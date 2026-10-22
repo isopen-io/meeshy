@@ -2,6 +2,7 @@ import type { GloryFramePaint, GloryFrameTextEffect, GloryFrameTextSlot } from '
 
 import { fitText, type MeasureText } from '@/lib/canvas/text-fit';
 
+import { isolatedAuthorMessage } from '../author-message';
 import type { PaintContext } from '../compose';
 import type { GloryTextFace, TextScript } from '../glory-fonts';
 import { LIVE_TEXT_SLOTS, type GloryTexts, type LiveTextSlot } from './frame-spec';
@@ -14,7 +15,8 @@ import { LIVE_TEXT_SLOTS, type GloryTexts, type LiveTextSlot } from './frame-spe
  * effets (copies décalées, dessous puis dessus) et son opacité.
  *
  *  - un emplacement VIVANT prend le texte du moment ; il passe en capitales
- *    quand l'exemple de l'export l'était, jamais en arabe ;
+ *    quand l'exemple de l'export l'était, jamais en arabe — et jamais le
+ *    MESSAGE de l'auteur (#10165), qui s'écrit comme il a été tapé ;
  *  - un texte trop long rétrécit puis s'ellipse (`fitText`) dans la place que
  *    son ancre lui laisse ; un emplacement décoratif garde la boîte de son
  *    exemple ;
@@ -82,12 +84,19 @@ const measureWith = (ctx: PaintContext, slot: GloryFrameTextSlot, face: (px: num
 const casedLike = (sample: string, text: string, uppercase: boolean, language: string): string =>
   uppercase && sample === sample.toLocaleUpperCase(language) && sample !== sample.toLocaleLowerCase(language) ? text.toLocaleUpperCase(language) : text;
 
-function paintSlot(ctx: PaintContext, slot: GloryFrameTextSlot, raw: string, live: boolean, deps: GloryTextDeps): void {
+/**
+ * Le message de l'auteur (#10165) s'écrit comme il l'a tapé — jamais de capitales forcées, même si l'exemple de l'export
+ * en portait — et dans un isolat de sens d'écriture (FSI … PDI) posé APRÈS l'ajustement, pour qu'une ellipse ne l'ouvre pas.
+ */
+const AUTHOR_SLOT: LiveTextSlot = 'message';
+
+function paintSlot(ctx: PaintContext, slot: GloryFrameTextSlot, raw: string, live: boolean, authored: boolean, deps: GloryTextDeps): void {
   const face = (px: number): GloryTextFace => deps.face(slot.font, raw, px);
-  const text = casedLike(slot.sample, raw, face(slot.font.size).uppercase, deps.language);
-  const fitted = fitText(measureWith(ctx, slot, (px) => deps.face(slot.font, text, px)), text, maxWidthOf(slot, live, deps.width), slot.font.size);
-  if (fitted.text.length === 0) return;
-  const shape = deps.face(slot.font, fitted.text, fitted.px);
+  const cased = authored ? raw : casedLike(slot.sample, raw, face(slot.font.size).uppercase, deps.language);
+  const sized = fitText(measureWith(ctx, slot, (px) => deps.face(slot.font, cased, px)), cased, maxWidthOf(slot, live, deps.width), slot.font.size);
+  if (sized.text.length === 0) return;
+  const fitted = authored ? { ...sized, text: isolatedAuthorMessage(sized.text) } : sized;
+  const shape = deps.face(slot.font, sized.text, fitted.px);
   ctx.save();
   if (slot.matrix !== undefined && ctx.transform !== undefined) ctx.transform(...slot.matrix);
   ctx.font = shape.font;
@@ -111,6 +120,6 @@ export function paintGloryText(ctx: PaintContext, slots: Readonly<Record<string,
     const live = isLive(key);
     const raw = live ? texts[key] : slot.sample;
     if (raw === null || raw.length === 0) return;
-    paintSlot(ctx, slot, raw, live, deps);
+    paintSlot(ctx, slot, raw, live, key === AUTHOR_SLOT, deps);
   });
 }

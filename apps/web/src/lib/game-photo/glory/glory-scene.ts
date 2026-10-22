@@ -170,6 +170,7 @@ async function tileOf(pick: GloryFramePick, language: InterfaceLanguage, deps: G
     poses: posesOf(pick),
     defaultPose: pick.frame.formats.story.birds.default,
     squareSimple: pick.frame.formats.square === null,
+    message: pick.frame.formats.story.text.message !== undefined,
     ready: missing.length === 0,
     missingBytes: missing.reduce((sum, ref) => sum + ref.bytes, 0),
   };

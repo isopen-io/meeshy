@@ -33,6 +33,8 @@ export type GloryOfferTile = {
   readonly defaultPose: GloryFrameBirdLayout;
   /** `formats.square === null` : le carré se peint en carte simple, et le sélecteur le DIT (D1, #10180). */
   readonly squareSimple: boolean;
+  /** Le cadre a un SUPPORT de message (cartouche, ruban, parchemin : l'emplacement `message` du contrat) ; le sélecteur l'indique (#10165). */
+  readonly message: boolean;
   /** Toutes les couches du format story sont au magasin. */
   readonly ready: boolean;
   /** Les octets qui manquent au magasin ; 0 quand la tuile est prête. */
@@ -87,13 +89,25 @@ export function choosePose(choice: GloryChoice, offer: GloryOffer | null, pose: 
   return { ...choice, pose, byUser: true };
 }
 
+export type ComposedVersion = {
+  readonly frameId: string | null;
+  readonly pose: GloryFrameBirdLayout | null;
+  /** Le message de l'auteur ÉCRIT sur le cadre (#10165) ; `null` ou absent : aucun. */
+  readonly message?: string | null;
+  readonly momentId: string;
+};
+
 /**
  * Le nom de la VERSION d'une prise pour la loi d'enregistrement (`capture-save`) : la scène COMPOSÉE
  * (jamais le seul choix — un cadre choisi mais pas encore prêt se compose en carte simple) et, sur un
- * cadre, la pose, qui change l'image autant que le cadre. Sans scène, la carte simple du moment.
+ * cadre, la pose et le message, qui changent l'image autant que le cadre. Sans scène, la carte simple
+ * du moment : un message n'y est pas écrit, il ne la nomme pas.
  */
-export const composedVersionOf = ({ frameId, pose, momentId }: { readonly frameId: string | null; readonly pose: GloryFrameBirdLayout | null; readonly momentId: string }): string =>
-  frameId === null ? momentId : pose === null ? frameId : `${frameId}#${pose}`;
+export const composedVersionOf = ({ frameId, pose, message = null, momentId }: ComposedVersion): string => {
+  if (frameId === null) return momentId;
+  const posed = pose === null ? frameId : `${frameId}#${pose}`;
+  return message === null || message.length === 0 ? posed : `${posed}#«${message}»`;
+};
 
 /** La présence d'une tuile : ce que l'appareil a vécu depuis prime sur ce que l'offre disait. */
 export function presenceOf(offer: GloryOffer, ref: FrameRef, lived: ReadonlyMap<string, TilePresence>): TilePresence {

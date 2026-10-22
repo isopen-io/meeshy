@@ -298,12 +298,57 @@ describe('la plaque et le message', () => {
     const { calls } = paint({ recipe: { ...DEFAULT_RECIPE, message: 'Ubuntu, toujours' } });
     expect(drawn(calls)).toContain('plate-message');
     expect(drawn(calls)).not.toContain('plate-plain');
-    expect(written(calls).find((t) => t.text === 'Ubuntu, toujours')?.y).toBe(1784);
+    const message = written(calls).find((t) => t.text.includes('Ubuntu, toujours'));
+    expect(message?.y).toBe(1784);
+    expect(message?.font).toContain('"Caveat"');
   });
 
   test('un message fait d’espaces ne compte pas', () => {
     const { calls } = paint({ recipe: { ...DEFAULT_RECIPE, message: '   ' } });
     expect(drawn(calls)).toContain('plate-plain');
+  });
+
+  /* LE MESSAGE DE L'AUTEUR (#10165, L12, § 5.14) : borné à 60 graphèmes quelle que soit la recette, une ligne, isolé
+     dans son sens d'écriture, jamais en capitales, la pile système hors du latin. */
+  test('une recette de 61 graphèmes n’en écrit que 60, sur une ligne, dans un isolat FSI … PDI', () => {
+    const wide = formatOf();
+    const roomy = { ...wide, text: { ...wide.text, message: slot({ x: 540, baseline: 1784, sample: 'Ubuntu, toujours', font: { family: 'Caveat', weight: 700, style: 'normal', size: 20, tracking: 0 } }) } };
+    const { calls } = paint({ format: roomy, recipe: { ...DEFAULT_RECIPE, message: `${'🇫🇷'.repeat(30)}\n${'é'.repeat(31)}` } });
+    const message = written(calls).find((t) => t.text.startsWith('\u2068'));
+    expect(message).toBeDefined();
+    expect(message?.text.endsWith('\u2069')).toBe(true);
+    const inner = message?.text.slice(1, -1) ?? '';
+    expect(inner.includes('\n')).toBe(false);
+    expect(Array.from(new Intl.Segmenter('und', { granularity: 'grapheme' }).segment(inner)).length).toBe(60);
+    expect(drawn(calls)).toContain('plate-message');
+  });
+
+  test('un message trop long pour sa place s’ellipse SANS ouvrir son isolat : la PDI ferme toujours la ligne', () => {
+    const { calls } = paint({ recipe: { ...DEFAULT_RECIPE, message: 'Merci à toute la famille, aux amis et à toutes celles et ceux' } });
+    const message = written(calls).find((t) => t.text.startsWith('\u2068'));
+    expect(message?.text.endsWith('…\u2069')).toBe(true);
+  });
+
+  test('le message ne passe jamais en capitales, même quand l’exemple de l’export en portait', () => {
+    const format = formatOf();
+    const shouting = { ...format, text: { ...format.text, message: slot({ x: 540, baseline: 1784, sample: 'UBUNTU, TOUJOURS', font: { family: 'Caveat', weight: 700, style: 'normal', size: 56, tracking: 0 } }) } };
+    const { calls } = paint({ format: shouting, recipe: { ...DEFAULT_RECIPE, message: 'Pour toi, maman' } });
+    expect(written(calls).some((t) => t.text.includes('Pour toi, maman'))).toBe(true);
+    expect(written(calls).some((t) => t.text.includes('POUR TOI, MAMAN'))).toBe(false);
+  });
+
+  for (const fixture of ['Для мамы', '給媽媽', 'माँ के लिए', 'לאמא', '🎉🎉', 'Merci يا أمي']) {
+    test(`« ${fixture} » s’écrit entier, dans la pile système, jamais en Caveat`, () => {
+      const { calls } = paint({ recipe: { ...DEFAULT_RECIPE, message: fixture } });
+      const message = written(calls).find((t) => t.text.includes(fixture));
+      expect(message).toBeDefined();
+      expect(message?.font).not.toContain('"Caveat"');
+    });
+  }
+
+  test('un message de contrôle (bidi incrusté, contrôle C0) est nettoyé avant d’être écrit', () => {
+    const { calls } = paint({ recipe: { ...DEFAULT_RECIPE, message: 'Ub\u0007untu\u202e, toujours' } });
+    expect(written(calls).some((t) => t.text === '\u2068Ubuntu, toujours\u2069')).toBe(true);
   });
 });
 

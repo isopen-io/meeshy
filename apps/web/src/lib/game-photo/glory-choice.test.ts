@@ -21,6 +21,7 @@ const tile = (frameId: string, overrides: Partial<GloryOfferTile> = {}): GloryOf
   poses: ['perches', 'pied'],
   defaultPose: 'perches',
   squareSimple: true,
+  message: true,
   ready: true,
   missingBytes: 0,
   ...overrides,
@@ -86,6 +87,14 @@ describe('ce que la prise emporte', () => {
     expect(composedVersionOf({ frameId: 'savane.ambassadeur-2', pose: 'pied', momentId: 'rank:ambassadeur:2' })).toBe('savane.ambassadeur-2#pied');
     expect(composedVersionOf({ frameId: null, pose: 'pied', momentId: 'rank:ambassadeur:2' })).toBe('rank:ambassadeur:2');
     expect(composedVersionOf({ frameId: 'a', pose: 'pied', momentId: 'm' })).not.toBe(composedVersionOf({ frameId: 'a', pose: 'perches', momentId: 'm' }));
+  });
+
+  test('le message de l’auteur nomme aussi la version sur un cadre (#10165) ; sur la carte simple, où il n’est pas écrit, il ne change rien', () => {
+    const plain = composedVersionOf({ frameId: 'a', pose: 'pied', momentId: 'm' });
+    expect(composedVersionOf({ frameId: 'a', pose: 'pied', message: 'Pour toi, maman', momentId: 'm' })).not.toBe(plain);
+    expect(composedVersionOf({ frameId: 'a', pose: 'pied', message: '', momentId: 'm' })).toBe(plain);
+    expect(composedVersionOf({ frameId: 'a', pose: 'pied', message: 'Merci', momentId: 'm' })).not.toBe(composedVersionOf({ frameId: 'a', pose: 'pied', message: 'Merci !', momentId: 'm' }));
+    expect(composedVersionOf({ frameId: null, pose: null, message: 'Merci', momentId: 'm' })).toBe('m');
   });
 
   test('la présence d’une tuile : prête, ou le poids qui manque ; un état vécu (chargement, échec) prime', () => {

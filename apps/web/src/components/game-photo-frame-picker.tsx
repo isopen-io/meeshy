@@ -18,8 +18,9 @@ import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2 } from './game-surface';
  * refuse : `gloryFramesFor` a déjà passé `canUseFrame`), chacun par sa vignette,
  * son nom et son libellé d'usage (`describeFrameUsage`, #10146), sa PRÉSENCE
  * (prêt, « … à télécharger », « Chargement… », échec avec « Réessayer ») et,
- * quand son carré n'est pas dessiné, « Carré : carte simple » (D1, #10180). La
- * carte simple reste un choix : aucun pack n'est obligatoire. Les poses sont
+ * quand son carré n'est pas dessiné, « Carré : carte simple » (D1, #10180), et
+ * quand il a un support de message, « Avec un mot » (#10165). La carte simple
+ * reste un choix : aucun pack n'est obligatoire. Les poses sont
  * celles que le cadre choisi déclare, la sienne cochée par défaut ; un cadre à
  * une seule pose n'en propose pas.
  *
@@ -133,6 +134,11 @@ export function GamePhotoFramePicker({ offer, choice, presence, thumb, onChooseF
                 {tile.squareSimple ? (
                   <span className="text-check" style={{ color: GAME_INK_2 }}>
                     {gameText('game.photo.frame.square_simple')}
+                  </span>
+                ) : null}
+                {tile.message ? (
+                  <span data-photo-frame-message="" className="text-check" style={{ color: GAME_INK_2 }}>
+                    {gameText('game.photo.frame.with_message')}
                   </span>
                 ) : null}
                 {text === null ? null : (

@@ -2,6 +2,7 @@ import { drawContained, paintReferralBanner, type PaintContext, type PhotoArt, t
 import { gloryTextFace, textScript } from '../glory-fonts';
 import { AUTHOR_PLATE_RATIO, bannerWithin, coverFit, photoLayout, type Rect } from '../layout';
 import { paintGloryText, type GloryTextDeps } from './paint-glory-text';
+import { authorMessageOf } from '../author-message';
 import { anchorsOf, birdLayoutOf, boxArgs, plateVariantOf, rectOf, type GloryFrameBirdAnchor, type GloryFrameFormat, type GloryRecipe, type GloryTexts } from './frame-spec';
 
 /**
@@ -159,7 +160,7 @@ function paintBirds(ctx: PaintContext, input: GloryPaintInput): void {
 }
 
 function paintPlate(ctx: PaintContext, input: GloryPaintInput): void {
-  const variant = plateVariantOf(input.format, input.recipe.message);
+  const variant = plateVariantOf(input.format, authorMessageOf(input.recipe.message));
   if (variant === null) return;
   const layer = input.format.layers.plate[variant];
   const image = input.layers.plate[variant];
@@ -213,8 +214,9 @@ const textDeps = (input: GloryPaintInput): GloryTextDeps => ({
 
 export function paintGloryFrame(ctx: PaintContext, input: GloryPaintInput): void {
   const { format } = input;
-  const message = input.recipe.message !== null && input.recipe.message.trim().length > 0 ? input.recipe.message : null;
-  const texts: GloryTexts = { ...input.texts, message };
+  /* Le message de l'auteur (#10165) : borné et nettoyé par la loi, quelle que soit sa provenance (champ, recette du
+     carnet) ; la plaque suit le message tel qu'il sera écrit, jamais le texte brut. Le peintre de texte l'isole. */
+  const texts: GloryTexts = { ...input.texts, message: authorMessageOf(input.recipe.message) };
   format.stack.forEach((token) => {
     if (token === 'photo') return paintWindow(ctx, input);
     if (token === 'decor') return ctx.drawImage(input.layers.decor, ...boxArgs(format.layers.decor.box));

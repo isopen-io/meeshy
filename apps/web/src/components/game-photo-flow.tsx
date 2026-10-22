@@ -8,7 +8,7 @@ import type { CameraFailure, CameraSession } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { flowReducer, type FlowState } from '@/lib/game-photo/flow';
-import { composedVersionOf } from '@/lib/game-photo/glory-choice';
+import { composedVersionOf, tileOf } from '@/lib/game-photo/glory-choice';
 import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
 import { referralOf, referralPlaceholder, referralShareText, type PhotoReferral } from '@/lib/game-photo/referral';
@@ -33,6 +33,7 @@ import { GameAuthorCard } from './game-author-card';
 import { GamePhotoFrame, type GloryFrameOverlay } from './game-photo-frame';
 import { GamePhotoFramePicker } from './game-photo-frame-picker';
 import { GamePhotoGloryCanvas } from './game-photo-glory-canvas';
+import { GamePhotoMessageField } from './game-photo-message-field';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-surface';
 
 /**
@@ -66,6 +67,10 @@ import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-
  * nominal = « Immortaliser » puis déclencher. Sur le résultat, changer de cadre ou de pose recompose
  * l'image depuis la même photo, sans reprendre, et « Enregistrer » revient (c'est une autre version).
  *
+ * LE MESSAGE DE L'AUTEUR (#10165, L12) : sur le résultat, pour un cadre à SUPPORT (l'offre le dit par tuile), un champ
+ * d'une ligne borné à 60 graphèmes ; il entre dans la recette, nomme la version (« Enregistrer » revient), se garde au
+ * carnet, et ne part jamais dans le texte de partage. Un cadre sans support compose sans lui, le mot attend.
+ *
  * L'ATMOSPHÈRE (#10163, L10b) : à la première photo de rang dès Ambassadeur, quand le compte n'a pas encore
  * choisi, l'écran de choix (E1) précède le déroulé ; « Choisir plus tard » laisse partir la photo dans
  * l'Afrique éternelle sans rien enregistrer. L'atmosphère du compte entre dans l'étape que la loi des cadres
@@ -74,8 +79,8 @@ import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-
 
 export type PhotoFlowResult = { readonly deferred: boolean };
 
-/** L'image composée et ce qui l'a composée : la scène ouverte (`null` : la carte simple) et sa pose. */
-type Composition = { readonly files: PhotoFiles; readonly frameId: string | null; readonly pose: GloryRecipe['pose'] };
+/** L'image composée et ce qui l'a composée : la scène ouverte (`null` : la carte simple), sa pose et le message écrit. */
+type Composition = { readonly files: PhotoFiles; readonly frameId: string | null; readonly pose: GloryRecipe['pose']; readonly message: string | null };
 
 type Props = {
   readonly moment: PhotoMoment;
@@ -222,14 +227,18 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const gloryChoice = useGloryChoice({ env, step: gloryStep, texts: gloryTexts, epoch: catalogEpoch });
   const glory = gloryChoice.scene;
   const chosenPose = gloryChoice.choice.pose;
+  /* Le message de l'auteur (#10165) : écrit une fois, il ne s'applique qu'à un cadre qui a un support. */
+  const [message, setMessage] = useState<string | null>(null);
+  const messageSupported = tileOf(gloryChoice.offer, gloryChoice.choice.frame)?.message === true;
+  const writtenMessage = messageSupported ? message : null;
   /* La version que l'aperçu ANNONCE : le cadre dont la scène est ouverte (ou la carte simple) et la pose — ce
      qui, en changeant sur le résultat, recompose l'image (#10164). La scène compte, pas le seul choix : un
      cadre choisi mais pas encore prêt se compose en carte simple, puis se recompose quand il arrive. */
-  const previewVersion = composedVersionOf({ frameId: glory === null ? null : glory.frame.id, pose: chosenPose, momentId: moment.id });
+  const previewVersion = composedVersionOf({ frameId: glory === null ? null : glory.frame.id, pose: chosenPose, message: writtenMessage, momentId: moment.id });
   const previewVersionRef = useRef(previewVersion);
   previewVersionRef.current = previewVersion;
   const composedVersion = useRef(previewVersion);
-  const gloryRecipe = useMemo((): GloryRecipe => ({ pose: chosenPose, message: null, crop: { dx: 0, dy: 0, zoom: 1 }, showFlame: withFlame, showLink: withLink }), [chosenPose, withFlame, withLink]);
+  const gloryRecipe = useMemo((): GloryRecipe => ({ pose: chosenPose, message: writtenMessage, crop: { dx: 0, dy: 0, zoom: 1 }, showFlame: withFlame, showLink: withLink }), [chosenPose, writtenMessage, withFlame, withLink]);
   const rtl = interfaceDirection(currentInterfaceLanguage()) === 'rtl';
   const gloryBanner = useMemo(() => (glory === null || referral === null ? null : photoBannerOf(referral, glory.bannerLayout(rtl))), [glory, referral, rtl]);
   const gloryOverlay = useMemo((): GloryFrameOverlay | null => (glory === null ? null : { crest: glory.crest, qr: glory.bannerLayout(rtl)?.qr ?? null }), [glory, rtl]);
@@ -245,14 +254,16 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
       try {
         const rendered = await env.render({ moment, ...input, glory: final?.source ?? null });
         if (rendered === null) return null;
-        return { files: rendered, frameId: final === null ? null : final.source.scene.frame.id, pose: final === null ? null : final.source.recipe.pose };
+        return final === null
+          ? { files: rendered, frameId: null, pose: null, message: null }
+          : { files: rendered, frameId: final.source.scene.frame.id, pose: final.source.recipe.pose, message: final.source.recipe.message };
       } finally {
         final?.close();
       }
     },
     [env, gloryFinal, moment],
   );
-  const versionOf = useCallback((composed: Composition): string => composedVersionOf({ frameId: composed.frameId, pose: composed.pose, momentId: moment.id }), [moment.id]);
+  const versionOf = useCallback((composed: Composition): string => composedVersionOf({ frameId: composed.frameId, pose: composed.pose, message: composed.message, momentId: moment.id }), [moment.id]);
   /* Lu au moment de composer, jamais une dépendance de la frappe : une scène d'aperçu qui arrive
      PENDANT la frappe (premier usage : chunk, packs, contrat, décodages) changerait l'identité de
      `composeWith` et rejouerait frappe et composition — la même loi que `referralRef`. */
@@ -595,6 +606,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
         ...(taken === null ? {} : { mirror: taken.mirror }),
         ...(composition === null || composition.frameId === null ? {} : { frameId: composition.frameId }),
         ...(composition === null || composition.pose === null ? {} : { pose: composition.pose }),
+        ...(composition === null || composition.message === null ? {} : { message: composition.message }),
         showLink: composedReferral !== null,
       },
     });
@@ -855,6 +867,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
                 style={{ aspectRatio: format === 'story' ? '9 / 16' : '1 / 1', maxHeight: '52dvh' }}
               />
             )}
+            {messageSupported ? <GamePhotoMessageField message={message} onCommit={setMessage} /> : null}
             {framePicker}
             <Button attr={{ 'data-photo-share': '' }} primary onClick={() => void share()}>
               {gameText('game.photo.share')}

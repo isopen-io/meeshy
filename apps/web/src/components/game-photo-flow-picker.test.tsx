@@ -33,6 +33,7 @@ const tile = (frameId: string, overrides: Partial<GloryOfferTile> = {}): GloryOf
   poses: ['perches', 'pied'],
   defaultPose: 'perches',
   squareSimple: frameId === 'savane.ambassadeur-2',
+  message: frameId === 'savane.ambassadeur-2',
   ready: true,
   missingBytes: 0,
   ...overrides,
