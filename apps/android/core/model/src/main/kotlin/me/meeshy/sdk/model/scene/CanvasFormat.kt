@@ -30,6 +30,16 @@ enum class CanvasFormat(val ratio: Double) {
     }
 }
 
-/** Le format du cadre de cette scène, déduit de son [SceneV3.carrierAspect]. */
+/**
+ * Le format du cadre de cette scène, déduit de son [SceneV3.carrierAspect].
+ *
+ * Ce que cette lecture dit est la forme du PORTEUR d'origine (l'équivalent de
+ * `StoryEffects.canvasAspectRatio` en v1), pas une loi de cadrage du lecteur :
+ * côté iOS, `SceneShape.aspect(of:)` (#6896, #6904) tient une scène v3 pour
+ * toujours 9:16, ses ancres ayant déjà été letterboxées par la conversion
+ * (voir `CanvasV3Projection`). Un lot qui câble ce format à une surface
+ * décide donc, surface par surface, s'il cadre en 16:9 ou s'il garde le 9:16 ;
+ * il ne cumule jamais les deux, sous peine de remapper deux fois les ancres.
+ */
 val SceneV3.canvasFormat: CanvasFormat
     get() = CanvasFormat.fromCarrierAspect(carrierAspect)
