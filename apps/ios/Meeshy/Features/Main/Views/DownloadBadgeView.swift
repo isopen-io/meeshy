@@ -20,6 +20,10 @@ struct DownloadBadgeView: View {
     /// La forme du bouton « télécharger », que décide la case qui le pose
     /// (`MediaTileDownloadPlacement`) : compacte sur la case « +N » (#11569).
     var form: MediaTileDownloadPlacement.Form = .prominent
+    /// La case porte-t-elle le lecteur de la vidéo (`MediaTileVideoPresentation`) ?
+    /// La case « +N » n'en monte pas : le badge y redevient le seul chemin
+    /// de téléchargement de la vidéo, comme pour une photo (#11586).
+    var tileHostsVideoPlayer: Bool = true
 
     @StateObject private var downloader = AttachmentDownloader()
     private var accent: Color { Color(hex: accentColor) }
@@ -40,9 +44,10 @@ struct DownloadBadgeView: View {
     /// Depuis #8231 ce lecteur, dans le fil, n'a que trois contrôles (son,
     /// lecture/pause, plein écran) ; son bouton central garde le
     /// téléchargement. La tuile de débordement et la pièce protégée ne
-    /// montrent qu'un poster : c'est le plein écran qui y télécharge.
+    /// montrent qu'un poster. La pièce protégée garde son voile, sans badge ;
+    /// la case « +N », sans lecteur, garde le badge de la photo (#11586).
     var yieldsToThePlayer: Bool {
-        attachment.type == .video
+        attachment.type == .video && tileHostsVideoPlayer
     }
 
     var hidesForLocalOrOptimisticMedia: Bool {
@@ -220,6 +225,38 @@ nonisolated struct MediaTileDownloadPlacement: Equatable {
         switch surface {
         case .bubbleGrid: return MediaTileDownloadPlacement(alignment: .center, form: .prominent)
         case .focalGrid: return MediaTileDownloadPlacement(alignment: .bottomTrailing, form: .prominent)
+        }
+    }
+}
+
+// MARK: - MediaTileVideoPresentation — ce qu'une case de grille fait d'une vidéo
+
+/// **La case « +N » n'est pas une vidéo : c'est la porte de la galerie** (#11586).
+///
+/// Le Fil montait le lecteur inline sous le voile du « +N », la bulle un
+/// poster à bouton lecture : dans les deux modes, un bouton central se posait
+/// sur le libellé, sur une case dont le toucher ouvre la galerie. Sur cette
+/// case, la vidéo n'est plus qu'une image fixe, sans bouton lecture ni durée,
+/// et son téléchargement suit la règle de la photo (badge compact au coin,
+/// `MediaTileDownloadPlacement`). Une pièce protégée encore voilée garde son
+/// poster et son repère de lecture ; toute autre case monte le lecteur à trois
+/// contrôles (#8231), dont le bouton central télécharge.
+nonisolated enum MediaTileVideoPresentation: Equatable {
+    case inlinePlayer
+    case poster(showsPlaybackCue: Bool)
+
+    static func resolve(overflowCount: Int, isHiddenByProtection: Bool) -> MediaTileVideoPresentation {
+        if overflowCount > 0 { return .poster(showsPlaybackCue: false) }
+        if isHiddenByProtection { return .poster(showsPlaybackCue: true) }
+        return .inlinePlayer
+    }
+
+    var hostsPlayer: Bool { self == .inlinePlayer }
+
+    var showsPlaybackCue: Bool {
+        switch self {
+        case .inlinePlayer: return true
+        case .poster(let showsPlaybackCue): return showsPlaybackCue
         }
     }
 }

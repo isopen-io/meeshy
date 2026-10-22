@@ -1,7 +1,7 @@
 import CoreGraphics
 
 /// **La bande des emojis rapides s'élargit sous le doigt qui la fait défiler**
-/// (directive porteur 2026-10-22).
+/// (#11566, directive porteur).
 ///
 /// Pendant le défilement, la bande gagne vers la gauche ce que le doigt a
 /// parcouru vers la gauche depuis le début du geste, et le champ de saisie

@@ -197,6 +197,16 @@ final class ContentRemovalOfferTests: XCTestCase {
         XCTAssertEqual(ContentRemovalKind.message.titleKey(count: 3), "moderation.removal.title.messages")
     }
 
+    func test_deleteConfirmation_titleKey_followsTheSelectionCount() {
+        XCTAssertEqual(MessageDeleteConfirmation.titleKey(count: 1), "conversation.view.delete_message.title")
+        XCTAssertEqual(MessageDeleteConfirmation.titleKey(count: 2), "conversation.view.delete_messages.title")
+    }
+
+    func test_deleteConfirmation_severalMessages_saysHowMany() {
+        XCTAssertTrue(MessageDeleteConfirmation.title(count: 3).contains("3"))
+        XCTAssertFalse(MessageDeleteConfirmation.title(count: 1).contains("1"))
+    }
+
     func test_titleKey_otherKinds_ignoreTheCount() {
         XCTAssertEqual(ContentRemovalKind.post.titleKey(count: 4), "moderation.removal.title.post")
         XCTAssertEqual(ContentRemovalKind.comment.titleKey(count: 2), "moderation.removal.title.comment")

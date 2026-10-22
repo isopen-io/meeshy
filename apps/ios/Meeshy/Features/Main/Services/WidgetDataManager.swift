@@ -273,8 +273,20 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// Les lecteurs valident la valeur contre une allowlist et retombent sur la
     /// production si elle en sort — un environnement inattendu ne peut donc pas
     /// détourner un partage vers un hôte arbitraire.
-    func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin) {
-        writingToSharedContainer { sharedDefaults?.set(origin, forKey: apiBaseURLKey) }
+    ///
+    /// Publiée depuis `prepareProcess`, avant le premier rendu de la liste
+    /// (#11558) : l'ouverture du groupe d'app et l'écriture partent sur la file
+    /// `AppGroupIO`. L'assertion d'arrière-plan court jusqu'à l'écriture faite.
+    func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin, io: AppGroupIO = .shared) {
+        let suiteName = suiteName
+        let key = apiBaseURLKey
+        let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.widget.publish")
+        io.enqueue {
+            UserDefaults(suiteName: suiteName)?.set(origin, forKey: key)
+            Task { @MainActor in
+                if taskId != .invalid { UIApplication.shared.endBackgroundTask(taskId) }
+            }
+        }
     }
 
     // MARK: - NotificationWidgetSink

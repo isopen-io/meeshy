@@ -6,6 +6,14 @@ import LocalAuthentication
 import Security
 import MeeshySDK
 
+/// Où vivent les empreintes des PIN, vu comme trois fonctions : un double en
+/// test (#11558). `SecretsConversationLockVault` l'adapte au coffre.
+struct ConversationLockSecrets {
+    let read: (String) -> String?
+    let save: (String, String) -> Bool
+    let delete: (String) -> Void
+}
+
 // MARK: - La porte du routeur (#11386)
 
 /// La SEULE question que le routeur pose au verrou avant de poser une
@@ -73,6 +81,19 @@ struct KeychainConversationLockVault: ConversationLockVault {
         ]
         SecItemDelete(query as CFDictionary)
     }
+}
+
+/// Un coffre bâti sur trois fonctions : les tests de lecture paresseuse
+/// (#11558) y comptent les lectures sans toucher le trousseau.
+struct SecretsConversationLockVault: ConversationLockVault {
+    let secrets: ConversationLockSecrets
+
+    func read(_ key: String) -> String? { secrets.read(key) }
+
+    @discardableResult
+    func write(_ value: String, for key: String) -> Bool { secrets.save(key, value) }
+
+    func delete(_ key: String) { secrets.delete(key) }
 }
 
 // MARK: - Le code dérivé (#11388)
@@ -334,8 +355,8 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     static let openingPassLifetime: TimeInterval = 60
 
     @Published private(set) var lockedConversationIds: Set<String> = []
-    @Published private(set) var masterPinConfigured: Bool = false
-    @Published private(set) var biometricUnlockEnabled: Bool = false
+    private var knownMasterPin: Bool?
+    private var knownBiometricUnlock: Bool?
 
     private let vault: ConversationLockVault
     private let defaults: UserDefaults
@@ -363,9 +384,39 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         self.iterations = iterations
         self.now = now
         loadLockedIds()
-        masterPinConfigured = vault.read(masterPinKey) != nil
-        biometricUnlockEnabled = vault.read(biometricStateKey) != nil
         wireAuthLogoutHook()
+    }
+
+    convenience init(secrets: ConversationLockSecrets) {
+        self.init(vault: SecretsConversationLockVault(secrets: secrets))
+    }
+
+    /// Le PIN maître est-il posé ? Lu au trousseau au PREMIER besoin (#11558) :
+    /// le gestionnaire est construit pendant le rendu des premières lignes de
+    /// la liste, et la valeur ne sert qu'au geste de verrouillage et aux Réglages.
+    var masterPinConfigured: Bool {
+        if let knownMasterPin { return knownMasterPin }
+        let configured = vault.read(masterPinKey) != nil
+        knownMasterPin = configured
+        return configured
+    }
+
+    /// La biométrie est-elle activée ? Même lecture paresseuse que le PIN maître.
+    var biometricUnlockEnabled: Bool {
+        if let knownBiometricUnlock { return knownBiometricUnlock }
+        let enabled = vault.read(biometricStateKey) != nil
+        knownBiometricUnlock = enabled
+        return enabled
+    }
+
+    private func noteMasterPin(_ configured: Bool) {
+        objectWillChange.send()
+        knownMasterPin = configured
+    }
+
+    private func noteBiometricUnlock(_ enabled: Bool) {
+        objectWillChange.send()
+        knownBiometricUnlock = enabled
     }
 
     /// P7-11 — pattern calqué sur `FeedbackToastManager.wireAuthLogoutHook` :
@@ -389,7 +440,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     func setMasterPin(_ pin: String) {
         store(pin, under: masterPinKey)
-        masterPinConfigured = true
+        noteMasterPin(true)
     }
 
     func attemptMasterPin(_ pin: String) -> PinAttemptOutcome {
@@ -410,7 +461,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     /// biométrie, autorisée par lui, part avec lui.
     func forceRemoveMasterPin() {
         erase(masterPinKey)
-        masterPinConfigured = false
+        noteMasterPin(false)
         disableBiometricUnlock()
     }
 
@@ -490,13 +541,13 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     func enableBiometricUnlock(authorizedBy masterPin: String) -> PinAttemptOutcome {
         let outcome = attemptMasterPin(masterPin)
         guard outcome == .granted, let enrollment = biometrics.enrollmentState() else { return outcome }
-        biometricUnlockEnabled = vault.write(enrollment.base64EncodedString(), for: biometricStateKey)
+        noteBiometricUnlock(vault.write(enrollment.base64EncodedString(), for: biometricStateKey))
         return outcome
     }
 
     func disableBiometricUnlock() {
         vault.delete(biometricStateKey)
-        biometricUnlockEnabled = false
+        noteBiometricUnlock(false)
     }
 
     /// Un visage ou un doigt ajouté depuis l'activation (il suffit de connaître

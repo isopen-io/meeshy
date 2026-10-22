@@ -119,6 +119,26 @@ final class AttachmentDownloaderTests: XCTestCase {
         )
     }
 
+    /// #11586 — la case « +N » ne monte pas de lecteur : la vidéo n'y a plus
+    /// d'autre affordance de téléchargement que le badge, comme la photo.
+    func test_downloadBadge_forVideoOnATileWithoutPlayer_keepsItsBadge() {
+        let video = MeeshyMessageAttachment(
+            id: "att-vid-\(UUID().uuidString)",
+            mimeType: "video/mp4",
+            fileUrl: "https://cdn.example.com/clip.mp4",
+            uploadedBy: "user-test"
+        )
+        let badge = DownloadBadgeView(
+            attachment: video,
+            accentColor: "#6366F1",
+            messageDeliveryStatus: .sent,
+            tileHostsVideoPlayer: false
+        )
+
+        XCTAssertFalse(badge.yieldsToThePlayer,
+                       "sans lecteur sur la case, le badge est le seul chemin de téléchargement de la vidéo")
+    }
+
     func test_downloadBadge_forConfirmedServerMedia_isVisible() {
         let badge = makeBadge(
             attachment: makeImageAttachment(fileUrl: "https://cdn.example.com/photo.jpg"),
@@ -610,5 +630,39 @@ final class MediaTileDownloadPlacementTests: XCTestCase {
 
     func test_compactForm_keepsTheMinimumTapTarget() {
         XCTAssertGreaterThanOrEqual(MediaTileDownloadPlacement.compactHitTarget, MeeshyControlSize.tapTarget)
+    }
+}
+
+/// #11586 — une vidéo posée sur la case « +N » montait le lecteur inline (Fil)
+/// ou un poster à bouton lecture (Bulles) sous le voile : un bouton central
+/// par-dessus le « +N », sur une case dont le toucher ouvre la galerie. Une
+/// seule loi dit ce que la case fait d'une vidéo, pour la bulle et le Fil.
+final class MediaTileVideoPresentationTests: XCTestCase {
+
+    func test_resolve_overflowTile_showsAStillPosterWithoutPlaybackCue() {
+        let presentation = MediaTileVideoPresentation.resolve(overflowCount: 3, isHiddenByProtection: false)
+
+        XCTAssertEqual(presentation, .poster(showsPlaybackCue: false))
+        XCTAssertFalse(presentation.hostsPlayer, "la case « +N » ouvre la galerie : aucun lecteur ne s'y monte")
+        XCTAssertFalse(presentation.showsPlaybackCue, "aucun bouton lecture ne se pose sur le « +N »")
+    }
+
+    func test_resolve_overflowTile_winsOverProtection() {
+        XCTAssertEqual(MediaTileVideoPresentation.resolve(overflowCount: 1, isHiddenByProtection: true),
+                       .poster(showsPlaybackCue: false))
+    }
+
+    func test_resolve_hiddenProtectedTile_keepsThePosterAndItsCue() {
+        let presentation = MediaTileVideoPresentation.resolve(overflowCount: 0, isHiddenByProtection: true)
+
+        XCTAssertEqual(presentation, .poster(showsPlaybackCue: true))
+        XCTAssertFalse(presentation.hostsPlayer)
+    }
+
+    func test_resolve_plainTile_mountsTheInlinePlayer() {
+        let presentation = MediaTileVideoPresentation.resolve(overflowCount: 0, isHiddenByProtection: false)
+
+        XCTAssertEqual(presentation, .inlinePlayer)
+        XCTAssertTrue(presentation.hostsPlayer)
     }
 }

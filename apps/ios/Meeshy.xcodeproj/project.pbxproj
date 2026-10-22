@@ -1423,6 +1423,7 @@
 		5EC025CB9A2D0DE78B39DF65 /* ConversationMediaGalleryView+LoadFailure.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0FB7A9DC4311341A1025B6F /* ConversationMediaGalleryView+LoadFailure.swift */; };
 		5ECEEB20AFF3657F6E070484 /* StickerSubjectLift.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B59CA477033E75355412770 /* StickerSubjectLift.swift */; };
 		5EF2CB3CE4137106A3A6C1D9 /* OnboardingContactsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6886649AFC509BDA05283969 /* OnboardingContactsTests.swift */; };
+		F3032096F9CE9E255E701A8C /* CaptureDiscardAlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AA90D48F09C89E733DE7E41 /* CaptureDiscardAlertTests.swift */; };
 		5F0248E5E349147110500873 /* DeviceRemote.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62434C6BF432177B6F49CD4 /* DeviceRemote.swift */; };
 		5F214132D5575251811993EF /* FeedViewModel+Pagination.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ADE99B8AEE23EFDD75933B5 /* FeedViewModel+Pagination.swift */; };
 		5F361EBA46DDD6618F7649F1 /* TranscriptionPermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B0985540DA4EE5AD7C331C /* TranscriptionPermission.swift */; };
@@ -7197,6 +7198,7 @@
 		D5FFA5FA5EEA0FF6A2240681 /* FocalMediaGridLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalMediaGridLayoutTests.swift; sourceTree = "<group>"; };
 		D6098EABEFEC25EB91483561 /* FeedViewModel+Translation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeedViewModel+Translation.swift"; sourceTree = "<group>"; };
 		D60AA8A78BDAE4CCBFFC46B4 /* ConversationListTypingTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListTypingTracker.swift; sourceTree = "<group>"; };
+		1AA90D48F09C89E733DE7E41 /* CaptureDiscardAlertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureDiscardAlertTests.swift; sourceTree = "<group>"; };
 		D62434C6BF432177B6F49CD4 /* DeviceRemote.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRemote.swift; sourceTree = "<group>"; };
 		D6387DC198E8CFACBC7C26A5 /* ComposerObjectEditorView+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ComposerObjectEditorView+Media.swift"; sourceTree = "<group>"; };
 		D63CF12AA2187A30EAF00664 /* ConversationDashboardClientStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDashboardClientStats.swift; sourceTree = "<group>"; };
@@ -9319,6 +9321,7 @@
 		316141DEA0589C218A7D9E6C /* MeeshyUIDeviceTests */ = {
 			isa = PBXGroup;
 			children = (
+				1AA90D48F09C89E733DE7E41 /* CaptureDiscardAlertTests.swift */,
 				D62434C6BF432177B6F49CD4 /* DeviceRemote.swift */,
 				3443D0167A7B51B989952235 /* ThreadFlingMetricsTests.swift */,
 			);
@@ -12786,10 +12789,6 @@
 		FDFC0645D7451ABC76E6FC4C /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
-				59E73EEFB954AEF47CA578CF /* OverlayHost.swift */,
-				88374453EB859B5086E50A24 /* GuestSessionCover.swift */,
-				42DC4F0BE0647BBBAB731EC2 /* SessionContent.swift */,
-				DD7238BB4691C405A6DE9F73 /* RootScene.swift */,
 				F4A1BFBB16A778AC87F2AAC5 /* ExtensionIsolationGuardTests.swift */,
 				B0E91CE05FC24E942678203E /* ProjectManifest.swift */,
 			);
@@ -12806,6 +12805,10 @@
 				F09B6295E809E9FCC7A4DC1A /* RootPresentationRules.swift */,
 				E0A32919EDA986C4269F39CE /* SessionTransitionPlan.swift */,
 				ED78E8BF0633E2274A188287 /* ExternalEntry.swift */,
+				59E73EEFB954AEF47CA578CF /* OverlayHost.swift */,
+				88374453EB859B5086E50A24 /* GuestSessionCover.swift */,
+				42DC4F0BE0647BBBAB731EC2 /* SessionContent.swift */,
+				DD7238BB4691C405A6DE9F73 /* RootScene.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -13184,6 +13187,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F3032096F9CE9E255E701A8C /* CaptureDiscardAlertTests.swift in Sources */,
 				5F0248E5E349147110500873 /* DeviceRemote.swift in Sources */,
 				83B67EE4070E4D7051F35A4A /* ThreadFlingMetricsTests.swift in Sources */,
 			);

@@ -33,7 +33,7 @@ while IFS= read -r source; do
     scanned=$((scanned + 1))
     base=$(basename "$source")
     grep -qF "$base" "$committed" || orphans+=("$source")
-done < <(find MeeshyTests MeeshyUITests -name '*.swift' -type f 2>/dev/null | sort)
+done < <(find MeeshyTests MeeshyUITests MeeshyUIDeviceTests -name '*.swift' -type f 2>/dev/null | sort)
 
 if [ ${#orphans[@]} -eq 0 ]; then
     echo "check_test_registration: $scanned fichiers de test, tous inscrits au projet committé."
