@@ -675,11 +675,10 @@ extension BubbleGridImageView {
         guard !originalLanded, !attachment.fileUrl.isEmpty,
               !attachment.fileUrl.hasPrefix("file://") else { return }
         let key = AttachmentDownloadCenter.key(for: attachment.fileUrl)
-        for await event in AttachmentDownloadCenter.shared.events(for: key).values
-        where BubbleImageSourceLaw.marksOriginalLanding(event) {
-            originalLanded = true
-            return
-        }
+        guard await AttachmentDownloadCenter.shared.firstEvent(
+            for: key, where: BubbleImageSourceLaw.marksOriginalLanding
+        ) != nil else { return }
+        originalLanded = true
     }
 }
 

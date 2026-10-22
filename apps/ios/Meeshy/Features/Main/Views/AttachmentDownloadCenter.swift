@@ -109,6 +109,20 @@ final class AttachmentDownloadCenter {
             .eraseToAnyPublisher()
     }
 
+    /// Le premier événement de `key` qui satisfait `predicate`, attendu sans
+    /// bloquer — `nil` si la tâche qui attend est annulée (#11550).
+    ///
+    /// Le tri se fait AVANT le passage en `async` : `.values` ne redemande un
+    /// élément qu'une fois le précédent consommé, et le sujet sans tampon
+    /// jette ce qu'il émet entre-temps — la fin qui suit de près une
+    /// progression se perdait, et la case restait floue.
+    func firstEvent(for key: String, where predicate: @escaping (Event) -> Bool) async -> Event? {
+        for await event in events(for: key).first(where: predicate).values {
+            return event
+        }
+        return nil
+    }
+
     /// Point d'émission UNIQUE : met à jour l'état tenu puis diffuse.
     func publish(_ event: Event, for key: String) {
         switch event {
