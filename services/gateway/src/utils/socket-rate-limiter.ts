@@ -198,6 +198,16 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute — mirrors CALL_RECONNECTING/CALL_RECONNECTED
     keyPrefix: 'socket:call:check-active'
   },
+  /**
+   * #10459 point 1 — `admin-metrics:subscribe` lit le rang en base à chaque appel.
+   * Un écran s'abonne une fois par ouverture et une fois par reconnexion : dix par
+   * minute et par compte laissent la marge d'une page qui bégaie, pas d'un martèlement.
+   */
+  ADMIN_METRICS_SUBSCRIBE: {
+    maxRequests: 10,
+    windowMs: 60000,
+    keyPrefix: 'socket:admin-metrics:subscribe'
+  },
   // Gateway calling-stack audit 2026-07-08 — `presence:app-state` was the one
   // remaining call-adjacent handler with zero throttling (no getUserId check
   // either, unlike every sibling). Impact per-event is minimal (sets a flag

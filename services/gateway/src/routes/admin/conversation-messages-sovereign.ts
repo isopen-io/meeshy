@@ -70,8 +70,13 @@ import {
 } from './sovereign-message-projection';
 import { logError } from '../../utils/logger.js';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { conversationIdParams } from './admin-conversation-response-schemas';
 
 const REASON_MIN_LENGTH = 10;
+// Pas de borne HAUTE au schéma de CETTE route : elle est en production et le web
+// déjà déployé n'en borne pas la saisie — un 400 ici serait une bascule sèche
+// (#9223). La borne vit côté client (MOTIF_LONGUEUR_MAXIMALE) et au schéma de la
+// route des pièces, née après elle (#11510).
 
 export function registerConversationMessagesSovereignRoute(fastify: FastifyInstance): void {
   fastify.get<{
@@ -123,6 +128,7 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
           }
         }
       },
+      params: conversationIdParams,
       response: {
         200: {
           description: 'Messages successfully retrieved',

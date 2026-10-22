@@ -78,6 +78,7 @@
  * ligne.
  */
 
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import type { CursorPaginationMeta } from '@meeshy/shared/types';
 
 export type SortDirection = 'asc' | 'desc';
@@ -91,7 +92,7 @@ export type SortDirection = 'asc' | 'desc';
  * que Mongo compare comme une CHAÎNE — un filtre qui a l'air juste et ne l'est
  * pas.
  */
-export type SortValueKind = 'date' | 'string' | 'number';
+export type SortValueKind = 'date' | 'string' | 'number' | 'objectId';
 
 export type SortKey = {
   readonly field: string;
@@ -132,10 +133,15 @@ export function orderByFor(sort: CursorSort): Array<Record<string, SortDirection
   return sort.map(({ field, direction }) => ({ [field]: direction }));
 }
 
+// Une clé `objectId` refuse à la LECTURE du jeton ce que Prisma refuserait à la
+// REQUÊTE (P2023 « Malformed ObjectID », rendu 500) : un curseur forgé bien formé
+// mais dont l'`id` n'est pas un ObjectId rend `null`, donc la réponse que la
+// route a promise pour un jeton illisible.
 const positionValue = (key: SortKey, raw: unknown): string | number | null => {
   if (key.kind === 'number') return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
   if (typeof raw !== 'string') return null;
   if (key.kind === 'string') return raw;
+  if (key.kind === 'objectId') return OBJECT_ID_REGEX.test(raw) ? raw : null;
   return Number.isNaN(new Date(raw).getTime()) ? null : raw;
 };
 

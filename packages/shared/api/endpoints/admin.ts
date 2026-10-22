@@ -159,6 +159,9 @@ export const conversations = '/api/v1/admin/conversations';
 /** GET · PATCH /api/v1/admin/conversations/:conversationId */
 export const conversationsByConversationId = (conversationId: string): string => `/api/v1/admin/conversations/${encodeURIComponent(conversationId)}`;
 
+/** GET /api/v1/admin/conversations/:conversationId/attachments */
+export const conversationsByConversationIdAttachments = (conversationId: string): string => `/api/v1/admin/conversations/${encodeURIComponent(conversationId)}/attachments`;
+
 /** GET /api/v1/admin/conversations/:conversationId/messages */
 export const conversationsByConversationIdMessages = (conversationId: string): string => `/api/v1/admin/conversations/${encodeURIComponent(conversationId)}/messages`;
 

@@ -175,7 +175,7 @@ const f = {
   'admin.scale.loyalty.presetLabel': 'Un año de fidelidad',
   'admin.scale.big.warning': 'Niveles por encima de 10 000 puntos: {count}. Revíselos antes de guardar; nada se bloquea.',
   'admin.scale.abuse.title': 'Salvaguardas de los pesos altos',
-  'admin.scale.abuse.intro': 'Una operación que vale al menos el umbral solo acredita una vez por contenido, devuelve sus puntos si el contenido se elimina en 30 días y queda limitada para una cuenta sin correo ni teléfono verificado. Interactuar con tu propio contenido nunca da nada.',
+  'admin.scale.abuse.intro': 'Una operación que vale al menos el umbral solo acredita una vez por contenido, devuelve sus puntos si el contenido se elimina en 30 días y queda limitada para una cuenta sin correo ni teléfono verificado. Un tramo de racha o de fidelidad que alcanza ese umbral sigue el mismo límite. Interactuar con tu propio contenido nunca da nada.',
   'admin.scale.abuse.heavyPoints': 'Umbral de peso alto (puntos)',
   'admin.scale.abuse.clawbackHours': 'Retirada si se elimina en (horas)',
   'admin.scale.abuse.unverifiedMaxPoints': 'Puntos máximos por acción, cuenta no verificada',

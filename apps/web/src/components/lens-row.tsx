@@ -17,13 +17,28 @@ import { accentOf, withAccent } from '@/lib/accent';
 import { useColorScheme } from '@/lib/use-color-scheme';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import { conversationRowSwipeSides } from '@/lib/view/conversation-row-swipe';
-import { isRowCallAction, isRowFlagAction, rowConversationActions, type RowActionId, type RowDetailsFocus, type RowFlagActionId, type RowIntent, type RowMenuMore } from '@/lib/view/row-actions';
+import {
+  isRowCallAction,
+  isRowFlagAction,
+  rowConversationActions,
+  type RowActionId,
+  type RowDetailsFocus,
+  type RowFlagActionId,
+  type RowIntent,
+  type RowMenuMore,
+  type RowSubmenuChoice,
+} from '@/lib/view/row-actions';
+import { useRowRoving } from '@/lib/view/row-roving';
+import { memberCountLabel, rowDateLabel } from '@/lib/view/row-extra';
+import { THREAD_SEARCH_PARAM } from '@/lib/view/thread-search-door';
+import { readingModeScopeOf } from '@/lib/reading-mode/scope';
+import { readingModeStore } from '@/lib/reading-mode/store';
 import { useLongPress } from '@/lib/view/long-press';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, interfaceLanguageOf } from '@/lib/interface-language';
 import { avatarOf, initialsOf, isGroup, peerOf, presenceKeyOf, titleOf } from '@/lib/view/conversation';
 import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { usePresence } from '@/lib/view/use-presence';
@@ -336,7 +351,20 @@ function LensRowImpl({
     rowConversationActions({ conversation, viewer: { id: viewerId, hasAccount: account, isAnonymous: guest, platformRole: servedPlatformRole() } });
   const openDetailsOn = (focus: RowDetailsFocus) =>
     onRowIntent === undefined ? onOpenDetails?.(conversation.id) : onRowIntent(conversation.id, { kind: 'details', focus });
+  /* LES DEUX PORTES DU FIL (#11226) — la recherche ouvre le fil sur elle, le
+     mode de lecture s'écrit dans le magasin que le fil lit à l'ouverture,
+     sous le scope du lecteur. */
+  const readingScope = readingModeScopeOf({ id: viewerId === '' ? null : viewerId });
+  const readingModeOf = () =>
+    import('@/lib/view/row-reading-mode').then(({ rowReadingModeMenu }) =>
+      rowReadingModeMenu({ conversation, isAnonymous: guest, sticky: readingModeStore.getPreference(readingScope, conversation.id), language: currentInterfaceLanguage() }),
+    );
+  const onChoice = (choice: RowSubmenuChoice) => {
+    if (choice.kind === 'readingMode') return readingModeStore.setPreference(readingScope, conversation.id, choice.mode);
+    onRowIntent?.(conversation.id, choice);
+  };
   const onAction = (id: RowActionId) => {
+    if (id === 'search') return navigate(href('thread', { conversation: conversation.id }, { [THREAD_SEARCH_PARAM]: '1' }));
     if (id === 'delete' || id === 'leave') return requestDeparture({ conversationId: conversation.id, kind: id, returnToList: false });
     if (id === 'invite' || id === 'manageMembers') return openDetailsOn(id === 'invite' ? 'invite' : 'members');
     if (id === 'details') return onOpenDetails?.(conversation.id);
@@ -361,6 +389,9 @@ function LensRowImpl({
   const peekOpener = useRef<(() => boolean) | null>(null);
   const press = useLongPress({ onOpen: () => peekOpener.current?.() ?? false });
   const rowGestures = useRowGestures(swipe.rowProps, press);
+  /* LE PARCOURS AU CLAVIER (#11227) — un arrêt de tabulation par rangée, son
+     lien vers le fil ; les flèches pour le reste (`useRowRoving`). */
+  const roving = useRowRoving(conversation.id);
 
   /**
    * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
@@ -370,6 +401,7 @@ function LensRowImpl({
    */
   const previewText = status.magnified ? 'line-clamp-2' : 'truncate';
   const language = interfaceLanguage ?? currentInterfaceLanguage();
+  const labelLanguage = (interfaceLanguage ? interfaceLanguageOf(interfaceLanguage) : null) ?? currentInterfaceLanguage();
   const preview = useConversationPreview({
     conversation,
     viewerId,
@@ -411,6 +443,8 @@ function LensRowImpl({
        */
       className="group"
       {...rowGestures}
+      onFocus={roving.onFocus}
+      onKeyDown={roving.onKeyDown}
       {...(swipe.shown === null ? {} : { 'data-row-swipe': swipe.shown.phase })}
       /**
        * `flexShrink: 0` n'est pas une précaution : la liste est un conteneur
@@ -499,6 +533,7 @@ function LensRowImpl({
           <button
             type="button"
             onClick={() => onOpenDetails(conversation.id)}
+            tabIndex={-1}
             aria-haspopup="dialog"
             aria-label={translate(currentInterfaceLanguage(), 'a11y.avatar.conversation', { name: title })}
             data-lens-avatar-door
@@ -543,6 +578,7 @@ function LensRowImpl({
             name={title}
             opacity={chromeFade}
             profileUsername={peerHandle}
+            outOfTabOrder
             {...(photo === undefined ? {} : { src: photo })}
             {...peerSignals}
             {...(group || peerStoryRing === undefined ? {} : { storyRing: peerStoryRing })}
@@ -554,6 +590,8 @@ function LensRowImpl({
           to="thread"
           params={{ conversation: conversation.id }}
           className="flex min-w-0 flex-1 flex-col justify-center"
+          data-row-primary=""
+          tabIndex={roving.tabIndex}
           {...(active ? { 'aria-current': 'page' as const } : {})}
         >
           {/*
@@ -743,8 +781,8 @@ function LensRowImpl({
                 color: 'var(--color-ios-ink-3)',
               }}
             >
-              <span>{at === undefined ? '' : new Date(at).toISOString().slice(0, 10)}</span>
-              {group ? <span>· {conversation.memberCount} membres</span> : null}
+              <span>{rowDateLabel(at, labelLanguage)}</span>
+              {group ? <span>· {memberCountLabel(conversation.memberCount, labelLanguage)}</span> : null}
             </span>
             {/*
               L'HEURE (#5694, écarts 1 et 8) — `LentilleMetrics.Time.size` = 12
@@ -780,6 +818,7 @@ function LensRowImpl({
             label={translate(currentInterfaceLanguage(), 'callJoin.named', { name: title })}
             text={translate(currentInterfaceLanguage(), 'callJoin.action')}
             onJoin={callActions.join}
+            outOfTabOrder
           />
         )}
       </div>
@@ -808,11 +847,14 @@ function LensRowImpl({
         actionsOf={actionsOf}
         peek={{ conversation, viewerId, languages, isAnonymous: guest }}
         peekOpener={peekOpener}
+        doors={{ search: true, readingMode: apiConfig.readingModesEnabled }}
+        readingModeOf={readingModeOf}
+        tabStop={false}
         {...(menuMore === undefined ? {} : { more: menuMore })}
         categoryId={categoryIdOf(conversation)}
         {...(categories === undefined ? {} : { categories })}
         onAction={onAction}
-        onChoice={(choice) => onRowIntent?.(conversation.id, choice)}
+        onChoice={onChoice}
       />
     </li>
   );

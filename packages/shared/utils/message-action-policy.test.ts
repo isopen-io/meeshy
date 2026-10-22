@@ -82,6 +82,8 @@ describe('messageActionsFor — les verdicts alignés sur la passerelle (#11205)
     expect(actions({ message: mine }).verdicts.report).toBe(false);
     expect(actions({ message: { messageType: 'system' } }).verdicts.report).toBe(false);
     expect(actions().verdicts.report).toBe(true);
+    expect(actions({ viewer: { isActiveMember: false } }).verdicts.report).toBe(false);
+    expect(actions({ viewer: { isActiveMember: false, platformRole: 'MODERATOR', conversationRole: null } }).verdicts.report).toBe(false);
   });
 
   it('en direct, aucun tiers ne retire un message, même un ADMIN de plateforme', () => {
@@ -155,6 +157,17 @@ describe('messageActionsFor — ce que la passerelle accorde sans le droit d’�
     expect(actions({ conversation: { type: 'global' } }).verdicts.pin).toBe('pin');
   });
 
+  it('épingler met un message en avant pour tous : il faut le droit d’écrire, comme la passerelle (#11219)', () => {
+    const announcements = { type: 'broadcast', isAnnouncementChannel: true } as const;
+    const pinned = { pinnedAt: '2026-10-20T10:00:00Z' } as const;
+    expect(actions({ conversation: announcements }).verdicts.pin).toBeNull();
+    expect(actions({ message: pinned, conversation: announcements }).verdicts.pin).toBeNull();
+    expect(actions({ conversation: announcements, viewer: { conversationRole: 'admin' } }).verdicts.pin).toBe('pin');
+    expect(actions({ conversation: { defaultWriteRole: 'moderator' } }).verdicts.pin).toBeNull();
+    expect(actions({ conversation: { closedAt: '2026-10-19T00:00:00Z' } }).verdicts.pin).toBeNull();
+    expect(actions({ message: pinned, conversation: { isActive: false } }).verdicts.pin).toBeNull();
+  });
+
   it('un message épinglé propose « Désépingler », jamais « Épingler »', () => {
     const { verdicts, groups } = actions({ message: { pinnedAt: '2026-10-20T10:00:00Z' } });
     expect(verdicts.pin).toBe('unpin');
@@ -209,5 +222,20 @@ describe('messageActionsFor — ce que la passerelle accorde sans le droit d’�
   it('un lecteur à la fois inscrit et anonyme se lit comme un invité (fermé par défaut)', () => {
     const { verdicts } = actions({ message: { senderId: 'part-other', authorUserId: 'user-viewer' }, viewer: { isAnonymous: true } });
     expect([verdicts.edit, verdicts.deleteForEveryone, verdicts.deleteForMe, verdicts.report, verdicts.pin]).toEqual([null, false, false, false, null]);
+  });
+  it('« Supprimer pour moi » exige un membre actif, comme DELETE /messages/:id/delete-for-me', () => {
+    expect(actions().verdicts.deleteForMe).toBe(true);
+    const left = actions({ viewer: { isActiveMember: false, conversationRole: null } });
+    expect(left.verdicts.deleteForMe).toBe(false);
+    expect(left.groups.destructive).not.toContain('deleteForMe');
+  });
+
+  const photo = { content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg' }] } as const;
+
+  it.each(['server', 'hybrid'])('transfert en conversation %s : le texte se transfère, les pièces non (ENCRYPTED_SOURCE de la passerelle)', (encryptionMode) => {
+    expect(actions({ conversation: { encryptionMode } }).verdicts.forward).toBe(true);
+    expect(actions({ message: photo, conversation: { encryptionMode } }).verdicts.forward).toBe(false);
+    expect(actions({ message: { ...photo, isEncrypted: true, encryptionMode } }).verdicts.forward).toBe(false);
+    expect(actions({ message: photo }).verdicts.forward).toBe(true);
   });
 });

@@ -234,6 +234,9 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
                 continue
             }
 
+            // La réécriture est une écriture : une lecture d'avance tombée entre
+            // la suppression et l'ajout aurait lu « absent » (#11587).
+            prefetch.invalidate(account)
             SecItemDelete(itemQuery as CFDictionary)
 
             var addQuery = itemQuery

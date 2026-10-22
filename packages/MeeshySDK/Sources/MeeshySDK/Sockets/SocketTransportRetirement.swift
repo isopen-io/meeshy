@@ -16,11 +16,11 @@ extension SocketManager: RetirableTransport {}
 final class SocketTransportRetirement: Sendable {
     private let retired = Locked<[any RetirableTransport]>(uncheckedState: [])
     private let grace: Duration
-    private let sleep: @Sendable (Duration) async -> Bool
+    private let sleep: @Sendable @concurrent (Duration) async -> Bool
 
     init(
         grace: Duration = .seconds(12),
-        sleep: @escaping @Sendable (Duration) async -> Bool = { await cancellableSleep(for: $0) }
+        sleep: @escaping @Sendable @concurrent (Duration) async -> Bool = { await cancellableSleep(for: $0) }
     ) {
         self.grace = grace
         self.sleep = sleep

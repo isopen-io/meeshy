@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
@@ -15,7 +15,9 @@ import {
   rowSubmenuItems,
   type RowActionGlyph as RowActionGlyphName,
   type RowActionId,
+  type RowMenuDoors,
   type RowMenuMore,
+  type RowReadingModeMenu,
   type RowSubmenu,
   type RowSubmenuChoice,
 } from '@/lib/view/row-actions';
@@ -128,6 +130,10 @@ type PanelEntry = {
   readonly submenu?: RowSubmenu;
   readonly checked?: boolean;
   readonly ariaLabel?: string;
+  /** Listée, annoncée désactivée, sans effet — un mode que la conversation n'ouvre pas encore. */
+  readonly disabled?: true;
+  /** La raison de la désactivation, sous le libellé. */
+  readonly detail?: string;
   readonly select: () => void;
 };
 
@@ -210,6 +216,16 @@ function swallowNextClick(): () => void {
   return detach;
 }
 
+/** La peau d'une ligne : rouge qui retire (un filet au-dessus du premier), grise désactivée, en gras le retour. */
+function entryStyle(entry: PanelEntry, previous: PanelEntry | undefined): CSSProperties {
+  if (entry.destructive === true) {
+    return { color: 'var(--color-error)', minHeight: 44, ...(previous?.destructive === true ? {} : { borderTop: '1px solid var(--color-edge)' }) };
+  }
+  if (entry.disabled === true) return { color: 'var(--color-ios-ink-3)', minHeight: 44, cursor: 'default' };
+  if (entry.leading === 'back') return { color: 'var(--color-ios-ink)', minHeight: 44, borderBottom: '1px solid var(--color-edge)', fontWeight: 700 };
+  return { color: 'var(--color-ios-ink)', minHeight: 44 };
+}
+
 const NO_CATEGORIES: readonly { readonly id: string; readonly name: string }[] = [];
 
 export function RowActions({
@@ -225,6 +241,9 @@ export function RowActions({
   peek,
   actionsOf,
   peekOpener,
+  doors,
+  readingModeOf,
+  tabStop = true,
   onAction,
   onChoice,
 }: {
@@ -250,15 +269,40 @@ export function RowActions({
   readonly actionsOf?: () => ConversationActions;
   /** Le relais que `LensRow` remet à son `useLongPress`. */
   readonly peekOpener?: RowPeekOpener;
+  /** « Rechercher » et « Mode de lecture › » (#11226) — absentes, le menu ne les porte pas. */
+  readonly doors?: RowMenuDoors;
+  /**
+   * Le sous-menu « Mode de lecture », lu À L'ENTRÉE — la préférence a pu
+   * changer depuis le rendu. Une promesse : sa loi se charge avec le menu
+   * (`row-reading-mode.ts`), et l'ouverture du menu l'amorce.
+   */
+  readonly readingModeOf?: () => Promise<RowReadingModeMenu>;
+  /**
+   * FAUX : le bouton sort du parcours `Tab` (#11227) — la rangée y mène aux
+   * flèches et par la touche menu ; il reste annoncé et focalisable.
+   */
+  readonly tabStop?: boolean;
   readonly onAction: (id: RowActionId) => void;
   /** Un choix de sous-menu (favori, catégorie) part vers l'écran. */
   readonly onChoice?: (choice: RowSubmenuChoice) => void;
 }) {
   const [verdict, setVerdict] = useState<ConversationActions | undefined>(undefined);
   const itemsFor = (actions: ConversationActions | undefined) =>
-    rowMenuItems({ flags, unread, language, canCall, canDelete, ...(more === undefined ? {} : { more }), ...(actions === undefined ? {} : { actions }) });
+    rowMenuItems({
+      flags,
+      unread,
+      language,
+      canCall,
+      canDelete,
+      ...(more === undefined ? {} : { more }),
+      ...(actions === undefined ? {} : { actions }),
+      ...(doors === undefined ? {} : { doors }),
+    });
   const items = itemsFor(verdict);
   const [submenu, setSubmenu] = useState<RowSubmenu | null>(null);
+  const [readingMenu, setReadingMenu] = useState<RowReadingModeMenu | undefined>(undefined);
+  const submenuItemsOf = (next: RowSubmenu, reading: RowReadingModeMenu | undefined = readingMenu) =>
+    rowSubmenuItems({ submenu: next, favorite: more?.favorite, categoryId, categories, language, ...(reading === undefined ? {} : { readingMode: reading }) });
   const [mode, setMode] = useState<'panel' | 'peek'>('panel');
   const [peekBox, setPeekBox] = useState<PeekBox>({ top: 0, left: 0, width: PEEK_WIDTH, cardHeight: PEEK_MAX_HEIGHT, menuOffset: 0, menuMaxHeight: 0 });
   const submenuTitle = submenu === null ? undefined : items.find((item) => item.submenu === submenu)?.label;
@@ -289,12 +333,13 @@ export function RowActions({
             ariaLabel: `${rowMenuText(language, 'rowMenu.back')}, ${submenuTitle ?? ''}`,
             select: () => leave(),
           },
-          ...rowSubmenuItems({ submenu, favorite: more?.favorite, categoryId, categories, language }).map((entry) => ({
+          ...submenuItemsOf(submenu).map((entry) => ({
             key: entry.key,
             label: entry.label,
             checked: entry.checked,
             ...(entry.destructive === true ? { destructive: true as const } : {}),
-            select: () => pick(entry.choice),
+            ...(entry.disabled === true ? { disabled: true as const, detail: entry.detail ?? '' } : {}),
+            select: () => (entry.disabled === true ? undefined : pick(entry.choice)),
           })),
         ];
 
@@ -396,7 +441,9 @@ export function RowActions({
     onResize: () => setOpen(false),
   });
 
-  /* Refermé, le menu se rouvrira sur sa liste principale. */
+  /* Refermé, le menu se rouvrira sur sa liste principale ; une loi chargée après la fermeture n'ouvre rien. */
+  const openRef = useRef(false);
+  openRef.current = open;
   useEffect(() => {
     if (!open) setSubmenu(null);
   }, [open]);
@@ -410,11 +457,18 @@ export function RowActions({
     setActiveIndex(index);
     requestAnimationFrame(() => itemRefs.current[index]?.focus());
   };
-  const enter = (next: RowSubmenu) => {
-    const count = rowSubmenuItems({ submenu: next, favorite: more?.favorite, categoryId, categories, language }).length + 1;
-    place(count);
+  const show = (next: RowSubmenu, reading: RowReadingModeMenu | undefined) => {
+    setReadingMenu(reading);
+    place(submenuItemsOf(next, reading).length + 1);
     setSubmenu(next);
     focusAt(0);
+  };
+  const enter = (next: RowSubmenu) => {
+    if (next !== 'readingMode' || readingModeOf === undefined) return show(next, readingMenu);
+    void readingModeOf().then(
+      (reading) => (openRef.current ? show(next, reading) : undefined),
+      () => undefined,
+    );
   };
   const leave = () => {
     const from = submenu;
@@ -452,7 +506,10 @@ export function RowActions({
    * verdicts du rôle se lisent ICI, à l'ouverture, et le panneau se mesure sur
    * le nombre d'entrées qu'ils donnent.
    */
+  /* La loi du sous-menu « Mode de lecture » se charge pendant que le menu s'ouvre. */
+  const warmReadingMode = () => void readingModeOf?.().catch(() => undefined);
   const openPanel = () => {
+    warmReadingMode();
     const actions = actionsOf?.();
     setVerdict(actions);
     setMode('panel');
@@ -465,6 +522,7 @@ export function RowActions({
       openPanel();
       return true;
     }
+    warmReadingMode();
     const actions = actionsOf?.();
     setVerdict(actions);
     setMode('peek');
@@ -540,6 +598,7 @@ export function RowActions({
       {...(entry.checked === undefined ? {} : { 'aria-checked': entry.checked })}
       {...(entry.submenu === undefined ? {} : { 'aria-haspopup': 'menu' as const, 'aria-expanded': false })}
       {...(entry.ariaLabel === undefined ? {} : { 'aria-label': entry.ariaLabel })}
+      {...(entry.disabled === true ? { 'aria-disabled': true as const } : {})}
       tabIndex={index === activeIndex ? 0 : -1}
       onFocus={() => setActiveIndex(index)}
       onClick={(event) => {
@@ -549,13 +608,7 @@ export function RowActions({
       }}
       {...(entry.destructive === true ? { 'data-destructive': 'true' } : {})}
       className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
-      style={
-        entry.destructive === true
-          ? { color: 'var(--color-error)', minHeight: 44, ...(entries[index - 1]?.destructive === true ? {} : { borderTop: '1px solid var(--color-edge)' }) }
-          : entry.leading === 'back'
-            ? { color: 'var(--color-ios-ink)', minHeight: 44, borderBottom: '1px solid var(--color-edge)', fontWeight: 700 }
-            : { color: 'var(--color-ios-ink)', minHeight: 44 }
-      }
+      style={entryStyle(entry, entries[index - 1])}
     >
       {entry.leading === 'back' ? (
         <span className="grid place-items-center rtl:-scale-x-100" style={{ color: 'var(--color-ios-ink-2)' }}>
@@ -570,6 +623,11 @@ export function RowActions({
           accessible et les sélecteurs de texte des gates le lisent
           sur la ligne elle-même, jamais sur un enfant. */}
       {entry.label}
+      {entry.detail === undefined || entry.detail === '' ? null : (
+        <span data-row-menu-detail className="ms-auto min-w-0 truncate text-check font-normal">
+          {entry.detail}
+        </span>
+      )}
       {entry.submenu === undefined ? null : (
         <span className="ms-auto grid place-items-center rtl:-scale-x-100" style={{ color: 'var(--color-ios-ink-3)' }}>
           <GlyphSvg glyph={ROW_MENU_GLYPHS.caretRight} size={14} />
@@ -602,6 +660,7 @@ export function RowActions({
         aria-label={menuLabel}
         aria-haspopup="menu"
         aria-expanded={open}
+        {...(tabStop ? {} : { tabIndex: -1 })}
         onClick={(event) => {
           // La rangée entière est un lien (`LensRow`) : sans ceci, le clic
           // navigue vers le fil AVANT que le menu n'ait pu s'ouvrir.
@@ -614,7 +673,7 @@ export function RowActions({
           openPanel();
         }}
         /**
-         * LE BOUTON EST TOUJOURS DANS L'ORDRE DE TABULATION ET JAMAIS
+         * LE BOUTON EST TOUJOURS ATTEIGNABLE AU CLAVIER ET JAMAIS
          * `aria-hidden` — c'était le défaut de la première forme : hors
          * magnification il portait `aria-hidden` et `tabIndex={-1}`, si bien
          * que le survol le rendait VISIBLE et CLIQUABLE tout en le laissant
@@ -623,7 +682,10 @@ export function RowActions({
          * qu'un contrôle absent : la magnification est élue par la POSITION DE
          * DÉFILEMENT, que personne ne pilote au clavier, donc les actions de
          * toutes les autres rangées n'existaient tout simplement pas pour qui
-         * n'a pas de souris.
+         * n'a pas de souris. Dans la liste (#11227), il sort du parcours
+         * `Tab` (`tabStop={false}`) sans cesser d'être atteignable : la flèche
+         * vers la fin de ligne y mène depuis le lien de SA rangée, et la touche
+         * menu ou Maj+F10 ouvre ce même menu depuis n'importe où dans la rangée.
          *
          * Ce qui reste conditionnel est la seule APPARENCE : opacité 0 au
          * repos, 1 dès que la rangée est magnifiée, survolée, que le bouton a

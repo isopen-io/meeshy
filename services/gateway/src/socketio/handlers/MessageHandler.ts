@@ -98,6 +98,7 @@ import {
 } from '../../services/messaging/messageLinks';
 import {
   admitMessageEdit,
+  editRefusalCode,
   isEditRefused,
   describeEditRefusalForSocket,
 } from '../../services/messaging/messageEditAdmission';
@@ -745,7 +746,7 @@ export class MessageHandler {
               conversationId: true,
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes ajoutées à un `select` déjà là : aucun aller-retour de plus.
-              conversation: { select: { isActive: true, closedAt: true, type: true } },
+              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
               senderId: true,
               content: true,
               originalLanguage: true,
@@ -804,7 +805,7 @@ export class MessageHandler {
         // `else` et s'annoncerait « vous n'êtes pas autorisé » — un refus
         // d'autorisation pour un état qui n'en est pas un, et que l'éditeur
         // corrigerait indéfiniment sans comprendre.
-        this._sendGenericError(callback, describeEditRefusalForSocket(admission.reason), socket);
+        this._sendGenericError(callback, describeEditRefusalForSocket(admission.reason), socket, editRefusalCode(admission.reason));
         return;
       }
 

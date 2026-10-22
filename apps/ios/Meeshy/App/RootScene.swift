@@ -13,7 +13,7 @@ struct RootSceneState {
 struct RootSceneActions {
     let onLoginAppear: () -> Void
     let onSkipCelebration: () -> Void
-    let holdSplashUntilCeiling: () async -> Void
+    let holdSplashUntilCeiling: @MainActor () async -> Void
 }
 
 struct RootInputs {

@@ -13,6 +13,14 @@
 # supprime que des sauvegardes COMPLÈTES : un échec ne fait jamais tomber une
 # sauvegarde réussie.
 #
+# Le même script sert la sauvegarde NOCTURNE (le timer) et celle qu'un administrateur
+# lance DEPUIS L'ADMINISTRATION (#11441, par le relais d'opérations). BACKUP_ORIGIN
+# les distingue (`nightly`, le défaut, ou `on-demand`) : une sauvegarde à la demande
+# porte le témoin A-LA-DEMANDE, et chaque origine a SA rotation (KEEP nocturnes,
+# KEEP_ON_DEMAND à la demande). Trois demandes en 18 h ne font donc jamais sortir la
+# dernière nocturne vérifiée : si la base s'abîme entre-temps, elle reste là (#11450).
+# Une sauvegarde sans témoin est nocturne — celles d'avant cette marque le sont toutes.
+#
 # Ces sauvegardes sont sur le disque de la production : elles protègent d'une erreur
 # ou d'une corruption, pas de la perte du serveur (copie hors site : #9232).
 #
@@ -28,6 +36,8 @@ umask 077
 COMPOSE_DIR="${COMPOSE_DIR:-/opt/meeshy/production}"
 BACKUP_ROOT="${BACKUP_ROOT:-/opt/meeshy/backups/nightly}"
 KEEP="${KEEP:-3}"
+KEEP_ON_DEMAND="${KEEP_ON_DEMAND:-1}"
+BACKUP_ORIGIN="${BACKUP_ORIGIN:-nightly}"
 DB_CONTAINER="${DB_CONTAINER:-meeshy-database}"
 DB_NAME="${DB_NAME:-meeshy}"
 VOLUMES="${VOLUMES:-meeshy_gateway_uploads meeshy_gateway_sounds meeshy_frontend_uploads meeshy_redis_data}"
@@ -137,15 +147,24 @@ trap on_exit EXIT
 trap 'exit 143' TERM INT
 
 [[ "$KEEP" =~ ^[1-9][0-9]*$ ]] || fail "KEEP doit être un entier ≥ 1"
+[[ "$KEEP_ON_DEMAND" =~ ^[1-9][0-9]*$ ]] || fail "KEEP_ON_DEMAND doit être un entier ≥ 1"
+[[ "$BACKUP_ORIGIN" == nightly || "$BACKUP_ORIGIN" == on-demand ]] || fail "BACKUP_ORIGIN doit valoir nightly ou on-demand"
 install -d -m 700 "$BACKUP_ROOT"
 
 free_gb="$(df --output=avail -BG "$BACKUP_ROOT" | tail -1 | tr -dc '0-9')"
 (( free_gb >= MIN_FREE_GB )) || fail "espace libre ${free_gb} Go < ${MIN_FREE_GB} Go"
 
+# $1 = nightly | on-demand | all (défaut) : les sauvegardes complètes de cette origine,
+# de la plus ancienne à la plus récente. Le témoin A-LA-DEMANDE fait l'origine.
 complete_backups() {
   local backup
   for backup in "$BACKUP_ROOT"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9]Z; do
-    [[ -d "$backup" && -f "$backup/COMPLET" ]] && printf '%s\n' "$backup"
+    [[ -d "$backup" && -f "$backup/COMPLET" ]] || continue
+    case "${1:-all}" in
+      nightly) [[ -f "$backup/A-LA-DEMANDE" ]] && continue ;;
+      on-demand) [[ -f "$backup/A-LA-DEMANDE" ]] || continue ;;
+    esac
+    printf '%s\n' "$backup"
   done
   return 0
 }
@@ -153,7 +172,7 @@ previous="$(complete_backups | tail -1)"
 
 mkdir -p "$WORK/config" "$WORK/base" "$WORK/volumes"
 T0="$(date +%s)"
-log "sauvegarde $STAMP → $DEST (précédente : ${previous:-aucune})"
+log "sauvegarde $BACKUP_ORIGIN $STAMP → $DEST (précédente : ${previous:-aucune})"
 
 cp -p "$COMPOSE_DIR/docker-compose.yml" "$COMPOSE_DIR/.env" "$WORK/config/"
 [[ -d "$COMPOSE_DIR/secrets" ]] && cp -a "$COMPOSE_DIR/secrets" "$WORK/config/secrets"
@@ -222,12 +241,14 @@ done
 (cd "$WORK" && sha256sum "base/$DB_NAME.archive.gz" > SHA256SUMS)
 {
   echo "horodatage=$STAMP"
+  echo "origine=$BACKUP_ORIGIN"
   echo "duree_secondes=$(( $(date +%s) - T0 ))"
   echo "base=$(head -1 "$WORK/base/verification.txt")"
   echo "archive=$(du -h "$WORK/base/$DB_NAME.archive.gz" | cut -f1)"
   for volume in $VOLUMES; do echo "volume $volume=$(du -sh "$WORK/volumes/$volume" | cut -f1)"; done
 } > "$WORK/MANIFESTE"
 
+[[ "$BACKUP_ORIGIN" == on-demand ]] && touch "$WORK/A-LA-DEMANDE"
 mv "$WORK" "$DEST"
 touch "$DEST/COMPLET"
 
@@ -239,12 +260,19 @@ DURATION_SECONDS="$(( $(date +%s) - T0 ))" \
 VOLUME_SIZES="$volume_sizes" \
   write_status ok || log "verdict non publié dans $STATUS_DIR"
 
-mapfile -t complete < <(complete_backups)
-excess=$(( ${#complete[@]} - KEEP ))
-for (( i = 0; i < excess; i++ )); do
-  log "rotation : suppression de ${complete[$i]}"
-  rm -rf -- "${complete[$i]}"
-done
+# Chaque origine ne fait tourner que les siennes : une sauvegarde à la demande ne
+# touche jamais une nocturne, ni l'inverse.
+rotate() {
+  local origin="$1" keep="$2" i
+  local -a complete
+  mapfile -t complete < <(complete_backups "$origin")
+  local excess=$(( ${#complete[@]} - keep ))
+  for (( i = 0; i < excess; i++ )); do
+    log "rotation ($origin) : suppression de ${complete[$i]}"
+    rm -rf -- "${complete[$i]}"
+  done
+}
+if [[ "$BACKUP_ORIGIN" == on-demand ]]; then rotate on-demand "$KEEP_ON_DEMAND"; else rotate nightly "$KEEP"; fi
 find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -name '.en-cours-*' -mmin +1440 -exec rm -rf -- {} +
 
 printf 'OK %s %s\n' "$STAMP" "$(head -1 "$DEST/base/verification.txt")" > "$BACKUP_ROOT/DERNIER-ETAT"
