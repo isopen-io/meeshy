@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="contacts_requests_empty">Keine offenen Anfragen</string>
+    <string name="contacts_list_error">Kontakte konnten nicht geladen werden</string>
+    <string name="contacts_discover_prompt">Suche nach Personen, mit denen du dich vernetzen möchtest</string>
+    <string name="contacts_discover_suggestions_title">Vorschläge</string>
+    <string name="contacts_discover_suggestions_empty">Im Moment keine Vorschläge</string>
+    <string name="contacts_discover_error">Nutzersuche fehlgeschlagen</string>
+    <string name="contacts_discover_connect">Verbinden</string>
+    <string name="contacts_discover_contact">Kontakt</string>
+    <string name="contacts_blocked_error">Blockierte Nutzer konnten nicht geladen werden</string>
+</resources>
