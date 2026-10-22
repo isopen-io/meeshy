@@ -66,6 +66,8 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)
+    // Test-only: OutboxFlushWorkerTest builds the worker with TestListenableWorkerBuilder.
+    testImplementation(libs.work.testing)
     // Test-only: TusUploadRepositoryTest constructs raw retrofit2.Response fixtures
     // to stub TusApi.createUpload (the Location-header response createSession()
     // reads). :core:network keeps retrofit an `implementation` (not `api`) dependency
