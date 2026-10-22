@@ -4430,7 +4430,7 @@ class ChatViewModelTest {
 
             val details = h.vm.state.value.reactionDetails!!
             assertThat(details.isLoading).isFalse()
-            val tab = details.breakdown.tabs.single()
+            val tab = details.breakdown.tabs.filterIsInstance<ReactionTab.Emoji>().single()
             assertThat(tab.count).isEqualTo(2)
             // Self floats to the top.
             assertThat(tab.reactors.first().isSelf).isTrue()
@@ -4501,7 +4501,7 @@ class ChatViewModelTest {
         val form = h.vm.state.value.reportForm
         assertThat(form).isNotNull()
         assertThat(form!!.messageId).isEqualTo("m9")
-        assertThat(form.selectedReason).isEqualTo(ReportReason.SPAM)
+        assertThat(form.selectedReason).isNull()
         assertThat(h.vm.state.value.actionMessageId).isNull()
     }
 
@@ -4530,6 +4530,11 @@ class ChatViewModelTest {
 
         h.vm.submitReport()
         advanceUntilIdle()
+        coVerify(exactly = 0) { h.reportRepo.reportMessage(any(), any(), any()) }
+        assertThat(h.vm.state.value.reportForm!!.isConfirming).isTrue()
+
+        h.vm.confirmReportSubmit()
+        advanceUntilIdle()
 
         coVerify(exactly = 1) { h.reportRepo.reportMessage("m9", ReportReason.VIOLENCE, "threatened another member") }
         assertThat(h.vm.state.value.reportForm!!.isSubmitted).isTrue()
@@ -4541,8 +4546,10 @@ class ChatViewModelTest {
         coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
         advanceUntilIdle()
         h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
 
         h.vm.submitReport()
+        h.vm.confirmReportSubmit()
         advanceUntilIdle()
 
         val form = h.vm.state.value.reportForm!!
@@ -4556,8 +4563,10 @@ class ChatViewModelTest {
         coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns null
         advanceUntilIdle()
         h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
 
         h.vm.submitReport()
+        h.vm.confirmReportSubmit()
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.reportForm!!.hasError).isTrue()
@@ -4569,12 +4578,55 @@ class ChatViewModelTest {
         coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns NetworkResult.Success(Unit)
         advanceUntilIdle()
         h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
 
         h.vm.submitReport()
-        h.vm.submitReport()
+        h.vm.confirmReportSubmit()
+        h.vm.confirmReportSubmit()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { h.reportRepo.reportMessage(any(), any(), any()) }
+    }
+
+    @Test
+    fun a_report_without_a_reason_is_never_sent() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+
+        h.vm.submitReport()
+        h.vm.confirmReportSubmit()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.reportRepo.reportMessage(any(), any(), any()) }
+    }
+
+    @Test
+    fun confirming_without_a_prior_request_sends_nothing() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
+
+        h.vm.confirmReportSubmit()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.reportRepo.reportMessage(any(), any(), any()) }
+    }
+
+    @Test
+    fun cancelling_the_confirmation_sends_nothing_and_keeps_the_sheet() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
+        h.vm.submitReport()
+
+        h.vm.cancelReportConfirmation()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.reportRepo.reportMessage(any(), any(), any()) }
+        assertThat(h.vm.state.value.reportForm!!.isConfirming).isFalse()
     }
 
     @Test

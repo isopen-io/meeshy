@@ -625,6 +625,9 @@ class ChatViewModel @Inject constructor(
     /** Select a tab in the open who-reacted sheet; an out-of-range index is inert. */
     fun selectReactionTab(index: Int) = reactions.selectTab(index)
 
+    /** Adds [emoji] from the who-reacted sheet's quick strip (inert when the viewer already has it). */
+    fun addReactionFromDetails(messageId: String, emoji: String) = reactions.addFromDetails(messageId, emoji)
+
     /** Dismiss the who-reacted sheet. */
     fun closeReactionDetails() = reactions.closeDetails()
 
@@ -757,17 +760,30 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * File the report. A submission in flight or already succeeded short-circuits a re-tap
-     * ([ReportMessageForm.canSubmit]), so a double tap never fires two reports. An inert repository
-     * result (no session) or a network failure both surface [ReportMessageForm.hasError] and clear
-     * the submitting flag, so the user can retry.
+     * "Envoyer le signalement" tapped: raises the mandatory confirmation dialog and sends nothing.
+     * Inert without a reason or while a send is in flight / done, so a double tap never stacks.
      */
     fun submitReport() {
+        _state.update { it.copy(reportForm = it.reportForm?.requestConfirmation()) }
+    }
+
+    fun cancelReportConfirmation() {
+        _state.update { it.copy(reportForm = it.reportForm?.cancelConfirmation()) }
+    }
+
+    /**
+     * File the report — only reachable from the confirmation dialog ([ReportMessageForm.isConfirming]),
+     * so no report ever reaches moderation unconfirmed, and a second confirm is inert. An inert
+     * repository result (no session) or a network failure both surface [ReportMessageForm.hasError]
+     * so the user can retry.
+     */
+    fun confirmReportSubmit() {
         val form = _state.value.reportForm ?: return
-        if (!form.canSubmit) return
+        val reason = form.selectedReason ?: return
+        if (!form.isConfirming) return
         _state.update { it.copy(reportForm = it.reportForm?.submitting()) }
         viewModelScope.launch {
-            val result = reportRepository.reportMessage(form.messageId, form.selectedReason, form.details)
+            val result = reportRepository.reportMessage(form.messageId, reason, form.details)
             _state.update { current ->
                 val open = current.reportForm ?: return@update current
                 current.copy(reportForm = if (result is NetworkResult.Success) open.submitted() else open.failed())

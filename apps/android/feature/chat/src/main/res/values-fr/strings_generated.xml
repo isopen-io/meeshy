@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="common_cancel">Annuler</string>
+    <string name="common_send">Envoyer</string>
+    <string name="common_unknown">Inconnu</string>
     <string name="composer_a11y_addSelection">Ajouter la sélection</string>
     <string name="composer_a11y_cancelSelection">Annuler la sélection</string>
     <string name="composer_a11y_openFullLibrary">Ouvrir toute la photothèque</string>
@@ -16,6 +19,10 @@
     <string name="composer_recent_grantAccess">Autoriser l\'accès aux photos</string>
     <string name="composer_recent_grantAccess_hint">Pour retrouver vos médias récents ici</string>
     <string name="composer_recent_select">Sélectionner</string>
+    <string name="message_detail_reactions_count_a11y">%d réaction(s)</string>
+    <string name="message_detail_reactions_empty">Aucune réaction</string>
+    <string name="message_detail_report_confirm_message">Le message sera transmis à la modération.</string>
+    <string name="message_detail_report_confirm_title">Signaler ce message ?</string>
     <string name="recentMedia_resolveFailed">Ce média n\'a pas pu être préparé — passez par la photothèque complète</string>
     <string name="recentMedia_resolveFailed_multiple">%d médias n\'ont pas pu être préparés — passez par la photothèque complète</string>
 </resources>

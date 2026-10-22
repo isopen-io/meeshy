@@ -177,6 +177,8 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onSelectReason = actions.selectReportReason,
             onDetailsChange = actions.onReportDetailsChange,
             onSubmit = actions.submitReport,
+            onConfirmSubmit = actions.confirmReportSubmit,
+            onCancelConfirm = actions.cancelReportConfirmation,
             onDismiss = actions.dismissReport,
         )
     }
@@ -193,20 +195,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         )
     }
 
-    val pickerMessageId = state.emojiPickerMessageId
-    if (pickerMessageId != null) {
-        ModalBottomSheet(
-            onDismissRequest = actions.dismissEmojiPicker,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        ) {
-            EmojiFullPicker(
-                onSelect = { emoji -> actions.toggleReaction(pickerMessageId, emoji) },
-                accentColor = accentColor,
-                modifier = Modifier.navigationBarsPadding(),
-            )
-        }
-    }
-
     val reactionDetails = state.reactionDetails
     if (reactionDetails != null) {
         ModalBottomSheet(
@@ -217,6 +205,22 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 details = reactionDetails,
                 accentColor = accentColor,
                 onSelectTab = actions.selectReactionTab,
+                onReact = { emoji -> actions.addReactionFromDetails(reactionDetails.messageId, emoji) },
+                onOpenFullPicker = { actions.openEmojiPicker(reactionDetails.messageId) },
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
+    }
+
+    val pickerMessageId = state.emojiPickerMessageId
+    if (pickerMessageId != null) {
+        ModalBottomSheet(
+            onDismissRequest = actions.dismissEmojiPicker,
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
+            EmojiFullPicker(
+                onSelect = { emoji -> actions.toggleReaction(pickerMessageId, emoji) },
+                accentColor = accentColor,
                 modifier = Modifier.navigationBarsPadding(),
             )
         }
