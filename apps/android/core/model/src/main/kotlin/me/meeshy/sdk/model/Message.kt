@@ -21,6 +21,7 @@ data class ApiMessageReplyPreview(
     val id: String,
     val content: String = "",
     val senderDisplayName: String? = null,
+    val senderId: String? = null,
     val deletedAt: String? = null,
     @Serializable(with = LossyApiMessageAttachmentListOrNullSerializer::class)
     val attachments: List<ApiMessageAttachment>? = null,
