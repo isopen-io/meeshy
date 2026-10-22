@@ -130,6 +130,15 @@ public object CallFrameRenderKit {
         )
     }
 
+    /** Où dessiner une image de [imageWidth] × [imageHeight] pour qu'elle remplisse [target] sans se déformer (rognée, centrée). */
+    public fun aspectFill(imageWidth: Double, imageHeight: Double, target: CallFrameRect): CallFrameRect? {
+        if (imageWidth <= 0 || imageHeight <= 0 || target.width <= 0 || target.height <= 0) return null
+        val scale = max(target.width / imageWidth, target.height / imageHeight)
+        val width = imageWidth * scale
+        val height = imageHeight * scale
+        return CallFrameRect(target.midX - width / 2, target.midY - height / 2, width, height)
+    }
+
     /** L'arrondi « demi vers l'extérieur » de Swift (`rounded()`), que `roundToInt` ne donne pas pour les négatifs. */
     internal fun Double.roundHalfAway(): Int = if (this < 0) -((-this).roundToInt()) else roundToInt()
 }

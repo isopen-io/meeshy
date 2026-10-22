@@ -91,4 +91,24 @@ class CallFrameRenderKitTest {
         val photo = CallFrameRenderKit.photoRect(box, CallFrameCard("#FFFFFF", pad = 0.1, foot = 0.2))
         assertThat(photo).isEqualTo(CallFrameRect(10.0, 10.0, 80.0, 200.0 - 20.0 - 20.0))
     }
+
+    @Test
+    fun `une image remplit la cible en etant rognee et centree sans deformation`() {
+        val target = CallFrameRect(0.0, 0.0, 100.0, 100.0)
+        val wide = CallFrameRenderKit.aspectFill(200.0, 100.0, target)!!
+        assertThat(wide.height).isEqualTo(100.0)
+        assertThat(wide.width).isEqualTo(200.0)
+        assertThat(wide.midX).isEqualTo(50.0)
+        val tall = CallFrameRenderKit.aspectFill(50.0, 100.0, target)!!
+        assertThat(tall.width).isEqualTo(100.0)
+        assertThat(tall.height).isEqualTo(200.0)
+        assertThat(tall.midY).isEqualTo(50.0)
+    }
+
+    @Test
+    fun `une image vide ou une cible vide ne dessinent rien`() {
+        val target = CallFrameRect(0.0, 0.0, 100.0, 100.0)
+        assertThat(CallFrameRenderKit.aspectFill(0.0, 10.0, target)).isNull()
+        assertThat(CallFrameRenderKit.aspectFill(10.0, 10.0, CallFrameRect(0.0, 0.0, 0.0, 5.0))).isNull()
+    }
 }
