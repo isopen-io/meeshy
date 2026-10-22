@@ -62,3 +62,50 @@ class GameMotionLawsTest {
         assertThat(GameTypeScaleLaw.factor(2f)).isEqualTo(1.3f)
     }
 }
+
+class GameEffectsLawTest {
+
+    @Test
+    fun `aucun effet hors de son temps`() {
+        assertThat(GameEffectsLaw.isActive(0.0)).isFalse()
+        assertThat(GameEffectsLaw.isActive(1.0)).isFalse()
+        assertThat(GameEffectsLaw.isActive(-0.2)).isFalse()
+        assertThat(GameEffectsLaw.isActive(0.5)).isTrue()
+        assertThat(GameEffectsLaw.sheenAlpha(0.0, 0.9)).isEqualTo(0.0)
+        assertThat(GameEffectsLaw.sheenAlpha(1.0, 0.9)).isEqualTo(0.0)
+        assertThat(GameEffectsLaw.ringAlpha(1.0)).isEqualTo(0.0)
+    }
+
+    @Test
+    fun `le reflet culmine au milieu de sa course`() {
+        assertThat(GameEffectsLaw.sheenAlpha(0.5, 1.0)).isWithin(1e-9).of(0.8)
+        assertThat(GameEffectsLaw.sheenAlpha(0.5, 5.0)).isWithin(1e-9).of(0.8)
+    }
+
+    @Test
+    fun `l'anneau s'elargit en s'eteignant`() {
+        assertThat(GameEffectsLaw.ringDiameterFraction(0.5)).isEqualTo(0.7)
+        assertThat(GameEffectsLaw.ringAlpha(0.5)).isEqualTo(0.3)
+    }
+
+    @Test
+    fun `l'irisation se fige au repos sous mouvement reduit`() {
+        assertThat(GameEffectsLaw.effectiveTilt(0.4, reduceMotion = true)).isEqualTo(0.25)
+        assertThat(GameEffectsLaw.effectiveTilt(0.4, reduceMotion = false)).isEqualTo(0.4)
+        assertThat(GameEffectsLaw.iridescenceAlpha(0.6)).isWithin(1e-9).of(0.21)
+        assertThat(GameEffectsLaw.iridescenceAlpha(0.0)).isEqualTo(0.0)
+    }
+
+    @Test
+    fun `mouvement reduit vient d'une echelle d'animation a zero`() {
+        assertThat(GameReduceMotionLaw.fromAnimatorScale(0f)).isTrue()
+        assertThat(GameReduceMotionLaw.fromAnimatorScale(1f)).isFalse()
+        assertThat(GameReduceMotionLaw.fromAnimatorScale(0.5f)).isFalse()
+    }
+
+    @Test
+    fun `la raideur Compose vaut la response SwiftUI au carre`() {
+        assertThat(GameBounceSpec.pressStiffness).isWithin(1f).of(1218.5f)
+        assertThat(GameBounceSpec.releaseStiffness).isWithin(1f).of(304.7f)
+    }
+}

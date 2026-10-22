@@ -36,6 +36,15 @@ object GameBounceSpec {
     const val RELEASE_RESPONSE: Float = 0.36f
     const val RELEASE_DAMPING: Float = 0.52f
 
+    /** Raideur d'un ressort Compose (masse 1) équivalente à la « response » d'un ressort SwiftUI. */
+    fun stiffness(response: Float): Float {
+        val omega = (2 * Math.PI / response).toFloat()
+        return omega * omega
+    }
+
+    val pressStiffness: Float get() = stiffness(PRESS_RESPONSE)
+    val releaseStiffness: Float get() = stiffness(RELEASE_RESPONSE)
+
     fun scale(pressed: Boolean, reduceMotion: Boolean): Float =
         if (pressed && !reduceMotion) PRESS_SCALE else 1f
 
@@ -75,4 +84,40 @@ object GameTypeScaleLaw {
     const val MAXIMUM: Float = 1.3f
 
     fun factor(fontScale: Float): Float = min(max(fontScale, 1f), MAXIMUM)
+}
+
+/** Android n'a pas de réglage Meeshy : « réduire les animations » = échelle d'animation système à zéro. */
+object GameReduceMotionLaw {
+    fun fromAnimatorScale(scale: Float): Boolean = scale == 0f
+}
+
+/**
+ * Les trois effets (reflet, onde, irisation) : AUCUN effet hors de leur temps, repli en dégradé sans
+ * shader. Les nombres sont ceux des replis de `GameShaders.swift`.
+ */
+object GameEffectsLaw {
+    /** Le temps pendant lequel un `progress` anime vraiment l'effet. */
+    fun isActive(progress: Double): Boolean = progress > 0 && progress < 1
+
+    fun clamp01(value: Double): Double = min(1.0, max(0.0, value))
+
+    /** L'irisation figée sous mouvement réduit : une inclinaison de repos. */
+    const val RESTING_TILT: Double = 0.25
+    const val IRIDESCENCE_ALPHA: Double = 0.35
+
+    fun effectiveTilt(tilt: Double, reduceMotion: Boolean): Double = if (reduceMotion) RESTING_TILT else tilt
+
+    fun iridescenceAlpha(intensity: Double): Double = IRIDESCENCE_ALPHA * clamp01(intensity)
+
+    /** L'opacité de la bande de reflet à l'instant [progress]. */
+    fun sheenAlpha(progress: Double, intensity: Double): Double =
+        if (!isActive(progress)) 0.0 else 0.8 * clamp01(intensity) * kotlin.math.sin(progress * Math.PI)
+
+    /** Le décalage horizontal de la bande, en fraction de la largeur (de -0,5 à 1,1). */
+    fun sheenOffsetFraction(progress: Double): Double = -0.5 + 1.6 * progress
+
+    /** L'anneau d'onde : diamètre en fraction de la plus grande dimension, et opacité. */
+    fun ringDiameterFraction(progress: Double): Double = 1.4 * progress
+
+    fun ringAlpha(progress: Double): Double = if (!isActive(progress)) 0.0 else 0.6 * (1 - progress)
 }

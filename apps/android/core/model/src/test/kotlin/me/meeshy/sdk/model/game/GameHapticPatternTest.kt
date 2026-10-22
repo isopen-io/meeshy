@@ -57,3 +57,42 @@ class GameHapticPatternTest {
         assertThat(GameHapticPattern.ceremonyBlow(final = true)).isEqualTo(GameHapticPattern.strikeInPlace)
     }
 }
+
+class GameHapticPlanTest {
+
+    @Test
+    fun `la composition garde les ecarts du motif de frappe`() {
+        val steps = GameHapticPlan.steps(GameHapticPattern.strike)
+        assertThat(steps).hasSize(2)
+        assertThat(steps[0].delayMillis).isEqualTo(450)
+        assertThat(steps[0].primitive).isEqualTo(GameHapticPlan.Primitive.CLICK)
+        assertThat(steps[0].scale).isEqualTo(1.0f)
+        assertThat(steps[1].delayMillis).isEqualTo(70)
+        assertThat(steps[1].primitive).isEqualTo(GameHapticPlan.Primitive.TICK)
+    }
+
+    @Test
+    fun `la forme d'onde alterne silence et toucher`() {
+        val wave = GameHapticPlan.waveform(GameHapticPattern.strike)!!
+        assertThat(wave.timings.toList()).containsExactly(450L, 20L, 70L, 20L).inOrder()
+        assertThat(wave.amplitudes.toList()).containsExactly(0, 255, 0, 115).inOrder()
+    }
+
+    @Test
+    fun `le niveau perdu ne produit ni composition ni onde`() {
+        assertThat(GameHapticPlan.steps(GameHapticPattern.levelLoss)).isEmpty()
+        assertThat(GameHapticPlan.waveform(GameHapticPattern.levelLoss)).isNull()
+    }
+
+    @Test
+    fun `l'amplitude reste entre 1 et 255`() {
+        val wave = GameHapticPlan.waveform(listOf(GameHapticTap(0.0, 0f, 0f), GameHapticTap(1.0, 9f, 1f)))!!
+        assertThat(wave.amplitudes.toList()).containsExactly(0, 1, 0, 255).inOrder()
+    }
+
+    @Test
+    fun `un coffre a trois recompenses donne trois touchers a 300 ms`() {
+        val wave = GameHapticPlan.waveform(GameHapticPattern.chest(3))!!
+        assertThat(wave.timings.toList()).containsExactly(500L, 20L, 280L, 20L, 280L, 20L).inOrder()
+    }
+}
