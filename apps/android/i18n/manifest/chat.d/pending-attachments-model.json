@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.drop.unnamedItem",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

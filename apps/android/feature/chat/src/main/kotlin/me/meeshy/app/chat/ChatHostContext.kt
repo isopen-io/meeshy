@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -11,7 +12,9 @@ import androidx.compose.ui.graphics.Color
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.sdk.model.composer.PendingAttachmentsState
 import me.meeshy.sdk.model.report.ReportReason
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Navigation-level callbacks the screen receives from its host (the nav graph): leaving the
@@ -101,6 +104,10 @@ internal class ChatHostActions(
     val cancelReply: () -> Unit,
     val removeClipboardContent: () -> Unit,
     val sendFileAttachment: (ByteArray, String, String?) -> Unit,
+    val onPickFile: (ByteArray, String, String?) -> Unit,
+    val pendingAttachments: StateFlow<PendingAttachmentsState>,
+    val removePendingAttachment: (String) -> Unit,
+    val stagePendingUris: (List<Uri>) -> Unit,
     val dismissImageViewer: () -> Unit,
     val openEmojiPicker: (String) -> Unit,
     val startEdit: (String) -> Unit,
@@ -169,6 +176,10 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     cancelReply = this::cancelReply,
     removeClipboardContent = this::removeClipboardContent,
     sendFileAttachment = this::sendFileAttachment,
+    onPickFile = this::onPickFile,
+    pendingAttachments = controllers.find<ComposerTrayController>()?.state ?: NO_PENDING,
+    removePendingAttachment = { controllers.find<ComposerTrayController>()?.remove(it) },
+    stagePendingUris = { controllers.find<ComposerTrayController>()?.stageUris(it) },
     dismissImageViewer = this::dismissImageViewer,
     openEmojiPicker = this::openEmojiPicker,
     startEdit = this::startEdit,

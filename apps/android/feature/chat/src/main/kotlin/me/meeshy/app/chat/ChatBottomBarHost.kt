@@ -2,6 +2,8 @@ package me.meeshy.app.chat
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /** Bottom bar layer: the @mention suggestions strip stacked over the composer. */
 @Composable
@@ -12,7 +14,9 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
     val replyTarget = state.replyingToMessageId?.let { id ->
         state.messages.firstOrNull { it.messageId == id }
     }
+    val pending by actions.pendingAttachments.collectAsStateWithLifecycle()
     Column {
+        ComposerPendingStrip(pending.items, onRemove = actions.removePendingAttachment)
         MentionSuggestionStrip(
             mention = state.mention,
             accentColor = accentColor,
@@ -21,7 +25,9 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
         ChatComposer(
             draft = state.draft,
             draftRevision = state.draftRevision,
-            canSend = state.canSend,
+            canSend = state.canSend || (!pending.isEmpty && !pending.hasPreparing),
+            hasPendingAttachments = !pending.isEmpty,
+            onPickUris = actions.stagePendingUris,
             isEditing = state.isEditing,
             affordances = state.composerAffordances,
             slowMode = rememberComposerSlowMode(state),
@@ -38,7 +44,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             onCancelEdit = actions.cancelEdit,
             onCancelReply = actions.cancelReply,
             onRemoveClipboard = actions.removeClipboardContent,
-            onPickFile = actions.sendFileAttachment,
+            onPickFile = actions.onPickFile,
         )
     }
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_tray_import_failed">Import von %1$s fehlgeschlagen</string>
+    <string name="chat_tray_cap_reached">Limit von 199 Medien erreicht</string>
+    <string name="chat_tray_remove">%1$s entfernen</string>
+    <string name="chat_tray_preparing">%1$s wird vorbereitet</string>
+</resources>
