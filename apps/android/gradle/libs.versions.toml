@@ -108,7 +108,7 @@ androidx-media3-effect = { module = "androidx.media3:media3-effect", version.ref
 androidx-media3-datasource = { module = "androidx.media3:media3-datasource", version.ref = "media3" }
 androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
 androidx-window = { module = "androidx.window:window", version.ref = "androidxWindow" }
-compose-material3-window-size-class = { module = "androidx.compose.material3:material3-window-size-class" }
+compose-material3-window-size = { module = "androidx.compose.material3:material3-window-size-class" }
 compose-material3-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "material3Adaptive" }
 compose-material3-adaptive-layout = { module = "androidx.compose.material3.adaptive:adaptive-layout", version.ref = "material3Adaptive" }
 compose-material3-adaptive-navigation = { module = "androidx.compose.material3.adaptive:adaptive-navigation", version.ref = "material3Adaptive" }
