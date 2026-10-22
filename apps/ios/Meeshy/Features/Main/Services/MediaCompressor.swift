@@ -107,7 +107,7 @@ extension MediaContext {
 // MARK: - Sendable Wrappers for AVFoundation types
 
 private nonisolated struct SendableTrackOutput: @unchecked Sendable {
-    let value: AVAssetReaderTrackOutput
+    let value: AVAssetReaderOutput
 }
 
 private nonisolated struct SendableWriterInput: @unchecked Sendable {
@@ -240,7 +240,7 @@ actor MediaCompressor {
         writer.shouldOptimizeForNetworkUse = true
 
         let videoInput = AVAssetWriterInput(mediaType: .video,
-                                            outputSettings: Self.videoSettings(recipe, size: geometry.raw, for: writer))
+                                            outputSettings: VideoEncodePass.videoSettings(recipe, size: geometry.raw, for: writer))
         videoInput.expectsMediaDataInRealTime = false
         videoInput.transform = geometry.transform
         writer.add(videoInput)
@@ -251,40 +251,16 @@ actor MediaCompressor {
         ])
         reader.add(videoOutput)
 
-        let audio = Self.audioPair(track: audioTrack, recipe: recipe)
+        let audio = Self.audioLane(track: audioTrack, recipe: recipe)
         if let audio {
             writer.add(audio.input)
             reader.add(audio.output)
         }
 
-        reader.startReading()
-        // `startSession` après un `startWriting` refusé lève une exception ObjC
-        // qu'aucun `do/catch` ne rattrape (#7004) : l'envoi échoue, l'app reste.
-        guard writer.startWriting() else {
-            if let cause = writer.error { throw cause }
-            throw CompressionError.writerCannotStart
-        }
-        writer.startSession(atSourceTime: .zero)
-
-        let vOut = SendableTrackOutput(value: videoOutput)
-        let vIn = SendableWriterInput(value: videoInput)
-        let aOut = audio.map { SendableTrackOutput(value: $0.output) }
-        let aIn = audio.map { SendableWriterInput(value: $0.input) }
-
-        // Vidéo et son se transfèrent EN PARALLÈLE : chaque piste a sa
-        // propre file dans le lecteur et l'écrivain.
-        async let videoTask: Void = Self.transferSamples(from: vOut.value, to: vIn.value)
-        async let audioTask: Void = {
-            guard let aOut, let aIn else { return }
-            await Self.transferSamples(from: aOut.value, to: aIn.value)
-        }()
-        _ = await (videoTask, audioTask)
-
-        await writer.finishWriting()
-
-        guard writer.status == .completed else {
-            throw writer.error ?? CompressionError.exportSessionFailed
-        }
+        try await VideoEncodePass.drain(reader: reader, writer: writer,
+                                        video: VideoEncodePass.Lane(output: videoOutput, input: videoInput),
+                                        audio: audio,
+                                        start: .zero)
 
         Self.logger.info("Video compressed: \(recipe.codec == .hevc ? "HEVC" : "H.264", privacy: .public) \(recipe.keepsTenBits ? "10-bit" : "8-bit", privacy: .public) \(Int(geometry.display.width))x\(Int(geometry.display.height)) display, quality \(VideoTranscodeRecipe.perceptualQuality) under \(context.videoBitRate / 1000)kbps")
 
@@ -304,20 +280,11 @@ actor MediaCompressor {
                                  audioChannelCount: audio.map { _ in Int(channels ?? 2) })
     }
 
-    /// La qualité visée si l'encodeur l'accepte, sinon le débit seul : jamais un
-    /// réglage que `AVAssetWriterInput` refuserait par une exception ObjC.
-    private static func videoSettings(_ recipe: VideoTranscodeRecipe, size: CGSize,
-                                      for writer: AVAssetWriter) -> [String: Any] {
-        let candidates = recipe.videoSettingsCandidates(width: Int(size.width), height: Int(size.height))
-        return candidates.first { writer.canApply(outputSettings: $0, forMediaType: .video) } ?? candidates[candidates.count - 1]
-    }
-
-    private static func audioPair(track: AVAssetTrack?,
-                                  recipe: VideoTranscodeRecipe) -> (input: AVAssetWriterInput, output: AVAssetReaderTrackOutput)? {
+    private static func audioLane(track: AVAssetTrack?, recipe: VideoTranscodeRecipe) -> VideoEncodePass.Lane? {
         guard let track, let writing = recipe.audioWriterSettings, let reading = recipe.audioReaderSettings else { return nil }
         let input = AVAssetWriterInput(mediaType: .audio, outputSettings: writing)
         input.expectsMediaDataInRealTime = false
-        return (input, AVAssetReaderTrackOutput(track: track, outputSettings: reading))
+        return VideoEncodePass.Lane(output: AVAssetReaderTrackOutput(track: track, outputSettings: reading), input: input)
     }
 
     private nonisolated struct WriterGeometry {
@@ -335,7 +302,7 @@ actor MediaCompressor {
         let transform = try await track.load(.preferredTransform)
         let isPortraitDisplay = abs(transform.b) == 1 && abs(transform.c) == 1
         let displaySource = isPortraitDisplay ? CGSize(width: rawSourceSize.height, height: rawSourceSize.width) : rawSourceSize
-        let display = fitSize(displaySource, within: budget)
+        let display = VideoEncodePass.fitSize(displaySource, within: budget)
         let raw = isPortraitDisplay ? CGSize(width: display.height, height: display.width) : display
         return WriterGeometry(transform: transform, raw: raw, display: display)
     }
@@ -387,56 +354,6 @@ actor MediaCompressor {
         guard longest > maxDimension else { return CGSize(width: w, height: h) }
         let scale = maxDimension / longest
         return CGSize(width: floor(w * scale), height: floor(h * scale))
-    }
-
-    // MARK: - Video helpers
-
-    private func fitSize(_ source: CGSize, within max: CGSize) -> CGSize {
-        guard source.width > max.width || source.height > max.height else {
-            return CGSize(width: evenNumber(source.width), height: evenNumber(source.height))
-        }
-        let scaleW = max.width / source.width
-        let scaleH = max.height / source.height
-        let scale = min(scaleW, scaleH)
-        return CGSize(
-            width: evenNumber(source.width * scale),
-            height: evenNumber(source.height * scale)
-        )
-    }
-
-    private func evenNumber(_ value: CGFloat) -> CGFloat {
-        let rounded = Int(value)
-        return CGFloat(rounded % 2 == 0 ? rounded : rounded - 1)
-    }
-
-    private static func transferSamples(from output: AVAssetReaderTrackOutput, to input: AVAssetWriterInput) async {
-        let wrappedInput = SendableWriterInput(value: input)
-        let wrappedOutput = SendableTrackOutput(value: output)
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            nonisolated(unsafe) var finished = false
-            nonisolated(unsafe) let inp = wrappedInput.value
-            nonisolated(unsafe) let out = wrappedOutput.value
-            inp.requestMediaDataWhenReady(on: DispatchQueue(label: "me.meeshy.media-compressor.\(inp.mediaType.rawValue)")) {
-                while inp.isReadyForMoreMediaData {
-                    guard !finished else { return }
-                    guard let sample = out.copyNextSampleBuffer() else {
-                        finished = true
-                        inp.markAsFinished()
-                        continuation.resume()
-                        return
-                    }
-                    // L'écrivain a basculé en échec (disque plein, interruption) : le bloc ne serait
-                    // plus jamais rappelé et l'attente resterait suspendue pour toujours, l'envoi
-                    // avec elle. Le statut est relu par l'appelant.
-                    guard inp.append(sample) else {
-                        finished = true
-                        inp.markAsFinished()
-                        continuation.resume()
-                        return
-                    }
-                }
-            }
-        }
     }
 
     // MARK: - Passthrough fast-path
@@ -539,6 +456,212 @@ actor MediaCompressor {
     /// compresseur le reçoit — le mimeType, en aval, se dérive de l'extension.
     func imageMimeType(of data: Data) -> String {
         OutgoingImageFormat(sniffing: data).mimeType ?? "image/jpeg"
+    }
+}
+
+// MARK: - Une passe d'encodage (#11290, #11849)
+
+/// Ce qu'un rendu écrit : la copie GARDÉE par l'utilisateur (définition de la
+/// source, plafond de sauvegarde) ou l'ENVOI (budget du contexte).
+nonisolated struct VideoRenderTarget: Equatable, Sendable {
+    let maxSize: CGSize?
+    let bitRateCeiling: Int?
+
+    static let sourceDefinition = VideoRenderTarget(maxSize: nil, bitRateCeiling: nil)
+
+    static func sending(_ context: MediaContext) -> VideoRenderTarget {
+        VideoRenderTarget(maxSize: context.maxVideoResolution, bitRateCeiling: context.videoBitRate)
+    }
+}
+
+/// **La passe UNIQUE entre un lecteur et un écrivain**, partagée par la
+/// compression (`MediaCompressor.compressVideo`) et le rendu d'une retouche
+/// (`ComposerLookVideoExporter`). Les réglages viennent de `VideoTranscodeRecipe` ;
+/// aucune étape n'écrit un fichier intermédiaire.
+nonisolated enum VideoEncodePass {
+
+    /// Une piste : ce que le lecteur rend, ce que l'écrivain reçoit.
+    nonisolated struct Lane {
+        let output: AVAssetReaderOutput
+        let input: AVAssetWriterInput
+    }
+
+    /// **Une retouche (look, cadrage, son réglé) s'encode UNE fois par fichier** (#11849).
+    ///
+    /// La composition est lue image par image (`AVAssetReaderVideoCompositionOutput`)
+    /// et le mixage avec elle (`AVAssetReaderAudioMixOutput`, tap d'amplification
+    /// compris), puis écrite par la loi des réglages, HEVC à qualité visée, pour
+    /// `target` : la copie de l'utilisateur garde la définition de la source,
+    /// l'envoi suit son budget et entre dans `compressVideo` pour y être REMUXÉ.
+    /// Avant, l'export passait par `AVAssetExportPresetHighestQuality` puis
+    /// `compressVideo` ré-encodait : deux générations.
+    static func render(_ asset: AVAsset, composition: AVVideoComposition, audioMix: AVAudioMix?,
+                       timeRange: CMTimeRange?, metadata: [AVMetadataItem], target: VideoRenderTarget) async throws -> URL {
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        guard let first = videoTracks.first else { throw CompressionError.noVideoTrack }
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        let source = try await traits(of: composition, video: first, audio: audioTracks.first)
+        let size = outputSize(of: composition.renderSize, for: target)
+        let recipe = VideoTranscodeRecipe(source: source,
+                                          bitRateCeiling: bitRateCeiling(for: target, size: size, frameRate: source.nominalFrameRate),
+                                          encodesHEVC: VideoEncoderAvailability.encodesHEVC)
+
+        let sortie = FileManager.default.temporaryDirectory.appendingPathComponent("video_look_\(UUID().uuidString).mov")
+        try? FileManager.default.removeItem(at: sortie)
+        let writer = try AVAssetWriter(outputURL: sortie, fileType: .mov)
+        writer.shouldOptimizeForNetworkUse = true
+        writer.metadata = metadata
+        let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings(recipe, size: size, for: writer))
+        videoInput.expectsMediaDataInRealTime = false
+        writer.add(videoInput)
+
+        let reader = try AVAssetReader(asset: asset)
+        if let timeRange { reader.timeRange = timeRange }
+        let videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: recipe.readerPixelFormat
+        ])
+        videoOutput.videoComposition = composition
+        reader.add(videoOutput)
+
+        let audio = mixLane(audioTracks, audioMix: audioMix, recipe: recipe)
+        if let audio {
+            writer.add(audio.input)
+            reader.add(audio.output)
+        }
+        do {
+            try await drain(reader: reader, writer: writer, video: Lane(output: videoOutput, input: videoInput),
+                            audio: audio, start: timeRange?.start ?? .zero)
+        } catch {
+            try? FileManager.default.removeItem(at: sortie)
+            throw error
+        }
+        return sortie
+    }
+
+    /// La définition écrite : celle de la toile pour la copie gardée, ramenée au
+    /// budget pour l'envoi — jamais agrandie, toujours paire.
+    static func outputSize(of canvas: CGSize, for target: VideoRenderTarget) -> CGSize {
+        fitSize(canvas, within: target.maxSize ?? canvas)
+    }
+
+    /// Le débit d'envoi borne l'envoi ; la copie gardée n'a qu'un plafond de
+    /// sauvegarde proportionnel à sa définition (`archivalCeiling`).
+    static func bitRateCeiling(for target: VideoRenderTarget, size: CGSize, frameRate: Float) -> Int {
+        target.bitRateCeiling ?? VideoTranscodeRecipe.archivalCeiling(width: Int(size.width), height: Int(size.height),
+                                                                      frameRate: frameRate)
+    }
+
+    /// La composition ÉMET ses propres couleurs : c'est elles que l'encodeur
+    /// étiquette, pas celles de la prise.
+    private static func traits(of composition: AVVideoComposition, video: AVAssetTrack,
+                               audio: AVAssetTrack?) async throws -> VideoSourceTraits {
+        let tags = [(AVVideoColorPrimariesKey, composition.colorPrimaries),
+                    (AVVideoTransferFunctionKey, composition.colorTransferFunction),
+                    (AVVideoYCbCrMatrixKey, composition.colorYCbCrMatrix)]
+            .compactMap { cle, valeur in valeur.map { (cle, $0) } }
+        let frameRate = try await video.load(.nominalFrameRate)
+        let audioFormat = try await audio?.load(.formatDescriptions).first
+        let channels = audioFormat.flatMap { CMAudioFormatDescriptionGetStreamBasicDescription($0)?.pointee.mChannelsPerFrame }
+        return VideoSourceTraits(colorTags: tags.count == 3 ? Dictionary(uniqueKeysWithValues: tags) : nil,
+                                 nominalFrameRate: frameRate,
+                                 audioChannelCount: audio.map { _ in Int(channels ?? 2) })
+    }
+
+    private static func mixLane(_ tracks: [AVAssetTrack], audioMix: AVAudioMix?, recipe: VideoTranscodeRecipe) -> Lane? {
+        guard !tracks.isEmpty, let writing = recipe.audioWriterSettings, let reading = recipe.audioReaderSettings else {
+            return nil
+        }
+        let output = AVAssetReaderAudioMixOutput(audioTracks: tracks, audioSettings: reading)
+        output.audioMix = audioMix
+        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: writing)
+        input.expectsMediaDataInRealTime = false
+        return Lane(output: output, input: input)
+    }
+
+    /// La qualité visée si l'encodeur l'accepte, sinon le débit seul : jamais un
+    /// réglage que `AVAssetWriterInput` refuserait par une exception ObjC.
+    static func videoSettings(_ recipe: VideoTranscodeRecipe, size: CGSize, for writer: AVAssetWriter) -> [String: Any] {
+        let candidates = recipe.videoSettingsCandidates(width: Int(size.width), height: Int(size.height))
+        return candidates.first { writer.canApply(outputSettings: $0, forMediaType: .video) } ?? candidates[candidates.count - 1]
+    }
+
+    /// Lit et écrit les pistes EN PARALLÈLE, puis vérifie les DEUX bouts : un
+    /// lecteur qui échoue en route (composition, disque) laisserait sinon un
+    /// fichier tronqué passer pour complet.
+    static func drain(reader: AVAssetReader, writer: AVAssetWriter, video: Lane, audio: Lane?,
+                      start: CMTime) async throws {
+        reader.startReading()
+        // `startSession` après un `startWriting` refusé lève une exception ObjC
+        // qu'aucun `do/catch` ne rattrape (#7004) : l'envoi échoue, l'app reste.
+        guard writer.startWriting() else {
+            reader.cancelReading()
+            if let cause = writer.error { throw cause }
+            throw CompressionError.writerCannotStart
+        }
+        writer.startSession(atSourceTime: start)
+
+        let vOut = SendableTrackOutput(value: video.output)
+        let vIn = SendableWriterInput(value: video.input)
+        let aOut = audio.map { SendableTrackOutput(value: $0.output) }
+        let aIn = audio.map { SendableWriterInput(value: $0.input) }
+        async let videoTask: Void = transferSamples(from: vOut.value, to: vIn.value)
+        async let audioTask: Void = {
+            guard let aOut, let aIn else { return }
+            await transferSamples(from: aOut.value, to: aIn.value)
+        }()
+        _ = await (videoTask, audioTask)
+
+        guard reader.status != .failed else {
+            writer.cancelWriting()
+            throw reader.error ?? CompressionError.exportSessionFailed
+        }
+        await writer.finishWriting()
+        guard writer.status == .completed else {
+            throw writer.error ?? CompressionError.exportSessionFailed
+        }
+    }
+
+    static func fitSize(_ source: CGSize, within max: CGSize) -> CGSize {
+        guard source.width > max.width || source.height > max.height else {
+            return CGSize(width: evenNumber(source.width), height: evenNumber(source.height))
+        }
+        let scale = min(max.width / source.width, max.height / source.height)
+        return CGSize(width: evenNumber(source.width * scale), height: evenNumber(source.height * scale))
+    }
+
+    private static func evenNumber(_ value: CGFloat) -> CGFloat {
+        let rounded = Int(value)
+        return CGFloat(rounded % 2 == 0 ? rounded : rounded - 1)
+    }
+
+    private static func transferSamples(from output: AVAssetReaderOutput, to input: AVAssetWriterInput) async {
+        let wrappedInput = SendableWriterInput(value: input)
+        let wrappedOutput = SendableTrackOutput(value: output)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            nonisolated(unsafe) var finished = false
+            nonisolated(unsafe) let inp = wrappedInput.value
+            nonisolated(unsafe) let out = wrappedOutput.value
+            inp.requestMediaDataWhenReady(on: DispatchQueue(label: "me.meeshy.media-compressor.\(inp.mediaType.rawValue)")) {
+                while inp.isReadyForMoreMediaData {
+                    guard !finished else { return }
+                    guard let sample = out.copyNextSampleBuffer() else {
+                        finished = true
+                        inp.markAsFinished()
+                        continuation.resume()
+                        return
+                    }
+                    // L'écrivain a basculé en échec (disque plein, interruption) : le bloc ne serait
+                    // plus jamais rappelé et l'attente resterait suspendue pour toujours, l'envoi
+                    // avec elle. Le statut est relu par l'appelant.
+                    guard inp.append(sample) else {
+                        finished = true
+                        inp.markAsFinished()
+                        continuation.resume()
+                        return
+                    }
+                }
+            }
+        }
     }
 }
 
