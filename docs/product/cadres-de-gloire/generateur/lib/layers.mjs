@@ -76,7 +76,9 @@ export function classify() {
   return { order, runs, count: all.length };
 }
 
-export function show({ kinds, probe = null, flatSlots = null }) {
+// `photo` : la photo FIXTURE des cibles (lib/cible.mjs) posée à la place des silhouettes, recadrée en `cover` sur la
+// boîte de la fenêtre (`box`, repère de design) — ce que l'app peint par défaut ; le décor la masque hors de la fenêtre.
+export function show({ kinds, probe = null, flatSlots = null, photo = null }) {
   const visible = new Set(kinds);
   const root = document.querySelector('g[data-layer="root"]');
   document.querySelectorAll('[data-probe]').forEach((el) => el.remove());
@@ -104,6 +106,20 @@ export function show({ kinds, probe = null, flatSlots = null }) {
     rect.setAttribute('height', '960');
     rect.setAttribute('fill', probe);
     (anchor?.parentNode ?? root).insertBefore(rect, anchor ?? root.firstChild);
+  }
+  if (photo) {
+    const anchor = root.querySelector('[data-layer="photo"]') ?? root.querySelector('[data-layer="photo-bg"]');
+    const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    image.setAttribute('data-probe', '1');
+    image.setAttribute('href', photo.href);
+    const [x, y, w, h] = photo.box;
+    image.setAttribute('x', String(x));
+    image.setAttribute('y', String(y));
+    image.setAttribute('width', String(w));
+    image.setAttribute('height', String(h));
+    image.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+    if (anchor) anchor.after(image);
+    else root.prepend(image);
   }
   if (flatSlots) {
     flatSlots.forEach(({ index, color }) => {

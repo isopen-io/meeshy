@@ -32,7 +32,6 @@ extension MeeshyApp {
         VitrineStage.preparer()
         #endif
         MeeshyConfig.shared.restoreEnvironment()
-        WidgetDataManager.shared.publishAPIBaseURL()
     }
 
     func wireNotificationToasts() async {
@@ -197,6 +196,7 @@ extension MeeshyApp {
 
     func finishLaunch() async {
         await launchSplash.markReady()
+        WidgetDataManager.shared.publishAPIBaseURL()
         surfacePendingCrashReports()
         let retentionPersistence = dependencies.messagePersistence
         Task.detached(priority: .background) {

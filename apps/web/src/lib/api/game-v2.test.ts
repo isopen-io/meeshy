@@ -94,6 +94,18 @@ describe('les extensions du bloc game', () => {
     expect(read?.level).toEqual(block.level);
   });
 
+  test('les réglages photo (#10163) sont une extension lue SEULE : atmosphère, invitations, registre ; une ligne de base illisible tombe à null', () => {
+    const photo = { atmosphere: 'olympe', invitations: 'every', baselineAt: null, baseline: null, treasuryPeakTier: null, moments: [{ stepId: 'rank:ambassadeur:1', detectedAt: null, presentedAt: '2026-10-20T10:00:00.000Z', notifiedAt: null, keptAt: null }] };
+    expect(readGameExtensions({ photo }).photo).toEqual(photo);
+    expect(readGameExtensions({ photo: { ...photo, baseline: { rank: 'nope' } } }).photo).toEqual({ ...photo, baseline: null });
+    expect(readGameExtensions({ photo: { ...photo, moments: [{ stepId: 'rank:ambassadeur:1', detectedAt: null, presentedAt: null, notifiedAt: null }] } }).photo?.moments[0]?.keptAt).toBeNull();
+    expect(readGameExtensions({ photo: { ...photo, atmosphere: 'mars' } })).toEqual({});
+    expect(readGameExtensions({ photo: { ...photo, invitations: 'sometimes' } })).toEqual({});
+    const read = readGameBlock({ ...block, photo: { ...photo, atmosphere: 'mars' } });
+    expect(read?.photo).toBeUndefined();
+    expect(read?.level).toEqual(block.level);
+  });
+
   test('une visibilité inconnue refuse le bloc de visibilité', () => {
     expect(readGameExtensions({ visibility: { showcase: 'friends', rank: 'friends', treasury: 'friends', atlas: 'public' } })).toEqual({});
   });

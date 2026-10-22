@@ -39,6 +39,7 @@ const f = {
   'admin.gesture.report.body': 'Le geste et la clôture du signalement partent ensemble ; la personne qui a signalé reçoit une réponse.',
   'admin.gesture.report.dismiss.body': 'Le contenu reste en ligne ; la personne qui a signalé reçoit une réponse.',
   'admin.gesture.report.done': 'Signalement traité.',
+  'admin.gesture.report.self': 'Ce signalement vise votre propre contenu : un autre modérateur le traitera.',
   'admin.gesture.preview.open': 'Aperçu',
   'admin.gesture.preview.title': 'Aperçu de la publication',
   'admin.gesture.preview.previous': 'Publication précédente',

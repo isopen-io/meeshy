@@ -56,7 +56,7 @@ describe('exportGame', () => {
       treasuryPeakTier: 'coffre',
     });
     db.gamePhotoMoment.rows.push(
-      { id: 'pm1', userId: USER, stepId: 'start', detectedAt: null, presentedAt: new Date('2026-10-11T08:00:00Z'), notifiedAt: null, updatedAt: new Date('2026-10-11T08:00:00Z') },
+      { id: 'pm1', userId: USER, stepId: 'start', detectedAt: null, presentedAt: new Date('2026-10-11T08:00:00Z'), notifiedAt: null, keptAt: new Date('2026-10-11T10:00:00Z'), updatedAt: new Date('2026-10-11T10:00:00Z') },
       { id: 'pm2', userId: OTHER, stepId: 'meesh:1', presentedAt: new Date('2026-10-11T08:00:00Z'), updatedAt: new Date('2026-10-11T08:00:00Z') },
     );
 
@@ -69,7 +69,7 @@ describe('exportGame', () => {
       photoAlertsBaseline: baseline,
       treasuryPeakTier: 'coffre',
     });
-    expect(game.photoMoments).toEqual([{ stepId: 'start', detectedAt: null, presentedAt: '2026-10-11T08:00:00.000Z', notifiedAt: null }]);
+    expect(game.photoMoments).toEqual([{ stepId: 'start', detectedAt: null, presentedAt: '2026-10-11T08:00:00.000Z', notifiedAt: null, keptAt: '2026-10-11T10:00:00.000Z' }]);
   });
 
   it('rend la progression, les réglages, le pseudonyme et chaque liste du compte', async () => {
@@ -181,10 +181,10 @@ describe('GET /export?types=game', () => {
     expect(json.game.trophies).toEqual([expect.objectContaining({ key: 'trophy.prestige.1' })]);
     expect(json.game.progress.prestige).toBe(1);
 
-    db.gamePhotoMoment.rows.push({ id: 'pm1', userId: USER, stepId: 'start', presentedAt: new Date('2026-10-11T08:00:00Z'), updatedAt: new Date() });
+    db.gamePhotoMoment.rows.push({ id: 'pm1', userId: USER, stepId: 'start', presentedAt: new Date('2026-10-11T08:00:00Z'), keptAt: new Date('2026-10-11T10:00:00Z'), updatedAt: new Date() });
     db.mythicSeat.rows.push({ id: '6d7974686500000000000003', number: 3, edition: 12, userId: USER, glory: 1_000_000, grantedAt: new Date('2027-01-02T00:00:00Z') });
     const withPhoto = (await app.inject({ method: 'GET', url: '/export?types=game' })).json().data;
-    expect(withPhoto.game.photoMoments).toEqual([expect.objectContaining({ stepId: 'start', presentedAt: '2026-10-11T08:00:00.000Z' })]);
+    expect(withPhoto.game.photoMoments).toEqual([expect.objectContaining({ stepId: 'start', presentedAt: '2026-10-11T08:00:00.000Z', keptAt: '2026-10-11T10:00:00.000Z' })]);
     expect(withPhoto.game.mythicSeat).toEqual({ number: 3, edition: 12, grantedAt: '2027-01-02T00:00:00.000Z' });
 
     const csv = (await app.inject({ method: 'GET', url: '/export?types=game&format=csv' })).json().data.csv;

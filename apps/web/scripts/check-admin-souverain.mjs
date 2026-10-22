@@ -12,7 +12,7 @@
  * sont interceptées et répondues ; TOUTE autre requête sortante est
  * abandonnée — aucun octet ne part vers une passerelle réelle.
  *
- * AUCUNE ROUTE HTTP N'EST INVENTÉE : les huit adresses servies plus bas
+ * AUCUNE ROUTE HTTP N'EST INVENTÉE : les dix adresses servies plus bas
  * existent toutes dans `services/gateway/src/routes/{me,admin}` et sont déjà
  * les seules que `lib/api/admin*.ts` appelle.
  *
@@ -53,6 +53,7 @@ import {
   TEXTES,
   identiteServie,
   pageDuFilLong,
+  piecesServies,
 } from './lib/admin-souverain-corpus.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
@@ -138,6 +139,19 @@ function repondre(pathname, search, avecAgent) {
     const query = new URLSearchParams(search);
     if ((query.get('reason') ?? '').trim().length < 10) return null;
     const { data, pagination } = pageDuFilLong(Number(query.get('offset') ?? '0'), Number(query.get('limit') ?? '30'));
+    return enveloppe(data, pagination);
+  }
+
+  // LA PELLICULE (#11510) : les pièces d'une conversation, sous le même motif,
+  // par leur propre route — l'onglet Médias ne parcourt plus les pages du fil.
+  if (pathname === `/api/v1/admin/conversations/${CONVERSATION_ID}/attachments`) {
+    if ((new URLSearchParams(search).get('reason') ?? '').trim().length < 10) return null;
+    const { data, pagination } = piecesServies(MESSAGES_SERVIS);
+    return enveloppe(data, pagination);
+  }
+  if (pathname === `/api/v1/admin/conversations/${CONVERSATION_LONGUE}/attachments`) {
+    if ((new URLSearchParams(search).get('reason') ?? '').trim().length < 10) return null;
+    const { data, pagination } = piecesServies(pageDuFilLong(0, FIL_LONG_TAILLE).data);
     return enveloppe(data, pagination);
   }
 
@@ -720,8 +734,14 @@ async function main() {
 
       await page.click('[data-admin-reading-tab="media"]');
       check(await attendre(() => present(page, '[data-admin-reading-media]')), 'l’onglet Médias s’ouvre');
-      const tuiles = await page.locator('[data-media-hub-tile]').count();
-      check(tuiles === Math.floor(FIL_LONG_TAILLE / 10), `les ${tuiles} photos transmises sont dans la pellicule`);
+      const pellicule = () => appels.filter((a) => a.includes(`/admin/conversations/${CONVERSATION_LONGUE}/attachments`));
+      check(await attendre(() => pellicule().length === 1), 'la pellicule lit SA route, une fois (#11510)');
+      check(pellicule()[0]?.includes('reason=') === true, '… sous le même motif');
+      check(lectures().length === 3, '… sans demander une page de messages de plus');
+      check(
+        await attendre(async () => (await page.locator('[data-media-hub-tile]').count()) === Math.floor(FIL_LONG_TAILLE / 10)),
+        `les ${Math.floor(FIL_LONG_TAILLE / 10)} photos transmises sont dans la pellicule`,
+      );
       await cliche(page, 'fil-long-medias', { fullPage: true });
       await page.click('[data-media-hub-tile="m-long-040:a-long-40"]');
       check(

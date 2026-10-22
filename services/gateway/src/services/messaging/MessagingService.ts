@@ -50,6 +50,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
+import { isE2eePlaintextRefusal } from './e2eePlaintextAdmission';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -544,6 +545,11 @@ export class MessagingService {
       return response;
 
     } catch (error) {
+      // #11216 — un clair refusé en e2ee n'est pas une panne : son motif voyage en `code`.
+      if (isE2eePlaintextRefusal(error)) {
+        logger.info('e2ee plaintext refused', { ...corr });
+        return this.createErrorResponse(error.message, error.code);
+      }
       logger.warn('perf:messaging.handleMessage', {
         ...corr, step: 'messaging.handleMessage', phase: 'end',
         durationMs: Date.now() - startTime, errored: true,

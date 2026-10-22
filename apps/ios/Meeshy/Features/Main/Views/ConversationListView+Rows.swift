@@ -568,7 +568,8 @@ extension ConversationRowItem: @MainActor Equatable {
         // hand.raised.fill ⇄ hand.raised.slash.fill, lock.fill ⇄ lock.open.fill).
         // The list now observes both singletons (see ConversationListView) so a
         // change re-evaluates the rows and this comparison detects it. Zip avoids
-        // allocating arrays in `==`.
+        // allocating arrays in `==`. The preview is covered the same way: the
+        // loader reads the lock, so `previewFingerprint.phase` flips to `.sealed`.
         lhs.leadingActions.count == rhs.leadingActions.count &&
         lhs.trailingActions.count == rhs.trailingActions.count &&
         zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&

@@ -17,6 +17,7 @@ import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
 import { logError } from '../../utils/logger.js';
 import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
 import { refreshParticipantNameSnapshots, type AccountNameFields } from '../../services/participantNameSnapshots';
+import { evictFromAdminRooms, isAdminRank } from '../../socketio/evictFromAdminRooms';
 
 const NAME_FIELDS = ['displayName', 'firstName', 'lastName', 'username'] as const;
 
@@ -90,6 +91,12 @@ const ANNONCE = {
 type Deps = {
   userManagementService: UserManagementService;
   userAuditService: UserAuditService;
+  /**
+   * #10459 point 1 — un compte qui perd le rang d'administration perd ses rooms
+   * d'administration dans le même geste. Absente ⇒ `evictFromAdminRooms` sur le
+   * serveur socket, résolu à l'appel (le manager n'existe pas encore à l'enregistrement).
+   */
+  evictFromAdminRooms?: (userId: string) => Promise<unknown>;
 };
 
 type Corps = Record<string, unknown>;
@@ -228,6 +235,14 @@ function rendreErreur(
 
 export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): void {
   const { userManagementService, userAuditService } = deps;
+  const evictDemoted =
+    deps.evictFromAdminRooms ??
+    ((userId: string) =>
+      evictFromAdminRooms({
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        userId,
+        onError: (err) => logError(fastify.log, `[ADMIN_USER_ROLE] admin room eviction failed (userId=${userId})`, err),
+      }));
 
   /**
    * La fiche RELUE après le geste : `prisma.user.update` rend la ligne nue,
@@ -355,6 +370,9 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         const avant = cible!.role;
         servi = await userManagementService.updateRole(userId, { role: nouveauRole });
         await oublierLeCache(userId);
+        // Le rang perdu sort des rooms d'administration AVANT la trace (#10459 point 1) :
+        // un socket ne revérifie son rang qu'à l'abonnement.
+        if (!isAdminRank(nouveauRole)) await evictDemoted(userId);
         await tracer(request, {
           cible: userId,
           action: UserAuditAction.UPDATE_ROLE,

@@ -11,12 +11,12 @@ protocol SocketHeartbeatProviding: Sendable {
 final class SocketHeartbeat: SocketHeartbeatProviding {
     private let loop = Locked<Task<Void, Never>?>(nil)
     private let interval: Duration
-    private let sleep: @Sendable (Duration) async -> Bool
+    private let sleep: @Sendable @concurrent (Duration) async -> Bool
     private let now: @Sendable () -> Date
 
     init(
         interval: Duration = .seconds(30),
-        sleep: @escaping @Sendable (Duration) async -> Bool = { await cancellableSleep(for: $0) },
+        sleep: @escaping @Sendable @concurrent (Duration) async -> Bool = { await cancellableSleep(for: $0) },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.interval = interval

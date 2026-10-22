@@ -252,11 +252,11 @@ public enum MessageActionPolicy {
         return (captureNotice && capturedIsMine && viewer.isActiveMember, false)
     }
 
-    /// `refusesMinorPin` et `refusesContentGesture` (`messages-pin.ts`) ; plus strict sur les avis et la vue unique.
+    /// `admitMessagePin` (`messages-pin.ts`, #11219) : une épingle se voit de tous, donc épingler et désépingler
+    /// exigent le droit d'écrire (`viewerCanWrite`). Plus strict sur les avis, la vue unique et les invités.
     private static func pinVerdict(_ context: MessageActionContext) -> PinVerdict? {
-        let minorInGlobal = context.conversation.isGlobal && context.viewer.isDeclaredMinor
-        let pinnable = context.live && context.registered && context.viewer.isActiveMember
-            && !context.notice && !context.content.flags.viewOnce && !minorInGlobal
+        let pinnable = context.live && context.registered && !context.notice && !context.content.flags.viewOnce
+            && viewerCanWrite(in: context.conversation, viewer: context.viewer)
         guard pinnable else { return nil }
         return context.message.pinnedAt != nil ? PinVerdict.unpin : PinVerdict.pin
     }
@@ -274,16 +274,17 @@ public enum MessageActionPolicy {
         return Verdicts(
             edit: editVerdict(context),
             deleteForEveryone: deletion.forEveryone,
-            deleteForMe: context.registered && !flags.optimistic,
+            deleteForMe: context.registered && context.viewer.isActiveMember && !flags.optimistic,
             remove: deletion.remove ? RemoveVerdict.withReason : nil,
             pin: pinVerdict(context),
-            report: context.live && context.registered && !context.notice && !context.isMine,
+            report: context.live && context.registered && context.viewer.isActiveMember
+                && !context.notice && !context.isMine,
             canReact: reacts,
             canReply: reacts && !flags.viewOnce && viewerCanWrite(in: context.conversation, viewer: context.viewer),
             translate: translatable ? (context.e2ee ? TranslateVerdict.device : TranslateVerdict.servedSwitch) : nil,
             transcribe: serverFeature(kind == .audio),
             sentiment: serverFeature(context.hasText),
-            forward: context.live && !context.notice && !context.e2ee && context.forwardable,
+            forward: context.live && !context.notice && !context.e2ee && !context.piecesNotServerCopyable && context.forwardable,
             copy: context.hasText && !context.gone && context.exportable,
             save: context.live && context.exportable && saveableKinds.contains(kind),
             serverFeatureAbsence: context.e2ee ? ServerFeatureAbsence.e2eeServerFeatureAbsent : nil
@@ -362,6 +363,8 @@ private struct MessageActionContext {
     let isMine: Bool
     let hasText: Bool
     let readable: Bool
+    /// `sourceIsEncrypted` de `forwardAdmission` : des pièces sous régime `server`/`hybrid` ne se recopient pas côté serveur.
+    let piecesNotServerCopyable: Bool
 
     private static let noticeKinds: Set<MessageContentKind> = [.system, .call]
 
@@ -393,6 +396,14 @@ private struct MessageActionContext {
         self.isMine = isAuthor || (participantId.map { input.message.senderId == $0 } ?? false)
         self.hasText = !notice && !(subject.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         self.readable = !gone && !flags.viewOnce && !flags.blurred
+        self.piecesNotServerCopyable = !subject.pieces.isEmpty
+            && (MessageActionContext.hasRegime(input.conversation.encryptionMode)
+                || MessageActionContext.hasRegime(subject.encryptionMode)
+                || subject.isEncrypted == true)
+    }
+
+    private static func hasRegime(_ mode: String?) -> Bool {
+        !(mode ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// D8 (#10949) : un message flouté, ou dont TOUTES les pièces le sont, se

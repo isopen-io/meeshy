@@ -33,6 +33,38 @@ nonisolated public enum LentilleMetrics {
         /// est une information de MAGNIFICATION, pas de repos) — la rangée a
         /// rendu cette hauteur.
         public static let height: CGFloat = 84
+
+        /// Plafond du facteur : la rangée grandit avec Dynamic Type mais reste
+        /// bornée, pour qu'une liste n'occupe jamais plus de deux fois sa place
+        /// de repos.
+        public static let maxScale: CGFloat = 2
+
+        /// Facteur de croissance de la rangée pour une taille de texte donnée.
+        /// 1 jusqu'à `.large` (taille par défaut), progressif ensuite, borné
+        /// par `maxScale` aux tailles d'accessibilité.
+        public static func scale(for size: DynamicTypeSize) -> CGFloat {
+            let factor: CGFloat
+            switch size {
+            case .xSmall, .small, .medium, .large: factor = 1
+            case .xLarge: factor = 1.05
+            case .xxLarge: factor = 1.1
+            case .xxxLarge: factor = 1.15
+            case .accessibility1: factor = 1.4
+            case .accessibility2: factor = 1.6
+            case .accessibility3: factor = 1.75
+            case .accessibility4: factor = 1.9
+            case .accessibility5: factor = 2
+            @unknown default: factor = 1
+            }
+            return min(factor, maxScale)
+        }
+
+        /// Hauteur de LAYOUT de la rangée pour la taille de texte courante.
+        /// Égale à `height` (84) à la taille par défaut.
+        public static func height(for size: DynamicTypeSize) -> CGFloat {
+            (height * scale(for: size)).rounded()
+        }
+
         public static let paddingVertical: CGFloat = 8
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8

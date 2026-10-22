@@ -93,6 +93,7 @@ export type MessageActionVerdicts = {
   /** Retrait par un tiers modérateur : un motif est exigé, l'auteur en est prévenu. */
   readonly remove: { readonly reasonRequired: true } | null;
   readonly pin: PinVerdict;
+  /** `verifierCible` (`routes/reports/target.ts`) : un membre actif, jamais sur son propre message (#11220). */
   readonly report: boolean;
   /** Un message vivant, non système, un membre actif d'une conversation ouverte — sans le droit d'écrire. */
   readonly canReact: boolean;
@@ -172,7 +173,17 @@ type Context = MessageActionInput & {
   readonly isMine: boolean;
   readonly hasText: boolean;
   readonly readable: boolean;
+  /** `sourceIsEncrypted` de `forwardAdmission` : des pièces sous régime `server`/`hybrid` ne se recopient pas côté serveur. */
+  readonly piecesNotServerCopyable: boolean;
 };
+
+const hasRegime = (mode: string | null | undefined): boolean => (mode ?? '').trim() !== '';
+
+const carriesPieces = (message: MessageActionSubject): boolean => (message.attachments ?? []).some((piece) => piece != null);
+
+/** Conversation ou message sous un régime de chiffrement quelconque : la passerelle n'y recopie aucune pièce. */
+const carriesEncryptionRegime = (message: MessageActionSubject, conversation: ActionConversation): boolean =>
+  hasRegime(conversation.encryptionMode) || hasRegime(message.encryptionMode) || message.isEncrypted === true;
 
 function contextOf(input: MessageActionInput): Context {
   const content = messageContentKind(input.message);
@@ -195,6 +206,7 @@ function contextOf(input: MessageActionInput): Context {
     isMine: isAuthor || (participantId !== null && message.senderId === participantId),
     hasText: !NOTICE_KINDS.has(kind) && (message.content ?? '').trim().length > 0,
     readable: !gone && !flags.viewOnce && !flags.blurred,
+    piecesNotServerCopyable: carriesPieces(message) && carriesEncryptionRegime(message, input.conversation),
   };
 }
 
@@ -227,11 +239,13 @@ function deleteVerdict(ctx: Context): DeleteVerdict {
   return { forEveryone: captureNotice && ctx.message.capturedMessageIsMine === true && viewer.isActiveMember, remove: false };
 }
 
-/** `refusesMinorPin` et `refusesContentGesture` de `messages-pin.ts` ; plus strict sur les avis et la vue unique. */
+/**
+ * `admitMessagePin` de `messages-pin.ts` (#11219) : une épingle se voit de TOUS, donc épingler et désépingler
+ * exigent le droit d'écrire (`viewerCanWrite` : conversation ouverte, canal d'annonces, rang, mineur de Global).
+ * Plus strict que la passerelle sur les avis, la vue unique et les invités.
+ */
 function pinVerdict(ctx: Context): PinVerdict {
-  const { conversation, viewer } = ctx;
-  const minorInGlobal = conversation.type === GLOBAL_CONVERSATION_TYPE && viewer.isDeclaredMinor;
-  const pinnable = ctx.live && ctx.registered && viewer.isActiveMember && !ctx.notice && !ctx.content.flags.viewOnce && !minorInGlobal;
+  const pinnable = ctx.live && ctx.registered && !ctx.notice && !ctx.content.flags.viewOnce && viewerCanWrite(ctx.conversation, ctx.viewer);
   if (!pinnable) return null;
   return ctx.message.pinnedAt != null ? 'unpin' : 'pin';
 }
@@ -245,16 +259,16 @@ function verdictsOf(ctx: Context): MessageActionVerdicts {
   return {
     edit: editVerdict(ctx),
     deleteForEveryone: deletion.forEveryone,
-    deleteForMe: ctx.registered && !flags.optimistic,
+    deleteForMe: ctx.registered && ctx.viewer.isActiveMember && !flags.optimistic,
     remove: deletion.remove ? { reasonRequired: true } : null,
     pin: pinVerdict(ctx),
-    report: ctx.live && ctx.registered && !notice && !ctx.isMine,
+    report: ctx.live && ctx.registered && ctx.viewer.isActiveMember && !notice && !ctx.isMine,
     canReact: reacts,
     canReply: reacts && !flags.viewOnce && viewerCanWrite(ctx.conversation, ctx.viewer),
     translate: ctx.hasText && ctx.readable && ctx.live ? (ctx.e2ee ? 'device' : 'served-switch') : null,
     transcribe: serverFeature(kind === 'audio'),
     sentiment: serverFeature(ctx.hasText),
-    forward: ctx.live && !notice && !ctx.e2ee && exit.forward.allowed,
+    forward: ctx.live && !notice && !ctx.e2ee && !ctx.piecesNotServerCopyable && exit.forward.allowed,
     copy: ctx.hasText && !ctx.gone && exit.exportable,
     save: ctx.live && exit.exportable && SAVEABLE_KINDS.has(kind),
     serverFeatureAbsence: ctx.e2ee ? 'e2ee-server-feature-absent' : null,

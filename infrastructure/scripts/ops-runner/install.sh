@@ -11,6 +11,8 @@
 #   /opt/meeshy/<env>/ops/bin        le runner et le script de sauvegarde du depot
 # puis les unites systemd, et les active :
 #   meeshy-ops@<env>.path, meeshy-ops-docker-df@<env>.timer, meeshy-<env>-backup.timer
+# La sauvegarde est un gabarit meeshy-<env>-backup@.service : le timer lance l'instance
+# @nightly, le relais l'instance @on-demand, chacune avec sa rotation (#11450).
 #
 # La production n'est PAS installee par ce script : ses operations attendent le feu
 # vert du porteur (#9223). Le compose de l'environnement monte ensuite :
@@ -43,9 +45,11 @@ install -m 755 -o root -g root "$HERE/meeshy-ops-runner.py" "$OPS_DIR/bin/meeshy
 install -m 755 -o root -g root "$REPO_SCRIPTS/production-backup/meeshy-nightly-backup.sh" "$OPS_DIR/bin/meeshy-nightly-backup.sh"
 
 for unit in meeshy-ops@.path meeshy-ops@.service meeshy-ops-docker-df@.service meeshy-ops-docker-df@.timer \
-            "meeshy-$ENV_NAME-backup.service" "meeshy-$ENV_NAME-backup.timer"; do
+            "meeshy-$ENV_NAME-backup@.service" "meeshy-$ENV_NAME-backup.timer"; do
   install -m 644 -o root -g root "$HERE/$unit" "$UNIT_DIR/$unit"
 done
+# L'unite d'avant le gabarit ne doit plus pouvoir etre lancee : elle sauvegardait sans origine.
+rm -f "$UNIT_DIR/meeshy-$ENV_NAME-backup.service"
 
 /usr/bin/python3 -I "$OPS_DIR/bin/meeshy-ops-runner.py" init "$ENV_NAME"
 chmod 644 "$OPS_DIR/state/"*.json
