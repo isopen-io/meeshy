@@ -11,10 +11,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.getBottom
-import androidx.compose.foundation.layout.getLeft
-import androidx.compose.foundation.layout.getRight
-import androidx.compose.foundation.layout.getTop
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -159,7 +155,11 @@ internal fun CallSelfTile(
                     val leadingDx = if (rtl) -shift.x else shift.x
                     dropAt(CallTilePoint(center.xDp + leadingDx, center.yDp + shift.y))
                 }
-                if (pinched) settle(CallSelfTileScale.fromPinch(pinch, scale)) else if (!dragged) pinch = 1f
+                if (pinched) {
+                    settle(CallSelfTileScale.fromPinch(pinch, scale))
+                } else if (!dragged) {
+                    pinch = 1f
+                }
             },
         )
 

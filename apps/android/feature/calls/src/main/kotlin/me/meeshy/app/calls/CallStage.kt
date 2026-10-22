@@ -128,6 +128,7 @@ internal fun CallDuoVideoStage(
                             mirror = true,
                             overlay = true,
                         )
+                        else -> Unit
                     }
                 }
             }
