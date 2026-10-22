@@ -144,6 +144,23 @@ final class ReaderAudioSharedEngineTests: XCTestCase {
         XCTAssertFalse(mixer.isPlaying)
     }
 
+    func test_configurationChange_duringACall_leavesTheEngineToTheCall() throws {
+        let fixture = try Self.makeAudioFixture()
+        let host = ReaderAudioEngineHost()
+        let recorder = RecordingAudioScheduler()
+        let mixer = ReaderAudioMixer(engineHost: host, scheduler: recorder)
+        try mixer.configure(audios: [Self.audio(id: "fg")], urls: ["fg": fixture])
+        _ = try mixer.play(originHost: mach_absolute_time(), slideKey: "k#call")
+        host.engine.stop()
+        MediaSessionCoordinator.shared.setCallActive(true)
+        defer { MediaSessionCoordinator.shared.setCallActive(false) }
+
+        host.engineConfigurationDidChange(of: ObjectIdentifier(host.engine))
+
+        XCTAssertFalse(host.engine.isRunning, "l'appel tient la session : le lecteur ne s'y rallume pas")
+        XCTAssertEqual(recorder.passes.count, 1)
+    }
+
     // MARK: - Services média réinitialisés
 
     func test_mediaServicesReset_rebuildsOneEngine_andReattachesEveryNode() throws {

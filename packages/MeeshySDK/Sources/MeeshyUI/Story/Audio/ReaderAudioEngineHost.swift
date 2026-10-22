@@ -111,7 +111,9 @@ final class ReaderAudioEngineHost {
     func engineConfigurationDidChange(of sender: ObjectIdentifier?) {
         guard sender == ObjectIdentifier(engine) else { return }
         let playing = liveClients.filter { $0.claimsRunningEngine }
-        guard !playing.isEmpty else { return }
+        // Un appel tient la session (WS3.2) : le lecteur ne rallume pas son
+        // moteur dessus ; la fin d'appel le relance par son propre chemin.
+        guard !playing.isEmpty, !MediaSessionCoordinator.shared.isCallActive else { return }
         do {
             try startEngine()
         } catch {

@@ -46,7 +46,8 @@ extension ReaderAudioMixer: ReaderAudioEngineClient {
     /// (`scheduleAudio`, `at: nil`) et reste en phase avec le canevas, dont le
     /// playhead n'a pas cessé d'avancer.
     func replanFromAnchor() {
-        guard isPlaying, let origin = currentPassOriginHost, let slideKey = startedSlideKey else { return }
+        guard isPlaying, !MediaSessionCoordinator.shared.isCallActive,
+              let origin = currentPassOriginHost, let slideKey = startedSlideKey else { return }
         let elapsed = Self.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: origin)
         cancelVolumeAutomation()
         entries.values.forEach { $0.node.stop() }
