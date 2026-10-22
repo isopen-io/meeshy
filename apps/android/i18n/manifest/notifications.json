@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:notifications": {
+      "resDir": "feature/notifications/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "notification.banner.inConversation",
+          "androidName": "notification_banner_in_conversation",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.summary.audio",
+          "androidName": "notification_banner_media_audio",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.summary.photo",
+          "androidName": "notification_banner_media_photo",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.summary.video",
+          "androidName": "notification_banner_media_video",
+          "status": "candidate"
+        },
+        {
+          "androidName": "notification_banner_preview_hidden",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.action.delete",
+          "androidName": "notifications_action_delete",
+          "status": "candidate"
+        },
+        {
+          "androidName": "notifications_action_mark_read",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.all",
+          "androidName": "notifications_category_all",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.calls",
+          "androidName": "notifications_category_calls",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.contacts",
+          "androidName": "notifications_category_contacts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.groups",
+          "androidName": "notifications_category_groups",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.mentions",
+          "androidName": "notifications_category_mentions",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.messages",
+          "androidName": "notifications_category_messages",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.reactions",
+          "androidName": "notifications_category_reactions",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.social",
+          "androidName": "notifications_category_social",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.system",
+          "androidName": "notifications_category_system",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.translations",
+          "androidName": "notifications_category_translations",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.unread",
+          "androidName": "notifications_category_unread",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.empty.all",
+          "androidName": "notifications_empty",
+          "status": "candidate"
+        },
+        {
+          "androidName": "notifications_empty_category",
+          "status": "android-only"
+        },
+        {
+          "androidName": "notifications_mark_all_read",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.system",
+          "androidName": "notifications_system_sender",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.notifications",
+          "androidName": "notifications_title",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}
