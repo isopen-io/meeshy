@@ -56,3 +56,35 @@ class PhonePlausibilityTest {
         assertThat(PhoneCheck().submitAttempted().isChecked).isTrue()
     }
 }
+
+class PhonePlausibilityBoundsTest {
+    @Test
+    fun `424242424 et 123123123 sont des repetitions integrales`() {
+        assertThat(PhonePlausibility.refusal("424242424")).isEqualTo(Refusal.REPEATED_PATTERN)
+        assertThat(PhonePlausibility.refusal("123123123")).isEqualTo(Refusal.REPEATED_PATTERN)
+    }
+
+    @Test
+    fun `bornes de longueur 8 et 9 chiffres`() {
+        assertThat(PhonePlausibility.refusal("12345678")).isEqualTo(Refusal.TOO_SHORT)
+        assertThat(PhonePlausibility.refusal("123456789")).isNull()
+    }
+
+    @Test
+    fun `quatre identiques passent, cinq non`() {
+        assertThat(PhonePlausibility.refusal("0644441230")).isNull()
+        assertThat(PhonePlausibility.refusal("0655555230")).isEqualTo(Refusal.IDENTICAL_RUN)
+    }
+
+    @Test
+    fun `seuls les chiffres comptent`() {
+        assertThat(PhonePlausibility.refusal("+33 (0)6.12-34 56 78")).isNull()
+        assertThat(PhonePlausibility.refusal("+1 111-110-0000")).isEqualTo(Refusal.IDENTICAL_RUN)
+    }
+
+    @Test
+    fun `isSubmittable exige une saisie plausible`() {
+        assertThat(PhonePlausibility.isSubmittable("")).isFalse()
+        assertThat(PhonePlausibility.isSubmittable("0612345678")).isTrue()
+    }
+}

@@ -80,7 +80,9 @@
     <string name="signup_password_hide">Nascondi password</string>
     <string name="signup_password_label">Password</string>
     <string name="signup_password_show">Mostra password</string>
+    <string name="signup_phone_implausible">Questo numero non sembra reale: controllalo.</string>
     <string name="signup_phone_label">Telefono</string>
+    <string name="signup_phone_too_short">Questo numero è troppo corto: almeno %d cifre.</string>
     <string name="signup_sign_in">Accedi</string>
     <string name="signup_subtitle">Leggerai tutti nella tua lingua.</string>
     <string name="signup_title">Crea il tuo account</string>

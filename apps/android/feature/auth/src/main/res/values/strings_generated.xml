@@ -77,7 +77,9 @@
     <string name="signup_password_hide">Hide password</string>
     <string name="signup_password_label">Password</string>
     <string name="signup_password_show">Show password</string>
+    <string name="signup_phone_implausible">This number doesn’t look real — please check it.</string>
     <string name="signup_phone_label">Phone</string>
+    <string name="signup_phone_too_short">This number is too short: at least %d digits.</string>
     <string name="signup_sign_in">Log in</string>
     <string name="signup_subtitle">You’ll read everyone in your own language.</string>
     <string name="signup_title">Create your account</string>

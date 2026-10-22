@@ -89,7 +89,9 @@
     <string name="signup_password_hide">إخفاء كلمة المرور</string>
     <string name="signup_password_label">كلمة المرور</string>
     <string name="signup_password_show">إظهار كلمة المرور</string>
+    <string name="signup_phone_implausible">لا يبدو هذا الرقم حقيقيًا، يُرجى التحقق منه.</string>
     <string name="signup_phone_label">الهاتف</string>
+    <string name="signup_phone_too_short">هذا الرقم قصير جدًا: %d أرقام على الأقل.</string>
     <string name="signup_sign_in">تسجيل الدخول</string>
     <string name="signup_subtitle">ستقرأ الجميع بلغتك.</string>
     <string name="signup_title">أنشئ حسابك</string>

@@ -31,7 +31,9 @@
     <string name="account_contact_phone_code_label">Código de 6 dígitos</string>
     <string name="account_contact_phone_code_sent">Código enviado por SMS</string>
     <string name="account_contact_phone_current_label">Telefone atual</string>
+    <string name="account_contact_phone_implausible">Este número não parece real: confira-o.</string>
     <string name="account_contact_phone_section">Telefone</string>
+    <string name="account_contact_phone_too_short">Este número é curto demais: pelo menos %d dígitos.</string>
     <string name="account_contact_phone_verify">Verificar</string>
     <string name="account_contact_send">Enviar</string>
     <string name="account_contact_verified">Verificado</string>
