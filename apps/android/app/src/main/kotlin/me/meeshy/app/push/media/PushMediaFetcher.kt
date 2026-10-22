@@ -3,12 +3,14 @@ package me.meeshy.app.push.media
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.push.PushAttachmentPolicy
 import me.meeshy.sdk.model.push.PushTrustedOrigin
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -60,24 +62,34 @@ class PushMediaFetcher(
     private suspend fun download(url: String, target: File): Boolean {
         val request = runCatching { Request.Builder().url(url).get().build() }.getOrNull() ?: return false
         val call = client.newCall(request)
-        val job: Job = currentCoroutineContext()[Job] ?: return false
-        val registration = job.invokeOnCompletion(onCancelling = true) { call.cancel() }
-        try {
-            call.execute().use { response ->
-                if (!response.isSuccessful) return false
-                if (!PushTrustedOrigin.isTrustedMediaUrl(response.request.url.toString())) return false
-                val announced = response.header("Content-Length")?.toLongOrNull()
-                if (announced != null && !PushAttachmentPolicy.mayAttach("image/*", announced)) return false
-                val body = response.body ?: return false
-                val written = copyBounded(body.byteStream(), target)
-                return written != null && PushAttachmentPolicy.mayKeepDownloaded(target.length())
+        return coroutineScope {
+            val watcher = launch(Dispatchers.Unconfined) {
+                try {
+                    awaitCancellation()
+                } finally {
+                    call.cancel()
+                }
             }
-        } catch (e: IOException) {
-            return false
-        } finally {
-            registration.dispose()
+            try {
+                execute(call, target)
+            } catch (e: IOException) {
+                false
+            } finally {
+                watcher.cancel()
+            }
         }
     }
+
+    private fun execute(call: Call, target: File): Boolean =
+        call.execute().use { response ->
+            if (!response.isSuccessful) return false
+            if (!PushTrustedOrigin.isTrustedMediaUrl(response.request.url.toString())) return false
+            val announced = response.header("Content-Length")?.toLongOrNull()
+            if (announced != null && !PushAttachmentPolicy.mayAttach("image/*", announced)) return false
+            val body = response.body ?: return false
+            val written = copyBounded(body.byteStream(), target)
+            written != null && PushAttachmentPolicy.mayKeepDownloaded(target.length())
+        }
 
     private fun copyBounded(input: java.io.InputStream, target: File): Long? {
         var total = 0L
