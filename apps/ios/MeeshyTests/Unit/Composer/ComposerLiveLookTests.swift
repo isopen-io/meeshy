@@ -112,8 +112,8 @@ final class ComposerLiveLookTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/inexistante.mov")
         let rendue = await ComposerLookVideoExporter.export(
             url, look: ComposerPhotoLook(), person: CallFramePerson(id: "u1", name: "Jean", handle: nil, isSelf: true),
-            date: Date(timeIntervalSince1970: 1_790_000_000))
-        XCTAssertEqual(rendue, url)
+            date: Date(timeIntervalSince1970: 1_790_000_000), uses: [.gallery, .delivery])
+        XCTAssertEqual(rendue, ComposerVideoRendition(gallery: url, delivery: url), "la galerie et l'envoi gardent le brut")
     }
 
     // MARK: - Couper sans retoucher ne ré-encode pas (#9889)
@@ -162,6 +162,36 @@ final class ComposerLiveLookTests: XCTestCase {
         XCTAssertEqual(ComposerLookVideoExporter.renderBudget.maxVideoResolution, MediaContext.story.maxVideoResolution)
         XCTAssertEqual(ComposerLookVideoExporter.renderBudget.videoBitRate, MediaContext.feedPost.videoBitRate,
                        "une story comme un post remuxent le rendu sans le ré-encoder")
+    }
+
+    /// Correction porteur (tour 4) : la copie en galerie appartient à l'utilisateur.
+    func test_galerie_uneRetouche4K_resteEn4K_viseeSurUneQualite() {
+        let toile = CGSize(width: 2160, height: 3840)
+        XCTAssertEqual(VideoEncodePass.outputSize(of: toile, for: .sourceDefinition), toile, "4K reste 4K en galerie")
+        XCTAssertEqual(VideoEncodePass.outputSize(of: toile, for: .sending(.story)), CGSize(width: 1080, height: 1920),
+                       "seul l'envoi suit le budget d'envoi")
+        let plafond = VideoEncodePass.bitRateCeiling(for: .sourceDefinition, size: toile, frameRate: 30)
+        XCTAssertEqual(plafond, VideoTranscodeRecipe.archivalCeiling(width: 2160, height: 3840, frameRate: 30))
+        XCTAssertGreaterThan(plafond, MediaContext.story.videoBitRate * 4, "la qualité gouverne, le plafond n'est qu'un garde-fou")
+        XCTAssertEqual(VideoEncodePass.bitRateCeiling(for: .sending(.story), size: toile, frameRate: 30),
+                       MediaContext.story.videoBitRate)
+    }
+
+    func test_galerie_uneSourceHDR_garde_sonHDR_dansLaComposition() {
+        let hlg = [AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_2020,
+                   AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_2100_HLG,
+                   AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_2020]
+        XCTAssertEqual(ComposerLookVideoExporter.compositionColors(source: hlg), hlg, "le HDR de la prise survit à la retouche")
+        XCTAssertEqual(ComposerLookVideoExporter.compositionColors(source: nil)[AVVideoColorPrimariesKey],
+                       AVVideoColorPrimaries_P3_D65, "une prise SDR se rend en P3 comme avant")
+    }
+
+    func test_finir_demandeLaGalerieEtLEnvoi_laFlecheSeulementLaGalerie() throws {
+        let edition = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        XCTAssertTrue(edition.contains("videoRender(url, uses: enregistre ? [.gallery, .delivery] : .delivery)"),
+                      "« Terminé » envoie le rendu d'envoi et garde en galerie celui de pleine définition")
+        XCTAssertTrue(edition.contains("videoRender(url, uses: .gallery)"), "⬇︎ n'écrit que la copie de l'utilisateur")
+        XCTAssertTrue(edition.contains("rendition?.gallery"), "la galerie reçoit la copie pleine définition, jamais l'envoi")
     }
 
     func test_rendu_laToileEstRameneeAuBudget_sansChangerSesProportions() {
