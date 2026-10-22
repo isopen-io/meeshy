@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.apiCall
@@ -14,6 +15,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
 import me.meeshy.sdk.outbox.OutboxPayloadGraft
+import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
@@ -22,11 +24,14 @@ import me.meeshy.sdk.story.PublishMediaWriteBack
 import javax.inject.Inject
 
 /**
- * `PUBLISH_STORY`: publishes the queued story. It owns the graft that swaps an upload's
- * placeholder `cmid` for the real media id in the story's `mediaIds`.
+ * `PUBLISH_STORY`: publishes the queued story. Once the story has its server id, every like
+ * or bookmark that waited on the `pending_` handle is re-addressed to it and leaves the hold.
+ * It owns the graft that swaps an upload's placeholder `cmid` for the real media id in the
+ * story's `mediaIds`.
  */
 public class PublishStoryHandler @Inject constructor(
     private val postApi: PostApi,
+    private val outboxRepository: OutboxRepository,
     private val json: Json,
 ) : OutboxKindHandler {
 
@@ -34,7 +39,13 @@ public class PublishStoryHandler @Inject constructor(
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<CreateStoryRequest>(row) { request ->
-            apiCall { postApi.createStory(request) }.toSendResult()
+            when (val result = apiCall { postApi.createStory(request) }) {
+                is NetworkResult.Success -> {
+                    runCatching { outboxRepository.resolveLocalId(row.targetId, result.data.id) }
+                    SendResult.Success
+                }
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
         }
 }
 

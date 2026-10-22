@@ -22,6 +22,7 @@ import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
+import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.PinPayload
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -141,6 +142,7 @@ class ExhaustionHandlersTest {
         val conversationApi = mockk<ConversationApi>()
         val preferencesApi = mockk<PreferencesApi>()
         val postApi = mockk<PostApi>()
+        val outboxRepository = mockk<OutboxRepository>()
         val untouchable: Map<OutboxKind, OutboxKindHandler> = mapOf(
             OutboxKind.EDIT_MESSAGE to EditMessageHandler(messageApi, senderJson),
             OutboxKind.DELETE_MESSAGE to DeleteMessageHandler(messageApi),
@@ -151,11 +153,11 @@ class ExhaustionHandlersTest {
             OutboxKind.UPDATE_CONVERSATION_PREFS to UpdateConversationPrefsHandler(conversationApi, senderJson),
             OutboxKind.UPDATE_SETTINGS to UpdateSettingsHandler(preferencesApi, senderJson),
             OutboxKind.UPDATE_PRIVACY_SETTINGS to UpdatePrivacySettingsHandler(preferencesApi, senderJson),
-            OutboxKind.PUBLISH_STORY to PublishStoryHandler(postApi, senderJson),
+            OutboxKind.PUBLISH_STORY to PublishStoryHandler(postApi, outboxRepository, senderJson),
         )
 
         untouchable.forEach { (kind, handler) -> handler.onExhausted(outboxRow(kind)) }
 
-        confirmVerified(messageApi, reactionApi, conversationApi, preferencesApi, postApi)
+        confirmVerified(messageApi, reactionApi, conversationApi, preferencesApi, postApi, outboxRepository)
     }
 }
