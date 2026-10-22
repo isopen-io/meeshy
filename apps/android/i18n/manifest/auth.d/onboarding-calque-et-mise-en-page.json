@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.skipAll",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.progress.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.points.a11y",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.points.pill",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.reward.announce",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.gauge.reached",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.gauge.level1",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

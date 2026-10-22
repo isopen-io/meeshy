@@ -1,0 +1,22 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="onboarding_gauge_level1">%1$d / %2$d chispas para tu nivel 1</string>
+    <string name="onboarding_gauge_reached">Nivel 1 alcanzado 🎉</string>
+    <plurals name="onboarding_points_a11y">
+        <item quantity="one">%d chispa ganada</item>
+        <item quantity="many">%d chispas ganadas</item>
+        <item quantity="other">%d chispas ganadas</item>
+    </plurals>
+    <plurals name="onboarding_points_pill">
+        <item quantity="one">%d chispa</item>
+        <item quantity="many">%d chispas</item>
+        <item quantity="other">%d chispas</item>
+    </plurals>
+    <string name="onboarding_progress_a11y">Paso %1$d de %2$d</string>
+    <plurals name="onboarding_reward_announce">
+        <item quantity="one">Más %d chispa</item>
+        <item quantity="many">Más %d chispas</item>
+        <item quantity="other">Más %d chispas</item>
+    </plurals>
+    <string name="onboarding_skipAll">Saltar todo</string>
+</resources>
