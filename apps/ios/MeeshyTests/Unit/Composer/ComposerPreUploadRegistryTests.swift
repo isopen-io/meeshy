@@ -286,9 +286,13 @@ final class ComposerPreUploadRegistryTests: XCTestCase {
     /// Le composer monte par CE monteur, au budget de la story — le seul format
     /// dont la publication référence ce qui a été pré-monté.
     func test_composerHost_preUploadsThroughTheCompressingUploader_atTheStoryBudget() throws {
-        let code = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        let host = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("ComposerCompressingPreUploader(inner:ComposerTusPreUploader(baseURL:base,token:jeton)"))
-        XCTAssertTrue(code.contains("compressVideo($0,context:.story)"))
+        XCTAssertTrue(host.contains("returnComposerCompressingPreUploader.story(baseURL:base,token:jeton)"))
+        let monteur = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerPreUploadRegistry.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(monteur.contains("inner:ComposerTusPreUploader(baseURL:baseURL,token:token)"))
+        XCTAssertTrue(monteur.contains("compressVideo($0,context:.story)"))
     }
 }
