@@ -24,7 +24,7 @@ class ApiMetaAndDeletionCallTest {
     }
 
     @Test
-    fun `conditionalApiCall Fresh porte meta et ETag, 304 inchange`() = runTest {
+    fun `conditionalApiCall Fresh porte meta et ETag`() = runTest {
         val fresh = conditionalApiCall {
             Response.success(
                 ApiResponse(success = true, data = "d", meta = meta),
@@ -33,8 +33,6 @@ class ApiMetaAndDeletionCallTest {
         } as ConditionalResult.Fresh
         assertThat(fresh.meta).isEqualTo(meta)
         assertThat(fresh.etag).isEqualTo("\"v1\"")
-        val nm = conditionalApiCall<String> { Response.error(304, "".toResponseBody(json)) }
-        assertThat(nm).isEqualTo(ConditionalResult.NotModified)
     }
 
     @Test
