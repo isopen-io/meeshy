@@ -58,6 +58,6 @@ public struct PushDeviceIdentity: Sendable, Equatable {
         let model = withUnsafeBytes(of: &system.machine) { buffer in
             String(decoding: buffer.prefix(while: { $0 != 0 }), as: UTF8.self)
         }
-        return model.isEmpty ? UIDevice.current.model : model
+        return model.isEmpty ? "unknown" : model
     }
 }

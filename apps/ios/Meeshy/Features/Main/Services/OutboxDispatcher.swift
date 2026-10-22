@@ -32,7 +32,7 @@ struct OutboxDispatcher: OutboxDispatching {
 
     init(
         messageService: any MessageServiceProviding = MessageService.shared,
-        persistence: @escaping @Sendable @concurrent () async -> MessagePersistenceActor = { await DependencyContainer.shared.messagePersistence }
+        persistence: @escaping @Sendable @concurrent () async -> MessagePersistenceActor = { DependencyContainer.shared.messagePersistence }
     ) {
         self.messageService = messageService
         self.persistence = persistence
