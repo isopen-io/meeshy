@@ -1,0 +1,14 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="common_clearSearch">Suche löschen</string>
+    <string name="emoji_category_activities">Aktivitäten</string>
+    <string name="emoji_category_animals">Tiere</string>
+    <string name="emoji_category_flags">Flaggen</string>
+    <string name="emoji_category_food">Essen</string>
+    <string name="emoji_category_objects">Objekte</string>
+    <string name="emoji_category_people">Personen</string>
+    <string name="emoji_category_recent">Zuletzt</string>
+    <string name="emoji_category_smileys">Smileys</string>
+    <string name="emoji_category_symbols">Symbole</string>
+    <string name="emoji_category_travel">Reisen</string>
+</resources>

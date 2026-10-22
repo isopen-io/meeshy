@@ -9,7 +9,9 @@ package me.meeshy.sdk.lang
  *
  * Critical rules (see /CLAUDE.md "Regles critiques du Prisme"):
  *  1. If no translation matches a preferred language, show the ORIGINAL content (return null).
- *     Never fall back to translations.first.
+ *     Never fall back to translations.first. The descent itself lives in
+ *     [PrismTranslationResolver] / [ReaderPrism] (single source); [preferredContentLanguages]
+ *     keeps its "fr" fallback for COMPOSITION defaults only, never for what is read.
  *  2. Device locale is the 4th priority (Prisme étendu 2026-05-26) — AFTER the in-app
  *     systemLanguage / regionalLanguage / customDestinationLanguage, BEFORE the "fr" fallback.
  *     It never supplants an in-app preference; it only fills the gap when none is configured.
@@ -90,23 +92,27 @@ object LanguageResolver {
     /**
      * Pick the translation to display for the given preferences, or null to show the original.
      *
+     * A backwards-compatible FAÇADE over the single Prisme descent
+     * ([PrismTranslationResolver], fed by the strict [ReaderPrism] — ranks 1 to 4, no "fr"
+     * fallback): it keeps the historical signature and returns the matching row itself.
+     *
      * Rule 1 in action: when no translation targets a preferred language, this returns null —
      * the caller MUST then render the original content, never an arbitrary translation.
+     * Rule 3: pass [originalLanguage] whenever the caller knows it — the original language
+     * then competes at its own RANK (a French message read by `["fr", "en"]` stays French even
+     * when an English translation exists). Left `null` (unknown), the original never competes,
+     * which is the historical behaviour of callers that do not carry it yet.
      */
     fun <T : TranslationLike> preferredTranslation(
         translations: List<T>,
         prefs: ContentLanguagePreferences,
-    ): T? {
-        if (translations.isEmpty()) return null
-        for (language in preferredContentLanguages(prefs)) {
-            val match = translations.firstOrNull {
-                it.targetLanguage.equals(language, ignoreCase = true) &&
-                    it.translatedContent.isNotBlank()
-            }
-            if (match != null) return match
-        }
-        return null
-    }
+        originalLanguage: String? = null,
+    ): T? = PrismTranslationResolver.resolve(
+        originalLanguage = originalLanguage,
+        candidates = translations.map { PrismCandidate(language = it.targetLanguage, value = it) },
+        preferredLanguages = ReaderPrism.resolve(prefs),
+        isServable = { it.translatedContent.isNotBlank() },
+    )?.value
 
     private fun String?.cleaned(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 }

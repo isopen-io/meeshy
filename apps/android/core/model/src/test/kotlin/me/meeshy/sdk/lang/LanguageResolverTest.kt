@@ -173,4 +173,95 @@ class LanguageResolverTest {
         val user = MeeshyUser(id = "u1", username = "jean", deviceLocale = "en-GB")
         assertThat(LanguageResolver.resolveUserLanguage(user)).isEqualTo("en")
     }
+
+    // --- La façade rétrocompatible : UNE descente (PrismTranslationResolver + ReaderPrism) ---
+
+    @Test
+    fun preferredTranslation_originalLanguageCompetesAtItsRank_notAsShortCircuit() {
+        // Prisme [fr, en], message écrit en fr avec une traduction en : on sert l'original.
+        val prefs = Prefs(systemLanguage = "fr", regionalLanguage = "en")
+        val translations = listOf(Translation("en", "Hello"))
+        assertThat(LanguageResolver.preferredTranslation(translations, prefs, originalLanguage = "fr"))
+            .isNull()
+    }
+
+    @Test
+    fun preferredTranslation_primaryTranslationBeatsALowerRankOriginal() {
+        // Message écrit en en, traduction fr : la langue primaire du lecteur est servie.
+        val prefs = Prefs(systemLanguage = "fr", regionalLanguage = "en")
+        val translations = listOf(Translation("fr", "Bonjour"))
+        assertThat(
+            LanguageResolver.preferredTranslation(translations, prefs, originalLanguage = "en")
+                ?.translatedContent,
+        ).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun preferredTranslation_originalLanguageOnALaterRankStopsTheDescent() {
+        // Témoin de rang : l'origine (en) est au rang 2, la traduction (it) au rang 3.
+        val prefs = Prefs(systemLanguage = "de", regionalLanguage = "en", customDestinationLanguage = "it")
+        val translations = listOf(Translation("it", "Ciao"))
+        assertThat(LanguageResolver.preferredTranslation(translations, prefs, originalLanguage = "en"))
+            .isNull()
+    }
+
+    @Test
+    fun preferredTranslation_unknownOriginalKeepsTheHistoricalBehaviour() {
+        val prefs = Prefs(systemLanguage = "fr", regionalLanguage = "en")
+        val translations = listOf(Translation("en", "Hello"))
+        assertThat(LanguageResolver.preferredTranslation(translations, prefs)?.translatedContent)
+            .isEqualTo("Hello")
+    }
+
+    @Test
+    fun preferredTranslation_nothingConfiguredAndNoDeviceLocale_keepsTheOriginal() {
+        // Le repli « fr » de preferredContentLanguages sert les défauts de COMPOSITION ;
+        // la descente de lecture est stricte.
+        val translations = listOf(Translation("fr", "Bonjour"), Translation("en", "Hello"))
+        assertThat(LanguageResolver.preferredContentLanguages(Prefs())).containsExactly("fr")
+        assertThat(LanguageResolver.preferredTranslation(translations, Prefs())).isNull()
+    }
+
+    @Test
+    fun preferredTranslation_regionTaggedKeysAndPreferencesShareOneCanonicalKey() {
+        val translations = listOf(Translation("pt-BR", "Olá"))
+        assertThat(
+            LanguageResolver.preferredTranslation(translations, Prefs(systemLanguage = "pt"))
+                ?.translatedContent,
+        ).isEqualTo("Olá")
+        assertThat(
+            LanguageResolver.preferredTranslation(
+                listOf(Translation("en", "Hello")),
+                Prefs(systemLanguage = "en-US"),
+            )?.translatedContent,
+        ).isEqualTo("Hello")
+    }
+
+    @Test
+    fun preferredTranslation_twoKeysOfTheSameCanonicalLanguage_canonicalFormWinsWhateverTheOrder() {
+        val prefs = Prefs(systemLanguage = "fr")
+        val forward = listOf(Translation("fr-CA", "Allô"), Translation("fr", "Bonjour"))
+        assertThat(LanguageResolver.preferredTranslation(forward, prefs)?.translatedContent)
+            .isEqualTo("Bonjour")
+        assertThat(LanguageResolver.preferredTranslation(forward.reversed(), prefs)?.translatedContent)
+            .isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun preferredTranslation_blankRowIsSkippedAndTheRankFallsThrough() {
+        val prefs = Prefs(systemLanguage = "fr", regionalLanguage = "es")
+        val translations = listOf(Translation("fr", "  "), Translation("es", "Hola"))
+        assertThat(LanguageResolver.preferredTranslation(translations, prefs)?.translatedContent)
+            .isEqualTo("Hola")
+    }
+
+    @Test
+    fun preferredTranslation_neverFallsBackToTheFirstTranslation() {
+        val prefs = Prefs(systemLanguage = "de")
+        val translations = listOf(Translation("es", "Hola"), Translation("it", "Ciao"))
+        assertThat(LanguageResolver.preferredTranslation(translations, prefs, originalLanguage = null))
+            .isNull()
+        assertThat(LanguageResolver.preferredTranslation(translations, prefs, originalLanguage = "en"))
+            .isNull()
+    }
 }

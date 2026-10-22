@@ -5,8 +5,9 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversationLastMessage
 
 /**
- * No in-app language preference configured — Prisme resolution falls through to
- * its device-locale/`"fr"` tail. Used only when [previewLines] is called before a
+ * No in-app language preference configured — the strict Prisme descent has no rank
+ * to walk, so the original content is shown (no `"fr"` fallback: that one serves
+ * COMPOSITION defaults only). Used only when [previewLines] is called before a
  * session has hydrated (mirrors the same-shaped fallback each feature module
  * already keeps locally, e.g. chat's/feed's own `EmptyContentPreferences`).
  */
