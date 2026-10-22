@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +22,7 @@ public class ProfileGameSlot(
 )
 
 /** `null` : la bannière reste nue. */
-public val LocalProfileGameSlot = compositionLocalOf<ProfileGameSlot?> { null }
+public val LocalProfileGameSlot: ProvidableCompositionLocal<ProfileGameSlot?> = compositionLocalOf { null }
 
 @Composable
 internal fun BoxScope.ProfileGameBadges(userId: String?, displayName: String, slot: ProfileGameSlot?) {
