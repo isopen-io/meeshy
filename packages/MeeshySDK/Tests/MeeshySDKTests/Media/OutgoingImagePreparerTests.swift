@@ -24,67 +24,66 @@ final class OutgoingImagePreparerTests: XCTestCase {
 
     // MARK: - Le plan (loi pure)
 
-    func test_plan_jpegWithinBudget_travelsAsIs() {
-        let plan = OutgoingImagePlanner.plan(format: .jpeg, pixelSize: CGSize(width: 1000, height: 800),
-                                             byteCount: 400_000, carriesLocation: false, policy: Self.compressing(max: 1200))
-        XCTAssertEqual(plan, .passthrough)
+    /// Le défaut compresse : une photo HD part en UNE génération perceptuelle,
+    /// sauf si l'original est déjà aussi efficace (décidé après l'essai).
+    func test_plan_defaultJpegWithinHD_isEncodedOnceUnlessAlreadyEfficient() {
+        let plan = OutgoingImagePlanner.plan(format: .jpeg, pixelSize: CGSize(width: 4032, height: 3024),
+                                             byteCount: 5_000_000, carriesLocation: false, policy: Self.hd())
+        XCTAssertEqual(plan, .reencodeUnlessAlreadyEfficient(.jpeg, maxPixelDimension: nil))
     }
 
-    func test_plan_jpegOverBudget_isEncodedOnceAtTheBudget() {
+    func test_plan_defaultJpegBeyondTheHDCeiling_keepsAnHDDefinition() {
+        let plan = OutgoingImagePlanner.plan(format: .jpeg, pixelSize: CGSize(width: 8064, height: 6048),
+                                             byteCount: 9_000_000, carriesLocation: false, policy: Self.hd())
+        XCTAssertEqual(plan, .reencode(.jpeg, maxPixelDimension: OutgoingImagePolicy.defaultHDPixelCeiling))
+    }
+
+    /// Au-delà du plafond d'octets, une photo HD ne retombe JAMAIS au budget du contexte.
+    func test_plan_defaultAboveTheByteCeiling_neverFallsToTheContextBudget() {
         let plan = OutgoingImagePlanner.plan(format: .jpeg, pixelSize: CGSize(width: 4032, height: 3024),
-                                             byteCount: 3_000_000, carriesLocation: false, policy: Self.compressing(max: 1200))
+                                             byteCount: OutgoingImagePolicy.defaultByteCeiling * 2,
+                                             carriesLocation: false, policy: Self.hd())
+        XCTAssertEqual(plan, .reencodeUnlessAlreadyEfficient(.jpeg, maxPixelDimension: nil))
+    }
+
+    func test_plan_strongCompression_reducesToTheContextBudget() {
+        let plan = OutgoingImagePlanner.plan(format: .jpeg, pixelSize: CGSize(width: 4032, height: 3024),
+                                             byteCount: 3_000_000, carriesLocation: false, policy: Self.strong(max: 1200))
         XCTAssertEqual(plan, .reencode(.jpeg, maxPixelDimension: 1200))
     }
 
-    func test_plan_jpegWithLocation_stripsItWithoutReencoding() {
-        let plan = OutgoingImagePlanner.plan(format: .jpeg, pixelSize: CGSize(width: 800, height: 600),
-                                             byteCount: 200_000, carriesLocation: true, policy: Self.compressing(max: 1200))
-        XCTAssertEqual(plan, .stripLocation)
-    }
-
-    func test_plan_locationKeptByTheUser_travelsAsIs() {
-        let policy = OutgoingImagePolicy(maxPixelDimension: 1200, compresses: true, quality: 0.85, keepsLocation: true)
-        let plan = OutgoingImagePlanner.plan(format: .jpeg, pixelSize: CGSize(width: 800, height: 600),
-                                             byteCount: 200_000, carriesLocation: true, policy: policy)
-        XCTAssertEqual(plan, .passthrough)
-    }
-
-    func test_plan_pngIsNeverTurnedIntoJpeg() {
-        let small = OutgoingImagePlanner.plan(format: .png, pixelSize: CGSize(width: 512, height: 512),
-                                              byteCount: 90_000, carriesLocation: false, policy: Self.compressing(max: 1200))
+    func test_plan_pngStaysLossless_andOnlyItsLocationIsRemoved() {
+        let small = OutgoingImagePlanner.plan(format: .png, pixelSize: CGSize(width: 1170, height: 2532),
+                                              byteCount: 2_000_000, carriesLocation: false, policy: Self.hd())
+        let located = OutgoingImagePlanner.plan(format: .png, pixelSize: CGSize(width: 512, height: 512),
+                                                byteCount: 90_000, carriesLocation: true, policy: Self.hd())
         let large = OutgoingImagePlanner.plan(format: .png, pixelSize: CGSize(width: 3000, height: 2000),
-                                              byteCount: 9_000_000, carriesLocation: false, policy: Self.compressing(max: 1200))
-        XCTAssertEqual(small, .passthrough)
+                                              byteCount: 9_000_000, carriesLocation: false, policy: Self.strong(max: 1200))
+        XCTAssertEqual(small, .passthrough, "une capture d'écran reste sans perte")
+        XCTAssertEqual(located, .stripLocation)
         XCTAssertEqual(large, .reencode(.png, maxPixelDimension: 1200))
     }
 
     func test_plan_gifAndWebpTravelAsIs() {
         [OutgoingImageFormat.gif, .webp].forEach { format in
             let plan = OutgoingImagePlanner.plan(format: format, pixelSize: CGSize(width: 4000, height: 4000),
-                                                 byteCount: 5_000_000, carriesLocation: true, policy: Self.compressing(max: 1200))
+                                                 byteCount: 5_000_000, carriesLocation: true, policy: Self.strong(max: 1200))
             XCTAssertEqual(plan, .passthrough, "\(format)")
         }
     }
 
     func test_plan_heicBecomesOneWebSafeJpeg() {
-        let plan = OutgoingImagePlanner.plan(format: .heic, pixelSize: CGSize(width: 1000, height: 750),
-                                             byteCount: 300_000, carriesLocation: false, policy: Self.compressing(max: 1200))
+        let plan = OutgoingImagePlanner.plan(format: .heic, pixelSize: CGSize(width: 4032, height: 3024),
+                                             byteCount: 2_500_000, carriesLocation: false, policy: Self.hd())
         XCTAssertEqual(plan, .reencode(.jpeg, maxPixelDimension: nil))
     }
 
-    func test_plan_compressionOff_keepsTheHDDefinition() {
-        let policy = OutgoingImagePolicy(maxPixelDimension: 1200, compresses: false, quality: 0.85, keepsLocation: false)
-        let plan = OutgoingImagePlanner.plan(format: .jpeg, pixelSize: CGSize(width: 4032, height: 3024),
-                                             byteCount: 4_000_000, carriesLocation: false, policy: policy)
-        XCTAssertEqual(plan, .passthrough, "compressImagesOnUpload = false : la définition HD part intacte")
-    }
-
-    func test_plan_compressionOff_aboveTheByteCeiling_fallsBackToTheBudget() {
-        let policy = OutgoingImagePolicy(maxPixelDimension: 1200, compresses: false, quality: 0.85, keepsLocation: false)
-        let plan = OutgoingImagePlanner.plan(format: .jpeg, pixelSize: CGSize(width: 4032, height: 3024),
-                                             byteCount: OutgoingImagePolicy.defaultPassthroughByteCeiling + 1,
-                                             carriesLocation: false, policy: policy)
-        XCTAssertEqual(plan, .reencode(.jpeg, maxPixelDimension: 1200))
+    func test_policy_hdSteps_descendFrom4096To2560_andNeverToTheContextBudget() {
+        let policy = Self.hd()
+        XCTAssertEqual(policy.step(below: 4032), 3072)
+        XCTAssertEqual(policy.step(below: 3072), 2560)
+        XCTAssertNil(policy.step(below: 2560))
+        XCTAssertNil(Self.strong(max: 1200).step(below: 1200), "la compression forte est déjà au budget")
     }
 
     func test_policy_qualityFromPercent_isClamped() {
@@ -95,34 +94,64 @@ final class OutgoingImagePreparerTests: XCTestCase {
 
     // MARK: - L'exécution (ImageIO réel)
 
-    func test_prepare_jpegWithinBudget_bytesAreIdentical() throws {
-        let data = try Self.encoded(.jpeg, width: 800, height: 600)
-        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.compressing(max: 1200)))
-        XCTAssertEqual(out.data, data)
-        XCTAssertEqual(out.format, .jpeg)
-        XCTAssertEqual(out.encodedGenerations, 0)
-        XCTAssertEqual(out.pixelSize, CGSize(width: 800, height: 600))
+    func test_prepare_denseJpeg_isEncodedOnceAtItsDefinition() throws {
+        let data = try Self.photo(width: 1600, height: 1200, quality: 1)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.hd()))
+        XCTAssertEqual(out.encodedGenerations, 1)
+        XCTAssertEqual(out.pixelSize, CGSize(width: 1600, height: 1200), "la définition HD n'est pas rabotée")
+        XCTAssertLessThan(out.data.count, data.count)
     }
 
-    func test_prepare_jpegWithLocation_dropsGPS_andKeepsThePixels() throws {
-        let data = try Self.encoded(.jpeg, width: 400, height: 300, gps: true)
-        XCTAssertNotNil(try Self.properties(of: data)[kCGImagePropertyGPSDictionary], "le témoin doit partir d'une photo géolocalisée")
-        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.compressing(max: 1200)))
+    func test_prepare_alreadyEfficientJpeg_travelsAsIs() throws {
+        let data = try Self.photo(width: 1600, height: 1200, quality: 0.5)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.hd()))
+        XCTAssertEqual(out.data, data, "réencoder ne ferait pas gagner assez pour payer une génération")
+        XCTAssertEqual(out.encodedGenerations, 0)
+    }
+
+    func test_prepare_alreadyEfficientJpegWithLocation_dropsGPS_andKeepsThePixels() throws {
+        let data = try Self.photo(width: 800, height: 600, quality: 0.5, gps: true)
+        XCTAssertNotNil(try Self.properties(of: data)[kCGImagePropertyGPSDictionary], "le témoin part d'une photo géolocalisée")
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.hd()))
         XCTAssertNil(try Self.properties(of: out.data)[kCGImagePropertyGPSDictionary])
         XCTAssertEqual(out.encodedGenerations, 0, "retirer le lieu ne ré-encode pas les pixels")
         XCTAssertEqual(try Self.pixels(of: out.data), try Self.pixels(of: data))
     }
 
-    func test_prepare_locationKept_gpsTravels() throws {
-        let data = try Self.encoded(.jpeg, width: 400, height: 300, gps: true)
-        let policy = OutgoingImagePolicy(maxPixelDimension: 1200, compresses: true, quality: 0.85, keepsLocation: true)
+    func test_prepare_locationKeptByTheUser_efficientOriginalTravelsAsIs() throws {
+        let data = try Self.photo(width: 800, height: 600, quality: 0.5, gps: true)
+        let policy = OutgoingImagePolicy(maxPixelDimension: 1200, compresses: false, quality: 0.85, keepsLocation: true)
         let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: policy))
         XCTAssertEqual(out.data, data)
     }
 
     func test_prepare_reencodeDropsGPS() throws {
-        let data = try Self.encoded(.jpeg, width: 2400, height: 1800, gps: true)
-        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.compressing(max: 1200)))
+        let data = try Self.photo(width: 1600, height: 1200, quality: 1, gps: true)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.hd()))
+        XCTAssertEqual(out.encodedGenerations, 1)
+        XCTAssertNil(try Self.properties(of: out.data)[kCGImagePropertyGPSDictionary])
+    }
+
+    func test_prepare_reencodeKeepsTheColorProfile() throws {
+        let data = try Self.photo(width: 800, height: 600, quality: 1, space: CGColorSpace.displayP3)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.hd()))
+        XCTAssertEqual(out.encodedGenerations, 1)
+        XCTAssertEqual(try XCTUnwrap(Self.image(of: out.data)).colorSpace?.name as String?, CGColorSpace.displayP3 as String)
+    }
+
+    /// Au-delà du plafond d'octets : 4096, puis 3072, puis 2560 — jamais 1200.
+    func test_prepare_heavyPhoto_descendsByHDSteps_neverToTheContextBudget() throws {
+        let data = try Self.photo(width: 3600, height: 2700, quality: 1)
+        let policy = OutgoingImagePolicy(maxPixelDimension: 1200, compresses: false, quality: 0.85,
+                                         keepsLocation: false, byteCeiling: 1)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: policy))
+        XCTAssertEqual(out.encodedGenerations, 1, "chaque palier repart de l'original")
+        XCTAssertEqual(out.pixelSize, CGSize(width: 2560, height: 1920))
+    }
+
+    func test_prepare_strongCompression_reducesToTheContextBudget() throws {
+        let data = try Self.photo(width: 2400, height: 1800, quality: 1, gps: true)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 1200)))
         XCTAssertEqual(out.encodedGenerations, 1)
         XCTAssertEqual(out.pixelSize, CGSize(width: 1200, height: 900))
         XCTAssertNil(try Self.properties(of: out.data)[kCGImagePropertyGPSDictionary])
@@ -130,7 +159,7 @@ final class OutgoingImagePreparerTests: XCTestCase {
 
     func test_prepare_largePng_staysPngWithItsAlpha() throws {
         let data = try Self.encoded(.png, width: 1600, height: 1600, alpha: true)
-        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.compressing(max: 800)))
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 800)))
         XCTAssertEqual(out.format, .png)
         XCTAssertEqual(OutgoingImageFormat(sniffing: out.data), .png)
         let image = try XCTUnwrap(Self.image(of: out.data))
@@ -139,35 +168,41 @@ final class OutgoingImagePreparerTests: XCTestCase {
                       "un PNG transparent garde son alpha")
     }
 
-    func test_prepare_rotatedJpegOverBudget_isUprightOnce() throws {
-        let data = try Self.encoded(.jpeg, width: 2000, height: 1000, orientation: 6)
-        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.compressing(max: 1000)))
+    func test_prepare_screenshotPng_travelsLosslessly() throws {
+        let data = try Self.encoded(.png, width: 1170, height: 2532)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.hd()))
+        XCTAssertEqual(out.data, data)
+    }
+
+    func test_prepare_rotatedDenseJpeg_isUprightOnce() throws {
+        let data = try Self.photo(width: 2000, height: 1000, quality: 1, orientation: 6)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 1000)))
         XCTAssertEqual(out.pixelSize, CGSize(width: 500, height: 1000))
         XCTAssertEqual((try Self.properties(of: out.data)[kCGImagePropertyOrientation] as? Int) ?? 1, 1)
     }
 
-    func test_prepare_rotatedJpegWithinBudget_reportsTheUprightSize() throws {
-        let data = try Self.encoded(.jpeg, width: 400, height: 300, orientation: 6)
-        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.compressing(max: 1200)))
+    func test_prepare_rotatedEfficientJpeg_reportsTheUprightSize() throws {
+        let data = try Self.photo(width: 400, height: 300, quality: 0.5, orientation: 6)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.hd()))
         XCTAssertEqual(out.data, data)
         XCTAssertEqual(out.pixelSize, CGSize(width: 300, height: 400))
     }
 
     func test_prepare_undecodableBytes_travelAsIs() {
         let data = Self.magic([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70])
-        let out = OutgoingImagePreparer().prepare(data, policy: Self.compressing(max: 1200))
+        let out = OutgoingImagePreparer().prepare(data, policy: Self.hd())
         XCTAssertEqual(out?.data, data)
         XCTAssertEqual(out?.format, .heic)
         XCTAssertNil(out?.pixelSize)
     }
 
     /// Le critère de #9885 : une photo de l'objectif ne connaît qu'UNE
-    /// génération d'encodage — celle de `PhotoCaptureProcessor` — jusqu'au disque.
+    /// génération d'encodage — celle de `PhotoCaptureProcessor`, à q 0,85 —
+    /// jusqu'au disque. Réencoder à la même qualité ne gagnerait rien.
     func test_cameraShot_isEncodedExactlyOnceUntilUpload() throws {
-        let raw = try Self.encoded(.jpeg, width: 1600, height: 1200, gps: true)
+        let raw = try Self.photo(width: 1600, height: 1200, quality: 1, gps: true)
         let shot = try XCTUnwrap(PhotoCaptureProcessor().process(encoded: raw, settings: .capture))
-        let policy = OutgoingImagePolicy(maxPixelDimension: 1200, compresses: false, quality: 0.85, keepsLocation: false)
-        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(shot.data, policy: policy))
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(shot.data, policy: Self.hd()))
         XCTAssertEqual(out.encodedGenerations, 0)
         XCTAssertEqual(try Self.pixels(of: out.data), try Self.pixels(of: shot.data))
         XCTAssertNil(try Self.properties(of: out.data)[kCGImagePropertyGPSDictionary])
@@ -175,8 +210,51 @@ final class OutgoingImagePreparerTests: XCTestCase {
 
     // MARK: - Fabriques
 
-    private static func compressing(max: CGFloat) -> OutgoingImagePolicy {
+    /// Le défaut : HD, une génération perceptuelle, lieu retiré.
+    private static func hd() -> OutgoingImagePolicy {
+        OutgoingImagePolicy(maxPixelDimension: 1200, compresses: false, quality: 0.85, keepsLocation: false)
+    }
+
+    /// La compression forte, choisie par l'utilisateur pour économiser des données.
+    private static func strong(max: CGFloat) -> OutgoingImagePolicy {
         OutgoingImagePolicy(maxPixelDimension: max, compresses: true, quality: 0.85, keepsLocation: false)
+    }
+
+    /// Une image au grain de photo (dégradé + bruit déterministe), encodée en JPEG
+    /// à la qualité donnée : `quality: 1` est un original dense, `0.5` un original
+    /// déjà plus léger que ce que q 0,85 produirait.
+    private static func photo(width: Int, height: Int, quality: CGFloat, orientation: Int = 1, gps: Bool = false,
+                              space: CFString = CGColorSpace.sRGB) throws -> Data {
+        let colorSpace = try XCTUnwrap(CGColorSpace(name: space))
+        let context = try XCTUnwrap(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                              space: colorSpace, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let pixels = try XCTUnwrap(context.data).bindMemory(to: UInt8.self, capacity: context.bytesPerRow * height)
+        var seed: UInt32 = 0x9E37_79B9
+        (0..<height).forEach { y in
+            (0..<width).forEach { x in
+                seed = seed &* 1_664_525 &+ 1_013_904_223
+                let noise = Int(seed >> 26)
+                let offset = y * context.bytesPerRow + x * 4
+                pixels[offset] = UInt8(min(255, x * 200 / width + noise))
+                pixels[offset + 1] = UInt8(min(255, y * 200 / height + noise))
+                pixels[offset + 2] = UInt8(min(255, 90 + noise * 2))
+            }
+        }
+        let image = try XCTUnwrap(context.makeImage())
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil))
+        let properties = location(gps).merging([kCGImagePropertyOrientation: orientation,
+                                                kCGImageDestinationLossyCompressionQuality: quality]) { garde, _ in garde }
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    private static func location(_ gps: Bool) -> [CFString: Any] {
+        gps ? [kCGImagePropertyGPSDictionary: [
+            kCGImagePropertyGPSLatitude: 48.8566, kCGImagePropertyGPSLatitudeRef: "N",
+            kCGImagePropertyGPSLongitude: 2.3522, kCGImagePropertyGPSLongitudeRef: "E",
+        ] as [CFString: Any]] : [:]
     }
 
     private static func magic(_ prefix: [UInt8]) -> Data {
@@ -207,11 +285,7 @@ final class OutgoingImagePreparerTests: XCTestCase {
         let type = kind == .jpeg ? UTType.jpeg : UTType.png
         let data = NSMutableData()
         let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil))
-        let location: [CFString: Any] = gps ? [kCGImagePropertyGPSDictionary: [
-            kCGImagePropertyGPSLatitude: 48.8566, kCGImagePropertyGPSLatitudeRef: "N",
-            kCGImagePropertyGPSLongitude: 2.3522, kCGImagePropertyGPSLongitudeRef: "E",
-        ] as [CFString: Any]] : [:]
-        let properties = location.merging([kCGImagePropertyOrientation: orientation]) { garde, _ in garde }
+        let properties = location(gps).merging([kCGImagePropertyOrientation: orientation]) { garde, _ in garde }
         CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
         return data as Data
