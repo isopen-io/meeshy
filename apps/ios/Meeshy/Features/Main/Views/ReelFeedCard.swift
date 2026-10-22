@@ -34,7 +34,7 @@ struct ReelFeedCardContainer: View {
     /// masquée du menu (même convention de gating que `FeedPostCard`).
     var onEdit: ((FeedPost) -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
-    var onRemove: ((String) -> Void)? = nil
+    var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
 
@@ -110,7 +110,7 @@ struct ReelFeedCard: View, Equatable {
     /// Menu « … » (parité avec `FeedPostCard`) — `nil` = action indisponible.
     var onEdit: ((FeedPost) -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
-    var onRemove: ((String) -> Void)? = nil
+    var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
 

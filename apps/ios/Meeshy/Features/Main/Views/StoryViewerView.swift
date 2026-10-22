@@ -802,7 +802,7 @@ struct StoryViewerView: View {
             },
             toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
             makeStoryExternalShareURL: { makeStoryExternalShareURL($0) },
-            deleteCurrentStory: { deleteCurrentStory(reason: $0) },
+            storyWithdrawal: StoryWithdrawalActions(delete: { deleteCurrentStory(reason: $0) }, makePrivate: { StoryPrivatization.makePrivate(currentStory, of: currentGroup, reason: $0, viewModel: viewModel, dismiss: dismissViewer) }),
             dismissViewer: { dismissViewer() },
             reportStory: { storyId, reportType, reason in
                 try await ReportService.shared.reportStory(storyId: storyId, reportType: reportType, reason: reason)

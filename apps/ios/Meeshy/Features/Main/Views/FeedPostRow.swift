@@ -97,8 +97,8 @@ struct FeedPostRow: View {
         }
     }
 
-    private var removalOffer: ((String) -> Void)? {
-        ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.deletePost($0, reason: $1) }
+    private var removalOffer: PublicationModerationOffer? {
+        ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) }
     }
 
     /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de

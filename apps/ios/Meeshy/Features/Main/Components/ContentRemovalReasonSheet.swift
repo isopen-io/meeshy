@@ -60,6 +60,8 @@ enum ContentRemovalKind: String, Identifiable, Equatable {
 struct ContentRemovalReasonSheet: View {
     let kind: ContentRemovalKind
     var count: Int = 1
+    /// Retirer, ou rendre privé (#11535) — la même feuille, les mots du geste.
+    var gesture: ContentModerationGesture = .remove
     let onConfirm: (String) -> Void
     /// Referme la feuille — le contrôleur qui la présente (`ContentRemovalPresenter`).
     let onClose: () -> Void
@@ -76,7 +78,7 @@ struct ContentRemovalReasonSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                    Text(String(localized: "moderation.removal.reason.label", defaultValue: "Motif du retrait", bundle: .main))
+                    Text(gesture.reasonLabel)
                         .font(.callout.weight(.semibold))
                         .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
                         .accessibilityAddTraits(.isHeader)
@@ -86,7 +88,7 @@ struct ContentRemovalReasonSheet: View {
                 .padding(.horizontal, MeeshySpacing.xl)
                 .padding(.vertical, MeeshySpacing.lg)
             }
-            .navigationTitle(kind.sheetTitle(count: count))
+            .navigationTitle(gesture.sheetTitle(for: kind, count: count))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
         }
@@ -94,7 +96,7 @@ struct ContentRemovalReasonSheet: View {
 
     private var reasonField: some View {
         TextField(
-            String(localized: "moderation.removal.reason.placeholder", defaultValue: "Expliquez pourquoi ce contenu est retiré…", bundle: .main),
+            gesture.reasonPlaceholder,
             text: $reason,
             axis: .vertical
         )
@@ -105,7 +107,7 @@ struct ContentRemovalReasonSheet: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(ReportSheetPalette.inputBackground(isDark: isDark))
         )
-        .accessibilityLabel(String(localized: "moderation.removal.reason.label", defaultValue: "Motif du retrait", bundle: .main))
+        .accessibilityLabel(gesture.reasonLabel)
         .accessibilityHint(String(localized: "moderation.removal.author_notified", defaultValue: "L'auteur sera prévenu du motif.", bundle: .main))
         .accessibilityIdentifier("moderation.removal.reason")
     }
@@ -135,7 +137,7 @@ struct ContentRemovalReasonSheet: View {
                 onConfirm(normalized)
                 onClose()
             } label: {
-                Text(String(localized: "moderation.removal.confirm", defaultValue: "Retirer", bundle: .main))
+                Text(gesture.confirmLabel)
                     .fontWeight(.semibold)
             }
             .tint(MeeshyColors.error)
@@ -146,12 +148,13 @@ struct ContentRemovalReasonSheet: View {
 }
 
 /// **Les entrées destructives du menu « … » d'une publication** (#11151) :
-/// « Supprimer » pour l'auteur, « Retirer » pour la modération — l'hôte décide
+/// « Supprimer » pour l'auteur, « Rendre privé » et « Retirer » pour la
+/// modération (#11535) — l'hôte décide
 /// laquelle s'offre en passant, ou non, sa fermeture.
 struct PublicationDestructiveMenuItems: View {
     let postId: String
     let onDelete: ((String) -> Void)?
-    let onRemove: ((String) -> Void)?
+    let onRemove: PublicationModerationOffer?
 
     var body: some View {
         if let onDelete {
@@ -165,11 +168,18 @@ struct PublicationDestructiveMenuItems: View {
         }
         if let onRemove {
             Divider()
+            Button {
+                HapticFeedback.medium()
+                onRemove.makePrivate(postId)
+            } label: {
+                Label(ContentModerationGesture.makePrivate.actionLabel, systemImage: ContentModerationGesture.privateSymbol)
+            }
+            .accessibilityIdentifier("moderation.private.action")
             Button(role: .destructive) {
                 HapticFeedback.medium()
-                onRemove(postId)
+                onRemove.remove(postId)
             } label: {
-                Label(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), systemImage: ContentRemovalKind.symbol)
+                Label(ContentModerationGesture.remove.actionLabel, systemImage: ContentRemovalKind.symbol)
             }
         }
     }
