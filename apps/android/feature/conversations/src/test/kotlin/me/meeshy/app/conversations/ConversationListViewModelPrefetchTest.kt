@@ -21,9 +21,6 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocketManager
 import org.junit.Test
 
-private fun row(id: String) =
-    ApiConversation(id = id, lastMessage = ApiConversationLastMessage(id = "m-$id", createdAt = "2026-10-01T10:00:00.000Z"))
-
 /** Les trois déclencheurs de la passe de préchargement : chargement, premier plan, reconnexion. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConversationListViewModelPrefetchTest {

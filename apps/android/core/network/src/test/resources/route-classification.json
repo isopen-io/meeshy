@@ -430,7 +430,6 @@
     "POST /api/v1/affiliate/tokens",
     "POST /api/v1/affiliate/track-visit",
     "POST /api/v1/attachments/:attachmentId/analysis",
-    "POST /api/v1/attachments/:attachmentId/status",
     "POST /api/v1/attachments/:attachmentId/transcribe",
     "POST /api/v1/attachments/:attachmentId/translate",
     "POST /api/v1/attachments/batch/analysis",

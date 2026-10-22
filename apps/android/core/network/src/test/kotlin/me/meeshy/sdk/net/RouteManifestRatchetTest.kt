@@ -27,7 +27,7 @@ import org.junit.Test
 class RouteManifestRatchetTest {
 
     private companion object {
-        const val TO_PORT_CEILING = 299
+        const val TO_PORT_CEILING = 298
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "a-porter", "implementee-par-url-serveur")
     }
 
