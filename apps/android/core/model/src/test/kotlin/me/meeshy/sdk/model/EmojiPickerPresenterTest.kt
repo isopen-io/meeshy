@@ -43,6 +43,17 @@ class EmojiPickerPresenterTest {
     }
 
     @Test
+    fun `a repeated emoji from the host or a damaged history is shown once`() {
+        val page = page(
+            selected = EmojiCategoryId.RECENT,
+            recents = listOf("🎉", "🍕", "🎉"),
+            quickReactions = listOf("❤️", "❤️", "😂"),
+        ) as EmojiPickerPage.Recents
+        assertThat(page.recents).containsExactly("🎉", "🍕").inOrder()
+        assertThat(page.quickReactions).containsExactly("❤️", "😂").inOrder()
+    }
+
+    @Test
     fun `a category tab shows its emojis`() {
         val page = page(selected = EmojiCategoryId.FLAGS)
         assertThat(page).isEqualTo(EmojiPickerPage.Category(EmojiCategoryId.FLAGS, EmojiCatalog.emojis(EmojiCategoryId.FLAGS)))

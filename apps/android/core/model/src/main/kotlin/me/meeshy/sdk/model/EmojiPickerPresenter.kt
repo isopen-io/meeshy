@@ -2,7 +2,11 @@ package me.meeshy.sdk.model
 
 /** What the picker body draws for the current query and tab. */
 sealed interface EmojiPickerPage {
-    /** The recent tab: quick reactions first, then what the user used lately (possibly nothing yet). */
+    /**
+     * The recent tab: quick reactions first, then what the user used lately (possibly nothing
+     * yet). Each list is de-duplicated — the grid keys its cells by emoji, and a repeat from a
+     * host or a damaged history must not crash it.
+     */
     data class Recents(val quickReactions: List<String>, val recents: List<String>) : EmojiPickerPage
 
     /** A fixed-content tab. */
@@ -56,8 +60,8 @@ object EmojiPickerPresenter {
         }
         if (selected == EmojiCategoryId.RECENT) {
             return EmojiPickerPage.Recents(
-                quickReactions = quickReactions.take(QUICK_REACTIONS_COUNT),
-                recents = recents.take(EmojiUsageRanker.HISTORY_CAPACITY),
+                quickReactions = quickReactions.distinct().take(QUICK_REACTIONS_COUNT),
+                recents = recents.distinct().take(EmojiUsageRanker.HISTORY_CAPACITY),
             )
         }
         val emojis = snapshot.categories.firstOrNull { it.id == selected }?.emojis.orEmpty()
