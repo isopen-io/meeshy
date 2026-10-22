@@ -157,7 +157,7 @@ public final class ReaderAudioMixer {
     public func configure(audios: [StoryAudioPlayerObject],
                           urls: [String: URL],
                           loopsEveryClip: Bool = false) throws {
-        let files = Self.readAudioFiles(Self.urls(urls, for: audios))
+        let files = ReaderAudioFileReader.readAudioFiles(Self.urls(urls, for: audios))
         configure(audios: audios, files: files, loopsEveryClip: loopsEveryClip)
     }
 
