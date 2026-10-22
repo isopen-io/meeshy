@@ -8,7 +8,9 @@
  *  - la ligne de base des alertes (date et situation `PhotoCatchUpStanding` à cette date).
  *
  * Et un registre DURABLE, une ligne par (compte, étape) : quand l'étape a été détectée, présentée,
- * notifiée. Lu par l'extension `game.photo` du bloc `game` (`GET /me/engagement`), bornée aux
+ * notifiée, immortalisée (`keptAt`, D22 b — #10182 : la photo reste sur l'appareil, seul l'identifiant
+ * d'étape voyage, pour que les autres appareils la sortent de « À rattraper »). Lu par l'extension
+ * `game.photo` du bloc `game` (`GET /me/engagement`), bornée aux
  * `PHOTO_MOMENTS_SERVED_MAX` lignes les plus récentes ; un client qui ne sait pas la lire la perd
  * SEULE (`.optional().catch(undefined)` dans `gameBlockExtensionShape`).
  *
@@ -33,6 +35,8 @@ export const isPhotoInvitations = (value: unknown): value is PhotoInvitations =>
 export const PHOTO_MOMENTS_SERVED_MAX = 64;
 /** Un accusé de présentation porte au plus ce nombre d'étapes. */
 export const PHOTO_PRESENTED_MAX = 64;
+/** Un signal « immortalisée » porte au plus ce nombre d'étapes — le même lot que l'accusé. */
+export const PHOTO_KEPT_MAX = 64;
 /** Une étape : `start`, `rank:or:2`, `meesh:40`, `trophy:…`, `league-up:2026-10-12:jade`… */
 export const PHOTO_STEP_ID_PATTERN = '^[A-Za-z0-9][A-Za-z0-9:._-]{0,95}$';
 const stepIdSchema = z.string().regex(new RegExp(PHOTO_STEP_ID_PATTERN));
@@ -58,6 +62,8 @@ export const gamePhotoMomentSchema = z.object({
   detectedAt: isoDate.nullable(),
   presentedAt: isoDate.nullable(),
   notifiedAt: isoDate.nullable(),
+  /** Immortalisée sur un appareil (D22 b) ; absent d'un serveur d'avant le signal ⇒ `null`. */
+  keptAt: isoDate.nullable().default(null),
 });
 
 export const gamePhotoBlockSchema = z.object({
@@ -90,4 +96,16 @@ export const photoMomentsPresentedRequestSchema = writeRequest.extend({
 /** Les étapes accusées, chacune avec la date de sa PREMIÈRE présentation (un rejeu ne la déplace pas). */
 export const photoMomentsPresentedResponseSchema = z.object({
   presented: z.array(z.object({ stepId: stepIdSchema, presentedAt: isoDate })),
+});
+
+/**
+ * Le signal « immortalisée » (D22 b, #10182) : des identifiants d'étape, RIEN d'autre — ni image, ni date de prise,
+ * ni recette (`.strict()` : une clé de plus est refusée, pas ignorée). Une étape immortalisée vaut présentée.
+ */
+export const photoMomentsKeptRequestSchema = writeRequest
+  .extend({ stepIds: z.array(stepIdSchema).min(1).max(PHOTO_KEPT_MAX) })
+  .strict();
+/** Les étapes gardées, chacune avec la date de sa PREMIÈRE immortalisation (un rejeu ne la déplace pas). */
+export const photoMomentsKeptResponseSchema = z.object({
+  kept: z.array(z.object({ stepId: stepIdSchema, keptAt: isoDate })),
 });

@@ -11,6 +11,8 @@ import {
   frameAtmosphereRequestSchema,
   gameBlockExtensionShape,
   gamePhotoBlockSchema,
+  photoMomentsKeptRequestSchema,
+  photoMomentsKeptResponseSchema,
   photoMomentsPresentedRequestSchema,
 } from '../../types/game.js';
 import { z } from 'zod';
@@ -23,7 +25,7 @@ const photo = (over: Record<string, unknown> = {}) => ({
   baselineAt: '2026-10-11T08:00:00.000Z',
   baseline: { rank: 'ambassadeur', division: 4, levelRecord: 30, prestige: 0, minted: 12, treasuryTier: 'coffret', flameRecord: 9 },
   treasuryPeakTier: 'coffre',
-  moments: [{ stepId: 'rank:ambassadeur:4', detectedAt: '2026-10-11T08:00:00.000Z', presentedAt: null, notifiedAt: null }],
+  moments: [{ stepId: 'rank:ambassadeur:4', detectedAt: '2026-10-11T08:00:00.000Z', presentedAt: null, notifiedAt: null, keptAt: null }],
   ...over,
 });
 
@@ -41,6 +43,13 @@ describe('game.photo — l’extension du bloc game', () => {
     expect(parsed.photo).toBeUndefined();
   });
 
+  it('une ligne servie par un serveur d’avant le signal « immortalisée » (sans `keptAt`) se lit `keptAt: null`', () => {
+    const [moment] = gamePhotoBlockSchema.parse(
+      photo({ moments: [{ stepId: 'start', detectedAt: null, presentedAt: '2026-10-11T08:00:00.000Z', notifiedAt: null }] }),
+    ).moments;
+    expect(moment).toEqual({ stepId: 'start', detectedAt: null, presentedAt: '2026-10-11T08:00:00.000Z', notifiedAt: null, keptAt: null });
+  });
+
   it('une ligne de base ou un palier illisibles se lisent « aucun » sans emporter le reste', () => {
     const parsed = gamePhotoBlockSchema.parse(photo({ baseline: { rank: 3 }, treasuryPeakTier: 'galion' }));
     expect(parsed.baseline).toBeNull();
@@ -50,13 +59,14 @@ describe('game.photo — l’extension du bloc game', () => {
 });
 
 describe('GAME_PHOTO_ROUTES — une table à part', () => {
-  it('trois routes neuves, aucune dans GAME_ROUTES (que GameRoutesTests.swift compte)', () => {
+  it('quatre routes neuves, aucune dans GAME_ROUTES (que GameRoutesTests.swift compte)', () => {
     expect(GAME_PHOTO_ROUTES).toEqual({
       frameAtmosphere: '/me/game/frames/atmosphere',
       photoInvitations: '/me/game/photo-moments/invitations',
       photoPresented: '/me/game/photo-moments/presented',
+      photoKept: '/me/game/photo-moments/kept',
     });
-    expect(GAME_PHOTO_ROUTE_METHODS).toEqual({ frameAtmosphere: 'PUT', photoInvitations: 'PUT', photoPresented: 'POST' });
+    expect(GAME_PHOTO_ROUTE_METHODS).toEqual({ frameAtmosphere: 'PUT', photoInvitations: 'PUT', photoPresented: 'POST', photoKept: 'POST' });
     expect(Object.values(GAME_ROUTES)).not.toEqual(expect.arrayContaining(Object.values(GAME_PHOTO_ROUTES)));
   });
 
@@ -67,5 +77,17 @@ describe('GAME_PHOTO_ROUTES — une table à part', () => {
     expect(photoMomentsPresentedRequestSchema.safeParse({ requestId: 'req-00001', stepIds: ids(64) }).success).toBe(true);
     expect(photoMomentsPresentedRequestSchema.safeParse({ requestId: 'req-00001', stepIds: ids(65) }).success).toBe(false);
     expect(photoMomentsPresentedRequestSchema.safeParse({ requestId: 'req-00001', stepIds: [] }).success).toBe(false);
+  });
+
+  it('le signal « immortalisée » (D22 b) ne porte que des identifiants d’étape, de 1 à 64 — ni image, ni date de prise', () => {
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `meesh:${i + 1}`);
+    expect(photoMomentsKeptRequestSchema.safeParse({ requestId: 'req-00001', stepIds: ids(64) }).success).toBe(true);
+    expect(photoMomentsKeptRequestSchema.safeParse({ requestId: 'req-00001', stepIds: ids(65) }).success).toBe(false);
+    expect(photoMomentsKeptRequestSchema.safeParse({ requestId: 'req-00001', stepIds: [] }).success).toBe(false);
+    expect(photoMomentsKeptRequestSchema.safeParse({ requestId: 'req-00001', stepIds: ['start'], takenAt: '2026-10-21T08:00:00.000Z' }).success).toBe(false);
+    expect(photoMomentsKeptRequestSchema.safeParse({ requestId: 'req-00001', stepIds: ['start'], image: 'data:image/jpeg;base64,AA==' }).success).toBe(false);
+    expect(photoMomentsKeptResponseSchema.parse({ kept: [{ stepId: 'start', keptAt: '2026-10-21T08:00:00.000Z' }] })).toEqual({
+      kept: [{ stepId: 'start', keptAt: '2026-10-21T08:00:00.000Z' }],
+    });
   });
 });
