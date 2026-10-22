@@ -8,13 +8,13 @@ import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.TusUploadRepository
 import me.meeshy.sdk.model.friend.FriendshipStatus
-import me.meeshy.sdk.net.api.BlockApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.PostApi
@@ -62,7 +62,7 @@ class ExhaustionHandlersTest {
     fun `an exhausted block removes the optimistic block`() = runTest {
         val cache = BlockCache().apply { setBlocked("u1", blocked = true) }
 
-        BlockUserHandler(mockk<BlockApi>(), cache).onExhausted(outboxRow(OutboxKind.BLOCK_USER, targetId = "u1"))
+        BlockUserHandler(mockk<BlockRepository>(), cache).onExhausted(outboxRow(OutboxKind.BLOCK_USER, targetId = "u1"))
 
         assertThat(cache.isBlocked("u1")).isFalse()
     }
@@ -71,7 +71,7 @@ class ExhaustionHandlersTest {
     fun `an exhausted unblock restores the block`() = runTest {
         val cache = BlockCache()
 
-        UnblockUserHandler(mockk<BlockApi>(), cache).onExhausted(outboxRow(OutboxKind.UNBLOCK_USER, targetId = "u1"))
+        UnblockUserHandler(mockk<BlockRepository>(), cache).onExhausted(outboxRow(OutboxKind.UNBLOCK_USER, targetId = "u1"))
 
         assertThat(cache.isBlocked("u1")).isTrue()
     }

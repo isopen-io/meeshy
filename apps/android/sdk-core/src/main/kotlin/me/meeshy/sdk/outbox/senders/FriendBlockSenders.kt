@@ -8,12 +8,11 @@ import dagger.multibindings.IntoMap
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendRequestDelivery
 import me.meeshy.sdk.friend.FriendRequestSend
 import me.meeshy.sdk.friend.FriendshipCache
-import me.meeshy.sdk.net.api.BlockApi
-import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.outbox.FriendRequestPayload
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
@@ -28,12 +27,12 @@ import javax.inject.Inject
  * blocklist re-hydrates truthfully on next load.
  */
 public class BlockUserHandler @Inject constructor(
-    private val blockApi: BlockApi,
+    private val blockRepository: BlockRepository,
     private val blockCache: BlockCache,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { blockApi.block(row.targetId) }.toSendResult()
+        blockRepository.deliverBlock(row.targetId).toSendResult()
 
     override suspend fun onExhausted(row: OutboxEntity) {
         blockCache.setBlocked(row.targetId, blocked = false)
@@ -42,12 +41,12 @@ public class BlockUserHandler @Inject constructor(
 
 /** `UNBLOCK_USER`: unblocks the user; an exhausted unblock rolls back to blocked. */
 public class UnblockUserHandler @Inject constructor(
-    private val blockApi: BlockApi,
+    private val blockRepository: BlockRepository,
     private val blockCache: BlockCache,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { blockApi.unblock(row.targetId) }.toSendResult()
+        blockRepository.deliverUnblock(row.targetId).toSendResult()
 
     override suspend fun onExhausted(row: OutboxEntity) {
         blockCache.setBlocked(row.targetId, blocked = true)

@@ -5,6 +5,7 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequest
@@ -15,6 +16,7 @@ import me.meeshy.sdk.net.api.BlockActionResponse
 import me.meeshy.sdk.net.api.BlockApi
 import me.meeshy.sdk.outbox.FriendRequestPayload
 import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.SendResult
 import org.junit.Test
 import java.io.IOException
@@ -23,10 +25,11 @@ class FriendBlockSendersTest {
 
     private val blockApi = mockk<BlockApi>()
     private val friendRepository = mockk<FriendRepository>()
+    private val blockRepository = BlockRepository(blockApi, BlockCache(), mockk<OutboxRepository>(relaxed = true))
 
     @Test
     fun `block user maps an accepted call to success and any failure to retryable`() = runTest {
-        val handler = BlockUserHandler(blockApi, BlockCache())
+        val handler = BlockUserHandler(blockRepository, BlockCache())
         val row = outboxRow(OutboxKind.BLOCK_USER, targetId = "u1")
 
         coEvery { blockApi.block("u1") } returns accepted(BlockActionResponse())
@@ -44,7 +47,7 @@ class FriendBlockSendersTest {
         val handler = UnblockUserHandler(blockApi, BlockCache())
         val row = outboxRow(OutboxKind.UNBLOCK_USER, targetId = "u1")
 
-        coEvery { blockApi.unblock("u1") } returns accepted(Unit)
+        coEvery { blockApi.unblock("u1") } returns accepted(BlockActionResponse())
         assertThat(handler.send(row)).isEqualTo(SendResult.Success)
 
         coEvery { blockApi.unblock("u1") } returns refused()
