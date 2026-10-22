@@ -24,6 +24,8 @@ bare-specifier :feature:chat en chat_forward_members
 # Chaînes GÉNÉRÉES à un seul spécificateur : xcstrings_to_android.py ne numérote un spécificateur
 # que s'il y en a plusieurs ou que la source iOS est déjà positionnelle ; le cliquet les garde
 # jusqu'à ce que le générateur les émette en %1$s / %1$d.
+bare-specifier :sdk-ui en avatar_a11y_mood
+bare-specifier :sdk-ui en media_trim_of_total
 bare-specifier :sdk-ui en notification_date_ago
 bare-specifier :sdk-ui en notification_date_hours
 bare-specifier :sdk-ui en notification_date_minutes
@@ -32,6 +34,26 @@ bare-specifier :sdk-ui en settings_info_button_label
 bare-specifier :sdk-ui en time_lastSeen_beforeYesterdayAt
 bare-specifier :sdk-ui en time_lastSeen_seen
 bare-specifier :sdk-ui en time_lastSeen_yesterdayAt
+bare-specifier :feature:auth en login_server_origin
+bare-specifier :feature:auth en onboarding_points_a11y
+bare-specifier :feature:auth en onboarding_points_pill
+bare-specifier :feature:auth en onboarding_reward_announce
+bare-specifier :feature:auth en signup_language_pill
+bare-specifier :feature:contacts en contacts_blocked_unblock_a11y
+bare-specifier :feature:contacts en contacts_blocked_unblock_message
+bare-specifier :feature:conversations en conversations_action_create_category
+bare-specifier :feature:conversations en conversations_lock_subtitle_confirm_code
+bare-specifier :feature:conversations en conversations_lock_subtitle_enter_code
+bare-specifier :feature:conversations en conversations_lock_subtitle_unlock
+bare-specifier :feature:conversations en conversations_preview_typing
+bare-specifier :feature:conversations en conversations_tags_remove_content_description
+bare-specifier :feature:conversations en global_search_members
+bare-specifier :feature:conversations en my_share_links_joined_count
+bare-specifier :feature:conversations en shareLink_detail_concurrentMax
+bare-specifier :feature:conversations en shareLink_detail_createdOn
+bare-specifier :feature:conversations en shareLink_detail_usesUnlimited
+bare-specifier :feature:stories en story_composer_fab_badge
+bare-specifier :feature:stories en story_composer_fab_open
 bare-specifier :feature:chat en composer_recent_addSelected
 bare-specifier :feature:chat en recentMedia_resolveFailed_multiple
 bare-specifier :feature:feed en feed_new_posts

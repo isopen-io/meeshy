@@ -6,7 +6,9 @@
       "entries": [
         { "catalog": "ui", "iosKey": "media.trim.loading", "status": "adopted" },
         { "catalog": "ui", "iosKey": "media.trim.window", "status": "adopted" },
-        { "catalog": "ui", "iosKey": "media.trim.of_total", "status": "adopted" }
+        { "catalog": "ui", "iosKey": "media.trim.of_total", "status": "adopted" },
+        { "androidName": "media_trim_handle_end", "status": "android-only" },
+        { "androidName": "media_trim_handle_start", "status": "android-only" }
       ]
     }
   }

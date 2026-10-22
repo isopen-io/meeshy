@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <plurals name="unread_badge_description">
-        <item quantity="zero">%d غير مقروءة</item>
-        <item quantity="one">%d غير مقروءة</item>
-        <item quantity="two">%d غير مقروءتين</item>
-        <item quantity="few">%d غير مقروءة</item>
-        <item quantity="many">%d غير مقروءة</item>
-        <item quantity="other">%d غير مقروءة</item>
+        <item quantity="zero">%1$d غير مقروءة</item>
+        <item quantity="one">%1$d غير مقروءة</item>
+        <item quantity="two">%1$d غير مقروءتين</item>
+        <item quantity="few">%1$d غير مقروءة</item>
+        <item quantity="many">%1$d غير مقروءة</item>
+        <item quantity="other">%1$d غير مقروءة</item>
     </plurals>
 </resources>

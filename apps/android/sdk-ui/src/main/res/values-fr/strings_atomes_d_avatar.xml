@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <plurals name="unread_badge_description">
-        <item quantity="one">%d non lu</item>
-        <item quantity="other">%d non lus</item>
+        <item quantity="one">%1$d non lu</item>
+        <item quantity="many">%1$d non lus</item>
+        <item quantity="other">%1$d non lus</item>
     </plurals>
 </resources>

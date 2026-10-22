@@ -39,6 +39,10 @@
           "iosKey": "presence.offline",
           "androidName": "presence_offline",
           "status": "adopted"
+        },
+        {
+          "androidName": "unread_badge_description",
+          "status": "android-only"
         }
       ]
     }
