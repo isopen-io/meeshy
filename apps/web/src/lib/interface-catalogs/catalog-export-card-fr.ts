@@ -141,6 +141,11 @@ const fr = {
   'export.card.compose.post': 'Post en tête',
   'export.card.compose.replies': 'Réponses sur la carte',
   'export.card.compose.folded': '+{count} réponses',
+  'export.card.compose.head': 'Média en tête',
+  'export.card.compose.head.image': 'Photo {position}',
+  'export.card.compose.head.video': 'Vidéo {position}',
+  'export.card.compose.head.audio': 'Son {position}',
+  'export.card.compose.withheld': 'Cette publication n’est pas publique : son contenu ne figure pas sur l’image.',
 } as const;
 
 export default fr;

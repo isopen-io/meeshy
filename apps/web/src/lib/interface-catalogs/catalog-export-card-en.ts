@@ -135,6 +135,11 @@ const en = {
   'export.card.compose.post': 'Post on top',
   'export.card.compose.replies': 'Replies on the card',
   'export.card.compose.folded': '+{count} replies',
+  'export.card.compose.head': 'Media on top',
+  'export.card.compose.head.image': 'Photo {position}',
+  'export.card.compose.head.video': 'Video {position}',
+  'export.card.compose.head.audio': 'Sound {position}',
+  'export.card.compose.withheld': 'This post isn’t public, so its content isn’t included in the image.',
 } satisfies ExportCardCatalog;
 
 export default en;

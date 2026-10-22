@@ -135,6 +135,11 @@ const de = {
   'export.card.compose.post': 'Beitrag oben',
   'export.card.compose.replies': 'Antworten auf der Karte',
   'export.card.compose.folded': '+{count} Antworten',
+  'export.card.compose.head': 'Medium oben',
+  'export.card.compose.head.image': 'Foto {position}',
+  'export.card.compose.head.video': 'Video {position}',
+  'export.card.compose.head.audio': 'Ton {position}',
+  'export.card.compose.withheld': 'Dieser Beitrag ist nicht öffentlich: Sein Inhalt erscheint nicht auf dem Bild.',
 } satisfies ExportCardCatalog;
 
 export default de;
