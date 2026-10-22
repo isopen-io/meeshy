@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import os
 @testable import Meeshy
 
 /// **« Créer une story » ne déborde plus la pile** (#8387).
@@ -141,16 +142,17 @@ final class MeeshyComposerHostTypeDepthTests: XCTestCase {
     /// précisément l'opération qui déborde, et le harnais doit la MESURER, pas
     /// planter en la tentant.
     private static func measure(_ type: Any.Type) throws -> Measurement {
-        var result: Measurement?
+        let result = OSAllocatedUnfairLock<Measurement?>(initialState: nil)
         let thread = Thread {
             let name = _typeName(type, qualified: false)
-            result = Measurement(depth: depth(of: name), name: name)
+            let measured = Measurement(depth: depth(of: name), name: name)
+            result.withLock { $0 = measured }
         }
         thread.stackSize = 64 * 1024 * 1024
         thread.start()
         let deadline = Date().addingTimeInterval(60)
-        while result == nil, Date() < deadline { usleep(2000) }
-        guard let measured = result else {
+        while result.withLock({ $0 }) == nil, Date() < deadline { usleep(2000) }
+        guard let measured = result.withLock({ $0 }) else {
             throw XCTSkip("Mesure de profondeur de type non terminée en 60 s")
         }
         return measured

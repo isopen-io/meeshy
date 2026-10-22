@@ -6,6 +6,8 @@ import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.model.scene.StoryCanvasTransform
+import me.meeshy.sdk.model.scene.StoryFilterMatrix
 
 /**
  * A z-order restack of an on-canvas text element within its slide's paint order.

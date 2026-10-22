@@ -820,7 +820,7 @@ final class StoryUploadQueueTests: XCTestCase {
 
         publish(draftId: draftId)
 
-        await waitUntil("l'intent write-ahead est persisté") { [self] in
+        await waitUntil("l'intent write-ahead est persisté") {
             await !StoryPublishQueue.shared.pendingItems.isEmpty
         }
         let items = await StoryPublishQueue.shared.pendingItems

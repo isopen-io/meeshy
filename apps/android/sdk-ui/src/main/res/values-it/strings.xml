@@ -48,12 +48,6 @@
     <string name="emoji_picker_title">Reazioni</string>
     <string name="emoji_picker_expand">Altre emoji</string>
     <string name="emoji_react_with">Reagisci con %1$s</string>
-    <string name="emoji_category_reactions">Reazioni</string>
-    <string name="emoji_category_faces">Volti</string>
-    <string name="emoji_category_gestures">Gesti</string>
-    <string name="emoji_category_hearts">Cuori</string>
-    <string name="emoji_category_animals">Animali</string>
-    <string name="emoji_category_objects">Oggetti</string>
     <string name="language_strip_select">Leggi in %1$s</string>
     <string name="time_relative_now">ora</string>
     <string name="time_relative_seconds">%1$d s</string>

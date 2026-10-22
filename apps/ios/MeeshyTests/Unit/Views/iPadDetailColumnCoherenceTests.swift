@@ -6,6 +6,7 @@ import XCTest
 /// et `dismiss()` dépile l'écran ; sur iPad, la liste reste à côté du fil, et le
 /// fil est posé dans la colonne de droite, hors `NavigationStack`, où
 /// `dismiss()` est un no-op silencieux (`PanelBackAction`).
+@MainActor
 final class iPadDetailColumnCoherenceTests: XCTestCase {
 
     // MARK: - La conversation ouverte quitte la liste

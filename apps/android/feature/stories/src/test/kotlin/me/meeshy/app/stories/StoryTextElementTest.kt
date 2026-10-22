@@ -1,6 +1,11 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.scene.StoryElementTiming
+import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextDirection
+import me.meeshy.sdk.model.scene.StoryTextFade
+import me.meeshy.sdk.model.scene.StoryTextOutline
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4

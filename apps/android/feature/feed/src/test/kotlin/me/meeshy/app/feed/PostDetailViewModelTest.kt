@@ -149,6 +149,18 @@ class PostDetailViewModelTest {
     }
 
     @Test
+    fun `a 404 is typed NOT_FOUND so no retry is offered, a 500 is SERVER and an IO failure NETWORK`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Failure(ApiError("gone", "HTTP_404", 404))
+        viewModel().state.test { assertThat(awaitItem().loadFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NOT_FOUND) }
+
+        coEvery { repository.getPost("p1") } returns NetworkResult.Failure(ApiError("boom", "HTTP_500", 500))
+        viewModel().state.test { assertThat(awaitItem().loadFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.SERVER) }
+
+        coEvery { repository.getPost("p1") } returns NetworkResult.Failure(ApiError("down", "NETWORK"))
+        viewModel().state.test { assertThat(awaitItem().loadFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NETWORK) }
+    }
+
+    @Test
     fun `a blank postId never hits the network and marks not-found`() = runTest {
         val vm = viewModel(postId = null)
 

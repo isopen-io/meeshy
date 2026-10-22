@@ -414,6 +414,34 @@ class ReelsViewModelTest {
     }
 
     @Test
+    fun `a network failure on cold start is typed NETWORK and a 500 is typed SERVER`() = runTest {
+        val vm = viewModel(cachedFeed = null)
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns NetworkResult.Failure(ApiError("offline", "NETWORK"))
+        vm.load()
+        assertThat(vm.state.value.loadFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NETWORK)
+
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns NetworkResult.Failure(ApiError("boom", "HTTP_500", 500))
+        vm.retry()
+        assertThat(vm.state.value.loadFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.SERVER)
+    }
+
+    @Test
+    fun `retry refills the open player from the same seed and clears the failure`() = runTest {
+        val vm = viewModel(cachedFeed = null)
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns NetworkResult.Failure(ApiError("offline", "NETWORK"))
+        vm.load()
+        assertThat(vm.state.value.reels).isEmpty()
+
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns NetworkResult.Success(
+            me.meeshy.sdk.post.PostPage(posts = emptyList(), nextCursor = null, hasMore = false),
+        )
+        vm.retry()
+
+        assertThat(vm.state.value.loadFailure).isNull()
+        assertThat(vm.state.value.hasLoadedOnce).isTrue()
+    }
+
+    @Test
     fun `load moves the cache-seeded reel matching the tapped seed to the front`() = runTest {
         val cached = listOf(reel("a"), reel("b"), reel("tapped"))
         val vm = viewModel(cachedFeed = cached)
