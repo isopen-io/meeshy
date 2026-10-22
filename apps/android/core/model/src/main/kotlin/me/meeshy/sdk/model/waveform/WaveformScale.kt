@@ -54,7 +54,7 @@ object WaveformScale {
     }
 
     /** Hauteur `0..1` d'une valeur du champ publié : déjà normalisée, donc linéaire. */
-    fun publishedHeight(value: Float): Float = value.coerceIn(0f, 1f)
+    fun publishedHeight(value: Float): Float = if (value.isNaN()) 0f else value.coerceIn(0f, 1f)
 }
 
 /**

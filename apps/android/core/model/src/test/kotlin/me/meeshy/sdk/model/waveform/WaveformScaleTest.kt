@@ -91,6 +91,7 @@ class WaveformScaleTest {
         assertThat(WaveformScale.publishedHeight(0.3f)).isWithin(1e-4f).of(0.3f)
         assertThat(WaveformScale.publishedHeight(1.7f)).isEqualTo(1f)
         assertThat(WaveformScale.publishedHeight(-0.2f)).isEqualTo(0f)
+        assertThat(WaveformScale.publishedHeight(Float.NaN)).isEqualTo(0f)
     }
 
     @Test

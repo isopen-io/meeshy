@@ -34,7 +34,7 @@ object WaveformDisplayCurve {
     fun barHeightDp(index: Int, total: Int, levels: List<Float>): Float {
         if (levels.isEmpty()) return proceduralHeightDp(index)
         val sampleIndex = min(levels.size - 1, index * levels.size / max(1, total)).coerceAtLeast(0)
-        val normalized = levels[sampleIndex].coerceIn(0f, 1f).toDouble()
+        val normalized = WaveformScale.publishedHeight(levels[sampleIndex]).toDouble()
         val curved = normalized.pow(PERCEPTUAL_EXPONENT)
         return max(MIN_HEIGHT_DP, (curved * MAX_HEIGHT_DP).toFloat())
     }

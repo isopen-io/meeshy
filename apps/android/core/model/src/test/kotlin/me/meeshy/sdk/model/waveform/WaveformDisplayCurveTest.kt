@@ -67,6 +67,11 @@ class WaveformDisplayCurveTest {
     }
 
     @Test
+    fun `une valeur non numerique tombe au plancher, jamais en hauteur indefinie`() {
+        assertThat(WaveformDisplayCurve.barHeightDp(0, total = 1, levels = listOf(Float.NaN))).isEqualTo(2f)
+    }
+
+    @Test
     fun `moins de valeurs que de barres, chaque valeur couvre ses barres voisines`() {
         val levels = listOf(1f, 0f, 1f, 0f)
         val heights = WaveformDisplayCurve.barHeightsDp(total = 8, levels = levels)
