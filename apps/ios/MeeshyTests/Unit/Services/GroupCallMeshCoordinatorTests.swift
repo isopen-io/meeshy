@@ -90,7 +90,7 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         func groupPrimaryDidVacate() { vacateCallCount += 1 }
         func groupCallTitleDidChange(_ title: String) { titles.append(title) }
         private(set) var groupVideoCeilings: [CallVideoBudget?] = []
-        func groupVideoBudgetDidChange(_ budget: CallVideoBudget?) { groupVideoCeilings.append(budget) }
+        func recordVideoCeiling(_ budget: CallVideoBudget?) { groupVideoCeilings.append(budget) }
     }
 
     private final class ActiveCallStub: ActiveCallServiceProviding, @unchecked Sendable {
@@ -114,7 +114,8 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
             signaling: signaling,
             activeCalls: calls,
             now: { Date(timeIntervalSince1970: 100) },
-            samplingInterval: .seconds(3600)
+            samplingInterval: .seconds(3600),
+            primaryVideoCeiling: { [weak host] in host?.recordVideoCeiling($0) }
         )
         if markGroup { sut.markGroupConversation("group1", title: "Équipe") }
         sut.attach(host: host)
