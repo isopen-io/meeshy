@@ -190,7 +190,7 @@ class CanvasReprojectorTest {
         assertThat(result.objects.textObjects).isEmpty()
     }
 
-    // region portrait <-> paysage (loi de format, #11614)
+    // region portrait <-> paysage (loi de format, #11646)
 
     private val toLandscape = CanvasReprojector.between(CanvasFormat.PORTRAIT, CanvasFormat.LANDSCAPE)
     private val toPortrait = CanvasReprojector.between(CanvasFormat.LANDSCAPE, CanvasFormat.PORTRAIT)
