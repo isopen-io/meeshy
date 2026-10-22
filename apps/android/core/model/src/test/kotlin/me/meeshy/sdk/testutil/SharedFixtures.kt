@@ -12,7 +12,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Rejeu des vecteurs partagés `packages/shared/fixtures/**` côté Android.
+ * Rejeu des vecteurs partagés de `packages/shared/fixtures` côté Android.
  *
  * Les lois à miroirs (Prisme, présence, accent, lentille...) sont tenues par un fichier
  * de vecteurs que TS, iOS et Android rejouent contre leur propre implémentation : c'est
