@@ -77,6 +77,7 @@ dependencies {
     implementation(libs.timber)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.coil.compose)
+    implementation(libs.okhttp)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

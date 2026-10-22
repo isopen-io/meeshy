@@ -85,7 +85,7 @@ describe('noticeWithdrawals — les publications mises hors ligne ou en privé',
     await flushDetached();
 
     const [call] = callsOf(deps) as unknown as [{ title: string; content: string; metadata: Record<string, unknown> }];
-    expect(call.title).toBe('Votre publication a été rendue privée par un administrateur');
+    expect(call.title).toBe('Votre publication a été rendue privée par la modération');
     expect(call.content).toBe('Motif : Hors sujet');
     expect(call.metadata).toEqual({ contentType: 'post', contentId: 'p3', postId: 'p3', reason: 'Hors sujet', madePrivate: true });
   });
