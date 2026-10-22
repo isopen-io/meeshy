@@ -1,15 +1,14 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -28,7 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
-import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -37,20 +35,31 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 @Composable
 internal fun SkeletonList() {
-    Column(modifier = Modifier.fillMaxSize()) {
-        repeat(8) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MeeshySkeletonBox(modifier = Modifier.size(48.dp), shape = CircleShape)
-                MeeshySkeletonBox(
-                    modifier = Modifier
-                        .padding(start = MeeshySpacing.md)
-                        .size(width = 160.dp, height = 14.dp),
-                )
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        repeat(ConversationSkeletonMetrics.ROW_COUNT) { index -> ConversationSkeletonRow(index) }
+    }
+}
+
+/**
+ * Renders the branch [content] with an opacity transition between branches (iOS
+ * `.transition(.opacity)`); the populated list is supplied by the caller.
+ */
+@Composable
+internal fun ConversationListStateHost(
+    content: ConversationListContent,
+    onRetry: () -> Unit,
+    onNewConversation: () -> Unit,
+    populated: @Composable () -> Unit,
+) {
+    Crossfade(targetState = content, label = "conversation-list-branch") { branch ->
+        when (branch) {
+            ConversationListContent.Skeleton -> SkeletonList()
+            ConversationListContent.Populated -> populated()
+            else -> EmptyStateVisual.of(branch)?.let { visual ->
+                EmptyStateCard(visual = visual, onRetry = onRetry, onNewConversation = onNewConversation)
             }
         }
     }
@@ -63,11 +72,20 @@ internal fun SkeletonList() {
  * glyph tints red, the others accent-indigo, keeping the palette coherent.
  */
 @Composable
-internal fun EmptyStateCard(visual: EmptyStateVisual, onRetry: () -> Unit) {
+internal fun EmptyStateCard(
+    visual: EmptyStateVisual,
+    onRetry: () -> Unit,
+    onNewConversation: () -> Unit = {},
+) {
     val accent = if (visual.glyph == EmptyStateGlyph.Error) MeeshyPalette.Error else MeeshyPalette.Indigo500
     Box(
-        modifier = Modifier.fillMaxSize().padding(MeeshySpacing.xl),
-        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxSize().padding(
+            start = MeeshySpacing.xl,
+            end = MeeshySpacing.xl,
+            top = if (visual.compact) 60.dp else MeeshySpacing.xl,
+            bottom = MeeshySpacing.xl,
+        ),
+        contentAlignment = if (visual.compact) Alignment.TopCenter else Alignment.Center,
     ) {
         MeeshyGlassSurface(shape = RoundedCornerShape(MeeshyRadius.lg)) {
             Column(
@@ -109,7 +127,10 @@ internal fun EmptyStateCard(visual: EmptyStateVisual, onRetry: () -> Unit) {
                     )
                 }
                 visual.cta?.let { cta ->
-                    Button(onClick = onRetry, modifier = Modifier.padding(top = MeeshySpacing.lg)) {
+                    Button(
+                        onClick = if (cta == EmptyStateCopy.NewConversation) onNewConversation else onRetry,
+                        modifier = Modifier.padding(top = MeeshySpacing.lg),
+                    ) {
                         Text(stringResource(cta.resId()))
                     }
                 }
@@ -120,7 +141,7 @@ internal fun EmptyStateCard(visual: EmptyStateVisual, onRetry: () -> Unit) {
 
 private fun EmptyStateGlyph.icon() = when (this) {
     EmptyStateGlyph.Error -> Icons.Filled.CloudOff
-    EmptyStateGlyph.NoResults -> Icons.Filled.SearchOff
+    EmptyStateGlyph.NoResults, EmptyStateGlyph.SearchNoResults -> Icons.Filled.SearchOff
     EmptyStateGlyph.NoConversations -> Icons.AutoMirrored.Filled.Chat
 }
 
@@ -132,4 +153,7 @@ private fun EmptyStateCopy.resId(): Int = when (this) {
     EmptyStateCopy.FilteredSubtitle -> R.string.conversations_no_results_subtitle
     EmptyStateCopy.ColdTitle -> R.string.conversations_empty
     EmptyStateCopy.ColdSubtitle -> R.string.conversations_empty_subtitle
+    EmptyStateCopy.NewConversation -> R.string.empty_states_new_conversation
+    EmptyStateCopy.SearchNoResultsTitle -> R.string.empty_states_search_no_results
+    EmptyStateCopy.SearchNoResultsSubtitle -> R.string.empty_states_search_try_other_terms
 }
