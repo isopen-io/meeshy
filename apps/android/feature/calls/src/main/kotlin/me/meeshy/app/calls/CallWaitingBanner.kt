@@ -37,7 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
-import me.meeshy.ui.component.game.LocalReduceMotion
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme

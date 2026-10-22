@@ -12,7 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.ui.component.game.LocalReduceMotion
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test

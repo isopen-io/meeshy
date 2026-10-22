@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.auth.R
-import me.meeshy.ui.component.game.LocalReduceMotion
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.readReduceMotion
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshySpacing
