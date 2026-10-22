@@ -542,4 +542,46 @@ class CanvasV3ProjectionTest {
         assertThat(StorySourceWindow.clippingMs(3.0000, 3.0004)).isNull()
         assertThat(StorySourceWindow.clippingMs(3.0000, 3.0011)).isEqualTo(StorySourceWindowMs(3000L, 3001L))
     }
+
+    private fun v3Scene(objectJson: String): StoryEffects = json.decodeFromString(
+        StoryEffectsWireSerializer,
+        """{"v":3,"scenes":[{"id":"s","objects":[$objectJson]}]}""",
+    )
+
+    @Test
+    fun `un sticker gabarit v3 projette gabarit emplacements et animation`() {
+        val sticker = v3Scene(
+            """{"id":"g","kind":"sticker","locale":"fr","payload":{"templateId":"love.heart",
+            "slots":{"title":"Salut"},"animation":"pulse"}}""",
+        ).stickerObjects!!.single()
+        assertThat(sticker.templateId).isEqualTo("love.heart")
+        assertThat(sticker.slots).containsExactly("title", "Salut")
+        assertThat(sticker.stickerAnimation).isEqualTo(StickerAnimation.PULSE)
+        assertThat(sticker.sourceLanguage).isEqualTo("fr")
+    }
+
+    @Test
+    fun `un texte v3 projette poids et cadre`() {
+        val texte = v3Scene(
+            """{"id":"t","kind":"text","payload":{"text":"Hi","fontWeight":"bold","frameShape":"pill",
+            "framePaddingScale":2,"frameBorderWidth":4,"frameBorderColor":"00FF00"}}""",
+        ).textObjects.single()
+        assertThat(texte.fontWeight).isEqualTo("bold")
+        assertThat(texte.frameShape).isEqualTo("pill")
+        assertThat(texte.framePaddingScale).isEqualTo(2.0)
+        assertThat(texte.frameBorderWidth).isEqualTo(4.0)
+        assertThat(texte.frameBorderColor).isEqualTo("00FF00")
+    }
+
+    @Test
+    fun `un media v3 projette ses reglages d image et neutre vaut aucun`() {
+        val regle = v3Scene(
+            """{"id":"m","kind":"media","payload":{"postMediaId":"p","adjustments":{"exposure":0.5,"blur":2}}}""",
+        ).mediaObjects!!.single()
+        assertThat(regle.adjustments!![AdjustmentKind.EXPOSURE]).isEqualTo(0.5f)
+        assertThat(regle.adjustments!![AdjustmentKind.BLUR]).isEqualTo(1f)
+        val neutre = v3Scene("""{"id":"m","kind":"media","payload":{"postMediaId":"p","adjustments":{}}}""")
+            .mediaObjects!!.single()
+        assertThat(neutre.adjustments).isNull()
+    }
 }

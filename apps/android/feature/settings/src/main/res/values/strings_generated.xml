@@ -1,5 +1,10 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="common_done">Done</string>
+    <string name="location_map_style_hybrid">Hybrid</string>
+    <string name="location_map_style_imagery">Satellite</string>
+    <string name="location_map_style_section">Map type</string>
+    <string name="location_map_style_standard">Map</string>
     <string name="location_precision_around">Nearby (~100 m)</string>
     <string name="location_precision_city">City (~10 km)</string>
     <string name="location_precision_exact">Exact</string>
@@ -7,4 +12,9 @@
     <string name="location_precision_neighborhood">Neighborhood (~1 km)</string>
     <string name="location_precision_section">Sharing precision</string>
     <string name="location_settings_title">Location sharing</string>
+    <string name="settings_media_capture_header">When capturing</string>
+    <string name="settings_media_capture_original_subtitle">The raw photo or video, with no effect or frame, is saved to Photos with every shot.</string>
+    <string name="settings_media_capture_original_title">Save the original</string>
+    <string name="settings_media_capture_rendered_subtitle">Automatically when you confirm the edit. Otherwise, the arrow in the edit view saves it on demand.</string>
+    <string name="settings_media_capture_rendered_title">Save the version with effects and frame</string>
 </resources>

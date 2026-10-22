@@ -54,6 +54,7 @@ class CallViewModel @Inject constructor(
     private val analytics: CallAnalyticsController,
     /** The seams capabilities plug into; the call screen reads the UI ones from here. */
     val extensions: CallExtensionPoints,
+    private val ongoing: CallOngoingController,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -74,6 +75,7 @@ class CallViewModel @Inject constructor(
 
     /** Seconds of connected media, ticked once the call reaches [CallState.Connected]. */
     private var elapsedSeconds: Long = 0L
+    private var mediaEstablished = false
 
     /** The 1-Hz timer job; alive only while media is (or was) flowing this call. */
     private var tickerJob: Job? = null
@@ -117,6 +119,7 @@ class CallViewModel @Inject constructor(
         waiting.attach(host)
         watchdogs.attach(host)
         analytics.attach(host)
+        ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
         }
@@ -195,6 +198,7 @@ class CallViewModel @Inject constructor(
         this.media = CallMedia(isCameraOn = config.isVideo, isSpeakerOn = config.isVideo)
         this.callId = config.callId
         this.elapsedSeconds = 0L
+        this.mediaEstablished = false
         this.connectionQuality = null
         waiting.reset()
         analytics.begin()
@@ -356,6 +360,7 @@ class CallViewModel @Inject constructor(
     private fun dispatch(event: CallEvent) {
         val previous = callState
         callState = CallStateMachine.reduce(previous, event)
+        if (callState is CallState.Connected) mediaEstablished = true
         driveTone(previous, callState)
         driveTelecom(previous, callState)
         analytics.onTransition(previous, callState)
@@ -383,6 +388,7 @@ class CallViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        ongoing.detach()
         toneController.release()
         telecomReporter.release()
         extensions.controllers.notifyCleared()
@@ -435,7 +441,7 @@ class CallViewModel @Inject constructor(
         _state.value = CallPresenter.present(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
             peer.qualityDegraded, peer.screenCapturing, peer.caption,
-            peer.audioEnabled, peer.videoEnabled, videoAutoPaused,
+            peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
         )
     }
 

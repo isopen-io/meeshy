@@ -373,6 +373,24 @@ class OutboxCoalescerTest {
     }
 
     @Test
+    fun `the last answer to the same friend request wins`() {
+        val accept = row("r1", OutboxKind.RESPOND_FRIEND_REQUEST, "req-1")
+        val reject = row("r2", OutboxKind.RESPOND_FRIEND_REQUEST, "req-1")
+
+        assertThat(OutboxCoalescer.decide(reject, listOf(accept)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("r1"), reject))
+    }
+
+    @Test
+    fun `answers to different friend requests are not coalesced`() {
+        val first = row("r1", OutboxKind.RESPOND_FRIEND_REQUEST, "req-1")
+        val second = row("r2", OutboxKind.RESPOND_FRIEND_REQUEST, "req-2")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Enqueue(second))
+    }
+
+    @Test
     fun `a first profile edit is enqueued`() {
         val edit = row("p1", OutboxKind.UPDATE_PROFILE, "me")
 

@@ -56,6 +56,11 @@ data class StoryMediaObject(
     val fadeOut: Double? = null,
     val sourceLanguage: String? = null,
     val keyframes: List<StoryKeyframe>? = null,
+    /**
+     * Les réglages d'image (exposition, contraste, saturation, température, vignette, netteté,
+     * flou…) — `null` quand rien n'est réglé. Seules les valeurs actives voyagent.
+     */
+    val adjustments: ImageAdjustments? = null,
     /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
     val name: String? = null,
     /** Coupe l'atténuation automatique de ce clip vidéo (`null` : ducking actif). */

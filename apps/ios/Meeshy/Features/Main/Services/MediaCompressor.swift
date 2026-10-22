@@ -9,6 +9,14 @@ import os
 struct CompressedImageResult {
     let data: Data
     let mimeType: String
+    /// Définition DEBOUT des octets remis, quand ils se décodent (#9885).
+    let pixelSize: CGSize?
+
+    init(data: Data, mimeType: String, pixelSize: CGSize? = nil) {
+        self.data = data
+        self.mimeType = mimeType
+        self.pixelSize = pixelSize
+    }
 
     var fileExtension: String {
         switch mimeType {
@@ -16,6 +24,7 @@ struct CompressedImageResult {
         case "image/png":   return "png"
         case "image/gif":   return "gif"
         case "image/webp":  return "webp"
+        case "image/heic":  return "heic"
         default:            return "jpg"
         }
     }
@@ -69,6 +78,32 @@ nonisolated enum MediaContext: Sendable {
     }
 }
 
+// MARK: - La politique d'envoi d'une photo (#9885)
+
+extension MediaContext {
+    /// Par défaut, la photo part en HD, en UNE génération perceptuelle à q 0,85,
+    /// lieu retiré (verdict #11247). `compresses` est la **compression forte** que
+    /// l'utilisateur choisit pour économiser des données (`compressImagesOnUpload`) :
+    /// budget du contexte et qualité de sa préférence. Un avatar se réduit toujours :
+    /// il ne s'affiche jamais en grand.
+    nonisolated func outgoingImagePolicy(compresses: Bool, qualityPercent: Int, keepsLocation: Bool) -> OutgoingImagePolicy {
+        let forte = compresses || self == .avatar
+        return OutgoingImagePolicy(maxPixelDimension: maxImageDimension, compresses: forte,
+                                   quality: forte ? OutgoingImagePolicy.quality(percent: qualityPercent)
+                                                  : OutgoingImagePolicy.perceptualQuality,
+                                   keepsLocation: keepsLocation)
+    }
+
+    /// La politique servie par les préférences de l'utilisateur.
+    @MainActor
+    func storedOutgoingImagePolicy() -> OutgoingImagePolicy {
+        let document = UserPreferencesManager.shared.document
+        return outgoingImagePolicy(compresses: document.compressImagesOnUpload,
+                                   qualityPercent: document.imageCompressionQuality,
+                                   keepsLocation: OutgoingImageLocationSetting.stored())
+    }
+}
+
 // MARK: - Sendable Wrappers for AVFoundation types
 
 private nonisolated struct SendableTrackOutput: @unchecked Sendable {
@@ -86,8 +121,9 @@ private nonisolated struct SendableWriterInput: @unchecked Sendable {
 /// Le ré-encodage ne change pas l'espace des pixels — il les recompresse.
 /// Sans étiquette, l'encodeur laisse le lecteur supposer du BT.709 : une prise
 /// Display P3 ressort délavée. L'étiquette se lit donc sur la description de
-/// format de la piste source et se reporte telle quelle ; une source muette
-/// reste muette, rien n'est inventé.
+/// format de la piste source et se reporte telle quelle. Cette lecture n'invente
+/// rien : une source muette rend `nil`, et c'est `VideoTranscodeRecipe` qui
+/// l'étiquette alors BT.709, ce que tout lecteur supposait déjà (#11290).
 nonisolated enum VideoColorTagging {
     static func properties(of description: CMFormatDescription) -> [String: String]? {
         let tags = [
@@ -110,9 +146,16 @@ actor MediaCompressor {
 
     private static let logger = MeeshyLog.logger(.mediaCompressor)
 
+    private let preparer: any OutgoingImagePreparing
+
+    init(preparer: any OutgoingImagePreparing = OutgoingImagePreparer()) {
+        self.preparer = preparer
+    }
+
     // MARK: - From UIImage (format already lost) → always JPEG
 
-    func compressImage(_ image: UIImage, maxDimension: CGFloat = 2048, quality: CGFloat = 0.8) -> CompressedImageResult {
+    func compressImage(_ image: UIImage, maxDimension: CGFloat = 2048,
+                       quality: CGFloat = OutgoingImagePolicy.perceptualQuality) -> CompressedImageResult {
         let size = image.size
         let needsResize = size.width > maxDimension || size.height > maxDimension
 
@@ -131,198 +174,92 @@ actor MediaCompressor {
                let cg = image.cgImage,
                let downsampled = downsample(cgImage: cg, maxDimension: maxDimension) {
                 let jpeg = downsampled.jpegData(compressionQuality: quality) ?? Data()
-                return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
+                return CompressedImageResult(data: jpeg, mimeType: "image/jpeg", pixelSize: Self.pixels(of: downsampled))
             }
             // Fallback: legacy data-roundtrip path if CGImage isn't available.
             guard let data = image.jpegData(compressionQuality: 1.0) else {
                 return CompressedImageResult(data: Data(), mimeType: "image/jpeg")
             }
             guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: "image/jpeg")
+                return CompressedImageResult(data: data, mimeType: "image/jpeg", pixelSize: Self.pixels(of: image))
             }
             let jpeg = downsampled.jpegData(compressionQuality: quality) ?? Data()
-            return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
+            return CompressedImageResult(data: jpeg, mimeType: "image/jpeg", pixelSize: Self.pixels(of: downsampled))
         }
 
         let jpeg = image.jpegData(compressionQuality: quality) ?? Data()
-        return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
+        return CompressedImageResult(data: jpeg, mimeType: "image/jpeg", pixelSize: Self.pixels(of: image))
     }
 
-    // MARK: - From raw Data (preserves format, hardware-accelerated downsampling)
-
-    func compressImageData(_ data: Data, maxDimension: CGFloat = 2048, quality: CGFloat = 0.8) -> CompressedImageResult {
-        let mime = detectMimeType(data)
-
-        switch mime {
-        case "image/gif", "image/webp":
-            return CompressedImageResult(data: data, mimeType: mime)
-
-        case "image/png":
-            guard needsResize(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: "image/png")
-            }
-            guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: "image/png")
-            }
-            let png = downsampled.pngData() ?? data
-            return CompressedImageResult(data: png, mimeType: "image/png")
-
-        // HEIC/HEIF ("High Efficiency" camera capture) falls straight through
-        // to `default`: most web clients (and non-Apple browsers) cannot
-        // decode HEIC inline, so re-encoding it as HEIC here would leave a
-        // format the web can't render regardless of file extension. The
-        // default branch already transcodes to a real JPEG stream with a
-        // matching mimeType/extension — reusing it fixes both the mismatched
-        // `.jpg` extension AND actual cross-platform rendering in one move.
-        //
-        // On transcode failure (corrupt/exotic source), both fallbacks below
-        // return the UNTOUCHED original bytes tagged with the ORIGINALLY
-        // detected `mime` — never hardcode "image/jpeg" here, or real HEIC
-        // bytes end up mislabeled on the failure path (the mismatch this
-        // branch exists to eliminate on the success path).
-        default:
-            guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: mime)
-            }
-            guard let jpeg = downsampled.jpegData(compressionQuality: quality) else {
-                return CompressedImageResult(data: data, mimeType: mime)
-            }
-            return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
-        }
+    /// La définition DEBOUT d'une image, en pixels.
+    private static func pixels(of image: UIImage) -> CGSize {
+        CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
     }
 
-    // MARK: - Video (AVAssetWriter with HEVC + adaptive bitrate)
+    // MARK: - From raw Data — une génération d'encodage au plus (#9885)
+
+    /// Les octets d'une photo, préparés pour l'envoi par la loi unique du SDK
+    /// (`OutgoingImagePreparer`) : un JPEG ou un PNG dans le budget part octet
+    /// pour octet, le lieu se retire sans ré-encoder, un PNG reste un PNG, et
+    /// une réduction ou un HEIC coûtent UN encodage. `nil` ⇒ l'image ne peut
+    /// pas partir sans un lieu que l'utilisateur n'a pas choisi de partager.
+    func compressImageData(_ data: Data, policy: OutgoingImagePolicy) -> CompressedImageResult? {
+        guard let prepared = preparer.prepare(data, policy: policy) else { return nil }
+        return CompressedImageResult(data: prepared.data,
+                                     mimeType: prepared.format.mimeType ?? "image/jpeg",
+                                     pixelSize: prepared.pixelSize)
+    }
+
+    // MARK: - Video (AVAssetWriter, réglages dérivés de la source — #11290)
 
     func compressVideo(_ url: URL, context: MediaContext = .message) async throws -> URL {
         let asset = AVURLAsset(url: url)
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("compressed_\(UUID().uuidString).mp4")
-        // `AVAssetWriter` ne REMPLACE pas un fichier existant : il refuse, et
-        // ce refus sort par `startWriting()` rendant `false` — dont
-        // `startSession` fait ensuite une exception ObjC irrattrapable (#7004).
-        // Le nom porte un UUID, la collision est donc improbable et non
-        // impossible (temporaire survivant d'un run précédent, restauration).
-        // Une ligne ici vaut mieux qu'un plantage qu'on ne saurait pas lire.
+        // `AVAssetWriter` ne REMPLACE pas un fichier : il refuse, et `startSession`
+        // en ferait une exception ObjC irrattrapable (#7004).
         try? FileManager.default.removeItem(at: outputURL)
 
-        // **Fast-path SOTA** : si la source est déjà au format cible
-        // (codec HEVC/H.264 + résolution ≤ budget + bitrate ≤ budget × 2),
-        // on **remux** au lieu de transcoder. Sur iPhone Camera (HEVC
-        // 1080p ~15 Mbps) qui dépasse à peine le budget story (4 Mbps),
-        // on accepte la surface ratio bitrate × 2 — l'économie de
-        // décodage + re-encodage vaut bien quelques MB de plus.
-        //
-        // Coût : un remux d'un .mp4 de 14 s = ~1 s (juste copie des
-        // sample buffers entre 2 containers MP4, pas de Video Toolbox
-        // appelé). Sans ça, on payait ~10–60 s de re-encodage HEVC
-        // selon la charge thermique du device.
-        if let fastPath = try? await passthroughIfPossible(
-            asset: asset,
-            sourceURL: url,
-            outputURL: outputURL,
-            context: context
-        ) {
+        // Une source déjà au format cible se REMUXE (≈ 1 s) au lieu d'un
+        // ré-encodage de 10 à 60 s : voir `passthroughIfPossible`.
+        if let fastPath = try? await passthroughIfPossible(asset: asset, sourceURL: url,
+                                                           outputURL: outputURL, context: context) {
             return fastPath
         }
 
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             throw CompressionError.noVideoTrack
         }
-
-        // **Le writer encode les pixel buffers RAW** (orientation sensor),
-        // pas l'image displayée — la rotation est appliquée en metadata via
-        // `videoInput.transform`. Donc les dims du writer doivent matcher
-        // les dims des sample buffers source, sinon l'encoder force-rescale
-        // entre deux ratios incompatibles (ex. 1920×1080 raw → 1080×1920
-        // demandé = stretch 16:9 → 9:16). C'était la régression du
-        // 2026-04-30 quand `naturalDisplaySize()` a remplacé `naturalSize`.
-        //
-        // Le budget `maxVideoResolution` reste exprimé côté display (1080×
-        // 1920 pour story portrait), donc on fait le fit en coordonnées
-        // display puis on swap back en raw pour le writer.
-        let rawSourceSize = try await videoTrack.load(.naturalSize)
-        let transform = try await videoTrack.load(.preferredTransform)
-        let isPortraitDisplay = abs(transform.b) == 1 && abs(transform.c) == 1
-        let displaySourceSize = isPortraitDisplay
-            ? CGSize(width: rawSourceSize.height, height: rawSourceSize.width)
-            : rawSourceSize
-        let targetDisplaySize = fitSize(displaySourceSize, within: context.maxVideoResolution)
-        let targetRawSize = isPortraitDisplay
-            ? CGSize(width: targetDisplaySize.height, height: targetDisplaySize.width)
-            : targetDisplaySize
-
-        let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
-        let targetFPS = min(nominalFrameRate, 30)
-
-        let useHEVC = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
-        let codecType: AVVideoCodecType = useHEVC ? .hevc : .h264
-        let colorTags = try await videoTrack.load(.formatDescriptions).first.flatMap(VideoColorTagging.properties(of:))
-
-        let encodage: [String: Any] = [
-            AVVideoCodecKey: codecType,
-            AVVideoWidthKey: Int(targetRawSize.width),
-            AVVideoHeightKey: Int(targetRawSize.height),
-            AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: context.videoBitRate,
-                AVVideoExpectedSourceFrameRateKey: targetFPS,
-                AVVideoProfileLevelKey: useHEVC
-                    ? kVTProfileLevel_HEVC_Main_AutoLevel as String
-                    : AVVideoProfileLevelH264HighAutoLevel,
-                AVVideoMaxKeyFrameIntervalKey: Int(targetFPS) * 2,
-            ] as [String: Any]
-        ]
-        let etiquette: [String: Any] = colorTags.map { [AVVideoColorPropertiesKey: $0] } ?? [:]
-        let videoSettings = encodage.merging(etiquette) { garde, _ in garde }
+        let audioTrack = try await asset.loadTracks(withMediaType: .audio).first
+        let geometry = try await writerGeometry(of: videoTrack, within: context.maxVideoResolution)
+        let recipe = VideoTranscodeRecipe(source: try await sourceTraits(video: videoTrack, audio: audioTrack),
+                                          bitRateCeiling: context.videoBitRate,
+                                          encodesHEVC: VideoEncoderAvailability.encodesHEVC)
 
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
 
-        let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        let videoInput = AVAssetWriterInput(mediaType: .video,
+                                            outputSettings: Self.videoSettings(recipe, size: geometry.raw, for: writer))
         videoInput.expectsMediaDataInRealTime = false
-        videoInput.transform = transform
+        videoInput.transform = geometry.transform
         writer.add(videoInput)
 
-        var audioInput: AVAssetWriterInput?
-        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-        if !audioTracks.isEmpty {
-            let audioSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 44100,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderBitRateKey: context.audioBitRate,
-            ]
-            let aInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
-            aInput.expectsMediaDataInRealTime = false
-            writer.add(aInput)
-            audioInput = aInput
-        }
-
         let reader = try AVAssetReader(asset: asset)
-
         let videoOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+            kCVPixelBufferPixelFormatTypeKey as String: recipe.readerPixelFormat
         ])
         reader.add(videoOutput)
 
-        var audioOutput: AVAssetReaderTrackOutput?
-        if let audioTrack = audioTracks.first {
-            let aOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: [
-                AVFormatIDKey: kAudioFormatLinearPCM,
-                AVSampleRateKey: 44100,
-                AVNumberOfChannelsKey: 1,
-                AVLinearPCMBitDepthKey: 16,
-                AVLinearPCMIsFloatKey: false,
-                AVLinearPCMIsBigEndianKey: false,
-            ])
-            reader.add(aOutput)
-            audioOutput = aOutput
+        let audio = Self.audioPair(track: audioTrack, recipe: recipe)
+        if let audio {
+            writer.add(audio.input)
+            reader.add(audio.output)
         }
 
         reader.startReading()
-        // Même règle que la jumelle `StoryExporter` : `startSession` après un
-        // `startWriting` refusé lève un `NSInternalInconsistencyException`
-        // qu'aucun `do/catch` Swift ne rattrape (#7004). L'utilisateur voit
-        // alors l'échec d'envoi et peut réessayer, au lieu de perdre l'app.
+        // `startSession` après un `startWriting` refusé lève une exception ObjC
+        // qu'aucun `do/catch` ne rattrape (#7004) : l'envoi échoue, l'app reste.
         guard writer.startWriting() else {
             if let cause = writer.error { throw cause }
             throw CompressionError.writerCannotStart
@@ -331,16 +268,11 @@ actor MediaCompressor {
 
         let vOut = SendableTrackOutput(value: videoOutput)
         let vIn = SendableWriterInput(value: videoInput)
-        let aOut = audioOutput.map { SendableTrackOutput(value: $0) }
-        let aIn = audioInput.map { SendableWriterInput(value: $0) }
+        let aOut = audio.map { SendableTrackOutput(value: $0.output) }
+        let aIn = audio.map { SendableWriterInput(value: $0.input) }
 
-        // **Parallélisation video + audio**. Avant on transferait
-        // séquentiellement (video puis audio) : sur un clip 30 s avec
-        // audio non trivial, l'audio attendait ~ durée du clip avant
-        // de commencer son pass. AVAssetReader et AVAssetWriter
-        // supportent des reads/writes concurrents sur des tracks
-        // distinctes (chaque track output a sa propre queue interne).
-        // `async let` les lance en parallèle, on attend la jointure.
+        // Vidéo et son se transfèrent EN PARALLÈLE : chaque piste a sa
+        // propre file dans le lecteur et l'écrivain.
         async let videoTask: Void = Self.transferSamples(from: vOut.value, to: vIn.value)
         async let audioTask: Void = {
             guard let aOut, let aIn else { return }
@@ -354,9 +286,58 @@ actor MediaCompressor {
             throw writer.error ?? CompressionError.exportSessionFailed
         }
 
-        Self.logger.info("Video compressed: \(codecType == .hevc ? "HEVC" : "H.264", privacy: .public) \(Int(targetDisplaySize.width))x\(Int(targetDisplaySize.height)) display (\(Int(targetRawSize.width))x\(Int(targetRawSize.height)) raw) @ \(context.videoBitRate / 1000)kbps")
+        Self.logger.info("Video compressed: \(recipe.codec == .hevc ? "HEVC" : "H.264", privacy: .public) \(recipe.keepsTenBits ? "10-bit" : "8-bit", privacy: .public) \(Int(geometry.display.width))x\(Int(geometry.display.height)) display, quality \(VideoTranscodeRecipe.perceptualQuality) under \(context.videoBitRate / 1000)kbps")
 
         return outputURL
+    }
+
+    // MARK: - Les réglages, dérivés de la source (#11290)
+
+    /// Ce que la source dit d'elle-même : étiquette couleur (#9332, HDR compris),
+    /// cadence, nombre de canaux de son.
+    private func sourceTraits(video: AVAssetTrack, audio: AVAssetTrack?) async throws -> VideoSourceTraits {
+        let colorTags = try await video.load(.formatDescriptions).first.flatMap(VideoColorTagging.properties(of:))
+        let frameRate = try await video.load(.nominalFrameRate)
+        let audioFormat = try await audio?.load(.formatDescriptions).first
+        let channels = audioFormat.flatMap { CMAudioFormatDescriptionGetStreamBasicDescription($0)?.pointee.mChannelsPerFrame }
+        return VideoSourceTraits(colorTags: colorTags, nominalFrameRate: frameRate,
+                                 audioChannelCount: audio.map { _ in Int(channels ?? 2) })
+    }
+
+    /// La qualité visée si l'encodeur l'accepte, sinon le débit seul : jamais un
+    /// réglage que `AVAssetWriterInput` refuserait par une exception ObjC.
+    private static func videoSettings(_ recipe: VideoTranscodeRecipe, size: CGSize,
+                                      for writer: AVAssetWriter) -> [String: Any] {
+        let candidates = recipe.videoSettingsCandidates(width: Int(size.width), height: Int(size.height))
+        return candidates.first { writer.canApply(outputSettings: $0, forMediaType: .video) } ?? candidates[candidates.count - 1]
+    }
+
+    private static func audioPair(track: AVAssetTrack?,
+                                  recipe: VideoTranscodeRecipe) -> (input: AVAssetWriterInput, output: AVAssetReaderTrackOutput)? {
+        guard let track, let writing = recipe.audioWriterSettings, let reading = recipe.audioReaderSettings else { return nil }
+        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: writing)
+        input.expectsMediaDataInRealTime = false
+        return (input, AVAssetReaderTrackOutput(track: track, outputSettings: reading))
+    }
+
+    private nonisolated struct WriterGeometry {
+        let transform: CGAffineTransform
+        let raw: CGSize
+        let display: CGSize
+    }
+
+    /// **Le writer encode les pixel buffers RAW** (orientation capteur), pas
+    /// l'image affichée : la rotation part en métadonnée (`transform`). Le budget
+    /// du contexte s'exprime côté AFFICHAGE ; on ajuste là puis on revient en
+    /// RAW, sinon l'encodeur étire un 16:9 en 9:16 (régression du 2026-04-30).
+    private func writerGeometry(of track: AVAssetTrack, within budget: CGSize) async throws -> WriterGeometry {
+        let rawSourceSize = try await track.load(.naturalSize)
+        let transform = try await track.load(.preferredTransform)
+        let isPortraitDisplay = abs(transform.b) == 1 && abs(transform.c) == 1
+        let displaySource = isPortraitDisplay ? CGSize(width: rawSourceSize.height, height: rawSourceSize.width) : rawSourceSize
+        let display = fitSize(displaySource, within: budget)
+        let raw = isPortraitDisplay ? CGSize(width: display.height, height: display.width) : display
+        return WriterGeometry(transform: transform, raw: raw, display: display)
     }
 
     // MARK: - ImageIO hardware-accelerated downsampling
@@ -406,17 +387,6 @@ actor MediaCompressor {
         guard longest > maxDimension else { return CGSize(width: w, height: h) }
         let scale = maxDimension / longest
         return CGSize(width: floor(w * scale), height: floor(h * scale))
-    }
-
-    private func needsResize(data: Data, maxDimension: CGFloat) -> Bool {
-        let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? CGFloat,
-              let height = properties[kCGImagePropertyPixelHeight] as? CGFloat else {
-            return false
-        }
-        return width > maxDimension || height > maxDimension
     }
 
     // MARK: - Video helpers
@@ -562,35 +532,13 @@ actor MediaCompressor {
 
     /// **Le type d'une image, lu dans ses OCTETS et non dans son nom.**
     ///
-    /// La table de signatures ci-dessous existait déjà, en `private`, au service
-    /// de `compressImageData`. Elle est désormais consultable par les chemins
-    /// d'INGESTION, qui doivent nommer un fichier avant de le compresser : un
+    /// La table de signatures est celle du SDK (`OutgoingImageFormat`), la même
+    /// que lit `compressImageData`. Les chemins d'INGESTION la consultent, car
+    /// ils doivent nommer un fichier avant de le compresser : un
     /// GIF écrit sous le nom `.jpg` a déjà perdu son animation quand le
     /// compresseur le reçoit — le mimeType, en aval, se dérive de l'extension.
-    func imageMimeType(of data: Data) -> String { detectMimeType(data) }
-
-    private func detectMimeType(_ data: Data) -> String {
-        guard data.count >= 12 else { return "image/jpeg" }
-        let bytes = [UInt8](data.prefix(12))
-
-        if bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF {
-            return "image/jpeg"
-        }
-        if bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 {
-            return "image/png"
-        }
-        if bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38 {
-            return "image/gif"
-        }
-        if bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
-           bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50 {
-            return "image/webp"
-        }
-        if bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70 {
-            return "image/heic"
-        }
-
-        return "image/jpeg"
+    func imageMimeType(of data: Data) -> String {
+        OutgoingImageFormat(sniffing: data).mimeType ?? "image/jpeg"
     }
 }
 

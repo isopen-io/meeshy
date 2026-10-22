@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.game
 
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent

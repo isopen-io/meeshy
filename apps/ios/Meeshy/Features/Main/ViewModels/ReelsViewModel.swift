@@ -278,7 +278,7 @@ final class ReelsViewModel: ObservableObject {
             hasLoadedOnce = true
         }
         do {
-            let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let preferred = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             // Thread d'affinité dédié (exclut le seed + les réels du viewer, porte
             // `isBookmarkedByMe`). `FeedPost.reels` reste un garde-fou : la réponse
             // est déjà `type: REEL`, on filtre par sécurité.
@@ -619,7 +619,7 @@ final class ReelsViewModel: ObservableObject {
                 location: location
             ))
             if let newIdx = reels.firstIndex(where: { $0.id == postId }) {
-                reels[newIdx] = updated.toFeedPost(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+                reels[newIdx] = updated.toFeedPost(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
             }
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Publication modifiée", bundle: .main))
         } catch {

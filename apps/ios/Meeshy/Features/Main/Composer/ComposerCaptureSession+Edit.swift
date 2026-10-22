@@ -177,15 +177,15 @@ extension ComposerCaptureSession {
         guard let photo = editPhoto else { return nil }
         let regard = look
         let cadrage = framing
-        let auteur = lookPerson
-        let date = lookDate
+        let (auteur, date) = (lookPerson, lookDate)
         let cache = scenes
         let prise = editPhotoData
         let proportions = canvasAspect
+        let intacte = ComposerPhotoEncoding.untouchedTake(prise, of: photo, paints: ComposerLiveLookRule.rendersLive(regard) || !cadrage.isIdentity, aspect: proportions)
         return { @MainActor in
-            guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
-                                                                    aspect: proportions, person: auteur,
-                                                                    date: date, scenes: cache) else { return nil }
+            if intacte != nil { return (photo, intacte) }
+            guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage, aspect: proportions,
+                                                                    person: auteur, date: date, scenes: cache) else { return nil }
             return (rendu, await ComposerPhotoEncoding.encode(rendu, like: prise))
         }
     }

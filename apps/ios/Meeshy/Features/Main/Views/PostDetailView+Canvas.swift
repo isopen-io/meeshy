@@ -115,7 +115,7 @@ extension PostDetailView {
                     document: document,
                     accentColor: accentColor,
                     preferredContentLanguages:
-                        AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                        ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                     // **Le détail JOUE — c'est la même règle que le canvas
                     // mono-scène juste en dessous.** Il n'y a qu'une publication à
                     // l'écran, donc aucune élection à arbitrer : ce qui gouverne
@@ -149,7 +149,7 @@ extension PostDetailView {
                                      onOpen: { openDetailScene(at: 0) }) {
                 StoryReaderRepresentable(
                     story: renderedItem,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                    preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                     mute: isCanvasMuted,
                     isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,
                                                                 callActive: isCallActive,

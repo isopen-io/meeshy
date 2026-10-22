@@ -49,6 +49,17 @@ extension ReaderAudioMixer {
                                     url: URL,
                                     looping: Bool,
                                     loopsEveryClip: Bool = false) throws {
+        let file = try AVAudioFile(forReading: url)
+        configureBackground(audio: audio, file: file, looping: looping, loopsEveryClip: loopsEveryClip)
+    }
+
+    /// Le corps, sur un fichier DÉJÀ ouvert (#9878) : un fichier illisible jette
+    /// AVANT que le fond en place ne soit démonté.
+    func configureBackground(audio: StoryAudioPlayerObject,
+                             file: AVAudioFile,
+                             looping: Bool,
+                             loopsEveryClip: Bool) {
+        configurationTicket &+= 1
         // Tear down any prior background node before re-attaching.
         if let prior = backgroundEntry {
             prior.player.stop()
@@ -56,7 +67,6 @@ extension ReaderAudioMixer {
             prior.fadeTasks.forEach { $0.cancel() }
             engine.detach(prior.player)
         }
-        let file = try AVAudioFile(forReading: url)
         let player = AVAudioPlayerNode()
         engine.attach(player)
         // Connect via canonical format — cf. foreground branch above.

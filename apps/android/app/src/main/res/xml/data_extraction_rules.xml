@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ : rien de l'app ne part dans la sauvegarde cloud ni dans le transfert
+     d'appareil (équivalent du « pas de sauvegarde iCloud » de la fiche de confidentialité iOS).
+     android:allowBackup="false" reste posé dans le manifeste (≤ 11) ; ce fichier couvre le
+     transfert d'appareil et ferme la porte même si allowBackup était rouvert par erreur. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

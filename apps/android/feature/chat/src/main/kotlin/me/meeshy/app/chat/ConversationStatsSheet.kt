@@ -61,7 +61,7 @@ import kotlin.math.roundToInt
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationStatsSheet(
+internal fun ConversationStatsSheet(
     conversationId: String,
     accentColor: Color,
     clientMessages: List<ClientStatMessage>,

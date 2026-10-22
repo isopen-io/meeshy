@@ -1,6 +1,8 @@
+import { currentDeviceTier } from '../device/capability-tier';
+
 import { browserReducedMotion, createFaceLayer } from './face-effects-draw';
 import { browserFaceDetector } from './face-tracker';
-import { createSegmentedBlur, type SegmenterPort } from './video-effects-blur';
+import { createSegmentedBlur, segmentIntervalFor, type SegmenterPort } from './video-effects-blur';
 import { createBlurCompositor } from './video-effects-compositor';
 import type { BlurStage, FrameEnv, Surface } from './video-effects-frames';
 
@@ -44,7 +46,7 @@ export function browserBlur(): BlurStage | null {
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, premultipliedAlpha: false, preserveDrawingBuffer: false });
   if (gl === null) return null;
   try {
-    return createSegmentedBlur({ compositor: createBlurCompositor(gl), canvas, loadSegmenter, snapshot, schedule: (task) => void setTimeout(task, 0), now });
+    return createSegmentedBlur({ compositor: createBlurCompositor(gl), canvas, loadSegmenter, snapshot, schedule: (task) => void setTimeout(task, 0), now, intervalMs: segmentIntervalFor(currentDeviceTier()) });
   } catch {
     return null;
   }

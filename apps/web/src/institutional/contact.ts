@@ -77,6 +77,10 @@ export const PAGE_CONTACT: ContentPage = {
   ],
   run: {
     title: 'Liens Utiles',
-    links: [{ label: 'À propos', href: '/about' }, { label: 'Partenaires', href: '/partners' }],
+    links: [
+      { label: 'À propos', href: '/about' },
+      { label: 'Partenaires', href: '/partners' },
+      { label: 'Sécurité des enfants', href: '/child-safety' },
+    ],
   },
 };

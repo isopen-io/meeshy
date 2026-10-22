@@ -23,8 +23,11 @@ export const DocumentPreferenceSchema = z.object({
   autoDeleteOldFiles: z.boolean().default(false),
   fileRetentionDays: z.number().min(7).max(365).default(90),
 
-  // Compression
+  // Compression forte, choisie pour économiser des données : chaque image est
+  // réduite au budget de son contexte. `false` (défaut) n'est PAS « sans
+  // compression » : l'image part en HD, en une génération perceptuelle (#9885).
   compressImagesOnUpload: z.boolean().default(false),
+  // Qualité (10–100) de la compression forte seulement.
   imageCompressionQuality: z.number().min(10).max(100).default(85),
 
   // Formats acceptés

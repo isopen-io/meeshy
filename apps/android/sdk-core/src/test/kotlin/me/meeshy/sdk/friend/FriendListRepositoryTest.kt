@@ -135,4 +135,43 @@ class FriendListRepositoryTest {
         assertThat(rows.map { it.userId }).containsExactly("first", "second").inOrder()
         assertThat(rows.map { it.sortIndex }).containsExactly(0, 1).inOrder()
     }
+
+    @Test
+    fun `insertAtHead puts the new friend first and keeps the rest in order`() = runTest {
+        val repo = repository()
+        repo.persist(listOf(user("a"), user("b")))
+
+        repo.insertAtHead(user("new"))
+
+        assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("new", "a", "b").inOrder()
+    }
+
+    @Test
+    fun `insertAtHead moves an already present friend to the head without duplicating`() = runTest {
+        val repo = repository()
+        repo.persist(listOf(user("a"), user("b")))
+
+        repo.insertAtHead(user("b"))
+
+        assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("b", "a").inOrder()
+    }
+
+    @Test
+    fun `insertAtHead leaves a cold cache cold`() = runTest {
+        val repo = repository()
+
+        repo.insertAtHead(user("new"))
+
+        assertThat(repo.cachedSnapshot()).isNull()
+    }
+
+    @Test
+    fun `remove drops the friend and preserves the order of the others`() = runTest {
+        val repo = repository()
+        repo.persist(listOf(user("a"), user("b"), user("c")))
+
+        repo.remove("b")
+
+        assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("a", "c").inOrder()
+    }
 }

@@ -53,6 +53,7 @@ class ConversationListViewModel @Inject constructor(
     lockStore: ConversationLockStore,
     storyRepository: StoryRepository,
     statusBarCache: StatusBarCache,
+    messagePrefetch: ConversationListMessagePrefetchTriggers,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -113,6 +114,7 @@ class ConversationListViewModel @Inject constructor(
                 },
             ).collect { result ->
                 rawConversations = result.rawListOr(rawConversations)
+                messagePrefetch.onListLoaded(sessionRepository, rawConversations)
                 _state.update { it.applyResultFlags(result, rawConversations).withVisible(rawConversations) }
             }
         }
@@ -141,6 +143,7 @@ class ConversationListViewModel @Inject constructor(
         observers.startCategories()
         realtime.start()
         observers.startLive()
+        messagePrefetch.start(viewModelScope, sessionRepository, socketManager) { rawConversations }
     }
 
     /** Selects a filter tab and re-derives the visible list from the cached conversations (no network). */

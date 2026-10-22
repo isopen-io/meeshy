@@ -46,7 +46,7 @@ describe('InstitutionalPage — l’en-tête et le pied de meeshy.me (#10071)', 
 
   test('le pied est celui de la landing, et mène à TOUTES les pages statiques', () => {
     expect(html).toContain('class="ld-footer"');
-    for (const page of ['about', 'contact', 'partners', 'help', 'faq', 'privacy', 'terms', 'download']) {
+    for (const page of ['about', 'contact', 'partners', 'help', 'faq', 'privacy', 'terms', 'child-safety', 'download']) {
       expect(html).toContain(`href="/${page}"`);
     }
   });

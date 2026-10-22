@@ -24,7 +24,7 @@ import {
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
 import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson } from './media-renditions.js';
-import { isExifStrippable, stripExifFromImageBuffer } from './ExifStrip.js';
+import { isMediaMetadataStrippable, stripMediaMetadataBuffer } from './media-metadata-strip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
 import { audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from './uploadMimeType.js';
@@ -287,16 +287,12 @@ export class UploadProcessor {
         finalPath = normalizedAudioPath(relativePath);
         finalMimeType = NORMALIZED_AUDIO.mimeType;
       }
-    } else if (mimeType && isExifStrippable(mimeType)) {
-      // #3627 — EXIF/GPS retiré AVANT persistance : c'est ce fichier que
-      // `GET /attachments/:id` sert tel quel. `mimeType` absent (chemin
-      // chiffré) saute cette branche sans y penser — le serveur ne peut pas
-      // lire un buffer E2EE en clair de toute façon.
-      try {
-        finalBuffer = await stripExifFromImageBuffer(buffer, mimeType);
-      } catch (error) {
-        logger.warn('EXIF strip failed, storing original bytes', error as Error);
-      }
+    } else if (mimeType && isMediaMetadataStrippable(mimeType)) {
+      // #3627, #11258 — GPS et métadonnées retirés AVANT persistance, photo et
+      // vidéo : c'est ce fichier que `GET /attachments/:id` sert tel quel.
+      // `mimeType` absent (octets déjà chiffrés) saute cette branche : le
+      // chemin chiffré retire AVANT de chiffrer (`uploadEncryptedFile`).
+      finalBuffer = await stripMediaMetadataBuffer({ buffer, mimeType, fileName: relativePath });
     }
 
     const fullPath = path.join(this.uploadBasePath, finalPath);
@@ -535,11 +531,14 @@ export class UploadProcessor {
         fileBuffer = normalized;
         storedMimeType = NORMALIZED_AUDIO.mimeType;
       }
+    } else {
+      fileBuffer = await stripMediaMetadataBuffer({ buffer: file.buffer, mimeType: file.mimeType, fileName: file.filename });
     }
 
     // Le serveur reçoit le CLAIR ici : ce chemin n'est pas du E2EE (#9224). Il
-    // ne fabrique donc que la vignette en tampon, chiffrée avec le fichier —
-    // aucune variante ni thumbhash en clair (voir `media-renditions.ts`).
+    // retire donc GPS et métadonnées AVANT de chiffrer (#11258), et ne fabrique
+    // que la vignette en tampon, chiffrée avec le fichier — aucune variante ni
+    // thumbhash en clair (voir `media-renditions.ts`).
     const thumbnailBuffer = await produceEncryptedThumbnail({
       metadataManager: this.metadataManager,
       attachmentType,

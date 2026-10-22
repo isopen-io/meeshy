@@ -755,7 +755,7 @@ struct MyStoriesView: View {
     /// aller-retour réseau pour l'ouvrir.
     private func openComments(for story: StoryItem) {
         guard !isResolvingComments else { return }
-        let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let preferred = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         let cached = StoryService.shared.cachedPost(id: story.id)
         if MyStoriesCommentsResolver.shouldUseCache(cachedPost: cached), let cached {
             commentTarget = MyStoriesCommentTarget(post: cached.toFeedPost(preferredLanguages: preferred))

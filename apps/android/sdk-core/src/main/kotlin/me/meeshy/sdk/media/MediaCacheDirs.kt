@@ -22,4 +22,11 @@ class MediaCacheDirs(
         MediaCacheCategory.VIDEO -> "Video"
         MediaCacheCategory.THUMBNAILS -> "Thumbnails"
     }
+
+    /**
+     * Racine du `SimpleCache` Media3 d'une catégorie : un sous-dossier, pour que le sidecar
+     * d'épingles (`.pins.json`, posé dans [dirFor]) ne se mêle pas aux tronçons que Media3
+     * possède seul et nettoie à l'initialisation.
+     */
+    fun spansDirFor(category: MediaCacheCategory): File = File(dirFor(category), "spans")
 }

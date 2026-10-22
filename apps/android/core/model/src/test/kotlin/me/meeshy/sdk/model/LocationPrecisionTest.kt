@@ -97,4 +97,27 @@ class LocationPrecisionTest {
         assertThat(SharedMapStyle.fromStorage("hybrid")).isEqualTo(SharedMapStyle.HYBRID)
         assertThat(LocationSharingPreferences().precision).isEqualTo(LocationPrecision.EXACT)
     }
+
+    @Test
+    fun `aux poles et a l'antimeridien l'arrondi reste dans les bornes et deterministe`() {
+        LocationPrecision.entries.forEach { precision ->
+            assertThat(precision.roundCoordinate(90.0)).isEqualTo(90.0)
+            assertThat(precision.roundCoordinate(-90.0)).isEqualTo(-90.0)
+            assertThat(precision.roundCoordinate(180.0)).isEqualTo(180.0)
+            assertThat(precision.roundCoordinate(-180.0)).isEqualTo(-180.0)
+            assertThat(precision.roundCoordinate(0.0)).isEqualTo(0.0)
+        }
+        assertThat(LocationPrecision.CITY.roundCoordinate(89.96)).isEqualTo(90.0)
+        assertThat(LocationPrecision.CITY.roundCoordinate(179.97)).isEqualTo(180.0)
+        assertThat(LocationPrecision.NEIGHBORHOOD.roundCoordinate(-179.996)).isEqualTo(-180.0)
+    }
+
+    @Test
+    fun `le meme point degrade deux fois donne le meme resultat`() {
+        val place = SharedPlace(latitude = 48.85661, longitude = 2.35222)
+        LocationPrecision.entries.forEach { precision ->
+            assertThat(precision.coarsen(place)).isEqualTo(precision.coarsen(place))
+            assertThat(precision.coarsen(precision.coarsen(place))).isEqualTo(precision.coarsen(place))
+        }
+    }
 }

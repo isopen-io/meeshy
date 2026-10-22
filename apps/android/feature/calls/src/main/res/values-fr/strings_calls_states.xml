@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_outgoing_ringing">Appel en cours…</string>
+    <string name="call_outgoing_waiting">En attente du correspondant…</string>
+    <string name="call_outgoing_waiting_hint">Le correspondant n\'a pas encore répondu.</string>
+    <string name="call_connecting_label">Connexion…</string>
+    <string name="call_unknown_peer">Inconnu</string>
+    <string name="call_type_audio">Appel audio</string>
+    <string name="call_type_video">Appel vidéo</string>
+    <string name="call_incoming_audio">Appel entrant</string>
+    <string name="call_incoming_video">Appel vidéo entrant</string>
+    <string name="call_incoming_badge_audio">Audio</string>
+    <string name="call_incoming_badge_video">Vidéo</string>
+    <string name="call_incoming_decline">Refuser</string>
+    <string name="call_incoming_accept">Répondre</string>
+    <string name="call_incoming_accept_hint">Répond à l\'appel entrant</string>
+    <string name="call_incoming_decline_hint">Décline l\'appel entrant</string>
+    <string name="call_incoming_a11y">%1$s, %2$s</string>
+    <string name="call_ended_local">Appel terminé</string>
+    <string name="call_ended_remote">Votre correspondant a raccroché</string>
+    <string name="call_duration_a11y">Durée de l\'appel</string>
+    <string name="call_a11y_connecting">Connexion en cours</string>
+    <string name="call_a11y_connected">Appel connecté</string>
+    <string name="call_a11y_reconnecting">Reconnexion en cours</string>
+    <string name="call_a11y_ended">Appel terminé</string>
+    <string name="call_avatar_you">Vous</string>
+</resources>

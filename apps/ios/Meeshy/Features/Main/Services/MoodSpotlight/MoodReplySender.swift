@@ -43,6 +43,7 @@ final class MoodReplySender: MoodReplySending {
         currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
         prepareReplyQueue: (@MainActor () async -> Void)? = nil,
         composingLanguages: @escaping @concurrent @Sendable () async -> [String] = {
+            // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             await MainActor.run { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
         }
     ) {

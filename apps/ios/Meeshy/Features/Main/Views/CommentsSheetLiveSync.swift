@@ -33,7 +33,7 @@ struct CommentsSheetLiveSync: ViewModifier {
                     .receive(on: DispatchQueue.main)
                     .filter { [postId = post.id] in $0.postId == postId }
             ) { data in
-                let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                 let updated = FeedComment(api: data.comment, preferredLanguages: langs)
                 let topLevelWasLoaded = liveComments != nil
                 applyEdit(updated)
@@ -125,7 +125,7 @@ struct CommentsSheetLiveSync: ViewModifier {
         // Parité effets + Prisme avec le mapping REST (`mapFetchedComments`) :
         // sans effectFlags, un commentaire stylé (lueur/pulse) arrivant en
         // temps réel rendait SANS ses effets dans cette feuille.
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         let feedComment = FeedComment(api: data.comment, preferredLanguages: langs)
         // The echoed event for OUR own just-sent comment: replace the optimistic
         // placeholder in place instead of duplicating it. Primary key: the
@@ -183,7 +183,7 @@ struct CommentsSheetLiveSync: ViewModifier {
     }
 
     private func handleCommentTranslation(_ data: SocketCommentTranslationUpdatedData) {
-        let langs = (AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             .filter { !$0.isEmpty }.map { $0.lowercased() }
         guard let incomingRank = langs.firstIndex(where: { $0 == data.language.lowercased() }) else { return }
         func shouldApply(_ comment: FeedComment) -> Bool {

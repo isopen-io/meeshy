@@ -97,6 +97,32 @@ final class AttachmentPreparationServiceTests: XCTestCase {
         XCTAssertNil(AttachmentPreparationService.downsampledPreview(from: garbage))
     }
 
+    // MARK: - Image bytes — les octets d'origine partent (#9885)
+
+    func test_prepareImageData_jpegWithinBudget_writesTheOriginalBytes() async throws {
+        let service = AttachmentPreparationService()
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 480), format: format).image { ctx in
+            UIColor.systemTeal.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 640, height: 480))
+        }
+        let data = try XCTUnwrap(image.jpegData(compressionQuality: 0.9))
+
+        let prep = service.prepareImageData(data, context: .message, accentColor: "4ECDC4")
+        let result = await prep.awaitCompletion()
+
+        guard case .success(let prepared) = result else {
+            return XCTFail("Expected successful preparation")
+        }
+        XCTAssertEqual(try Data(contentsOf: prepared.fileURL), data, "aucune génération d'encodage de plus")
+        XCTAssertEqual(prepared.attachment.mimeType, "image/jpeg")
+        XCTAssertEqual(prepared.attachment.width, 640)
+        XCTAssertEqual(prepared.attachment.height, 480)
+        XCTAssertNotNil(prepared.thumbHash)
+        try? FileManager.default.removeItem(at: prepared.fileURL)
+    }
+
     // MARK: - PreparingAttachment contract
 
     func test_awaitCompletion_resumesAfterFailure() async {

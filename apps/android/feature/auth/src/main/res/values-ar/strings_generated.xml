@@ -1,0 +1,31 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="onboarding_gauge_level1">%1$d / %2$d شرارة للمستوى ١</string>
+    <string name="onboarding_gauge_reached">وصلت إلى المستوى ١ 🎉</string>
+    <plurals name="onboarding_points_a11y">
+        <item quantity="zero">تم كسب %d شرارة</item>
+        <item quantity="one">تم كسب %d شرارة</item>
+        <item quantity="two">تم كسب %d شرارة</item>
+        <item quantity="few">تم كسب %d شرارات</item>
+        <item quantity="many">تم كسب %d شرارةً</item>
+        <item quantity="other">تم كسب %d شرارة</item>
+    </plurals>
+    <plurals name="onboarding_points_pill">
+        <item quantity="zero">%d شرارة</item>
+        <item quantity="one">شرارة واحدة</item>
+        <item quantity="two">شرارتان</item>
+        <item quantity="few">%d شرارات</item>
+        <item quantity="many">%d شرارةً</item>
+        <item quantity="other">%d شرارة</item>
+    </plurals>
+    <string name="onboarding_progress_a11y">الخطوة %1$d من %2$d</string>
+    <plurals name="onboarding_reward_announce">
+        <item quantity="zero">زائد %d شرارة</item>
+        <item quantity="one">زائد %d شرارة</item>
+        <item quantity="two">زائد %d شرارة</item>
+        <item quantity="few">زائد %d شرارات</item>
+        <item quantity="many">زائد %d شرارةً</item>
+        <item quantity="other">زائد %d شرارة</item>
+    </plurals>
+    <string name="onboarding_skipAll">تخطَّ الكل</string>
+</resources>
