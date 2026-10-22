@@ -84,11 +84,20 @@ class LanguageCodeNormalizerTest {
     }
 
     @Test
-    fun normalize_rejectsReductionWhoseTargetIsNotSupported() {
-        // "orm"/"nya" ARE in the reduction table (-> "om"/"ny") but those targets
-        // are absent from the Android catalogue, so the re-validation drops them.
-        assertThat(LanguageCodeNormalizer.normalize("orm")).isNull()
-        assertThat(LanguageCodeNormalizer.normalize("nya")).isNull()
+    fun normalize_reducesToTheLanguagesTheCatalogueGainedFromIos() {
+        // "orm"/"nya"/"tir" are in the reduction table (-> "om"/"ny"/"ti"); those targets
+        // joined the Android catalogue with the 83-language alignment on iOS, so the
+        // re-validation now keeps them instead of dropping the reader on the original.
+        assertThat(LanguageCodeNormalizer.normalize("orm")).isEqualTo("om")
+        assertThat(LanguageCodeNormalizer.normalize("nya")).isEqualTo("ny")
+        assertThat(LanguageCodeNormalizer.normalize("tir")).isEqualTo("ti")
+    }
+
+    @Test
+    fun normalize_preservesTheCameroonCodesWithoutAnIso6391Equivalent() {
+        assertThat(LanguageCodeNormalizer.normalize("ksf")).isEqualTo("ksf")
+        assertThat(LanguageCodeNormalizer.normalize("nnh")).isEqualTo("nnh")
+        assertThat(LanguageCodeNormalizer.normalize("ksf-CM")).isEqualTo("ksf")
     }
 
     @Test
