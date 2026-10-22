@@ -8,6 +8,12 @@ import MeeshySDK
 @MainActor
 final class ConversationPreviewLockTests: XCTestCase {
 
+    @MainActor
+    private final class PinLock {
+        nonisolated deinit {}
+        var isLocked = false
+    }
+
     private let conversationId = "000000000000000000000c01"
 
     private func makeMessage(id: String = "000000000000000000000a01", content: String = "Mot de passe: 1234") -> Message {
@@ -63,13 +69,13 @@ final class ConversationPreviewLockTests: XCTestCase {
     }
 
     func test_preview_whenLockAppearsAfterLoad_dropsAlreadyServedMessages() async {
-        var locked = false
+        let pin = PinLock()
         let cached = CacheResult<[Message]>.fresh([makeMessage()], age: 1)
-        let (sut, _, _) = makeSUT(cache: cached, isLocked: { _ in locked })
+        let (sut, _, _) = makeSUT(cache: cached, isLocked: { _ in pin.isLocked })
         await sut.load(for: conversationId, intent: .ensure)
         XCTAssertEqual(sut.state(for: conversationId).phase, .loaded)
 
-        locked = true
+        pin.isLocked = true
 
         XCTAssertEqual(sut.state(for: conversationId).phase, .sealed)
         XCTAssertTrue(sut.messages[conversationId] == nil)
@@ -129,13 +135,13 @@ final class ConversationPreviewLockTests: XCTestCase {
     // MARK: - L'empreinte
 
     func test_previewFingerprint_changesWhenLockStateChanges() async {
-        var locked = false
+        let pin = PinLock()
         let cached = CacheResult<[Message]>.fresh([makeMessage()], age: 1)
-        let (sut, _, _) = makeSUT(cache: cached, isLocked: { _ in locked })
+        let (sut, _, _) = makeSUT(cache: cached, isLocked: { _ in pin.isLocked })
         await sut.load(for: conversationId, intent: .ensure)
         let open = sut.fingerprint(for: conversationId)
 
-        locked = true
+        pin.isLocked = true
         let sealed = sut.fingerprint(for: conversationId)
 
         XCTAssertNotEqual(open, sealed)

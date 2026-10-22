@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connection_badge_blocked">محظور</string>
+    <string name="connection_badge_contact">جهة اتصال</string>
+    <string name="connection_badge_pending_sent">قيد الانتظار</string>
+    <string name="connection_action_add">إضافة</string>
+    <string name="connection_action_accept">قبول</string>
+    <string name="connection_action_decline">رفض</string>
+    <string name="connection_action_cancel">إلغاء الطلب</string>
+    <string name="connection_toast_request_sent">تم إرسال الطلب</string>
+    <string name="connection_toast_request_send_failed">تعذّر إرسال الطلب</string>
+    <string name="connection_toast_connection_accepted">تم قبول الاتصال</string>
+    <string name="connection_toast_accept_failed">تعذّر القبول</string>
+    <string name="connection_toast_request_declined">تم رفض الطلب</string>
+    <string name="connection_toast_decline_failed">تعذّر الرفض</string>
+    <string name="connection_toast_request_cancelled">تم إلغاء الطلب</string>
+    <string name="connection_toast_cancel_failed">تعذّر الإلغاء</string>
+    <string name="connection_a11y_with_user">%1$s — %2$s</string>
+</resources>

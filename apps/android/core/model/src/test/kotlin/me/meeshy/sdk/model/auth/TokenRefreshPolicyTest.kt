@@ -204,6 +204,69 @@ class TokenRefreshPolicyTest {
             .isEqualTo(TokenRefreshPolicy.UnauthorizedMapping.InvalidCredentials("Mot de passe incorrect"))
     }
 
+    // --- seconde étape de connexion et attente de preuve : un 401 est un refus, jamais une session morte ---
+
+    @Test
+    fun map_twoFactorVerifyAndCancel_areInvalidCredentials() {
+        listOf("/auth/2fa/verify", "/auth/2fa/cancel").forEach { endpoint ->
+            assertThat(TokenRefreshPolicy.mapUnauthorized(endpoint, "Code invalide"))
+                .isEqualTo(TokenRefreshPolicy.UnauthorizedMapping.InvalidCredentials("Code invalide"))
+        }
+    }
+
+    @Test
+    fun map_verificationStatus_isInvalidCredentials() {
+        assertThat(TokenRefreshPolicy.mapUnauthorized("/auth/verification/status", null))
+            .isInstanceOf(TokenRefreshPolicy.UnauthorizedMapping.InvalidCredentials::class.java)
+    }
+
+    @Test
+    fun map_otherTwoFactorRoutes_stayOrdinarySessionRoutes() {
+        // enable/disable/setup/status/backup-codes appartiennent à une session ouverte :
+        // un 401 y est bien une expiration.
+        listOf("/auth/2fa/status", "/auth/2fa/setup", "/auth/2fa/enable", "/auth/2fa/disable", "/auth/2fa/backup-codes")
+            .forEach { endpoint ->
+                assertThat(TokenRefreshPolicy.mapUnauthorized(endpoint, null))
+                    .isEqualTo(TokenRefreshPolicy.UnauthorizedMapping.SessionExpired)
+            }
+    }
+
+    @Test
+    fun map_logoutAndGuestRefresh_areNeverASessionExpiry() {
+        listOf("/auth/logout", "/anonymous/refresh").forEach { endpoint ->
+            assertThat(TokenRefreshPolicy.mapUnauthorized(endpoint, null))
+                .isInstanceOf(TokenRefreshPolicy.UnauthorizedMapping.InvalidCredentials::class.java)
+        }
+    }
+
+    @Test
+    fun on401_logoutNeverRefreshesNorTearsDownTheNextAccount() {
+        assertThat(
+            TokenRefreshPolicy.decideOn401(endpoint = "/auth/logout", serverMessage = null, hasRefreshedOn401 = false),
+        ).isInstanceOf(TokenRefreshPolicy.Unauthorized401Decision.InvalidCredentials::class.java)
+    }
+
+    @Test
+    fun on401_guestRefreshNeverTouchesTheRegisteredAccount() {
+        assertThat(
+            TokenRefreshPolicy.decideOn401(endpoint = "/anonymous/refresh", serverMessage = null, hasRefreshedOn401 = false),
+        ).isInstanceOf(TokenRefreshPolicy.Unauthorized401Decision.InvalidCredentials::class.java)
+    }
+
+    @Test
+    fun on401_twoFactorVerify_neitherRefreshesNorTearsDown() {
+        assertThat(
+            TokenRefreshPolicy.decideOn401(endpoint = "/auth/2fa/verify", serverMessage = null, hasRefreshedOn401 = false),
+        ).isInstanceOf(TokenRefreshPolicy.Unauthorized401Decision.InvalidCredentials::class.java)
+    }
+
+    @Test
+    fun on401_verificationStatus_neitherRefreshesNorTearsDown() {
+        assertThat(
+            TokenRefreshPolicy.decideOn401(endpoint = "/auth/verification/status", serverMessage = null, hasRefreshedOn401 = true),
+        ).isInstanceOf(TokenRefreshPolicy.Unauthorized401Decision.InvalidCredentials::class.java)
+    }
+
     // --- decideOn401: the reactive branch ---
 
     @Test

@@ -128,13 +128,26 @@ final class KeychainPrefetchTests: XCTestCase {
     }
 
     func test_lifetime_discardsWhatNobodyTook() {
-        let sut = KeychainPrefetch()
-        sut.start(plan(["k"]), on: queue, lifetime: .milliseconds(50)) { _ in .value("secret") }
-        let expired = expectation(description: "expired")
-        queue.asyncAfter(deadline: .now() + .milliseconds(200)) { expired.fulfill() }
-        wait(for: [expired], timeout: 2)
+        let clock = TestClock()
+        let sut = KeychainPrefetch(now: clock.now)
+        sut.start(plan(["a", "b"]), on: queue, lifetime: .seconds(30)) { _ in .value("secret") }
+        XCTAssertEqual(sut.take("a"), .value("secret"))
 
-        XCTAssertNil(sut.take("k"), "un secret ne reste pas en mémoire au-delà du démarrage")
+        clock.advance(by: 31)
+
+        XCTAssertNil(sut.take("b"), "un secret ne reste pas en mémoire au-delà du démarrage")
+        clock.rewind(by: 31)
+        XCTAssertNil(sut.take("b"), "une réponse expirée est purgée, pas seulement masquée")
+    }
+
+    func test_lifetime_stillServesBeforeItEnds() {
+        let clock = TestClock()
+        let sut = KeychainPrefetch(now: clock.now)
+        sut.start(plan(["k"]), on: queue, lifetime: .seconds(30)) { _ in .value("secret") }
+
+        clock.advance(by: 29)
+
+        XCTAssertEqual(sut.take("k"), .value("secret"))
     }
 
     func test_start_twice_readsTheKeychainOnce() {
@@ -192,4 +205,18 @@ final class ReaderLog: Sendable {
     }
 
     var keys: [String] { recorded.read { $0 } }
+}
+
+final class TestClock: Sendable {
+    private let current = Locked(Date(timeIntervalSinceReferenceDate: 0))
+
+    var now: @Sendable () -> Date { { [current] in current.read { $0 } } }
+
+    func advance(by seconds: TimeInterval) {
+        current.mutate { $0 = $0.addingTimeInterval(seconds) }
+    }
+
+    func rewind(by seconds: TimeInterval) {
+        advance(by: -seconds)
+    }
 }

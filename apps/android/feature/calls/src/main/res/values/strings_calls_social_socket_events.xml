@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_feedback_title">How was the call?</string>
+    <string name="call_feedback_star">%1$d of 5 stars</string>
+    <string name="call_feedback_issue_audio_quality">Audio quality</string>
+    <string name="call_feedback_issue_video_quality">Video quality</string>
+    <string name="call_feedback_issue_echo">Echo</string>
+    <string name="call_feedback_issue_dropped">Call dropped</string>
+    <string name="call_feedback_issue_sync">Out of sync</string>
+    <string name="call_feedback_issue_other">Other</string>
+    <string name="call_feedback_send">Send</string>
+    <string name="call_feedback_skip">Not now</string>
+    <string name="call_reaction_from">Reaction %1$s</string>
+    <string name="call_screen_share_notification_title">Sharing your screen</string>
+    <string name="call_screen_share_notification_text">Your screen is visible to the other participants.</string>
+    <string name="call_screen_share_channel">Screen sharing</string>
+</resources>

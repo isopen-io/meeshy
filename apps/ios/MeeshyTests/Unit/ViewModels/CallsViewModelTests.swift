@@ -258,8 +258,13 @@ final class CallsViewModelTests: XCTestCase {
 
         await sut.hide(callId: "c1")
 
-        let cached = await CacheCoordinator.shared.callHistory.load(for: "calls:list:all")
-        XCTAssertEqual(cached.value?.map(\.callId), ["c2"])
+        let cachedCallIds: [String]
+        switch await CacheCoordinator.shared.callHistory.load(for: "calls:list:all") {
+        case .fresh(let records, _), .stale(let records, _): cachedCallIds = records.map(\.callId)
+        case .expired, .empty:
+            return XCTFail("Expected the cached journal to stay readable, got no cached rows")
+        }
+        XCTAssertEqual(cachedCallIds, ["c2"])
     }
 
     func test_clearAll_emptiesTheJournalBeforeTheGatewayAnswers() async {

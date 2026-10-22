@@ -16,6 +16,7 @@ import MeeshyUI
 ///
 /// Le fond l'était déjà (#8847) : ses témoins sont repris ici, la même
 /// grammaire valant désormais pour toutes les familles.
+@MainActor
 final class ComposerInlineEditTests: XCTestCase {
 
     // MARK: - La famille d'un objet
