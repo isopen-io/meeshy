@@ -26,7 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallEndMotive
 import me.meeshy.sdk.model.call.CallEndReason
+import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -134,12 +136,13 @@ private fun statusLabel(state: CallUiState): String = when (state.status) {
 }
 
 @Composable
-private fun endedLabel(reason: CallEndReason?): String = when (reason) {
-    CallEndReason.Missed -> stringResource(R.string.call_ended_missed)
-    CallEndReason.Rejected -> stringResource(R.string.call_ended_declined)
-    CallEndReason.ConnectionLost -> stringResource(R.string.call_ended_connection_lost)
-    is CallEndReason.Failed -> stringResource(R.string.call_ended_failed)
-    else -> stringResource(R.string.call_ended)
+internal fun endedLabel(reason: CallEndReason?): String = when (CallStatusLabelLaw.motive(reason)) {
+    CallEndMotive.Local -> stringResource(R.string.call_ended_local)
+    CallEndMotive.Remote -> stringResource(R.string.call_ended_remote)
+    CallEndMotive.Rejected -> stringResource(R.string.call_ended_declined)
+    CallEndMotive.Missed -> stringResource(R.string.call_ended_missed)
+    CallEndMotive.ConnectionLost -> stringResource(R.string.call_ended_connection_lost)
+    CallEndMotive.Failed -> stringResource(R.string.call_ended_failed)
 }
 
 /**
