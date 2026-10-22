@@ -4,13 +4,15 @@ import { readSwiftDesignTokens, SWIFT_VALUE } from './swift-design-tokens.mjs';
 
 /**
  * PARTIE 11 — LA GRILLE DE MÉDIAS DU FIL (#6169, § 5 étape d de la
- * spécification « grille de médias »). CINQ sources Swift, jamais importées
+ * spécification « grille de médias »). SIX sources Swift, jamais importées
  * (même raison que le reste du fichier — Prisma/zod hors d'une application
  * de 40 Ko) : la géométrie 2/3/4+ (`FocalAttachmentBlock.swift`, parité
  * DÉCLARÉE avec `BubbleStandardLayout+Media.swift`), la pellicule
  * (`ConversationMediaFilmstrip.swift`), le chrome de la visionneuse
- * (`ConversationMediaGalleryView+Geometry.swift`) et le zoom/seuil de
- * fermeture (`ConversationMediaGalleryView+Pages.swift`).
+ * (`ConversationMediaGalleryView+Geometry.swift`), le zoom/seuil de
+ * fermeture (`ConversationMediaGalleryView+Pages.swift`) et, depuis #11569,
+ * le voile « +N » partagé par la bulle et le Fil (`DownloadBadgeView.swift`
+ * § `MediaTileOverflowLabel`).
  *
  * `swiftNumber` lit `nom: CGFloat = valeur` OU `nom = valeur` (motif
  * PARTIE 9 `bubbleStickerNumber`, généralisé) — les cinq fichiers écrivent
@@ -49,6 +51,12 @@ export function mediaGridCurveFailures({ root, count }) {
   );
   const galleryPagesSwift = readFileSync(
     `${root}apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Pages.swift`,
+    'utf8',
+  );
+  // #11569 — le voile « +N » a quitté `overflowOverlay` pour UNE vue partagée
+  // par la bulle et le Fil : `MediaTileOverflowLabel` (DownloadBadgeView.swift).
+  const downloadBadgeSwift = readFileSync(
+    `${root}apps/ios/Meeshy/Features/Main/Views/DownloadBadgeView.swift`,
     'utf8',
   );
   const metricsDerived3 = readFileSync(`${root}apps/web/src/lib/reading-mode/metrics.ts`, 'utf8');
@@ -115,9 +123,11 @@ export function mediaGridCurveFailures({ root, count }) {
     count(mediaGridLayoutDerived, 'MEDIA_GRID_TRIPLE_LEFT_RATIO'),
   );
 
-  // --- Le voile `+N` (BubbleStandardLayout+Media.swift § overflowOverlay) ---
+  // --- Le voile `+N` (DownloadBadgeView.swift § MediaTileOverflowLabel, que
+  // `overflowOverlay` de BubbleStandardLayout+Media.swift et la case du Fil
+  // montent tous deux depuis #11569) ---
   const overflowOverlaySwift = (() => {
-    const m = /private var overflowOverlay:[\s\S]*?\n\s*\}\n\s*\}/.exec(bubbleMediaSwift);
+    const m = /struct MediaTileOverflowLabel: View \{[\s\S]*?\n\}/.exec(downloadBadgeSwift);
     return m === null ? '' : m[0];
   })();
   const overflowOpacitySwift = (() => {
