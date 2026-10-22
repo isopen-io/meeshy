@@ -33,7 +33,7 @@ class NetworkReachabilityReducerTest {
         return seen
     }
 
-    private suspend fun TestScope.advance(millis: Long) {
+    private fun TestScope.advance(millis: Long) {
         advanceTimeBy(millis)
         runCurrent()
     }
