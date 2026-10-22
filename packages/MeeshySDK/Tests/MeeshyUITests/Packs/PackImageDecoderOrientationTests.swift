@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import ImageIO
 import CoreGraphics
 import UniformTypeIdentifiers
@@ -10,23 +11,21 @@ import UniformTypeIdentifiers
 final class PackImageDecoderOrientationTests: XCTestCase {
 
     func test_thumbnail_rendersAnExif6ImageUpright() async throws {
-        let image = try await XCTUnwrapValue(await PackImageDecoder.thumbnail(
-            try Self.image(width: 400, height: 200, orientation: 6, type: .jpeg), maxPixelSize: 100))
+        let data = try Self.image(width: 400, height: 200, orientation: 6, type: .jpeg)
+        let decoded = await PackImageDecoder.thumbnail(data, maxPixelSize: 100)
+        let image = try XCTUnwrap(decoded)
 
         XCTAssertEqual(image.size.width * image.scale, 50)
         XCTAssertEqual(image.size.height * image.scale, 100)
     }
 
     func test_thumbnail_keepsAPackPNG_asDrawn() async throws {
-        let image = try await XCTUnwrapValue(await PackImageDecoder.thumbnail(
-            try Self.image(width: 400, height: 200, orientation: nil, type: .png), maxPixelSize: 100))
+        let data = try Self.image(width: 400, height: 200, orientation: nil, type: .png)
+        let decoded = await PackImageDecoder.thumbnail(data, maxPixelSize: 100)
+        let image = try XCTUnwrap(decoded)
 
         XCTAssertEqual(image.size.width * image.scale, 100)
         XCTAssertEqual(image.size.height * image.scale, 50)
-    }
-
-    private func XCTUnwrapValue<T>(_ value: T?, file: StaticString = #filePath, line: UInt = #line) async throws -> T {
-        try XCTUnwrap(value, file: file, line: line)
     }
 
     private static func image(width: Int, height: Int, orientation: Int?, type: UTType) throws -> Data {

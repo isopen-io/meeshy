@@ -14,7 +14,8 @@ final class ThumbnailPrefetcherOrientationTests: XCTestCase {
         let key = "exif6-\(UUID().uuidString)"
         await prefetcher.saveToDisk(data: try Self.jpeg(width: 600, height: 300, orientation: 6), forKey: key)
 
-        let image = try await XCTUnwrapAsync(await prefetcher.get(key: key))
+        let decoded = await prefetcher.get(key: key)
+        let image = try XCTUnwrap(decoded)
 
         XCTAssertEqual(image.width, 150)
         XCTAssertEqual(image.height, 300)
@@ -25,14 +26,11 @@ final class ThumbnailPrefetcherOrientationTests: XCTestCase {
         let key = "upright-\(UUID().uuidString)"
         await prefetcher.saveToDisk(data: try Self.jpeg(width: 600, height: 300, orientation: 1), forKey: key)
 
-        let image = try await XCTUnwrapAsync(await prefetcher.get(key: key))
+        let decoded = await prefetcher.get(key: key)
+        let image = try XCTUnwrap(decoded)
 
         XCTAssertEqual(image.width, 300)
         XCTAssertEqual(image.height, 150)
-    }
-
-    private func XCTUnwrapAsync<T>(_ value: T?, file: StaticString = #filePath, line: UInt = #line) async throws -> T {
-        try XCTUnwrap(value, file: file, line: line)
     }
 
     static func jpeg(width: Int, height: Int, orientation: Int) throws -> Data {
