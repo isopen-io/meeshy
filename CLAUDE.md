@@ -14,7 +14,15 @@
 > - **Meeshy est gratuit : NLLB-200 et MMS-TTS restent tant que c'est le cas** (#9227). Toute monétisation est précédée de leur remplacement par des modèles sous licence commerciale.
 > - **Les compétences manquantes sont des agents spécialisés** (`.claude/agents/`) : `crypto-e2ee`, `sre-infra`, `conformite-juridique`, `auditeur-adversarial`. Ils outillent le travail. Ils ne remplacent ni un audit cryptographique tiers, ni un avis juridique signé, et ils le disent quand c'est cela qui est requis.
 
-> ## 🧊 LE DÉVELOPPEMENT ANDROID KOTLIN EST GELÉ (directive porteur 2026-09-16)
+> ## 🟢 LE KOTLIN NATIF EST DÉGELÉ — `apps/android` vise l'ISO de l'application iOS (directive porteur 2026-10-22, #11570)
+> **Le gel du 2026-09-16 est levé par directive du porteur.** `apps/android` reçoit de nouveau des features, des portages d'écran et des mises à parité, et son objectif est l'iso de l'application iOS : mêmes features, mêmes états, même disposition, même hiérarchie et mêmes gestes. **La référence est `apps/ios` + `packages/MeeshySDK`**, comme pour `apps/web`. La transposition est Material/Compose seulement là où la plateforme l'impose (retour système, notifications, partage).
+> - **Les lois à miroirs se relisent de nouveau « touche les TROIS »** (Prisme § 3 et ses familles, présence, accent, actions). Les divergences du miroir Kotlin consignées pendant le gel redeviennent de la dette à solder, chacune par une issue.
+> - **La coque Capacitor `apps/web/android` continue sous sa propre directive (2026-09-07).** Le dégel ne la retire pas. Les deux apps déclarent le même `applicationId` (`me.meeshy.app`). Laquelle publie sur Play est une décision ouverte du porteur (#11570).
+> - **Le seul compilateur Android joignable est la CI `android.yml`** : `dl.google.com` est refusé par le proxy des conteneurs. Un lot Android est prouvé par `assembleDebug` + `testDebugUnitTest` verts sur sa PR, jamais par un « ça devrait compiler ».
+
+> ## 🧊 (CLOS le 2026-10-22 — #11570) LE DÉVELOPPEMENT ANDROID KOTLIN EST GELÉ (directive porteur 2026-09-16)
+> **Bandeau CLOS, conservé pour l'histoire : il décrit l'état du dépôt du 2026-09-16 au 2026-10-22.** Le bandeau ci-dessus le remplace. Ses interdits ne s'appliquent plus.
+>
 > **`apps/android` — l'application NATIVE Kotlin (1 582 fichiers `.kt`, 254 559 lignes, mesurés le 2026-09-16) — ne reçoit plus de développement.** Aucune feature, aucun portage d'écran, aucune mise à parité, y compris si une issue ouverte avant cette date le demande : ces plans sont SUSPENDUS, ils ne se rejouent pas. Le gel porte sur le développement, pas sur le code : rien n'est supprimé, `android.yml` continue de tourner, et la reprise se décidera par une directive, jamais par une session.
 >
 > **CE QUE LE GEL NE TOUCHE PAS — la coque Android de `apps/web`** (ex `apps/web-v2`, renommée le 2026-09-24, #7668). Ce sont DEUX Android, et la confusion coûterait le chantier en cours : `apps/web/android` est une coque Capacitor qui ne porte AUCUN Kotlin écrit à la main (mesuré : 0 fichier `.kt`, 3 fichiers Java générés). La directive 2026-09-07 fait de `apps/web-v2` « une application similaire à `apps/ios` pour le web ET Android EN UNE FOIS » — c'est elle qui sert Android désormais, et elle continue à plein régime. Geler le Kotlin natif ne retire pas Android du produit : **cela fait de la coque le chemin Android.**
