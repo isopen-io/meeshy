@@ -12,31 +12,33 @@
           "catalog": "app",
           "iosKey": "2fa_close",
           "androidName": "reels_close",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "a11y.post.comments",
           "androidName": "reels_comments",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
-          "iosKey": "viewer.engagement.comments.other",
+          "iosKey": "feed.comments.count",
           "androidName": "reels_comments_count",
-          "status": "candidate"
+          "kind": "plurals",
+          "fillMissingQuantities": true,
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "story.viewer.comments.beFirst",
           "androidName": "reels_comments_empty_subtitle",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "story.viewer.comments.empty",
           "androidName": "reels_comments_empty_title",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "reels_comments_error",
@@ -58,13 +60,13 @@
           "catalog": "app",
           "iosKey": "call.feedback.send",
           "androidName": "reels_comments_send",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "a11y.post.comments",
           "androidName": "reels_comments_title",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "reels_comments_view_post",
@@ -74,31 +76,31 @@
           "catalog": "app",
           "iosKey": "reels.empty",
           "androidName": "reels_empty",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "reels.action.like",
           "androidName": "reels_like",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "composer.object.editor.mute",
           "androidName": "reels_mute",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "a11y.post.repost",
           "androidName": "reels_repost",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "action.share",
           "androidName": "reels_share",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "reels_unbookmark",
@@ -108,7 +110,7 @@
           "catalog": "ui",
           "iosKey": "media.video.unmute",
           "androidName": "reels_unmute",
-          "status": "candidate"
+          "status": "adopted"
         }
       ]
     }
