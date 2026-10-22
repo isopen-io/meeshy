@@ -1,7 +1,6 @@
 package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
