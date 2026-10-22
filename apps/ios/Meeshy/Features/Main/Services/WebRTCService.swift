@@ -93,6 +93,8 @@ final class WebRTCService {
     private(set) var survivalFloorActive = false
     /// #11292 — dans un appel de groupe, le plafond que le maillage pose au principal.
     private(set) var groupVideoCeiling: CallVideoBudget?
+    /// #11293 — le format de capture que la caméra a reçu en dernier.
+    private var captureCeiling = CallCaptureCeiling.hd
     /// #8697 — how much data the call may spend, from the OS path (Wi-Fi,
     /// cellular, Low Data Mode) and the RTT/loss heuristic. Caps both the
     /// ladder's audio and video targets and shapes the Opus fmtp of the next
@@ -580,6 +582,19 @@ final class WebRTCService {
             scaleResolutionDownBy: encoding.scaleResolutionDownBy,
             degradationPreference: encoding.degradationPreference
         )
+        followCaptureCeiling(scaleDownBy: encoding.scaleResolutionDownBy)
+    }
+
+    /// **La caméra descend avec le palier et l'état thermique** (#11293) : quand le
+    /// format de capture change, la caméra en cours se rechoisit par le chemin
+    /// sérialisé du changement de caméra — même arrêt et redémarrage, même garde
+    /// de session, jamais en concurrence avec un basculement.
+    private func followCaptureCeiling(scaleDownBy: Double) {
+        let ceiling = CallCaptureCeiling.following(scaleDownBy: scaleDownBy, thermal: ProcessInfo.processInfo.thermalState)
+        guard ceiling != captureCeiling else { return }
+        captureCeiling = ceiling
+        guard let camera = client.liveCameraUniqueID else { return }
+        switchToCamera(uniqueID: camera)
     }
 
     /// #11292 — un quatrième plafond, celui du maillage ; `nil` le retire.
