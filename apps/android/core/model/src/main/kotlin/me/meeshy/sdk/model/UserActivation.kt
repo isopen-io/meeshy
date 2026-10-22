@@ -69,11 +69,9 @@ data class UserActivation(
         val days = Math.floorDiv(remaining + DAY_MILLIS - 1, DAY_MILLIS)
         return days.coerceAtLeast(0).toInt()
     }
-
-    private companion object {
-        const val DAY_MILLIS = 86_400_000L
-    }
 }
+
+private const val DAY_MILLIS = 86_400_000L
 
 internal object UserActivationSerializer : KSerializer<UserActivation> {
     override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
