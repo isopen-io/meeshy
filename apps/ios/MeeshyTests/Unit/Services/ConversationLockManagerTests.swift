@@ -131,4 +131,75 @@ final class ConversationLockManagerTests: XCTestCase {
             "the lock's keychain entry must be wiped, not just the in-memory set")
         XCTAssertTrue(manager.lockedConversationIds.isEmpty)
     }
+
+    // MARK: - #11558 : le PIN maître se lit au premier besoin
+
+    /// Le gestionnaire est construit pendant le rendu des premières lignes de la
+    /// liste (actions de balayage) : sa lecture du trousseau y était un XPC
+    /// synchrone du fil principal, pour une valeur qui ne sert qu'au geste.
+    func test_init_doesNotReadTheKeychain() {
+        let secrets = CountingLockSecrets(["meeshy_master_pin": "hash"])
+
+        _ = ConversationLockManager(secrets: secrets.store)
+
+        XCTAssertEqual(secrets.reads, 0)
+    }
+
+    func test_masterPinConfigured_isReadOnce_atFirstNeed() {
+        let secrets = CountingLockSecrets(["meeshy_master_pin": "hash"])
+        let sut = ConversationLockManager(secrets: secrets.store)
+
+        XCTAssertTrue(sut.masterPinConfigured)
+        XCTAssertTrue(sut.masterPinConfigured)
+
+        XCTAssertEqual(secrets.reads, 1)
+    }
+
+    func test_masterPinConfigured_noPin_isFalse() {
+        let sut = ConversationLockManager(secrets: CountingLockSecrets([:]).store)
+
+        XCTAssertFalse(sut.masterPinConfigured)
+    }
+
+    func test_setMasterPin_beforeAnyRead_isConfigured_withoutReading() {
+        let secrets = CountingLockSecrets([:])
+        let sut = ConversationLockManager(secrets: secrets.store)
+
+        sut.setMasterPin("123456")
+
+        XCTAssertTrue(sut.masterPinConfigured)
+        XCTAssertEqual(secrets.reads, 0)
+    }
+
+    func test_forceRemoveMasterPin_afterARead_isNotConfigured() {
+        let secrets = CountingLockSecrets(["meeshy_master_pin": "hash"])
+        let sut = ConversationLockManager(secrets: secrets.store)
+        _ = sut.masterPinConfigured
+
+        sut.forceRemoveMasterPin()
+
+        XCTAssertFalse(sut.masterPinConfigured)
+    }
+}
+
+@MainActor
+private final class CountingLockSecrets {
+    private var entries: [String: String]
+    private(set) var reads = 0
+
+    init(_ entries: [String: String]) { self.entries = entries }
+
+    var store: ConversationLockSecrets {
+        ConversationLockSecrets(
+            read: { [self] key in
+                reads += 1
+                return entries[key]
+            },
+            save: { [self] key, value in
+                entries[key] = value
+                return true
+            },
+            delete: { [self] key in entries[key] = nil }
+        )
+    }
 }
