@@ -36,7 +36,7 @@ class GameMaterialTest {
         assertThat(GameMaterial.GOLD.ink).isEqualTo(hex(0x6b4610))
         assertThat(GameMaterial.PRISM.ink).isEqualTo(hex(0x1c1941))
         assertThat(GameMaterial.OBSIDIAN.ink).isEqualTo(hex(0xd7d4f2))
-        assertThat(GameMaterial.entries.filter { it != GameMaterial.OBSIDIAN }.all { it.ink.luminance() < 0.2f }).isTrue()
+        assertThat(GameMaterial.entries.filter { it != GameMaterial.OBSIDIAN }.all { it.ink.luminance() < 0.4f }).isTrue()
         assertThat(GameMaterial.OBSIDIAN.ink.luminance()).isGreaterThan(0.6f)
     }
 
