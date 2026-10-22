@@ -19,6 +19,10 @@
  *   (`photoMomentId`) ; la date de la PREMIÈRE présentation ne bouge plus. Le registre est BORNÉ : la route
  *   n'accepte que des étapes connues (`isKnownPhotoStepId`), et un compte ne dépasse jamais
  *   `PHOTO_MOMENTS_ACCOUNT_MAX` lignes — au-delà, les étapes neuves sont ignorées, les gardées restent accusables.
+ * - **Le signal « immortalisée » (D22 b, #10182) suit les mêmes règles** sur la même ligne (`keptAt`, première
+ *   immortalisation) : seul l'identifiant d'étape voyage, la photo reste sur l'appareil. Une étape immortalisée
+ *   VAUT présentée (`presentedAt` posé s'il manque) : le job des alertes ne pousse jamais une étape déjà au
+ *   carnet, même immortalisée depuis une ligne que seule la détection avait écrite.
  * - **Le plus haut palier du trésor** (D14) ne redescend pas : tenu à la frappe (`notePeakTreasury`), et
  *   servi comme le plus haut du gardé et du courant — un compte déjà riche avant ce lot n'attend pas sa
  *   prochaine frappe.
@@ -67,6 +71,13 @@ const isUniqueViolation = (error: unknown): boolean =>
 
 /** Une ligne pas encore présentée : `presentedAt` à null, ou ABSENT (une ligne écrite par la détection). */
 const notPresented = { OR: [{ presentedAt: null }, { presentedAt: { isSet: false } }] };
+/** Une ligne pas encore immortalisée : `keptAt` à null, ou ABSENT (toute ligne d'avant le signal). */
+const notKept = { OR: [{ keptAt: null }, { keptAt: { isSet: false } }] };
+
+/** Les deux horloges du registre que les clients écrivent ; chacune ne se pose que là où elle manque. */
+type StampKind = 'presented' | 'kept';
+const stampWhere = (kind: StampKind) => (kind === 'kept' ? notKept : notPresented);
+const stampData = (kind: StampKind, now: Date) => (kind === 'kept' ? { keptAt: now, updatedAt: now } : { presentedAt: now, updatedAt: now });
 
 export class GamePhotoService {
   constructor(private readonly prisma: PhotoDb) {}
@@ -80,7 +91,7 @@ export class GamePhotoService {
       }),
       this.prisma.gamePhotoMoment.findMany({
         where: { userId },
-        select: { stepId: true, detectedAt: true, presentedAt: true, notifiedAt: true },
+        select: { stepId: true, detectedAt: true, presentedAt: true, notifiedAt: true, keptAt: true },
         orderBy: { updatedAt: 'desc' },
         take: PHOTO_MOMENTS_SERVED_MAX,
       }),
@@ -98,6 +109,7 @@ export class GamePhotoService {
         detectedAt: asIso(row.detectedAt),
         presentedAt: asIso(row.presentedAt),
         notifiedAt: asIso(row.notifiedAt),
+        keptAt: asIso(row.keptAt),
       })),
     };
   }
@@ -120,29 +132,40 @@ export class GamePhotoService {
    * est ignorée. Rend chaque étape gardée avec la date de sa première présentation.
    */
   async markPresented(userId: string, stepIds: readonly string[], now: Date = new Date()): Promise<{ presented: { stepId: string; presentedAt: string }[] }> {
+    const stamped = await this.stamp('presented', userId, stepIds, now);
+    return { presented: stamped.map(({ stepId, at }) => ({ stepId, presentedAt: at })) };
+  }
+
+  /**
+   * Le signal « immortalisée » (D22 b) : l'identifiant d'étape seul. Même ligne, mêmes règles que l'accusé — une
+   * ligne par étape, la PREMIÈRE immortalisation fait foi, une étape neuve n'entre que sous le plafond — et
+   * l'étape vaut présentée. Supprimer la photo sur l'appareil ne retire pas le signal.
+   */
+  async markKept(userId: string, stepIds: readonly string[], now: Date = new Date()): Promise<{ kept: { stepId: string; keptAt: string }[] }> {
+    const stamped = await this.stamp('kept', userId, stepIds, now);
+    return { kept: stamped.map(({ stepId, at }) => ({ stepId, keptAt: at })) };
+  }
+
+  /** Pose une horloge sur chaque étape du lot et rend, par étape gardée, la date qui fait foi (la première). */
+  private async stamp(kind: StampKind, userId: string, stepIds: readonly string[], now: Date): Promise<readonly { stepId: string; at: string }[]> {
     const unique = [...new Set(stepIds)];
-    await this.prisma.gamePhotoMoment.updateMany({
-      where: { userId, stepId: { in: unique }, ...notPresented },
-      data: { presentedAt: now, updatedAt: now },
-    });
+    await this.stampExisting(kind, { userId, stepId: { in: unique } }, now);
     const known = new Set(
       (await this.prisma.gamePhotoMoment.findMany({ where: { userId, stepId: { in: unique } }, select: { stepId: true }, take: unique.length })).map((row) => row.stepId),
     );
     for (const stepId of await this.withinAccountCap(userId, unique.filter((id) => !known.has(id)))) {
-      await this.createPresented(userId, stepId, now);
+      await this.createStamped(kind, userId, stepId, now);
     }
     const rows = await this.prisma.gamePhotoMoment.findMany({
       where: { userId, stepId: { in: unique } },
-      select: { stepId: true, presentedAt: true },
+      select: { stepId: true, presentedAt: true, keptAt: true },
       take: unique.length,
     });
-    const presentedAt = new Map(rows.map((row) => [row.stepId, row.presentedAt ?? now]));
-    return {
-      presented: unique.flatMap((stepId) => {
-        const at = presentedAt.get(stepId);
-        return at === undefined ? [] : [{ stepId, presentedAt: at.toISOString() }];
-      }),
-    };
+    const at = new Map(rows.map((row) => [row.stepId, (kind === 'kept' ? row.keptAt : row.presentedAt) ?? now]));
+    return unique.flatMap((stepId) => {
+      const when = at.get(stepId);
+      return when === undefined ? [] : [{ stepId, at: when.toISOString() }];
+    });
   }
 
   /** Les étapes neuves qui tiennent sous `PHOTO_MOMENTS_ACCOUNT_MAX`, dans l'ordre du lot ; aucune au-delà. */
@@ -168,13 +191,21 @@ export class GamePhotoService {
     return profile?.frameAtmosphere !== slug;
   }
 
-  private async createPresented(userId: string, stepId: string, now: Date): Promise<void> {
+  /** Pose l'horloge là où elle manque ; une immortalisation pose aussi la présentation si elle manque (jamais l'inverse). */
+  private async stampExisting(kind: StampKind, lines: { userId: string; stepId: string | { in: string[] } }, now: Date): Promise<void> {
+    await this.prisma.gamePhotoMoment.updateMany({ where: { ...lines, ...stampWhere(kind) }, data: stampData(kind, now) });
+    if (kind === 'kept') {
+      await this.prisma.gamePhotoMoment.updateMany({ where: { ...lines, ...notPresented }, data: stampData('presented', now) });
+    }
+  }
+
+  private async createStamped(kind: StampKind, userId: string, stepId: string, now: Date): Promise<void> {
     try {
-      await this.prisma.gamePhotoMoment.create({ data: { id: photoMomentId(userId, stepId), userId, stepId, presentedAt: now, updatedAt: now } });
+      await this.prisma.gamePhotoMoment.create({ data: { id: photoMomentId(userId, stepId), userId, stepId, presentedAt: now, ...stampData(kind, now) } });
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
-      // Une écriture concurrente (détection, autre appareil) l'a créée entre-temps : la présenter si elle ne l'est pas.
-      await this.prisma.gamePhotoMoment.updateMany({ where: { userId, stepId, ...notPresented }, data: { presentedAt: now, updatedAt: now } });
+      // Une écriture concurrente (détection, autre appareil) l'a créée entre-temps : l'estampiller si elle ne l'est pas.
+      await this.stampExisting(kind, { userId, stepId }, now);
     }
   }
 

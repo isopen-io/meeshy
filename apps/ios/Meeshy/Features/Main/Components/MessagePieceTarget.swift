@@ -130,10 +130,26 @@ enum MessagePieceMenu {
         let canDelete: Bool
         /// Le verdict `forward` de la loi partagée (E2EE, avis, envoi raté).
         var canForward: Bool = true
+        /// Le verdict `canReply` de la loi : conversation fermée, lecteur sans
+        /// le droit d'écrire (mineur dans Global, invité muet, annonce) ⇒ la
+        /// pièce ne se cite pas non plus.
+        var canReply: Bool = true
+        /// Le verdict `canReact` de la loi : sans lui, ni bande d'emojis ni
+        /// réaction sur la pièce affichée.
+        var canReact: Bool = true
+    }
+
+    /// **La bande de réactions de l'aperçu d'une pièce** suit le même verdict
+    /// que celle du message : disparu, conversation fermée, non-membre ou avis
+    /// système n'ont rien à réagir. Une pièce protégée ne se réagit jamais.
+    static func offersReaction(_ ctx: Context) -> Bool {
+        ctx.canReact && !ctx.isProtected
     }
 
     /// Répondre, enregistrer, supprimer : chacun atteint la pièce AFFICHÉE.
     ///
+    /// - la citation suit le droit d'écrire du lecteur (`canReply`), comme le
+    ///   menu du message ; la pièce, comme lui, ne s'épingle pas (pas d'entrée) ;
     /// - une pièce protégée ne se cite ni ne s'enregistre : sa forme se montre,
     ///   jamais son contenu ;
     /// - l'enregistrement suit la loi de sortie du message (#9573) ;
@@ -145,7 +161,7 @@ enum MessagePieceMenu {
     ///   #9914) — jamais une pièce protégée, ni quand la loi refuse le transfert.
     static func actions(_ ctx: Context) -> [PrimaryAction] {
         var out: [PrimaryAction] = []
-        if !ctx.isProtected { out.append(.replyToPiece) }
+        if !ctx.isProtected && ctx.canReply { out.append(.replyToPiece) }
         if !ctx.isProtected && ctx.canForward && ctx.exits.offers(.forward) { out.append(.forwardPiece) }
         if !ctx.isProtected && ctx.exits.offers(.save) { out.append(.saveMedia) }
         if ctx.canDelete { out.append(.deletePiece) }
@@ -158,6 +174,8 @@ extension MessagePieceMenu.Context {
     /// Le menu d'une pièce lit les verdicts de la fabrique du message
     /// (#11214) : la suppression serveur, jamais « pour moi », et le transfert.
     init(isProtected: Bool, menu: MessageMenuContext) {
-        self.init(isProtected: isProtected, exits: menu.exits, canDelete: menu.canDeleteOnServer, canForward: menu.canForward)
+        self.init(
+            isProtected: isProtected, exits: menu.exits, canDelete: menu.canDeleteOnServer,
+            canForward: menu.canForward, canReply: menu.canReply, canReact: menu.canReact)
     }
 }

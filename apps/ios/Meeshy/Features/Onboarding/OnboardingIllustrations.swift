@@ -66,7 +66,7 @@ struct OnboardingPrismIllustration: View {
         .task {
             guard !reduce else { return }
             while !Task.isCancelled {
-                do { try await Task.sleep(nanoseconds: 1_800_000_000) } catch { return }
+                do { try await Task.sleep(for: .milliseconds(1800)) } catch { return }
                 withAnimation(.spring(response: 0.7, dampingFraction: 0.75)) { flipped.toggle() }
             }
         }

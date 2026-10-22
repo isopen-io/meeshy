@@ -37,6 +37,7 @@ const f = {
   'admin.gesture.report.body': 'The action and the report closure go together; the reporter gets an answer.',
   'admin.gesture.report.dismiss.body': 'The content stays online; the reporter gets an answer.',
   'admin.gesture.report.done': 'Report handled.',
+  'admin.gesture.report.self': 'This report targets your own content: another moderator will handle it.',
   'admin.gesture.preview.open': 'Preview',
   'admin.gesture.preview.title': 'Post preview',
   'admin.gesture.preview.previous': 'Previous post',

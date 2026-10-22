@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { notebookSizeLabel, accountBackend, createNotebook, developNotebookSource, NOTEBOOK_SOURCE_EDGE, lazyBackend, notebookBytes, notebookDbName, openIndexedDbBackend, pendingOf, retakeChoices, type NotebookBackend, type NotebookEntry } from './notebook';
+import { notebookSizeLabel, accountBackend, createNotebook, developNotebookSource, NOTEBOOK_SOURCE_EDGE, lazyBackend, notebookBytes, notebookDbName, openIndexedDbBackend, pendingOf, retakeChoices, retakeSessionOf, type NotebookBackend, type NotebookEntry } from './notebook';
 import { achievementMoment, flameMoment, rankMoment, startMoment } from './moments';
 
 /**
@@ -166,6 +166,64 @@ describe('garder une photo : la recette (#10161)', () => {
     const notebook = createNotebook({ backend: full, now: () => new Date(T0) });
     expect(await notebook.keep(startMoment(), { story: image('s'), mode: 'card' })).toBe('no-space');
     expect(backend.rows.size).toBe(0);
+  });
+});
+
+/**
+ * LA REPRISE (§ 5.13, #10166) : reprendre une photo gardée — autre cadre, autre
+ * pose, même photo ou nouveau selfie — REMPLACE l'entrée du même moment et
+ * garde sa date ; le carnet remet au déroulé la session de reprise : ses choix,
+ * la source, le mode, la recette et la date de la plaque.
+ */
+describe('reprendre une photo gardée (#10166)', () => {
+  test('re-garder le même moment remplace l’entrée, sans dupliquer la ligne, et garde la date de la première garde', async () => {
+    const { notebook, backend, advance } = bench();
+    await notebook.keep(flameMoment(7), { story: image('s'), mode: 'selfie', source: image('src'), recipe: { frameId: 'savane.lion', pose: 'pied' } });
+    advance(3 * DAY);
+    expect(await notebook.keep(flameMoment(7), { story: image('ss'), mode: 'selfie', source: image('src'), recipe: { frameId: 'royaumes.lion', pose: 'duo' } })).toBe('kept');
+    expect(backend.rows.size).toBe(1);
+    const [entry] = await notebook.list();
+    expect(entry).toMatchObject({ createdAt: new Date(T0).toISOString(), frameId: 'royaumes.lion', pose: 'duo' });
+    expect(entry?.story?.size).toBe(2);
+  });
+
+  test('une entrée en attente qui se photographie prend la date du jour : seule une photo GARDÉE garde la sienne', async () => {
+    const { notebook, advance } = bench();
+    await notebook.defer(achievementMoment('achievement.first_voice'));
+    advance(3 * DAY);
+    await notebook.keep(achievementMoment('achievement.first_voice'), { story: image('s'), mode: 'card' });
+    const [entry] = await notebook.list();
+    expect(entry?.createdAt).toBe(new Date(T0 + 3 * DAY).toISOString());
+  });
+
+  test('la session de reprise d’une entrée neuve : la même photo possible, son mode, sa recette, la date de l’étape sur la plaque', async () => {
+    const { notebook } = bench();
+    await notebook.keep(flameMoment(7), {
+      story: image('s'),
+      mode: 'gallery',
+      source: image('src'),
+      recipe: { frameId: 'savane.lion', pose: 'pied', message: 'Enfin', mirror: false, showFlame: false, showLink: true, momentAt: '2026-10-01T00:00:00.000Z' },
+    });
+    const [entry] = await notebook.list();
+    const session = retakeSessionOf(entry!);
+    expect(session.choices).toEqual(['same-photo', 'selfie', 'card']);
+    expect(session.source?.size).toBe(3);
+    expect(session.mode).toBe('gallery');
+    expect(session.recipe).toEqual({ frameId: 'savane.lion', pose: 'pied', message: 'Enfin', mirror: false, showFlame: false, showLink: true, momentAt: '2026-10-01T00:00:00.000Z' });
+    expect(session.at.toISOString()).toBe('2026-10-01T00:00:00.000Z');
+  });
+
+  test('la session d’une ANCIENNE entrée : sans source, selfie neuf ou carte, la date de sa garde sur la plaque, une recette vide', async () => {
+    const { notebook, backend } = bench();
+    const old = startMoment();
+    await backend.put({ id: old.id, momentId: old.id, emblem: old.emblem, kicker: old.kicker, title: old.title, status: 'kept', createdAt: new Date(T0).toISOString(), expiresAt: null, mode: 'selfie', story: image('s'), square: image('q') });
+    const [entry] = await notebook.list();
+    const session = retakeSessionOf(entry!);
+    expect(session.choices).toEqual(['selfie', 'card']);
+    expect(session.source).toBeNull();
+    expect(session.mode).toBe('selfie');
+    expect(session.recipe).toEqual({});
+    expect(session.at.toISOString()).toBe(new Date(T0).toISOString());
   });
 });
 

@@ -8,6 +8,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -18,11 +19,13 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.search.SearchQueryCache
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.search.GlobalSearchRepository
 import me.meeshy.sdk.search.InMemoryRecentSearchesStore
 import me.meeshy.sdk.search.GlobalSearchResults
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
 import org.junit.Before
@@ -40,6 +43,11 @@ class GlobalSearchViewModelTest {
         every { this@mockk.conversationUpdated } returns this@GlobalSearchViewModelTest.conversationUpdated
         every { this@mockk.conversationDeleted } returns this@GlobalSearchViewModelTest.conversationDeleted
         every { this@mockk.conversationRestored } returns MutableSharedFlow()
+    }
+
+    private val signedInUser = MutableStateFlow<MeeshyUser?>(null)
+    private val session = mockk<SessionRepository> {
+        every { this@mockk.currentUser } returns this@GlobalSearchViewModelTest.signedInUser
     }
 
     // Horloge controlable : le TTL du cache de requetes se teste sans dormir.
@@ -60,7 +68,7 @@ class GlobalSearchViewModelTest {
 
     private val recentSearches = InMemoryRecentSearchesStore()
 
-    private fun viewModel() = GlobalSearchViewModel(repository, recentSearches, socket, clock)
+    private fun viewModel() = GlobalSearchViewModel(repository, recentSearches, socket, clock, session)
 
     // Une frappe sous le seuil ne part JAMAIS en reseau : la recherche a 1
     // caractere renverrait la moitie de la base et l'UI clignoterait a chaque
@@ -324,5 +332,19 @@ class GlobalSearchViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 2) { repository.search("belva", any(), any(), any()) }
+    }
+
+    // #11615 — l'interlocuteur d'un direct s'elit contre le LECTEUR : la recherche
+    // le lit de la session, sinon une ligne de resultat ne pourrait pas nommer l'autre.
+    @Test
+    fun `the signed-in reader is exposed so a direct hit can be named after its peer`() = runTest(dispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertThat(vm.state.value.currentUserId).isNull()
+
+        signedInUser.value = MeeshyUser(id = "me", username = "me")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.currentUserId).isEqualTo("me")
     }
 }

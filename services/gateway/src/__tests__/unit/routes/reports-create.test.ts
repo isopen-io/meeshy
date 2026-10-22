@@ -53,7 +53,7 @@ const CORPS = {
 
 /** Ce que la base répond — chaque témoin le règle pour SON cas. */
 const base = {
-  message: null as { conversationId: string } | null,
+  message: null as { conversationId: string; senderId?: string; sender?: { userId: string | null } } | null,
   participe: true,
   utilisateur: null as { id: string } | null,
   post: null as { authorId: string; visibility: string; visibilityUserIds: string[]; deletedAt: Date | null } | null,
@@ -232,6 +232,29 @@ describe('POST /reports — la cible doit exister et avoir été atteignable', (
 
     expect(inexistant.statusCode).toBe(inaccessible.statusCode);
     expect(inexistant.json().message).toBe(inaccessible.json().message);
+
+    await app.close();
+  });
+
+  it('refuse de signaler son propre message (#11220) — rien n’est écrit', async () => {
+    base.message = { conversationId: CONVERSATION_ID, senderId: 'p1', sender: { userId: USER_ID } };
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/reports', payload: CORPS });
+
+    expect(res.statusCode).toBe(404);
+    expect(createReport).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('accepte le message d’un autre membre de la conversation', async () => {
+    base.message = { conversationId: CONVERSATION_ID, senderId: 'p2', sender: { userId: '507f1f77bcf86cd799439099' } };
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/reports', payload: CORPS });
+
+    expect(res.statusCode).toBe(201);
 
     await app.close();
   });
@@ -446,6 +469,18 @@ describe('POST /reports — le signalant ANONYME', () => {
     expect(res.statusCode).toBe(201);
     expect((createReport.mock.calls[0][0] as Record<string, unknown>).reporterName).toBe('invite-42');
     expect((createReport.mock.calls[0][0] as Record<string, unknown>).reporterId).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('refuse à un anonyme de signaler son propre message (#11220) — sa ligne EST l’expéditeur', async () => {
+    base.message = { conversationId: CONVERSATION_ID, senderId: 'participant-1', sender: { userId: null } };
+    const app = await buildAppAnonyme();
+
+    const res = await app.inject({ method: 'POST', url: '/reports', payload: CORPS });
+
+    expect(res.statusCode).toBe(404);
+    expect(createReport).not.toHaveBeenCalled();
 
     await app.close();
   });

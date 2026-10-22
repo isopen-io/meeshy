@@ -4,7 +4,7 @@ Description=Sauvegarde du staging Meeshy chaque jour a 2 h 30 (heure de Paris), 
 [Timer]
 OnCalendar=*-*-* 02:30:00 Europe/Paris
 Persistent=true
-Unit=meeshy-staging-backup.service
+Unit=meeshy-staging-backup@nightly.service
 
 [Install]
 WantedBy=timers.target

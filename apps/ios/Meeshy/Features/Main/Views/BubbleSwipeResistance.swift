@@ -53,6 +53,19 @@ enum BubbleSwipeResistance {
         offset >= commitDistance
     }
 
+    /// Résultat d'un pas de drag vis-à-vis du seuil de validation :
+    /// `crossed` = état courant, `firesHaptic` = vrai UNIQUEMENT au passage
+    /// de sous-seuil à sur-seuil (une fois par franchissement).
+    struct ThresholdCrossing: Equatable {
+        let crossed: Bool
+        let firesHaptic: Bool
+    }
+
+    static func crossing(wasCrossed: Bool, offset: CGFloat) -> ThresholdCrossing {
+        let crossed = commits(offset: abs(offset))
+        return ThresholdCrossing(crossed: crossed, firesHaptic: crossed && !wasCrossed)
+    }
+
     /// Direction du swipe REPLY (signe de la translation qui commite une
     /// réponse). Rangée plate (Script, `uniformFlatRow`) : géométrie
     /// UNIFORME — tous les messages étant alignés pareil, reply = glisser à

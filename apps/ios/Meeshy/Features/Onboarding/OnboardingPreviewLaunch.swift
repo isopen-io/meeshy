@@ -145,7 +145,7 @@ struct OnboardingPreviewScreen: View {
                 return
             }
             guard OnboardingPreviewLaunch.showsDoneVariant else { return }
-            do { try await Task.sleep(nanoseconds: 1_200_000_000) } catch { return }
+            do { try await Task.sleep(for: .milliseconds(1200)) } catch { return }
             model.debugApplyDoneVariant()
         }
     }
@@ -206,7 +206,7 @@ nonisolated private final class PreviewContactSync: ContactSyncProviding, @unche
     func findFriendsFromContacts() async throws -> [ContactMatch] { [] }
 
     func syncDirectory(mode: DirectorySyncMode) async throws -> DirectorySyncResult {
-        try await Task.sleep(nanoseconds: 700_000_000)
+        try await Task.sleep(for: .milliseconds(700))
         guard OnboardingPreviewLaunch.contactsScenario != "failed" else { throw URLError(.notConnectedToInternet) }
         return DirectorySyncResult(totalContacts: 3, processedContacts: 3, syncedCount: 3, matchedCount: 3, removedCount: 0)
     }

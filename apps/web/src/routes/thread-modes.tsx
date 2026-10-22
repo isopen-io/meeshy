@@ -23,6 +23,7 @@ import type { TypingEntry } from '@/lib/api/typing-store';
 import type { Viewer } from '@/lib/api/viewer';
 import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
+import type { SummaryEntryMenu } from '@/lib/view/summary-exits';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
@@ -143,6 +144,7 @@ export type ThreadSummaryCapability = {
   readonly onReplyToPerson: (entry: FaceRampEntry) => void;
   readonly onOpenEpisode: (episode: ConversationEpisode) => void;
   readonly onResumeThread: () => void;
+  readonly entryMenu?: SummaryEntryMenu;
 };
 
 export function ThreadModes({
@@ -466,6 +468,7 @@ export function ThreadModes({
           onReplyToPerson={summary.onReplyToPerson}
           onOpenEpisode={summary.onOpenEpisode}
           onResumeThread={summary.onResumeThread}
+          {...(summary.entryMenu === undefined ? {} : { entryMenu: summary.entryMenu })}
         />
       </Suspense>
     );

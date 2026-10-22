@@ -5687,10 +5687,10 @@ model GameProfile {
 }
 
 /// LE REGISTRE DES MOMENTS PHOTO (#10162, § 5.16.2) : une ligne par (compte, étape du jeu), qui dit
-/// quand l'étape a été détectée, PRÉSENTÉE (sur n'importe quel appareil) et notifiée. `_id` est DÉRIVÉ
-/// de (userId, stepId) (`photoMomentId`, empreinte de 24 hex) : deux écritures de la même étape se
-/// heurtent à l'index `_id`, qui existe toujours ; l'unique (userId, stepId) et l'index de lecture sont
-/// posés par `migrations/2026-10-11-game-photo-moment-indexes.mongodb.js`. Purgé avec le compte.
+/// quand l'étape a été détectée, PRÉSENTÉE (sur n'importe quel appareil), notifiée et IMMORTALISÉE.
+/// `_id` est DÉRIVÉ de (userId, stepId) (`photoMomentId`, empreinte de 24 hex) : deux écritures de la
+/// même étape se heurtent à l'index `_id`, qui existe toujours ; l'unique (userId, stepId) et l'index de
+/// lecture sont posés par `migrations/2026-10-11-game-photo-moment-indexes.mongodb.js`. Purgé avec le compte.
 model GamePhotoMoment {
   id          String    @id @map("_id") @db.ObjectId
   userId      String    @db.ObjectId
@@ -5698,6 +5698,10 @@ model GamePhotoMoment {
   detectedAt  DateTime?
   presentedAt DateTime?
   notifiedAt  DateTime?
+  /// Le signal « immortalisée » (D22 b, #10182) : la photo reste sur l'appareil, seul l'identifiant
+  /// d'étape voyage (`POST /me/game/photo-moments/kept`) pour que les autres appareils la sortent de
+  /// « À rattraper ». Première immortalisation ; supprimer la photo ne l'efface pas.
+  keptAt      DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

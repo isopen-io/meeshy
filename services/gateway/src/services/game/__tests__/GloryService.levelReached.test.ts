@@ -85,6 +85,18 @@ describe('GloryService.creditLevelProgress — « Niveau N atteint » suit le re
     expect(reached).toEqual([{ userId: USER, level: 9, sparks: thresholdOf(15) }]);
   });
 
+  it('un compte neuf crédité de 100 000 (un palier de fidélité, #10422) sert le niveau 9 retenu, un seul push, 800 de Gloire', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 100_000 });
+    const { glory, reached } = service(db);
+
+    const gained = await glory.creditLevelProgress({ userId: USER, score: 100_000, previousRecord: null });
+
+    expect(reached).toEqual([{ userId: USER, level: 9, sparks: 100_000 }]);
+    expect(gained).toBe(800);
+    expect(db.gloryLedger.rows.reduce((sum, line) => sum + Number(line.delta), 0)).toBe(800);
+  });
+
   it('course (Promise.all) : deux crédits qui lisent le même record n\'annoncent la montée qu\'UNE fois', async () => {
     const db = fakeGameDb();
     seedUser(db, { levelRecord: 3, engagementScore: thresholdOf(6) });

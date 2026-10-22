@@ -11,6 +11,9 @@
  * calmement, rien à immortaliser), une saison inachevée, un simple tampon d'Atlas.
  */
 
+import { ACHIEVEMENT_FAMILIES } from '../../types/achievement-families.js';
+import { achievementKey, tiersOf } from '../../types/achievement-catalog.js';
+import { ENGAGEMENT_ACHIEVEMENT_KEYS, type EngagementAchievementKey } from '../../types/engagement.js';
 import type { GuideEventV2 } from './guide-v2.js';
 import type { LeagueKey } from './league.js';
 
@@ -62,3 +65,29 @@ export const photoDayMomentId = (dayKey: string): string | null => (DAY_KEY.test
 /** La journée d'une identité `day:<AAAA-MM-JJ>`, `null` pour toute autre identité. */
 export const photoDayOfMomentId = (momentId: string): string | null =>
   momentId.startsWith('day:') && DAY_KEY.test(momentId.slice(4)) ? momentId.slice(4) : null;
+
+/**
+ * LE HAUT FAIT (LS, #10168) — l'identité commune du web (`achievementMoment`) et d'iOS (`GamePhotoMoments.achievement`),
+ * simples et composés : `achievement:<clé du catalogue>`. La rareté n'y entre jamais : elle est SERVIE à part à la loi
+ * des cadres (`gloryFramesFor({ rarity })`), et une photo gardée avant que la rareté ne soit connue reste la même photo.
+ *
+ * La grammaire n'est pas réécrite ici : la clé est celle que le jeu ATTRIBUE — les cinq succès simples
+ * (`achievement.first_content`, `ENGAGEMENT_ACHIEVEMENT_KEYS`) et les composés de chaque famille et palier
+ * (`achievement.parole.message.send.count:1`, `achievementKey`). Une clé hors du catalogue n'a pas d'identité.
+ */
+export const PHOTO_ACHIEVEMENT_KEYS: readonly string[] = [
+  ...ENGAGEMENT_ACHIEVEMENT_KEYS,
+  ...ACHIEVEMENT_FAMILIES.flatMap((family) => tiersOf(family).map((tier) => achievementKey(family, tier))),
+];
+
+const ACHIEVEMENT_KEY_SET: ReadonlySet<string> = new Set(PHOTO_ACHIEVEMENT_KEYS);
+
+export function photoAchievementMomentId(key: EngagementAchievementKey): string;
+export function photoAchievementMomentId(key: string): string | null;
+export function photoAchievementMomentId(key: string): string | null {
+  return ACHIEVEMENT_KEY_SET.has(key) ? `achievement:${key}` : null;
+}
+
+/** La clé du haut fait d'une identité `achievement:<clé>`, `null` pour toute autre identité. */
+export const photoAchievementKeyOfMomentId = (momentId: string): string | null =>
+  momentId.startsWith('achievement:') && ACHIEVEMENT_KEY_SET.has(momentId.slice(12)) ? momentId.slice(12) : null;

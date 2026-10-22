@@ -1,10 +1,12 @@
 import type { GameLeagueBlock, GameVisibility } from '@meeshy/shared/types/game';
+import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
 import { ATLAS_DEFAULT_VISIBILITY, SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
 
 import type { GameDevicePrefs } from '@/lib/game/preferences';
 import { gameText } from '@/lib/view/game-copy';
 
-import { GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
+import { atmosphereName } from './game-atmosphere-choice';
+import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 import { GameVisibilityPicker } from './game-visibility-picker';
 
 /**
@@ -40,6 +42,11 @@ export type GameSettingsProps = {
    */
   readonly gameNotifications?: boolean | undefined;
   readonly onGameNotifications?: ((on: boolean) => void) | undefined;
+  /**
+   * « Mon atmosphère » (#10163) — l'atmosphère des cadres de rang, une préférence du COMPTE ; `null` : pas encore
+   * choisie, l'Afrique éternelle décore. Le geste ouvre l'écran de choix chez l'hôte. Sans branchement, pas de carte.
+   */
+  readonly atmosphere?: { readonly current: GloryAtmosphere | null; readonly onChange: () => void; readonly notice?: string | undefined } | undefined;
   readonly onCelebrations: (on: boolean) => void;
   readonly onHidden: (on: boolean) => void;
   readonly onVisibility: (patch: Partial<GameVisibility>) => void;
@@ -108,6 +115,34 @@ export function GameSettings(props: GameSettingsProps) {
           </p>
         )}
       </GameCard>
+
+      {props.atmosphere === undefined ? null : (
+        <GameCard id="game-settings-atmosphere" labelledBy="game-settings-atmosphere-title">
+          <h2 id="game-settings-atmosphere-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+            {gameText('game.settings.atmosphere.title')}
+          </h2>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.settings.atmosphere.body')}
+          </p>
+          <p data-game-setting-atmosphere-current="" className="text-body font-semibold" style={{ color: GAME_INK }}>
+            {props.atmosphere.current === null ? gameText('game.settings.atmosphere.none') : atmosphereName(props.atmosphere.current)}
+          </p>
+          <button
+            type="button"
+            data-game-setting-atmosphere=""
+            onClick={props.atmosphere.onChange}
+            className="self-start rounded-chip px-4 text-body font-semibold"
+            style={{ minHeight: 44, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
+          >
+            {props.atmosphere.current === null ? gameText('game.settings.atmosphere.choose') : gameText('game.settings.atmosphere.change')}
+          </button>
+          {props.atmosphere.notice === undefined ? null : (
+            <p role="status" className="text-caption" style={{ color: GAME_INK_2 }}>
+              {props.atmosphere.notice}
+            </p>
+          )}
+        </GameCard>
+      )}
 
       {props.onGameNotifications === undefined ? null : (
         <GameCard id="game-settings-notifications" labelledBy="game-settings-notifications-title">
