@@ -1,0 +1,1278 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "conversations_action_all_notifications",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.archive",
+          "androidName": "conversations_action_archive",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.create_quoted",
+          "androidName": "conversations_action_create_category",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "conversation.settings.deleteForAll.label",
+          "androidName": "conversations_action_delete_for_all",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.delete-for-me",
+          "androidName": "conversations_action_delete_for_me",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_action_discard_draft",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.favorite",
+          "androidName": "conversations_action_favorite",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "conversation.settings.leave.button",
+          "androidName": "conversations_action_leave",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "swipe.lock",
+          "androidName": "conversations_action_lock",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "notifications.action.markRead",
+          "androidName": "conversations_action_mark_read",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_action_mark_unread",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.mentions-only",
+          "androidName": "conversations_action_mentions_only",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.more",
+          "androidName": "conversations_action_more",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_action_move_to_category",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.action.mute",
+          "androidName": "conversations_action_mute",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.pin",
+          "androidName": "conversations_action_pin",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_action_remove_favorite",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_action_rename",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.tags",
+          "androidName": "conversations_action_tags",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.unarchive",
+          "androidName": "conversations_action_unarchive",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.unlock",
+          "androidName": "conversations_action_unlock",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.video.unmute",
+          "androidName": "conversations_action_unmute",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.unpin",
+          "androidName": "conversations_action_unpin",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.locked",
+          "androidName": "conversations_badge_locked",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.muted",
+          "androidName": "conversations_badge_muted",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.message.pinned",
+          "androidName": "conversations_badge_pinned",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.list.filter.offline",
+          "androidName": "conversations_banner_offline",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.a11y.reconnecting",
+          "androidName": "conversations_banner_reconnecting",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "connection.syncing",
+          "androidName": "conversations_banner_syncing",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_category_search_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_change_master_pin",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "commands.contacts",
+          "androidName": "conversations_contacts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.list.create_share_link",
+          "androidName": "conversations_create_share_link",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "conversation.settings.deleteForAll.label",
+          "androidName": "conversations_delete_for_all_confirm_button",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_delete_for_all_confirm_message",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "conversation.settings.deleteForAll.label",
+          "androidName": "conversations_delete_for_all_confirm_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audio.delete.confirm",
+          "androidName": "conversations_delete_for_me_confirm_button",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_delete_for_me_confirm_message",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "conversation.settings.delete.confirm.title",
+          "androidName": "conversations_delete_for_me_confirm_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_empty_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_error_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_error_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_favorite_set_content_description",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bookmarks.filter.all",
+          "androidName": "conversations_filter_all",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.filter.archived",
+          "androidName": "conversations_filter_archived",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.filter.channels",
+          "androidName": "conversations_filter_channels",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.filter.favoris",
+          "androidName": "conversations_filter_favorites",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.filter.globales",
+          "androidName": "conversations_filter_global",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.filter.ouvertes",
+          "androidName": "conversations_filter_open",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.route.direct",
+          "androidName": "conversations_filter_personal",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.filter.privee",
+          "androidName": "conversations_filter_private",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.filter.unread",
+          "androidName": "conversations_filter_unread",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_cancel",
+          "androidName": "conversations_leave_cancel_button",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.leave.confirm",
+          "androidName": "conversations_leave_confirm_button",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_leave_confirm_message",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.leave.title",
+          "androidName": "conversations_leave_confirm_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.a11y.delete",
+          "androidName": "conversations_lock_delete_digit",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_lock_dots_a11y",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.error.codeIncorrect",
+          "androidName": "conversations_lock_error_code_incorrect",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.error.codeMismatch",
+          "androidName": "conversations_lock_error_code_mismatch",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.error.masterPinIncorrect",
+          "androidName": "conversations_lock_error_master_incorrect",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.error.pinMismatch",
+          "androidName": "conversations_lock_error_pin_mismatch",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_lock_security_menu",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.enterCurrentMasterPin",
+          "androidName": "conversations_lock_subtitle_change_verify",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.confirmCodeFor",
+          "androidName": "conversations_lock_subtitle_confirm_code",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.reenterMasterPin",
+          "androidName": "conversations_lock_subtitle_confirm_master",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.confirmNewMasterPin",
+          "androidName": "conversations_lock_subtitle_confirm_new",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.chooseMasterPin",
+          "androidName": "conversations_lock_subtitle_create_master",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.chooseCode",
+          "androidName": "conversations_lock_subtitle_enter_code",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.chooseNewMasterPin",
+          "androidName": "conversations_lock_subtitle_new_master",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_lock_subtitle_open",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.confirmRemoval",
+          "androidName": "conversations_lock_subtitle_remove_master",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.enterCodeToUnlock",
+          "androidName": "conversations_lock_subtitle_unlock",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_lock_subtitle_unlock_all",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_lock_subtitle_verify_master",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.confirmCode",
+          "androidName": "conversations_lock_title_confirm_code",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.confirmMasterPin",
+          "androidName": "conversations_lock_title_confirm_master",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.confirmNewPin",
+          "androidName": "conversations_lock_title_confirm_new",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.createMasterPin",
+          "androidName": "conversations_lock_title_create_master",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.conversationCode",
+          "androidName": "conversations_lock_title_enter_code",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.newMasterPin",
+          "androidName": "conversations_lock_title_new_master",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "preview.conversation_locked",
+          "androidName": "conversations_lock_title_open",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.removeMasterPin",
+          "androidName": "conversations_lock_title_remove_master",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_lock_title_unlock",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_lock_title_unlock_all",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.verifyMasterPin",
+          "androidName": "conversations_lock_title_verify_master",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.logout.a11y",
+          "androidName": "conversations_logout",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.list.new_conversation",
+          "androidName": "conversations_new",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_no_messages",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_no_results",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_no_results_subtitle",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "widget.preview.dashboard",
+          "androidName": "conversations_open_dashboard",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_open_global_search",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "draft.label_prefix",
+          "androidName": "conversations_preview_draft_prefix",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "exit.preview.ephemeral",
+          "androidName": "conversations_preview_ephemeral_content_description",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message.expired",
+          "androidName": "conversations_preview_expired",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_preview_expired_content_description",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "protection.hidden",
+          "androidName": "conversations_preview_hidden",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_preview_hidden_content_description",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "loading.message",
+          "androidName": "conversations_preview_loading",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.comment.body",
+          "androidName": "conversations_preview_sender_format",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "typing.named",
+          "androidName": "conversations_preview_typing",
+          "status": "candidate"
+        },
+        {
+          "catalog": "nse",
+          "iosKey": "notification.view_once_message",
+          "androidName": "conversations_preview_view_once",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_preview_view_once_content_description",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.reply.you",
+          "androidName": "conversations_preview_you",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.removeMasterPin",
+          "androidName": "conversations_remove_master_pin",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.renameConfirm",
+          "androidName": "conversations_rename_confirm_button",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_rename_dialog_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_rename_field_label",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversations.error.retry",
+          "androidName": "conversations_retry",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_row_tags_overflow",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "commands.search",
+          "androidName": "conversations_search",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.view.search.close",
+          "androidName": "conversations_search_close",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.list.search_conversations",
+          "androidName": "conversations_search_hint",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_section_all",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.message.pinned",
+          "androidName": "conversations_section_pinned",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_tags_add_content_description",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.prefs.tags",
+          "androidName": "conversations_tags_dialog_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "tag.placeholder",
+          "androidName": "conversations_tags_field_hint",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "tag.remove",
+          "androidName": "conversations_tags_remove_content_description",
+          "status": "candidate"
+        },
+        {
+          "androidName": "conversations_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_unlock_all",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "commands.contacts",
+          "androidName": "dashboard_action_contacts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.list.new_conversation",
+          "androidName": "dashboard_action_new_conversation",
+          "status": "candidate"
+        },
+        {
+          "androidName": "dashboard_action_search",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "links.hub.share.title",
+          "androidName": "dashboard_action_share_links",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "widget.preview.quickActions",
+          "androidName": "dashboard_quick_actions",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "widget.preview.recentConversations",
+          "androidName": "dashboard_recent",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "widget.preview.dashboard",
+          "androidName": "dashboard_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.unreadMessages.title",
+          "androidName": "dashboard_unread",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "global_search_back",
+          "status": "candidate"
+        },
+        {
+          "androidName": "global_search_empty_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_empty_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_members",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.view.search.no_results",
+          "androidName": "global_search_no_results",
+          "status": "candidate"
+        },
+        {
+          "androidName": "global_search_no_results_hint",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "connection.online",
+          "androidName": "global_search_online",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.clearAll.confirm.action",
+          "androidName": "global_search_recent_clear",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.remove",
+          "androidName": "global_search_recent_remove",
+          "status": "candidate"
+        },
+        {
+          "androidName": "global_search_recent_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.view.search.searching",
+          "androidName": "global_search_searching",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.tab.conversations",
+          "androidName": "global_search_tab_conversations",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.stat.messages",
+          "androidName": "global_search_tab_messages",
+          "status": "candidate"
+        },
+        {
+          "androidName": "global_search_tab_users",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "my_share_links_back",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.a11y.copied",
+          "androidName": "my_share_links_copied",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.links.copy.a11y",
+          "androidName": "my_share_links_copy",
+          "status": "candidate"
+        },
+        {
+          "androidName": "my_share_links_delete",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.links.empty.subtitle",
+          "androidName": "my_share_links_empty_subtitle",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.links.empty.title",
+          "androidName": "my_share_links_empty_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.expired.label",
+          "androidName": "my_share_links_expired",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.expiration.24h",
+          "androidName": "my_share_links_expiry_24h",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.expiration.30d",
+          "androidName": "my_share_links_expiry_30d",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.expiration.3m",
+          "androidName": "my_share_links_expiry_3m",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.expiration.7d",
+          "androidName": "my_share_links_expiry_7d",
+          "status": "candidate"
+        },
+        {
+          "androidName": "my_share_links_extend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "my_share_links_joined_count",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.status.retry",
+          "androidName": "my_share_links_retry",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "links.hub.title",
+          "androidName": "my_share_links_section",
+          "status": "candidate"
+        },
+        {
+          "androidName": "my_share_links_share",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.referral.title",
+          "androidName": "my_share_links_share_subject",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.links.stats.active",
+          "androidName": "my_share_links_stats_active",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.links.stats.total",
+          "androidName": "my_share_links_stats_total",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.links.stats.joined",
+          "androidName": "my_share_links_stats_uses",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.links.status.active",
+          "androidName": "my_share_links_status_active",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.links.status.inactive",
+          "androidName": "my_share_links_status_inactive",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "links.hub.share.title",
+          "androidName": "my_share_links_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.links.stats.active",
+          "androidName": "my_share_links_toggle",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "new_conversation_back",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.create",
+          "androidName": "new_conversation_create",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.new.group-name",
+          "androidName": "new_conversation_group_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.notebook.remove",
+          "androidName": "new_conversation_remove",
+          "status": "candidate"
+        },
+        {
+          "androidName": "new_conversation_search_hint",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.selected",
+          "androidName": "new_conversation_selected",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.new.title",
+          "androidName": "new_conversation_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.access.account_required",
+          "androidName": "share_link_access_account",
+          "status": "candidate"
+        },
+        {
+          "androidName": "share_link_access_birthday",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.access.email_required",
+          "androidName": "share_link_access_email",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.access.nickname_required",
+          "androidName": "share_link_access_nickname",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "share_link_create_back",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.button.create",
+          "androidName": "share_link_create_submit",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.title",
+          "androidName": "share_link_create_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.a11y.copied",
+          "androidName": "share_link_created_copied",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.action.copy-link",
+          "androidName": "share_link_created_copy",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_done_button",
+          "androidName": "share_link_created_done",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "tracking.link.detail.share",
+          "androidName": "share_link_created_share",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.referral.title",
+          "androidName": "share_link_created_share_subject",
+          "status": "candidate"
+        },
+        {
+          "androidName": "share_link_created_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_created_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.button.creating",
+          "androidName": "share_link_creating",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.activate",
+          "androidName": "share_link_detail_activate",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.link.confirm.cancel",
+          "androidName": "share_link_detail_cancel",
+          "status": "candidate"
+        },
+        {
+          "androidName": "share_link_detail_created",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.delete",
+          "androidName": "share_link_detail_delete_confirm",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.deleteConfirmation",
+          "androidName": "share_link_detail_delete_message",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.deleteTitle",
+          "androidName": "share_link_detail_delete_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.disable",
+          "androidName": "share_link_detail_disable",
+          "status": "candidate"
+        },
+        {
+          "androidName": "share_link_detail_dismiss",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.expires",
+          "androidName": "share_link_detail_expires",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "communityLink.identifier",
+          "androidName": "share_link_detail_identifier",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.info.title",
+          "androidName": "share_link_detail_info_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "share_link_detail_not_found",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_detail_open",
+          "status": "android-only"
+        },
+        {
+          "androidName": "share_link_detail_stats_max",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.stats",
+          "androidName": "share_link_detail_stats_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.uses",
+          "androidName": "share_link_detail_stats_uses",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.expiration.h24",
+          "androidName": "share_link_expiration_24h",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.expiration.d30",
+          "androidName": "share_link_expiration_30d",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.expiration.m3",
+          "androidName": "share_link_expiration_3m",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.expiration.d7",
+          "androidName": "share_link_expiration_7d",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.expiration.never",
+          "androidName": "share_link_expiration_never",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.field.description",
+          "androidName": "share_link_field_description",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.expiration",
+          "androidName": "share_link_field_expiration",
+          "status": "candidate"
+        },
+        {
+          "androidName": "share_link_field_max_uses",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.field.name",
+          "androidName": "share_link_field_name",
+          "status": "candidate"
+        },
+        {
+          "androidName": "share_link_field_slug",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.limit_uses",
+          "androidName": "share_link_limit_uses",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.permission.send_files",
+          "androidName": "share_link_permission_files",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.permission.view_history",
+          "androidName": "share_link_permission_history",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.permission.send_images",
+          "androidName": "share_link_permission_images",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.permission.send_messages",
+          "androidName": "share_link_permission_messages",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "share_link_picker_back",
+          "status": "candidate"
+        },
+        {
+          "androidName": "share_link_picker_empty_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.empty",
+          "androidName": "share_link_picker_empty_cta",
+          "status": "candidate"
+        },
+        {
+          "androidName": "share_link_picker_empty_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.picker.title",
+          "androidName": "share_link_picker_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.section.access",
+          "androidName": "share_link_section_access",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.section.identity",
+          "androidName": "share_link_section_identity",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.section.limits",
+          "androidName": "share_link_section_limits",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.link.create.section.permissions",
+          "androidName": "share_link_section_permissions",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

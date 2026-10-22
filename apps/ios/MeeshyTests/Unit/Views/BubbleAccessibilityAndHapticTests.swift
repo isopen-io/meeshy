@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class BubbleAccessibilityAndHapticTests: XCTestCase {
 
     func test_bubble_exposesNamedAccessibilityActions_replyReactCopyMenu() {

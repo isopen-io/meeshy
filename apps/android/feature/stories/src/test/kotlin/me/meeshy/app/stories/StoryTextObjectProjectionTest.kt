@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.StoryTextBackgroundStyle
+import me.meeshy.sdk.model.scene.StoryTextBackground
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4

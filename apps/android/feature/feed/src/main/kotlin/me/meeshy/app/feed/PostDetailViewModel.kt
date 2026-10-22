@@ -14,12 +14,14 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
@@ -48,6 +50,8 @@ data class PostDetailUiState(
     val showSkeleton: Boolean = false,
     val notFound: Boolean = false,
     val errorMessage: String? = null,
+    /** Cause typee de l'echec du chargement (null = aucun echec) ; pilote [PostAbsenceReason]. */
+    val loadFailure: ContentFetchFailure? = null,
     val translatingLanguages: Set<String> = emptySet(),
     /**
      * The quote-repost composer currently open (the reader chose "Quote"), or `null` when
@@ -260,7 +264,14 @@ class PostDetailViewModel @Inject constructor(
             return
         }
         if (status.value.isLoading || status.value.hasLoaded) return
-        status.update { it.copy(isLoading = true, error = null) }
+        status.update { it.copy(isLoading = true, error = null, failure = null) }
+        fetch()
+    }
+
+    /** « Reessayer » de l'ecran d'echec : rejoue le chargement initial sans quitter le detail. */
+    fun retryLoad() {
+        if (postId.isBlank() || status.value.isLoading) return
+        status.update { it.copy(isLoading = true, error = null, failure = null) }
         fetch()
     }
 
@@ -279,18 +290,23 @@ class PostDetailViewModel @Inject constructor(
                         rawPost.value = result.data
                         liveOverlay.value = LiveOverlay()
                         status.update {
-                            it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null)
+                            it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null, failure = null)
                         }
                     }
                     is NetworkResult.Failure ->
                         status.update {
-                            it.copy(isLoading = false, isRefreshing = false, error = result.error.message)
+                            it.copy(
+                                isLoading = false,
+                                isRefreshing = false,
+                                error = result.error.message,
+                                failure = result.error.toContentFetchFailure(),
+                            )
                         }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                status.update { it.copy(isLoading = false, isRefreshing = false, error = e.message) }
+                status.update { it.copy(isLoading = false, isRefreshing = false, error = e.message, failure = e.toContentFetchFailure()) }
             }
         }
     }
@@ -448,6 +464,7 @@ class PostDetailViewModel @Inject constructor(
             showSkeleton = showSkeleton,
             notFound = st.notFound,
             errorMessage = st.error,
+            loadFailure = st.failure ?: if (st.notFound) ContentFetchFailure.NOT_FOUND else null,
             translatingLanguages = st.translating,
             quoteComposer = st.quoteComposer,
             isReposted = st.isReposted,
@@ -465,6 +482,7 @@ private data class PostDetailStatus(
     val hasLoaded: Boolean = false,
     val notFound: Boolean = false,
     val error: String? = null,
+    val failure: ContentFetchFailure? = null,
     val translating: Set<String> = emptySet(),
     val quoteComposer: QuoteComposerState? = null,
     val isReposted: Boolean = false,

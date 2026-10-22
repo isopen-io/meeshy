@@ -45,6 +45,9 @@ dependencies {
     api(libs.stream.webrtc)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+    implementation(libs.androidx.media3.common)
+    implementation(libs.androidx.media3.transformer)
+    implementation(libs.androidx.media3.effect)
     implementation(libs.datastore.preferences)
     implementation(libs.room.ktx)
     implementation(libs.security.crypto)
@@ -66,6 +69,8 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)
+    // Test-only: OutboxFlushWorkerTest builds the worker with TestListenableWorkerBuilder.
+    testImplementation(libs.work.testing)
     // Test-only: TusUploadRepositoryTest constructs raw retrofit2.Response fixtures
     // to stub TusApi.createUpload (the Location-header response createSession()
     // reads). :core:network keeps retrofit an `implementation` (not `api`) dependency

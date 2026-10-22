@@ -10,14 +10,14 @@ import XCTest
 @MainActor
 final class RouterContentLinkTests: XCTestCase {
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DeepLinkRouter.shared.pendingDeepLink = nil
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         DeepLinkRouter.shared.pendingDeepLink = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func test_handleDeepLink_lienDeStory_passeParLaPorteDesStories_sansPousserLeDetail() {
