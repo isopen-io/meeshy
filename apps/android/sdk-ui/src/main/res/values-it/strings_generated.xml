@@ -11,4 +11,26 @@
     <string name="emoji_category_smileys">Faccine</string>
     <string name="emoji_category_symbols">Simboli</string>
     <string name="emoji_category_travel">Viaggi</string>
+    <string name="sticker_sheet_instants_lieu">Luoghi</string>
+    <string name="sticker_sheet_instants_message">Messaggi</string>
+    <string name="sticker_sheet_instants_meteo">Meteo</string>
+    <string name="sticker_sheet_instants_moment">Momenti</string>
+    <string name="sticker_sheet_intent_amour_hint">Per una parola dolce, un bacio, un abbraccio o una dichiarazione</string>
+    <string name="sticker_sheet_intent_amour_title">Dire ti amo</string>
+    <string name="sticker_sheet_intent_bonjour_hint">Per salutare, ringraziare, dire di sì, scusarsi o augurare la buonanotte</string>
+    <string name="sticker_sheet_intent_bonjour_title">Ciao, grazie</string>
+    <string name="sticker_sheet_intent_coup_de_mou_hint">Per la tristezza, il dispiacere, la stanchezza o la voglia di dormire</string>
+    <string name="sticker_sheet_intent_coup_de_mou_title">Giù di morale</string>
+    <string name="sticker_sheet_intent_fete_hint">Per una bella notizia, un successo, un compleanno o una risata a crepapelle</string>
+    <string name="sticker_sheet_intent_fete_title">Ridere e festeggiare</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">Per ridere di tutto, anche del peggio: morire dal ridere, fantasmi e lapidi</string>
+    <string name="sticker_sheet_intent_humour_noir_title">Umorismo nero</string>
+    <string name="sticker_sheet_intent_quotidien_hint">Per dire cosa stai facendo: un caffè, un pasto, il lavoro, il viaggio, un ritardo</string>
+    <string name="sticker_sheet_intent_quotidien_title">La vita di tutti i giorni</string>
+    <string name="sticker_sheet_intent_rale_hint">Per esprimere fastidio, rabbia, gelosia o prendere le distanze</string>
+    <string name="sticker_sheet_intent_rale_title">Brontolare e tenere il muso</string>
+    <string name="sticker_sheet_intent_soutien_hint">Per incoraggiare, confortare o dire «ci sono io»</string>
+    <string name="sticker_sheet_intent_soutien_title">Consolare e sostenere</string>
+    <string name="sticker_sheet_intent_surprise_hint">Per lo stupore, la paura, l’imbarazzo o un «ops»</string>
+    <string name="sticker_sheet_intent_surprise_title">Sorpresa e brividi</string>
 </resources>
