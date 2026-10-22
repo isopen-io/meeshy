@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.appearance
 
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -67,9 +68,9 @@ class FrameMotionPlanTest {
                     sweep.getValue("reverse").jsonPrimitive.boolean,
                 )
             }
-            assertThat(plan.layers).named("$label / couches").isEqualTo(layers)
-            assertThat(plan.sweeps).named("$label / reflets").isEqualTo(sweeps)
-            assertThat(plan.animated).named("$label / animes")
+            assertWithMessage("$label / couches").that(plan.layers).isEqualTo(layers)
+            assertWithMessage("$label / reflets").that(plan.sweeps).isEqualTo(sweeps)
+            assertWithMessage("$label / animes").that(plan.animated)
                 .isEqualTo(ints(vector.getValue("animated").jsonArray).toSet())
         }
     }
