@@ -40,7 +40,7 @@ struct MeeshyApp: App {
         // Les extensions de notification tournent dans leur propre
         // processus : elles lisent cette langue dans le groupe d'app, et les
         // catégories que l'AppDelegate enregistre juste après aussi.
-        UILanguageOverride.publishInterfaceLanguage()
+        UILanguageOverride.publishInterfaceLanguageInBackground()
 
         // Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste.
         // Lu APRÈS l'override de `MeeshyLaunch.main()` : c'est lui

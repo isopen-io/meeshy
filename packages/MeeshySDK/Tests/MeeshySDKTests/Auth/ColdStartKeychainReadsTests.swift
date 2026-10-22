@@ -34,7 +34,7 @@ final class PersistedActiveUserTests: XCTestCase {
         var slot = PersistedActiveUser()
         _ = slot.read(from: keychain)
 
-        slot.write("u1", to: keychain, groupDefaults: nil)
+        slot.write("u1", to: keychain, groupSuite: nil)
 
         XCTAssertEqual(keychain.saves(of: PersistedActiveUser.key), 0)
     }
@@ -43,7 +43,7 @@ final class PersistedActiveUserTests: XCTestCase {
         let keychain = CountingKeychainStore([:])
         var slot = PersistedActiveUser()
 
-        slot.write("u2", to: keychain, groupDefaults: nil)
+        slot.write("u2", to: keychain, groupSuite: nil)
 
         XCTAssertEqual(keychain.saves(of: PersistedActiveUser.key), 1)
         XCTAssertEqual(keychain.value(of: PersistedActiveUser.key), "u2")
@@ -55,7 +55,7 @@ final class PersistedActiveUserTests: XCTestCase {
         let keychain = CountingKeychainStore(["meeshy_active_user_id": "u1"])
         var slot = PersistedActiveUser()
 
-        slot.write("u1", to: keychain, groupDefaults: nil)
+        slot.write("u1", to: keychain, groupSuite: nil)
 
         XCTAssertEqual(keychain.saves(of: PersistedActiveUser.key), 1, "rien n'a été lu : rien ne prouve que le trousseau la porte")
     }
@@ -64,7 +64,7 @@ final class PersistedActiveUserTests: XCTestCase {
         let keychain = CountingKeychainStore(["meeshy_active_user_id": "u1"])
         var slot = PersistedActiveUser()
 
-        slot.write(nil, to: keychain, groupDefaults: nil)
+        slot.write(nil, to: keychain, groupSuite: nil)
 
         XCTAssertNil(keychain.value(of: PersistedActiveUser.key))
         XCTAssertNil(slot.read(from: keychain))
@@ -79,9 +79,47 @@ final class PersistedActiveUserTests: XCTestCase {
         var slot = PersistedActiveUser()
         _ = slot.read(from: keychain)
 
-        slot.write("u1", to: keychain, groupDefaults: group)
+        let io = AppGroupIO(label: "PersistedActiveUserTests")
+
+        slot.write("u1", to: keychain, groupSuite: suite, io: io)
+        io.drain()
 
         XCTAssertEqual(group.string(forKey: PersistedActiveUser.key), "u1", "les extensions lisent le compte actif dans le groupe")
+    }
+
+    /// #11558 — le groupe d'app s'écrit sur la file `AppGroupIO`, jamais sur le
+    /// fil qui pose le compte actif (le principal, au démarrage à froid).
+    func test_write_mirrorsToTheAppGroup_onItsQueue_notOnTheCallingThread() throws {
+        let suite = "PersistedActiveUserTests.\(UUID().uuidString)"
+        let group = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { group.removePersistentDomain(forName: suite) }
+        let io = AppGroupIO(label: "PersistedActiveUserTests.gated")
+        let gate = DispatchSemaphore(value: 0)
+        io.enqueue { gate.wait() }
+        var slot = PersistedActiveUser()
+
+        slot.write("u1", to: CountingKeychainStore([:]), groupSuite: suite, io: io)
+
+        XCTAssertNil(group.string(forKey: PersistedActiveUser.key), "rien ne s'écrit avant le tour de la file")
+        gate.signal()
+        io.drain()
+        XCTAssertEqual(group.string(forKey: PersistedActiveUser.key), "u1")
+    }
+
+    func test_successiveWrites_reachTheAppGroupInOrder() throws {
+        let suite = "PersistedActiveUserTests.\(UUID().uuidString)"
+        let group = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { group.removePersistentDomain(forName: suite) }
+        let io = AppGroupIO(label: "PersistedActiveUserTests.order")
+        let keychain = CountingKeychainStore([:])
+        var slot = PersistedActiveUser()
+
+        slot.write("u1", to: keychain, groupSuite: suite, io: io)
+        slot.write(nil, to: keychain, groupSuite: suite, io: io)
+        slot.write("u2", to: keychain, groupSuite: suite, io: io)
+        io.drain()
+
+        XCTAssertEqual(group.string(forKey: PersistedActiveUser.key), "u2")
     }
 
     func test_write_failedSave_letsTheNextReadAskTheKeychain() {
@@ -89,7 +127,7 @@ final class PersistedActiveUserTests: XCTestCase {
         keychain.failsSaves = true
         var slot = PersistedActiveUser()
 
-        slot.write("u2", to: keychain, groupDefaults: nil)
+        slot.write("u2", to: keychain, groupSuite: nil)
 
         XCTAssertEqual(slot.read(from: keychain), "u1")
     }
@@ -326,6 +364,42 @@ final class PushTokenColdStartTests: XCTestCase {
         XCTAssertEqual(sut.deviceToken, "beef")
         XCTAssertEqual(keychain.loads(of: PushNotificationManager.persistedTokenKey), 0)
     }
+
+    /// Le réenregistrement part de `performOpeningStep`, sur le fil principal,
+    /// avant le premier rendu de la liste : sa lecture du trousseau n'y a pas sa place.
+    func test_reRegisterTokenIfNeeded_readsThePersistedTokenOffTheMainThread() async throws {
+        let key = PushNotificationManager.persistedTokenKey
+        let keychain = CountingKeychainStore([key: "cafe"])
+        let (sut, defaults, suite) = try makeSUT(keychain)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        sut.reRegisterTokenIfNeeded()
+        try await waitUntil { keychain.loads(of: key) == 1 }
+
+        XCTAssertEqual(keychain.mainThreadLoads(of: key), 0)
+        try await waitUntil { sut.deviceToken == "cafe" }
+        XCTAssertEqual(keychain.loads(of: key), 1, "la valeur lue hors du fil principal est retenue")
+    }
+
+    func test_reRegisterTokenIfNeeded_tokenSetMeanwhile_keepsTheNewerToken() async throws {
+        let key = PushNotificationManager.persistedTokenKey
+        let keychain = CountingKeychainStore([key: "cafe"])
+        let (sut, defaults, suite) = try makeSUT(keychain)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        sut.reRegisterTokenIfNeeded()
+        sut.registerDeviceToken(Data([0xBE, 0xEF]))
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.deviceToken, "beef")
+    }
+
+    private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
+        for _ in 0..<200 where !condition() {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(condition())
+    }
 }
 
 @MainActor
@@ -362,6 +436,39 @@ final class LegacyAuthKeyMigrationActiveUserTests: XCTestCase {
     }
 }
 
+/// #11558 — la file des accès au groupe d'app.
+final class AppGroupIOTests: XCTestCase {
+
+    func test_enqueuedWork_runsOffTheCallingMainThread_inOrder() {
+        XCTAssertTrue(Thread.isMainThread)
+        let io = AppGroupIO(label: "AppGroupIOTests")
+        let trace = WorkTrace()
+
+        for index in 0..<20 { io.enqueue { trace.record(index) } }
+        io.drain()
+
+        XCTAssertEqual(trace.indexes, Array(0..<20))
+        XCTAssertEqual(trace.mainThreadRuns, 0)
+    }
+}
+
+private final class WorkTrace: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [Int] = []
+    private var onMain = 0
+
+    var indexes: [Int] { lock.withLock { recorded } }
+    var mainThreadRuns: Int { lock.withLock { onMain } }
+
+    func record(_ index: Int) {
+        let isMain = Thread.isMainThread
+        lock.withLock {
+            recorded.append(index)
+            if isMain { onMain += 1 }
+        }
+    }
+}
+
 // MARK: - Doubles
 
 final class CountingKeychainStore: KeychainStoring, @unchecked Sendable {
@@ -369,6 +476,7 @@ final class CountingKeychainStore: KeychainStoring, @unchecked Sendable {
     private var store: [String: String]
     private var loadCounts: [String: Int] = [:]
     private var saveCounts: [String: Int] = [:]
+    private var mainThreadLoadCounts: [String: Int] = [:]
     var failsSaves = false
 
     init(_ seed: [String: String]) { store = seed }
@@ -377,6 +485,7 @@ final class CountingKeychainStore: KeychainStoring, @unchecked Sendable {
     func value(of key: String) -> String? { lock.withLock { store[key] } }
     func loads(of key: String) -> Int { lock.withLock { loadCounts[key, default: 0] } }
     func saves(of key: String) -> Int { lock.withLock { saveCounts[key, default: 0] } }
+    func mainThreadLoads(of key: String) -> Int { lock.withLock { mainThreadLoadCounts[key, default: 0] } }
 
     func save(_ value: String, forKey key: String, account: String?) throws {
         try lock.withLock {
@@ -387,8 +496,10 @@ final class CountingKeychainStore: KeychainStoring, @unchecked Sendable {
     }
 
     func load(forKey key: String, account: String?) -> String? {
-        lock.withLock {
+        let onMainThread = Thread.isMainThread
+        return lock.withLock {
             loadCounts[key, default: 0] += 1
+            if onMainThread { mainThreadLoadCounts[key, default: 0] += 1 }
             return store[key]
         }
     }
