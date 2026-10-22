@@ -40,6 +40,7 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose)
     implementation(libs.hilt.android)
+    implementation(libs.timber)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     debugImplementation(libs.compose.ui.tooling)

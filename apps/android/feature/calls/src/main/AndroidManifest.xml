@@ -15,7 +15,18 @@
     <!-- lot: calls-social-socket-events — le partage d'écran tient la projection dans un service de premier plan. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
+    <!-- lot: calls-foreground-service-and-ongoing-notification — l'appel reste vivant en arrière-plan (Android 14+). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+
     <application>
+        <service
+            android:name="me.meeshy.app.calls.CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall|microphone|camera" />
+        <receiver
+            android:name="me.meeshy.app.calls.CallHangUpReceiver"
+            android:exported="false" />
         <service
             android:name="me.meeshy.app.calls.ScreenShareService"
             android:exported="false"
