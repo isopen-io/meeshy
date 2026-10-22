@@ -113,34 +113,66 @@ enum DecodedBitmapStore {
 
     /// **Décode à la taille d'affichage, jamais l'image pleine** (#9685) :
     /// `CGImageSourceCreateThumbnailAtIndex` borne le plus grand côté à
-    /// `maxPixelSize` (taille affichée × échelle, quantifiée par `bucket(for:)`),
-    /// et `kCGImageSourceShouldCacheImmediately` force le décodage ICI — hors du
-    /// fil principal sur le chemin asynchrone de l'acteur —, au lieu de le laisser
-    /// au premier dessin.
+    /// `maxPixelSize` (taille affichée × échelle, quantifiée par `bucket(for:)`).
+    /// `kCGImageSourceShouldCacheImmediately` force le décodage ICI quand la
+    /// taille est celle qui s'AFFICHE (#9872) ; sans elle, le bitmap se décode
+    /// au premier dessin, comme toute image dont on ignore où elle ira.
     static func downsampledImage(data: Data, maxPixelSize: CGFloat = 1200, tier: DeviceMediaTier = .current) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(min(maxPixelSize, pixelCeiling(for: tier))))
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(min(maxPixelSize, pixelCeiling(for: tier)), decodeImmediately: true))
         else { return UIImage(data: data) }
         return UIImage(cgImage: cgImage)
     }
 
     /// Même réduction, lue directement depuis le fichier du cache (aucune copie
     /// des octets en mémoire).
-    static func downsampledImage(fileURL: URL, maxPixelSize: CGFloat, tier: DeviceMediaTier = .current) -> UIImage? {
+    static func downsampledImage(fileURL: URL, maxPixelSize: CGFloat, decodeImmediately: Bool = true, tier: DeviceMediaTier = .current) -> UIImage? {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, sourceOptions),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(min(maxPixelSize, pixelCeiling(for: tier))))
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(min(maxPixelSize, pixelCeiling(for: tier)), decodeImmediately: decodeImmediately))
         else { return nil }
         return UIImage(cgImage: cgImage)
     }
 
-    private static func thumbnailOptions(_ maxPixelSize: CGFloat) -> CFDictionary {
+    static func thumbnailOptions(_ maxPixelSize: CGFloat, decodeImmediately: Bool) -> CFDictionary {
         [
             kCGImageSourceShouldCache: false,
-            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceShouldCacheImmediately: decodeImmediately,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
         ] as CFDictionary
+    }
+
+    // MARK: - Hors de l'acteur, à concurrence bornée (#9872)
+
+    /// Combien de décodages tournent ensemble : deux au moins (un avatar
+    /// n'attend pas une bannière), quatre au plus (la mémoire de travail reste
+    /// bornée), les cœurs restants laissés au rendu et au réseau.
+    nonisolated static func decodeConcurrency(processorCount: Int) -> Int {
+        min(max(processorCount - 2, 2), 4)
+    }
+
+    static let decodeGate = DecodeGate(limit: decodeConcurrency(processorCount: ProcessInfo.processInfo.activeProcessorCount))
+
+    /// Le décodage réduit, exécuté HORS de l'appelant (`@concurrent`) — donc
+    /// hors de l'acteur `DiskCacheStore`, qui reste libre de servir les autres
+    /// cellules pendant ce temps — sous le permis de `decodeGate`.
+    @concurrent
+    static func decoded(data: Data, maxPixelSize: CGFloat) async -> UIImage? {
+        await decodeGate.acquire()
+        let image = downsampledImage(data: data, maxPixelSize: maxPixelSize)
+        await decodeGate.release()
+        return image
+    }
+
+    /// Même saut pour un fichier local (`file://`) : la lecture du fichier
+    /// quitte l'acteur avec le décodage.
+    @concurrent
+    static func decoded(fileAt url: URL, maxPixelSize: CGFloat) async -> UIImage? {
+        await decodeGate.acquire()
+        let image = (try? Data(contentsOf: url)).flatMap { downsampledImage(data: $0, maxPixelSize: maxPixelSize) }
+        await decodeGate.release()
+        return image
     }
 }
