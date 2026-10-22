@@ -3,11 +3,10 @@ package me.meeshy.ui.component.auth
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodes
-import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithText
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.PasswordStrengthLevel

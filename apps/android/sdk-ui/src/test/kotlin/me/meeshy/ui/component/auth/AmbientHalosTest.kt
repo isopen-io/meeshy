@@ -2,6 +2,7 @@ package me.meeshy.ui.component.auth
 
 import android.provider.Settings
 import androidx.compose.runtime.State
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.google.common.truth.Truth.assertThat
@@ -10,7 +11,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
@@ -29,23 +29,24 @@ class AmbientHalosTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun setAnimatorDurationScale(scale: Float) {
-        val resolver = RuntimeEnvironment.getApplication().contentResolver
-        Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, scale)
-    }
-
-    private fun observeHaloPhase(): State<Float> {
+    private fun observeHaloPhase(animatorDurationScale: Float): State<Float> {
         compose.mainClock.autoAdvance = false
         lateinit var phase: State<Float>
-        compose.setContent { phase = rememberHaloPhase() }
+        compose.setContent {
+            Settings.Global.putString(
+                LocalContext.current.contentResolver,
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                animatorDurationScale.toString(),
+            )
+            phase = rememberHaloPhase()
+        }
         compose.mainClock.advanceTimeBy(100)
         return phase
     }
 
     @Test
     fun `with animations at normal speed the halos breathe`() {
-        setAnimatorDurationScale(1f)
-        val phase = observeHaloPhase()
+        val phase = observeHaloPhase(animatorDurationScale = 1f)
 
         compose.mainClock.advanceTimeBy(1_000)
 
@@ -54,8 +55,7 @@ class AmbientHalosTest {
 
     @Test
     fun `with the system animator scale at zero the halos never leave their rest scale`() {
-        setAnimatorDurationScale(0f)
-        val phase = observeHaloPhase()
+        val phase = observeHaloPhase(animatorDurationScale = 0f)
 
         compose.mainClock.advanceTimeBy(1_000)
         compose.mainClock.advanceTimeBy(1_000)
