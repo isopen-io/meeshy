@@ -27,9 +27,13 @@ struct PersistedActiveUser: Sendable {
     }
 
     /// Le groupe d'app reçoit la valeur à chaque écriture : c'est ce qui le répare
-    /// quand il a été vidé sans que le trousseau le soit.
-    mutating func write(_ value: String?, to keychain: any KeychainStoring, groupDefaults: UserDefaults?) {
-        groupDefaults?.set(value, forKey: Self.key)
+    /// quand il a été vidé sans que le trousseau le soit. Il s'écrit sur la file
+    /// `AppGroupIO`, dans l'ordre des écritures : seules les extensions le lisent.
+    mutating func write(_ value: String?, to keychain: any KeychainStoring, groupSuite: String?, io: AppGroupIO = .shared) {
+        if let groupSuite {
+            let key = Self.key
+            io.enqueue { UserDefaults(suiteName: groupSuite)?.set(value, forKey: key) }
+        }
         if case .some(let held) = known, held == value { return }
         guard let value else {
             keychain.delete(forKey: Self.key, account: nil)
