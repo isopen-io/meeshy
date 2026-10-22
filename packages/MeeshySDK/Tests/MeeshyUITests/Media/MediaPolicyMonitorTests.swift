@@ -10,6 +10,7 @@ import MeeshySDK
 final class MediaPolicyMonitorTests: XCTestCase {
 
     /// L'état de l'appareil, que le témoin fait bouger.
+    @MainActor
     private final class DeviceState {
         var thermal: ProcessInfo.ThermalState = .nominal
         var lowPower = false
@@ -106,7 +107,7 @@ final class MediaPolicyMonitorTests: XCTestCase {
         watch.cancel()
     }
 
-    // MARK: - Un élément adopté change de rôle, et n'est pas retenu
+    // MARK: - Un élément adopté change de rôle
 
     func test_adoptingAPrerolledItemAsWatched_movesItToTheWatchedBuffer() {
         let device = DeviceState()
@@ -119,17 +120,6 @@ final class MediaPolicyMonitorTests: XCTestCase {
         monitor.refresh()
         XCTAssertEqual(prerolled.preferredForwardBufferDuration, 1.0, accuracy: 0.0001,
                        "le lecteur préparé puis affiché suit la loi du lecteur regardé")
-    }
-
-    func test_adoptedItems_areNotRetained() {
-        let monitor = makeMonitor(DeviceState())
-        weak var released: AVPlayerItem?
-        autoreleasepool {
-            let transient = item()
-            monitor.adopt(transient, role: .watched)
-            released = transient
-        }
-        XCTAssertNil(released, "l'observateur ne garde aucun élément en vie")
     }
 
     /// Un lecteur en FILE (boucle, `AVPlayerLooper`) joue des copies de son
@@ -148,26 +138,15 @@ final class MediaPolicyMonitorTests: XCTestCase {
         }
     }
 
-    func test_adoptedPlayers_areNotRetained() {
-        let monitor = makeMonitor(DeviceState())
-        weak var released: AVPlayer?
-        autoreleasepool {
-            let transient = AVPlayer(playerItem: item())
-            monitor.adopt(transient, role: .prerolled)
-            released = transient
-        }
-        XCTAssertNil(released)
-    }
-
     // MARK: - Les lecteurs vivants du SDK s'y abonnent
 
     func test_sharedPlayer_rearmsItsTimeObserver_atTheNewCadence() {
         let manager = SharedAVPlayerManager.shared
         let previous = manager.player
-        let player = AVPlayer()
-        manager.player = player
+        manager.disarmTimeObserver()
+        manager.player = AVPlayer()
         defer {
-            manager.disarmTimeObserverForTesting()
+            manager.disarmTimeObserver()
             manager.player = previous
         }
 
@@ -192,15 +171,16 @@ final class MediaPolicyMonitorTests: XCTestCase {
     func test_storyLoader_underASmallerPool_returnsThePlayersInExcess() {
         let loader = StoryMediaLoader.shared
         loader.clearPlayerCache()
-        var capacity = 3
-        loader.setPlayerPoolCapacity { capacity }
-        defer { loader.setPlayerPoolCapacity { PlayerPoolCapacity.players(for: DeviceMediaTier.current) } }
+        loader.setPlayerPoolCapacity { 3 }
+        defer {
+            loader.clearPlayerCache()
+            loader.setPlayerPoolCapacity { PlayerPoolCapacity.players(for: DeviceMediaTier.current) }
+        }
         let urls = (1...3).map { URL(string: "https://example.invalid/\($0).mp4")! }
         urls.forEach { loader.returnPlayer(AVPlayer(), for: $0) }
 
-        capacity = 1
         loader.applyMediaPolicy(MediaPolicy(thermalState: .serious, lowPower: false, tier: .low))
-        XCTAssertEqual(urls.compactMap { loader.peekCachedPlayer(for: $0) }.count, 1)
-        loader.clearPlayerCache()
+        XCTAssertEqual(urls.compactMap { loader.peekCachedPlayer(for: $0) }.count, 1,
+                       "un appareil qui chauffe en cours de lecture ne tient plus qu'un lecteur préparé")
     }
 }

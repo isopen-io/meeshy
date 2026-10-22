@@ -17,19 +17,19 @@ extension StoryBackgroundLayer {
     @MainActor
     func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool, fitOverride: String? = nil) {
         let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = 2.0
+        MediaPolicyMonitor.shared.adopt(item, role: .watched)
         if looping {
             let queuePlayer = AVQueuePlayer()
             // Fond de canvas en boucle : décor, jamais un contenu regardé (#6221).
             queuePlayer.preventsDisplaySleepDuringVideoPlayback = false
             self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
+            MediaPolicyMonitor.shared.adopt(queuePlayer, role: .watched)
             self.avPlayer = queuePlayer
         } else {
             self.avPlayer = providedCarrierPlayer() ?? AVPlayer(playerItem: item)
         }
-        // Le paramètre `mute` reste pris en compte pour compat avec les call
-        // sites existants (renderer), mais on respecte aussi l'état dynamique
-        // `self.isMuted` mis à jour par le canvas. Le OR garantit que si l'un
+        // `mute` reste pris en compte pour les call sites existants (renderer),
+        // avec l'état dynamique `self.isMuted` mis à jour par le canvas : si l'un
         // OU l'autre demande mute, le player démarre silencieux ; le toggle
         // unmute du sidebar passera ensuite par `isMuted.didSet`.
         self.avPlayer?.isMuted = mute || self.isMuted

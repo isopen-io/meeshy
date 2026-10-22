@@ -56,7 +56,7 @@ final class MediaPolicyAdoptionGuardTests: XCTestCase {
         XCTAssertGreaterThan(files.count, 1_000, "la garde ne voit plus les sources")
         let offenders = files
             .filter { Self.createsAPlayer($0.code) && !Self.adoptsThePolicy($0.code) }
-            .map(\.path)
+            .map { $0.path }
             .filter { Self.declaredApart[$0] == nil }
         XCTAssertEqual(offenders, [], "remettre l'élément ou le lecteur à MediaPolicyMonitor.shared.adopt")
     }
@@ -77,7 +77,7 @@ final class MediaPolicyAdoptionGuardTests: XCTestCase {
                         && !line.trimmingCharacters(in: .whitespaces).hasPrefix("self.")
                 }
             }
-            .map(\.path)
+            .map { $0.path }
             .filter { !$0.hasSuffix("MediaPolicyMonitor.swift") && !$0.hasSuffix("PlaybackLoopQueue.swift") }
         XCTAssertEqual(offenders, [], "le tampon d'avance se règle par la politique, jamais par une constante")
     }
@@ -86,7 +86,7 @@ final class MediaPolicyAdoptionGuardTests: XCTestCase {
         let files = try swiftFiles(under: "packages/MeeshySDK/Sources") + swiftFiles(under: "apps/ios/Meeshy")
         let offenders = files
             .filter { file in Self.codeLines(file.code).contains { $0.contains("preferredPeakBitRate") } }
-            .map(\.path)
+            .map { $0.path }
         XCTAssertEqual(offenders, [], "sans effet sur du MP4 progressif : le levier est le nombre de lecteurs préparés")
     }
 }

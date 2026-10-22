@@ -478,10 +478,13 @@ final class ReelResumeTests: XCTestCase {
     }
 
     /// Le tier média (#11281) entre dans le contexte vivant : la fenêtre des
-    /// réels ne se règle pas sur la seule mémoire.
+    /// réels ne se règle pas sur la seule mémoire. Il y entre avec l'énergie et
+    /// la chaleur par la politique VIVANTE (#9880), celle que lisent les
+    /// lecteurs — `MediaPolicyTests` prouve que le contexte porte son tier.
     func test_liveContext_carriesTheDeviceMediaTier() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ReelPrewarm.swift"))
-        XCTAssertTrue(source.contains("tier: DeviceMediaTier.current"))
+        XCTAssertTrue(source.contains("MediaPolicyMonitor.shared.policy.reelWindowContext("))
+        XCTAssertFalse(source.contains("isLowPowerModeEnabled"), "l'énergie se lit dans la politique, pas une seconde fois")
     }
 
     /// Avec ces distances, le pool garde le réel quitté face à un préchauffage

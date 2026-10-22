@@ -520,9 +520,9 @@ public final class StoryMediaLayer: CALayer {
         hasPlayedToEnd = false
 
         let item = AVPlayerItem(url: url)
-        // Buffer modéré : 2 s suffit pour la plupart des vidéos courtes sans
-        // gaspiller la RAM. Sur 3G/4G lent, peut être ajusté à 4 s.
-        item.preferredForwardBufferDuration = 2.0
+        // Tampon d'avance de la politique vivante (#9880) : 2 s à froid, moitié
+        // quand l'appareil chauffe ou économise — y compris en cours de lecture.
+        MediaPolicyMonitor.shared.adopt(item, role: .watched)
 
         // Nouvel item ⇒ fenêtre de rognage inconnue jusqu'à preuve du
         // contraire : repli "source entière" pendant le chargement (voir

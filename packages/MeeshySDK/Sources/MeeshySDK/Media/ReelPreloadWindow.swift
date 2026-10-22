@@ -267,7 +267,7 @@ public enum ReelPreloadWindow {
     private static func constraintCap(_ context: Context) -> Int {
         let network = context.network
         if context.lowPower || network.saveData { return minRadius }
-        if context.thermalState == .serious || context.thermalState == .critical { return minRadius }
+        if DeviceMediaInputs.Thermal(context.thermalState).isUnderPressure { return minRadius }
         if network.effectiveType == .slow2G || network.effectiveType == .twoG { return minRadius }
         if network.effectiveType == .threeG { return constrainedRadius }
         if let memory = context.deviceMemoryGb, memory <= lowMemoryGb { return constrainedRadius }
