@@ -1,5 +1,390 @@
 # @meeshy/gateway
 
+## 1.89.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - code mort, valeurs inutilisées et lecture dépréciée du cache retirés des témoins — dix-neuf avertissements soldés sous Xcode 27 (Refs #11551)
+  - les témoins ne mutent plus de variable capturée par une fermeture Sendable — boîtes explicites, onze avertissements soldés sous Xcode 27 (Refs #11551)
+  - les setUp et tearDown des témoins isolés sur MainActor passent à la forme async throws — 93 avertissements soldés sous Xcode 27 (Refs #11551)
+  - les témoins des règles statiques de vues compilent sans avertissement sous Xcode 27 — leurs classes s'isolent sur MainActor (Refs #11551)
+  - merge dev into liste-decoupage-ecran-jetons-lentille
+  - sdk-ui.json drops emoji_category_animals/objects now adopted by sdk-ui.d/emoji-picker-full-catalog.json
+  - durées de média en spécificateurs positionnels (%1$d), la garde de localisation les refusait nus
+  - fusionne dev dans le cliquet de localisation et positionne les pluriels de durée média
+  - drop strings_bubble_locales duplicated by dev's sdk-ui strings.xml
+  - retire les doublons emoji_category_animals/objects de strings.xml (de, it, ar) déjà portés par strings_generated.xml
+  - les lots mis à jour s'intègrent — work-testing rétabli au catalogue, doublons de chaînes sdk-ui ar/de/it retirés, cliquet de localisation recalé
+  - one setContent per Compose test in CallReactionOverlayTest
+  - positional specifiers in media duration plurals
+  - pluriels de durée média positionnels (%1$d) pour le garde de localisation
+  - retire les doublons emoji_category_animals/objects de sdk-ui (ar, de, it)
+  - drop emoji_category duplicates now owned by strings_generated.xml (de/it/ar)
+  - l'intégration des 27 lots Android compile et passe toutes ses gardes
+  - drop emoji_category_animals/objects duplicated between strings.xml and strings_generated.xml (ar, it, de)
+  - merge dev, positional specifiers for media duration plurals
+  - positional specifiers in media duration plurals (LocalizationGuardTest)
+  - positional specifiers in sdk-ui media duration plurals
+  - la cible MeeshyTests recompile sur dev — le témoin Bubble s'isole sur le MainActor, celui du toast lit des nanosecondes
+  - rename catalog alias containing reserved word 'class'
+  - spécificateurs positionnels pour les durées média de sdk-ui
+  - specificateurs positionnels des durees de media :sdk-ui
+  - positional specifiers for sdk-ui media duration plurals (localization guard)
+  - declare ICE_MARGIN_MS before the const that uses it
+  - close MeeshyBackground block dropped by the FeedScreen split
+  - ar/de/it fullscreen strings, ratchet sdk-ui locale gaps, exact clock in auto-hide test
+  - sdk-ui livre ses 80 chaînes en allemand, italien et arabe, les trois dossiers ne portaient que le kit d'accessibilité
+  - consigne l'allemand et l'italien partiels de :sdk-ui dans le cliquet de localisation
+  - consigne les écarts sdk-ui ar/de/it apparus avec les ressources a11y de dev
+  - complete sdk-ui bubble strings in de, it and ar
+  - un retrait dit « par la modération », plus « par un administrateur » — et la sélection annonce à VoiceOver combien de messages partent
+  - consigner au cliquet les chaines sdk-ui absentes des dossiers ar, de et it partiels
+  - consigner l'ecart :sdk-ui ar/de/it au cliquet de localisation
+  - consigner les 160 clés sdk-ui absentes de values-de et values-it, apparues avec les libellés média sur dev
+  - drop duplicate import in stability test
+  - import Composable in FeedPostCardStabilityTest
+  - le bouton Ajouter / En attente / Accepter-Refuser / Contact / Bloqué sur Découvrir et Contacts
+  - le worker d'outbox livre BLOCK/UNBLOCK via BlockRepository (404 de déblocage = succès)
+  - import R du module feature:calls (namespace me.meeshy.feature.calls)
+  - pin Robolectric sdk for the new calls Compose and service tests
+  - consigner les écarts :sdk-ui ar/de/it hérités des chaînes de permissions seules
+  - consigne l'arabe partiel de :sdk-ui dans le cliquet de localisation
+  - etats vides lisibles sur le fond noir en theme clair
+  - contrôleur optimiste du bouton de connexion (outbox, retour arrière, garde anti double appui)
+  - consigne aussi les écarts sdk-ui de et it
+  - consigne les chaînes de bulle sdk-ui absentes de values-ar au cliquet de la garde de localisation
+  - table de rendu du bouton de connexion universel
+  - un contenu introuvable ou en panne dit pourquoi et ne propose Reessayer que si cela a un sens
+  - durée d'appel « 02:05 », délais d'appel partagés et droit de lancer un appel
+  - réactions montantes, retour de qualité d'après-appel et partage d'écran tenu par un service de premier plan
+  - merge dev, keep both sdk-ui test dependencies
+  - consigner les chaînes sdk-ui absentes en ar, de, it dans le cliquet de localisation
+  - merge dev into dependances-gradle-scene-medias
+  - consigner les écarts sdk-ui ar/de/it (dossiers partiels hérités de dev) au cliquet de localisation
+  - delai du telechargement sur le dispatcher reel, chaines sdk-ui completes en ar/de/it
+  - l'invitation par e-mail garde une seule déclaration de route
+  - consigner les 80 clés sdk-ui absentes de values-ar, apparues avec les permissions média sur dev
+  - les événements sociaux d'un appel (invitations, modération, réactions, enregistrement, cadre, aperçu) arrivent et partent
+  - consigner les 240 écarts sdk-ui ar/de/it au cliquet de localisation
+  - la garde de parité LentilleMetrics qualifie ses objets imbriqués
+  - loi ContentFetchFailure et PostAbsenceReason (rouge puis vert)
+  - les règles du montage sont pures et testées (fenêtre, aimant, plan 2D, commandes annulables)
+  - merge dev, keep both scene imports in StoryComposerDraft
+  - les gardes de l'appel arrêtent le média de l'appel, pas celui d'un second coordinateur
+  - annulation du téléchargement par l'API publique des coroutines
+  - garde de la table de correspondance des chaînes et scaffold des modules à venir
+  - un nouveau type d'action hors-ligne ne demande plus qu'un fichier
+  - l'appel s'étend par des points d'extension, chaque capacité ajoute contrôleurs, couches et actions sans toucher au cœur
+  - miroir de Row.maxScale pour la garde de parité LentilleMetrics
+  - merge dev, keep both sdk-ui test dependency sets
+  - le plateau reste sombre dans les deux thèmes, lisible à 4,5:1
+  - amorcer les manifestes de chaînes depuis les strings.xml
+  - l'écran de liste est découpé par surface, rendu inchangé
+  - les cotes de la Lentille deviennent des jetons partagés
+  - les capacités de réseau des témoins sont simulées, NetworkCapabilities.Builder étant caché
+  - un lien à jeton d'e-mail touché dans l'app part au navigateur, jamais à l'app
+  - lois de trait (largeur, lissage, ruban, gomme) iso iOS
+  - en-têtes d'identité réels (X-App-Platform / X-App-Version)
+  - se connecter, prouver une adresse ou récupérer un compte rend toujours une issue typée
+  - toutes les routes d'authentification d'iOS existent côté Retrofit, typées
+  - l'inscription par invitation ne porte la clé de visite qu'avec son code
+  - la carte de post est découpée en cinq emplacements à fichier propre
+  - les médias de notification viennent d'une origine de confiance et sous un plafond
+  - réglages d'export, résolution des entrées et plan de marque fixés avant tout encodage
+  - la porte détermine le format, les formats offerts et l'ouverture du composer
+  - kit d'accessibilité, haptique et sens de lecture RTL du glissement de réponse
+  - pin the element type of the empty-list state in CacheFirstLoaderTest
+  - lecture des amis et des demandes par curseur, gestes idempotents
+  - demandes d'amis et blocages partent sur les routes canoniques /directory
+  - une demande d'ami se répond par une action et se lit en une liste unique
+  - le test de fraîcheur du corpus du fil se mesure à l'import, pas à l'heure d'exécution
+  - le code actif du chat suit la même descente que la bulle (langue d'origine à son rang)
+  - le texte comprend markdown complet, hashtags, liens de suivi et arc-en-ciel par lettre
+  - le cliquet des routes accepte une variable déclarée servie par un littéral par domaine
+  - une seule source du chemin réseau pour la pastille, le socket et l'outbox
+  - le contrat d'authentification se lit en une charge tolérante, côté modèle
+  - restaure les tests MessageSummaryKind écrasés, tests des libellés dans leur propre fichier
+  - le sélecteur d'emojis offre dix catégories, une recherche et des récents, sans bloquer le fil principal
+  - les emojis utilisés récemment survivent au redémarrage de l'application
+  - un emoji répété par l'hôte ou par un historique abîmé ne s'affiche qu'une fois
+  - les blocs d'un message (titres, listes, citations, code) se découpent comme sur iOS
+  - le test d'effacement avance l'horloge par pas pour que la pause soit recomposee avant le terme
+  - libellés de média uniques en sept langues, aperçus de liste et widgets branchés dessus
+  - vocabulaire média partagé (vitesses, contextes, durées, disponibilité, rapports, MIME, libellés, modes)
+  - le vocabulaire des actions d'appel est nommé une fois, avec les mêmes identifiants que sur iOS
+  - le catalogue d'emojis compte dix catégories, une recherche tolérante aux accents et un historique des vingt derniers
+  - la bulle, la carte de fil et le commentaire annoncent la langue servie par la même descente
+  - EmailLinkSecret, la loi des liens à jeton d'e-mail en deux lectures
+  - la pause est recomposee avant que l'horloge ne saute au-dela du delai d'effacement
+  - un message reste dans sa langue d'origine dès qu'elle est l'un de mes rangs
+  - la lecture en ligne se débounce et ne naît jamais hors ligne
+  - le badge « Transféré » ne nomme plus jamais un groupe privé
+  - les tests de ligne ne importent plus assertExists/assertDoesNotExist
+  - le témoin « l'emoji n'est pas mis à l'échelle, le texte l'est » se mesure à une taille que la police du système fait grandir
+  - le témoin des halos pose le facteur d'animation en Float, comme la table typée de Robolectric
+  - la légende du rail se teste par son repère, l'effacement automatique appelle le rappel à jour
+  - le cycle de vie REST d'un appel et le protocole Signal sont déclarés, jamais rejoués, fail-closed
+  - la plage du décalage UTC se dit UTC-12 h..UTC+14 h, pas ±14 h
+  - le format déduit de carrierAspect dit le porteur d'origine, pas la forme de la scène
+  - le chemin thermique réel de la sonde est prouvé et le contrat des vecteurs nomme Android
+  - la publication d'une story libère les mutations retenues derrière son id pending\_
+  - le jeton push et les lectures de notifications visent les routes qui existent sur la passerelle
+  - le kit de chrome plein écran — croix, disques de verre, rail d'actions, voiles et sortie audio
+  - les lois de scène (keyframes, fondus, fenêtres, cadrage du fond) vivent dans le module partagé
+  - la recherche globale nomme un direct d'après son interlocuteur élu contre le lecteur
+  - les tests des atomes d'authentification compilent avec les vraies signatures de Compose
+  - feuille d'explication, carte de refus et reprise de l'action après les Réglages
+  - le modèle de story est rangé un type par responsabilité sans changer le fil
+  - l'écran de conversation est découpé en fichiers courts, sans changement visible
+  - la porte unique d'accès décide quand expliquer, demander ou renvoyer vers les Réglages
+  - squelette du registre de senders par kind (témoin d'exhaustivité rouge)
+  - mes appels hors contacts, mon retour et mes consentements se synchronisent avec les bons champs du serveur
+  - garde du budget de taille des sources Kotlin
+  - les 83 langues d'iOS, chaque nom écrit dans sa propre graphie
+  - le catalogue se charge une fois hors du fil principal et les packs installés se listent sans casser sur un pack illisible
+  - une chaîne sans argument rend % et non %%, un androidName ne peut pas être un mot réservé
+  - les lois du chrome plein écran — immersion, ouverture, cotes et bouton pause qui s'efface
+  - la sonde lit le matériel une fois et relit énergie et chaleur à chaque lecture
+  - l'appareil est rangé bas, moyen, haut ou pro par la même loi que le web et iOS
+  - une pièce jointe garde toutes ses propriétés et ses protections, et la bulle charge un aperçu léger
+  - la scène garde les mêmes proportions en portrait 9:16 comme en paysage 16:9
+  - chaque écran peint le cache d'abord avec les fenêtres de fraîcheur d'iOS et ne montre plus d'erreur hors-ligne
+  - le module analysé range ses fichiers de ressources par dossier sans listes parallèles
+  - une mutation vers un id local attend son id serveur, et chaque clé d'idempotence a le format exact de la passerelle
+  - les champs, boutons et éléments de marque d'authentification se ressemblent partout
+  - la hauteur d'une vidéo en bulle suit son ratio, plafonnée au portrait 5:8
+  - l'environnement API se publie aux extensions après la levée de l'écran de lancement — plus de tâche d'arrière-plan ouverte sur le fil principal avant la liste
+  - l'app ne plante plus au lancement sous iOS 16 et 17 — la vue racine et les sockets disent l'isolement de leurs fermetures async
+  - les couleurs de marque, d'état de message et de média sont celles d'iOS
+  - un direct montre toujours l'autre personne et un résolveur unique retrouve ou crée la bonne discussion
+  - les fonds, contours et cadres du catalogue se lisent sans réseau, élément par élément
+  - une chaîne manquante, mal formatée ou écrite en dur fait échouer la CI sur les treize modules
+  - un son Meeshy prend le focus audio et le rend, reprend après un appel, et baisse sous un enregistrement comme sur iOS
+  - un média posé sur la scène reste visible pour tous après la publication
+  - le générateur sort tôt d'un module sans clé adoptée
+  - le manifeste refuse un resDir hors de son module, le lecteur n'interprète que les langues livrées sur Android
+  - ./meeshy.sh i18n génère les chaînes depuis les catalogues iOS, i18n --check vérifie leur fraîcheur
+  - le dépôt de messages devient une façade sur des collaborateurs ciblés
+  - les catégories plurielles qu'une langue exige sont une loi pure testée
+  - le stockage sait à quel compte appartient chaque cache et ne se purge jamais pendant l'initialisation
+  - espacements, rayons, ressorts et typographie suivent les échelles d'iOS et grandissent avec la police du système
+  - le générateur xcstrings_to_android.py écrit les strings_generated.xml des sept langues et sait vérifier leur fraîcheur
+  - le manifeste des chaînes, la lecture des catalogues .xcstrings et les quantités plurielles CLDR
+  - le convertisseur de spécificateurs et l'écrivain XML des chaînes générées
+  - la migration d'accessibilité du trousseau retire la réponse lue d'avance de chaque élément qu'elle réécrit
+  - le catalogue de fonds, contours et cadres est embarqué dans l'APK, identique à celui d'iOS
+  - une MessageEntityFactory unique construit les lignes de messages du cache
+  - la base locale s'ouvre et la session reprend sans lecture synchrone du trousseau sur le fil principal au démarrage à froid
+  - changer le code d'une conversation révoque son laissez-passer d'ouverture en cours
+  - le témoin du fondu de l'aperçu importe SwiftUI pour nommer EmptyView
+  - le projet Xcode committé range RootScene, SessionContent, OverlayHost et GuestSessionCover sous Meeshy/App et inscrit CaptureDiscardAlertTests — les gardes voient désormais un fichier rangé sous le mauvais groupe
+  - le verrou des conversations lit son PIN au premier besoin, et le groupe d'app ne se touche plus sur le fil principal au démarrage
+  - une case « +N » qui porte une vidéo garde son « +N » lisible, sans lecteur ni bouton lecture par-dessus, en Bulles comme dans le Fil
+  - la garde de la Lentille suit le « +N » jusqu'à la vue qui le dessine — Quality (bun) redevient vert sur dev
+  - supprimer une sélection de plusieurs messages dit combien partent — « Supprimer 3 messages ? », comme la feuille de retrait
+  - les règles maison redeviennent vertes sur dev — le carnet de contacts se verrouille par OSAllocatedUnfairLock, deux commentaires perdent leur date
+  - le compte actif part au groupe d'app sur une file série, et le jeton APNs se relit hors du fil principal
+  - bun.lock au format de bun 1.3.14 et le gate de la Lentille lit la barre d'emoji conditionnelle
+  - le « +N » d'une grille et son bouton Télécharger se lisent tous les deux, en Bulles comme dans le Fil
+  - le projet Xcode committé inscrit la marge sous la barre de composition, le bouton replié et la bande d'emojis élargie — dev compile sans xcodegen et leurs témoins tournent
+  - les gardes de l'outillage repassent au vert sur dev
+  - la bande des emojis rapides s'élargit sous le doigt qui la fait défiler, sans cacher le micro ni le début de l'invite
+  - NotificationToastManager se découpe par responsabilité (lecture, cache, socket)
+  - ComposerBottomClearanceTests rejoint le projet — ses cas s'exécutent enfin
+  - découper CacheCoordinator par responsabilité, sans changement d'API
+  - découpe PostService.swift par responsabilité, sans changement d'API
+  - la descente du Prisme des messages et commentaires normalise les codes de langue
+  - la mémoire du compte actif ne fait plus reprendre un ancien jeton global, et le compte rouvert repasse en tête du sélecteur
+  - l'hôte des célébrations ne boucle plus sur son rendu au démarrage — l'onboarding s'observe par valeur, la file ne se réécrit que si elle change
+  - l'app native publie sous me.meeshy.android, la coque Capacitor garde me.meeshy.app (décision porteur)
+  - le cliquet des entrées mortes du catalogue Swift enregistre l'amélioration de dev (323 → 322)
+  - la barre de composition laisse toujours au moins un bouton d'air sous elle, clavier fermé
+  - la base du compte actif ne relit plus le trousseau au démarrage quand elle ne change pas
+  - l'app compile sans avertissement sous Xcode 27 — le noyau Core Image se lie en -fcikernel, les extensions sans AppIntents ne lancent plus l'extracteur, SyncPill importe Combine
+  - la photo téléchargée depuis son bouton s'affiche nette sur place dans la rangée du Fil et le carrousel, comme dans la bulle
+  - le démarrage à froid ne crée plus le carnet de contacts ni ne rejoue la migration du trousseau sur le fil principal
+  - la reprise de session du démarrage à froid lit le trousseau une fois par clé — compte actif en mémoire, rien de réécrit à l'identique
+  - un modérateur rend une publication privée depuis iOS, comme depuis la console web
+  - la photo téléchargée depuis la bulle s'y affiche nette — la fin du téléchargement ne se perd plus derrière une progression
+  - un retrait avec motif réussi ne s'affiche plus en échec — la réponse se lit en accusé, comme le DELETE sans corps
+  - ProgressiveImageLoadID est nonisolated — les tests SDK compilent de nouveau sous l isolation MainActor par défaut de MeeshyUI
+  - ProgressiveImageLoadID devient nonisolated — ses tests nonisolated recompilent
+  - une photo téléchargée depuis la bulle s y affiche nette, sans passer par le plein écran
+  - la feuille de partage montre une image tirée de la vidéo partagée, comme pour une photo
+  - les activités en direct ne lisent plus ActivityKit sur le fil principal — ni au démarrage, ni pendant un appel, un vocal ou un enregistrement
+  - un nom partagé à point final ne double plus le point de l'extension — photo. devient photo.jpeg, plus photo..jpeg (#11531)
+  - StoryLayerStateConcurrencyTests capture layer via une boîte Sendable
+  - la capture faible du moteur d'autoplay se nomme dans la liste de capture — AudioPlayerView retrouve sa taille, sans avertissement
+  - les noms des packs intégrés se lisent dans la langue de l'interface sur le web (Refs #10189)
+  - --only et --final n'écrasent plus les cibles, la CI épingle leur Chromium (Refs #10177)
+  - les cibles de fidélité existent avant que l'app ne peigne, en une commande prouvée à l'octet (Closes #10177)
+  - l'app et le SDK compilent sans avertissement sous Xcode 27 — quatorze avertissements soldés, sans rien changer à ce que l'app fait
+  - un fichier partagé vers Meeshy garde son nom d'origine — IMG_0111.jpeg, plus 0.jpeg (Closes #11531)
+  - le gate des polices de cadre voit tout importeur de la feuille et tourne en CI (Refs #10158)
+  - dev recompile — la barre de commentaire des stories porte ses DelayedActions, BackgroundTransform est Equatable hors acteur
+  - le budget des polices de cadre se tient sur les sources, avant toute émission (Refs #10158)
+  - le motif se borne à la saisie, la route en production reste tolérante, et un curseur forgé rend 400 et non 500 (Refs #11510)
+  - la pellicule souveraine s'ancre sur l'index des messages, motif borné, ObjectId exigé (Refs #11510)
+  - les médias d'une conversation se lisent par une route souveraine au curseur (Closes #11510)
+  - le test de l'environnement de palette s'exécute sur le MainActor
+  - Signup et racines n'observent plus ThemeManager, cliquet observed-theme-singleton à 0
+  - neuf fichiers du SDK lisent la palette injectée au lieu d'observer ThemeManager
+  - cliquet foreground-color abaissé à 2411
+  - S6 MeeshyUI (141 sites foregroundColor vers foregroundStyle)
+  - S6 Game, Focal, Lentille, Riviere, Share, Composer et racine app (139 sites foregroundColor vers foregroundStyle)
+  - S6 Components (142 sites foregroundColor vers foregroundStyle)
+  - S6 Views 2/2 (136 sites foregroundColor vers foregroundStyle)
+  - S6 Views 1/2 (132 sites foregroundColor vers foregroundStyle)
+  - palette de thème injectée à la racine et lue sans observer le gestionnaire
+  - dix vues lisent les commandes de routeur au lieu d'observer le Router (22 à 12)
+  - six commandes de routeur pour les vues qui n'observent plus le Router
+  - ConversationType devient un seul type, les deux copies deviennent des typealias
+  - LiteralRegex.compile remplace les 25 try! NSRegularExpression de production
+  - cliquet narrative-comment, les commentaires datés ne montent plus
+  - StoryViewerView.delays redevient internal pour les extensions cross-fichiers
+  - les délais de vues et d'objets passent par DelayedActions et des tâches annulables
+  - retire le nonisolated redondant de NSEMessagePrePersister
+  - un ADMIN rétrogradé quitte les rooms d'administration, le runner n'ouvre jamais en bloquant (Closes #10459)
+  - le pré-enregistreur de l'extension de notification garde ses pools sous Locked
+  - StoryExportEncoder passe ContinuationBox et le reporter sous Locked
+  - le filigrane vidéo mémoïse sa tuile par un WatermarkTileMemo sous Locked
+  - StoryForegroundVideoFrameSource garde ses générateurs sous Locked
+  - MediaFileDownloader et son relais d'annulation passent sous Locked
+  - PhotoLibraryMediaRegistry passe sous Locked, NSLock disparaît
+  - ConversationStoreSubjects passe sous Locked, NSLock disparaît
+  - les attentes des services, vues et ViewModels passent par cancellableSleep
+  - StoryMediaLayer range son état dans un Locked, ses 15 nonisolated(unsafe) disparaissent
+  - StoryBackgroundLayer range son état dans un Locked, ses 14 nonisolated(unsafe) disparaissent
+  - DelayedActions remplace asyncAfter par des tâches annulables
+  - les derniers Logger construits à la main passent par MeeshyLog
+  - TusUploadManager garde son sujet de progression sous Locked, nonisolated(unsafe) disparaît
+  - cliquets async-after et sleep-nanoseconds, exemption de SampleHandler
+  - AudioPlaybackManager libère ses ressources par TeardownBox, CleanupHandle disparaît
+  - le moteur de synchro tient son état d'ouverture dans un journal sous Locked, stateQueue disparaît
+  - les événements de socket se livrent au fil principal par une seule voie ordonnée
+  - les gardes des publishers d'appel lisent la table de routes entrantes
+  - la couverture de session invitée se pose par .modifier — l'extension View faisait grossir le type View au cliquet de cohésion ; RootScene importe MeeshyUI pour .meeshyAnimation
+  - la garde des noms d'événements socket lit la table SocketEvent
+  - Sécurité > Sessions compile sans avertissement sous Xcode 27 comme sous Xcode 26 — le cache des sessions se lit sans await
+  - un refus accessoire ne raccroche plus, call:end part avant le démontage, l'appareil écarté s'efface en silence
+  - le témoin de l'alerte de capture d'écran lit la table de routes entrantes
+  - le body de MeeshyApp tient en 77 lignes et AppRootGate observe seul AuthManager
+  - callControlRoutes compose sa table en deux temps pour alléger l'inférence
+  - la ligne d'une publication se replie entre ses gestes, et la carte les pose pleine largeur (Refs #10461)
+  - le contrat entrant des deux sockets est une table [SocketInboundRoute] installée par SocketEventRegistering
+  - la séquence de démarrage quitte le body de MeeshyApp
+  - types de la racine mince (porte d'AuthManager, règles de présentation, entrée externe)
+  - la transition de session lit un plan pur au lieu d'un corps de 148 lignes
+  - le cycle de vie des sockets délègue à une méthode par événement client, sauts par Task @MainActor
+  - le décodage des charges de socket se livre à un gestionnaire @MainActor, par Task
+  - le retrait des transports de socket suit un protocole, un sommeil injecté et une Task annulable
+  - le battement de socket est une boucle Task annulable, sans Timer ni @unchecked
+  - la carte d'une opération serveur a son modèle de vue pur, témoigné hors du DOM (Refs #10467)
+  - une annonce de participant en double ne détruit plus le lien qui négocie avec ce pair — plus de seconde offre
+  - une console d'avant le retrait de la fenêtre de reprise lit encore le barème
+  - l'écran de partage parle la langue d'interface choisie dans Meeshy, pas celle de l'appareil — Bundle.meeshyShare passe par InterfaceLanguageResolver (langue publiée dans l'App Group, puis appareil), comme l'extension de notification ; l'override AppleLanguages de l'app n'atteint pas le processus de l'extension (Closes #11515)
+  - la publication du fil passe d'abord par ExpiredEphemeralRow.living, le masquage « pour moi » ensuite et en clair
+  - ConversationViewModel.resolveVoiceConsentMissing quitte la surface — VoiceConsentGate.missing en est le site unique
+  - le témoin des Pas et des Renaissances lit le français dans la table fr, plus dans la langue du simulateur
+  - les styles de survol pointeur rendent leurs rayons par la charte — MeeshyRadius.smPlus et MeeshyPointerShape.rectangle, plafond des rayons littéraux à 119
+  - l'image figée du feu d'artifice est vide — une gerbe s'éteint à la fin de sa vie, bornes exclues
+  - le témoin de sortie de zone du défilement de chip retient la liste qu'il fait défiler
+  - le témoin des pools de réutilisation retient le modèle de conversation qu'il remet à la liste
+  - les trois entrées en édition appellent beginEdit par son nom — le geste de ConversationMessageActions s'appelle beginEdit, comme beginSelection
+  - les sept types fonction async stockés des extractions du jour écrivent leur isolement — iOS 16 et 17 n'ont pas \_swift_getExtendedFunctionTypeMetadata
+  - l'alimentation de la file des vocaux sort du ConversationViewModel
+  - la descente du Prisme sort du ConversationViewModel
+  - la relance de transcription sort du ConversationViewModel
+  - retrait du pont déprécié sendMessage(content:)
+  - l'envoi multi-pièces sort de la vue dans AttachmentSendRunner
+  - rétablit le cliquet de cohésion (accessibilité de bulle extraite, commentaires narratifs élagués)
+  - la ligne d'une conversation dont le dernier message est supprimé ne lit plus « Nom : » suivi de rien
+  - la fixture du Résumé déclare son participant
+  - relation d'envoi sans .legacy et pièce optimiste du sticker extraites
+  - le barème ne propose plus de fenêtre de reprise réglable — la reprise suit la loi des 30 jours
+  - lens-row étroit la langue d'interface avant les libellés de rangée, et la fixture du Résumé n'a plus de présence
+  - l'analytique et le résumé de qualité d'appel sortent de CallManager
+  - la feuille de retrait d'une sélection dit combien de messages partent
+  - l'haptique se tait sous prefers-reduced-motion
+  - la liste dit l'issue des gestes de rangée et parle la langue du lecteur
+  - une sauvegarde lancée depuis l'administration ne fait jamais sortir la nocturne de la rotation (Closes #11450)
+  - register 4 orphan test files in pbxproj and add 3 missing catalog keys
+  - la coque compile sans aucune dépréciation de notre code ni flatDir dans app/build.gradle
+  - la négociation d'appel web suit iOS, H264 d'abord
+  - le témoin du vumètre déballe la cadence préférée avant de la comparer — Float? contre Float ne compile pas sous Xcode 26.1.1
+  - la webapp et sa coque Android compilent sans avertissement — la config Vite importe ses modules avec leur extension, la directive « use client » d'une dépendance se tait, la coque suit @capacitor/android 8.5.3
+  - les deux lockfiles suivent les manifestes bumpés par la vague Dependabot, react et react-dom n ont plus qu un plancher
+  - ConversationCacheReader compile — ses lectures de cache stockées déclarent leur isolement @MainActor
+  - la config Capacitor type son indice de viewport en littéral — @capacitor/cli 8.5.3 (#11006) le déclare, le type-check de dev rougissait
+  - LivePresence.swift est référencé par le pbxproj committé — seul xcodegen le rattrapait
+  - dev recompile sous Xcode 27.1 — les actions d'accessibilité des gestes gardés prennent une fermeture, SyncPillMarquee importe Foundation
+  - dev compile sous Xcode 27 — les actions d accessibilité du SDK passent leur geste en fermeture de queue, SyncPillMarquee importe Foundation
+  - la reprise après échec d'envoi se classe dans SendFailureRecovery
+  - la ligne optimiste et l'aperçu de liste s'écrivent par OptimisticMessageStager
+  - une caméra allumée en cours d'appel garde H264 d'abord
+  - la lecture du cache et la fenêtre sautée passent par ConversationCacheReader et ConversationWindowFetcher
+  - le consentement vocal se lit et s'octroie par VoiceConsentGate
+  - l'accusé de lecture part par ConversationReadReceiptSender, injecté par ConversationCollaborators
+  - le tri des éphémères échus se décide dans EphemeralExpiryTriage
+  - les projections pures des médias, vocaux et mentions vivent dans ConversationMessageProjector
+  - le relevé des compteurs de livraison se calcule dans DeliveryCounterReconciliation
+  - le renvoi d'un message en échec se compose dans FailedMessageReplay
+  - la négociation d'appel suit iOS (max-bundle, H264 d'abord)
+  - les sept emoji seuls de l'app passent par MeeshyFont.emoji (vert)
+  - les noms tranchés le 2026-10-21 parlent les sept langues — Barquero, « N jours » sous la flamme d'une conversation, les paliers des médailles
+  - l'Héritage garde son compte et sa pièce jusqu'à la fin de la frappe, puis montre la dernière pièce, dessinée en or dès la centième ; un toucher n'importe où passe la cérémonie
+  - l'aperçu de conversation revalide une page, dit son échec et ne se re-rend que sur changement (#11214)
+  - le fondu de l'aperçu long disparaît au bout du défilement (#11214)
+  - les détails d'une conversation verrouillée demandent le PIN (#11214)
+  - l'aperçu de la liste ne livre pas une flamme après lecture reçue (#11214)
+  - E2EE ⇒ pas de transfert, lu par toutes les portes via la loi de sortie (#11214)
+  - un favori n'emporte pas le texte de ce qui brûle ou d'une conversation chiffrée (#11214)
+  - l'aperçu d'appui long montre un éphémère vivant comme le fil le montre (#11214)
+  - la coque Android vibre à l'appui long par le plugin Haptics
+  - l'aperçu de conversation revalide en silence, la liste borne son DOM
+  - la loi, la passerelle et le miroir Swift disent la même chose
+  - rangée de conversation Dynamic Type, actions VoiceOver nommées de la bulle, seuil de swipe testable
+  - le menu et l'aperçu d'un message lisent la loi partagée en entier
+  - modernise Swift concurrency Task.sleep and date formatting across app target and tests
+  - l'aperçu d'appui long d'une conversation verrouillée ne montre aucun message
+  - le gate de la liste attend un fait, non un délai (cliquet délai fixe 121 -> 120)
+  - un son cité joué par le lecteur commun n'est plus rapporté « vu » sur sa pièce audio — run test
+  - restore exec bit on check-accent-color-hardcoding.mjs lost in merge
+  - le code média mort quitte le dépôt et l'aperçu de citation passe par le lecteur commun — run test
+  - le balayeur de pression disque compile sous Xcode 26.1 — run test (Refs #11283)
+  - modernise Swift concurrency Task.sleep and date formatting across app target
+  - sdk-tests rejoue le miroir Swift quand les vecteurs du tier média changent — run test (Refs #11281)
+  - abaisse BASELINE_DEAD_ENTRIES à 322 après #11421
+  - les entrées du Résumé ont un menu d'appui long — Aller au message · Répondre
+  - le centre de téléchargement relève le profil d'un préchargement rejoint — run test (Refs #11283)
+  - le tier média se range sur des entrées neutres partagées avec le web, et règle le pool de lecteurs — run test (Refs #11281)
+  - une lecture qui rejoint un préchargement restreint reprend avec son propre profil (Refs #11283)
+  - la politique cellulaire des réels quitte le SDK (Refs #11283)
+  - « Supprimer pour moi » cache sans purger avant l'accord, part en une requête pour une sélection, et la Rivière rend la main au Script pour sélectionner
+  - une conversation verrouillée ne s'ouvre jamais sans le PIN, et le PIN résiste à la force brute
+  - le menu du message voit le chiffrement en temps réel et offre « Transcrire »
+  - le menu d'une ligne porte Rechercher et Mode de lecture, la liste se parcourt au clavier, une remontée de section glisse
+  - un look se calcule en lumière linéaire dans le contexte unique — run test (Refs #9873)
+  - la sonde du tier lit l'écran par sa scène, plus par UIScreen.main — run test (Refs #11281)
+  - le menu d'un message copie le texte affiché, nomme ses actions d'une table, supprime pour moi partout et sert la Rivière
+  - aucun clair dans une conversation e2ee — refus serveur et composeur web verrouillé
+  - épingler exige le droit d'écrire, on ne signale ni son message ni hors membre, le créateur active l'E2EE
+  - la cadence par tier compile dans les tests du SDK et StoryCanvasUIView ne grossit plus — run test
+  - l'épinglage du cache disque compile, import os rétabli après extraction — run test (Refs #11283)
+  - la fenêtre lointaine des réels part par la session discrétionnaire et respecte le réglage vidéo (run test)
+  - session média typée vidéo, sensible aux données, discrétionnaire en différé
+  - extrait épinglage et purge de DiskCacheStore
+  - le curseur de look ne ressert jamais l'ancienne image, et le lot IC6 tient ses cliquets
+  - le look d'une image se cuit en un passage, dans le seul CIContext du domaine story
+  - le simulateur range l'appareil simulé et la sonde du tier média ne se rejoue plus — run test
+  - chaque appareil connaît son tier média — fenêtre des réels, cadence des stories et cache décodé le lisent, À propos l'affiche
+  - l'arrêt de la passerelle ne lève plus de rejet non géré ioredis « Connection is closed »
+  - l'offre de l'appelant atteint chaque appareil qui sonne, celui qui décroche compris — un appelé à plusieurs appareils n'est annoncé qu'une fois
+  - les joins d'un même appelé sur un même appel passent un par un — plus de conflit d'écriture en rafale, le join dit s'il n'a rien écrit
+  - le double Prisma de test compare aussi des intervalles de chaînes, pas seulement de dates
+
 ## 1.88.0
 
 ### Minor Changes
