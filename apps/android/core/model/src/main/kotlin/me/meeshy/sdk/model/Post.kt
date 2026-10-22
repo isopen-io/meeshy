@@ -172,7 +172,7 @@ val ApiPost.trackedLinkMap: Map<String, String>
     get() = servedTrackingLinks.orEmpty().trackedLinkMap()
 
 /** Le genre typé du post ; `null` pour un genre inconnu (la chaîne brute reste dans [ApiPost.type]). */
-val ApiPost.postType: PostType? get() = PostType.fromWire(type)
+val ApiPost.postType: PostType? get() = postTypeFromWire(type)
 
 /** Le contour d'avatar de l'auteur, hissé comme `FeedPost.authorRing`. */
 val ApiPost.authorRing: PostServedRing? get() = author?.avatarRing

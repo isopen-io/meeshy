@@ -74,6 +74,6 @@ class ApiPostDecodeTest {
     fun `MAX_POST_MEDIA vaut 10 et PostType est ordonne`() {
         assertThat(MAX_POST_MEDIA).isEqualTo(10)
         assertThat(PostType.entries.map { it.wire }).containsExactly("POST", "REEL", "STORY", "STATUS").inOrder()
-        assertThat(PostType.fromWire("WHATEVER")).isNull()
+        assertThat(postTypeFromWire("WHATEVER")).isNull()
     }
 }

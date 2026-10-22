@@ -48,7 +48,7 @@ public data class RepostContent(
         get() = mentions?.map { it.username.lowercase() }?.toSet()
 
     /** Le serveur (`REEL`) fait foi pour reconnaître un réel reposté. */
-    val isReel: Boolean get() = PostType.fromWire(type) == PostType.REEL
+    val isReel: Boolean get() = postTypeFromWire(type) == PostType.REEL
 
     /** Premier média montré pour un réel reposté : vidéo, sinon audio, sinon image. */
     val primaryReelMedia: FeedMedia?
