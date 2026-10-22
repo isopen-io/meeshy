@@ -6,15 +6,19 @@
  *
  * 1. **LE RANG ET LE MOTIF** — les mêmes que la lecture des messages : rang
  *    d'administration par-dessus `canManageConversations`, motif écrit sauf
- *    pour le rang souverain, et la ligne d'audit à CHAQUE page.
+ *    pour le rang souverain (et borné en haut), et la ligne d'audit à CHAQUE page.
  * 2. **LA PROTECTION** — `servedAttachment` et `messageContentIsProtected` sont
  *    APPELÉS, jamais recopiés : une pièce à vue unique, floutée, à effets, ou
  *    portée par un message chiffré / à vue unique / expiré, rend son voile et
  *    jamais son URL — ni sa vignette, ni son `thumbHash`, ni ses variantes, ni
  *    sa transcription, ni ses pistes.
- * 3. **LA REQUÊTE** — le curseur (ordre total `createdAt desc, id desc`), le
- *    filtre par genre et le `where` se mesurent sur ce qui est REMIS à Prisma,
- *    jamais sur le rendu.
+ * 3. **LA REQUÊTE** — elle s'ANCRE sur l'index de `Message`
+ *    `(conversationId, deletedAt, createdAt)` : les PORTEURS se paginent au
+ *    curseur (ordre total `createdAt desc, id desc`) et les pièces se chargent
+ *    SOUS eux, jamais par un filtre de relation posé sur la table des pièces,
+ *    qu'aucun index ne sert. Le filtre par genre se pose aux DEUX niveaux — le
+ *    porteur retenu en a au moins une, et seules celles du genre sont chargées.
+ *    Tout se mesure sur ce qui est REMIS à Prisma, jamais sur le rendu.
  * 4. **LA FORME** — fast-json-stringify supprime ce que le schéma ne déclare
  *    pas : les témoins traversent `app.inject()`.
  *
@@ -42,14 +46,17 @@ jest.mock('../../../utils/logger', () => ({
 
 type AnyRecord = Record<string, unknown>;
 
-type Espion = { findManyArgs: AnyRecord | null; audits: AnyRecord[] };
+type Espion = { findManyArgs: AnyRecord | null; findUniqueCalls: number; audits: AnyRecord[] };
 
 function createMockPrisma(rows: AnyRecord[], espion: Espion, conversationExiste = true): PrismaClient {
   return {
     conversation: {
-      findUnique: jest.fn(async () => (conversationExiste ? { id: CONVERSATION_ID } : null)),
+      findUnique: jest.fn(async () => {
+        espion.findUniqueCalls += 1;
+        return conversationExiste ? { id: CONVERSATION_ID } : null;
+      }),
     },
-    messageAttachment: {
+    message: {
       findMany: jest.fn(async (args?: AnyRecord) => {
         espion.findManyArgs = args ?? null;
         return rows;
@@ -94,34 +101,8 @@ async function buildApp(prisma: PrismaClient, role: string | null): Promise<Fast
   return app;
 }
 
-/** Le message PORTEUR, tel que Prisma le rend sous `message: { select: … }` — LIBRE par défaut. */
-function porteurFixture(overrides: AnyRecord = {}): AnyRecord {
-  return {
-    id: 'm-1',
-    conversationId: CONVERSATION_ID,
-    createdAt: new Date('2026-09-01T10:00:00.000Z'),
-    senderId: 'participant-1',
-    isViewOnce: false,
-    isBlurred: false,
-    effectFlags: 0,
-    expiresAt: null,
-    isEncrypted: false,
-    encryptionMode: null,
-    sender: {
-      id: 'participant-1',
-      userId: 'user-1',
-      type: 'user',
-      displayName: 'Alice',
-      avatar: null,
-      nickname: null,
-      user: { id: 'user-1', username: 'alice', displayName: 'Alice Martin', avatar: null },
-    },
-    ...overrides,
-  };
-}
-
 /** Une pièce BRUTE, telle que Prisma la rend sous le `select` de la route. */
-function pieceFixture(overrides: AnyRecord = {}, porteur: AnyRecord = porteurFixture()): AnyRecord {
+function pieceFixture(overrides: AnyRecord = {}): AnyRecord {
   return {
     id: 'att-1',
     messageId: 'm-1',
@@ -155,21 +136,58 @@ function pieceFixture(overrides: AnyRecord = {}, porteur: AnyRecord = porteurFix
     isViewOnce: false,
     isBlurred: false,
     effectFlags: 0,
-    message: porteur,
     ...overrides,
   };
 }
 
-type Lecture = { role?: string; rows?: AnyRecord[]; query?: Record<string, string>; conversationExiste?: boolean };
+/** Le message PORTEUR, tel que Prisma le rend — LIBRE par défaut, UNE pièce sous lui. */
+function porteurFixture(overrides: AnyRecord = {}, pieces: AnyRecord[] = [pieceFixture()]): AnyRecord {
+  return {
+    id: 'm-1',
+    createdAt: new Date('2026-09-01T10:00:00.000Z'),
+    senderId: 'participant-1',
+    isViewOnce: false,
+    isBlurred: false,
+    effectFlags: 0,
+    expiresAt: null,
+    isEncrypted: false,
+    encryptionMode: null,
+    sender: {
+      id: 'participant-1',
+      userId: 'user-1',
+      type: 'user',
+      displayName: 'Alice',
+      avatar: null,
+      nickname: null,
+      user: { id: 'user-1', username: 'alice', displayName: 'Alice Martin', avatar: null },
+    },
+    attachments: pieces,
+    ...overrides,
+  };
+}
 
-async function lire({ role = 'ADMIN', rows = [pieceFixture()], query = { reason: MOTIF }, conversationExiste = true }: Lecture = {}) {
-  const espion: Espion = { findManyArgs: null, audits: [] };
+type Lecture = {
+  role?: string;
+  rows?: AnyRecord[];
+  query?: Record<string, string>;
+  conversationExiste?: boolean;
+  conversationId?: string;
+};
+
+async function lire({
+  role = 'ADMIN',
+  rows = [porteurFixture()],
+  query = { reason: MOTIF },
+  conversationExiste = true,
+  conversationId = CONVERSATION_ID,
+}: Lecture = {}) {
+  const espion: Espion = { findManyArgs: null, findUniqueCalls: 0, audits: [] };
   const prisma = createMockPrisma(rows, espion, conversationExiste);
   const app = await buildApp(prisma, role);
   const search = new URLSearchParams(query).toString();
   const res = await app.inject({
     method: 'GET',
-    url: `/api/v1/admin/conversations/${CONVERSATION_ID}/attachments${search === '' ? '' : `?${search}`}`,
+    url: `/api/v1/admin/conversations/${conversationId}/attachments${search === '' ? '' : `?${search}`}`,
     headers: { authorization: 'Bearer x' },
   });
   await app.close();
@@ -190,6 +208,8 @@ function cheminsDe(valeur: unknown, prefixe = ''): readonly string[] {
   );
 }
 
+const WHERE_DE_BASE = { conversationId: CONVERSATION_ID, deletedAt: null, attachments: { some: {} } };
+
 // ---------------------------------------------------------------------------
 // 1 — LE RANG, LE MOTIF, LA TRACE
 // ---------------------------------------------------------------------------
@@ -200,8 +220,10 @@ describe('GET /admin/conversations/:id/attachments — le rang, le motif, la tra
     expect((await lire({ role: 'ADMIN' })).res.statusCode).toBe(200);
   });
 
-  it("refuse un MODERATOR — il PORTE `canManageConversations`, il n'a pas le RANG — et un AUDIT", async () => {
-    expect((await lire({ role: 'MODERATOR' })).res.statusCode).toBe(403);
+  it("refuse un MODERATOR — il PORTE `canManageConversations`, il n'a pas le RANG — et un AUDIT, sans rien lire", async () => {
+    const moderateur = await lire({ role: 'MODERATOR' });
+    expect(moderateur.res.statusCode).toBe(403);
+    expect(moderateur.espion.findManyArgs).toBeNull();
     expect((await lire({ role: 'AUDIT' })).res.statusCode).toBe(403);
   });
 
@@ -213,6 +235,15 @@ describe('GET /admin/conversations/:id/attachments — le rang, le motif, la tra
     const absent = await lire({ query: {} });
     expect(absent.res.statusCode).toBe(400);
     expect(absent.espion.audits).toEqual([]);
+  });
+
+  it('refuse AU SCHÉMA un motif de plus de 500 caractères — il est recopié dans l’audit à CHAQUE page', async () => {
+    const long = await lire({ query: { reason: 'x'.repeat(501) } });
+    expect(long.res.statusCode).toBe(400);
+    expect(long.espion.findManyArgs).toBeNull();
+    expect(long.espion.audits).toEqual([]);
+
+    expect((await lire({ query: { reason: 'x'.repeat(500) } })).res.statusCode).toBe(200);
   });
 
   it('le rang souverain lit SANS motif, et sa lecture est tracée quand même', async () => {
@@ -239,20 +270,31 @@ describe('GET /admin/conversations/:id/attachments — le rang, le motif, la tra
     expect(espion.findManyArgs).toBeNull();
     expect(espion.audits).toEqual([]);
   });
+
+  it('un identifiant de conversation qui n’est pas un ObjectId est refusé en 400 AVANT Prisma — jamais un 500', async () => {
+    const { res, espion } = await lire({ conversationId: 'pas-un-objectid' });
+    expect(res.statusCode).toBe(400);
+    expect(espion.findUniqueCalls).toBe(0);
+    expect(espion.findManyArgs).toBeNull();
+    expect(espion.audits).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
-// 2 — LA REQUÊTE : le `where`, le curseur, le genre
+// 2 — LA REQUÊTE : ancrée sur l'index des MESSAGES, le curseur, le genre
 // ---------------------------------------------------------------------------
 
 describe('GET /admin/conversations/:id/attachments — la requête remise à Prisma', () => {
-  it('ne sélectionne que les pièces d’un message NON supprimé de CETTE conversation, dans un ordre TOTAL', async () => {
+  it('pagine les PORTEURS sur `(conversationId, deletedAt, createdAt)` et charge les pièces SOUS eux — jamais un filtre de relation sur la table des pièces', async () => {
     const { espion } = await lire();
-    expect(espion.findManyArgs?.where).toEqual({ message: { conversationId: CONVERSATION_ID, deletedAt: null } });
+    expect(espion.findManyArgs?.where).toEqual(WHERE_DE_BASE);
     expect(espion.findManyArgs?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+    const pieces = (espion.findManyArgs?.select as AnyRecord).attachments as AnyRecord;
+    expect(pieces.where).toEqual({});
+    expect(pieces.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
   });
 
-  it('lit `limit + 1` lignes — la sonde dit `hasMore` sans compter la table', async () => {
+  it('lit `limit + 1` porteurs — la sonde dit `hasMore` sans compter la table', async () => {
     const { espion } = await lire({ query: { reason: MOTIF, limit: '10' } });
     expect(espion.findManyArgs?.take).toBe(11);
   });
@@ -260,19 +302,21 @@ describe('GET /admin/conversations/:id/attachments — la requête remise à Pri
   it('ne charge JAMAIS `fileName` — le basename d’une URL masquée', async () => {
     const { espion } = await lire();
     const select = espion.findManyArgs?.select as AnyRecord;
-    expect(select.fileName).toBeUndefined();
-    expect(select.fileUrl).toBe(true);
+    const piece = (select.attachments as AnyRecord).select as AnyRecord;
+    expect(piece.fileName).toBeUndefined();
+    expect(piece.fileUrl).toBe(true);
     // Les six colonnes de protection du PORTEUR sont demandées : une garde se
     // mesure sur la requête, et un prédicat dont une colonne manque est muet.
-    const porteur = ((select.message as AnyRecord).select as AnyRecord);
     for (const colonne of ['isViewOnce', 'isBlurred', 'effectFlags', 'expiresAt', 'isEncrypted', 'encryptionMode']) {
-      expect(porteur[colonne]).toBe(true);
+      expect(select[colonne]).toBe(true);
     }
   });
 
   it('une page pleine rend un curseur OPAQUE en forme `keyset`, et le rejoue en clause de reprise ET-isée', async () => {
     const rows = Array.from({ length: 3 }, (_, i) =>
-      pieceFixture({ id: `att-${i}`, createdAt: new Date(`2026-09-0${3 - i}T10:00:00.000Z`) }),
+      porteurFixture({ id: `m-${i}`, createdAt: new Date(`2026-09-0${3 - i}T10:00:00.000Z`) }, [
+        pieceFixture({ id: `att-${i}`, messageId: `m-${i}` }),
+      ]),
     );
     const premiere = await lire({ rows, query: { reason: MOTIF, limit: '2' } });
     expect(premiere.res.statusCode).toBe(200);
@@ -281,13 +325,13 @@ describe('GET /admin/conversations/:id/attachments — la requête remise à Pri
     expect(page.pagination).toMatchObject({ limit: 2, hasMore: true, form: 'keyset' });
     const cursor = page.pagination.nextCursor as string;
     expect(typeof cursor).toBe('string');
-    expect(cursor).not.toContain('att-1');
+    expect(cursor).not.toContain('m-1');
 
     const suivante = await lire({ rows: [rows[2]], query: { reason: MOTIF, limit: '2', cursor } });
     expect(suivante.res.statusCode).toBe(200);
     const where = suivante.espion.findManyArgs?.where as AnyRecord;
     expect(where.AND).toBeDefined();
-    expect((where.AND as AnyRecord[])[0]).toEqual({ message: { conversationId: CONVERSATION_ID, deletedAt: null } });
+    expect((where.AND as AnyRecord[])[0]).toEqual(WHERE_DE_BASE);
     expect(suivante.res.json().pagination).toMatchObject({ hasMore: false, nextCursor: null });
   });
 
@@ -297,24 +341,50 @@ describe('GET /admin/conversations/:id/attachments — la requête remise à Pri
     expect(espion.findManyArgs).toBeNull();
   });
 
-  it('`kind=visual` ne retient que les pièces `image/*` et `video/*` ; `kind=document` tout le reste', async () => {
-    const visuel = await lire({ query: { reason: MOTIF, kind: 'visual' } });
-    const whereVisuel = visuel.espion.findManyArgs?.where as AnyRecord;
-    expect(whereVisuel.OR).toEqual([
+  it('`kind=visual` retient les porteurs d’au moins une pièce `image/*` ou `video/*`, et ne charge QUE celles-là ; `kind=document` tout le reste', async () => {
+    const plage = [
       { mimeType: { gte: 'image/', lt: 'image0' } },
       { mimeType: { gte: 'video/', lt: 'video0' } },
-    ]);
-    expect(whereVisuel.message).toEqual({ conversationId: CONVERSATION_ID, deletedAt: null });
+    ];
+    const visuel = await lire({ query: { reason: MOTIF, kind: 'visual' } });
+    const whereVisuel = visuel.espion.findManyArgs?.where as AnyRecord;
+    expect(whereVisuel).toEqual({ conversationId: CONVERSATION_ID, deletedAt: null, attachments: { some: { OR: plage } } });
+    const piecesVisuelles = (visuel.espion.findManyArgs?.select as AnyRecord).attachments as AnyRecord;
+    expect(piecesVisuelles.where).toEqual({ OR: plage });
 
     const document = await lire({ query: { reason: MOTIF, kind: 'document' } });
     const whereDocument = document.espion.findManyArgs?.where as AnyRecord;
-    expect(Object.keys(whereDocument.NOT as AnyRecord)).toEqual(['OR']);
+    const some = ((whereDocument.attachments as AnyRecord).some as AnyRecord);
+    expect(Object.keys(some.NOT as AnyRecord)).toEqual(['OR']);
+    const piecesDocument = (document.espion.findManyArgs?.select as AnyRecord).attachments as AnyRecord;
+    expect(piecesDocument.where).toEqual(some);
   });
 
   it('un genre inconnu est refusé AU SCHÉMA', async () => {
     const { res, espion } = await lire({ query: { reason: MOTIF, kind: 'secret' } });
     expect(res.statusCode).toBe(400);
     expect(espion.findManyArgs).toBeNull();
+  });
+
+  it('un porteur à plusieurs pièces les rend TOUTES dans sa page, dans l’ordre servi — un envoi groupé ne se coupe pas en deux', async () => {
+    const rows = [
+      porteurFixture({ id: 'm-1' }, [
+        pieceFixture({ id: 'att-b', createdAt: new Date('2026-09-01T10:00:02.000Z') }),
+        pieceFixture({ id: 'att-a', createdAt: new Date('2026-09-01T10:00:01.000Z') }),
+      ]),
+      porteurFixture({ id: 'm-0', createdAt: new Date('2026-08-31T10:00:00.000Z') }, [pieceFixture({ id: 'att-0', messageId: 'm-0' })]),
+    ];
+    const { res } = await lire({ rows, query: { reason: MOTIF, limit: '1' } });
+    expect(res.statusCode).toBe(200);
+    const page = res.json();
+    expect((page.data as AnyRecord[]).map((p) => p.id)).toEqual(['att-b', 'att-a']);
+    expect(page.pagination).toMatchObject({ limit: 1, hasMore: true });
+  });
+
+  it('un porteur sans pièce ne rend rien — jamais une ligne vide', async () => {
+    const { res } = await lire({ rows: [porteurFixture({}, [])] });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual([]);
   });
 });
 
@@ -324,7 +394,7 @@ describe('GET /admin/conversations/:id/attachments — la requête remise à Pri
 
 describe('GET /admin/conversations/:id/attachments — la forme servie', () => {
   it('sert une pièce LIBRE entière, avec son porteur résolu en `User.id`', async () => {
-    const piece = await premierePiece([pieceFixture()]);
+    const piece = await premierePiece([porteurFixture()]);
     expect(piece.isProtected).toBe(false);
     expect(piece.fileUrl).toBe('/api/v1/attachments/file/uploads%2Freunion.m4a');
     expect(piece.transcription).toEqual({ text: 'la reunion est deplacee a jeudi', segments: [] });
@@ -338,11 +408,11 @@ describe('GET /admin/conversations/:id/attachments — la forme servie', () => {
   });
 
   it('déclare au schéma TOUT ce que la projection compose — à chaque profondeur', async () => {
-    const { mapSovereignAttachmentRow } = await import('../../../routes/admin/conversation-attachments-sovereign');
-    const ligne = pieceFixture({ width: 640, height: 480 });
+    const { piecesServiesDuPorteur } = await import('../../../routes/admin/conversation-attachments-sovereign');
+    const ligne = porteurFixture({}, [pieceFixture({ width: 640, height: 480 })]);
     const { res } = await lire({ rows: [ligne] });
     expect(res.statusCode).toBe(200);
-    const compose = mapSovereignAttachmentRow(ligne as never);
+    const compose = piecesServiesDuPorteur(ligne as never)[0];
     const servi = (res.json().data as AnyRecord[])[0];
     const perdus = cheminsDe(compose).filter((chemin) => !cheminsDe(servi).includes(chemin));
     expect(perdus).toEqual([]);
@@ -356,13 +426,13 @@ describe('GET /admin/conversations/:id/attachments — la forme servie', () => {
 
 describe('GET /admin/conversations/:id/attachments — une pièce PROTÉGÉE rend son voile, jamais son URL', () => {
   const protections: ReadonlyArray<readonly [string, AnyRecord]> = [
-    ['pièce à vue unique', pieceFixture({ isViewOnce: true })],
-    ['pièce floutée', pieceFixture({ isBlurred: true })],
+    ['pièce à vue unique', porteurFixture({}, [pieceFixture({ isViewOnce: true })])],
+    ['pièce floutée', porteurFixture({}, [pieceFixture({ isBlurred: true })])],
     // Le BITFIELD seul — le troisième canal de `maskedAttachment`, celui qu'une garde partielle laisse tomber.
-    ['pièce à effets masquants', pieceFixture({ effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE })],
-    ['pièce d’un message CHIFFRÉ', pieceFixture({}, porteurFixture({ isEncrypted: true, encryptionMode: 'e2ee' }))],
-    ['pièce d’un message à VUE UNIQUE', pieceFixture({}, porteurFixture({ isViewOnce: true }))],
-    ['pièce d’un message EXPIRÉ', pieceFixture({}, porteurFixture({ expiresAt: new Date('2020-01-01T00:00:00.000Z') }))],
+    ['pièce à effets masquants', porteurFixture({}, [pieceFixture({ effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE })])],
+    ['pièce d’un message CHIFFRÉ', porteurFixture({ isEncrypted: true, encryptionMode: 'e2ee' })],
+    ['pièce d’un message à VUE UNIQUE', porteurFixture({ isViewOnce: true })],
+    ['pièce d’un message EXPIRÉ', porteurFixture({ expiresAt: new Date('2020-01-01T00:00:00.000Z') })],
   ];
 
   it.each(protections)('%s', async (_nom, ligne) => {
@@ -389,17 +459,20 @@ describe('GET /admin/conversations/:id/attachments — une pièce PROTÉGÉE ren
   });
 
   it('le porteur d’une pièce retenue par le MESSAGE le dit : `message.isProtected`', async () => {
-    const piece = await premierePiece([pieceFixture({}, porteurFixture({ isEncrypted: true, encryptionMode: 'e2ee' }))]);
+    const piece = await premierePiece([porteurFixture({ isEncrypted: true, encryptionMode: 'e2ee' })]);
     expect((piece.message as AnyRecord).isProtected).toBe(true);
-    const libreMaisPieceVoilee = await premierePiece([pieceFixture({ isBlurred: true })]);
+    const libreMaisPieceVoilee = await premierePiece([porteurFixture({}, [pieceFixture({ isBlurred: true })])]);
     expect((libreMaisPieceVoilee.message as AnyRecord).isProtected).toBe(false);
     expect(libreMaisPieceVoilee.isBlurred).toBe(true);
   });
 
-  it('une pièce dont le porteur manque est voilée — jamais servie en clair par défaut', async () => {
-    const piece = await premierePiece([pieceFixture({ message: null })]);
-    expect(piece.isProtected).toBe(true);
-    expect(piece.fileUrl).toBeNull();
-    expect(piece.message).toBeNull();
+  it('un porteur protégé voile CHACUNE de ses pièces — pas seulement la première', async () => {
+    const { res } = await lire({
+      rows: [porteurFixture({ isViewOnce: true }, [pieceFixture({ id: 'att-1' }), pieceFixture({ id: 'att-2' })])],
+    });
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data as AnyRecord[];
+    expect(data.map((p) => p.isProtected)).toEqual([true, true]);
+    expect(data.map((p) => p.fileUrl)).toEqual([null, null]);
   });
 });

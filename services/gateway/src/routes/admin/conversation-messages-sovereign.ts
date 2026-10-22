@@ -70,8 +70,11 @@ import {
 } from './sovereign-message-projection';
 import { logError } from '../../utils/logger.js';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { conversationIdParams } from './admin-conversation-response-schemas';
 
 const REASON_MIN_LENGTH = 10;
+/** La borne HAUTE du motif — il est recopié dans `AdminAuditLog.metadata` à chaque page servie. */
+const REASON_MAX_LENGTH = 500;
 
 export function registerConversationMessagesSovereignRoute(fastify: FastifyInstance): void {
   fastify.get<{
@@ -119,10 +122,12 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
           limit: { type: 'string', description: 'Pagination limit (max 100)' },
           reason: {
             type: 'string',
-            description: 'Motif écrit de la lecture (10 caractères minimum s\'il est fourni ; facultatif pour le rang souverain), consigné dans AdminAuditLog'
+            maxLength: REASON_MAX_LENGTH,
+            description: 'Motif écrit de la lecture (10 caractères minimum s\'il est fourni, 500 au plus ; facultatif pour le rang souverain), consigné dans AdminAuditLog'
           }
         }
       },
+      params: conversationIdParams,
       response: {
         200: {
           description: 'Messages successfully retrieved',

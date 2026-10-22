@@ -7,14 +7,15 @@
  * L'onglet « Médias » de la lecture d'administration (#11457) tirait ses pièces
  * des pages de messages déjà lues : sur une conversation de milliers de
  * messages pauvre en médias, il fallait charger beaucoup de pages — chacune
- * une lecture journalisée — pour en trouver quelques-uns. Cette route lit la
- * table des pièces directement, au curseur, et filtre par genre.
+ * une lecture journalisée — pour en trouver quelques-uns. Cette route lit les
+ * pièces directement, au curseur, et filtre par genre.
  *
  * ## Le même régime que la lecture des messages, à l'identique
  *
  * - rang d'administration par-dessus `canManageConversations` (MODERATOR porte
  *   la permission, pas le rang) ;
- * - motif écrit, sauf pour le rang souverain (`requireReasonUnlessSovereign`) ;
+ * - motif écrit, sauf pour le rang souverain (`requireReasonUnlessSovereign`),
+ *   borné en haut au schéma : il est recopié dans l'audit à chaque page ;
  * - UNE ligne `AdminAuditLog` par page servie, via `withAudit` ;
  * - LA MÊME projection de protection : `servedAttachment` et
  *   `messageContentIsProtected` sont APPELÉS (`sovereign-message-projection.ts`,
@@ -30,12 +31,35 @@
  * de chaque élément), et son verdict de protection. Aucun texte, aucune
  * traduction : le fil est la seule surface qui les sert.
  *
+ * ## La requête s'ANCRE sur un index — celui des MESSAGES
+ *
+ * `MessageAttachment` ne porte ni `conversationId`, ni index sur `createdAt`
+ * ni sur `mimeType` (ses seuls index : `messageId`, `uploadedBy`, `filePath`,
+ * `thumbnailPath`). Une première forme paginait la table des pièces sous un
+ * filtre de RELATION (`message: { conversationId }`) : sur MongoDB, Prisma le
+ * résout par jointure sur chaque document, donc chaque page balayait la
+ * collection ENTIÈRE des pièces de l'instance avant de trier en mémoire —
+ * invisible en staging, et exactement la lenteur que #11510 prétendait retirer.
+ *
+ * La route pagine donc les PORTEURS, sur `Message` et son index
+ * `(conversationId, deletedAt, createdAt)`, et charge les pièces SOUS eux —
+ * Prisma les lit par `messageId IN (…)`, l'index que la table des pièces A. Le
+ * filtre par genre se pose aux DEUX niveaux : `attachments: { some: clause }`
+ * retient les porteurs qui en ont au moins une, et le `where` imbriqué ne
+ * charge que celles-là. Le coût d'une page reste borné par les messages de LA
+ * conversation (la jointure de `some` ne sort pas de l'index), jamais par la
+ * taille de l'instance — c'est le régime de l'index de membre (`view=media`,
+ * `messages-media-kinds.ts`), qui pose la même clause sur le même index.
+ *
  * ## La pagination
  *
- * Curseur opaque sur l'ordre TOTAL `(createdAt desc, id desc)` de la pièce
- * (`utils/cursor-pagination.ts`). Un curseur illisible est REFUSÉ en 400 : le
- * défilement infini ne peut pas réparer un jeton, et re-servir la première
- * page en silence rendrait deux fois ce qu'il a déjà peint.
+ * Curseur opaque sur l'ordre TOTAL `(createdAt desc, id desc)` du PORTEUR
+ * (`utils/cursor-pagination.ts`). `limit` borne les porteurs, pas les pièces :
+ * un envoi groupé de dix photos sort entier dans sa page, jamais coupé en deux.
+ * Sous un porteur, les pièces viennent dans l'ordre `(createdAt desc, id desc)`.
+ * Un curseur illisible est REFUSÉ en 400 : le défilement infini ne peut pas
+ * réparer un jeton, et re-servir la première page en silence rendrait deux
+ * fois ce qu'il a déjà peint.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Prisma } from '@meeshy/shared/prisma/client';
@@ -54,6 +78,7 @@ import {
 import { sendSuccess, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger.js';
 import { clauseDeTypeDuGenre, GENRES_DE_PIECE, type GenreDePiece } from '../conversations/messages-media-kinds';
+import { conversationIdParams } from './admin-conversation-response-schemas';
 import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
 import {
   servedAttachment,
@@ -64,41 +89,52 @@ import {
 } from './sovereign-message-projection';
 
 const REASON_MIN_LENGTH = 10;
+/** La borne HAUTE du motif — il est recopié dans `AdminAuditLog.metadata` à chaque page servie. */
+const REASON_MAX_LENGTH = 500;
 const DEFAULT_LIMIT = 60;
 const MAX_LIMIT = 100;
 
-/** L'ordre TOTAL de la route — la dernière clé est l'`id`, sinon deux pièces nées dans la même milliseconde se sautent. */
-const ORDRE_DES_PIECES: CursorSort = [
+/** L'ordre TOTAL des PORTEURS — la dernière clé est l'`id`, sinon deux messages nés dans la même milliseconde se sautent. */
+const ORDRE_DES_PORTEURS: CursorSort = [
   { field: 'createdAt', direction: 'desc', kind: 'date' },
   { field: 'id', direction: 'desc', kind: 'string' },
 ];
+
+/** L'ordre des pièces SOUS un porteur — le même, sur la table des pièces. */
+const ORDRE_DES_PIECES = [{ createdAt: 'desc' }, { id: 'desc' }] as const satisfies Prisma.MessageAttachmentOrderByWithRelationInput[];
 
 // ---------------------------------------------------------------------------
 // LE `select`
 // ---------------------------------------------------------------------------
 
+/** Le genre, en clause de pièce — `{}` quand tous les genres entrent (« au moins une pièce »). */
+const clauseDuGenre = (kind: GenreDePiece | undefined): Prisma.MessageAttachmentWhereInput =>
+  kind === undefined ? {} : clauseDeTypeDuGenre(kind);
+
 /**
- * Le PORTEUR d'une pièce : les six colonnes que `messageContentIsProtected`
+ * Le PORTEUR et ses pièces : les six colonnes que `messageContentIsProtected`
  * exige (une garde se mesure sur la requête — une colonne absente rend le
- * prédicat muet), plus ce que l'index affiche. `deletedAt` et `conversationId`
- * sont portés par le `where`, pas servis.
+ * prédicat muet), ce que l'index affiche, et SOUS lui les pièces du genre
+ * demandé, sous le `select` partagé. `deletedAt` et `conversationId` sont
+ * portés par le `where`, pas servis.
  */
-const porteurSelect = {
-  id: true,
-  conversationId: true,
-  createdAt: true,
-  senderId: true,
-  ...messageContentProtectionSelect,
-  sender: { select: sovereignSenderSelect },
-} as const;
+export function sovereignAttachmentPageSelect(kind: GenreDePiece | undefined) {
+  return {
+    id: true,
+    createdAt: true,
+    senderId: true,
+    ...messageContentProtectionSelect,
+    sender: { select: sovereignSenderSelect },
+    attachments: {
+      where: clauseDuGenre(kind),
+      orderBy: ORDRE_DES_PIECES,
+      select: sovereignAttachmentSelect,
+    },
+  } satisfies Prisma.MessageSelect;
+}
 
-export const sovereignAttachmentPageSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
-  ...sovereignAttachmentSelect,
-  message: { select: porteurSelect },
-});
-
-export type SovereignAttachmentPageRow = Prisma.MessageAttachmentGetPayload<{
-  select: typeof sovereignAttachmentPageSelect;
+export type SovereignPorteurRow = Prisma.MessageGetPayload<{
+  select: ReturnType<typeof sovereignAttachmentPageSelect>;
 }>;
 
 // ---------------------------------------------------------------------------
@@ -106,31 +142,23 @@ export type SovereignAttachmentPageRow = Prisma.MessageAttachmentGetPayload<{
 // ---------------------------------------------------------------------------
 
 /**
- * Une pièce et son porteur, servis sous LA projection de la lecture souveraine.
- *
- * Un porteur ABSENT (une pièce orpheline, que le `where` ne devrait jamais
- * laisser passer) vaut PROTÉGÉ : une porte de confidentialité échoue en
- * montrant moins, jamais en montrant plus.
+ * Les pièces d'un porteur, servies sous LA projection de la lecture souveraine —
+ * chacune avec le même porteur réduit, et le verdict de protection du message
+ * appliqué à toutes.
  */
-export function mapSovereignAttachmentRow(row: SovereignAttachmentPageRow) {
-  const porteur = row.message;
-  const protege = porteur === null || messageContentIsProtected(porteur);
-  return {
-    ...servedAttachment(row, protege),
-    message:
-      porteur === null
-        ? null
-        : {
-            id: porteur.id,
-            createdAt: porteur.createdAt,
-            // Résolu en `User.id`, comme la lecture des messages : les clients
-            // comparent `senderId` à un compte, le brut restant servi à côté.
-            senderId: porteur.sender?.userId ?? porteur.sender?.user?.id ?? porteur.senderId,
-            senderParticipantId: porteur.senderId,
-            sender: porteur.sender,
-            isProtected: protege,
-          },
+export function piecesServiesDuPorteur(row: SovereignPorteurRow) {
+  const protege = messageContentIsProtected(row);
+  const porteur = {
+    id: row.id,
+    createdAt: row.createdAt,
+    // Résolu en `User.id`, comme la lecture des messages : les clients
+    // comparent `senderId` à un compte, le brut restant servi à côté.
+    senderId: row.sender?.userId ?? row.sender?.user?.id ?? row.senderId,
+    senderParticipantId: row.senderId,
+    sender: row.sender,
+    isProtected: protege,
   };
+  return row.attachments.map((piece) => ({ ...servedAttachment(piece, protege), message: porteur }));
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +167,6 @@ export function mapSovereignAttachmentRow(row: SovereignAttachmentPageRow) {
 
 const porteurSchema = {
   type: 'object',
-  nullable: true,
   properties: {
     id: { type: 'string' },
     createdAt: { type: 'string', format: 'date-time' },
@@ -179,11 +206,18 @@ export function registerConversationAttachmentsSovereignRoute(fastify: FastifyIn
       tags: ['admin'],
       summary: 'List a private conversation\'s attachments (sovereign)',
       security: [{ bearerAuth: [] }],
+      params: conversationIdParams,
       querystring: {
         type: 'object',
         properties: {
           cursor: cursorQueryProperty,
-          limit: { type: 'integer', minimum: 1, maximum: MAX_LIMIT, default: DEFAULT_LIMIT },
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            maximum: MAX_LIMIT,
+            default: DEFAULT_LIMIT,
+            description: 'Nombre de messages PORTEURS par page — toutes les pièces d\'un porteur sortent dans sa page',
+          },
           kind: {
             type: 'string',
             enum: [...GENRES_DE_PIECE],
@@ -191,8 +225,9 @@ export function registerConversationAttachmentsSovereignRoute(fastify: FastifyIn
           },
           reason: {
             type: 'string',
+            maxLength: REASON_MAX_LENGTH,
             description:
-              'Motif écrit de la lecture (10 caractères minimum s\'il est fourni ; facultatif pour le rang souverain), consigné dans AdminAuditLog',
+              'Motif écrit de la lecture (10 caractères minimum s\'il est fourni, 500 au plus ; facultatif pour le rang souverain), consigné dans AdminAuditLog',
           },
         },
       },
@@ -218,7 +253,7 @@ export function registerConversationAttachmentsSovereignRoute(fastify: FastifyIn
       const { conversationId } = request.params as { conversationId: string };
       const { cursor, limit = DEFAULT_LIMIT, kind, reason } = request.query as Query;
 
-      if (cursor !== undefined && decodePageCursor(cursor, ORDRE_DES_PIECES) === null) {
+      if (cursor !== undefined && decodePageCursor(cursor, ORDRE_DES_PORTEURS) === null) {
         return sendBadRequest(reply, 'INVALID_CURSOR', { message: 'Malformed cursor', code: 'INVALID_CURSOR' });
       }
 
@@ -231,21 +266,23 @@ export function registerConversationAttachmentsSovereignRoute(fastify: FastifyIn
       }
 
       // Un message SUPPRIMÉ n'est plus servable du tout — ses pièces non plus.
-      const where: Prisma.MessageAttachmentWhereInput = {
-        message: { conversationId, deletedAt: null },
-        ...(kind === undefined ? {} : clauseDeTypeDuGenre(kind)),
+      // Et un porteur sans pièce du genre n'a rien à donner à la pellicule.
+      const where: Prisma.MessageWhereInput = {
+        conversationId,
+        deletedAt: null,
+        attachments: { some: clauseDuGenre(kind) },
       };
-      const requete = cursorQuery({ sort: ORDRE_DES_PIECES, cursor, limit, where });
+      const requete = cursorQuery({ sort: ORDRE_DES_PORTEURS, cursor, limit, where });
 
-      const rows = await fastify.prisma.messageAttachment.findMany({
+      const rows = await fastify.prisma.message.findMany({
         where: requete.where,
-        select: sovereignAttachmentPageSelect,
+        select: sovereignAttachmentPageSelect(kind),
         orderBy: requete.orderBy,
         take: requete.take,
       });
 
-      const servie = cursorPage({ sort: ORDRE_DES_PIECES, rows, limit });
-      const data = servie.page.map(mapSovereignAttachmentRow);
+      const servie = cursorPage({ sort: ORDRE_DES_PORTEURS, rows, limit });
+      const data = servie.page.flatMap(piecesServiesDuPorteur);
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       await withAudit(request, {

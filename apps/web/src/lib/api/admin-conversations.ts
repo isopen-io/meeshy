@@ -471,9 +471,10 @@ function decodeMediaItem(entree: unknown): MediaHubAttachmentItem | null {
 
   const { message: _porteur, isProtected, ...piece } = ligne;
   const retenue = isProtected === true;
-  /* Le SEUL cast du décodeur, à la frontière : la charge est `unknown`, le
-     schéma de réponse de la route en est le contrat, et `decodeAttachment`
-     retire les `null`. */
+  /* Les DEUX casts du décodeur — celui-ci et celui du porteur, plus bas — sont
+     à la frontière : la charge est `unknown`, le schéma de réponse de la route
+     en est le contrat, et `decodeAttachment` / `decodeMessage` retirent les
+     `null` et complètent ce que la route ne sert pas. */
   const attachment = decodeAttachment({ ...piece, ...(retenue ? SECRETS_DUNE_PIECE : {}), messageId: porteur.id } as unknown as Attachment);
   if (retenue && !maskedAttachment(attachment)) return null;
 

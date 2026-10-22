@@ -298,6 +298,28 @@ describe('GET /admin/conversations/:id/messages — le rang', () => {
     expect(res.statusCode).toBe(400);
     expect(espion.findManyArgs).toBeNull();
   });
+
+  it('refuse AU SCHÉMA un motif de plus de 500 caractères — il est recopié dans l’audit à CHAQUE page', async () => {
+    const { res, espion } = await lire('ADMIN', [messageFixture()], 'x'.repeat(501));
+    expect(res.statusCode).toBe(400);
+    expect(espion.findManyArgs).toBeNull();
+    expect((await lire('ADMIN', [messageFixture()], 'x'.repeat(500))).res.statusCode).toBe(200);
+  });
+
+  it('un identifiant de conversation qui n’est pas un ObjectId est refusé en 400 AVANT Prisma — jamais un 500', async () => {
+    const espion: Espion = { findManyArgs: null };
+    const prisma = createMockPrisma([messageFixture()], espion);
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/pas-un-objectid/messages?reason=${encodeURIComponent(MOTIF)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(400);
+    expect((prisma.conversation.findUnique as jest.Mock).mock.calls).toHaveLength(0);
+    expect(espion.findManyArgs).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
