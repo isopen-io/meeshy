@@ -57,10 +57,18 @@ object MotionSpecs {
     fun pressScale(pressed: Boolean, target: Float, reduce: Boolean): Float =
         if (pressed && !reduce) target else 1f
 
-    fun staggeredAppear(index: Int, visible: Boolean, reduce: Boolean): AppearState = when {
-        reduce -> SETTLED
-        visible -> SETTLED.copy(delayMillis = index.coerceAtLeast(0) * STAGGER_STEP_MILLIS)
-        else -> AppearState(0f, STAGGER_OFFSET_DP, STAGGER_FROM_SCALE, index.coerceAtLeast(0) * STAGGER_STEP_MILLIS)
+    fun staggeredAppear(
+        index: Int,
+        visible: Boolean,
+        reduce: Boolean,
+        stepMillis: Int = STAGGER_STEP_MILLIS,
+    ): AppearState {
+        val delay = index.coerceAtLeast(0) * stepMillis
+        return when {
+            reduce -> SETTLED
+            visible -> SETTLED.copy(delayMillis = delay)
+            else -> AppearState(0f, STAGGER_OFFSET_DP, STAGGER_FROM_SCALE, delay)
+        }
     }
 
     fun bounceOnAppear(visible: Boolean, reduce: Boolean): AppearState = when {
