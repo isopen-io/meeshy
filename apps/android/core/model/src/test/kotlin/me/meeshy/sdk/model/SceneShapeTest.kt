@@ -70,8 +70,8 @@ class SceneShapeTest {
     }
 
     @Test
-    fun `une bande sans objet hors zone se resserre sur le media - un objet central y reste`() {
-        val centre = """{"id":"t","kind":"sticker","anchor":{"t":"free","x":0.5,"y":0.5},"payload":{"emoji":"x"}}"""
+    fun `une bande sans objet hors zone se resserre sur le media - un petit objet central y reste`() {
+        val centre = """{"id":"t","kind":"sticker","anchor":{"t":"free","x":0.5,"y":0.5},"transform":{"scale":0.5},"payload":{"emoji":"x"}}"""
         assertThat(SceneShape.frame(scene(fond(1.78), centre)).rect.height).isLessThan(1.0)
     }
 

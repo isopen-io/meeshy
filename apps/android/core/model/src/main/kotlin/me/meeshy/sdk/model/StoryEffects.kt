@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -33,6 +35,7 @@ data class StoryTextPosition(
 )
 
 /** The full effects payload for a story slide — port of StoryEffects (StoryModels.swift). */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class StoryEffects(
     val background: String? = null,
@@ -60,6 +63,7 @@ data class StoryEffects(
     val closing: StoryTransitionEffect? = null,
     val textObjects: List<StoryTextObject> = emptyList(),
     /** Pastilles de lieu posées sur la slide — distinctes du lieu de la PUBLICATION. */
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val locationObjects: List<StoryLocationObject> = emptyList(),
     val mediaObjects: List<StoryMediaObject>? = null,
     val audioPlayerObjects: List<StoryAudioPlayerObject>? = null,
