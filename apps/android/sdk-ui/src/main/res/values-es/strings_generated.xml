@@ -5,10 +5,14 @@
     <string name="common_close">Cerrar</string>
     <string name="emoji_category_activities">Actividades</string>
     <string name="emoji_category_animals">Animales</string>
+    <string name="emoji_category_faces">Caras</string>
     <string name="emoji_category_flags">Banderas</string>
     <string name="emoji_category_food">Comida</string>
+    <string name="emoji_category_gestures">Gestos</string>
+    <string name="emoji_category_hearts">Corazones</string>
     <string name="emoji_category_objects">Objetos</string>
     <string name="emoji_category_people">Personas</string>
+    <string name="emoji_category_reactions">Reacciones</string>
     <string name="emoji_category_recent">Recientes</string>
     <string name="emoji_category_smileys">Emoticonos</string>
     <string name="emoji_category_symbols">Símbolos</string>

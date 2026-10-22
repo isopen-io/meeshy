@@ -36,10 +36,17 @@ data class EmojiCategory(
 /** Source of truth for the emoji picker catalog (mirrors iOS `EmojiGridCategory.table`). */
 object EmojiCatalog {
 
-    /** The default quick-reaction strip when the user has no usage history yet. */
+    /**
+     * The default quick-reaction strip when the user has no usage history yet — the fifteen
+     * emojis of iOS `MeeshyQuickReactions.standard`, in that order. One list for every surface.
+     */
     val defaultQuickReactions: List<String> = listOf(
-        "❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "👍",
+        "👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉",
+        "💯", "😍", "👀", "🤣", "💪", "✨", "🥺",
     )
+
+    /** The emoji of the simple gesture (double-tap) — iOS `MeeshyQuickReactions.heart`. */
+    const val DOUBLE_TAP_EMOJI: String = "❤️"
 
     /** The ten categories, [EmojiCategoryId.RECENT] first. */
     val categories: List<EmojiCategory> by lazy(LazyThreadSafetyMode.PUBLICATION) {

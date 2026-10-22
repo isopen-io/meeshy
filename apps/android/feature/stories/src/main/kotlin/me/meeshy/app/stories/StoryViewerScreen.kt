@@ -96,6 +96,7 @@ import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
@@ -688,7 +689,7 @@ fun StoryViewerScreen(
                 hasReacted = state.myReactions.isNotEmpty(),
                 languageBadgeCode = languageBadge,
                 heartBouncePulse = heartBouncePulse,
-                onTapHeart = { sendReaction("❤️", from = heartBounds) },
+                onTapHeart = { sendReaction(EmojiCatalog.DOUBLE_TAP_EMOJI, from = heartBounds) },
                 onTapLanguage = {
                     reactionBarVisible = false
                     hoveredIndex = null
