@@ -535,11 +535,16 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // MessagesEndpoint.bulkDeleteForMe trouvent leur appelant iOS — MessageService.hideForMe et le plan de sélection
 // ForMeSelectionPlan (« Supprimer pour moi »). Valeur MESURÉE en CI (Quality, run 119150128073) et en local en
 // diffant deadEntries() entre origin/dev et la branche de #11421, puis sur la fusion avec #11441 (325).
-// 323 -> 324 (#11510, 2026-10-21) : `AdminEndpoint.conversationsByConversationIdAttachments`
-// (`GET /api/v1/admin/conversations/:conversationId/attachments`), les pièces d'une conversation en lecture
-// souveraine, au curseur et par genre. Le web l'appelle (onglet Médias de la lecture d'administration,
-// `lib/api/admin-conversations.ts`) ; l'app iOS n'a pas d'écran d'administration des conversations — entrée
-// PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le 2026-10-21 en local.
+// 323 -> 322 (#11570, 2026-10-22) : un commit iOS de dev a retiré une entrée de catalogue sans appelant ;
+// la référence suit l'amélioration. Valeur MESURÉE en CI (Quality, bun) et en local sur origin/dev.
+// 322 -> 324 (#11510, #10162, 2026-10-22) : `AdminEndpoint.conversationsByConversationIdAttachments`
+// (`GET /api/v1/admin/conversations/:conversationId/attachments`, les pièces d'une conversation en lecture
+// souveraine, au curseur et par genre — le web l'appelle depuis l'onglet Médias de la lecture d'administration,
+// `lib/api/admin-conversations.ts`, aucun écran iOS d'administration des conversations) et
+// `MeEndpoint.gamePhotoMomentsKept` (`POST /api/v1/me/game/photo-moments/kept`, le signal « immortalisée »
+// de D22(b), que le web émet et que le carnet iOS émettra dans son lot). Entrées PRÉMATURÉES, pas des faux
+// morts (#5427). Valeur MESURÉE le 2026-10-22 en local, en diffant les entrées mortes entre origin/dev (322)
+// et la fusion de la branche de #10167 avec origin/dev.
 const BASELINE_DEAD_ENTRIES = 324;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;

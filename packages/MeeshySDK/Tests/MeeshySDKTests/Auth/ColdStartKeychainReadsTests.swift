@@ -213,6 +213,57 @@ final class ColdStartSessionRestoreKeychainTests: XCTestCase {
         XCTAssertTrue(AuthManager.shared.isAuthenticated)
     }
 
+    /// L'ancienne version gardait le compte actif dans les préférences ET, plus tôt encore,
+    /// un jeton GLOBAL. La migration pose le compte actif au trousseau (étape 1) : la
+    /// reprise du jeton global (étape 4) ne vaut alors plus, sinon un jeton plus ancien
+    /// remplace celui du compte et la session finit en reconnexion forcée.
+    func test_checkExistingSession_legacyActiveUser_keepsTheAccountTokenOverTheGlobalOne() async throws {
+        let keychain = try storedSession(headAccount: head())
+        keychain.delete(forKey: PersistedActiveUser.key, account: nil)
+        keychain.seed("meeshy_auth_token", "tok-global-ancien")
+        keychain.seed("meeshy_current_user", try XCTUnwrap(keychain.value(of: AuthStorageKeys.user(for: Self.userId))))
+        AuthManager.shared.keychain = keychain
+        XCTAssertNil(AuthManager.shared.persistedActiveUserId)
+        UserDefaults.standard.set(Self.userId, forKey: PersistedActiveUser.key)
+        defer { UserDefaults.standard.removeObject(forKey: PersistedActiveUser.key) }
+
+        await AuthManager.shared.checkExistingSession()
+
+        XCTAssertEqual(keychain.value(of: AuthStorageKeys.token(for: Self.userId)), "tok-lea")
+        XCTAssertEqual(APIClient.shared.authToken, "tok-lea")
+    }
+
+    /// Revenir au compte qui était en tête au lancement (A → B → A) doit le refaire
+    /// passer devant : la liste en mémoire n'est pas retriée par une mise à jour, donc
+    /// « en tête » n'y veut pas dire « le plus récent ».
+    func test_returningToTheHeadAccount_makesItTheMostRecentAgain() async throws {
+        let other = "64f000000000000000000b22"
+        let keychain = try storedSession(headAccount: head())
+        let otherUser = MeeshyUser(
+            id: other, username: "noe", email: "noe@test.com", displayName: "Noé", role: "USER",
+            systemLanguage: "fr", createdAt: "2024-01-01T00:00:00.000Z", updatedAt: "2024-01-01T00:00:00.000Z"
+        )
+        let accounts = [head(), SavedAccount(id: other, username: "noe", displayName: "Noé", avatarURL: nil,
+                                             lastActiveAt: Date(timeIntervalSince1970: 500))]
+        keychain.seed("meeshy_saved_accounts", String(decoding: try JSONEncoder().encode(accounts), as: UTF8.self))
+        keychain.seed(AuthStorageKeys.token(for: other), "tok-noe")
+        keychain.seed(AuthStorageKeys.user(for: other), String(decoding: try JSONEncoder().encode(otherUser), as: UTF8.self))
+        AuthManager.shared.keychain = keychain
+        await AuthManager.shared.checkExistingSession()
+
+        AuthManager.shared.isAuthenticated = false
+        XCTAssertTrue(AuthManager.shared.installStoredSession(for: other))
+        AuthManager.shared.isAuthenticated = false
+        XCTAssertTrue(AuthManager.shared.installStoredSession(for: Self.userId))
+
+        let persisted = try JSONDecoder().decode(
+            [SavedAccount].self, from: Data(try XCTUnwrap(keychain.value(of: "meeshy_saved_accounts")).utf8)
+        )
+        let returned = try XCTUnwrap(persisted.first { $0.id == Self.userId })
+        let left = try XCTUnwrap(persisted.first { $0.id == other })
+        XCTAssertGreaterThanOrEqual(returned.lastActiveAt, left.lastActiveAt, "le compte rouvert en dernier passe devant")
+    }
+
     func test_swappingTheKeychain_forgetsTheRememberedActiveUser() throws {
         AuthManager.shared.keychain = CountingKeychainStore([PersistedActiveUser.key: "first"])
         XCTAssertEqual(AuthManager.shared.persistedActiveUserId, "first")

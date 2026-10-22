@@ -56,8 +56,9 @@ struct LegacyAuthKeyMigration {
             manager.migrateFromUserDefaults(keys: [legacyTokenKey, legacyUserKey])
         }
 
-        // 4. Only migrate if no active user is set yet
-        guard currentActiveUserId() == nil,
+        // 4. Only migrate if no active user is set yet — l'étape 1 vient d'en poser un
+        // que la mémoire d'`AuthManager` ne voit pas encore (#11558).
+        guard !wroteActiveUser, currentActiveUserId() == nil,
               let token = keychain.load(forKey: legacyTokenKey, account: nil),
               let userJSON = keychain.load(forKey: legacyUserKey, account: nil),
               let userData = userJSON.data(using: .utf8) else {
