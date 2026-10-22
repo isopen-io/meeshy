@@ -12,6 +12,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -103,9 +104,10 @@ public fun FullscreenChromeAutoHide(
     onAutoHide: () -> Unit,
     restartKey: Any? = null,
 ) {
+    val currentOnAutoHide by rememberUpdatedState(onAutoHide)
     LaunchedEffect(state, isPlaying, restartKey) {
         val wait = state.autoHideDelay(isPlaying) ?: return@LaunchedEffect
         delay(wait)
-        onAutoHide()
+        currentOnAutoHide()
     }
 }

@@ -20,7 +20,6 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
@@ -173,7 +172,23 @@ class FullscreenChromeSemanticsTest {
             .assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "12 likes"))
-        compose.onNodeWithText("12", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag(FLOATING_CAPTION_TAG, useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun `une action en disque n'ecrit jamais de legende, meme quand on lui en donne une`() {
+        showAction {
+            FullscreenActionButton(
+                icon = FullscreenChromeSymbol.Like.icon,
+                label = "Like",
+                onClick = {},
+                style = FullscreenActionStyle.Disc(),
+                caption = "12",
+            )
+        }
+
+        compose.onNodeWithContentDescription("Like").assertExists()
+        compose.onNodeWithTag(FLOATING_CAPTION_TAG, useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test

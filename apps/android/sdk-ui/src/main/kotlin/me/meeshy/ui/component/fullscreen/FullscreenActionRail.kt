@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -218,13 +219,20 @@ private fun FloatingActionCell(
                 color = ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.clearAndSetSemantics { },
+                modifier = Modifier.clearAndSetSemantics { testTag = FLOATING_CAPTION_TAG },
             )
         }
     }
 }
 
 private const val CAPTION_SHADOW_ALPHA: Float = 0.45f
+
+/**
+ * La légende est muette pour TalkBack (le compteur est lu en valeur du libellé) : sa sémantique est
+ * effacée, et son texte avec elle — aucun test ne peut plus la trouver par son texte. Ce repère,
+ * posé dans le même bloc, la garde observable.
+ */
+internal const val FLOATING_CAPTION_TAG: String = "fullscreen-floating-caption"
 
 /** La lueur d'un contour : un halo radial de la teinte, derrière le glyphe. */
 private fun Modifier.glow(tint: Color?): Modifier =
