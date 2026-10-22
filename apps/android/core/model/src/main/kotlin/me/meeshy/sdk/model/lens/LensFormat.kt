@@ -10,7 +10,7 @@ import me.meeshy.sdk.model.lens.LensVocabulary.Patterns
 public object LensFormat {
 
     /** Lit un texte JSON. */
-    public fun parse(json: String): LensParseOutcome = LensJsonValue.parse(json)?.let(::parse) ?: LensParseOutcome.Invalid
+    public fun parse(json: String): LensParseOutcome = LensJsonValue.parse(json)?.let { parse(it) } ?: LensParseOutcome.Invalid
 
     /** Même ordre que `parseLens` : version, interdits, enveloppe, couches. */
     public fun parse(input: LensJsonValue): LensParseOutcome {
