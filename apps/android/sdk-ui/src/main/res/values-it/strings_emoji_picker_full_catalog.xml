@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="emoji_search">Cerca un\'emoji</string>
+    <string name="emoji_quick_reactions">Reazioni rapide</string>
+    <string name="emoji_recent">Usate di recente</string>
+    <string name="emoji_search_no_results">Nessuna emoji trovata</string>
+</resources>
