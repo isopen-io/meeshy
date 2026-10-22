@@ -42,7 +42,8 @@ public object BubbleContentBuilder {
         // back to the binary showOriginal toggle: original vs the preferred
         // translation (or original when no translation is preferred).
         val originalCode = message.originalLanguage.normalizedCode()
-        val preferredCode = LanguageResolver.preferredTranslation(message.translations, preferences)
+        val preferredCode = LanguageResolver
+            .preferredTranslation(message.translations, preferences, message.originalLanguage)
             ?.targetLanguage?.normalizedCode()
         val requestedActive = activeLanguageCode.normalizedCode()
             ?.takeIf { it.hasContentIn(message, originalCode) }
