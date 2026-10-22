@@ -18,7 +18,8 @@ import os
 nonisolated enum ComposerLookVideoExporter {
 
     /// - Returns: la vidéo regardée, `url` telle quelle sans look, sans cadrage
-    ///   et sans découpe, `nil` si le rendu a échoué (l'appelant ne remet alors
+    ///   et sans découpe, une copie coupée sans ré-encodage quand seule la
+    ///   longueur change (`Plan.trimOnly`), `nil` si le rendu a échoué (l'appelant ne remet alors
     ///   rien : le brut porte ce que la découpe et le cadrage ont retiré).
     ///
     /// `@concurrent` : peindre les couches du cadre et monter l'export ne se
@@ -34,9 +35,12 @@ nonisolated enum ComposerLookVideoExporter {
                        timeRange: CMTimeRange? = nil, aspect: CGFloat = ComposerLookPainter.designAspect,
                        person: CallFramePerson, date: Date,
                        declaredSpaceName: String? = nil, audioGain: Float = 1) async -> URL? {
-        guard ComposerLiveLookRule.rendersLive(look) || !framing.isIdentity || timeRange != nil
-                || audioGain != 1 else { return url }
         let asset = AVURLAsset(url: url)
+        switch plan(look: look, framing: framing, timeRange: timeRange, audioGain: audioGain) {
+        case .untouched: return url
+        case .trimOnly(let plage): return await trimmed(asset, timeRange: plage)
+        case .render: break
+        }
         do {
             guard let track = try await asset.loadTracks(withMediaType: .video).first else { return nil }
             let natural = try await track.load(.naturalSize)
@@ -68,6 +72,39 @@ nonisolated enum ComposerLookVideoExporter {
 
     private struct UnpaintedFrame: Error {}
 
+    /// **Ce que l'export doit faire de la prise** (#9889).
+    nonisolated enum Plan: Equatable, Sendable {
+        /// Rien n'a changé : la prise repart telle quelle.
+        case untouched
+        /// Seule la longueur change : une copie des échantillons, sans ré-encodage.
+        case trimOnly(CMTimeRange)
+        /// Un look, un cadrage ou un son réglé : une composition.
+        case render
+    }
+
+    static func plan(look: ComposerPhotoLook, framing: ComposerFraming, timeRange: CMTimeRange?,
+                     audioGain: Float) -> Plan {
+        guard !paints(look: look, framing: framing, audioGain: audioGain) else { return .render }
+        return timeRange.map(Plan.trimOnly) ?? .untouched
+    }
+
+    /// Le look, le cadrage ou le son réglé touchent-ils aux échantillons ?
+    static func paints(look: ComposerPhotoLook, framing: ComposerFraming, audioGain: Float) -> Bool {
+        ComposerLiveLookRule.rendersLive(look) || !framing.isIdentity || audioGain != 1
+    }
+
+    /// **Couper sans retoucher ne ré-encode pas** (#9889, défaut validé de #11247) :
+    /// `Passthrough` copie les échantillons compressés. La coupe tombe sur l'image
+    /// clé qui précède le début demandé (au plus une seconde plus tôt pour une
+    /// prise de l'iPhone), et la piste de découpe le dit.
+    private static func trimmed(_ asset: AVAsset, timeRange: CMTimeRange) async -> URL? {
+        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough) else {
+            return nil
+        }
+        session.metadata = (try? await asset.load(.metadata)) ?? []
+        return await run(session, timeRange: timeRange, name: "video_trim")
+    }
+
     /// **Le son réglé part dans le rendu** (#9754) : chaque piste de son porte
     /// le gain de la retouche, par la loi de l'aperçu (#10360) — l'atténuation
     /// au volume du mixage, l'amplification au-delà de 100 % par le même tap
@@ -95,21 +132,25 @@ nonisolated enum ComposerLookVideoExporter {
         guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
             return nil
         }
-        let sortie = FileManager.default.temporaryDirectory
-            .appendingPathComponent("video_look_\(UUID().uuidString).mov")
-        session.outputURL = sortie
-        session.outputFileType = .mov
-        session.shouldOptimizeForNetworkUse = true
         session.videoComposition = composition
         session.audioMix = audioMix
         // La date de création et le lieu de la prise suivent la vidéo rendue.
         session.metadata = (try? await asset.load(.metadata)) ?? []
+        return await run(session, timeRange: timeRange, name: "video_look")
+    }
+
+    private static func run(_ session: AVAssetExportSession, timeRange: CMTimeRange?, name: String) async -> URL? {
+        let sortie = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(name)_\(UUID().uuidString).mov")
+        session.outputURL = sortie
+        session.outputFileType = .mov
+        session.shouldOptimizeForNetworkUse = true
         if let timeRange { session.timeRange = timeRange }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             session.exportAsynchronously { continuation.resume() }
         }
         guard session.status == .completed else {
-            FileManager.default.removeItemLogging(at: sortie, context: "rendu du look abandonné", logger: .media)
+            FileManager.default.removeItemLogging(at: sortie, context: "rendu de la prise abandonné", logger: .media)
             return nil
         }
         return sortie
