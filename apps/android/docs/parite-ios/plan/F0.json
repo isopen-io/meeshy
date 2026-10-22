@@ -1,0 +1,2242 @@
+[
+ {
+  "key": "couleurs-de-marque-et-contraste-aa",
+  "title": "Les couleurs de marque, d'etat de message et de media sont celles d'iOS et les textes secondaires passent le contraste AA",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 600,
+  "deps": [],
+  "goal": "Completer MeeshyPalette et les jetons de theme avec tous les jetons iOS manquants et remonter textSecondary/textMuted au cran WCAG AA, verrouilles par test de contraste et de parite avec packages/design-tokens/ios.css.",
+  "acceptance": [
+   "Tous les jetons listes existent a l'identique d'iOS (errorInk C81E1E, meeshSilver, blue/orange/amber500, blockedNeutral, plateauNoir, violet950, etats de message, teintes de tuile, plans nommes, echelle onMedia/scrims, accents de liens)",
+   "mentionColor/hashtagColor(isDark) et surfaceFill/controlFill/hairline(isDark) correspondent aux valeurs iOS",
+   "textSecondary et textMuted >= 4,5:1 sur backgroundSecondary et backgroundTertiary en clair comme en sombre (clair indigo700 80 %, sombre indigo300 / indigo300 70 %)",
+   "Aucun nouveau hex local dans les features (cliquet sur le nombre d'occurrences)"
+  ],
+  "tests": [
+   "sdk-ui/src/test/.../theme/MeeshyTokenParityTest.kt etendu a chaque nouveau jeton",
+   "sdk-ui/src/test/.../theme/MeeshyContrastTest.kt : composition alpha puis luminance WCAG",
+   "sdk-ui/src/test/.../theme/MeeshyIosCssParityTest.kt : lit packages/design-tokens/ios.css (Assume si absent)",
+   "sdk-ui/src/test/.../theme/NoLocalHexColorGuardTest.kt : cliquet"
+  ],
+  "android_modules": [
+   ":sdk-ui"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyPalette.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyThemeTokens.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyColorScheme.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyMessageStateColors.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyMediaChromeColors.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyAdaptiveColors.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/ThemePalette.swift",
+   "packages/design-tokens/ios.css"
+  ],
+  "feature_keys": [
+   "dst-brand-color-tokens",
+   "dst-text-contrast-aa-tokens"
+  ],
+  "rank": 4
+ },
+ {
+  "key": "echelles-de-jetons-ressorts-et-typographie",
+  "title": "Espacements, rayons, tailles, ressorts et typographie suivent les echelles iOS et grandissent avec la police systeme",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 500,
+  "deps": [],
+  "goal": "Completer MeeshySpacing/Radius, creer MeeshyFontSize/IconSize/ControlSize/Border/Opacity/Shadow, aligner les ressorts et le delai d'echelonnement sur iOS, ajouter contentMaxWidth, meeshyText et emojiTextStyle.",
+  "acceptance": [
+   "Spacing xxs 2, xsPlus 6, smPlus 10, mdPlus 14 et radius xxs 4, xs 8, smPlus 12, lgPlus 18, xlPlus 22 presents ; la contrainte de grille 4 dp est retiree du test",
+   "FontSize 9..34, IconSize, ControlSize (tapTarget 44, bouton 52), Border, Opacity, Shadow subtle/medium/strong egaux a DesignTokens.swift",
+   "springFast 0,25/0,7, springDefault 0,4/0,75, springBouncy 0,5/0,6 convertis en dampingRatio + stiffness=(2pi/response)^2 ; staggerDelay 0,04 s",
+   "meeshyText(size, weight, rounded) et emojiTextStyle(90/60/45) non mis a l'echelle ; contentMaxWidth 700 + contentColumnWidth ; ecart Nunito/design arrondi documente dans decisions.md"
+  ],
+  "tests": [
+   "MeeshyDimensTest modifie + MeeshyScalesParityTest",
+   "MeeshyMotionTest : conversion response -> stiffness",
+   "MeeshyTypographyTest : tailles 9..34 presentes"
+  ],
+  "android_modules": [
+   ":sdk-ui"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyDimens.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyMotion.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyLayout.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyType.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyScales.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyTextStyles.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/Accessibility.swift"
+  ],
+  "feature_keys": [
+   "dst-design-token-scales",
+   "dst-typography-dynamic-type"
+  ],
+  "rank": 5
+ },
+ {
+  "key": "garde-localisation-android",
+  "title": "Une chaîne manquante, mal formatée ou écrite en dur fait échouer la CI sur tous les modules",
+  "domain": "resources-i18n-assets",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 650,
+  "deps": [],
+  "goal": "Remplacer le seul garde de :feature:feed par un garde transverse en JUnit JVM dans :app : parité des clés entre locales, spécificateurs identiques et positionnels, quantités plurielles complètes selon la CLDR, aucun nom défini à la fois à la main et en généré, accord entre les locales déclarées et les dossiers values-*, et cliquet sur les littéraux d'interface en dur. Ajouter dans :core:model la loi pure CldrPluralCategories (catégories requises par langue). Le lint n'étant pas dans le gate android.yml, le garde est un test JUnit.",
+  "acceptance": [
+   "Pour chacun des 13 modules qui portent des chaînes, une clé de values/ absente d'une locale présente fait échouer le test avec module, clé et locale dans le message.",
+   "Le multi-ensemble des spécificateurs d'une locale doit égaler celui de l'anglais ; une chaîne à deux spécificateurs ou plus qui n'est pas positionnelle fait échouer (chat_forward_members en %d nu est signalée tant qu'elle n'est pas corrigée par son lot).",
+   "Un <plurals> doit porter toutes les quantités de sa langue selon CldrPluralCategories : en, de, it = one, other ; fr, es, pt = one, many, other ; ar = zero, one, two, few, many, other.",
+   "Un nom défini à la fois dans strings.xml et strings_generated.xml d'un même dossier fait échouer.",
+   "shipped-locales.txt (en, fr, es, pt) impose que chaque module possède ces dossiers ; un dossier d'une autre locale n'est accepté que complet pour ce module ; known-gaps.txt consigne l'écart connu « ar est dans AppLanguage.supportedCodes sans ressources » et le test échoue quand une ligne devient fausse (cliquet).",
+   "HardcodedUiTextGuardTest repère Text(\"...\") à contenu alphabétique, contentDescription = \"...\", NotificationChannel(..., \"...\"), setContentTitle(\"...\") et Toast.makeText(..., \"...\") dans src/main/kotlin ; les occurrences actuelles (BrandLogo, VoiceRecordingPill x3, MeeshySplashScreen, NotificationChannelInstaller, MeeshyFcmService) sont dans la baseline ; un nouveau littéral fait échouer et une ligne de baseline obsolète aussi.",
+   "CldrPluralCategories est pur (aucun import android) et se prouve par ./apps/android/meeshy.sh jvm-check ; FeedStringLocalizationParityTest est supprimé, sa couverture reprise."
+  ],
+  "tests": [
+   "CldrPluralCategoriesTest : required(\"ar\") = six catégories, required(\"fr\") = one, many, other, required(\"en\") = one, other, normalisation de pt-BR vers pt et de zh vers other seul, langue inconnue = one, other.",
+   "LocalizationRulesTest : sur des fragments XML synthétiques, clé manquante, spécificateur dérivé, spécificateur non positionnel, quantité plurielle absente et doublon généré/main sont chacun détectés (la logique de détection est testée indépendamment des vrais fichiers).",
+   "LocalizationGuardTest : applique les règles à l'arbre réel des 13 modules.",
+   "HardcodedUiTextGuardTest : littéral nouveau = échec, ligne de baseline périmée = échec."
+  ],
+  "android_modules": [
+   ":app",
+   ":core:model",
+   ":feature:feed"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/lang/CldrPluralCategories.kt",
+   "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/lang/CldrPluralCategoriesTest.kt",
+   "apps/android/app/src/test/kotlin/me/meeshy/app/i18n/ResourceTree.kt",
+   "apps/android/app/src/test/kotlin/me/meeshy/app/i18n/LocalizationRules.kt",
+   "apps/android/app/src/test/kotlin/me/meeshy/app/i18n/LocalizationRulesTest.kt",
+   "apps/android/app/src/test/kotlin/me/meeshy/app/i18n/LocalizationGuardTest.kt",
+   "apps/android/app/src/test/kotlin/me/meeshy/app/i18n/HardcodedUiTextGuardTest.kt",
+   "apps/android/app/src/test/resources/i18n/shipped-locales.txt",
+   "apps/android/app/src/test/resources/i18n/known-gaps.txt",
+   "apps/android/app/src/test/resources/i18n/hardcoded-ui-baseline.txt",
+   "apps/android/feature/feed/src/test/kotlin/me/meeshy/app/feed/FeedStringLocalizationParityTest.kt"
+  ],
+  "ios_reference_files": [
+   "apps/ios/scripts/check_localization.py",
+   "apps/ios/MeeshyTests/Unit/Architecture/LocalizationCatalogGuardTests.swift",
+   "apps/ios/Meeshy/Core/UILanguageOverride.swift"
+  ],
+  "feature_keys": [
+   "res-strings-localization-guards",
+   "res-strings-plurals-cldr"
+  ],
+  "rank": 6
+ },
+ {
+  "key": "generateur-chaines-ios",
+  "title": "Les chaînes Android se génèrent depuis les catalogues de traduction iOS",
+  "domain": "resources-i18n-assets",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "L",
+  "est_kotlin_lines": 1000,
+  "deps": [],
+  "goal": "Livrer le générateur déterministe apps/android/scripts/i18n/xcstrings_to_android.py (Python, environ 650 lignes + 350 de tests) qui lit Localizable.xcstrings de l'app, celui de MeeshyUI, ceux des widgets, de la NSE et de l'extension de contenu, plus InfoPlist.xcstrings, et écrit pour chaque module déclaré dans un manifeste les fichiers res/values{,-fr,-es,-de,-it,-pt,-ar}/strings_generated.xml. Il porte la conversion de spécificateurs (%@ vers %s, %lld vers %d, forme positionnelle %1$s dès deux arguments), les échappements XML et Android, le markdown ** vers <b>, les variations plurielles vers <plurals> avec les catégories du catalogue, le filtre des entrées stale, le repli de clé source fr sans localisation fr, pt-BR vers values-pt, et le mode --check pour la CI. Il ne modifie jamais strings.xml. Le format du manifeste (chargeur + validateur) est défini ici ; ses données arrivent avec le lot table-correspondance-chaines.",
+  "acceptance": [
+   "Exécuté deux fois de suite sur les mêmes entrées, le générateur produit des fichiers identiques octet pour octet (clés triées, aucun horodatage), et chaque fichier commence par un bandeau « GÉNÉRÉ — ne pas modifier ».",
+   "%@ devient %s, %lld/%ld/%d deviennent %d, %.2f et %% sont conservés ; toute chaîne qui compte deux spécificateurs ou plus est écrite en forme positionnelle (%1$s, %2$d) dans l'ordre de l'anglais, avec la même numérotation dans les sept langues (58 chaînes concernées côté iOS).",
+   "Apostrophe, @ et ? en tête, & et < XML, et retour ligne littéral sont échappés ; le balisage markdown **x** devient <b>x</b> (4 chaînes) ; un test charge le XML produit et retrouve le texte attendu.",
+   "Une variation plural du catalogue devient un <plurals> avec exactement les quantités fournies (arabe : zero, one, two, few, many, other) ; une quantité requise par la CLDR et absente du catalogue fait échouer la génération en nommant la clé et la langue.",
+   "Les entrées extractionState stale ne sont jamais émises ; une clé source française sans localisation fr reprend la clé comme texte français ; pt-BR est écrit dans values-pt ; seules les clés du manifeste au statut adopted sont émises.",
+   "Le générateur refuse d'écrire un nom déjà défini dans le strings.xml à la main du même dossier de locale, avec un message qui nomme module, nom et dossier.",
+   "--check ne modifie aucun fichier, sort 1 et liste les fichiers périmés quand un catalogue ou un manifeste a bougé sans régénération, sort 0 sinon ; ./apps/android/meeshy.sh i18n et ./apps/android/meeshy.sh i18n --check le lancent."
+  ],
+  "tests": [
+   "test_specifier_converter : un seul %@, deux spécificateurs mixtes (%@ puis %lld), %% isolé, %.2f, %1$@ déjà positionnel côté iOS, chaîne sans spécificateur.",
+   "test_android_xml_writer : échappement de ' @ ? & < et \\n, conversion ** vers <b>, ordre trié stable, bandeau présent.",
+   "test_plural_emitter : arabe à six catégories, français one/other fourni sans many (échec attendu), clé stale ignorée, repli fr sur la clé.",
+   "test_manifest_schema : statuts valides (adopted, candidate, android-only, disabled), androidName unique par module, kind string ou plurals.",
+   "test_check_mode : sortie propre = code 0 ; un catalogue modifié = code 1 avec la liste des fichiers ; aucune écriture en mode --check ; collision avec un strings.xml à la main = erreur."
+  ],
+  "android_modules": [
+   "scripts"
+  ],
+  "android_files_touched": [
+   "apps/android/scripts/i18n/xcstrings_to_android.py",
+   "apps/android/scripts/i18n/xcstrings_reader.py",
+   "apps/android/scripts/i18n/specifier_converter.py",
+   "apps/android/scripts/i18n/android_xml_writer.py",
+   "apps/android/scripts/i18n/plural_emitter.py",
+   "apps/android/scripts/i18n/manifest_schema.py",
+   "apps/android/scripts/i18n/tests/test_specifier_converter.py",
+   "apps/android/scripts/i18n/tests/test_android_xml_writer.py",
+   "apps/android/scripts/i18n/tests/test_plural_emitter.py",
+   "apps/android/scripts/i18n/tests/test_manifest_schema.py",
+   "apps/android/scripts/i18n/tests/test_check_mode.py",
+   "apps/android/scripts/i18n/tests/fixtures/mini.xcstrings",
+   "apps/android/scripts/i18n/tests/fixtures/mini-manifest.json",
+   "apps/android/meeshy.sh"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Localizable.xcstrings",
+   "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
+   "apps/ios/Meeshy/InfoPlist.xcstrings",
+   "apps/ios/scripts/check_localization.py",
+   "apps/ios/scripts/catalog_keys.py",
+   "packages/design-tokens/scripts/generate-from-ios.mjs",
+   "apps/ios/Meeshy/Core/UILanguageOverride.swift"
+  ],
+  "feature_keys": [
+   "res-strings-xcstrings-sync-pipeline",
+   "res-strings-plurals-cldr"
+  ],
+  "rank": 7
+ },
+ {
+  "key": "langues-catalogue-complet-et-autonyme",
+  "title": "Chaque liste de langues se lit pareil : 83 langues, noms écrits dans leur propre graphie",
+  "domain": "translation-prism-models",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "S",
+  "est_kotlin_lines": 180,
+  "deps": [],
+  "goal": "Aligner le catalogue de langues sur iOS : ajouter ksf, nnh, ny, om, ti ; restaurer les vraies graphies natives (Français, Español, Português au lieu de Francais, Espanol, Portugues) ; fournir autonym(code) avec repli Locale.getDisplayName puis code en capitales, et colorHex(code) neutre pour une langue inconnue. Comme les sélecteurs lisent déjà nativeName, corriger la donnée suffit à les mettre à jour.",
+  "acceptance": [
+   "Le catalogue compte les mêmes 83 codes qu'iOS, sans doublon ; ksf, nnh, ny, om, ti sont présents avec drapeau et couleur de famille.",
+   "Les noms natifs portent leurs diacritiques et leur écriture (한국어, العربية, Français) dans tous les sélecteurs existants (composeur, réglages, inscription, stories).",
+   "autonym('ko') rend 한국어 ; un code hors catalogue retombe sur Locale puis sur le code en capitales ; colorHex d'un code inconnu est neutre.",
+   "Le tri et la recherche des sélecteurs restent insensibles aux accents."
+  ],
+  "tests": [
+   "core/model: LanguageDataTest — nombre de langues, unicité des codes, présence des 5 ajouts",
+   "core/model: LanguageAutonymTest — catalogue puis Locale puis capitales",
+   "core/model: LanguageColorTest — couleur neutre pour inconnu"
+  ],
+  "android_modules": [
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/LanguageData.kt",
+   "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/LanguageDataTest.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/LanguageData.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/LanguageData+Autonym.swift"
+  ],
+  "feature_keys": [
+   "tpm-language-catalog"
+  ],
+  "rank": 9
+ },
+ {
+  "key": "persist-cache-policy-loadstate",
+  "title": "Chaque écran affiche le cache d'abord avec les mêmes fenêtres de fraîcheur qu'iOS, et ne montre jamais une erreur hors-ligne",
+  "domain": "sdk-persistence-cache-offline",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 380,
+  "deps": [],
+  "goal": "Aligner la table de CachePolicy sur iOS (TTL, fraîcheur, plafonds), y ajouter maxItemCount et l'emplacement de stockage, et exposer LoadState/PaginationState/PaginationCursor purs plus un CacheFirstLoader (refresh force-réseau, revalidation silencieuse annulable).",
+  "acceptance": [
+   "Table alignée sur iOS : messages 6 mois / fraîcheur 2 min / 600 ; stories 72 h ; feed 7 j / 5 min / 100 posts ; commentaires 1 h / 500 ; notifications 24 h / 2 min / 200 ; historique d'appels 30 j / 300 ; profils 30 j / 100 ; stats 6 h / 10 ; participants 24 h / 5 min ; conversationMedia 6 mois / 10 min",
+   "CachePolicy garde son constructeur actuel (freshForMillis, keepForMillis) : maxItemCount et StorageLocation (Room ou Disque avec maxBytes : images 300 Mo, audio 200 Mo, vidéo 1 Go, vignettes 150 Mo) sont des paramètres par défaut, aucun site d'appel existant ne casse",
+   "LoadState = idle, cachedStale, cachedFresh, loading, loaded, offline, error ; un échec réseau (ApiError.code NETWORK) donne offline et JAMAIS error, et n'efface rien de ce qui est peint",
+   "Cache expiré : la dernière donnée connue est repeinte (loadIgnoringExpiry) au lieu d'un écran vide hors-ligne ; skeleton uniquement sur cache vide au cold start",
+   "refresh() force le réseau (tirer pour rafraîchir) distinct du chemin cold start ; la revalidation silencieuse s'annule à la disparition de l'écran",
+   "Un échec de persistance ne régresse pas l'état affiché",
+   "PaginationState (idle, loadingMore, exhausted, error) est distinct de LoadState ; PaginationCursor est sérialisable pour être persisté avec la liste"
+  ],
+  "tests": [
+   "core/model LoadStateReducerTest : toutes les transitions, offline vs error, échec de revalidation sans perte",
+   "core/model PaginationStateTest : exhausted, retour d'erreur, reprise",
+   "sdk-core CachePolicyTableTest : chaque ressource égale aux valeurs iOS",
+   "sdk-core CacheFirstLoaderTest (Turbine) : cache vide, périmé repeint, refresh forcé, annulation"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-core"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/CachePolicy.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/CacheResult.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/cacheFirstFlow.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/SwrCacheSource.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/classifyCache.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/CacheFirstLoader.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/cache/LoadState.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/cache/LoadStateReducer.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/cache/PaginationState.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/cache/PaginationCursor.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/cache/CacheFirstLoaderTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/cache/CachePolicyTableTest.kt",
+   "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/cache/LoadStateReducerTest.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CachePolicy.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheResult.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheFirst.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheFirstLoader.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/LoadState.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheStoreProtocols.swift"
+  ],
+  "feature_keys": [
+   "pco-swr-cache-policy-states"
+  ],
+  "rank": 11
+ },
+ {
+  "key": "persist-outbox-registre-senders",
+  "title": "Ajouter un nouveau type d'action hors-ligne ne demande plus qu'un fichier, sans toucher au worker d'envoi",
+  "domain": "sdk-persistence-cache-offline",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 650,
+  "deps": [],
+  "goal": "Refactor sans changement de comportement : éclater OutboxFlushWorker en un registre Hilt multibinding de senders et de gestionnaires d'épuisement par kind, un fichier par domaine, avec test d'exhaustivité kind vers sender.",
+  "acceptance": [
+   "Aucun changement de comportement : chaque sender garde exactement son mapping de résultat actuel (tests de caractérisation par kind)",
+   "Le worker ne contient plus de when sur OutboxKind : il drainé les lanes du registre",
+   "Chaque kind a un sender enregistré (test d'exhaustivité qui rougit si un kind n'en a pas) et une clé en double est refusée à la compilation Dagger",
+   "Les gestionnaires onExhausted (rollback de blocage, ami, profil, épingle, like, signet, message) migrent à l'identique vers leur fichier de domaine",
+   "Ajouter un kind = un fichier @IntoMap, sans éditer OutboxFlushWorker"
+  ],
+  "tests": [
+   "sdk-core SenderRegistryCompletenessTest : OutboxKind.entries tous couverts",
+   "sdk-core MessageSendersTest, ReactionSendersTest, SocialSendersTest : caractérisation du mapping Success/Transient/Permanent",
+   "sdk-core ExhaustionHandlersTest : rollbacks inchangés",
+   "sdk-core OutboxFlushWorkerTest (TestListenableWorkerBuilder) : drainage des lanes du registre"
+  ],
+  "android_modules": [
+   ":sdk-core"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxFlushWorker.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/MutationSenderRegistry.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxKindHandler.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxKindKey.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxSendersModule.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/MessageSenders.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/ReactionSenders.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/ConversationSenders.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/ProfileSettingsSenders.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/SocialSenders.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/MediaSenders.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/FriendBlockSenders.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/outbox/SenderRegistryCompletenessTest.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxFlusher.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/Mutations/MutationPayloads.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OfflineQueue+Mutations.swift"
+  ],
+  "feature_keys": [
+   "pco-outbox-queue-model-and-flusher",
+   "pco-outbox-mutation-kinds"
+  ],
+  "rank": 14
+ },
+ {
+  "key": "piece-jointe-fil-complet-et-protection",
+  "title": "Une pièce jointe garde toutes ses propriétés, ses protections et un aperçu léger",
+  "domain": "translation-prism-models",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 700,
+  "deps": [],
+  "goal": "Extraire ApiMessageAttachment dans son propre fichier et le compléter : dimensions et métadonnées audio/vidéo/document, protection par pièce (vue unique, flou, effectFlags, protection déclarée fail-closed), chiffrement (iv, authTag), variantes WebP responsives avec décodage tolérant, réactions par pièce, consommation du lecteur et accusés. Ajoute le choix de variante d'aperçu (jamais l'original multi-Mo pour une vignette) et le calcul de hauteur vidéo en bulle. Fournit le sérialiseur de liste tolérante réutilisé par les lots de messages.",
+  "acceptance": [
+   "Une pièce dont une variante d'image est malformée se décode quand même, variante écartée ; une ancienne ligne Room sans les nouveaux champs se relit.",
+   "La protection déclarée d'une pièce (vue unique, flou, effectFlags) est fermée par défaut : en cas de doute, la pièce est traitée comme protégée.",
+   "La vignette d'une bulle choisit la plus petite variante couvrant la largeur d'affichage (format webp avec repli) au lieu de l'original.",
+   "Hauteur d'une vidéo en bulle = largeur multipliée par le ratio, plafonnée à 1,6 (portrait 5:8 max), repli 16:9 si dimensions inconnues.",
+   "Réactions par pièce, consommation du lecteur et accusés par pièce sont décodés sans effet de bord sur les messages sans pièce."
+  ],
+  "tests": [
+   "core/model: ApiMessageAttachmentDecodingTest — charge complète, variante malformée écartée, ancienne ligne",
+   "core/model: ImageVariantPickerTest — plus petite variante suffisante, repli sans variantes",
+   "core/model: AttachmentProtectionTest — fail-closed, effectFlags, vue unique",
+   "core/model: VideoSizingTest — plafond 1,6 et repli 16:9",
+   "core/model: LossyListSerializerTest — élément invalide écarté, ordre conservé"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-ui"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ApiMessageDetail.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ApiMessageAttachment.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/AttachmentProtection.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ImageVariants.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/VideoSizing.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/serialization/LossyListSerializer.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/Core.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleContentBuilder.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/APIMessageAttachment.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/APIAttachmentTranslation.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshyMessageAttachment.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/MessageAttachment+VideoSizing.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/KeyedDecodingContainer+StoryLossyDecoding.swift"
+  ],
+  "feature_keys": [
+   "tpm-attachment-wire-model"
+  ],
+  "rank": 15
+ },
+ {
+  "key": "prisme-descente-stricte-loi",
+  "title": "Un message reste dans sa langue d'origine dès que celle-ci est l'un de mes rangs du prisme",
+  "domain": "translation-prism-models",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 450,
+  "deps": [],
+  "goal": "Porter la descente UNIQUE du Prisme : PrismTranslationResolver générique (candidats de n'importe quelle famille), ReaderPrism strict (rangs 1 à 4 sans repli fr), langue d'origine qui concourt à son rang (jamais un court-circuit), clés canoniques région-aveugles, départage déterministe, traduction vide sautée. LanguageResolver.preferredTranslation devient une façade rétrocompatible qui reçoit originalLanguage ; ApiMessage, ApiPost et StoryComment l'utilisent. Livre aussi ConsumedLanguageResolver et dominantSplit (loi pure consommée par le lot des accusés de lecture) et le helper de test SharedFixtures.",
+  "acceptance": [
+   "Prisme [fr, en], message écrit en fr avec une traduction en : on sert l'original (pas l'anglais) ; message écrit en en avec traduction fr : on sert la traduction fr.",
+   "Aucune langue configurée et pas de locale appareil : la descente stricte est vide, le message reste en original ; le repli fr de preferredContentLanguages ne sert que les défauts de composition.",
+   "pt-BR et pt, en-US et en se comparent par la même clé canonique ; deux clés de même langue canonique se départagent (forme canonique d'abord, sinon ordre lexical) ; une traduction vide est sautée.",
+   "Jamais translations.first : aucune traduction aux rangs du lecteur et origine hors prisme ou inconnue donne null (original).",
+   "dominantSplit rend la langue dominante et les exceptions ; à égalité, le code alphabétiquement premier gagne ; la langue lue suit la bascule manuelle puis le prisme puis l'original."
+  ],
+  "tests": [
+   "core/model: PrismTranslationVectorParityTest — rejoue packages/shared/fixtures/reading-modes/prism-translation.vectors.json",
+   "core/model: ReaderPrismTest — rangs 1 à 4, dédoublonnage insensible à la casse, locale vide sautée",
+   "core/model: PrismTranslationResolverTest — origine à son rang, clé canonique, départage, vide sautée",
+   "core/model: ConsumedLanguageResolverTest et DominantSplitTest — bascule manuelle, null si indéterminable, égalité",
+   "core/model: LanguageResolverTest mis à jour (non-régression des appelants existants)"
+  ],
+  "android_modules": [
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/lang/LanguageResolver.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/lang/PrismTranslationResolver.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/lang/ReaderPrism.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/lang/ConsumedLanguageResolver.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/lang/LanguageCodeNormalizer.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/Message.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/Post.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/StoryComment.kt",
+   "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/testutil/SharedFixtures.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/PrismTranslationResolver.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Auth/ReaderPrism.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/ConsumedLanguageResolver.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/LanguageCode.swift",
+   "apps/ios/Meeshy/Features/Main/ViewModels/Conversation/PrismTranslationLaw.swift",
+   "apps/ios/Meeshy/Features/Main/Models/ConversationLanguagePreferences.swift"
+  ],
+  "feature_keys": [
+   "tpm-prism-resolver",
+   "tpm-prism-text-resolution-law",
+   "tpm-prism-consumed-language-read-receipt"
+  ],
+  "rank": 17
+ },
+ {
+  "key": "reseau-en-ligne-source-unique",
+  "title": "L'app sait en temps réel si le réseau est là, sans clignoter ni se tromper au démarrage",
+  "domain": "sdk-networking-sockets-sync",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 420,
+  "deps": [],
+  "goal": "Une source unique du chemin réseau (un seul NetworkCallback du ConnectivityManager) alimente deux lectures : binaire en ligne / hors ligne débouncée 500 ms (pastille, reprise socket, gate réseau de l'outbox) et qualitative (hors ligne, mauvais cellulaire, bon cellulaire, wifi) pour l'auto-téléchargement. Amorcée depuis la photo courante : jamais de hors ligne fabriqué avant le premier callback.",
+  "acceptance": [
+   "isOnline (StateFlow<Boolean>) est amorcé de façon synchrone depuis activeNetwork + capacité VALIDATED ; il ne vaut jamais hors ligne avant le premier callback si le réseau est présent (les mutations enfilées au démarrage ne sont pas rejetées par le gate de l'outbox).",
+   "Une coupure de moins de 500 ms ne publie rien ; une coupure plus longue publie hors ligne une seule fois (distinctUntilChanged) ; le retour en ligne est publié sans délai.",
+   "connectionType expose wifi / cellular / wired / unknown ; condition (hors ligne, mauvais cellulaire, bon cellulaire, wifi) est dérivée du MÊME callback : un seul registerDefaultNetworkCallback dans le processus.",
+   "Les consommateurs existants de NetworkConditionMonitor (téléchargement auto des médias) se comportent à l'identique.",
+   "Un seam de test (simulateOffline / simulateOnline) permet aux lots pastille, socket et outbox de piloter le réseau sans ConnectivityManager."
+  ],
+  "tests": [
+   "NetworkReachabilityReducerTest (:core:model, temps virtuel) : debounce 500 ms, amorçage, jamais de hors ligne avant le premier callback",
+   "AndroidNetworkMonitorTest (Robolectric, ShadowConnectivityManager) : transitions wifi / cellulaire / perte",
+   "NetworkConditionMonitorParityTest : même condition qu'avant le refactor pour chaque jeu de capacités",
+   "NetworkPathSourceTest : simulateOffline / simulateOnline"
+  ],
+  "android_modules": [
+   ":sdk-core",
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/network/NetworkMonitor.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/network/AndroidNetworkMonitor.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/network/NetworkPathSource.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/NetworkConditionMonitor.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/di/SdkModule.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/NetworkReachabilityReducer.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/NetworkMonitor.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/NetworkPathSource.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/NetworkConditionMonitor.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPolicyEngine.swift"
+  ],
+  "feature_keys": [
+   "nss-net-reachability"
+  ],
+  "rank": 18
+ },
+ {
+  "key": "texte-riche-loi-markdown-blocs-hashtags-liens-de-suivi",
+  "title": "Le texte des messages, posts et commentaires comprend markdown, blocs, hashtags, liens de suivi et arc-en-ciel par lettre",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "L",
+  "est_kotlin_lines": 1200,
+  "deps": [],
+  "goal": "Loi pure dans :core:model : markdown complet, blocs, hashtags, adresses sans schema, trackedLinks et LinkDisplayLaw, pseudos valides, liens inertes, plainText, RainbowLetters (FNV-1a + SplitMix64) et getUserDisplayName.",
+  "acceptance": [
+   "***gras italique***, `code`, [libelle](https://...) et (mailto:), titres #/##/###, listes, citations, blocs ``` (miroir de text-blocks.ts, chemin rapide hasBlockSyntax)",
+   "www... -> https, a@b.fr -> mailto, [[https://...]] ouvert directement, #tag -> /hashtag/tag (un titre # n'est pas un hashtag)",
+   "trackedLinks : URL mappee affichee m+jeton et ouverte par /l/jeton de l'origine web active ; liens inertes pour un auteur sans compte ; seuls les pseudos reels deviennent liens",
+   "Rainbow : memes indices de couleur qu'iOS pour une graine donnee, jamais deux voisines identiques, ni liens ni mentions",
+   "getUserDisplayName : displayName, sinon prenom nom, sinon pseudo, sinon repli localise"
+  ],
+  "tests": [
+   "core/model MessageTextParserTest etendu (table de cas)",
+   "core/model TextBlocksTest, LinkDisplayLawTest, PlainTextTest",
+   "core/model RainbowLettersTest : vecteurs dores du Swift",
+   "core/model UserDisplayNameTest"
+  ],
+  "android_modules": [
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/MessageTextParser.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/text/TextBlocks.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/text/LinkDisplayLaw.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/text/PlainText.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/text/RainbowLetters.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/UserDisplayName.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshyUI/Utilities/MessageTextRenderer.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Utilities/MessageTextRenderer+Blocks.swift",
+   "apps/ios/Meeshy/Features/Main/Components/RainbowLetters.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Utilities/UserDisplayName.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Utilities/EmojiDetector.swift"
+  ],
+  "feature_keys": [
+   "dst-rich-text",
+   "dst-emoji-only",
+   "dst-rainbow-letters",
+   "dst-user-display-name"
+  ],
+  "rank": 19
+ },
+ {
+  "key": "accessibilite-annonces-haptique-et-sens-de-lecture",
+  "title": "Lecteurs d'ecran, clavier et toucher disposent du kit d'accessibilite d'iOS (cibles 48 dp, interrupteurs, annonces, haptique, sens de lecture)",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 900,
+  "deps": [
+   "echelles-de-jetons-ressorts-et-typographie"
+  ],
+  "goal": "Kit partage : cible tactile minimale, decoratif masque, etat d'interrupteur, controles ajustables, identifiants de test, Echap, separateur masque, annonces TalkBack, vocabulaire haptique et readingDelta RTL.",
+  "acceptance": [
+   "meeshyTapTarget garde le glyphe a sa taille et agrandit la zone sensible a 48 dp ; Modifier.decorative masque halos et anneaux",
+   "toggleState annonce Active/Desactive (4 langues) ; poignees ajustables (pas 0,1 s / 1 %) exposees en progressBarRangeInfo + actions augmenter/diminuer",
+   "MeeshyA11yId reprend les identifiants iOS (login.submit, composer.send, toast.container, conversation.messageList...) ; dismissOnEscape ferme par Echap",
+   "MeeshyHaptics light/medium/heavy/rigid/success/warning/error/selection avec garde d'API ; annonceur no-op sans TalkBack, assertive pour une erreur",
+   "readingDelta inverse la translation en RTL et SwipeToReply l'utilise"
+  ],
+  "tests": [
+   "core/model TapTargetGeometryTest, AdjustStepTest, ReadingDirectionTest",
+   "sdk-ui MeeshyA11yIdTest : constantes == iOS",
+   "sdk-core HapticSurfacingTest (fake)"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-core",
+   ":sdk-ui",
+   ":feature:chat"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/accessibility/TapTargetGeometry.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/accessibility/AdjustStep.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/accessibility/ReadingDirection.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/feedback/HapticSurfacing.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/accessibility/MeeshyTapTarget.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/accessibility/SemanticsKit.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/accessibility/MeeshyA11yId.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/accessibility/EscapeDismiss.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/accessibility/MetaSeparator.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/accessibility/AccessibilityAnnouncer.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/haptics/MeeshyHaptics.kt",
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/SwipeToReply.kt",
+   "apps/android/sdk-ui/src/main/res/values/strings.xml"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/Accessibility.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyAdjustable.swift",
+   "apps/ios/Meeshy/Features/Main/Components/ToggleStateAccessibility.swift",
+   "apps/ios/Meeshy/Features/Main/Components/EscapeDismiss.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Utilities/HapticFeedback.swift",
+   "apps/ios/Meeshy/Features/Main/Components/ReadingDirection.swift"
+  ],
+  "feature_keys": [
+   "dst-a11y-semantics-kit",
+   "dst-a11y-announcements",
+   "dst-haptics",
+   "dst-rtl-reading-direction"
+  ],
+  "rank": 20
+ },
+ {
+  "key": "etats-vides-et-echecs-de-contenu",
+  "title": "Une liste vide ou un contenu introuvable explique pourquoi et ne propose Reessayer que si cela a un sens",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 500,
+  "deps": [
+   "couleurs-de-marque-et-contraste-aa",
+   "echelles-de-jetons-ressorts-et-typographie"
+  ],
+  "goal": "MeeshyEmptyState commun et ContentFetchFailure (reseau, serveur, interdit, introuvable) avec mapping depuis les erreurs du SDK.",
+  "acceptance": [
+   "403/404/410 = absence sans bouton Reessayer ; 5xx = serveur ; IOException = reseau",
+   "Titres et messages localises : Impossible de charger ce contenu / Meeshy n'a pas pu charger ce contenu / Ce contenu n'est plus disponible",
+   "MeeshyEmptyState(icone, titre, sous-titre, action, accent, compact) pour vide a froid, filtre sans resultat, erreur serveur, hors ligne ; titre+sous-titre regroupes pour TalkBack",
+   "Cache vide a froid : placeholder plein cadre avec shimmer MeeshySkeleton, jamais un spinner nu ; cache non vide : aucun squelette",
+   "Liste vide (reponse 200 sans reel) affiche 'Aucun reel pour le moment' ; echec reseau affiche message + bouton Reessayer qui remplit le lecteur deja ouvert sans repasser par le detail",
+   "ContentFetchFailure : 404/403/inconnu -> indisponible, IOException -> reseau, 5xx -> serveur ; un 500 ne dit jamais 'verifiez votre connexion' ; Reessayer n'est offert que si l'echec peut aboutir",
+   "Le detail de post rend des ecrans de meme silhouette (icone, titre, detail, action) pour disparu / reseau / serveur, avec la meme phrase que le lecteur",
+   "Chaines en fr/en/es/pt ; glyphe heros masque a TalkBack"
+  ],
+  "tests": [
+   "core/model ContentFetchFailureTest : isAbsence, offersRetry",
+   "sdk-core ContentFetchFailuresTest : mapping HTTP/IO",
+   "ContentFetchFailureTest : table code HTTP / exception -> cause + retryable",
+   "PostAbsenceReasonTest : ordre des questions (present, chargement, indisponible, reseau, serveur)",
+   "ReelEmptyStatesTest (Robolectric) : froid / vide / echec / indisponible"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-core",
+   ":sdk-ui"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/loading/ContentFetchFailure.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/net/ContentFetchFailures.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/MeeshyEmptyState.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/ContentFetchFailureView.kt",
+   "apps/android/sdk-ui/src/main/res/values/strings.xml",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ContentFetchFailure.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/PostAbsenceReason.kt",
+   "apps/android/feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelEmptyStates.kt",
+   "apps/android/feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelsScreen.kt",
+   "apps/android/feature/feed/src/main/kotlin/me/meeshy/app/feed/PostDetailAbsenceView.kt",
+   "apps/android/feature/feed/src/main/kotlin/me/meeshy/app/feed/PostDetailScreen.kt",
+   "apps/android/feature/reels/src/main/res/values/strings.xml"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Features/Main/Views/ContentFetchFailure+Copy.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Primitives/EmptyStateView.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveContentUnavailableView.swift",
+   "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+EmptyState.swift",
+   "apps/ios/Meeshy/Features/Main/Views/ReelOpenFailureView.swift",
+   "apps/ios/Meeshy/Features/Main/Views/PostDetailAbsenceReason.swift",
+   "apps/ios/Meeshy/Features/Main/Views/PostDetailView+AbsenceStates.swift"
+  ],
+  "feature_keys": [
+   "dst-empty-states",
+   "dst-content-fetch-failure-states",
+   "rfp-reels-states-failure",
+   "rfp-post-detail-absence"
+  ],
+  "absorbed": [
+   "content-absence-states"
+  ],
+  "rank": 21
+ },
+ {
+  "key": "message-fil-decodage-complet-et-tolerant",
+  "title": "Chaque message du serveur s'affiche complet, même quand un champ est malformé ou récent",
+  "domain": "translation-prism-models",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 800,
+  "deps": [
+   "prisme-descente-stricte-loi",
+   "piece-jointe-fil-complet-et-protection"
+  ],
+  "goal": "Compléter ApiMessage avec tout ce que la passerelle sert : repli _id, updatedAt, message transféré (source, expéditeur, pièces), lieu partagé, sticker (racine ou metadata.sticker), avis système (systemEvent et metadata brute), liens suivis, mentions, ephemeralDuration, consumedByMe, chiffrement. Enrichit l'expéditeur (type anonymous/user/bot, nom, avatar résolu, hasAccount), la citation (ApiMessageReplyPreview : id et avatar d'auteur, traductions, langue d'origine, pièces, drapeaux de protection, échéance, attachmentReplyTo) et les traductions (isEncrypted). Décodage tolérant des listes : une traduction ou une pièce malformée n'emporte plus le message.",
+  "acceptance": [
+   "Un message avec une traduction malformée s'affiche avec ses autres traductions et ses pièces ; un payload avec _id seul se décode.",
+   "Un sticker en racine ou dans metadata.sticker donne le même modèle ; un lieu sans texte, un transfert avec conversation d'origine et un message chiffré sont décodés sans être rendus en clair.",
+   "L'expéditeur anonyme est distingué par son type (jamais par un pseudo ano_), les dérivés name, avatar résolu et userId résolu sont disponibles.",
+   "Les anciennes lignes Room (JSON sans les nouveaux champs) se relisent ; un type de message ou une source inconnus sont tolérés.",
+   "displayContent et isTranslated passent originalLanguage à la descente du Prisme.",
+   "Une charge message:new avec metadata.kind = call-summary se décode en CallSummaryMetadata (type audio/video, issue, durée, octets estimés ou non, qualité réseau, appel en cours, terminé par l'initiateur) ; un kind inconnu est ignoré sans erreur",
+   "Les kinds member-joined et members-arrived se décodent en JoinNoticeMetadata et ArrivalsNoticeMetadata ; metadata.sticker (ou le champ hissé) donne un MessageSticker, un sticker vide vaut absence",
+   "Une pièce décode sa protection déclarée : declaredProtection est nul quand le fil ne dit rien, vrai si vue unique ou floutée, jamais un faux fabriqué à partir d'un silence",
+   "Une ligne de cache écrite avant ce lot se décode toujours (tous les nouveaux champs ont une valeur par défaut) et consumedByMe nul est traité comme non ouvert",
+   "Les clés de suivi de liens sont lues au premier niveau ET sous metadata.trackingLinks"
+  ],
+  "tests": [
+   "core/model: ApiMessageDecodingTest — fixtures JSON par forme (transfert, lieu, sticker racine et metadata, avis système, chiffré)",
+   "core/model: ApiMessageLossyDecodingTest — traduction et pièce malformées écartées",
+   "core/model: ApiMessageSenderIdentityTest — type anonymous/user/bot, dérivés",
+   "core/model: ApiMessageReplyPreviewDecodingTest — citation enrichie, attachmentReplyTo",
+   "core/model: MessageTranslationIsEncryptedTest",
+   "MessageRichMetadataDecodingTest : un exemple de charge gateway par famille (appel, arrivée, arrivées groupées, sticker, lieu hissé)",
+   "MessageRichMetadataDecodingTest : metadata au kind inconnu et champs inconnus ne cassent pas le décodage",
+   "MessageRichMetadataDecodingTest : ancienne ligne de cache sans les nouveaux champs",
+   "AttachmentProtectionTest : declaredProtection nul / faux / vrai selon les deux drapeaux",
+   "SerializationTest : aller-retour ApiMessage avec tous les nouveaux champs"
+  ],
+  "android_modules": [
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/Message.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ApiMessageDetail.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/MessageSticker.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/MessageSystemMetadata.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/serialization/LossyListSerializer.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/CallSummaryMetadata.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/JoinNoticeMetadata.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ArrivalsNoticeMetadata.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/AttachmentConsumption.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/AttachmentProtection.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/model/MessageRichMetadataDecodingTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/model/SerializationTest.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/APIMessage.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/APIMessageSender.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/APIMessageSenderUser.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/APIForwardedFrom.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/APITextTranslation.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/MessageSticker.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/APIMessageReplyTo.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/APIMessageAttachment.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/CallSummaryMetadata.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/ConsumeViewOnceResponse.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/ArrivalsNoticeMetadata.swift"
+  ],
+  "feature_keys": [
+   "tpm-message-wire-decoding",
+   "tpm-message-domain-mapping",
+   "cbr-content-model",
+   "cbr-sticker",
+   "cbr-call-notice",
+   "cbr-system-notices",
+   "cbr-protected-veil"
+  ],
+  "absorbed": [
+   "chat-dto-messages-riches"
+  ],
+  "rank": 22
+ },
+ {
+  "key": "persist-room-migrations",
+  "title": "Une mise à jour de l'app ne détruit plus la file d'envoi, les médias en attente ni les points de reprise",
+  "domain": "sdk-persistence-cache-offline",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 450,
+  "deps": [
+   "dependances-gradle-scene-medias"
+  ],
+  "goal": "Remplacer fallbackToDestructiveMigration par des migrations Room versionnées avec schémas JSON exportés (baseline v16), interdire la destruction des tables durables (outbox, media_blob, tus_upload_checkpoint, sync_meta) et garder la CI rouge dès qu'une version change sans migration ni schéma.",
+  "acceptance": [
+   "Monter la version Room sans Migration ni schéma JSON fait échouer la CI (script check-room-schema.sh branché dans android.yml + test MigrationTestHelper)",
+   "exportSchema = true et le schéma v16 est commité comme baseline ; room.schemaLocation configuré via KSP",
+   "Migrer depuis v16 conserve octet pour octet les lignes outbox, media_blob, tus_upload_checkpoint et sync_meta (le test insère à v16, migre, relit)",
+   "Une migration qui échoue ne détruit jamais une table durable : seules les tables de cache (liste CacheTables exhaustive, gardée par un test qui classe chaque @Entity en durable ou cache) sont recréées puis repeuplées par le SWR (skeleton sur cache vide, jamais d'écran d'erreur)",
+   "fallbackToDestructiveMigrationFrom(1..15) documente le baseline ; fallbackToDestructiveMigrationOnDowngrade ne vide que les tables de cache",
+   "Le helper de reconstruction de table (copie, drop, rename) est prouvé sur un changement de clé primaire",
+   "Hors-ligne après mise à jour : un message déjà en file part toujours au retour du réseau",
+   "Passer de la version 16 à la 17 conserve les lignes d'outbox PENDING et INFLIGHT, les messages et les conversations en cache : un message en file avant la mise à jour part après elle, hors ligne puis reconnecté.",
+   "Plus aucun fallbackToDestructiveMigration, hormis fallbackToDestructiveMigrationOnDowngrade : une entité modifiée sans migration fait échouer un test.",
+   "exportSchema est actif et le JSON de la version 17 est versionné dans core/database/schemas.",
+   "Les quatre DAO sont utilisables : réception éphémère idempotente et monotone par messageId, révisions d'édition par message, contacts du répertoire en payload JSON, index média par (conversation, genre) trié par date.",
+   "Une procédure d'ajout de table (Migration + test) est documentée en tête de Migrations.kt pour les lots suivants."
+  ],
+  "tests": [
+   "core/database MeeshyMigrationTest : MigrationTestHelper rejoue 16 vers la version courante et compare les lignes durables",
+   "core/database DurableTablesGuardTest : rougit si une @Entity n'est classée ni durable ni cache",
+   "core/database TableRebuildTest : changement de clé primaire sans perte de ligne",
+   "core/database MigrationFailureKeepsOutboxTest : migration forcée en échec, l'outbox survit",
+   "core/database: MigrationsTest — Robolectric + MigrationTestHelper, 16 vers 17 conserve outbox, messages, conversations",
+   "core/database: OutboxSurvivesUpgradeTest — une ligne PENDING lue après migration",
+   "core/database: EphemeralReceiptDaoTest — upsert idempotent, jamais de recul de receivedAt",
+   "core/database: EditRevisionDaoTest, DirectoryContactDaoTest, MediaIndexDaoTest — tri, purge, suppression par message"
+  ],
+  "android_modules": [
+   ":core:database"
+  ],
+  "android_files_touched": [
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/MeeshyDatabase.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/DatabaseModule.kt",
+   "apps/android/core/database/build.gradle.kts",
+   "apps/android/gradle/libs.versions.toml",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/migration/MeeshyMigrations.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/migration/DurableTables.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/migration/TableRebuild.kt",
+   "apps/android/core/database/schemas/me.meeshy.core.database.MeeshyDatabase/16.json",
+   "apps/android/core/database/src/test/kotlin/me/meeshy/core/database/migration/MeeshyMigrationTest.kt",
+   "apps/android/core/database/src/test/kotlin/me/meeshy/core/database/migration/DurableTablesGuardTest.kt",
+   "apps/android/scripts/check-room-schema.sh",
+   ".github/workflows/android.yml",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/migration/Migrations.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/entity/EphemeralReceiptEntity.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/entity/EditRevisionEntity.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/entity/DirectoryContactEntity.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/entity/MediaIndexEntity.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/dao/EphemeralReceiptDao.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/dao/EditRevisionDao.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/dao/DirectoryContactDao.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/dao/MediaIndexDao.kt",
+   "apps/android/core/database/schemas/"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/Migrations/DatabaseMigration.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/Migrations/AppDatabaseMigrations.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessageDatabaseMigrations.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/FeedDatabaseMigrations.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/Migrations/MessageMigrations+Outbox.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/SearchIndexMigrations.swift"
+  ],
+  "feature_keys": [
+   "pco-db-migrations-no-data-loss",
+   "tpm-ephemeral-deadline-schedule",
+   "tpm-msg-edit-history",
+   "tpm-address-book-directory",
+   "tpm-conv-media-kinds"
+  ],
+  "absorbed": [
+   "base-donnees-migrations-explicites"
+  ],
+  "rank": 25
+ },
+ {
+  "key": "reseau-pipeline-reessai-erreurs",
+  "title": "Chaque appel réseau se réessaie tout seul, échoue lisiblement et ne rejoue jamais un refus définitif",
+  "domain": "sdk-networking-sockets-sync",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 900,
+  "deps": [
+   "dependances-gradle-scene-medias"
+  ],
+  "goal": "Poser le pipeline HTTP unique de :core:network : réessai 429/503 avec Retry-After (3 tentatives, plafond 30 s, sinon 2^n s), table de politique par route (authentification bearer / aucune / identifiants, réessai standard / jamais, refus opaque / structuré), garde d'URL, taxonomie d'erreurs typée avec libellé FR et icône, journal des requêtes lentes. Pose aussi le mécanisme de parallélisme du domaine : OkHttpClient et Retrofit fournis en singletons Hilt, intercepteurs et authenticator contribués par un multibinding ordonné (HttpClientContributor) ; plus aucun lot suivant n'édite MeeshyApi.create, et chaque nouvelle interface Retrofit se déclare dans son propre module Hilt.",
+  "acceptance": [
+   "Un 429 ou 503 est rejoué jusqu'à 3 fois : délai = Retry-After (entier ou date HTTP, plafonné à 30 s), sinon 2^tentative secondes ; la 4e réponse remonte telle quelle à l'appelant.",
+   "Jamais rejoué : un 429 portant DAILY_COMMENT_LIMIT, DAILY_REACTION_LIMIT ou NEWCOMER_SLOW_MODE, toute route /signal/*, toute requête dont la politique est « jamais ».",
+   "Politique par route : /auth/login* et /auth/verification/status = identifiants (un 401 y signifie Identifiants invalides) ; /auth/refresh, /auth/register*, /auth/magic-link* = aucune authentification ; le reste = bearer ; register, verify-email, reset-password = refus structurés.",
+   "Un chemin à segment vide, à double slash ou à slash final est refusé AVANT envoi avec l'erreur « URL invalide », sans aucun appel réseau.",
+   "SocketTimeoutException donne timeout, UnknownHostException/ConnectException donne serverUnreachable, absence de réseau donne noConnection ; chaque catégorie expose un libellé FR et un nom d'icône (wifi_off, lock, dns, lock_open) pour les états d'erreur et hors ligne des écrans.",
+   "Une requête de plus d'1 s est journalisée « Slow request » avec la ventilation réseau / décodage ; une erreur de décodage cite le chemin du champ fautif ; aucun corps sensible n'est journalisé.",
+   "Un lot ultérieur ajoute un intercepteur ou un authenticator par un @IntoSet HttpClientContributor sans modifier MeeshyApi.create ; l'ordre est déterministe (priorité) et couvert par test ; la signature create(config, tokenStore, onSessionExpired) reste compatible.",
+   "Aucun littéral de chemin d'API hors interface *Api ou :core:model (ApiPathLiteralGuardTest reste vert)."
+  ],
+  "tests": [
+   "RetryDecisionTest (:core:model, pur) : Retry-After entier, date HTTP, absent, négatif, supérieur à 30 s",
+   "EndpointPolicyTest : table complète authKind / retryPolicy / rejectionPolicy, y compris /signal/* jamais réessayé",
+   "UrlGuardInterceptorTest : segment vide, double slash, slash final, chemin valide",
+   "RetryInterceptorTest (MockWebServer) : 429 puis 200, 3 échecs puis remontée, DAILY_* jamais rejoué, /signal/* jamais rejoué",
+   "MeeshyErrorMapperTest : chaque exception vers sa catégorie, libellé FR et icône",
+   "HttpClientContributorOrderTest : ordre par priorité stable, authenticator contribuable",
+   "MeeshyApiCreateCompatibilityTest : l'ancienne signature create() construit toujours un client équivalent"
+  ],
+  "android_modules": [
+   ":core:network",
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/MeeshyApi.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/NetworkModule.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/ApiCall.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/HttpClientContributor.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/RetryInterceptor.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/EndpointPolicyInterceptor.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/UrlGuardInterceptor.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/SlowRequestEventListener.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/MeeshyErrorMapper.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/EndpointPolicy.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/RetryDecision.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/error/MeeshyError.kt",
+   "apps/android/gradle/libs.versions.toml",
+   "apps/android/core/network/build.gradle.kts"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient+Perform.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIRequestPipeline.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints/MeeshyEndpointPolicy.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints/MeeshyEndpoint.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Core/MeeshyError.swift"
+  ],
+  "feature_keys": [
+   "nss-http-request-pipeline"
+  ],
+  "rank": 26
+ },
+ {
+  "key": "socle-points-d-extension-de-l-app",
+  "title": "Le chassis de l'app accueille de nouveaux ecrans, superpositions et taches de demarrage sans toucher a MeeshyApp",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "L",
+  "est_kotlin_lines": 1200,
+  "deps": [
+   "dependances-gradle-scene-medias"
+  ],
+  "goal": "Decouper MeeshyApp.kt (1202 lignes, plafond dur) en Routes.kt, graphes par domaine, FloatingChrome.kt et SplashOverlay.kt sans changer le comportement ; ajouter les six points d'extension Hilt et les dependances Gradle des lots suivants.",
+  "acceptance": [
+   "L'ensemble des routes, arguments et navDeepLink est identique avant/apres (snapshot) ; MeeshyApp.kt <= 450 lignes, aucun fichier cree > 600 lignes",
+   "Un AppInitializer lie en @IntoSet s'execute une fois dans MeeshyApplication.onCreate et une exception n'empeche pas les suivants",
+   "Un AppOverlay s'affiche au-dessus du NavHost selon son ordre (sous le splash), un AppLocalsProvider enveloppe le NavHost, un NavGraphContributor ajoute des destinations, un RealtimeBinding est attache/detache par RealtimeSessionCoordinator",
+   "SessionTeardown.wipe() vide chaque PerAccountCache lie (idempotent)",
+   "assembleDebug passe en CI avec les nouvelles dependances sans changement fonctionnel",
+   "Aucun changement de comportement: mêmes routes, mêmes arguments, mêmes navDeepLink, même ordre de composition; les tests MeeshyAppMenuItemsTest, LeftButtonTapTargetTest, LaunchRouterTest, GuestJoinShareDeepLinkTest, MagicLinkDeepLinkTest, ProfileShareDeepLinkTest passent sans modification.",
+   "MeeshyApp.kt <= 400 lignes et aucun fichier du dossier navigation > 600 lignes; Routes reste dans le même package (aucun import à changer ailleurs).",
+   "L'isolation de recomposition du chrome flottant (ChromeViewModel lu dans MeeshyFloatingChrome, jamais dans MeeshyApp) est préservée.",
+   "La signature publique de MeeshyApp (floatingButtonPositions, sessionExpiry, launchRoute, onLaunchRouteConsumed) est inchangée pour MainActivity.",
+   "Toutes les routes existantes gardent exactement leur chaîne (settings, settings/change-password, settings/two-factor, settings/account-contact, settings/media-download, settings/media-cache, settings/privacy, settings/sessions, settings/data-export, settings/diagnostics, settings/about, settings/support, settings/licenses, settings/legal/{doc}, settings/delete-account).",
+   "Chaque destination settings/* se résout depuis le nouveau graphe et le retour arrière se comporte comme avant.",
+   "La déconnexion garde sa navigation actuelle (navigate LOGIN avec popUpTo CONVERSATIONS inclusive).",
+   "MeeshyApp.kt passe sous 1100 lignes ; Routes.SETTINGS et Routes.legal(kind) restent utilisables par les appelants existants.",
+   "Aucun nouvel écran, aucune nouvelle chaîne visible."
+  ],
+  "tests": [
+   "app/src/test/.../navigation/RoutesContractTest.kt : valeurs et arguments figes",
+   "app/src/test/.../navigation/NavGraphRouteSetTest.kt : union des routes == snapshot d'avant",
+   "app/src/test/.../startup/AppInitializerRunnerTest.kt : ordre et isolation des erreurs",
+   "sdk-core SessionTeardownTest etendu : PerAccountCache vide a la deconnexion ; MeeshyAppMenuItemsTest et LeftButtonTapTargetTest restent verts",
+   "app RoutesPatternsTest: chaque constante Routes/DEEP_LINK reste identique (instantané des patterns)",
+   "app RootNavGraphsCoverageTest: chaque Routes.* déclarée est enregistrée une et une seule fois dans les graphes (garde contre une destination oubliée à l'extraction)",
+   "Non-régression: suite app/src/test/.../navigation inchangée et verte",
+   "SettingsRoutesTest : instantané de toutes les constantes de routes Réglages et de Routes.legal(kind) pour chaque LegalDocumentKind",
+   "MeeshyAppMenuItemsTest existant reste vert (non-régression)",
+   "LaunchRouterTest et CallRouteTest existants restent verts"
+  ],
+  "android_modules": [
+   ":app",
+   ":sdk-core",
+   ":sdk-ui"
+  ],
+  "android_files_touched": [
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/Routes.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/FloatingChrome.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/SplashOverlay.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/graph/AuthNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/graph/ConversationsNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/graph/FeedNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/graph/SettingsNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/graph/SocialNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/graph/CallNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/graph/NavGraphContributor.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/startup/AppInitializer.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/startup/AppOverlay.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/startup/AppLocalsProvider.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/startup/StartupModule.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/MeeshyApplication.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/RealtimeBinding.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/RealtimeSessionCoordinator.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/session/PerAccountCache.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/session/SessionTeardown.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/di/SdkModule.kt",
+   "apps/android/gradle/libs.versions.toml",
+   "apps/android/app/build.gradle.kts",
+   "apps/android/sdk-ui/build.gradle.kts",
+   "apps/android/sdk-core/build.gradle.kts",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/RootNavHost.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/RootSplashGate.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/RootFloatingChrome.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/RootCallBridge.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/AuthNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/ConversationsNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/FeedNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/SettingsNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/ProfileNavGraph.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/StoriesNavGraph.kt",
+   "apps/android/app/src/test/kotlin/me/meeshy/app/navigation/SettingsRoutesTest.kt"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Features/Main/Views/AdaptiveRootView.swift",
+   "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",
+   "apps/ios/Meeshy/Features/Main/Views/RootView.swift",
+   "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift",
+   "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+   "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
+   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+  ],
+  "feature_keys": [
+   "dst-nav-router-stack",
+   "cl-root-floating-buttons-menu",
+   "cl-root-deeplinks",
+   "cl-root-adaptive-tablet",
+   "sps-settings-hub"
+  ],
+  "absorbed": [
+   "racine-decoupage-navigation",
+   "settings-nav-graph-extraction"
+  ],
+  "rank": 27
+ },
+ {
+  "key": "table-correspondance-chaines",
+  "title": "Chaque chaîne Android sait de quelle clé iOS elle vient, ou dit qu'elle n'en a pas",
+  "domain": "resources-i18n-assets",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 650,
+  "deps": [
+   "generateur-chaines-ios",
+   "garde-localisation-android"
+  ],
+  "goal": "Produire les 13 manifestes apps/android/i18n/manifest/<module>.json : pour chaque entrée, clé iOS, catalogue source, nom Android, genre (string ou plurals) et statut (adopted, candidate, android-only, disabled). Un script de bootstrap apparie les 1 593 noms Android existants aux clés iOS par texte anglais exact (1 001 appariements) et sort la liste des 592 restants à classer à la main (équivalent par le sens = candidate, sinon android-only). Un script de scaffold prépare les manifestes des modules à venir (jeu, composer, focal, lentille) avec toutes leurs clés non stale en disabled. Brancher le contrôle de génération et les tests Python dans android.yml. Aucun strings.xml n'est modifié : aucun site d'appel ne change.",
+  "acceptance": [
+   "Les 1 593 noms définis dans les strings.xml des 13 modules figurent chacun dans le manifeste de leur module avec un statut ; aucun nom n'est renommé (zéro site d'appel modifié).",
+   "Les 1 001 chaînes dont le texte anglais est identique à une clé iOS sont en candidate ; les 592 autres sont triées par un humain en android-only ou candidate (équivalent par le sens), et le rapport des non-appariées est joint à la PR.",
+   "scaffold_module.py --module game --prefix game.,game2.,progression.,achievement. crée un manifeste de 1 414 clés non stale en disabled avec des noms snake_case déterministes sans collision ; les mêmes commandes pour composer (398), focal (23) et lentille (30) fonctionnent ; passer une clé en adopted tient en une ligne.",
+   "android.yml exécute les tests Python et python3 apps/android/scripts/i18n/xcstrings_to_android.py --check ; son filtre paths inclut Localizable.xcstrings de l'app, du SDK MeeshyUI, des widgets, de la NSE, de l'extension de contenu et InfoPlist.xcstrings ; l'échec est bloquant pour une PR touchant apps/android et consultatif pour une PR iOS seule.",
+   "StringManifestIntegrityTest : JSON valide, androidName unique par module, tout nom adopted existe dans le XML généré du module et pas dans son strings.xml, tout nom de strings.xml est classé dans le manifeste (pas d'orphelin)."
+  ],
+  "tests": [
+   "test_bootstrap_manifest : appariement par texte anglais exact avec normalisation des spécificateurs (%@ contre %1$s), deux clés iOS de même texte donnent un candidat ambigu signalé, une chaîne sans équivalent tombe dans le rapport.",
+   "test_scaffold_module : préfixes multiples, exclusion des stale, noms déterministes à l'exécution répétée, résolution des collisions.",
+   "StringManifestIntegrityTest : un orphelin, un doublon de nom et un adopted resté dans strings.xml font chacun échouer le test."
+  ],
+  "android_modules": [
+   "scripts",
+   ":app"
+  ],
+  "android_files_touched": [
+   "apps/android/i18n/manifest/app.json",
+   "apps/android/i18n/manifest/sdk-ui.json",
+   "apps/android/i18n/manifest/auth.json",
+   "apps/android/i18n/manifest/calls.json",
+   "apps/android/i18n/manifest/chat.json",
+   "apps/android/i18n/manifest/contacts.json",
+   "apps/android/i18n/manifest/conversations.json",
+   "apps/android/i18n/manifest/feed.json",
+   "apps/android/i18n/manifest/notifications.json",
+   "apps/android/i18n/manifest/profile.json",
+   "apps/android/i18n/manifest/reels.json",
+   "apps/android/i18n/manifest/settings.json",
+   "apps/android/i18n/manifest/stories.json",
+   "apps/android/scripts/i18n/bootstrap_manifest.py",
+   "apps/android/scripts/i18n/scaffold_module.py",
+   "apps/android/scripts/i18n/tests/test_bootstrap_manifest.py",
+   "apps/android/scripts/i18n/tests/test_scaffold_module.py",
+   "apps/android/app/src/test/kotlin/me/meeshy/app/i18n/StringManifestIntegrityTest.kt",
+   ".github/workflows/android.yml"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Localizable.xcstrings",
+   "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
+   "apps/ios/MeeshyWidgets/Localizable.xcstrings",
+   "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
+   "apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings",
+   "apps/ios/scripts/check_localization.py"
+  ],
+  "feature_keys": [
+   "res-strings-xcstrings-sync-pipeline",
+   "res-strings-domain-game-progression",
+   "res-strings-domain-composer-focal-lentille"
+  ],
+  "rank": 28
+ },
+ {
+  "key": "identite-client-et-environnement-serveur",
+  "title": "Le serveur sait quelle version et quel appareil lui parlent, et le serveur choisi pilote tout de façon cohérente",
+  "domain": "sdk-networking-sockets-sync",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 600,
+  "deps": [
+   "reseau-pipeline-reessai-erreurs"
+  ],
+  "goal": "Annoncer à chaque requête version, build, plateforme, modèle lisible, OS, fuseau, locale / région et nom d'appareil (X-Meeshy-*, X-App-Version, X-App-Platform, X-Meeshy-Capabilities limité à ce que le binaire sait lire), comparer les versions numériquement, unifier les environnements (STAGING) et valider les URL médias (https, loopback, plages privées refusées) ; fixer la limite client de 2000 caractères d'un message.",
+  "acceptance": [
+   "Chaque requête porte X-Meeshy-Version, X-Meeshy-Build, X-Meeshy-Platform=android, X-Meeshy-Device (modèle lisible via table identifiant vers nom, repli MANUFACTURER MODEL), X-Meeshy-OS, X-Meeshy-Timezone, X-Meeshy-Locale, X-Meeshy-Country, ainsi que X-App-Version et X-App-Platform=android ; un en-tête posé par l'appelant n'est jamais écrasé.",
+   "X-Meeshy-Capabilities ne déclare que ce que le binaire sait lire (onboarding-age et link-device-binding restent absents tant que leurs écrans ne sont pas livrés) ; X-Canvas-Caps et X-Device-Locale restent inchangés.",
+   "La comparaison de versions est numérique segment par segment, un segment non numérique valant 0 : 1.10.0 est supérieur à 1.9.0, abc vaut 0.",
+   "Une URL média n'est acceptée qu'en https (ou http en loopback) ; 10/8, 172.16/12, 192.168/16, 169.254/16 et 127/8 sont refusées hors environnement local ; file:// local passe ; une URL refusée ne déclenche aucune requête.",
+   "MeeshyConfig.STAGING et ServerEnvironment.STAGING pointent le même hôte (celui réellement déployé, vérifié contre la configuration iOS) ; l'hôte choisi pilote API, socket, web et médias de façon cohérente.",
+   "La limite de 2000 caractères est une constante partagée (MessageLimits) utilisée par le détecteur de collage ; au-delà, la pièce jointe .txt est proposée."
+  ],
+  "tests": [
+   "AppVersionHeaderTest (:core:model) : compare / isBelow, segments non numériques, longueurs différentes",
+   "DeviceModelNameTest : table connue et repli",
+   "MediaUrlPolicyTest : https, http loopback, chaque plage privée, file://, schéma inconnu",
+   "ClientInfoInterceptorTest : chaque en-tête, en-tête appelant préservé",
+   "ClientCapabilitiesInterceptorTest étendu : capacités déclarées seulement si lisibles",
+   "ServerEnvironmentConsistencyTest : STAGING unique, origines dérivées"
+  ],
+  "android_modules": [
+   ":core:network",
+   ":core:model",
+   ":sdk-core",
+   ":feature:chat"
+  ],
+  "android_files_touched": [
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/ClientInfoInterceptor.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/ClientInfoProvider.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/ClientCapabilitiesInterceptor.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/MeeshyConfig.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/auth/ServerEnvironment.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/DeviceModelName.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/AppVersionHeader.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/ClientCapabilities.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/MessageLimits.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/MediaUrlPolicy.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/util/MediaUrlResolver.kt",
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/LargePasteDetector.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/ClientInfoProvider.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/AppVersionHeader.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/ClientCapabilities.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/DeviceModelName.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Configuration/MeeshyConfig.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Core/MessageLimits.swift"
+  ],
+  "feature_keys": [
+   "nss-http-client-identity-headers",
+   "nss-http-environment-config"
+  ],
+  "rank": 30
+ },
+ {
+  "key": "persist-app-lifecycle-hooks",
+  "title": "Les services de persistance se réveillent et se vident aux bons moments (démarrage, premier plan, arrière-plan, mémoire basse)",
+  "domain": "sdk-persistence-cache-offline",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "S",
+  "est_kotlin_lines": 280,
+  "deps": [
+   "socle-points-d-extension-de-l-app"
+  ],
+  "goal": "Introduire un point d'extension unique AppLifecycleHook (multibinding Hilt) câblé UNE fois dans MeeshyApplication, pour que les balayages de démarrage, la reconciliation d'envois, le flush du cache L1, la rétention et la pression disque s'enregistrent sans éditer l'Application.",
+  "acceptance": [
+   "Un hook enregistré par @IntoSet reçoit onAppCreate, onForeground (ON_START après un passage en arrière-plan), onBackground (ON_STOP) et onTrimMemory(niveau)",
+   "Un hook qui lève n'empêche pas les suivants (try/catch + Timber) et ne bloque jamais le fil principal (exécution hors main)",
+   "ThrottleWindow garantit « au plus une passe par 10 minutes » et « jamais deux à la fois » pour les hooks qui le demandent",
+   "Les niveaux de ComponentCallbacks2 sont ramenés à un TrimLevel pur (UI_HIDDEN, RUNNING_CRITICAL, COMPLETE)",
+   "L'observateur de présence existant de MeeshyApplication reste inchangé",
+   "Tâche de démarrage exécutée une fois par processus, dans l'ordre de sa priorité, hors fil principal.",
+   "Tâche de premier plan exécutée à chaque ON_START avec anti-rebond >= 500 ms, jamais en arrière-plan.",
+   "Une tâche qui lève ne bloque aucune autre (erreur journalisée) ; un doublon de nom fait échouer le build debug."
+  ],
+  "tests": [
+   "sdk-core AppLifecycleDispatcherTest : ordre, isolation des exceptions, hors-main",
+   "core/model ThrottleWindowTest : fenêtre de 10 min, non-concurrence, horloge injectée",
+   "core/model TrimLevelTest : mapping des constantes ComponentCallbacks2",
+   "AppLifecycleRunnerTest (app) : ordre, isolation d'un échec",
+   "AppLifecycleModuleTest (app, Robolectric)"
+  ],
+  "android_modules": [
+   ":sdk-core",
+   ":app",
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/lifecycle/AppLifecycleHook.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/lifecycle/AppLifecycleDispatcher.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/di/LifecycleModule.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/lifecycle/ThrottleWindow.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/lifecycle/TrimLevel.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/MeeshyApplication.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/lifecycle/AppLifecycleDispatcherTest.kt",
+   "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/lifecycle/ThrottleWindowTest.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/startup/AppLifecycleTask.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/startup/AppLifecycleModule.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheBackgroundFlushTask.swift",
+   "apps/ios/Meeshy/Core/DiskPressureSweeper.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OfflineQueue+Recovery.swift",
+   "apps/ios/Meeshy/Features/Main/Services/WidgetActionFlusher.swift",
+   "apps/ios/Meeshy/Features/Main/Services/SharePendingSendConsumer.swift"
+  ],
+  "feature_keys": [
+   "pco-cache-coordinator-l1-l2-stores",
+   "pco-offline-queue-actor-lifecycle",
+   "pco-media-disk-pressure-eviction",
+   "ext-widget-data-pipeline",
+   "ext-share-durable-send",
+   "ext-share-direct-targets",
+   "ext-ongoing-activity-host"
+  ],
+  "absorbed": [
+   "app-lifecycle-task-registry"
+  ],
+  "rank": 31
+ },
+ {
+  "key": "persist-cache-entries-store",
+  "title": "Les listes secondaires se rouvrent instantanément depuis le disque grâce à un cache générique à écriture différentielle",
+  "domain": "sdk-persistence-cache-offline",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "L",
+  "est_kotlin_lines": 1300,
+  "deps": [
+   "persist-room-migrations",
+   "persist-cache-policy-loadstate"
+  ],
+  "goal": "Créer la table Room cache_entries et un CacheStore générique (écriture-diff par contentHash, trois modes d'écriture, plafond maxItemCount, loadIgnoringExpiry, curseur de pagination persisté) pour ne pas multiplier une entité Room par ressource.",
+  "acceptance": [
+   "Une ligne = (namespace, key, itemId, position, contentHash SHA-256, lastFetchedAt, payload) ; migration Room versionnée vers la prochaine version libre",
+   "L'écriture est un diff : lignes sorties supprimées, lignes au hash inchangé sautées, seul le reste est écrit ; une revalidation sans changement n'émet aucune mise à jour Room (aucune recomposition de la liste)",
+   "Trois modes : save (un fetch réseau avance l'horloge), savePreservingFreshness (une mutation locale ne rend pas la clé faussement fraîche), saveAsStale (instantané poussé par FCM daté juste au-delà de la fenêtre fraîche pour forcer la revalidation)",
+   "maxItemCount tronque les plus anciens à l'écriture ; l'expiré reste lisible via loadIgnoringExpiry",
+   "Le curseur de pagination et hasMore sont persistés avec la liste et rechargés au cold start",
+   "Échec de décodage d'une ligne = cache miss silencieux (revalidation réseau), jamais un crash",
+   "Hors-ligne : une liste gérée par ce store se peint depuis le disque sans spinner",
+   "Mise à jour de l'app depuis une base v16 contenant des lignes d'outbox PENDING : les lignes survivent à la migration 16 vers 17 (le fallbackToDestructiveMigration n'est pas déclenché).",
+   "Une ressource jamais synchronisée est servie Empty (squelette autorisé) ; une ressource synchronisée mais vide est servie Fresh ou Stale avec liste vide (vrai état vide, distinct du démarrage à froid).",
+   "Fresh (dans la fenêtre freshFor) : aucune requête réseau. Stale : valeur servie immédiatement puis revalidation silencieuse. Expiré : Syncing(valeur) : jamais de spinner sur un cache non vide.",
+   "Un échec réseau de revalidation (y compris hors ligne) ne remplace ni ne vide le cache : la dernière valeur reste servie.",
+   "Deux espaces de noms (ex. community:list et participants:<convId>) ne s'écrasent jamais ; purge possible par espace de noms.",
+   "Une charge illisible (schéma de modèle ayant évolué) est traitée comme absente (Empty) et jamais comme un crash.",
+   "La déconnexion vide la table par le chemin existant (SessionTeardown.clearAllTables) : aucun contenu d'un utilisateur ne survit pour le suivant."
+  ],
+  "tests": [
+   "core/model CacheDiffTest : insertions, mises à jour, suppressions, inchangé, troncature",
+   "core/database CacheEntryDaoTest (Robolectric) : upsert, purge par namespace, plafond",
+   "sdk-core RoomCacheStoreTest : trois modes d'écriture et horloge de fraîcheur",
+   "sdk-core RoomCacheStoreEmissionTest (Turbine) : revalidation identique = zéro émission",
+   "sdk-core CacheCursorStoreTest : curseur survivant au redémarrage",
+   "core/database KeyedJsonCacheDaoTest (Robolectric, calqué sur OutboxDaoTest) : upsert/observe par (espace de noms, clé), deleteNamespace, deux espaces isolés.",
+   "core/database Migration16To17Test : ouvre une base v16 minimale via SupportSQLiteOpenHelper contenant une ligne d'outbox, applique MIGRATION_16_17, vérifie que la ligne survit et que keyed_json_cache existe.",
+   "sdk-core KeyedJsonCacheSourceTest (runTest + Turbine + CacheClock factice) : Empty, Fresh sans revalidation, Stale avec revalidation, Syncing, échec réseau conserve le cache, charge illisible donne Empty.",
+   "sdk-core SessionTeardownTest : après teardown, la table keyed_json_cache est vide."
+  ],
+  "android_modules": [
+   ":core:database",
+   ":sdk-core",
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/entity/CacheEntryEntity.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/dao/CacheEntryDao.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/MeeshyDatabase.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/DatabaseModule.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/migration/MeeshyMigrations.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/cache/CacheDiff.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/cache/FreshnessWriteMode.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/store/CacheStore.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/store/RoomCacheStore.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/store/CacheCursorStore.kt",
+   "apps/android/core/database/src/test/kotlin/me/meeshy/core/database/CacheEntryDaoTest.kt",
+   "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/cache/CacheDiffTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/cache/store/RoomCacheStoreTest.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/entity/KeyedJsonCacheEntity.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/dao/KeyedJsonCacheDao.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/Migrations.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/KeyedJsonCache.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/cache/KeyedJsonCacheSource.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/GRDBCacheStore.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/GRDBCacheL2.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/CacheEntry.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/DBCacheMetadata.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheCoordinator.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheStoreProtocols.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheResult.swift"
+  ],
+  "feature_keys": [
+   "pco-cache-coordinator-l1-l2-stores",
+   "pco-swr-cache-policy-states",
+   "gcom-community-data-layer",
+   "gcom-participants-cache-service"
+  ],
+  "absorbed": [
+   "cache-json-par-cle-room"
+  ],
+  "rank": 32
+ },
+ {
+  "key": "persist-outbox-schema-metadonnees",
+  "title": "Chaque envoi en attente porte son prochain essai, son erreur et son propriétaire, et un kind inconnu ne fait plus planter l'app",
+  "domain": "sdk-persistence-cache-offline",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 380,
+  "deps": [
+   "persist-room-migrations",
+   "persist-outbox-registre-senders"
+  ],
+  "goal": "Étendre OutboxEntity (nextAttemptAt, lastError, waitingSince, cancelRequestedAt, ownerId), ajouter les requêtes DAO du flusher et de la pastille, un catalogue de métadonnées par kind (compte pour la synchro, ligne terminale jetable, valeur disque stable) et un décodage tolérant des kinds inconnus.",
+  "acceptance": [
+   "Migration vers la prochaine version libre : colonnes nullables ajoutées, aucune ligne existante perdue",
+   "OutboxDao expose : lignes échues (nextAttemptAt <= now), reclaim des INFLIGHT périmés (> 30 min), compteur actif hors kinds exclus, haut de file (50), épuisées plus anciennes que N jours, hasUnsentRow(kind, ancre), lignes par propriétaire",
+   "Catalogue par kind : countsForSyncIndicator (faux pour READ_RECEIPT et futurs rapports de lecture/vues de story/consommation/capture), terminalDisposable, valeur disque stable",
+   "kindEnum est tolérant : un kind écrit par un build plus récent est ignoré (jamais OutboxKind.valueOf qui lève) et loggué",
+   "Un test verrouille les noms disque de OutboxKind (append-only) : renommer un kind est une migration",
+   "Chaque OutboxKind a exactement un sender enregistré : un test exhaustif échoue si un type est ajouté sans sender (même garantie structurelle que OutboxLaneMap).",
+   "Une mutation enfilée par le compte A pendant que B est connecté ne part pas, n'est pas supprimée et repart quand A revient ; elle ne consomme aucune tentative pendant l'attente.",
+   "Un résultat Deferred (origine d'un transfert pas encore livrée) ne consomme pas de tentative et s'épuise proprement au-delà de la borne d'attente.",
+   "Une charge illisible n'est jamais rejouée en boucle : la ligne est supprimée après acceptation et l'issue Exhausted est publiée.",
+   "Une relance manuelle d'une ligne sans auteur lui donne l'auteur courant ; une ligne sans auteur issue d'avant la migration s'épuise sans rien envoyer ni supprimer de données d'autrui.",
+   "La réconciliation d'un envoi réussi (ligne optimiste -> envoyé) reste appliquée par le worker sans ViewModel vivant (aucun doublon après rechargement à froid).",
+   "Migration 17->18 conserve toutes les lignes ; aucun repli destructif."
+  ],
+  "tests": [
+   "core/database OutboxDaoTest : échues, reclaim, compteur exclu, hasUnsentRow",
+   "sdk-core OutboxKindDiskValuesLockTest : liste figée des noms",
+   "sdk-core OutboxKindCatalogTest : exhaustivité du catalogue sur OutboxKind.entries",
+   "sdk-core OutboxTolerantKindTest : kind inconnu ignoré sans exception",
+   "OutboxSenderRegistryTest : couverture exhaustive OutboxKind -> sender via groupes multibindés",
+   "OutboxDrainerTest : Deferred sans consommation de tentative, borne d'attente, cascade d'échec",
+   "OutboxAuthorGuardTest : A/B bascule, reprise de A, ligne sans auteur, relance manuelle",
+   "OutboxCorruptPayloadTest : charge illisible acceptée puis supprimée, Exhausted publié",
+   "MeeshyDatabaseMigration17To18Test (Robolectric, DDL v17 à la main)",
+   "OutboxFlushWorkerReconcileTest : reconcileSent appliqué sans ViewModel"
+  ],
+  "android_modules": [
+   ":core:database",
+   ":sdk-core"
+  ],
+  "android_files_touched": [
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/entity/OutboxEntity.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/dao/OutboxDao.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/MeeshyDatabase.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/migration/MeeshyMigrations.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxModel.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxKindCatalog.kt",
+   "apps/android/core/database/src/test/kotlin/me/meeshy/core/database/OutboxDaoTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/outbox/OutboxKindDiskValuesLockTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/outbox/OutboxKindCatalogTest.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxFlushWorker.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxDrainer.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxRepository.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxSenderGroup.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxMessageSenders.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxAuthorGuard.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxSenderModule.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/Migrations.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxRecord.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxPendingIndicator.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxMutationRules.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/Migrations/MessageMigrations+Outbox.swift",
+   "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher.swift",
+   "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Messages.swift",
+   "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Comments.swift"
+  ],
+  "feature_keys": [
+   "pco-outbox-queue-model-and-flusher",
+   "pco-sync-pill-outbox-feed",
+   "cmp-outbox",
+   "cmp-outbox-sched"
+  ],
+  "absorbed": [
+   "outbox-sender-registry-and-guards"
+  ],
+  "rank": 34
+ },
+ {
+  "key": "reduire-les-animations-et-micro-animations",
+  "title": "Reduire les animations (systeme ou app) supprime tout mouvement non essentiel et les elements reagissent au toucher avec les ressorts d'iOS",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 800,
+  "deps": [
+   "echelles-de-jetons-ressorts-et-typographie",
+   "socle-points-d-extension-de-l-app"
+  ],
+  "goal": "Noyau Reduce Motion (OU systeme/app, override persiste) et boite a outils de micro-animations (pressable, bounce, staggeredAppear, floating, pulse, transitions de zoom) qui s'y conforment.",
+  "acceptance": [
+   "shouldReduce = systeme (ANIMATOR_DURATION_SCALE == 0) OU override app ; l'override ne peut qu'ajouter de la reduction ; sauvegarde differee 100 ms",
+   "Sous reduction : etat final immediat, aucun rebond/flottement/echelle, snap() a la place des ressorts",
+   "pressable 0,93 et bounceOnTap 0,92, bounceOnFocus 1,02, bounceOnAppear 0,5->1, staggeredAppear (50 ms/index, 20 dp, 0,95), floating 15/4 s, pulse 0,04 avec ressorts iOS",
+   "VoiceRecordingPill lit la valeur resolue et la waveform de repos est statique (0,30 0,72 0,45 1,00 0,38 0,86 0,55)"
+  ],
+  "tests": [
+   "core/model ReduceMotionLawTest : OU, override additif, ratios de repos",
+   "sdk-core AccessibilityPreferencesStoreTest : round-trip, debounce",
+   "sdk-ui MeeshyMotionModifiersTest : specs pures reduites vs normales"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-core",
+   ":sdk-ui",
+   ":app"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/accessibility/ReduceMotionLaw.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/preferences/AccessibilityPreferencesStore.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/preferences/AccessibilityModule.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/accessibility/ReduceMotion.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/motion/MeeshyMotionModifiers.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/motion/ZoomTransitions.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/recording/VoiceRecordingPill.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/accessibility/AccessibilityLocalsProvider.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/Accessibility.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/ViewModifiers.swift",
+   "apps/ios/Meeshy/Features/Main/Components/ReduceMotion.swift"
+  ],
+  "feature_keys": [
+   "dst-reduce-motion-preference",
+   "dst-motion-modifiers"
+  ],
+  "rank": 35
+ },
+ {
+  "key": "reponses-api-suppressions-et-pagination",
+  "title": "Un client qui a manqué un événement apprend quand même qu'une conversation ou une story a disparu",
+  "domain": "sdk-networking-sockets-sync",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "S",
+  "est_kotlin_lines": 350,
+  "deps": [
+   "reseau-pipeline-reessai-erreurs"
+  ],
+  "goal": "Faire porter à l'enveloppe de réponse tout ce que le serveur dit : le bloc meta hors-page (identifiants supprimés avec drapeaux de troncature, feedRequestId, searchId), la pagination par curseur et par offset typées séparément avec l'ancre de la suite, et les suppressions tolérantes (tout 2xx confirme). C'est le seul canal par lequel un client ayant manqué un événement socket apprend la disparition d'une conversation ou d'une story.",
+  "acceptance": [
+   "Le bloc meta est décodé (deletedConversationIds, deletedConversationIdsTruncated, deletedStoryIds, deletedStoryIdsTruncated, feedRequestId, searchId) ; absent ou avec clés inconnues, il se lit null sans erreur (ancien et nouveau serveur).",
+   "PagedResult et ConditionalResult.Fresh exposent meta ; ConversationCacheSource et les autres appelants compilent et se comportent sans changement (valeur par défaut).",
+   "Pagination par curseur (nextCursor, hasMore) et par offset (offset, limit, total) distinguées ; la page 1 servie au rang porte l'ancre du curseur de la suite.",
+   "Une suppression est confirmée par tout 2xx, quelle que soit la charge : {message}, {messageId, deleted, meta}, {deleted:true} ou corps vide ; un 4xx/5xx reste un Failure.",
+   "Un drapeau Truncated=true est exposé comme « liste incomplète » : aucun appelant ne peut le lire comme une liste exhaustive."
+  ],
+  "tests": [
+   "ApiResponseMetaTest : toutes les clés, absence, clés inconnues",
+   "DeletionAcknowledgementTest : les 4 formes de charge et le corps vide",
+   "PagedResultMetaTest : apiCall / pagedApiCall exposent meta",
+   "ConditionalResultMetaTest : Fresh avec meta et ETag, NotModified inchangé",
+   "ApiCallTest existant : aucune régression"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":core:network"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ApiResponse.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ApiResponseMeta.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/DeletionAcknowledgement.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/ApiCall.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIResponseTypes.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIResponseMeta.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIError.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/DeletionAcknowledgement.swift"
+  ],
+  "feature_keys": [
+   "nss-http-response-envelope"
+  ],
+  "rank": 36
+ },
+ {
+  "key": "session-renouvellement-un-seul-vol",
+  "title": "Une session expirée se renouvelle en silence et une seule fois, et un mauvais mot de passe ne déconnecte personne",
+  "domain": "sdk-networking-sockets-sync",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 550,
+  "deps": [
+   "reseau-pipeline-reessai-erreurs"
+  ],
+  "goal": "Remplacer le runBlocking sans verrou du RefreshAuthenticator par un renouvellement en un seul vol (Mutex + génération de jeton), proactif avant l'envoi quand le JWT est échu, avec les trois issues du 401 (sessionExpired, expireSession, refreshAndReplay), un credential abstrait (Bearer ou X-Session-Token d'invité) et une requête épinglée à un jeton figé ; expose freshAuthToken() à TUS, /sync et au handshake socket.",
+  "acceptance": [
+   "Un JWT échu (marge 30 s) sur une route bearer déclenche UN renouvellement avant l'envoi ; 5 requêtes parallèles échues produisent un seul POST /auth/refresh.",
+   "Un 401 déclenche un renouvellement puis UN rejeu ; si le compte actif a changé entre-temps, ni renouvellement ni rejeu (jamais d'action au nom d'un autre compte).",
+   "Un 401 de /auth/login ou /auth/login/2fa donne « Identifiants invalides » sans démontage de session ni renouvellement ; la session existante reste intacte.",
+   "Un 401 sur une route non bearer portant un bearer expire la session ; un 401 sans bearer est une session expirée ; les deux notifient SessionExpiryNotifier une fois.",
+   "Un invité de lien s'authentifie par X-Session-Token sans jamais mélanger avec Bearer ; une requête épinglée à un jeton figé (déconnexion par jeton) n'est jamais rejouée avec un autre.",
+   "freshAuthToken() est un suspend rafraîchissant si besoin, utilisable par TUS, /sync et le handshake socket.",
+   "Cinq requêtes en 401 simultanées déclenchent UN seul POST auth/refresh (tâche partagée) ; toutes rejouent avec le nouveau JWT.",
+   "Un 401 reçu par une requête partie avec le jeton d'un autre compte (ou un jeton retiré, mémoire de 8 jetons) n'est jamais rejoué avec le jeton actif et ne démonte pas la session active.",
+   "Un refus d'authentification ne s'applique qu'au compte actif, sous la génération courante, et est ignoré pendant isSwitchingAccount / isLeavingActiveSession (SessionTransitionFlags lisible par l'intercepteur sans dépendre de :sdk-core).",
+   "SessionRepository publie hasResolvedStoredSession : faux jusqu'à la fin de la restauration, vrai après succès OU échec définitif ; hors ligne avec une identité en cache, vrai sans jamais montrer la connexion (cache-first).",
+   "La relecture du profil est limitée à une par minute et une réponse tardive d'une session remplacée est écartée (garde de génération).",
+   "Un JWT à moins de 30 s de l'expiration est rafraîchi avant l'envoi (shouldRefreshBeforeSend effectivement câblé dans AuthInterceptor) ; SessionOrigin (LOGIN, REGISTRATION, LINK, RESTORED) est exposé pour la fête d'arrivée et la permission push."
+  ],
+  "tests": [
+   "UnauthorizedStepTest (:core:model) : table complète des issues du 401",
+   "SessionRefresherTest (MockWebServer + coroutines) : 5 appels concurrents = 1 refresh, génération de jeton, changement de compte",
+   "ProactiveRefreshInterceptorTest : marge 30 s, route bearer seulement",
+   "RefreshAuthenticatorTest existant mis à jour : un seul rejeu, boucle impossible",
+   "AuthInterceptorCredentialTest : Bearer vs X-Session-Token vs jeton épinglé",
+   "RequestOwnershipTest (JVM) : jeton présenté = actif -> rejeu ; jeton retiré -> pas de rejeu ; génération périmée -> ignoré ; pendant la bascule -> ignoré ; anneau de 8 jetons retirés.",
+   "RefreshAuthenticatorTest : rafale de 401 = un seul refresh, rejeu avec le nouveau jeton, échec du refresh = démontage du seul compte actif.",
+   "AuthExpiryInterceptorTest : seule la requête propriétaire signale l'expiration ; routes d'entrée d'auth toujours exclues.",
+   "SessionRepositoryTest : hasResolvedStoredSession (en ligne, hors ligne, échec définitif), plafond 60 s, réponse tardive après changement de génération.",
+   "Test Turbine du StateFlow hasResolvedStoredSession : une seule transition faux -> vrai."
+  ],
+  "android_modules": [
+   ":core:network",
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/RefreshAuthenticator.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/AuthInterceptor.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/TokenStore.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/MeeshyApi.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/SessionRefresher.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/ProactiveRefreshInterceptor.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/RequestCredential.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/auth/JwtExpiry.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/auth/RequestOwnership.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/auth/SessionOrigin.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/EncryptedTokenStore.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/AuthExpiryInterceptor.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/SessionTransitionFlags.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/session/SessionRepository.kt",
+   "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/auth/RequestOwnershipTest.kt",
+   "apps/android/core/network/src/test/kotlin/me/meeshy/sdk/net/RefreshAuthenticatorTest.kt",
+   "apps/android/core/network/src/test/kotlin/me/meeshy/sdk/net/AuthExpiryInterceptorTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/session/SessionRepositoryTest.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient+Perform.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient+UnauthorizedMapping.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/MeeshyRequestCredential.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+RequestOwnership.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+Reauthentication.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthJWTExpiry.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManaging.swift"
+  ],
+  "feature_keys": [
+   "nss-http-session-refresh-replay",
+   "auth-session-refresh-ownership"
+  ],
+  "absorbed": [
+   "rafraichissement-session-sans-melange"
+  ],
+  "rank": 38
+ },
+ {
+  "key": "verre-flou-et-surfaces-opaques",
+  "title": "Les cartes et controles poses sur du verre ont un vrai flou, un relief et une bordure iOS, avec repli opaque",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 650,
+  "deps": [
+   "couleurs-de-marque-et-contraste-aa",
+   "echelles-de-jetons-ressorts-et-typographie",
+   "socle-points-d-extension-de-l-app"
+  ],
+  "goal": "MeeshyGlassSurface avec ombre, flou d'arriere-plan (haze, API 31+), rayon 20, encre glassControlForeground, MeeshySurface translucide/opaque force par transparence reduite et recette liquid glass.",
+  "acceptance": [
+   "Verre = remplissage indigo translucide (60 % sombre / 72 % clair) + bordure degradee 1 dp + ombre noire 20 % rayon 10 y 5, flou du contenu derriere des l'API 31",
+   "Avant l'API 31 ou en contraste eleve / transparence reduite : surface opaque teintee",
+   "glassControlForeground : blanc en sombre, indigo950 en clair ; TopBarBottomFade expose la rampe noir->transparent",
+   "Les appels existants de MeeshyGlassSurface compilent sans changement"
+  ],
+  "tests": [
+   "core/model SurfaceResolutionTest",
+   "sdk-ui LiquidGlassRecipeTest : valeurs sombre/clair teinte/non teinte",
+   "sdk-ui MeeshyGradientsTest etendu"
+  ],
+  "android_modules": [
+   ":sdk-ui",
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/MeeshyGlassSurface.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/MeeshyCard.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/GlassControlForeground.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/MeeshySurface.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/LiquidGlassRecipe.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/GlassGradients.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/TopBarBottomFade.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/chrome/SurfaceResolution.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveGlass.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveLiquidGlass.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshySurface.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/ViewModifiers.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Components/TopBarBottomFade.swift"
+  ],
+  "feature_keys": [
+   "dst-glass-surfaces"
+  ],
+  "rank": 39
+ },
+ {
+  "key": "atomes-d-avatar-loi-humeur-et-non-lus",
+  "title": "Chaque avatar suit la meme loi de contextes et de presence, l'humeur respire discretement et la pastille de non-lus n'apparait que s'il y en a",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 900,
+  "deps": [
+   "reduire-les-animations-et-micro-animations",
+   "accessibilite-annonces-haptique-et-sens-de-lecture"
+  ],
+  "goal": "Loi pure AvatarContext (20 contextes), transition de presence, libelle a11y, MeeshyMoodBadge et MeeshyUnreadBadge.",
+  "acceptance": [
+   "20 contextes avec taille, epaisseur d'anneau et drapeaux d'animation identiques (tray 88, liste 52, bulle 32, commentaire 28...)",
+   "Presence : vert/orange/gris, hors ligne = aucun point ; typing:start force online ; point ici (absent/present/actif) couleur primaire, pulse quand le pair agit ; transition de remplacement seulement sur changement reel",
+   "L'humeur masque le point de presence ; pulsation jamais en liste/en-tete ni sous reduction ; libelle TalkBack nom + humeur + dans la conversation",
+   "UnreadBadge : count <= 0 ne rend rien et n'occupe rien, plafond 99+, libelle N non lus"
+  ],
+  "tests": [
+   "core/model AvatarContextTest : table des 20 contextes",
+   "core/model AvatarPresenceTransitionTest, AvatarAccessibilityLabelTest",
+   "core/model UnreadBadgeTest"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-ui"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/avatar/AvatarContext.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/avatar/AvatarPresenceTransition.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/avatar/AvatarAccessibilityLabel.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/chrome/UnreadBadge.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/MeeshyMoodBadge.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/MeeshyUnreadBadge.kt",
+   "apps/android/sdk-ui/src/main/res/values/strings.xml"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Primitives/MoodBadge.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Primitives/UnreadCountBadge.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Theme/PresenceStyle.swift"
+  ],
+  "feature_keys": [
+   "dst-mood-badge",
+   "dst-unread-badge",
+   "dst-avatar"
+  ],
+  "rank": 40
+ },
+ {
+  "key": "persist-media-file-queue",
+  "title": "Un média enregistré hors-ligne est stocké en fichier et repart tout seul au retour du réseau, même si l'app a été tuée",
+  "domain": "sdk-persistence-cache-offline",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 800,
+  "deps": [
+   "persist-room-migrations",
+   "persist-outbox-registre-senders",
+   "persist-app-lifecycle-hooks"
+  ],
+  "goal": "Remplacer le BLOB Room des médias en file par un fichier de filesDir/pending-media avec chemin relatif persisté, enfilage en deux phases, balayage des orphelins et migration des blobs existants, sans casser les appelants de MediaUploadItem.",
+  "acceptance": [
+   "Plus aucun octet en BLOB : MediaBlobEntity porte un chemin relatif stable et une taille ; une lecture au-delà de 2 Mo ne lève plus SQLiteBlobTooBigException et l'upload lit en flux depuis le fichier",
+   "MediaUploadItem garde son constructeur par octets (compat ChatViewModel, StoryComposerViewModel, ShareTargetViewModel, FeedMediaUploader) en plus d'une source fichier",
+   "Enfilage en deux phases : ligne d'abord, copie ensuite ; si la copie échoue la ligne passe failed (le flusher ne rejoue pas contre un fichier absent) et l'appelant défait son UI optimiste ; si l'insertion échoue, aucun fichier fantôme",
+   "Balayage au démarrage : ligne pending dont le fichier a disparu vers failed ; fichiers orphelins supprimés à l'état terminal (appliqué ou épuisé)",
+   "Migration des blobs existants vers des fichiers sans perdre les uploads en file",
+   "Le dossier est exclu des sauvegardes ; la bulle média apparaît immédiatement, l'état « en attente » est porté par la pastille, jamais par une erreur",
+   "Un média de 50 Mo mis en file hors ligne est encore là après mort du processus et part au retour du réseau ; aucun ByteArray de plus de 1 Mo n'est tenu pendant l'upload (corps de requête en flux depuis le fichier).",
+   "La migration 16->17 conserve les lignes d'outbox et de media_blob existantes (les blobs sont convertis en fichiers) ; elle ne passe jamais par le repli destructif, qui ne reste actif que sur downgrade.",
+   "Annuler ou retirer une pièce en file supprime le fichier ET la ligne d'outbox ; une livraison réussie supprime le fichier ; un fichier sans ligne d'outbox est balayé au démarrage.",
+   "Disque plein : l'enqueue échoue avec une erreur typée remontée à l'appelant (pas de ligne d'outbox sans fichier, pas d'échec silencieux).",
+   "Le compositeur de story (StoryMediaUploader, StoryDraftMediaReconciler) fonctionne sans modification de son API (constructeur MediaUploadItem(bytes) conservé en façade).",
+   "Noms de fichiers dérivés du cmid uniquement (aucun nom fourni par l'utilisateur dans le chemin : pas de traversée de répertoire)."
+  ],
+  "tests": [
+   "core/database MediaBlobDaoTest : chemin relatif, migration",
+   "sdk-core MediaUploadQueueTwoPhaseTest : copie en échec, insertion en échec, aucun fantôme",
+   "sdk-core PendingMediaSweeperTest : fichier disparu et orphelin",
+   "sdk-core MediaBlobMigratorTest : blobs existants vers fichiers",
+   "sdk-core MediaSendersTest : upload en flux depuis fichier",
+   "MediaBlobStoreTest : put/get/has/remove sur fichiers, remplacement, fichier absent -> null",
+   "PendingMediaDirectoryTest : chemin dérivé du cmid, balayage des orphelins, refus de chemin hors dossier",
+   "MediaUploadSenderTest : corps multipart en flux depuis un fichier, type MIME conservé, fichier manquant -> PermanentFailure",
+   "MeeshyDatabaseMigration16To17Test (Robolectric, DDL v16 écrit à la main) : lignes conservées, blobs convertis",
+   "MediaUploadQueueTest : enqueue écrit fichier puis ligne, cancel retire les deux, disque plein -> erreur typée",
+   "StoryMediaUploaderCompatTest : l'ancien chemin octets continue de passer par la façade"
+  ],
+  "android_modules": [
+   ":core:database",
+   ":sdk-core"
+  ],
+  "android_files_touched": [
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/entity/MediaBlobEntity.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/dao/MediaBlobDao.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/MeeshyDatabase.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/migration/MeeshyMigrations.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/MediaBlobStore.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/MediaUploadQueue.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/MediaRepository.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/PendingMediaFiles.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/PendingMediaSweeper.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/MediaBlobMigrator.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/MediaSenders.kt",
+   "apps/android/core/database/src/test/kotlin/me/meeshy/core/database/MediaBlobDaoTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/media/MediaUploadQueueTwoPhaseTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/media/PendingMediaSweeperTest.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/MediaUploadSender.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/TusUploadRepository.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/PendingMediaDirectory.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxFlushWorker.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/DatabaseModule.kt",
+   "apps/android/core/database/src/main/kotlin/me/meeshy/core/database/Migrations.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OfflineQueue+Audio.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OfflineQueue+Recovery.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OfflineQueueItem.swift",
+   "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher.swift",
+   "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Comments.swift",
+   "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerAttachments.swift"
+  ],
+  "feature_keys": [
+   "pco-offline-media-message-uploads",
+   "cmp-outbox",
+   "cmp-tray",
+   "cmp-send-plan"
+  ],
+  "absorbed": [
+   "durable-media-queue-file-backed"
+  ],
+  "rank": 46
+ },
+ {
+  "key": "persist-outbox-flusher-classifie",
+  "title": "Les envois en attente repartent seuls au retour du réseau sans brûler leurs tentatives, et un refus définitif échoue tout de suite",
+  "domain": "sdk-persistence-cache-offline",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 1000,
+  "deps": [
+   "persist-outbox-schema-metadonnees",
+   "persist-outbox-registre-senders",
+   "persist-app-lifecycle-hooks",
+   "reseau-pipeline-reessai-erreurs"
+  ],
+  "goal": "Classer chaque échec d'envoi (définitif, session expirée, panne de transport, réessayable), appliquer un backoff par ligne (nextAttemptAt, 2 à 30 s), un gate réseau avec échéance de 60 s, le reclaim des INFLIGHT périmés, les déclencheurs multiples et l'en-tête X-Client-Mutation-Id pour la dédup du gateway.",
+  "acceptance": [
+   "400/403/404/410/413/422 deviennent PermanentFailure dès la 1re tentative ; 401 est différé sans consommer le budget (refresh de session) ; IOException de transport (connexion, DNS, timeout, roaming) sans budget ; 408/429/503/5xx/409 réessayables avec budget de 5",
+   "Le mapping 404 sur suppression = succès et 410 = déjà appliqué (ne jamais rejouer) est conservé ; limite quotidienne de gestes terminale jusqu'à resetAt",
+   "Backoff par ligne exponentiel 2 à 30 s plafonné via nextAttemptAt : une ligne en backoff ne bloque ni les autres lanes ni le worker entier (fin du Result.retry() global)",
+   "Gate réseau explicite : hors-ligne ne dispatche rien et rend toujours une échéance (60 s), jamais « rien à planifier »",
+   "Reclaim des INFLIGHT de plus de 30 min à chaque flush, à la place du recoverInflight global qui remet aussi les lignes réellement en vol",
+   "Déclencheurs : retour du socket, front montant du réseau, enqueue (debounce 250 ms, travail expédié), premier plan",
+   "Dépendance attendue au plus 30 min depuis la première attente réelle (waitingSince) puis échec normal",
+   "Chaque requête d'une ligne envoie X-Client-Mutation-Id: cmid (format cmid_<uuid v4>) pour la dédup MutationLog du gateway",
+   "Une panne réseau de quelques minutes n'épuise plus aucune ligne"
+  ],
+  "tests": [
+   "sdk-core SendFailureClassifierTest : table complète code HTTP/IOException vers résultat",
+   "sdk-core OutboxBackoffTest : suite 2 à 30 s, plafond, jitter injecté",
+   "sdk-core OutboxDrainerClassificationTest : budget non consommé en panne transport, épuisement immédiat sur 404",
+   "sdk-core OutboxFlushGateTest : hors-ligne rend une échéance de 60 s",
+   "core/network MutationIdCallFactoryTest : l'en-tête est posé depuis le contexte du sender"
+  ],
+  "android_modules": [
+   ":sdk-core",
+   ":core:network"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxDrainer.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxFlushPlan.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxFlushWorker.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxRepository.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/SendFailureClassifier.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxBackoff.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxFlushGate.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxDrainTriggers.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxScheduler.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/MessageSenders.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/senders/SocialSenders.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/MutationIdCallFactory.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/NetworkModule.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/outbox/SendFailureClassifierTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/outbox/OutboxBackoffTest.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/outbox/OutboxDrainerClassificationTest.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxFlusher.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxDrainTriggers.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxDeferralError.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/QueueTiming.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxRecord.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxMutationRules.swift"
+  ],
+  "feature_keys": [
+   "pco-outbox-queue-model-and-flusher"
+  ],
+  "rank": 48
+ },
+ {
+  "key": "refus-types-limite-du-jour-mode-lent",
+  "title": "Quand un refus désigne un champ, une limite du jour ou le mode lent, l'écran dit pourquoi et jusqu'à quand",
+  "domain": "sdk-networking-sockets-sync",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 950,
+  "deps": [
+   "reseau-pipeline-reessai-erreurs",
+   "reponses-api-suppressions-et-pagination",
+   "socle-points-d-extension-de-l-app",
+   "persist-outbox-registre-senders"
+  ],
+  "goal": "Compléter les refus typés (emailOwner masqué pour « Est-ce vous ? », resetAt, limit, retryAfter, politique structurée par route étendue à shared-translations, birth-date et game/*, encodage strict des segments de chemin), reconnaître DAILY_COMMENT_LIMIT / DAILY_REACTION_LIMIT / NEWCOMER_SLOW_MODE en REST, tenir le registre borné DailyGestureLimitLedger, corriger OutboxFlushWorker pour qu'un refus définitif ne soit plus rejoué, et créer le point d'extension GlobalOverlays de :app (un seul crochet dans MeeshyApp.kt) dont le premier client est la bannière de refus.",
+  "acceptance": [
+   "Un refus 4xx hors 401/403/429 sur une route structurée produit un ApiError porteur de code machine, champ visé, suggestions, violations, et pour EMAIL_TAKEN un emailOwner masqué ; l'écran peut demander « Est-ce vous ? » sans rien révéler de plus.",
+   "Un 429 DAILY_COMMENT_LIMIT / DAILY_REACTION_LIMIT (code, retryAfter, resetAt, limit, path à la racine) est un refus terminal jusqu'à resetAt : jamais rejoué par OkHttp ni par l'outbox ; la ligne est abandonnée sans rejeu et l'écran affiche « Limite du jour atteinte, retour à HH:mm » à l'heure locale.",
+   "Un 429 NEWCOMER_SLOW_MODE lit Retry-After puis retryAfter de l'enveloppe, jamais moins d'une seconde, et remonte un refus TEMPORAIRE (pas un rejeu silencieux) ; le compte à rebours du bouton d'envoi relève de ext:chat-composer-send-button.",
+   "Le registre DailyGestureLimitLedger est borné à 64 entrées par identifiant de mutation ; OutboxFlushWorker classe désormais chaque échec (transitoire, définitif, limite du jour) par un classifieur unique au lieu de tout traiter en TransientFailure.",
+   "Les segments de chemin des routes game n'acceptent que A-Za-z0-9-_~ ; un segment hors jeu est refusé avant envoi.",
+   "GlobalOverlays est le seul point d'insertion des bannières et feuilles globales de :app (inscription @IntoSet) ; MeeshyApp.kt reçoit un unique crochet d'une ligne.",
+   "Hors ligne : aucune bannière de refus ne se lève pour une erreur réseau."
+  ],
+  "tests": [
+   "DailyGestureLimitTest (:core:model) : parse racine / accusé, resetAt, limit, retryAfter",
+   "NewcomerSlowModeTest : en-tête vs enveloppe, plancher d'une seconde",
+   "EndpointPolicyStructuredTest : shared-translations, birth-date, game/*",
+   "PathSegmentTest : jeu de caractères strict",
+   "ApiErrorRejectionTest : emailOwner, resetAt, limit, retryAfter dans toApiError",
+   "OutboxResultClassifierTest : transitoire, définitif, limite du jour",
+   "DailyGestureLimitLedgerTest : borne 64, éviction",
+   "GlobalOverlaysTest (Robolectric) : inscription @IntoSet, ordre, bannière de refus"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":core:network",
+   ":sdk-core",
+   ":app"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ApiResponse.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/EndpointPolicy.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/DailyGestureLimit.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/NewcomerSlowMode.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/PathSegment.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/NetworkResult.kt",
+   "apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/ApiCall.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/DailyGestureLimitLedger.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxResultClassifier.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/outbox/OutboxFlushWorker.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/chat/GestureRefusalCenter.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/GlobalOverlays.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/GestureRefusalOverlay.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIRejection.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/DailyGestureLimit.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/NewcomerSlowMode.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints/GameEndpointPolicy.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints/MeeshyEndpointPolicy.swift"
+  ],
+  "feature_keys": [
+   "nss-http-field-rejections",
+   "nss-http-daily-limit-slow-mode"
+  ],
+  "rank": 54
+ },
+ {
+  "key": "socket-connexion-jeton-identite-idempotente",
+  "title": "La connexion temps réel s'ouvre une seule fois dès que le compte est connecté, avec les bonnes identités et un jeton valide",
+  "domain": "sdk-networking-sockets-sync",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 650,
+  "deps": [
+   "session-renouvellement-un-seul-vol",
+   "identite-client-et-environnement-serveur",
+   "socle-points-d-extension-de-l-app"
+  ],
+  "goal": "Réécrire le cycle de connexion de SocketManager : idempotent (jamais deux sockets vivants ni listeners en double), vérification de l'expiration du JWT (exp moins 30 s) AVANT de partir, charge d'authentification client:{appVersion, appBuild, platform, deviceModel, osVersion, timezone, deviceLocale, deviceName}, connexion invité dédiée avec jeton présenté mémorisé, écoute de auth:token-expired et auth:session-revoked, et OkHttpClient partagé avec REST. Transforme RealtimeSessionCoordinator en armeur d'un multibinding RealtimeAttachable.",
+  "acceptance": [
+   "Appeler connect() deux fois ne crée qu'UN socket et un seul jeu de listeners (aujourd'hui chaque appel crée un socket sans fermer l'ancien : événements en double) ; disconnect() ferme et annule proprement.",
+   "Un JWT échu (exp moins 30 s) n'ouvre PAS de socket : le renouvellement est déclenché, puis la connexion repart avec le jeton frais (SocketConnectOutcome armed / notArmed).",
+   "La charge d'authentification porte token et sessionToken d'un compte inscrit, plus client:{appVersion, appBuild, platform=android, deviceModel, osVersion, timezone, deviceLocale, deviceName} ; un invité de lien n'envoie que sessionToken.",
+   "Le jeton présenté est mémorisé : auth:token-expired rafraîchit au nom de CE jeton, jamais du compte actif ; auth:session-revoked et l'événement error sont écoutés, journalisés et exposés ; une erreur transitoire ne déconnecte jamais.",
+   "La socket utilise l'OkHttpClient partagé (callFactory / webSocketFactory), prérequis du pinning ; une fabrique injectable (SocketFactory) rend le gestionnaire testable.",
+   "RealtimeSessionCoordinator arme un ensemble RealtimeAttachable : les lots suivants (relais, garde de session, social) s'y inscrivent sans l'éditer ; ré-armer est idempotent et l'ordre connect puis attach reste garanti."
+  ],
+  "tests": [
+   "SocketConnectDecisionTest (:core:model) : jeton valide / échu à 29 s et 31 s / absent",
+   "SocketAuthPayloadTest : compte inscrit, invité, charge client complète",
+   "SocketManagerIdempotenceTest (fabrique factice) : double connect, disconnect, reconnect",
+   "SocketManagerTokenExpiredTest : auth:token-expired pour le jeton présenté",
+   "RealtimeSessionCoordinatorTest : armement du multibinding, ré-armement, logout",
+   "HandshakeAuthTest existant mis à jour"
+  ],
+  "android_modules": [
+   ":sdk-core",
+   ":core:model",
+   ":core:network"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/SocketManager.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/RealtimeSessionCoordinator.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/RealtimeLifecyclePlan.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/RealtimeAttachable.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/SocketFactory.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/socket/SocketConnectDecision.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/socket/SocketAuthPayload.kt",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/socket/HandshakeAuthTest.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketProviding.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Networking/SocketConfig.swift"
+  ],
+  "feature_keys": [
+   "nss-sock-transport-connect"
+  ],
+  "rank": 55
+ },
+ {
+  "key": "toasts-de-retour-globaux",
+  "title": "Chaque action locale affiche un toast de retour en haut, annonce, tappable et ferme automatiquement",
+  "domain": "design-system-theme",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 900,
+  "deps": [
+   "socle-points-d-extension-de-l-app",
+   "accessibilite-annonces-haptique-et-sens-de-lecture",
+   "verre-flou-et-surfaces-opaques"
+  ],
+  "goal": "FeedbackToastManager singleton (un toast a la fois, 3 s / 6 s tappable / >= 6 s sous TalkBack), hote anime monte en AppOverlay, bus de toasts du SDK, purge a la deconnexion et message de limite quotidienne.",
+  "acceptance": [
+   "Un nouveau toast remplace le courant ; tap = action puis fermeture ; swipe vers le haut ferme ; testTag toast.container",
+   "Fermeture 3 s, 6 s si tappable, au moins 6 s sous TalkBack ; liveRegion assertive pour une erreur, haptique par type",
+   "Pastille de verre emergeant du haut sous la decoupe camera avec ressort bondissant ; icone d'erreur en disque croix",
+   "Purge du toast et de son handler a la deconnexion ; limite quotidienne DAILY_COMMENT_LIMIT/DAILY_REACTION_LIMIT avec heure de remise a zero au fuseau de l'appareil",
+   "FeedbackToastCenter.show(message, kind, onTap?) affiche UN toast à la fois : un nouveau remplace le courant (comme iOS), un message identique dans une fenêtre de 2 s n'est pas ré-affiché ; kinds Succès / Erreur / Info rendus par l'atome MeeshyFeedbackToast existant.",
+   "Le toast se présente en glissant du haut avec fondu, se ferme tout seul (succès/info plus courts que l'erreur, durée allongée si l'option de délai d'accessibilité du système est active) et un toast cliquable ferme et exécute son action.",
+   "Le message est annoncé par TalkBack (liveRegion, priorité haute pour une erreur) ; l'hôte est monté UNE fois à la racine de MeeshyApp au-dessus du NavHost.",
+   "MeeshyHaptics expose light, medium, success, error (mapping HapticFeedbackType.TextHandleMove, LongPress, Confirm, Reject avec repli LongPress avant l'API qui les porte) et respecte le réglage système de retour tactile.",
+   "La déconnexion purge tout toast en cours et son action (un toast de l'utilisateur A ne survit jamais à sa session), via SessionTeardown.wipe()."
+  ],
+  "tests": [
+   "core/model FeedbackToastTest : durees",
+   "core/model DailyGestureLimitTest : fuseau",
+   "sdk-core FeedbackToastManagerTest (Turbine) : remplacement, tapAction, purge",
+   "FeedbackToastTest : remplacement, déduplication 2 s, durée par kind et facteur d'accessibilité, purge.",
+   "FeedbackToastCenterTest (Turbine) : émission, remplacement, clear, action de tap exécutée une seule fois.",
+   "SessionTeardownTest : wipe() vide le présentateur.",
+   "MeeshyHapticsTest : mapping pur type -> HapticFeedbackType, repli sous la version d'API."
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-core",
+   ":sdk-ui",
+   ":app"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/feedback/FeedbackToast.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/feedback/DailyGestureLimit.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/feedback/FeedbackToastManager.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/feedback/SdkToastBus.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/feedback/FeedbackToastModule.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/MeeshyToast.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/FeedbackToastHost.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/overlay/FeedbackToastOverlay.kt",
+   "apps/android/sdk-ui/src/main/res/values/strings.xml",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/feedback/FeedbackToast.kt (nouveau)",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/feedback/FeedbackToastCenter.kt (nouveau)",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/session/SessionTeardown.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/di/SdkModule.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/feedback/FeedbackToastHost.kt (nouveau)",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/haptic/MeeshyHaptics.kt (nouveau)",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt",
+   "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/feedback/FeedbackToastTest.kt (nouveau)",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/feedback/FeedbackToastCenterTest.kt (nouveau)",
+   "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/session/SessionTeardownTest.kt",
+   "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/haptic/MeeshyHapticsTest.kt (nouveau)"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Features/Main/Components/FeedbackToastOverlay.swift",
+   "apps/ios/Meeshy/Features/Main/Services/FeedbackToastManager.swift",
+   "apps/ios/Meeshy/Features/Main/Services/FeedbackToastSurfacing.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Primitives/FeedbackToastView.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Utilities/HapticFeedback.swift"
+  ],
+  "feature_keys": [
+   "dst-feedback-toast-overlay",
+   "dst-feedback-toasts",
+   "cf-shared-ui-kit"
+  ],
+  "absorbed": [
+   "retours-haptiques-et-toasts"
+  ],
+  "rank": 59
+ },
+ {
+  "key": "socket-routage-evenements-ordre-arrivee",
+  "title": "Chaque événement temps réel est décodé hors du fil principal et appliqué dans l'ordre exact où il est arrivé",
+  "domain": "sdk-networking-sockets-sync",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 850,
+  "deps": [
+   "socket-connexion-jeton-identite-idempotente"
+  ],
+  "goal": "Remplacer les chaînes littérales dispersées et les SharedFlow à 64 places par un catalogue central des noms d'événements (aligné et testé contre packages/shared/types/socketio-events.ts), une table déclarative de routes (événement, type, sujet) installable sans socket, un décodage sur une voie série puis une livraison dans l'ordre d'arrivée sans perte sous rafale. GÈLE MessageSocketManager, SocialSocketManager et CallSignalManager : chaque famille d'événements ajoute désormais sa propre classe.",
+  "acceptance": [
+   "Aucune chaîne d'événement littérale hors du catalogue SocketEventNames ; chaque nom est de la forme entité:action-mot avec traits d'union et existe dans socketio-events.ts (test de parité qui lit le fichier TypeScript).",
+   "Le décodage a lieu sur une voie série hors du thread Socket.IO ; les événements de TYPES DIFFÉRENTS conservent leur ordre relatif d'arrivée (message:new puis message:edited) car une file unique alimente les sujets.",
+   "Aucune perte sous rafale : 5 000 événements consécutifs arrivent tous (plus de tryEmit silencieux à 64 places) ; un abonné lent ne bloque pas les autres.",
+   "Un décodage raté est journalisé (jamais le contenu) sans casser les autres routes ; _seq des notifications est toujours observé avant le décodage.",
+   "Les routes s'installent et se testent sans socket (injection d'un faux transport) ; les flux publics existants de MessageSocketManager gardent leurs noms et types (aucun collecteur existant ne change).",
+   "Le gestionnaire est gelé : un lot de famille n'y ajoute rien, il enregistre ses routes par SocketEventRouter."
+  ],
+  "tests": [
+   "SocketEventNamesParityTest : lit packages/socketio-events.ts, tous les noms Android y figurent, format à traits d'union",
+   "SocketEventRouterTest : ordre inter-événements, rafale de 5 000, abonné lent, décodage raté isolé",
+   "OrderedDeliveryLaneTest : une seule voie, annulation à la fermeture",
+   "MessageSocketManagerChannelNamesTest / NotificationSyncTest existants mis à jour sans régression"
+  ],
+  "android_modules": [
+   ":sdk-core",
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/SocketEventRouter.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/SocketInboundRoute.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/OrderedDeliveryLane.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/MessageSocketManager.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/SocialSocketManager.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CategorySocketManager.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/PreferencesSocketManager.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/socket/SocketEventNames.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketEvent.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketInboundRoute.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketPayloadDecoder.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MainActorDeliveryLane.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketRoutes.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketRoutes+Messages.swift"
+  ],
+  "feature_keys": [
+   "nss-sock-event-catalog-routing"
+  ],
+  "rank": 73
+ },
+ {
+  "key": "liste-conversations-fil-complet-et-contrat-apercu",
+  "title": "La liste de conversations décode tout ce que la passerelle sert, sans jamais jeter une ligne",
+  "domain": "translation-prism-models",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "L",
+  "est_kotlin_lines": 1000,
+  "deps": [
+   "message-fil-decodage-complet-et-tolerant",
+   "socket-routage-evenements-ordre-arrivee"
+  ],
+  "goal": "Compléter ApiConversation et ses sous-modèles : communauté, vignette de bannière, effectif plafonné (memberCountCapped), messages récents, étiquettes, restriction d'écriture du lecteur (viewerWriteRestriction tolérante), pont ConversationBridge (décodage), et le contrat d'aperçu #7545 (PreviewParam, LastMessageAttachmentSummary, LastMessageCallSummary, LastMessageSystemEvent, LastMessageNature, ConversationLastReaction, ConversationActiveCall, sticker et lieu hissés). Plafonne chaque aperçu en graphèmes (BreakIterator). Un champ inconnu ou mal formé ne jette pas la ligne ; les anciens payloads Room se relisent.",
+  "acceptance": [
+   "Une ligne dont un champ est mal formé (appel, pièce, réaction) se décode quand même avec le champ à null.",
+   "Un dernier message protégé arrive sans texte, traduction ni pièce (seulement ses drapeaux) et le modèle ne fabrique rien.",
+   "memberCountCapped, bannerThumbHash, communityId, tags et recentMessages sont lus ; un ancien payload Room sans ces champs se relit.",
+   "Le dernier message géolocalisé sans texte expose son lieu hissé ; un sticker hissé de metadata.sticker est exposé.",
+   "Chaque aperçu est plafonné à LAST_MESSAGE_PREVIEW_MAX_LENGTH en graphèmes, sans casser un emoji ni une écriture complexe.",
+   "Un ancien payload (cache Room écrit avant l'élargissement, passerelle plus ancienne, champ absent ou inconnu) se décode sans erreur avec les défauts; aucune migration Room.",
+   "ApiConversationLastMessage et ApiConversation décodent la nature (systemEvent, callSummary, attachmentSummary, sticker) et les pièces du dernier message avec les mêmes noms de clés que le contrat iOS (ConversationPreviewContract.swift) et la passerelle.",
+   "ConversationUpdatedSocketEvent porte les clés plates lastMessage* (nature, pièces, nombre, lieu, expiration, vue unique, flou) utilisées pour patcher une ligne en place; ParticipantJoined et ParticipantUnbanned sont exposés par MessageSocketManager.",
+   "ApiConversationPreferences.orderInCategory et ApiConversation.isWorldWide (identifier == 'world') existent; l'ancien accesseur resolvedPreferences est inchangé."
+  ],
+  "tests": [
+   "core/model: ConversationWireDecodingTest — champs tolérants, ligne jamais jetée",
+   "core/model: ConversationPreviewContractDecodingTest — appel, pièces, système, réaction, appel actif",
+   "core/model: PreviewTruncationTest — graphèmes, emoji ZWJ, écritures indiennes",
+   "core/model: ConversationLegacyPayloadTest — anciennes lignes Room",
+   "core/model: ConversationBridgeDecodingTest",
+   "core/model ConversationWireWideningTest: décodage d'un payload ancien, d'un payload complet, d'un payload avec clés inconnues; aller-retour MeeshyApi.json (explicitNulls=false)",
+   "core/model ConversationUpdatedFlatKeysTest: clés plates -> LastMessageNature/pièces",
+   "core/model ParticipantMembershipEventsTest: décodage joint/débanni",
+   "sdk-core MessageSocketManagerTest: les nouveaux flux émettent et ne bloquent pas l'émetteur (SharedFlow borné)"
+  ],
+  "android_modules": [
+   ":core:model"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/Conversation.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ApiConversationDetail.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/preview/ConversationPreviewContract.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/preview/PreviewTruncation.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ConversationBridge.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/SocketEvents.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/LastMessageNature.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ConversationBridgeWire.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/MessageSocketManager.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationModels.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreviewContract.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationListLastMessage.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationBridge.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/RecentMessagePreview.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshyConversation.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewInput+Conversation.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/LastMessageSummaryKind.swift"
+  ],
+  "feature_keys": [
+   "tpm-conv-list-wire",
+   "tpm-conv-preview-contract",
+   "cl-row-last-message-line",
+   "clist-vm-socket-live-updates",
+   "cl-lentille-unread-bridge-live-call"
+  ],
+  "absorbed": [
+   "modele-conversation-enrichi"
+  ],
+  "rank": 86
+ },
+ {
+  "key": "media-vocabulaire-partage",
+  "title": "Les médias partagent les mêmes vitesses, contextes, libellés et états de disponibilité",
+  "domain": "media-audio-video",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 800,
+  "deps": [],
+  "goal": "Poser dans :core:model le vocabulaire commun que tous les lecteurs, visionneuses et compositeurs lisent : grille de vitesses iOS (0,8 à 2,25), contextes de rendu avec rayons, états de disponibilité audio/vidéo, format de durée, corps de rapport de consommation, interface de sortie de rapport, classification fine des pièces par MIME, libellés uniques (Photo, Vidéo, Message vocal, Fichier, Position) et modes de composeur avec limites. Supprime la grille 0,5 à 2,0 divergente de l'overlay et les huit copies de libellés.",
+  "acceptance": [
+   "PlaybackSpeed expose exactement 0,8 / 0,9 / 1,0 / 1,25 / 1,5 / 1,75 / 2,0 / 2,25, défaut 1,0, cycle qui boucle de 2,25 vers 0,8, libellé « 1.25× » avec croix de multiplication",
+   "MediaPlayerContext donne les rayons 14 (bulle), 12 (pièce du composer), 18 (post du fil), 0 (overlay de story) et 0 (plein écran) et sait si le contexte est compact",
+   "formatMediaDuration rend m:ss sans zéro de tête sur les minutes, null ou 0:00 pour une durée négative/NaN ; une version parlée (« 12 secondes ») sert TalkBack",
+   "AudioAvailability et VideoAvailability couvrent ready / needsDownload / downloading(progress, octets téléchargés, total) avec une résolution « au repos » sans flash de téléchargement au premier rendu",
+   "AttachmentStatusBody se sérialise (écoutes continues avec raison de fin, position, complétion, viewed, downloaded, watched) et est rejouable par l'outbox",
+   "PlaybackReportSink est une interface à implémentation inerte par défaut, que les moteurs appellent et que le lot de rapports implémentera",
+   "AttachmentKind classe un MIME sans tenir compte de la casse ni des paramètres (image, video, audio, pdf, spreadsheet, document, presentation, archive, code, text, other)",
+   "MediaKindLabel rend name (Photo, Vidéo, Audio, Fichier, Position) et summary avec émoji (📷 Photo, 🎥 Vidéo, 🎙️ Message vocal, 📎 Fichier, 📍 Position) plus « Message vocal · 0:12 » dans les 4 langues, et les aperçus de la liste des conversations utilisent cette source unique",
+   "ComposerMode porte les limites post 5 000, status 500, story 1 000, comment 2 000, caption 500, message sans limite et les placeholders en ressources, pas en littéraux"
+  ],
+  "tests": [
+   "PlaybackSpeedTest (core:model) : grille, cycle, libellé",
+   "MediaPlayerContextTest (core:model) : rayons et compact",
+   "MediaDurationTest (core:model) : formats m:ss, négatif, version parlée",
+   "AttachmentStatusBodyTest (core:model) : aller-retour JSON avec segments et raison de fin",
+   "AttachmentKindTest (core:model) : vecteurs MIME insensibles à la casse, paramètres ignorés",
+   "MediaKindLabelTest (core:model + sdk-ui Robolectric) : name/summary/voiceRecording dans fr, en, es, pt",
+   "ComposerModeTest (core:model) : limites et capacités par mode",
+   "MessageSummaryKindTest (feature:conversations) : l'aperçu de liste passe par MediaKindLabel"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-ui",
+   ":feature:conversations"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/PlaybackSpeed.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/MediaPlayerContext.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/MediaDuration.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/AudioAvailability.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/VideoAvailability.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/AttachmentStatusBody.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/PlaybackReportSink.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/AttachmentKind.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/MediaKindLabel.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ComposerMode.kt",
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/MediaAutoDownload.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/media/MediaKindLabels.kt",
+   "apps/android/sdk-ui/src/main/res/values/strings_media_kinds.xml",
+   "apps/android/feature/conversations/src/main/kotlin/me/meeshy/app/conversations/MessageSummaryKind.kt"
+  ],
+  "ios_reference_files": [
+   "packages/MeeshySDK/Sources/MeeshyUI/Media/MediaTypes.swift",
+   "apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/AttachmentKind.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/AudioAvailability.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Models/VideoAvailability.swift"
+  ],
+  "feature_keys": [
+   "media-shared-types-contexts",
+   "mav-media-kind-labels"
+  ],
+  "rank": 142
+ },
+ {
+  "key": "dependances-gradle-scene-medias",
+  "title": "Les bibliothèques médias de la scène (Lottie, GIF animés, Media3 Transformer, détourage) sont disponibles pour tous les lots",
+  "domain": "story-composer-canvas",
+  "track": "F0",
+  "priority": "P0",
+  "effort": "S",
+  "est_kotlin_lines": 90,
+  "deps": [],
+  "goal": "Centraliser en un seul lot toutes les nouvelles dépendances Gradle du domaine (coil-gif, lottie-compose, media3-transformer/effect/common, ML Kit Subject Segmentation, bibliothèques de test Robolectric/MockK/Turbine/coroutines-test pour :sdk-ui) afin qu'aucun lot parallèle ne modifie les fichiers de build et ne crée de conflit.",
+  "acceptance": [
+   "La CI android.yml (assembleDebug + testDebugUnitTest) est verte avec toutes les nouvelles dépendances résolues, sans aucune ligne de feature ajoutée.",
+   "Chaque version est épinglée exactement (jamais de plage), antérieure de plus de deux semaines, avec minSdk compatible API 26 vérifié (lottie-compose, coil-gif, media3 1.4.1, ML Kit Subject Segmentation beta).",
+   "Les tests unitaires de :sdk-ui peuvent désormais utiliser Robolectric, MockK, Turbine et coroutines-test (un test témoin le prouve).",
+   "Le surcoût de taille de l'APK debug est mesuré et consigné dans le commentaire de clôture de l'issue.",
+   "La construction release (R8) n'est pas cassée par les nouvelles bibliothèques (règles de conservation ajoutées si nécessaire)."
+  ],
+  "tests": [
+   "BuildSmokeTest : un test Robolectric dans :sdk-ui instancie un contexte et prouve que la configuration de test fonctionne",
+   "Vérification CI : assembleDebug et testDebugUnitTest verts sur la PR du lot"
+  ],
+  "android_modules": [
+   ":sdk-ui",
+   ":sdk-core",
+   ":feature:stories"
+  ],
+  "android_files_touched": [
+   "apps/android/gradle/libs.versions.toml",
+   "apps/android/sdk-ui/build.gradle.kts",
+   "apps/android/sdk-core/build.gradle.kts",
+   "apps/android/feature/stories/build.gradle.kts",
+   "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/BuildSmokeTest.kt"
+  ],
+  "ios_reference_files": [],
+  "feature_keys": [
+   "scc-export-mp4-pipeline",
+   "scc-look-filters-adjustments",
+   "scc2-mee-films",
+   "scc2-sticker-library",
+   "scc-sticker-layer"
+  ],
+  "rank": 287
+ }
+]
