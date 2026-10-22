@@ -162,7 +162,8 @@ final class ConversationAudioQueueFeedTests: XCTestCase {
         let feed = ConversationAudioQueueFeed()
         let emissions = PassthroughSubject<[Message], Never>()
         var host: StubAudioQueueHost? = StubAudioQueueHost(coordinator: coordinator)
-        weak var weakHost = host
+        weak var weakHost: StubAudioQueueHost?
+        weakHost = host
         let subscriptions = [
             feed.followMessages(of: host!, publishing: emissions.eraseToAnyPublisher()),
             feed.followFinishedEvents(of: host!)

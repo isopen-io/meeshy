@@ -1,9 +1,25 @@
 package me.meeshy.sdk.auth
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.auth.EmailVerificationRequest
+import me.meeshy.sdk.model.auth.EmailVerificationWatchStatus
+import me.meeshy.sdk.model.auth.LoginOutcome
+import me.meeshy.sdk.model.auth.LoginResponse
+import me.meeshy.sdk.model.auth.ResendVerificationRequest
+import me.meeshy.sdk.model.auth.ResetPasswordRequest
+import me.meeshy.sdk.model.auth.ResetTokenVerification
+import me.meeshy.sdk.model.auth.ResetTokenVerificationRequest
+import me.meeshy.sdk.model.auth.SendPhoneCodeRequest
+import me.meeshy.sdk.model.auth.TwoFactorLoginRequest
+import me.meeshy.sdk.model.auth.TwoFactorVerifyResult
+import me.meeshy.sdk.model.auth.VerificationStatusRequest
+import me.meeshy.sdk.model.auth.VerifyPhoneData
+import me.meeshy.sdk.model.auth.VerifyPhoneRequest
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
@@ -26,9 +42,79 @@ class AuthRepository @Inject constructor(
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
+    /**
+     * La connexion par mot de passe, dans TOUTES ses issues : la session, le défi
+     * de second facteur, l'adresse à prouver, la confirmation d'un compte
+     * ([LoginOutcome]). La session n'est stockée que sur [LoginOutcome.Authenticated] —
+     * les trois autres ne donnent aucun accès, donc rien n'est écrit dans le
+     * porte-jetons. Une charge illisible (statut inconnu, charge vide) est un échec
+     * typé [AuthFailureCode.UNSUPPORTED_RESPONSE], jamais une session supposée.
+     *
+     * [rememberDevice] part toujours au corps : c'est lui qui fait durer la
+     * confiance de l'appareil (365 jours) plutôt qu'un jour.
+     */
+    suspend fun loginOutcome(
+        username: String,
+        password: String,
+        rememberDevice: Boolean,
+    ): NetworkResult<LoginOutcome> =
+        when (val result = apiCall { authApi.login(LoginRequest(username, password, rememberDevice)) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.openIfAuthenticated(typedIdentifier = username)
+        }
+
+    /**
+     * La porte de l'écran de connexion actuel : une session ou un échec. Toute autre
+     * issue de [loginOutcome] devient un échec typé ([AuthFailureCode]) — l'écran
+     * qui sait les lire appelle [loginOutcome]. Le comportement reste celui d'avant :
+     * session stockée sur succès, rien sinon, `rememberDevice = false` (la passerelle
+     * n'accordait déjà que la durée de base quand la clé était omise).
+     */
     suspend fun login(username: String, password: String): NetworkResult<AuthSession> =
-        apiCall { authApi.login(LoginRequest(username, password)) }
-            .also { if (it is NetworkResult.Success) storeSession(it.data) }
+        when (val result = loginOutcome(username, password, rememberDevice = false)) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.asSession()
+        }
+
+    /**
+     * Seconde étape de la connexion d'un compte protégé : le défi rendu par
+     * [loginOutcome] ([LoginOutcome.TwoFactorRequired.twoFactorToken]) et le code
+     * (TOTP, ou de secours `XXXX-XXXX`). La session n'est stockée qu'au succès ; un
+     * refus (code invalide, trop de tentatives) remonte tel quel, avec le `code` de
+     * la passerelle — un 401 de cette route est « code refusé », jamais une
+     * session expirée.
+     */
+    suspend fun completeLoginWith2FA(twoFactorToken: String, code: String): NetworkResult<AuthSession> =
+        when (val result = apiCall { authApi.completeLoginWith2FA(TwoFactorLoginRequest(twoFactorToken, code)) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> when (val opened = result.data.openIfAuthenticated()) {
+                is NetworkResult.Failure -> opened
+                is NetworkResult.Success -> opened.data.asSession()
+            }
+        }
+
+    /**
+     * Prouve l'adresse par le code ou le lien ([EmailVerificationRequest]) et rend ce
+     * que la preuve a produit — la session, le défi de second facteur, ou la
+     * confirmation d'un compte. Elle N'ADOPTE RIEN : l'écran qui attend le code tient
+     * la session et la pose lui-même ([adoptSession]), sinon la racine de l'app
+     * basculerait et démonterait l'écran en cours (#8288).
+     */
+    suspend fun confirmEmail(request: EmailVerificationRequest): NetworkResult<LoginOutcome> =
+        when (val result = apiCall { authApi.verifyEmail(request) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.asOutcome(typedIdentifier = request.email)
+        }
+
+    /**
+     * Ouvre une session que l'appelant a TENUE (preuve d'adresse, lien magique
+     * confirmé) : jetons écrits, profil adopté. Publique pour les écrans d'ouverture
+     * sur preuve ; elle ne vérifie rien — l'appelant ne la passe qu'à une session que
+     * la passerelle vient de rendre.
+     */
+    fun adoptSession(session: AuthSession) {
+        storeSession(session)
+    }
 
     /**
      * Crée le compte. Le `200` de la passerelle porte DEUX issues distinctes —
@@ -101,8 +187,105 @@ class AuthRepository @Inject constructor(
      * passer par un teardown complet, jamais par un simple remplacement).
      */
     suspend fun loginWithMagicLink(token: String): NetworkResult<AuthSession> =
-        apiCall { authApi.validateMagicLink(me.meeshy.sdk.net.api.MagicLinkValidateRequest(token)) }
-            .also { if (it is NetworkResult.Success) storeSession(it.data) }
+        when (val result = magicLinkOutcome(token)) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.asSession()
+        }
+
+    /**
+     * Le lien magique dans toutes ses issues. [linkDeviceSecret] est le secret que
+     * l'appareil a gardé en demandant le lien et [confirmed] le « oui » de l'utilisateur
+     * au compte qu'il ouvre (#10872) : un lien ouvert ailleurs que sur l'appareil
+     * demandeur rend [LoginOutcome.LinkConfirmationRequired], sans session. La session
+     * n'est stockée que sur [LoginOutcome.Authenticated].
+     */
+    suspend fun magicLinkOutcome(
+        token: String,
+        linkDeviceSecret: String? = null,
+        confirmed: Boolean = false,
+    ): NetworkResult<LoginOutcome> =
+        when (
+            val result = apiCall {
+                authApi.validateMagicLink(
+                    me.meeshy.sdk.net.api.MagicLinkValidateRequest(
+                        token = token,
+                        linkDeviceSecret = linkDeviceSecret?.takeIf { it.isNotBlank() },
+                        confirm = if (confirmed) true else null,
+                    ),
+                )
+            }
+        ) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.openIfAuthenticated()
+        }
+
+    /** Renvoie le code / lien de vérification ; la passerelle répond succès même sans compte (anti-énumération). */
+    suspend fun resendEmailVerification(email: String): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.resendVerification(ResendVerificationRequest(email)) }
+
+    /**
+     * L'adresse a-t-elle été prouvée ailleurs depuis que CET appareil a reçu son jeton
+     * d'attente ? Jamais une session. Un jeton inconnu (401) ou expiré (410) FINIT
+     * l'attente ([EmailVerificationWatchStatus.ENDED]) ; toute autre panne reste un
+     * échec passager, à rejouer.
+     */
+    suspend fun emailVerificationStatus(pendingSessionToken: String): NetworkResult<EmailVerificationWatchStatus> =
+        when (val result = apiCall { authApi.verificationStatus(VerificationStatusRequest(pendingSessionToken)) }) {
+            is NetworkResult.Success -> NetworkResult.Success(EmailVerificationWatchStatus.served(result.data.status))
+            is NetworkResult.Failure ->
+                EmailVerificationWatchStatus.ending(result.error.httpStatus)
+                    ?.let { NetworkResult.Success(it) }
+                    ?: result
+        }
+
+    /** Le verdict d'un jeton de réinitialisation, sans le consommer. */
+    suspend fun verifyResetToken(token: String): NetworkResult<ResetTokenVerification> =
+        apiCall { authApi.verifyResetToken(ResetTokenVerificationRequest(token)) }
+
+    /**
+     * Pose le nouveau mot de passe. [twoFactorCode] est celui d'un compte protégé (omis
+     * sinon) ; les refus (`RESET_TOKEN_INVALID`, `TWO_FACTOR_REQUIRED`…) remontent avec
+     * leur `code`.
+     */
+    suspend fun submitPasswordReset(
+        token: String,
+        newPassword: String,
+        twoFactorCode: String? = null,
+    ): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit {
+            authApi.resetPassword(
+                ResetPasswordRequest(
+                    token = token,
+                    newPassword = newPassword,
+                    confirmPassword = newPassword,
+                    twoFactorCode = twoFactorCode,
+                ),
+            )
+        }
+
+    /** Envoie le code SMS qui prouve un numéro. */
+    suspend fun sendPhoneCode(phoneNumber: String): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.sendPhoneCode(SendPhoneCodeRequest(phoneNumber)) }
+
+    suspend fun verifyPhone(phoneNumber: String, code: String): NetworkResult<VerifyPhoneData> =
+        apiCall { authApi.verifyPhone(VerifyPhoneRequest(phoneNumber, code)) }
+
+    /**
+     * Le compte a-t-il déjà un mot de passe ? Un compte né d'une inscription par e-mail
+     * seul n'en a pas, et Réglages › Sécurité doit alors en POSER un sans réclamer
+     * d'« actuel » (#9186). `Success(null)` quand la passerelle ne sert pas le résumé :
+     * l'écran garde le formulaire d'un CHANGEMENT.
+     */
+    suspend fun hasPassword(): NetworkResult<Boolean?> =
+        apiCall { authApi.meSecurity() }.map { it.user.security?.hasPassword }
+
+    /** Vérifie un code de second facteur (TOTP ou de secours) ; un 401 est un code refusé. */
+    suspend fun verifyTwoFactor(code: String): NetworkResult<TwoFactorVerifyResult> =
+        apiCall { authApi.verifyTwoFactor(me.meeshy.sdk.net.api.TwoFactorCodeRequest(code)) }
+
+    /** Annule un enrôlement 2FA en cours, avant `enable`. */
+    suspend fun cancelTwoFactorSetup(): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.cancelTwoFactorSetup() }
 
     /** Les sessions actives du compte (la courante marquee par le serveur). */
     suspend fun listSessions(): NetworkResult<me.meeshy.sdk.net.api.SessionsListData> =
@@ -146,8 +329,17 @@ class AuthRepository @Inject constructor(
      * different account signing in on this device never inherits the previous
      * account's data. The wipe is awaited before returning — the caller may treat
      * the device as clean the moment this suspend call completes.
+     *
+     * La passerelle est ensuite prévenue, au mieux : `POST /auth/logout` part avec les
+     * jetons FIGÉS de la session quittée, relevés AVANT la purge. Lus plus tard, ils
+     * seraient vides — ou ceux du compte qui vient de se connecter, dont on fermerait
+     * alors la session à la place de l'autre. La purge locale passe d'abord et ne
+     * dépend de rien : hors ligne, en erreur ou après [SERVER_LOGOUT_TIMEOUT_MILLIS],
+     * l'appareil est propre de toute façon, et la session passerelle expirera d'elle-même.
      */
     suspend fun logout() {
+        val frozenJwt = tokenStore.jwt
+        val frozenSessionToken = tokenStore.sessionToken
         tokenStore.clear()
         sessionRepository.clear()
         sessionTeardown.wipe()
@@ -157,6 +349,38 @@ class AuthRepository @Inject constructor(
         // PAR USER côté serveur : hérité, il ferait manquer au compte suivant
         // tous ses trous tant qu'il n'aurait pas dépassé la valeur du précédent.
         syncSeqTracker.reset()
+        closeServerSession(frozenJwt, frozenSessionToken)
+    }
+
+    private suspend fun closeServerSession(jwt: String?, sessionToken: String?) {
+        if (jwt == null && sessionToken == null) return
+        withTimeoutOrNull(SERVER_LOGOUT_TIMEOUT_MILLIS) {
+            try {
+                authApi.logout(authorization = jwt?.let { "Bearer $it" }, sessionToken = sessionToken)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (ignored: Exception) {
+                // Meilleur effort assumé : la purge locale a déjà eu lieu, et la
+                // session passerelle expirera d'elle-même.
+            }
+        }
+    }
+
+    private fun LoginResponse.asOutcome(typedIdentifier: String = ""): NetworkResult<LoginOutcome> =
+        outcome(typedIdentifier)
+            ?.let { NetworkResult.Success(it) }
+            ?: NetworkResult.Failure(AuthFailureCode.forNonSession(null))
+
+    /** L'issue lue, et la session stockée si — et seulement si — c'est une session. */
+    private fun LoginResponse.openIfAuthenticated(typedIdentifier: String = ""): NetworkResult<LoginOutcome> =
+        asOutcome(typedIdentifier).also { result ->
+            val outcome = (result as? NetworkResult.Success)?.data
+            if (outcome is LoginOutcome.Authenticated) storeSession(outcome.session)
+        }
+
+    private fun LoginOutcome.asSession(): NetworkResult<AuthSession> = when (this) {
+        is LoginOutcome.Authenticated -> NetworkResult.Success(session)
+        else -> NetworkResult.Failure(AuthFailureCode.forNonSession(this))
     }
 
     private fun storeSession(session: AuthSession) {
@@ -168,6 +392,9 @@ class AuthRepository @Inject constructor(
     private companion object {
         /** Validite par defaut si le gateway omet expiresInSeconds (60 s cote serveur). */
         const val DEFAULT_MAGIC_LINK_VALIDITY_SECONDS: Int = 60
+
+        /** Ce que la deconnexion attend la passerelle : au-dela, l'appareil est deja propre et rend la main. */
+        const val SERVER_LOGOUT_TIMEOUT_MILLIS: Long = 3_000L
     }
 }
 

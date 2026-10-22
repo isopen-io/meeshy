@@ -5,6 +5,11 @@ import me.meeshy.sdk.lang.LanguageCodeNormalizer
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
+import me.meeshy.sdk.model.scene.StoryElementVisibility
+import me.meeshy.sdk.model.scene.StoryKeyframeResolver
+import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
+import me.meeshy.sdk.model.scene.StoryTextBackground
 
 /**
  * A text overlay on a slide, projected for the viewer canvas. Pure data.
