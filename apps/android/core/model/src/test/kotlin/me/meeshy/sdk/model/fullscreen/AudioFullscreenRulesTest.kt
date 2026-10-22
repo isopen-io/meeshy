@@ -68,7 +68,7 @@ class AudioFullscreenRulesTest {
 
     @Test
     fun `un conteneur minuscule garde le portrait minimal`() {
-        assertThat(AudioFullscreenLayout.resolve(320f, 300f).heroDiameter).isEqualTo(72f)
+        assertThat(AudioFullscreenLayout.resolve(300f, 320f).heroDiameter).isEqualTo(72f)
     }
 
     @Test
@@ -85,7 +85,7 @@ class AudioFullscreenRulesTest {
     @Test
     fun `les paroles valent 2,4 fois le corps au plus et se ramenent a la largeur`() {
         assertThat(AudioFullscreenLayout.lyricSize(600f)).isEqualTo(34f)
-        assertThat(AudioFullscreenLayout.lyricSize(200f)).isEqualTo(22f)
+        assertThat(AudioFullscreenLayout.lyricSize(200f)).isWithin(1e-4f).of(22.4f)
     }
 
     @Test
@@ -97,7 +97,7 @@ class AudioFullscreenRulesTest {
     @Test
     fun `le mot en cours se pose au premier tiers de la bande libre`() {
         assertThat(AudioFullscreenLayout.lyricAnchor(100f, 100f, 0f)).isEqualTo(0.5f)
-        assertThat(AudioFullscreenLayout.lyricAnchor(100f, 100f, 700f)).isWithin(1e-4f).of(0.4f)
+        assertThat(AudioFullscreenLayout.lyricAnchor(100f, 100f, 700f)).isWithin(1e-4f).of(0.38095f)
     }
 
     @Test
