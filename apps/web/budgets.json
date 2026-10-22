@@ -998,6 +998,15 @@
         "source": "Mesure du 2026-10-11 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 1,17 Ko pour la boutique GENERIQUE des packs (`components/pack-shop.tsx` : liste, Installer/Retirer optimiste, un geste en vol par pack, retour arriere sur refus), partagee par la Boutique des stickers (`composer-sticker-shop.tsx`) et la Boutique des cadres (`frame-pack-shop.tsx`), chacune par un import() — jamais un import statique. La premiere peinture ne bouge pas : 90,33 Ko avant, 90,31 Ko apres (meme arbre, sans puis avec le lot ; le depassement de 90 est anterieur au lot). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
+    "glory_painter": {
+      "pattern": "^assets/glory-scene-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 10,
+        "status": "CIBLE -- MESUREE PAR #10159, NON ARBITREE",
+        "source": "Mesure du 2026-10-22 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 7,77 Ko pour le peintre des cadres de gloire (`lib/game-photo/glory/` : catalogue des packs installes par le port generique et la loi partagee gloryFramesFor, lecture des couches au magasin SANS reseau, peintre pile/fenetre/grade/blason/oiseaux/plaque/texte/bandeau, polices de cadre), atteint par import() depuis `lib/game-photo/env.ts` seulement -- jamais un import statique (le temoin de source `glory/source-guard.test.ts` le tient, lecon 589). Le magasin des packs (`packs_store`) et le catalogue Mee restent des chunks a part, atteints par import() depuis la scene. La feuille des polices (`glory-scene-*.css`) voyage avec lui ; ses fichiers woff2 restent comptes par `glory_fonts`. La premiere peinture ne bouge pas (meme arbre, aucun module de ce dossier atteint statiquement depuis main.tsx). Arrondi au Ko SUPERIEUR (8) + 2 Ko de marge."
+      }
+    },
     "packs_store": {
       "pattern": "^assets/pack-asset-store-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
