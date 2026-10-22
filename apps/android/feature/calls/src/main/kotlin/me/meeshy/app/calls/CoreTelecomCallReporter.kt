@@ -55,7 +55,7 @@ class CoreTelecomCallReporter @Inject constructor(
         session = opened
         job = scope.launch {
             try {
-                gateway.addCall(call, handlersOf(opened), { run(call, opened) })
+                gateway.addCall(call, handlersOf(opened), { serve(call, opened) })
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
@@ -96,7 +96,7 @@ class CoreTelecomCallReporter @Inject constructor(
         onSetInactive = { _requests.tryEmit(TelecomSystemRequest.Hold(onHold = true)) },
     )
 
-    private suspend fun TelecomCallControl.run(call: TelecomCallInfo, opened: CallTelecomSession) = coroutineScope {
+    private suspend fun TelecomCallControl.serve(call: TelecomCallInfo, opened: CallTelecomSession) = coroutineScope {
         val watchers = listOf(
             launch { isMuted.distinctUntilChanged().collect { _requests.tryEmit(TelecomSystemRequest.Mute(it)) } },
             launch { followSystemEndpoint() },
