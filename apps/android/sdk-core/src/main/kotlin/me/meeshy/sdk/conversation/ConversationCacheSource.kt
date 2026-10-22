@@ -15,7 +15,10 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.keepingParticipantsOf
+import me.meeshy.sdk.model.namesTwoPeople
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
@@ -302,21 +305,8 @@ internal class ConversationCacheSource(
         etagScope: String?,
     ) {
         val now = clock.nowMillis()
-        val rows = conversations.map { conversation ->
-            ConversationEntity(
-                id = conversation.id,
-                payload = MeeshyApi.json.encodeToString(conversation),
-                updatedAt = isoToEpochMillis(
-                    conversation.updatedAt
-                        ?: conversation.lastMessage?.createdAt
-                        ?: conversation.createdAt,
-                ),
-                cachedAt = now,
-                unreadCount = conversation.unreadCount,
-            )
-        }
-        // The watermark's own value — NEVER the fallback-adjusted one above —
-        // see the doc-comment on [revalidate] for why the two must not merge.
+        // The watermark's own value — NEVER the fallback-adjusted one in [entityOf] — see the
+        // doc-comment on [revalidate] for why the two must not merge.
         val receivedMax = if (advanceWatermark) {
             conversations.mapNotNull { isoToEpochMillisOrNull(it.updatedAt) }.maxOrNull()
         } else {
@@ -324,11 +314,49 @@ internal class ConversationCacheSource(
         }
         val watermarkToStore = receivedMax ?: currentWatermark
         database.withTransaction {
+            val rows = conversations.map { entityOf(carryingKnownPeers(it), now) }
             conversationDao.upsertAll(rows)
             if (prune) pruneMissing(rows.map { it.id })
             syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermarkToStore, etag, etagScope))
         }
     }
+
+    /**
+     * Stores one conversation the app has just been handed outside a list sweep (a direct found
+     * or created for a story/mood reply or a profile's Message button), so the chat screen — which
+     * reads the Room row — has it before the next sweep serves it. Same carry rule as a sweep.
+     */
+    suspend fun remember(conversation: ApiConversation) {
+        val now = clock.nowMillis()
+        database.withTransaction {
+            conversationDao.upsertAll(listOf(entityOf(carryingKnownPeers(conversation), now)))
+        }
+    }
+
+    /**
+     * A served direct row that names fewer than two people has not elected an interlocutor
+     * (`GET /sync`-shaped rows carry no roster, #11615): it takes the roster the cache knows
+     * instead of overwriting it, so the row never falls back to the generic name on a sync that
+     * simply did not serve its participants. Must run inside the write transaction.
+     */
+    private suspend fun carryingKnownPeers(served: ApiConversation): ApiConversation {
+        if (!served.isDirect || served.namesTwoPeople) return served
+        val known = conversationDao.find(served.id)
+            ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
+        return served.keepingParticipantsOf(known)
+    }
+
+    private fun entityOf(conversation: ApiConversation, cachedAtMillis: Long) = ConversationEntity(
+        id = conversation.id,
+        payload = MeeshyApi.json.encodeToString(conversation),
+        updatedAt = isoToEpochMillis(
+            conversation.updatedAt
+                ?: conversation.lastMessage?.createdAt
+                ?: conversation.createdAt,
+        ),
+        cachedAt = cachedAtMillis,
+        unreadCount = conversation.unreadCount,
+    )
 
     internal companion object {
         const val RESOURCE_KEY: String = "conversations"

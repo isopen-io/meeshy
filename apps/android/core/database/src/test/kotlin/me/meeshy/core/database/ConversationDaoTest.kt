@@ -101,4 +101,30 @@ class ConversationDaoTest {
 
         assertThat(rows.map { it.id }).containsExactly("c9", "c8", "c7").inOrder()
     }
+
+    @Test
+    fun `payloadsContaining returns only rows whose payload mentions the text, most recent first`() = runTest {
+        dao.upsertAll(
+            listOf(
+                ConversationEntity(id = "a", payload = "{\"userId\":\"u1\"}", updatedAt = 100, cachedAt = 0L, unreadCount = 0),
+                ConversationEntity(id = "b", payload = "{\"userId\":\"u2\"}", updatedAt = 300, cachedAt = 0L, unreadCount = 0),
+                ConversationEntity(id = "c", payload = "{\"userId\":\"u1\"}", updatedAt = 200, cachedAt = 0L, unreadCount = 0),
+            ),
+        )
+
+        assertThat(dao.payloadsContaining("u1").map { it.id }).containsExactly("c", "a").inOrder()
+    }
+
+    @Test
+    fun `payloadsContaining matches the needle literally when it is escaped`() = runTest {
+        dao.upsertAll(
+            listOf(
+                ConversationEntity(id = "a", payload = "{\"t\":\"100% sure\"}", updatedAt = 1, cachedAt = 0L, unreadCount = 0),
+                ConversationEntity(id = "b", payload = "{\"t\":\"plain\"}", updatedAt = 2, cachedAt = 0L, unreadCount = 0),
+            ),
+        )
+
+        assertThat(dao.payloadsContaining("%").map { it.id }).containsExactly("a", "b")
+        assertThat(dao.payloadsContaining("\\%").map { it.id }).containsExactly("a")
+    }
 }

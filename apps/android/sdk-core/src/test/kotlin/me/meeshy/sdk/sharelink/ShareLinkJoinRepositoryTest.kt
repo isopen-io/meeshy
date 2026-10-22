@@ -36,6 +36,8 @@ private abstract class StubJoinApi : ConversationApi {
     ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
 
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) = ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun directWith(type: String, withUserId: String, limit: Int) =
+        ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun listConditional(
         offset: Int?,
         limit: Int?,
