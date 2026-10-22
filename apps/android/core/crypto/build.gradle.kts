@@ -25,4 +25,8 @@ android {
 }
 
 dependencies {
+    implementation(libs.tink.android)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.truth)
 }

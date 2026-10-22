@@ -116,6 +116,42 @@ final class ComposerLiveLookTests: XCTestCase {
         XCTAssertEqual(rendue, url)
     }
 
+    // MARK: - Couper sans retoucher ne ré-encode pas (#9889)
+
+    private static let coupe = CMTimeRange(start: CMTime(seconds: 1, preferredTimescale: 1000),
+                                           end: CMTime(seconds: 4, preferredTimescale: 1000))
+
+    func test_plan_rienNeChange_laPriseRepartTelleQuelle() {
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: ComposerPhotoLook(), framing: .identity,
+                                                      timeRange: nil, audioGain: 1), .untouched)
+    }
+
+    func test_plan_seuleLaLongueurChange_copieSansReencodage() {
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: ComposerPhotoLook(), framing: .identity,
+                                                      timeRange: Self.coupe, audioGain: 1), .trimOnly(Self.coupe))
+    }
+
+    func test_plan_unLookAvecLaCoupe_seRendEnUnePasse() {
+        let look = ComposerPhotoLook(filter: .warm, frame: .none, effect: .none)
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: look, framing: .identity,
+                                                      timeRange: Self.coupe, audioGain: 1), .render)
+    }
+
+    func test_plan_unCadrageOuUnSonRegle_seRend() {
+        let cadrage = ComposerFraming(center: CGPoint(x: 0.4, y: 0.5), scale: 2)
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: ComposerPhotoLook(), framing: cadrage,
+                                                      timeRange: Self.coupe, audioGain: 1), .render)
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: ComposerPhotoLook(), framing: .identity,
+                                                      timeRange: Self.coupe, audioGain: 0.5), .render)
+    }
+
+    func test_coupeSansReencodage_laPisteLeDit_etLExportCopie() throws {
+        let piste = try Self.code("Meeshy/Features/Main/Composer/ComposerTrimTrack.swift")
+        XCTAssertTrue(piste.contains("if cutsOnKeyframe { keyframeNote }"), "l'interface dit la précision de la coupe")
+        let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        XCTAssertTrue(export.contains("presetName: AVAssetExportPresetPassthrough"), "la découpe seule copie les échantillons")
+    }
+
     // MARK: - Ce que la relecture a resserré
 
     func test_seulsLesCadresQueLAppelComposeEnDirect_sOffrent() {

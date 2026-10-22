@@ -119,7 +119,7 @@ struct StoryCardView: View {
     let storyCommentExpandedThreads: Set<String>
     let storyCommentLoadingReplies: Set<String>
     let isLoadingComments: Bool
-    let commentsUserLang: String
+    let commentsReaderLanguages: [String]
 
     // Bindings — UI state owned by the viewer
     @Binding var isContentReady: Bool
@@ -247,7 +247,7 @@ struct StoryCardView: View {
     let goToPrevious: () -> Void
     let goToNext: () -> Void
     let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
-    let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
+    let makeStoryCommentRow: (FeedComment, [String]) -> StoryCommentRowView
     let toggleStoryCommentThread: @MainActor (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
     let storyWithdrawal: StoryWithdrawalActions

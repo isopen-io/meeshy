@@ -61,6 +61,7 @@ dependencies {
     implementation(project(":feature:stories"))
     implementation(project(":feature:calls"))
     implementation(project(":feature:reels"))
+    implementation(project(":feature:game"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

@@ -31,6 +31,7 @@ android {
 dependencies {
     implementation(project(":sdk-core"))
     implementation(project(":sdk-ui"))
+    implementation(libs.coil.compose)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -40,6 +41,7 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose)
     implementation(libs.hilt.android)
+    implementation(libs.timber)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     debugImplementation(libs.compose.ui.tooling)

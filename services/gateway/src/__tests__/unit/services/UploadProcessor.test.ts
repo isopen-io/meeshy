@@ -685,7 +685,7 @@ describe('UploadProcessor', () => {
 
       await processor.uploadEncryptedFile(file, testUserId, 'e2ee' as any, false, testMessageId);
 
-      expect(mockMetadataManager.extractImageMetadataFromBuffer).toHaveBeenCalledWith(file.buffer);
+      expect(mockMetadataManager.extractImageMetadataFromBuffer).toHaveBeenCalledWith(mockEncryptionService.encryptAttachment.mock.calls[0][0].fileBuffer);
     });
 
     it('should handle provided audio metadata', async () => {

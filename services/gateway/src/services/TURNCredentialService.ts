@@ -14,6 +14,7 @@
 import crypto from 'crypto';
 import { logger } from '../utils/logger';
 import { CallCleanupService } from './CallCleanupService';
+import { parseTurnTlsServers, turnTlsUrl, type TurnTlsServer } from './turn-tls-servers';
 
 export interface TURNServerConfig {
   host: string;
@@ -28,6 +29,7 @@ export class TURNCredentialService {
   private readonly credentialTTL: number;
   private readonly stunServers: RTCIceServer[];
   private readonly turnTlsPort: number;
+  private readonly turnTlsServers: readonly TurnTlsServer[];
 
   constructor() {
     // Load TURN secret from environment (CRITICAL: must be set in production)
@@ -166,6 +168,14 @@ export class TURNCredentialService {
     // 0 to disable (e.g. an environment where 5349 isn't provisioned).
     this.turnTlsPort = parseInt(process.env.TURN_TLS_PORT || '5349', 10);
 
+    // #11278 — relais TLS à nom et port libres, 443 par défaut (voir
+    // turn-tls-servers.ts) : ce qui passe un pare-feu qui n'ouvre que le web.
+    const tlsServers = parseTurnTlsServers(process.env.TURN_TLS_SERVERS);
+    if (tlsServers.rejected.length > 0) {
+      logger.warn('⚠️ TURN_TLS_SERVERS entries ignored (expected host[:port])', { rejected: tlsServers.rejected });
+    }
+    this.turnTlsServers = tlsServers.servers;
+
     // STUN servers. Cloudflare is a second provider alongside Google so a
     // Google STUN outage doesn't strand every call on TURN alone — mirrors
     // the redundancy already documented on the iOS client's STUN-only
@@ -288,13 +298,19 @@ export class TURNCredentialService {
       }
     }
 
+    const derivedUrls = new Set(turnServerConfigs.map((server) => server.urls));
+    const extraTlsConfigs: RTCIceServer[] = this.turnTlsServers
+      .map(turnTlsUrl)
+      .filter((url, index, urls) => !derivedUrls.has(url) && urls.indexOf(url) === index)
+      .map((url) => ({ urls: url, username, credential }));
+
     // Combine STUN and TURN servers
-    const iceServers = [...this.stunServers, ...turnServerConfigs];
+    const iceServers = [...this.stunServers, ...turnServerConfigs, ...extraTlsConfigs];
 
     logger.info('✅ ICE servers configured', {
       userId,
       stunServers: this.stunServers.length,
-      turnServers: turnServerConfigs.length,
+      turnServers: turnServerConfigs.length + extraTlsConfigs.length,
       totalServers: iceServers.length
     });
 

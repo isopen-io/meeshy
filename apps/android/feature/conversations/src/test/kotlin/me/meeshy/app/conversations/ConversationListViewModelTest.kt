@@ -193,7 +193,7 @@ class ConversationListViewModelTest {
     ) = ConversationListViewModel(
         repo, messageRepo, socket, relay, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
-        storyRepository, statusBarCache,
+        storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(

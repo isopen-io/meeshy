@@ -35,6 +35,20 @@ nonisolated enum ComposerPhotoEncoding {
                       kCGImageDestinationLossyCompressionQuality: quality]) { _, rendu in rendu }
     }
 
+    /// **La prise repart telle quelle quand rien ne l'a peinte** (#9885) : un look
+    /// intact, un cadrage neutre et une toile à la définition de la prise rendent
+    /// exactement ses pixels — les ré-encoder ajouterait une génération pour rien.
+    /// Une toile différente est un recadrage : elle se peint.
+    static func reusesTake(paints: Bool, canvas: CGSize, take: CGImage) -> Bool {
+        !paints && canvas == CGSize(width: take.width, height: take.height)
+    }
+
+    /// Les octets de la prise quand `reusesTake` le permet, `nil` s'il faut peindre.
+    static func untouchedTake(_ data: Data?, of take: CGImage, paints: Bool, aspect: CGFloat) -> Data? {
+        let toile = ComposerLookPainter.canvas(for: CGSize(width: take.width, height: take.height), aspect: aspect)
+        return reusesTake(paints: paints, canvas: toile, take: take) ? data : nil
+    }
+
     /// Le nom du fichier en galerie, à l'extension du type encodé.
     static func fileName(for data: Data, id: String) -> String {
         let type = CGImageSourceCreateWithData(data as CFData, nil)

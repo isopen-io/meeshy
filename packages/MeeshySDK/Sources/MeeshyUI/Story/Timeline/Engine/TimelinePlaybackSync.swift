@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Darwin
 
@@ -75,8 +76,54 @@ enum TimelinePlaybackSync {
         return min(duration, origin + Float(elapsed))
     }
 
+    /// **Le départ de la vidéo selon l'état de son item** (#9884). Un item pas
+    /// encore prêt refuse `setRate(_:time:atHostTime:)` : partir sans ancre
+    /// pendant que le son part à la sienne décale l'image du son. On attend
+    /// donc qu'il soit prêt, et vidéo et son partent ensemble. Un item en
+    /// échec joue sans ancre, pour que le son, lui, parte.
+    nonisolated enum VideoStart: Equatable, Sendable {
+        case anchored
+        case awaitingReadiness
+        case unanchored
+    }
+
+    nonisolated static func videoStart(itemStatus: AVPlayerItem.Status?) -> VideoStart {
+        switch itemStatus {
+        case .readyToPlay: return .anchored
+        case .failed: return .unanchored
+        case .unknown, .none: return .awaitingReadiness
+        @unknown default: return .awaitingReadiness
+        }
+    }
+
     private static func saturatingAdd(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
         let (sum, overflow) = lhs.addingReportingOverflow(rhs)
         return overflow ? .max : sum
+    }
+}
+
+/// **Le tampon d'E/S de 5 ms n'est emprunté que pendant la lecture** (#9884).
+/// Le scrub et le play du composer répondent sans latence audible ; le reste de
+/// l'app (lecteur de stories, vocaux) n'a pas à payer ce coût CPU et énergie
+/// pendant que le composer est seulement ouvert. Le bail garde la valeur
+/// d'origine, une seule fois, et la rend une seule fois.
+nonisolated struct IOBufferLease: Equatable, Sendable {
+    static let previewDuration: TimeInterval = 0.005
+
+    private(set) var original: TimeInterval?
+
+    init() {}
+
+    /// `true` : la valeur d'origine vient d'être notée, le tampon court peut se poser.
+    mutating func borrow(current: TimeInterval) -> Bool {
+        guard original == nil else { return false }
+        original = current
+        return true
+    }
+
+    /// La valeur à rendre à la session, `nil` si rien n'était emprunté.
+    mutating func giveBack() -> TimeInterval? {
+        defer { original = nil }
+        return original
     }
 }

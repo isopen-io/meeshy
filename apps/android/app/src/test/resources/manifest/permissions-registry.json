@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "permissions": [
+    {
+      "name": "android.permission.INTERNET",
+      "justification": "Toute l'app parle à la passerelle Meeshy (REST, Socket.IO, médias).",
+      "usage": "core/network, sdk-core socket",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.ACCESS_NETWORK_STATE",
+      "justification": "Savoir si le réseau est joignable pour la file d'envoi hors ligne et l'état discret hors ligne.",
+      "usage": "sdk-core NetworkMonitor, outbox",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.POST_NOTIFICATIONS",
+      "justification": "Notifications de messages, d'appels et de mentions (obligatoire dès l'API 33).",
+      "usage": "app/push, MeeshyFcmService",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_notifications_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.RECEIVE_BOOT_COMPLETED",
+      "justification": "Reprogrammer la synchronisation et les rappels après un redémarrage de l'appareil.",
+      "usage": "WorkManager, app/startup",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.FOREGROUND_SERVICE",
+      "justification": "Service d'appel en cours (micro, caméra) maintenu à l'écran verrouillé.",
+      "usage": "feature/calls",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.RECORD_AUDIO",
+      "justification": "Messages vocaux, appels audio et vidéo, enregistrement de transcription.",
+      "usage": "feature/chat, feature/calls",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_microphone_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.CAMERA",
+      "justification": "Photos et vidéos des messages, appels vidéo, stories.",
+      "usage": "feature/chat, feature/calls, feature/stories",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_camera_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.MODIFY_AUDIO_SETTINGS",
+      "justification": "Router le son d'un appel (haut-parleur, écouteur, Bluetooth).",
+      "usage": "feature/calls",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+      "justification": "Type de service au premier plan exigé dès l'API 34 pour un appel avec micro.",
+      "usage": "feature/calls",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.FOREGROUND_SERVICE_CAMERA",
+      "justification": "Type de service au premier plan exigé dès l'API 34 pour un appel vidéo.",
+      "usage": "feature/calls",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.ACCESS_FINE_LOCATION",
+      "justification": "Joindre sa position précise à un message ou à un post (action explicite de l'utilisateur).",
+      "usage": "feature/feed, feature/chat",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_location_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.ACCESS_COARSE_LOCATION",
+      "justification": "Repli de précision approximative quand l'utilisateur n'accorde pas la position précise.",
+      "usage": "feature/feed, feature/chat",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_location_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.DETECT_SCREEN_RECORDING",
+      "justification": "Android 15+ : alerter le pair quand l'écran est enregistré pendant un appel (call:screen-capture-detected).",
+      "usage": "feature/calls ScreenRecordingDetector",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.USE_FULL_SCREEN_INTENT",
+      "justification": "Afficher l'écran d'appel entrant plein écran depuis une notification FCM.",
+      "usage": "app/push",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
+      "name": "android.permission.READ_MEDIA_IMAGES",
+      "justification": "Choisir des photos de la photothèque (API 33+).",
+      "usage": "sdk-ui permission, feature/chat",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_photos_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.READ_MEDIA_VIDEO",
+      "justification": "Choisir des vidéos de la photothèque (API 33+).",
+      "usage": "sdk-ui permission, feature/chat",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_photos_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+      "justification": "Accès partiel choisi par l'utilisateur à la photothèque (API 34+).",
+      "usage": "sdk-ui permission",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_photos_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.READ_EXTERNAL_STORAGE",
+      "justification": "Lecture de la photothèque avant l'API 33 (maxSdkVersion 32).",
+      "usage": "sdk-ui permission",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_photos_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.WRITE_EXTERNAL_STORAGE",
+      "justification": "Enregistrer une photo ou une vidéo dans la bibliothèque avant l'API 29 (maxSdkVersion 28).",
+      "usage": "sdk-ui permission",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_photos_add_rationale_body"
+      ]
+    },
+    {
+      "name": "android.permission.READ_CONTACTS",
+      "justification": "Trouver ses contacts inscrits sur Meeshy ; rien d'un non-inscrit n'est envoyé en clair.",
+      "usage": "feature/contacts",
+      "runtime": true,
+      "rationaleKeys": [
+        "media_permission_contacts_rationale_body"
+      ]
+    }
+  ],
+  "planned": [
+    {
+      "permission": "android.permission.USE_BIOMETRIC",
+      "arrivesWith": "verrouillage biométrique de l'app"
+    },
+    {
+      "permission": "android.permission.MANAGE_OWN_CALLS",
+      "arrivesWith": "appels intégrés au système (core-telecom)"
+    },
+    {
+      "permission": "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+      "arrivesWith": "appels intégrés au système (core-telecom)"
+    },
+    {
+      "permission": "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+      "arrivesWith": "lecture audio en arrière-plan"
+    },
+    {
+      "permission": "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+      "arrivesWith": "envoi de gros médias en arrière-plan"
+    },
+    {
+      "permission": "android.permission.BLUETOOTH_CONNECT",
+      "arrivesWith": "routage audio Bluetooth des appels"
+    }
+  ]
+}

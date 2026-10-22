@@ -51,6 +51,8 @@ export type LandingCopy = {
   readonly faq: string;
   readonly privacy: string;
   readonly terms: string;
+  /** Les normes de sécurité des enfants que Google Play exige (#9923). */
+  readonly 'child-safety': string;
   readonly download: string;
   readonly about: string;
   readonly contact: string;
@@ -108,6 +110,7 @@ const fr: LandingCopy = {
   faq: 'FAQ',
   privacy: 'Confidentialité',
   terms: "Conditions d'utilisation",
+  'child-safety': 'Sécurité des enfants',
   download: "Télécharger l'app",
   about: 'À propos',
   contact: 'Contact',
@@ -165,6 +168,7 @@ const en: LandingCopy = {
   faq: 'FAQ',
   privacy: 'Privacy',
   terms: 'Terms of use',
+  'child-safety': 'Child safety',
   download: 'Download the app',
   about: 'About',
   contact: 'Contact',
@@ -222,6 +226,7 @@ const es: LandingCopy = {
   faq: 'Preguntas frecuentes',
   privacy: 'Privacidad',
   terms: 'Condiciones de uso',
+  'child-safety': 'Seguridad infantil',
   download: 'Descargar la app',
   about: 'Acerca de',
   contact: 'Contacto',
@@ -279,6 +284,7 @@ const pt: LandingCopy = {
   faq: 'Perguntas frequentes',
   privacy: 'Privacidade',
   terms: 'Termos de uso',
+  'child-safety': 'Segurança infantil',
   download: 'Baixar o app',
   about: 'Sobre',
   contact: 'Contato',
@@ -336,6 +342,7 @@ const de: LandingCopy = {
   faq: 'FAQ',
   privacy: 'Datenschutz',
   terms: 'Nutzungsbedingungen',
+  'child-safety': 'Kinderschutz',
   download: 'App herunterladen',
   about: 'Über uns',
   contact: 'Kontakt',
@@ -393,6 +400,7 @@ const it: LandingCopy = {
   faq: 'FAQ',
   privacy: 'Privacy',
   terms: "Condizioni d'uso",
+  'child-safety': 'Tutela dei minori',
   download: "Scarica l'app",
   about: 'Chi siamo',
   contact: 'Contatti',
@@ -450,6 +458,7 @@ const ar: LandingCopy = {
   faq: 'الأسئلة الشائعة',
   privacy: 'الخصوصية',
   terms: 'شروط الاستخدام',
+  'child-safety': 'سلامة الأطفال',
   download: 'تنزيل التطبيق',
   about: 'حول Meeshy',
   contact: 'اتصل بنا',

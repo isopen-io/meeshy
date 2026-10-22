@@ -276,8 +276,8 @@ extension StoryCanvasUIView {
             guard self.slide.id == slideId else { return }
 
             do {
-                try self.audioMixer.configure(audios: foreground, urls: fgURLs,
-                                              loopsEveryClip: isEditPreview)
+                try await self.audioMixer.loadAndConfigure(audios: foreground, urls: fgURLs,
+                                                           loopsEveryClip: isEditPreview) { self.slide.id == slideId }
             } catch {
                 os.Logger.storyAudio.error(
                     "ReaderAudioMixer.configure failed: \(error.localizedDescription, privacy: .public)"
@@ -313,14 +313,14 @@ extension StoryCanvasUIView {
                         "BG audio cached audioId=\(background.id, privacy: .public) localFile=\(localURL.lastPathComponent, privacy: .public)"
                     )
                     do {
-                        try self.audioMixer.configureBackground(
+                        try await self.audioMixer.loadAndConfigureBackground(
                             audio: background,
                             url: localURL,
                             looping: ReaderAudioLoopPolicy.loops(declared: background.loop,
                                                                  isBackground: true,
                                                                  isEditPreview: isEditPreview),
                             loopsEveryClip: isEditPreview
-                        )
+                        ) { self.slide.id == slideId }
                     } catch {
                         os.Logger.storyAudio.error(
                             "ReaderAudioMixer.configureBackground failed audioId=\(background.id, privacy: .public): \(error.localizedDescription, privacy: .public)"

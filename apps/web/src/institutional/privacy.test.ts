@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 
 import { PAGE_PRIVACY } from './privacy';
-import type { Block, Section } from './type';
+import { sectionText } from './text';
 
 /**
  * LA POLITIQUE DIT CE QUE DEVIENT LE CARNET D'ADRESSES (#8130).
@@ -12,28 +13,6 @@ import type { Block, Section } from './type';
  * exige chacune des cinq réponses — quoi, pourquoi, combien de temps, comment
  * l'effacer, et ce que Meeshy ne fait PAS à la place de l'utilisateur.
  */
-const blockText = (block: Block): string => {
-  switch (block.kind) {
-    case 'paragraphes':
-      return block.body.join(' ');
-    case 'list':
-      return block.items.join(' ');
-    case 'accent':
-      return block.body;
-    case 'encadre':
-      return block.rows.map((row) => row.text).join(' ');
-    case 'cartes':
-      return block.cards
-        .map((card) => [card.title, card.body ?? '', ...(card.items ?? [])].join(' '))
-        .join(' ');
-    case 'mee':
-      return block.views.map((view) => view.caption).join(' ');
-  }
-};
-
-const sectionText = (section: Section): string =>
-  [section.title, ...section.blocks.map(blockText)].join(' ');
-
 const addressBook = PAGE_PRIVACY.sections.find((section) => /carnet d'adresses/i.test(section.title));
 
 describe("Politique de confidentialité — le carnet d'adresses (#8130)", () => {
@@ -86,6 +65,94 @@ describe("Politique de confidentialité — le carnet d'adresses (#8130)", () =>
   });
 
   test('la date de mise à jour suit la modification', () => {
-    expect(PAGE_PRIVACY.mention).toBe('Dernière mise à jour : 10 octobre 2026');
+    expect(PAGE_PRIVACY.mention).toBe('Dernière mise à jour : 22 octobre 2026');
+  });
+});
+
+/**
+ * LA POLITIQUE NOMME SES SOUS-TRAITANTS ET SES TRANSFERTS HORS UE (#9922).
+ *
+ * Google rejette une déclaration « Sécurité des données » que la politique
+ * contredit, et le RGPD (art. 13) exige de nommer les destinataires et les
+ * transferts hors UE. Le témoin exige chaque prestataire que le code BRANCHE —
+ * et, dans l'autre sens, confronte chaque nom à la source qui l'appelle : une
+ * politique qui citerait un prestataire que rien n'appelle mentirait aussi.
+ */
+const ROOT = new URL('../../../../', import.meta.url);
+const source = (path: string): string => readFileSync(new URL(path, ROOT), 'utf8');
+
+const subprocessors = PAGE_PRIVACY.sections.find((section) => /sous-traitants/i.test(section.title));
+const transfers = PAGE_PRIVACY.sections.find((section) => /transferts/i.test(section.title));
+
+describe('Politique de confidentialité — les sous-traitants (#9922)', () => {
+  test('une section dédiée existe', () => {
+    expect(subprocessors).toBeDefined();
+  });
+
+  const text = subprocessors ? sectionText(subprocessors) : '';
+
+  const wiredProviders = [
+    ['Brevo', 'services/gateway/src/services/email/providers.ts', /api\.brevo\.com/],
+    ['SendGrid', 'services/gateway/src/services/email/providers.ts', /api\.sendgrid\.com/],
+    ['Mailgun', 'services/gateway/src/services/email/providers.ts', /mailgun/i],
+    ['Twilio', 'services/gateway/src/services/SmsService.ts', /TWILIO_ACCOUNT_SID/],
+    ['Vonage', 'services/gateway/src/services/SmsService.ts', /VONAGE_API_KEY/],
+    ['Firebase Cloud Messaging', 'services/gateway/src/services/web-push-config.ts', /firebase-admin\/messaging/],
+    ['Apple Push Notification service', 'infrastructure/docker/compose/docker-compose.prod.yml', /ENABLE_APNS_PUSH=true/],
+    ['OpenAI', 'infrastructure/docker/compose/docker-compose.prod.yml', /OPENAI_API_KEY/],
+    ['Anthropic', 'infrastructure/docker/compose/docker-compose.prod.yml', /ANTHROPIC_API_KEY/],
+  ] as const;
+  for (const [name, path, wired] of wiredProviders) {
+    test(`${name} est nommé, et le code le branche bien`, () => {
+      expect(text).toContain(name);
+      expect(source(path)).toMatch(wired);
+    });
+  }
+
+  test('les prestataires optionnels sont dits « selon la configuration »', () => {
+    expect(text).toMatch(/selon la configuration/i);
+  });
+
+  test('chaque catégorie dit quelles données part chez le prestataire', () => {
+    for (const data of [/adresse e-mail/i, /numéro de téléphone/i, /jeton/i, /texte des messages/i]) {
+      expect(text).toMatch(data);
+    }
+  });
+
+  test('la reconnaissance vocale du système (sous-titres d’appel sur Android) est dite', () => {
+    expect(text).toMatch(/reconnaissance vocale/i);
+    expect(source('apps/web/android/app/src/main/java/me/meeshy/app/MeeshySpeechPlugin.java')).toMatch(/SpeechRecognizer/);
+  });
+
+  test('la géolocalisation par IP reste locale, sans service tiers', () => {
+    expect(text).toMatch(/base locale/i);
+    expect(source('services/gateway/src/services/geoip/local-geoip-database.ts').length).toBeGreaterThan(0);
+  });
+
+  test('la traduction reste interne : aucun prestataire n’est cité pour elle', () => {
+    expect(text).toMatch(/traduction[^.]*sans (aucun )?service tiers|sans service tiers[^.]*traduction/i);
+  });
+});
+
+describe('Politique de confidentialité — les transferts hors UE (#9922)', () => {
+  const text = transfers ? sectionText(transfers) : '';
+
+  test('la section des transferts nomme les États-Unis et les garanties du RGPD', () => {
+    expect(text).toMatch(/États-Unis/);
+    expect(text).toMatch(/clauses contractuelles types/i);
+    expect(text).toMatch(/privacy@meeshy\.me/);
+  });
+
+  test('elle ne prétend plus que les données restent dans l’UE sans exception', () => {
+    expect(text).toMatch(/sous-traitants/i);
+  });
+
+  test('le partage renvoie aux sous-traitants au lieu du seul hébergement', () => {
+    const sharing = PAGE_PRIVACY.sections.find((section) => /partage de vos données/i.test(section.title));
+    expect(sharing ? sectionText(sharing) : '').toMatch(/sous-traitants/i);
+  });
+
+  test('la politique mène aux normes de sécurité des enfants', () => {
+    expect(PAGE_PRIVACY.run.links.map((l) => l.href)).toContain('/child-safety');
   });
 });

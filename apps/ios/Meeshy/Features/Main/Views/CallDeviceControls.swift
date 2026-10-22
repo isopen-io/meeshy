@@ -224,6 +224,7 @@ struct CallOutputMenu<Face: View>: View {
 
     @StateObject private var model: CallAudioRouteViewModel
     @State private var routePicker = CallAudioRoutePickerLauncher()
+    @State private var microphoneMode = CallMicrophoneMode.standard
     @Environment(\.callChromeInteraction) private var reportInteraction
 
     init(
@@ -255,6 +256,11 @@ struct CallOutputMenu<Face: View>: View {
             } label: {
                 Label(chooseOutputLabel, systemImage: "airplayaudio")
             }
+            Button {
+                CallMicrophoneMode.presentSystemModes()
+            } label: {
+                Label(microphoneMode.menuTitle, systemImage: microphoneMode.symbolName)
+            }
             if model.state.offersInputChoice {
                 Section {
                     ForEach(model.state.inputs) { input in
@@ -282,8 +288,15 @@ struct CallOutputMenu<Face: View>: View {
         .accessibilityValue(spokenValue)
         .accessibilityHint(String(localized: "call.control.output.hint", defaultValue: "Touchez pour basculer le haut-parleur, maintenez pour choisir la sortie", bundle: .main))
         .accessibilityAction(named: Text(chooseOutputLabel)) { routePicker.open() }
-        .onAppear { model.start() }
+        .onAppear {
+            model.start()
+            microphoneMode = .current
+        }
         .onDisappear { model.stop() }
+        // La feuille des modes micro se referme : l'app redevient active et relit le mode.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            microphoneMode = .current
+        }
     }
 }
 

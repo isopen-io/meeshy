@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import me.meeshy.sdk.model.call.CallConnectedLayoutLaw
 import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallRetryPolicy
@@ -67,6 +68,10 @@ data class CallConfig(
     val isOutgoing: Boolean,
     val conversationId: String = "",
     val callId: String = "",
+    /** Photo du contact, quand l'appelant la connaît : l'écran d'appel la pose en disque et, floutée, en fond. */
+    val peerAvatarUrl: String? = null,
+    /** Bannière du contact : elle passe avant l'avatar pour le fond flouté. */
+    val peerBannerUrl: String? = null,
 ) {
     companion object {
         val EMPTY: CallConfig = CallConfig(peerId = "", peerName = "", isVideo = false, isOutgoing = false)
@@ -154,6 +159,13 @@ data class CallUiState(
      * phases of a VIDEO call.
      */
     val isVideoAutoPaused: Boolean = false,
+    /**
+     * La disposition connectée est gardée : `CONNECTED`, ou `RECONNECTING` APRÈS un média établi
+     * (un creux réseau ne vide pas l'écran) — jamais l'écran de connexion à ce moment-là.
+     */
+    val showsConnectedLayout: Boolean = false,
+    /** La durée finale en secondes, pour que TalkBack la dise (« 2 minutes 5 secondes »). */
+    val durationSeconds: Long = 0,
 ) {
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -217,6 +229,7 @@ object CallPresenter {
         peerAudioEnabled: Boolean = true,
         peerVideoEnabled: Boolean = true,
         videoAutoPaused: Boolean = false,
+        mediaEstablished: Boolean = false,
     ): CallUiState {
         val status = statusOf(state)
         val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
@@ -242,6 +255,8 @@ object CallPresenter {
             // peer "camera off" is its permanent, unremarkable state.
             isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled,
             isVideoAutoPaused = onMediaPhase && config.isVideo && videoAutoPaused,
+            showsConnectedLayout = CallConnectedLayoutLaw.showsConnectedLayout(state, mediaEstablished),
+            durationSeconds = elapsedSeconds.coerceAtLeast(0),
         )
     }
 

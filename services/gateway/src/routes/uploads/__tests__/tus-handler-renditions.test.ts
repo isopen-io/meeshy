@@ -43,6 +43,7 @@ jest.mock('@tus/file-store', () => ({
 }));
 
 const mockRunFfmpeg = jest.fn<(args: string[]) => Promise<void>>();
+const transcodeCalls = () => mockRunFfmpeg.mock.calls.filter(([args]) => !args.includes('-map_metadata'));
 jest.mock('../../../services/attachments/ffmpeg-run', () => ({
   runFfmpeg: (args: string[]) => mockRunFfmpeg(args),
 }));
@@ -216,20 +217,22 @@ describe('tus-handler — mêmes rendus que le chemin multipart (#11260)', () =>
 
       const data = (prisma.postMedia.create as jest.Mock<any>).mock.calls[0][0].data;
       expect(data.videoCodec).toBe('hevc');
-      expect(mockRunFfmpeg).not.toHaveBeenCalled();
+      expect(transcodeCalls()).toEqual([]);
     });
 
     it('drapeau levé : le clip lourd est transcodé et c est le fichier RENDU que la ligne, le disque et la réponse désignent', async () => {
       process.env.VIDEO_TRANSCODE = 'true';
       mockRunFfmpeg.mockImplementation(async (args) => {
-        await fs.writeFile(args[args.length - 1], Buffer.alloc(1024 * 1024, 9));
+        const output = args[args.length - 1];
+        if (args.includes('-map_metadata')) await fs.copyFile(args[args.indexOf('-i') + 1], output);
+        else await fs.writeFile(output, Buffer.alloc(1024 * 1024, 9));
       });
       const prisma = buildFakePrisma();
       const result = await runFullUpload({
         prisma, filename: 'clip.mp4', filetype: 'video/mp4', bytes: clip, uploadContext: 'post', stubVideoProbe: [heavy, light],
       });
 
-      expect(mockRunFfmpeg).toHaveBeenCalledTimes(1);
+      expect(transcodeCalls()).toHaveLength(1);
       const data = (prisma.postMedia.create as jest.Mock<any>).mock.calls[0][0].data;
       expect(data.fileName).toMatch(/_t\.mp4$/);
       expect(data.filePath).toMatch(/_t\.mp4$/);
@@ -247,7 +250,7 @@ describe('tus-handler — mêmes rendus que le chemin multipart (#11260)', () =>
       const prisma = buildFakePrisma();
       await runFullUpload({ prisma, filename: 'clip.mp4', filetype: 'video/mp4', bytes: clip, stubVideoProbe: [heavy] });
 
-      expect(mockRunFfmpeg).not.toHaveBeenCalled();
+      expect(transcodeCalls()).toEqual([]);
       const data = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0].data;
       expect(data.fileSize).toBe(clip.length);
       expect(data.videoCodec).toBe('hevc');
