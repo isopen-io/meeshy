@@ -140,8 +140,8 @@ importers:
         version: 4.4.3
     optionalDependencies:
       '@signalapp/libsignal-client':
-        specifier: ^0.102.2
-        version: 0.102.3
+        specifier: 0.105.0
+        version: 0.105.0
     devDependencies:
       '@types/node':
         specifier: ^20.19.43
@@ -280,8 +280,8 @@ importers:
         specifier: ^6.19.3
         version: 6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3)
       '@signalapp/libsignal-client':
-        specifier: ^0.102.3
-        version: 0.102.3
+        specifier: 0.105.0
+        version: 0.105.0
       '@socket.io/redis-adapter':
         specifier: ^8.3.0
         version: 8.3.0(socket.io-adapter@2.5.8)
@@ -2644,8 +2644,8 @@ packages:
     peerDependencies:
       rollup: ^1.20.0||^2.0.0
 
-  '@signalapp/libsignal-client@0.102.3':
-    resolution: {integrity: sha512-VQeBebCcvHea5d7VabBB3g7zY/gaLGew7tuWPmlSAqU5QwpFOoaI/a/yT8+NZJN0ZlKr2zoSI+g7nHr7DNCYgw==}
+  '@signalapp/libsignal-client@0.105.0':
+    resolution: {integrity: sha512-6H7aQ6/grE6A/wG3nAm+c7aMWhj472/wtbTnNzb9z2KEPZ933PwYGi93zy6Pm63Mxd7SiOSfoa4gSTr++F44UQ==}
 
   '@sinclair/typebox@0.34.49':
     resolution: {integrity: sha512-brySQQs7Jtn0joV8Xh9ZV/hZb9Ozb0pmazDIASBkYKCjXrXU3mpcFahmK/z4YDhGkQvP9mWJbVyahdtU5wQA+A==}
@@ -9974,7 +9974,7 @@ snapshots:
       picomatch: 2.3.2
       rollup: 2.80.0
 
-  '@signalapp/libsignal-client@0.102.3':
+  '@signalapp/libsignal-client@0.105.0':
     dependencies:
       node-gyp-build: 4.8.4
       type-fest: 4.41.0
