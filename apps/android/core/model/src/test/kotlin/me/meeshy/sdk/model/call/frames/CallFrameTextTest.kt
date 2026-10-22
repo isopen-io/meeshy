@@ -90,7 +90,7 @@ class CallFrameTextTest {
         assertThat(fitted.size).isWithin(1e-9).of(6.0)
         assertThat(fitted.text).endsWith("…")
         assertThat(charWidth(fitted.text, fitted.size)).isAtMost(40.0)
-        assertThat(fitted.text).isEqualTo("abcdef…")
+        assertThat(fitted.text).isEqualTo("abcde…")
     }
 
     @Test

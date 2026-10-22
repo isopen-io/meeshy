@@ -170,7 +170,8 @@ internal object CallFrameLookDecoder {
         form = CallFrameTextForm.fromRaw(json.str("form")),
     )
 
-    private fun elementOrNull(json: JsonObject): CallFrameElement? = CallFrameElement(
+    private fun elementOrNull(json: JsonObject): CallFrameElement? {
+        return CallFrameElement(
         source = CallFrameTitleSource.fromRaw(json.str("source")) ?: return null,
         form = CallFrameTextForm.fromRaw(json.str("form")),
         place = CallFrameElementPlace.fromRaw(json.str("place")) ?: return null,
@@ -180,8 +181,10 @@ internal object CallFrameLookDecoder {
         effect = CallFrameTextEffect.fromRaw(json.str("effect")),
         letterCase = CallFrameLetterCase.fromRaw(json.str("case")),
     )
+    }
 
-    private fun sceneLayerOrNull(json: JsonObject): CallFrameSceneLayer? = CallFrameSceneLayer(
+    private fun sceneLayerOrNull(json: JsonObject): CallFrameSceneLayer? {
+        return CallFrameSceneLayer(
         id = json.str("id") ?: return null,
         kind = CallFrameSceneLayerKind.fromRaw(json.str("kind")) ?: return null,
         depth = CallFrameSceneDepth.fromRaw(json.str("depth")) ?: return null,
@@ -191,8 +194,10 @@ internal object CallFrameLookDecoder {
         amount = json.num("amount"),
         maxParticles = json.prim("max")?.takeIf { !it.isString }?.intOrNull,
     )
+    }
 
-    private fun behaviorOrNull(json: JsonObject): CallFrameBehavior? = CallFrameBehavior(
+    private fun behaviorOrNull(json: JsonObject): CallFrameBehavior? {
+        return CallFrameBehavior(
         trigger = CallFrameBehaviorTrigger.fromRaw(json.str("trigger")) ?: return null,
         `when` = CallFrameBehaviorCondition.fromRaw(json.str("when")),
         target = json.str("target"),
@@ -200,6 +205,7 @@ internal object CallFrameLookDecoder {
         duration = json.num("duration"),
         color = json.str("color"),
     )
+    }
 
     private fun fallbacks(json: JsonObject) = CallFrameFallbacks(
         reduced = (json["reduced"] as? JsonObject)?.let(::fallbackTier),
