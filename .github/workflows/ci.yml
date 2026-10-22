@@ -1404,7 +1404,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.glory_frames == 'true'
-    timeout-minutes: 30
+    # 60 : plafond de secours au-dessus du jeu complet des cibles (40 min, sur
+    # workflow_dispatch seulement) ; une PR tient en une douzaine de minutes.
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: docs/product/cadres-de-gloire/generateur
@@ -1425,9 +1427,12 @@ jobs:
       - name: Ateliers (numpy et Pillow, l'atelier poses)
         run: python -m pip install --disable-pip-version-check numpy==2.5.4 Pillow==12.3.0
 
-      - name: Playwright épinglé (Chromium)
+      # sharp encode les cibles de fidélité (L21a, lib/cible.mjs) ; la version
+      # épinglée est celle du workspace de la passerelle (lib/sharp.mjs), lue
+      # ici par $SHARP_MODULE puisque ce job n'installe rien du monorepo.
+      - name: Playwright épinglé (Chromium) et sharp
         run: |
-          npm install --prefix . --no-save --no-package-lock --no-audit --no-fund playwright@1.64.0
+          npm install --prefix . --no-save --no-package-lock --no-audit --no-fund playwright@1.64.0 sharp@0.35.5
           ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Générer les SVG des ateliers
@@ -1442,6 +1447,46 @@ jobs:
 
       - name: Garde d'empiètement (191 cadres)
         run: node lib/overlap.mjs --check --jobs 2
+
+      # Les cibles de fidélité (lot L21a, #10177, prompt § 8.3) : l'échantillon
+      # versionné sous docs/product/cadres-de-gloire/cible/ se régénère ici,
+      # chaque cible rendue deux fois (une cible instable rougit). Un écart
+      # d'OCTETS avec les cibles versionnées n'est que signalé : la fraîcheur
+      # se juge sur l'export normalisé, jamais sur les octets de Chromium
+      # (version, hinting, GPU). Le jeu complet (191 × 2) n'est produit, en
+      # artefact, que sur workflow_dispatch : il coûte une demi-heure.
+      - name: Cibles de fidélité — l'échantillon se régénère (L21a)
+        env:
+          SHARP_MODULE: sharp
+        run: |
+          node lib/cible.mjs --generate --jobs 2 --cible cible-echantillon
+          if ! diff -rq cible-echantillon ../cible; then
+            echo "::warning::les cibles régénérées diffèrent des cibles versionnées (docs/product/cadres-de-gloire/cible/) : voir le journal"
+          fi
+
+      - name: Publier l'échantillon régénéré
+        uses: actions/upload-artifact@v7
+        with:
+          name: cadres-de-gloire-cibles-${{ github.run_number }}
+          path: docs/product/cadres-de-gloire/generateur/cible-echantillon
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Cibles de fidélité — le jeu complet (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        timeout-minutes: 40
+        env:
+          SHARP_MODULE: sharp
+        run: node lib/cible.mjs --full --jobs 2
+
+      - name: Publier le jeu complet des cibles
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: cadres-de-gloire-cibles-completes-${{ github.run_number }}
+          path: docs/product/cadres-de-gloire/generateur/cible-complete
+          retention-days: 7
+          if-no-files-found: error
 
   # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)

@@ -1,0 +1,407 @@
+{
+  "note": "Cibles de fidélité du lot L21a (#10177, prompt § 8.3) : un cadre par collection, dans sa mise en page cuite, avec et sans message, rendu par Chromium en 1080×1920 avec la photo fixture, le texte français et la date fixes, puis descendu à l'échelle de design. Régénérées par `node lib/cible.mjs --generate` ; jamais posées à la main. Rendues sur l'état courant des cadres (ancres L2, #10153, revalidation du porteur en attente).",
+  "generator": "docs/product/cadres-de-gloire/generateur",
+  "chromium": "141.0.7390.37",
+  "sharp": "0.35.5",
+  "libwebp": "1.6.0",
+  "rendered": [
+    1080,
+    1920
+  ],
+  "size": [
+    540,
+    960
+  ],
+  "downsample": "moyenne 2×2 en alpha prémultiplié, arrondie au plus proche (lib/cible-plan.mjs, halve)",
+  "encoding": "WebP sans perte, effort 6",
+  "photo": {
+    "file": "generateur/fixture/photo.jpg",
+    "fit": "cover",
+    "anchor": "window.box",
+    "align": "center",
+    "sha256": "64f1bf58d8c608dcd1c09f8253cd93a8260350294da9ca6b61b8d25965023ba3",
+    "bytes": 34728
+  },
+  "formats": {
+    "story": true,
+    "square": null,
+    "squareNote": "D1 (#10180) : le carré d'un cadre décoré est la carte simple, `formats.square` est nul ; le médaillon et sa cible viennent en lot additif."
+  },
+  "count": 22,
+  "targets": [
+    {
+      "file": "abysses-ambassadeur-1.plain.webp",
+      "collection": "abysses",
+      "frame": "abysses-ambassadeur-1",
+      "variant": "plain",
+      "layout": "pied : Mee (fête) et Meo (roi) sur les marches du temple",
+      "format": "story",
+      "window": [
+        173,
+        545,
+        734,
+        902
+      ],
+      "bytes": 326584,
+      "sha256": "137e872bf1dbb8e49785dd62b773cf321af841f95a91325fa749d27a28568a99",
+      "stable": true
+    },
+    {
+      "file": "abysses-ambassadeur-1.message.webp",
+      "collection": "abysses",
+      "frame": "abysses-ambassadeur-1",
+      "variant": "message",
+      "layout": "pied : Mee (fête) et Meo (roi) sur les marches du temple",
+      "format": "story",
+      "window": [
+        173,
+        545,
+        734,
+        902
+      ],
+      "bytes": 331056,
+      "sha256": "c1d9c389fe962aa0f7f443524fd589a162f566d5f01019f111fdee60aa1068eb",
+      "stable": true
+    },
+    {
+      "file": "celeste-ambassadeur-1.plain.webp",
+      "collection": "celeste",
+      "frame": "celeste-ambassadeur-1",
+      "variant": "plain",
+      "layout": "pied : Mee (fête) et Meo (roi) au pied des dragons",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 317486,
+      "sha256": "1d7bfabb01d1064b405da016a661436bcac7d6a7cef8c198bc77bbaf0550f239",
+      "stable": true
+    },
+    {
+      "file": "celeste-ambassadeur-1.message.webp",
+      "collection": "celeste",
+      "frame": "celeste-ambassadeur-1",
+      "variant": "message",
+      "layout": "pied : Mee (fête) et Meo (roi) au pied des dragons",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 316850,
+      "sha256": "ab5da672458671279d05a7b98342a2b0182c441a1011f3c7c91ce360e1535390",
+      "stable": true
+    },
+    {
+      "file": "egypte-ambassadeur-1.plain.webp",
+      "collection": "egypte",
+      "frame": "egypte-ambassadeur-1",
+      "variant": "plain",
+      "layout": "côtés, sur les rangs de perles (Mee jackpot, Meo trophée)",
+      "format": "story",
+      "window": [
+        157,
+        605,
+        766,
+        854
+      ],
+      "bytes": 375084,
+      "sha256": "26fba4bb17468dea265447911612d36ecf0e0c81ebd238b43749babfc3f7073b",
+      "stable": true
+    },
+    {
+      "file": "egypte-ambassadeur-1.message.webp",
+      "collection": "egypte",
+      "frame": "egypte-ambassadeur-1",
+      "variant": "message",
+      "layout": "côtés, sur les rangs de perles (Mee jackpot, Meo trophée)",
+      "format": "story",
+      "window": [
+        157,
+        605,
+        766,
+        854
+      ],
+      "bytes": 382594,
+      "sha256": "8e485c3c4a2209d64fb361da14aab682b20c014ec685282c484b10b07341e1b5",
+      "stable": true
+    },
+    {
+      "file": "moments-flamme-30.plain.webp",
+      "collection": "moments",
+      "frame": "moments-flamme-30",
+      "variant": "plain",
+      "layout": "perchés (Mee fête, Meo feu d'artifice)",
+      "format": "story",
+      "window": [
+        177,
+        545,
+        726,
+        902
+      ],
+      "bytes": 327484,
+      "sha256": "a03bc2291be8065a41117abd763d0150a7b544bb1a6b6a52e38824a5d0d7a4bb",
+      "stable": true
+    },
+    {
+      "file": "moments-flamme-30.message.webp",
+      "collection": "moments",
+      "frame": "moments-flamme-30",
+      "variant": "message",
+      "layout": "perchés (Mee fête, Meo feu d'artifice)",
+      "format": "story",
+      "window": [
+        177,
+        545,
+        726,
+        902
+      ],
+      "bytes": 327002,
+      "sha256": "7d2005d2dd8ffb59f5937ac4c7f16ac7ece22c5c46fb3a5a7d71e64fbfa45d3f",
+      "stable": true
+    },
+    {
+      "file": "neon-ambassadeur-1.plain.webp",
+      "collection": "neon",
+      "frame": "neon-ambassadeur-1",
+      "variant": "plain",
+      "layout": "pied : Mee (fête) et Meo (champagne) sur l'autoroute de lumière",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 304348,
+      "sha256": "28d7107aaa3a8bfff2c725252c9c4128ae265ceb46ad4e524e50f950e46dd466",
+      "stable": true
+    },
+    {
+      "file": "neon-ambassadeur-1.message.webp",
+      "collection": "neon",
+      "frame": "neon-ambassadeur-1",
+      "variant": "message",
+      "layout": "pied : Mee (fête) et Meo (champagne) sur l'autoroute de lumière",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 308190,
+      "sha256": "758831e524b80b4ce12a03fac502df3c59ffadebc6869c350086ed13a8ee183e",
+      "stable": true
+    },
+    {
+      "file": "nord-ambassadeur-1.plain.webp",
+      "collection": "nord",
+      "frame": "nord-ambassadeur-1",
+      "variant": "plain",
+      "layout": "pied : Mee (bravo) et Meo (trophée) sur les racines",
+      "format": "story",
+      "window": [
+        165,
+        525,
+        750,
+        926
+      ],
+      "bytes": 502526,
+      "sha256": "5ed2b9ffcdd3659057d6731d4b7124d09df7774c394040e4f3cc7328c27e29a0",
+      "stable": true
+    },
+    {
+      "file": "nord-ambassadeur-1.message.webp",
+      "collection": "nord",
+      "frame": "nord-ambassadeur-1",
+      "variant": "message",
+      "layout": "pied : Mee (bravo) et Meo (trophée) sur les racines",
+      "format": "story",
+      "window": [
+        165,
+        525,
+        750,
+        926
+      ],
+      "bytes": 514654,
+      "sha256": "e8cb3118826de87bca8f3fec45cb5cecac0a5d5ec737d315d305f25f820fb95e",
+      "stable": true
+    },
+    {
+      "file": "olympe-ambassadeur-1.plain.webp",
+      "collection": "olympe",
+      "frame": "olympe-ambassadeur-1",
+      "variant": "plain",
+      "layout": "pied : Mee (fête) et Meo (roi) sur les degrés, près des trépieds",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 372634,
+      "sha256": "2d095b77af53fd8e793faf93ce2762d8f45df4cd0656ff7d24df4e251bafa7a1",
+      "stable": true
+    },
+    {
+      "file": "olympe-ambassadeur-1.message.webp",
+      "collection": "olympe",
+      "frame": "olympe-ambassadeur-1",
+      "variant": "message",
+      "layout": "pied : Mee (fête) et Meo (roi) sur les degrés, près des trépieds",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 375472,
+      "sha256": "6f27340aedf9339a7efb37c92487487bb19e527350f9763e731190bbd54364fe",
+      "stable": true
+    },
+    {
+      "file": "poses-pied.plain.webp",
+      "collection": "poses",
+      "frame": "poses-pied",
+      "variant": "plain",
+      "layout": "pied",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 350354,
+      "sha256": "fee09c7ac02a3f5f6c2e913068a5581cb9d12b55888e27edcb08ba34c70ca854",
+      "stable": true
+    },
+    {
+      "file": "poses-pied.message.webp",
+      "collection": "poses",
+      "frame": "poses-pied",
+      "variant": "message",
+      "layout": "pied",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 350006,
+      "sha256": "62ad793d80337ade8af49ba882e886a009e2cfb6a2d53f725502e82e00056d89",
+      "stable": true
+    },
+    {
+      "file": "royaumes-ambassadeur-1.plain.webp",
+      "collection": "royaumes",
+      "frame": "royaumes-ambassadeur-1",
+      "variant": "plain",
+      "layout": "pied : Mee (fête) et Meo (roi) de part et d'autre du tabouret d'or",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 372106,
+      "sha256": "f82c3d17d211a4aae672af1f6832aeef8b5ec4d30a24bf890f5416ea3c1c19db",
+      "stable": true
+    },
+    {
+      "file": "royaumes-ambassadeur-1.message.webp",
+      "collection": "royaumes",
+      "frame": "royaumes-ambassadeur-1",
+      "variant": "message",
+      "layout": "pied : Mee (fête) et Meo (roi) de part et d'autre du tabouret d'or",
+      "format": "story",
+      "window": [
+        0,
+        0,
+        1080,
+        1920
+      ],
+      "bytes": 371110,
+      "sha256": "e4377b2537f62f3d61004ec6b4475fe105dc3297a0e094e97cf941f701554b3e",
+      "stable": true
+    },
+    {
+      "file": "savane-ambassadeur-1.plain.webp",
+      "collection": "savane",
+      "frame": "savane-ambassadeur-1",
+      "variant": "plain",
+      "layout": "ruban, au-dessus de l'inscription (Mee fête, Meo champagne)",
+      "format": "story",
+      "window": [
+        198,
+        538,
+        684,
+        924
+      ],
+      "bytes": 268168,
+      "sha256": "977c581b1e07f7996a85f9bd2aefebd125ae943d1f0f67ef018b096611ced18d",
+      "stable": true
+    },
+    {
+      "file": "savane-ambassadeur-1.message.webp",
+      "collection": "savane",
+      "frame": "savane-ambassadeur-1",
+      "variant": "message",
+      "layout": "ruban, au-dessus de l'inscription (Mee fête, Meo champagne)",
+      "format": "story",
+      "window": [
+        198,
+        538,
+        684,
+        924
+      ],
+      "bytes": 269764,
+      "sha256": "b4f183d0375718b3a15c666c845aef46332ce7073a31e060749431525bfa62d9",
+      "stable": true
+    },
+    {
+      "file": "tresor-coffre-a.plain.webp",
+      "collection": "tresor",
+      "frame": "tresor-coffre-a",
+      "variant": "plain",
+      "layout": "pied",
+      "format": "story",
+      "window": [
+        128,
+        560,
+        701,
+        824
+      ],
+      "bytes": 391574,
+      "sha256": "cc024cc8bae06bd0a98e291c8d9bfcb17b9206a8d1d143da4d2038496eb992b8",
+      "stable": true
+    },
+    {
+      "file": "tresor-coffre-a.message.webp",
+      "collection": "tresor",
+      "frame": "tresor-coffre-a",
+      "variant": "message",
+      "layout": "pied",
+      "format": "story",
+      "window": [
+        128,
+        560,
+        701,
+        824
+      ],
+      "bytes": 393118,
+      "sha256": "4dc4aca31096242e172f556fd83ecd0f2f621be50269e5891a27a9b0cb42377b",
+      "stable": true
+    }
+  ]
+}

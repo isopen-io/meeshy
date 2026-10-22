@@ -117,6 +117,25 @@ Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--
 
 **La référence de fidélité** (`reference/`, lot L0) : la génération de `c5b1390040` rendue en 1080×1920, `sha256.json` (empreinte de chaque SVG et de chaque rendu, versions de Chromium et de libwebp) et un WebP sans perte par collection (`reference/samples/`). `node lib/reference.mjs out ../reference --commit <sha>` la reproduit ; `recompose.mjs` vérifie d'abord que le rendu de référence retrouve son sha256, puis juge la recomposition hors boîtes de texte et de blason. **La tolérance du § 8.3 juge la SÉPARATION des couches : elle se mesure sur un export `--lossless`.** L'encodage de livraison (WebP q82, le poids visé par le § 5.1) ajoute sa propre perte, que `recompose.mjs` chiffre à part (part de pixels, PSNR) : sur un décor texturé (papier, grain), aucune qualité avec perte raisonnable ne tient |Δ| ≤ 6 sur 99,5 % des pixels, et le compromis poids / perte se tranche au L3, où le poids des packs se mesure. sharp est celui du workspace de la passerelle (ou `$SHARP_MODULE`) : sa version épingle les octets des couches.
 
+## Les cibles de fidélité
+
+**Ce contre quoi les peintres web et iOS se jugent (prompt § 8.3, lot L21a, #10177), rendu par le générateur AVANT que l'app ne peigne.** L'échantillon versionné sous `cible/` : **un cadre par collection** (l'Ambassadeur I des sept atmosphères, comme la référence L0 ; `moments-flamme-30`, `tresor-coffre-a`, `poses-pied` pour les trois autres), dans la mise en page que le contrat lui connaît (chaque cadre en déclare exactement une, `birds.default`), **avec et sans message** (`<cadre>.plain.webp`, `<cadre>.message.webp` — les deux variantes de plaque, `CADRES_PLATE`), en **9:16**. Vingt-deux fichiers et `cible/index.json` (versions de Chromium, de sharp et de libwebp, boîte de la fenêtre, sha256, poids et verdict de stabilité de chaque cible). Une commande, depuis `generateur/` :
+
+```bash
+node lib/cible.mjs --generate        # régénère les 11 ateliers dans les deux variantes, puis rend l'échantillon → ../cible/
+node lib/cible.mjs --generate --check  # le rend à part et exige l'identité à l'octet avec les cibles versionnées
+node lib/cible.mjs --full            # le jeu COMPLET (191 cadres × 2 variantes) → generateur/cible-complete/, jamais versionné
+```
+
+Options : `--only savane,poses`, `--jobs 3`, `--final` (garde le 1080×1920). Chromium par `lib/launch.mjs` (épinglé en CI par Playwright), sharp par `lib/sharp.mjs`.
+
+- **La photo est une FIXTURE versionnée**, `generateur/fixture/photo.jpg` : un paysage dessiné par `lib/fixture.mjs` (libre de droits, aucun visage), au format d'une photo développée par l'app (1 080 × 1 440, JPEG q0,85). Elle prend la place des silhouettes, **recadrée en `cover` sur la boîte de la fenêtre** (trouvée comme à l'export, par différence magenta / vert) et centrée : c'est la pose par défaut que les peintres reproduisent. Le texte français et la date « 10 octobre 2026 » sont ceux des SVG.
+- **Chaque cible se prouve** : le cadre est rendu deux fois, depuis deux chargements de page ; des octets différents rendent la commande rouge et la cible `stable: false`. C'est pour cela que les trois collections hors atmosphère n'échantillonnent pas le cadre de la référence L0 : un titre en dégradé sur chemin courbe (`poses-ruban`, `moments-meesh-100`, `tresor-reserve-a`) ne se rend pas deux fois à l'identique dans Chromium.
+- **Rendues en 1080 × 1920 comme l'app peint, versionnées à l'échelle de design (540 × 960)** par la moyenne EXACTE de chaque bloc 2 × 2 en alpha prémultiplié (`lib/cible-plan.mjs`, `halve`), WebP sans perte : 7,5 Mo pour l'échantillon, contre plus de 20 Mo en 1080 × 1920 (0,9 Mo par cible mesurés sur la Savane, la plus légère). Un peintre qui se juge contre ces cibles applique la même descente à sa composition avant la comparaison du § 8.3 ; `--final` rend le 1080 × 1920 quand il le faut.
+- **Pas de carré** : D1 (#10180) tient le 1:1 d'un cadre décoré pour la carte simple (`formats.square: null`), et le médaillon viendra en lot additif avec sa cible ; `index.json` le dit (`formats.square`).
+- **La fraîcheur se juge sur l'export normalisé, jamais sur ces octets** (§ 8.3) : en CI, le job du générateur régénère l'échantillon, le publie en artefact et ne fait que SIGNALER un écart avec les cibles versionnées ; le jeu complet n'est produit (artefact) que sur `workflow_dispatch`.
+- Les cibles sont rendues sur l'**état courant des cadres** (ancres L2, #10153) ; la revalidation du porteur reste attendue, et un cadre qu'elle ferait bouger se régénère par la même commande.
+
 ## La règle d'empiètement
 
 Mee et Meo ne recouvrent **jamais** la photo : sur chaque cadre, **overlap ≤ 250 px, depth ≤ 6 px, face = 0** (repère de design, `lib/overlap-rule.mjs`). Une mise en page `selfie` (déclarée par le manifeste : Meo dans la photo) est exemptée de l'overlap et de la profondeur, jamais du visage.
