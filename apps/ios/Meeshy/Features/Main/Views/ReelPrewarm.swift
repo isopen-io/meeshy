@@ -131,13 +131,10 @@ enum ReelPrewarm {
     }
 
     /// Attend que le téléchargement de `key` se termine — fini, échoué ou
-    /// annulé — ou que la tâche soit annulée. Le registre n'expose qu'un état
-    /// (`progress(for:)`) : on le relit à cadence lente plutôt que de risquer
-    /// de manquer l'événement de fin entre le lancement et l'abonnement.
+    /// annulé — ou que la tâche soit annulée. La fin est SIGNALÉE par le
+    /// registre (#9882) : la passe s'endort jusqu'à elle, sans relire l'état.
     static func awaitFile(key: String, center: AttachmentDownloadCenter = .shared) async {
-        while center.progress(for: key) != nil, !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: 120_000_000)
-        }
+        await center.awaitEnd(of: key)
     }
 
     /// Prépare le lecteur de `post` — seulement si son fichier est sur le

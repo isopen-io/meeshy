@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_waiting_reject">Recusar</string>
+    <string name="call_waiting_answer">Atender</string>
+    <string name="call_waiting_reject_hint">Recusa a nova chamada recebida sem interromper a chamada em curso</string>
+    <string name="call_waiting_answer_hint">Encerra a chamada em curso e atende a nova chamada recebida</string>
+</resources>

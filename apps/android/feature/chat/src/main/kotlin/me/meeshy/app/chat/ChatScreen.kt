@@ -7,6 +7,7 @@ import android.provider.OpenableColumns
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,8 +50,11 @@ fun ChatScreen(
         ?.takeIf { it != Color.Unspecified }
         ?: MeeshyPalette.Indigo500
     val actions = remember(viewModel) { viewModel.hostActions() }
+    val pendingTray = remember(viewModel) { viewModel.controllers.find<ComposerTrayController>() }
+    val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
+        pending = pending,
         accentColor = accentColor,
         actions = actions,
         navigation = ChatNavigationActions(

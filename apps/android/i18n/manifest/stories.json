@@ -8,25 +8,25 @@
           "catalog": "app",
           "iosKey": "comment.action.delete",
           "androidName": "stories_action_delete",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "story.viewer.action.react",
           "androidName": "stories_action_react",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "comment.action.report",
           "androidName": "stories_action_report",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "a11y.post.repost",
           "androidName": "stories_action_repost",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_action_send_to",
@@ -36,37 +36,39 @@
           "catalog": "app",
           "iosKey": "story.viewer.action.translations",
           "androidName": "stories_action_translations",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.control.addPeople.caption",
           "androidName": "stories_add",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "2fa_cancel",
           "androidName": "stories_cancel",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
-          "iosKey": "viewer.engagement.comments.other",
+          "iosKey": "feed.comments.count",
           "androidName": "stories_comments_count",
-          "status": "candidate"
+          "kind": "plurals",
+          "fillMissingQuantities": true,
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "story.viewer.comments.beFirst",
           "androidName": "stories_comments_empty_subtitle",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "story.viewer.comments.empty",
           "androidName": "stories_comments_empty_title",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_comments_error",
@@ -88,19 +90,19 @@
           "catalog": "app",
           "iosKey": "a11y.post.comments",
           "androidName": "stories_comments_open",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.feedback.send",
           "androidName": "stories_comments_send",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "a11y.post.comments",
           "androidName": "stories_comments_title",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_add_media",
@@ -118,13 +120,13 @@
           "catalog": "app",
           "iosKey": "composer.attach.sticker",
           "androidName": "stories_composer_add_sticker",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "story.composer.addText",
           "androidName": "stories_composer_add_text",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_align_center",
@@ -142,7 +144,7 @@
           "catalog": "app",
           "iosKey": "composer.attach.background",
           "androidName": "stories_composer_background",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_background_loop_off",
@@ -160,13 +162,11 @@
           "catalog": "ui",
           "iosKey": "story.canvas.action.setAsBackground",
           "androidName": "stories_composer_background_media_set",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "story.composer.openingNone",
           "androidName": "stories_composer_background_none",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
           "androidName": "stories_composer_background_random",
@@ -176,7 +176,7 @@
           "catalog": "ui",
           "iosKey": "story.timeline.plan.plane.content.a11y",
           "androidName": "stories_composer_band_contenu",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_band_dismiss",
@@ -186,13 +186,13 @@
           "catalog": "app",
           "iosKey": "composer.object.editor.effects",
           "androidName": "stories_composer_band_effets",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "story.textEdit.bg.glass",
           "androidName": "stories_composer_bg_glass",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_bg_none",
@@ -202,7 +202,7 @@
           "catalog": "app",
           "iosKey": "composer.recent.cancelSelection",
           "androidName": "stories_composer_cancel",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_canvas",
@@ -212,7 +212,7 @@
           "catalog": "app",
           "iosKey": "composer.rail.drawing",
           "androidName": "stories_composer_draw",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_draw_done",
@@ -258,7 +258,7 @@
           "catalog": "app",
           "iosKey": "video.filter.preset.cool",
           "androidName": "stories_composer_filter_cool",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_filter_dramatic",
@@ -268,17 +268,15 @@
           "catalog": "ui",
           "iosKey": "story.composer.opening.fade",
           "androidName": "stories_composer_filter_fade",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_filter_intensity",
           "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "story.composer.openingNone",
           "androidName": "stories_composer_filter_none",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
           "androidName": "stories_composer_filter_vintage",
@@ -288,35 +286,33 @@
           "catalog": "app",
           "iosKey": "video.filter.preset.vivid",
           "androidName": "stories_composer_filter_vivid",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "video.filter.preset.warm",
           "androidName": "stories_composer_filter_warm",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "contacts.list.filter.offline",
           "androidName": "stories_composer_media_pending",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "story.textEdit.tool.border",
           "androidName": "stories_composer_outline",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_placeholder",
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "composer.overflow.share",
           "androidName": "stories_composer_publish",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
           "androidName": "stories_composer_remaining",
@@ -326,7 +322,7 @@
           "catalog": "app",
           "iosKey": "game.notebook.remove",
           "androidName": "stories_composer_remove_media",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_remove_slide",
@@ -344,7 +340,7 @@
           "catalog": "ui",
           "iosKey": "story.textEdit.tool.size",
           "androidName": "stories_composer_size",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_slide_duration",
@@ -354,7 +350,7 @@
           "catalog": "app",
           "iosKey": "time.short.seconds",
           "androidName": "stories_composer_slide_duration_value",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_slide_label",
@@ -364,49 +360,49 @@
           "catalog": "ui",
           "iosKey": "sticker.category.activities",
           "androidName": "stories_composer_sticker_cat_activities",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "sticker.category.animals",
           "androidName": "stories_composer_sticker_cat_animals",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "sticker.category.flags",
           "androidName": "stories_composer_sticker_cat_flags",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "sticker.category.food",
           "androidName": "stories_composer_sticker_cat_food",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "sticker.category.objects",
           "androidName": "stories_composer_sticker_cat_objects",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "sticker.category.smileys",
           "androidName": "stories_composer_sticker_cat_smileys",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "sticker.category.symbols",
           "androidName": "stories_composer_sticker_cat_symbols",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "sticker.category.travel",
           "androidName": "stories_composer_sticker_cat_travel",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_sticker_no_results",
@@ -420,37 +416,37 @@
           "catalog": "app",
           "iosKey": "composer.format.bold",
           "androidName": "stories_composer_style_bold",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "story.textEdit.style.classic",
           "androidName": "stories_composer_style_classic",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "story.textEdit.style.handwriting",
           "androidName": "stories_composer_style_handwriting",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.capture.style.neon",
           "androidName": "stories_composer_style_neon",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "story.textEdit.style.typewriter",
           "androidName": "stories_composer_style_typewriter",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "story.media.caption.label",
           "androidName": "stories_composer_text_caption",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_composer_text_placeholder",
@@ -469,28 +465,20 @@
           "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "story.canvas.action.sendBackward",
           "androidName": "stories_composer_zorder_backward",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "story.canvas.action.bringForward",
           "androidName": "stories_composer_zorder_forward",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "story.canvas.a11y.sendToBack",
           "androidName": "stories_composer_zorder_to_back",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "composer.scene.background.menu.bringForward",
           "androidName": "stories_composer_zorder_to_front",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
           "androidName": "stories_count_dots",
@@ -504,7 +492,7 @@
           "catalog": "app",
           "iosKey": "story.mine.delete.title",
           "androidName": "stories_delete_confirm_title",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_empty",
@@ -523,10 +511,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "composer.camera.discard.confirm",
           "androidName": "stories_publish_discard",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
           "androidName": "stories_publish_failed_title",
@@ -540,49 +526,49 @@
           "catalog": "app",
           "iosKey": "conversations.error.retry",
           "androidName": "stories_publish_retry",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.harassment",
           "androidName": "stories_report_reason_harassment",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "report.reason.hate_speech",
           "androidName": "stories_report_reason_hate_speech",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.impersonation",
           "androidName": "stories_report_reason_impersonation",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.inappropriate",
           "androidName": "stories_report_reason_inappropriate",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.other",
           "androidName": "stories_report_reason_other",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.spam",
           "androidName": "stories_report_reason_spam",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "report.reason.violence",
           "androidName": "stories_report_reason_violence",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_report_title",
@@ -592,31 +578,29 @@
           "catalog": "app",
           "iosKey": "a11y.post.reposted",
           "androidName": "stories_reposted",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "feed.post.reposted_from",
           "androidName": "stories_reposted_from",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "call.captions.translated",
+          "catalog": "ui",
+          "iosKey": "userIdentity.translation.available",
           "androidName": "stories_translated",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "2fa_close",
           "androidName": "stories_viewer_close",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "story.viewer.a11y.next",
           "androidName": "stories_viewer_next",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_viewer_open_viewers",
@@ -626,23 +610,27 @@
           "catalog": "app",
           "iosKey": "story.viewer.a11y.previous",
           "androidName": "stories_viewer_previous",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "bubble.media.a11y.viewCount",
           "androidName": "stories_viewers_count",
-          "status": "android-only"
+          "kind": "plurals",
+          "fillMissingQuantities": true,
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "story.viewer.empty.subtitle",
           "androidName": "stories_viewers_empty_subtitle",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "story.viewer.empty.title",
           "androidName": "stories_viewers_empty_title",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "stories_viewers_error",
@@ -656,37 +644,37 @@
           "catalog": "app",
           "iosKey": "story.viewer.views.title",
           "androidName": "stories_viewers_title",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "conversationType.community",
           "androidName": "stories_visibility_community",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "game2.league.tab.friends",
           "androidName": "stories_visibility_friends",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "game2.visibility.me",
           "androidName": "stories_visibility_private",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "post.visibility.public",
           "androidName": "stories_visibility_public",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "share.sheet.caption",
           "androidName": "story_send_caption_hint",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "story_send_empty",
@@ -696,17 +684,21 @@
           "catalog": "app",
           "iosKey": "share.loading",
           "androidName": "story_send_loading",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "conversation.members-count",
           "androidName": "story_send_members",
-          "status": "android-only"
+          "kind": "plurals",
+          "fillMissingQuantities": true,
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "community.addChannel.search.prompt",
           "androidName": "story_send_search_hint",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "story_send_send_a11y",
@@ -716,11 +708,16 @@
           "catalog": "app",
           "iosKey": "bubble.delivery.sent",
           "androidName": "story_send_sent",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "story_send_title",
           "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.save.photosDenied",
+          "status": "disabled"
         }
       ]
     }

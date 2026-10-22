@@ -6,6 +6,7 @@
     <string name="composer_a11y_recentPhoto">Foto recente</string>
     <string name="composer_a11y_recentVideo">Vídeo recente</string>
     <string name="composer_a11y_selectedState">Selecionado</string>
+    <string name="composer_drop_unnamedItem">item sem nome</string>
     <string name="composer_recent_accessDenied">Acesso às fotos negado</string>
     <string name="composer_recent_accessDenied_hint">Toque para abrir os Ajustes</string>
     <string name="composer_recent_add">Adicionar</string>
