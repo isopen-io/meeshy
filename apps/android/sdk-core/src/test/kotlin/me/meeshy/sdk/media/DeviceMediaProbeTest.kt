@@ -235,6 +235,31 @@ class DeviceMediaProbeTest {
     }
 
     @Test
+    @Config(sdk = [29])
+    fun `depuis Android 10 l etat thermique de PowerManager se relit a chaque lecture`() {
+        setMemory(totalMemBytes = 6 * gibibyte)
+        val power = context.getSystemService(PowerManager::class.java)
+        val probe = DeviceMediaProbe.forContext(context)
+
+        val thermal = listOf(
+            PowerManager.THERMAL_STATUS_NONE,
+            PowerManager.THERMAL_STATUS_SEVERE,
+            PowerManager.THERMAL_STATUS_CRITICAL,
+            PowerManager.THERMAL_STATUS_LIGHT,
+        ).map { status ->
+            shadowOf(power).setCurrentThermalStatus(status)
+            probe.inputs().thermal
+        }
+
+        assertThat(thermal).containsExactly(
+            DeviceThermalState.NOMINAL,
+            DeviceThermalState.SERIOUS,
+            DeviceThermalState.CRITICAL,
+            DeviceThermalState.FAIR,
+        ).inOrder()
+    }
+
+    @Test
     fun `sans decodeur materiel annonce l appareil est range en bas`() {
         setMemory(totalMemBytes = 8 * gibibyte)
         val probe = DeviceMediaProbe.forContext(context)
