@@ -59,6 +59,7 @@ struct StoryComposerBarView: View {
     let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
 
     // Comment attachments + real voice capture (parity with feed/reels composer).
+    @State private var delays = DelayedActions()
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
