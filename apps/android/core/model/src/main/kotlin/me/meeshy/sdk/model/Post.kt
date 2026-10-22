@@ -2,6 +2,9 @@ package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.PrismCandidate
+import me.meeshy.sdk.lang.PrismTranslationResolver
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.lang.resolveLastMessagePreview
 
 /** A post author — port of APIAuthor (PostModels.swift). */
@@ -252,21 +255,23 @@ val ApiPost.servedTrackingLinks: List<TrackedLink>?
     get() = trackingLinks?.takeIf { it.isNotEmpty() } ?: metadata?.trackingLinks
 
 /**
- * Prisme Linguistique resolution for posts. Post translations are a
- * language-keyed map (vs. the message list form), so we walk the preferred
- * languages and pick the first non-blank match — never an arbitrary entry.
+ * Prisme Linguistique resolution for posts. Post translations are a language-keyed map
+ * (vs. the message list form); the descent is the single [PrismTranslationResolver] one,
+ * fed by the strict [ReaderPrism]: ranks walked in order, the first served wins — by a
+ * non-blank translation, or because the content is already written in that language
+ * ([originalLanguage] competes at its own rank). Never an arbitrary entry.
  */
 internal fun Map<String, ApiPostTranslationEntry>?.preferredEntry(
     prefs: LanguageResolver.ContentLanguagePreferences,
+    originalLanguage: String?,
 ): ApiPostTranslationEntry? {
     val translations = this?.takeIf { it.isNotEmpty() } ?: return null
-    for (language in LanguageResolver.preferredContentLanguages(prefs)) {
-        val match = translations.entries.firstOrNull { (key, entry) ->
-            key.equals(language, ignoreCase = true) && entry.text.isNotBlank()
-        }?.value
-        if (match != null) return match
-    }
-    return null
+    return PrismTranslationResolver.resolve(
+        originalLanguage = originalLanguage,
+        candidates = translations.map { (language, entry) -> PrismCandidate(language = language, value = entry) },
+        preferredLanguages = ReaderPrism.resolve(prefs),
+        isServable = { it.text.isNotBlank() },
+    )?.value
 }
 
 /**
@@ -274,11 +279,11 @@ internal fun Map<String, ApiPostTranslationEntry>?.preferredEntry(
  * or the original [content] when no translation targets a preferred language.
  */
 fun ApiPost.displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
-    translations.preferredEntry(prefs)?.text ?: content.orEmpty()
+    translations.preferredEntry(prefs, originalLanguage)?.text ?: content.orEmpty()
 
 /** True when the displayed content is a translation rather than the original. */
 fun ApiPost.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
-    translations.preferredEntry(prefs) != null
+    translations.preferredEntry(prefs, originalLanguage) != null
 
 /**
  * Content to display for a reposted/quoted post under the Prisme Linguistique:
@@ -287,11 +292,11 @@ fun ApiPost.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Bo
  * — the embedded post is prism-translated like any other post.
  */
 fun ApiRepostOf.displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
-    translations.preferredEntry(prefs)?.text ?: content.orEmpty()
+    translations.preferredEntry(prefs, originalLanguage)?.text ?: content.orEmpty()
 
 /** True when the reposted post's displayed content is a translation, not the original. */
 fun ApiRepostOf.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
-    translations.preferredEntry(prefs) != null
+    translations.preferredEntry(prefs, originalLanguage) != null
 
 /**
  * Content to display for a comment under the Prisme Linguistique: the preferred
@@ -300,11 +305,11 @@ fun ApiRepostOf.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences)
  * prism-translated like any other content.
  */
 fun ApiPostComment.displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
-    translations.preferredEntry(prefs)?.text ?: content
+    translations.preferredEntry(prefs, originalLanguage)?.text ?: content
 
 /** True when the comment's displayed content is a translation, not the original. */
 fun ApiPostComment.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
-    translations.preferredEntry(prefs) != null
+    translations.preferredEntry(prefs, originalLanguage) != null
 
 /** A viewer of a post — port of APIPostViewer (PostModels.swift). */
 @Serializable
