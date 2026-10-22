@@ -3,6 +3,7 @@ package me.meeshy.sdk.model
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.lang.LanguageResolver
@@ -125,6 +126,9 @@ data class ApiMessageSender(
     val firstName: String? = null,
     val lastName: String? = null,
     val user: ApiMessageSenderUser? = null,
+    /** Le décor équipé servi avec l'auteur (#10713) : son contour d'avatar relu hors ligne. */
+    @Serializable(with = TolerantServedProfileDecorSerializer::class)
+    val profileDecor: ServedProfileDecor? = null,
 ) {
     /** Le nom affiché : surnom, puis nom du compte imbriqué, puis pseudo, puis identifiant. */
     val name: String
@@ -250,6 +254,9 @@ data class ApiMessage(
     /** Liens suivis, au PREMIER niveau (socket) ; voir [servedTrackingLinks] pour le repli sur `metadata`. */
     @Serializable(with = LossyTrackedLinkListOrNullSerializer::class)
     val trackingLinks: List<TrackedLink>? = null,
+    /** Le cryptogramme d'un message chiffré de bout en bout ; conservé tel quel, jamais déchiffré ici. */
+    @Serializable(with = TolerantEncryptedContentSerializer::class)
+    val encryptedContent: String? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,
@@ -365,3 +372,9 @@ internal object TolerantSharedPlaceSerializer :
 internal object TolerantMetadataSerializer :
     KSerializer<JsonObject?> by TolerantSerializer(JsonObject.serializer())
 
+
+internal object TolerantEncryptedContentSerializer :
+    KSerializer<String?> by TolerantSerializer(String.serializer())
+
+internal object TolerantServedProfileDecorSerializer :
+    KSerializer<ServedProfileDecor?> by TolerantSerializer(ServedProfileDecor.serializer())
