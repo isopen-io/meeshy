@@ -494,3 +494,25 @@ process; manual baseline profiles (silently rot); unstaged production releases.
 
 **Consequences.** Reproducible, gated releases; performance regressions caught
 in CI; safe staged rollout of a large, security-sensitive app.
+
+---
+
+## ADR-024 — `applicationId = me.meeshy.android`, distinct de la coque Capacitor
+**Date:** 2026-10-22 · **Status:** accepted (décision porteur, #11570)
+
+**Context.** Le dégel du 2026-10-22 remet l'app native en développement, et la coque Capacitor de `apps/web`
+sert déjà Android sous `me.meeshy.app` (`apps/web/android/app/build.gradle`). Les deux déclaraient le même
+`applicationId` : un appareil ne peut pas les installer côte à côte, et une fiche Play n'en porte qu'une.
+
+**Decision.** L'app native publie sous `me.meeshy.android` (`me.meeshy.android.debug` en debug). Le
+`namespace` Kotlin reste `me.meeshy.app` : c'est l'espace des classes générées (`R`, `BuildConfig`), sans
+rapport avec l'identité de publication. Le renommer réécrirait des centaines d'imports pour rien.
+
+**Rejected.** Garder `me.meeshy.app` et retirer la coque du Play Store : la coque est le chemin Android en
+service. Renommer le `namespace` : c'est un coût sans effet sur l'utilisateur.
+
+**Consequences.** Deux fiches Play, deux apps installables côte à côte. `assetlinks.json` doit recevoir les
+entrées `me.meeshy.android` (empreinte de la clé Play App Signing) et `me.meeshy.android.debug`. Le projet
+Firebase doit déclarer une app Android `me.meeshy.android` pour que FCM délivre ses pushes. Les deux
+démarches attendent la console du porteur (`docs/magic-link-app-links.md`).
+

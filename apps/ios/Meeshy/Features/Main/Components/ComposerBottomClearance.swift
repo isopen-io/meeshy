@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshyUI
 
 /// **La barre de composition laisse toujours au moins un bouton d'espace sous
-/// elle, clavier fermé** (#11565, directive porteur 2026-10-22).
+/// elle, clavier fermé** (#11565).
 ///
 /// L'air exigé sous la barre vaut `max(encart bas, diamètre d'une porte)` —
 /// jamais leur somme, sinon la barre monterait trop haut sur un Pro Max. Chaque

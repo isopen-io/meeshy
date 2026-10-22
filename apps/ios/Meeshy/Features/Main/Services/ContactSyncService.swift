@@ -51,8 +51,7 @@ nonisolated protocol DeviceContactBookReading: Sendable {
 /// Le carnet réel, adossé à `CNContactStore`.
 nonisolated final class CNDeviceContactBook: DeviceContactBookReading, @unchecked Sendable {
     private let makeStore: @Sendable () -> CNContactStore
-    private let lock = NSLock()
-    private var built: CNContactStore?
+    private let built = Locked<CNContactStore?>(uncheckedState: nil)
 
     /// Init hors acteur (type `nonisolated`) : il sert de VALEUR PAR DÉFAUT à
     /// `ContactSyncService.init`, donc son expression est évaluée au site
@@ -66,10 +65,10 @@ nonisolated final class CNDeviceContactBook: DeviceContactBookReading, @unchecke
     }
 
     var store: CNContactStore {
-        lock.withLock {
-            if let built { return built }
+        built.mutateUnchecked { state in
+            if let state { return state }
             let fresh = makeStore()
-            built = fresh
+            state = fresh
             return fresh
         }
     }
