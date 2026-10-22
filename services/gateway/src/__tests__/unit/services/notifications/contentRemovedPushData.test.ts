@@ -42,7 +42,7 @@ const pushData = async (params: { readonly type: string; readonly metadata: Reco
     userId: AUTHOR,
     type: params.type,
     priority: 'normal',
-    title: 'Votre réel a été retiré par un administrateur',
+    title: 'Votre réel a été retiré par la modération',
     content: 'Motif : Nudité',
     context: { postId: 'post_1' },
     metadata: params.metadata,
