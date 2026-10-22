@@ -637,7 +637,13 @@ jobs:
     # #8580 — 53 gates Playwright en série : le job franchissait ses 25 min
     # (24 min 23 s puis annulé à 25 min 15 s sur #8593) dès que les gates
     # d'appel ont gagné leurs témoins. Le plafond suit la charge mesurée.
-    timeout-minutes: 40
+    # 2026-10-22 — 40 min ne suffisent plus : les verts du jour ont fini à
+    # 39 min 21 s, 39 min 22 s, 39 min 54 s et 39 min 59 s, puis le run
+    # 39843843835 a été annulé à 40 min 16 s, pendant le gate du cadre
+    # téléphone (13 min à lui seul en CI : 148 adresses × 3 téléphones,
+    # 270 relevés de Progression, 21 textes de landing — ~0,8 s le relevé,
+    # 9 min 48 s en local). 55 min rendent une marge d'un quart.
+    timeout-minutes: 55
     steps:
       - name: Checkout
         uses: actions/checkout@v7
