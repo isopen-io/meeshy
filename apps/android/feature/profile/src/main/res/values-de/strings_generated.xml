@@ -1,0 +1,42 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="profile_activity_title">Aktivität</string>
+    <string name="profile_back">Zurück</string>
+    <string name="profile_bio_label">Bio</string>
+    <string name="profile_cancel">Abbrechen</string>
+    <string name="profile_detail_country">Land</string>
+    <string name="profile_detail_system_language">Hauptsprache</string>
+    <string name="profile_display_name_label">Anzeigename</string>
+    <string name="profile_e2ee">Ende-zu-Ende-verschlüsselt</string>
+    <string name="profile_edit">Bearbeiten</string>
+    <string name="profile_first_name_label">Vorname</string>
+    <string name="profile_image_error_update">Profilfoto konnte nicht aktualisiert werden</string>
+    <string name="profile_language_unset">Nicht festgelegt</string>
+    <string name="profile_last_name_label">Nachname</string>
+    <string name="profile_presence_away">Abwesend</string>
+    <string name="profile_presence_online">Online</string>
+    <string name="profile_save">Speichern</string>
+    <string name="profile_share_copy">Link kopieren</string>
+    <string name="profile_share_send">Teilen</string>
+    <string name="profile_stat_conversations">Unterhaltungen</string>
+    <string name="profile_stat_friend_requests">Freundschaftsanfragen</string>
+    <string name="profile_stat_languages">Sprachen</string>
+    <string name="profile_stat_messages">Nachrichten</string>
+    <string name="profile_stat_translations">Übersetzungen</string>
+    <string name="profile_stats_title">Statistiken</string>
+    <string name="profile_system_language_label">Hauptsprache</string>
+    <string name="profile_title">Profil</string>
+    <string name="profile_unknown">Unbekannt</string>
+    <string name="profile_view_posts">Beiträge</string>
+    <string name="report_close">Schließen</string>
+    <string name="report_details_header">Details (optional)</string>
+    <string name="report_error">Fehler beim Senden der Meldung</string>
+    <string name="report_reason_harassment">Belästigung</string>
+    <string name="report_reason_header">Grund der Meldung</string>
+    <string name="report_reason_impersonation">Identitätsdiebstahl</string>
+    <string name="report_reason_inappropriate">Unangemessener Inhalt</string>
+    <string name="report_reason_other">Andere</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_submit">Meldung senden</string>
+    <string name="report_title_generic">Melden</string>
+</resources>
