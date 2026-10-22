@@ -1,5 +1,6 @@
 import XCTest
 import ImageIO
+import CoreGraphics
 import UniformTypeIdentifiers
 @testable import MeeshySDK
 
