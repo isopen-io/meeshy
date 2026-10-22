@@ -36,6 +36,7 @@ import me.meeshy.sdk.media.AndroidNetworkConditionMonitor
 import me.meeshy.sdk.media.DataStoreMediaDownloadPreferencesStore
 import me.meeshy.sdk.media.MediaDownloadPreferencesStore
 import me.meeshy.sdk.media.NetworkConditionMonitor
+import me.meeshy.sdk.network.NetworkPathSource
 import me.meeshy.sdk.notification.DataStoreNotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationRepository
@@ -189,9 +190,9 @@ object SdkModule {
 
     @Provides
     @Singleton
-    fun providesNetworkConditionMonitor(@ApplicationContext context: Context): NetworkConditionMonitor {
+    fun providesNetworkConditionMonitor(source: NetworkPathSource): NetworkConditionMonitor {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        return AndroidNetworkConditionMonitor(context, scope)
+        return AndroidNetworkConditionMonitor(source, scope)
     }
 
     @Provides
