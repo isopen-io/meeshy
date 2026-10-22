@@ -14,12 +14,12 @@
     <string name="media_voice_message">Sprachnachricht</string>
     <string name="media_voice_recording">Sprachnachricht (%1$s)</string>
     <plurals name="media_duration_minutes">
-        <item quantity="one">%d Minute</item>
-        <item quantity="other">%d Minuten</item>
+        <item quantity="one">%1$d Minute</item>
+        <item quantity="other">%1$d Minuten</item>
     </plurals>
     <plurals name="media_duration_seconds">
-        <item quantity="one">%d Sekunde</item>
-        <item quantity="other">%d Sekunden</item>
+        <item quantity="one">%1$d Sekunde</item>
+        <item quantity="other">%1$d Sekunden</item>
     </plurals>
     <string name="media_composer_placeholder_message">Nachricht...</string>
     <string name="media_composer_placeholder_post">Was gibt\'s Neues?</string>
