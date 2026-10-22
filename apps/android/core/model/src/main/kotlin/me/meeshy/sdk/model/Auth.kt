@@ -40,7 +40,8 @@ data class LoginRequest(
 @Serializable
 data class RegisterRequest(
     val email: String,
-    val password: String,
+    /** `null` ⇒ clé ABSENTE : le compte naît sans mot de passe (lien magique). Jamais `""`, que la borne de longueur refuserait. */
+    val password: String? = null,
     /** Le nom affiché, seule identité saisie à l'inscription. */
     val displayName: String? = null,
     val username: String? = null,
@@ -79,7 +80,7 @@ data class RegisterRequest(
      * (`packages/MeeshySDK/.../Auth/AuthModels.swift`).
      */
     fun referred(code: String?, sessionKey: String? = null): RegisterRequest {
-        val token = code?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_REFERRAL_CODE_LENGTH && it.none(Char::isWhitespace) }
+        val token = me.meeshy.sdk.model.auth.ReferralCode.normalized(code)
         val key = sessionKey?.trim()?.takeIf { it.isNotEmpty() }
         return copy(affiliateToken = token, affiliateSessionKey = if (token == null) null else key)
     }

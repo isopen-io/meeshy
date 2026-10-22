@@ -75,6 +75,11 @@ public data class SignupForm(
     val password: String = "",
     val systemLanguage: String = SignupRegionInference.DEFAULT_LANGUAGE,
     val regionalLanguage: String = SignupRegionInference.SECONDARY_LANGUAGE,
+    /**
+     * Le pseudo TAPÉ (inscription par phases). `null` = jamais touché : il SUIT l'adresse en
+     * direct. Une chaîne = la saisie, qui gagne ; vidée, la dérivation repart.
+     */
+    val username: String? = null,
 ) {
 
     /** L'indicatif E.164 du pays choisi (`"+33"`), ou `""` s'il est inconnu. */
@@ -85,6 +90,59 @@ public data class SignupForm(
 
     /** Un numéro a été saisi — donc il voyage. Vide ⇒ absent de la charge. */
     public val hasPhone: Boolean get() = normalizedPhoneDigits.isNotEmpty()
+
+    // ---- inscription par phases : identité dérivée, numéro requis, mot de passe facultatif ----
+
+    /** Le pseudo qui PARTIRA : tapé s'il l'a été, tiré de l'adresse sinon ; `""` si la dérivation retombe sur le recours. */
+    public val effectiveUsername: String
+        get() {
+            val typed = username.orEmpty().trim()
+            if (typed.isNotEmpty()) return typed
+            val derived = RegistrationIdentity.pseudoRacine(displayName = null, email = email)
+            return if (derived == RegistrationIdentity.PSEUDO_DE_SECOURS) "" else derived
+        }
+
+    /** Le nom affiché qui partira : tapé s'il l'a été, dérivé de l'adresse sinon. */
+    public val effectiveDisplayName: String
+        get() = displayName.trim().ifEmpty { RegistrationIdentity.displayNameDepuisEmail(email) }
+
+    /** Le refus EN DIRECT du pseudo qui partira (`null` s'il est recevable ou absent). */
+    public val usernameRefusal: RegistrationIdentity.UsernameRefusal?
+        get() = effectiveUsername.takeIf { it.isNotEmpty() }?.let(RegistrationIdentity::usernameRefusal)
+
+    /** Nom affiché ET pseudo existent et tiennent leurs bornes : c'est alors que paraît le mot de passe. */
+    public val isIdentityDefined: Boolean
+        get() = SignupFieldValidation.isEmailValidLocally(email.trim()) &&
+            effectiveDisplayName.let { it.isNotEmpty() && it.length <= DISPLAY_NAME_MAX_LENGTH && it.any(Char::isLetter) } &&
+            effectiveUsername.isNotEmpty() && usernameRefusal == null
+
+    /** Le numéro est REQUIS par l'écran (#9343) alors que la requête reste valide sans lui côté serveur. */
+    public val phoneRefusal: SignupPhoneRefusal? get() = SignupPhoneRefusal.of(phoneDigits)
+
+    public val isPhoneValid: Boolean get() = phoneRefusal == null
+
+    /** Le mot de passe est facultatif : vide est valide, fourni il atteint [PASSWORD_MIN_LENGTH]. */
+    public val isPasswordOptionalValid: Boolean get() = password.isEmpty() || password.length >= PASSWORD_MIN_LENGTH
+
+    public val hasPassword: Boolean get() = password.isNotEmpty()
+
+    /** Le bouton de l'inscription par phases : adresse valide, numéro plausible, pseudo recevable, mot de passe éventuel tenu. */
+    public val canSubmitPhased: Boolean
+        get() = isIdentityDefined && isPhoneValid && isPasswordOptionalValid
+
+    /**
+     * La charge de l'inscription par phases : nom et pseudo montrés sont ceux envoyés ; sans mot
+     * de passe la clé est ABSENTE ; le code de parrainage (jamais seul avec sa clé de visite)
+     * voyage tel que mémorisé par `PendingReferralStore`.
+     */
+    public fun toPhasedRegisterRequest(referralCode: String? = null, referralSessionKey: String? = null): RegisterRequest {
+        val base = toRegisterRequest()
+        return base.copy(
+            displayName = effectiveDisplayName.ifEmpty { null },
+            username = effectiveUsername.ifEmpty { null },
+            password = password.takeIf { it.isNotEmpty() },
+        ).referred(referralCode, referralSessionKey)
+    }
 
     /**
      * Applique une saisie de téléphone, d'où qu'elle vienne — frappe, collage ou
