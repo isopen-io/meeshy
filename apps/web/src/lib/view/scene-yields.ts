@@ -70,9 +70,6 @@ export const SCENE_YIELD_TRANSITION = 'filter 220ms ease, transform 260ms cubic-
 /** La scène qui ne porte pas le flou n'anime que sa réduction. */
 export const SCENE_SCALE_TRANSITION = 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)';
 
-/** Le voile flouté apparaît par son opacité — le compositeur seul l'anime. */
-export const SCENE_VEIL_TRANSITION = 'opacity 220ms ease';
-
 /**
  * QUI PORTE LE FLOU DE LECTURE (#11307). `scene` : la scène elle-même — une
  * story, dont le calque ne change pas d'image pendant qu'on lit. `poster` :

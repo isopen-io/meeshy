@@ -7,7 +7,10 @@ import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import type { SceneYield } from '@/lib/view/scene-yields';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { renderToStaticMarkup } from 'react-dom/server';
+
 import { ReelPage } from './reel-page';
+import { ReelVeil } from './reel-veil';
 
 /**
  * #11307 (défaut retenu de #11253, parité iOS) — SOUS LA FEUILLE DE
@@ -110,7 +113,7 @@ describe('ReelPage — sous la feuille, en pause sous son affiche floutée (#113
     expect(veil).not.toBeNull();
     expect(veil?.getAttribute('aria-hidden')).toBe('true');
     expect(veil?.style.filter).toContain('blur(');
-    expect(veil?.style.backgroundImage).toContain(MODEL.media[0]?.thumbnailSrc ?? MODEL.media[0]?.placeholder ?? '∅');
+    expect(veil?.getAttribute('data-reel-veil')).toBe('poster');
     expect(veil?.style.transition ?? '').not.toContain('filter');
   });
 
@@ -133,5 +136,21 @@ describe('ReelPage — sous la feuille, en pause sous son affiche floutée (#113
     });
     expect(calls).toEqual(['pause', 'play']);
     expect(veilOf(container)).toBeNull();
+  });
+});
+
+describe('ReelVeil — le flou vit sur une image FIXE (#11307)', () => {
+  test('l’affiche est l’image floutée', () => {
+    const html = renderToStaticMarkup(<ReelVeil src="https://cdn.example/poster.jpg" />);
+    expect(html).toContain('data-reel-veil="poster"');
+    expect(html).toContain('https://cdn.example/poster.jpg');
+    expect(html).toMatch(/filter:\s*blur\(/);
+  });
+
+  test('sans affiche, il floute l’image ARRÊTÉE dessous, jamais un noir', () => {
+    const html = renderToStaticMarkup(<ReelVeil src={undefined} />);
+    expect(html).toContain('data-reel-veil="backdrop"');
+    expect(html).toMatch(/backdrop-filter:\s*blur\(/);
+    expect(html).not.toContain('background-image');
   });
 });
