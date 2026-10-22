@@ -34,6 +34,16 @@ public data class MyShareLinksState(
     /** The empty-state card shows only once a load settled with nothing to show. */
     public val showEmptyState: Boolean get() = phase == MyShareLinksPhase.Loaded && links.isEmpty()
 
+    /**
+     * Un échec de lecture qui garde la liste d'avant : elle reste affichée sous un bandeau
+     * (« réessayer »), jamais remplacée par un écran d'erreur.
+     */
+    public val showFailureBanner: Boolean get() = phase == MyShareLinksPhase.Error && links.isNotEmpty()
+
+    /** Paint [links] read from the local cache: the list is visible at once, no spinner. */
+    public fun fromCache(links: List<MyShareLink>): MyShareLinksState =
+        copy(links = links, phase = MyShareLinksPhase.Loaded, errorMessage = null)
+
     /** Enter the loading phase, clearing any prior error (existing links are kept). */
     public fun loading(): MyShareLinksState =
         copy(phase = MyShareLinksPhase.Loading, errorMessage = null)
