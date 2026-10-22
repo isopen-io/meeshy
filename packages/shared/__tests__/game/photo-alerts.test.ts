@@ -14,6 +14,7 @@ import {
 } from '../../utils/game/photo-alerts.js';
 import { photoCatchUp, photoStepsReached, type PhotoCatchUpStanding } from '../../utils/game/photo-catch-up.js';
 import { photoAchievementKeyOfMomentId, photoAchievementMomentId, photoDayMomentId } from '../../utils/game/photo-moments.js';
+import { PHOTO_STATIC_STEP_IDS } from '../../utils/game/photo-step-ids.js';
 
 const standing = (over: Partial<PhotoCatchUpStanding> = {}): PhotoCatchUpStanding => ({
   rank: 'murmure',
@@ -188,17 +189,36 @@ describe('la réalisation du jour', () => {
 });
 
 describe('le haut fait (LS, #10168)', () => {
+  const ACHIEVEMENT_STEP_IDS = PHOTO_STATIC_STEP_IDS.filter((id) => id.startsWith('achievement:'));
+
   it('son identité est achievement:<clé du catalogue>, simple ou composé, la même que le web et iOS gravent — sans la rareté', () => {
-    expect(photoAchievementMomentId('messages.3')).toBe('achievement:messages.3');
-    expect(photoAchievementMomentId('defi.streak-3')).toBe('achievement:defi.streak-3');
+    expect(photoAchievementMomentId('achievement.first_content')).toBe('achievement:achievement.first_content');
+    expect(photoAchievementMomentId('achievement.parole.message.send.count:1')).toBe('achievement:achievement.parole.message.send.count:1');
     expect(photoAchievementMomentId('')).toBeNull();
-    expect(photoAchievementMomentId('Messages:3')).toBeNull();
+    expect(photoAchievementMomentId('Achievement.first_content')).toBeNull();
+  });
+
+  it('une clé hors du catalogue n’a pas d’identité : la loi ne grave que ce que le jeu peut attribuer', () => {
+    expect(photoAchievementMomentId('messages.3')).toBeNull();
+    expect(photoAchievementMomentId('achievement.inconnu')).toBeNull();
+    expect(photoAchievementMomentId('achievement.parole.message.send.count:7')).toBeNull();
   });
 
   it('la clé se relit depuis l’identité, et seulement depuis une identité de haut fait', () => {
-    expect(photoAchievementKeyOfMomentId('achievement:defi.streak-3')).toBe('defi.streak-3');
+    expect(photoAchievementKeyOfMomentId('achievement:achievement.parole.message.send.count:1')).toBe('achievement.parole.message.send.count:1');
     expect(photoAchievementKeyOfMomentId('day:2026-10-11')).toBeNull();
     expect(photoAchievementKeyOfMomentId('achievement:')).toBeNull();
+    expect(photoAchievementKeyOfMomentId('achievement:messages.3')).toBeNull();
+  });
+
+  it('chaque haut fait du registre fait l’aller-retour : les cinq simples et les composés de chaque famille et palier', () => {
+    expect(ACHIEVEMENT_STEP_IDS.length).toBeGreaterThan(100);
+    expect(ACHIEVEMENT_STEP_IDS).toContain('achievement:achievement.first_content');
+    const roundTrips = ACHIEVEMENT_STEP_IDS.map((id) => {
+      const key = photoAchievementKeyOfMomentId(id);
+      return { id, back: key === null ? null : photoAchievementMomentId(key) };
+    });
+    expect(roundTrips.filter(({ id, back }) => back !== id)).toEqual([]);
   });
 });
 

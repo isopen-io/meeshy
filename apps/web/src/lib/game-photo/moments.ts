@@ -209,7 +209,7 @@ export const meeshMoment = (params: { readonly number: number }): PhotoMoment =>
  * `rarity` n'est posée que si l'écran a le DROIT de la montrer : l'identité du moment n'en dépend pas.
  */
 export const achievementMoment = (key: EngagementAchievementKey, rarity?: AchievementRarity | null): PhotoMoment =>
-  moment(photoAchievementMomentId(key) ?? `achievement:${key}`, { kind: 'achievement', key, ...(rarity == null ? {} : { rarity }) });
+  moment(photoAchievementMomentId(key), { kind: 'achievement', key, ...(rarity == null ? {} : { rarity }) });
 
 /** Le moment photo que la loi de la vague 2 nomme (`photoMomentOfGuideEvent`) : son identité est celle de la loi. */
 export const photoMomentOfEmblemV2 = (emblem: PhotoMomentEmblemV2): PhotoMoment => {
