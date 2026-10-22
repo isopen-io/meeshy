@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
+import me.meeshy.ui.component.media.rememberMediaKindStrings
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -111,11 +112,11 @@ private data class RowPreviewKindStyle(
 @Composable
 internal fun lastMessagePreviewLabels(): LastMessagePreviewLabels =
     LastMessagePreviewLabels(
-        photo = stringResource(R.string.conversations_preview_photo),
-        video = stringResource(R.string.conversations_preview_video),
-        voice = stringResource(R.string.conversations_preview_voice),
-        file = stringResource(R.string.conversations_preview_file),
-        location = stringResource(R.string.conversations_preview_location),
+        photo = "",
+        video = "",
+        voice = "",
+        file = "",
+        location = "",
         none = stringResource(R.string.conversations_no_messages),
         you = stringResource(R.string.conversations_preview_you),
         senderFormat = stringResource(R.string.conversations_preview_sender_format),
@@ -123,4 +124,4 @@ internal fun lastMessagePreviewLabels(): LastMessagePreviewLabels =
         expired = stringResource(R.string.conversations_preview_expired),
         hidden = stringResource(R.string.conversations_preview_hidden),
         viewOnce = stringResource(R.string.conversations_preview_view_once),
-    )
+    ).withMediaKinds(rememberMediaKindStrings())
