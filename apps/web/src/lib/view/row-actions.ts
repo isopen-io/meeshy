@@ -1,10 +1,12 @@
 import { conversationActionsFor, type ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
+import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import type { ConversationFlags } from '@/lib/api/preferences';
 import type { Conversation } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { MenuRow } from '@/lib/reading-mode/catalog';
 
 /**
  * LES ACTIONS DE RANGÉE (#5559 §5.6) — le cœur du critère de fin de l'issue :
@@ -25,7 +27,9 @@ export type RowActionId =
   | 'callVideo'
   | 'pin'
   | 'mute'
+  | 'search'
   | 'read'
+  | 'readingMode'
   | 'details'
   | 'rename'
   | 'invite'
@@ -79,10 +83,12 @@ export type RowActionGlyph =
   | 'userPlus'
   | 'users'
   | 'shieldCheck'
-  | 'signOut';
+  | 'signOut'
+  | 'magnifyingGlass'
+  | 'eye';
 
-/** Les deux entrées qui ouvrent un SOUS-MENU, comme les `Menu` d'iOS. */
-export type RowSubmenu = 'favorite' | 'moveTo';
+/** Les entrées qui ouvrent un SOUS-MENU, comme les `Menu` d'iOS. */
+export type RowSubmenu = 'favorite' | 'moveTo' | 'readingMode';
 
 export type RowMenuItem = {
   readonly id: RowActionId;
@@ -107,6 +113,18 @@ export type RowMenuMore = {
   readonly organize: boolean;
   readonly favorite: string | undefined;
   readonly block: 'block' | 'unblock' | null;
+};
+
+/**
+ * LES DEUX PORTES DU FIL (#11226) — « Rechercher » ouvre la conversation sur
+ * sa recherche, « Mode de lecture › » choisit comment elle s'ouvrira : celles
+ * du menu d'iOS (`ConversationListView+Overlays.swift`). Le mode suit le
+ * drapeau de construction (`apiConfig.readingModesEnabled`) : coupé, un mode
+ * choisi ici serait ignoré à l'ouverture, et l'entrée n'existe pas.
+ */
+export type RowMenuDoors = {
+  readonly search: boolean;
+  readonly readingMode: boolean;
 };
 
 /**
@@ -191,8 +209,10 @@ export function rowMenuItems(params: {
    * et ouvrent Inviter, Gérer les membres, l'administration et Quitter.
    */
   readonly actions?: ConversationActions;
+  /** Absentes (le balayage) : ni « Rechercher » ni « Mode de lecture ». */
+  readonly doors?: RowMenuDoors;
 }): readonly RowMenuItem[] {
-  const { flags, unread, language, canCall = false, canDelete = false, more, actions } = params;
+  const { flags, unread, language, canCall = false, canDelete = false, more, actions, doors } = params;
   const label = (key: RowMenuLabelKey) => translate(language, key);
   const call = canCall && (actions?.call ?? true);
   const remove = canDelete && (actions?.hide ?? true);
@@ -205,7 +225,11 @@ export function rowMenuItems(params: {
       : []),
     { id: 'pin', label: label(flags.isPinned ? 'rowActions.unpin' : 'rowActions.pin'), glyph: 'pushPin' },
     { id: 'mute', label: label(flags.isMuted ? 'rowActions.unmute' : 'rowActions.mute'), glyph: flags.isMuted ? 'bell' : 'bellSlash' },
+    ...(doors?.search === true ? [{ id: 'search', label: rowMenuText(language, 'rowMenu.search'), glyph: 'magnifyingGlass' } as const] : []),
     { id: 'read', label: label(unread ? 'rowActions.read' : 'rowActions.unread'), glyph: 'envelopeOpen' },
+    ...(doors?.readingMode === true
+      ? [{ id: 'readingMode', label: rowMenuText(language, 'rowMenu.readingMode'), glyph: 'eye', submenu: 'readingMode' } as const]
+      : []),
     ...(more === undefined ? [] : moreItems(more, language, actions)),
     ...(flags.archiveLocked === true
       ? []
@@ -255,7 +279,8 @@ export const FAVORITE_EMOJIS = ['⭐️', '❤️', '🔥', '💎', '🎯', '✨
 /** Ce qu'une entrée de sous-menu ÉCRIT — `null` retire. */
 export type RowSubmenuChoice =
   | { readonly kind: 'favorite'; readonly emoji: string | null }
-  | { readonly kind: 'moveTo'; readonly categoryId: string | null };
+  | { readonly kind: 'moveTo'; readonly categoryId: string | null }
+  | { readonly kind: 'readingMode'; readonly mode: ConversationReadingMode | null };
 
 /**
  * CE QUE LA LIGNE DEMANDE À L'ÉCRAN (#10593) — renommer (une fenêtre),
@@ -273,7 +298,7 @@ export type RowIntent =
   | { readonly kind: 'rename' }
   | { readonly kind: 'details'; readonly focus: RowDetailsFocus }
   | { readonly kind: 'block'; readonly intent: 'block' | 'unblock' }
-  | RowSubmenuChoice;
+  | Exclude<RowSubmenuChoice, { readonly kind: 'readingMode' }>;
 
 export type RowSubmenuItem = {
   readonly key: string;
@@ -281,7 +306,36 @@ export type RowSubmenuItem = {
   readonly checked: boolean;
   readonly choice: RowSubmenuChoice;
   readonly destructive?: true;
+  /** Listée mais sans effet — un mode que cette conversation n'ouvre pas encore. */
+  readonly disabled?: true;
+  /** Pourquoi elle est désactivée, dans la langue du lecteur — jamais un placeholder. */
+  readonly detail?: string;
 };
+
+/**
+ * CE QUE LE SOUS-MENU « MODE DE LECTURE » MONTRE (#11226) — les cinq lignes
+ * du chip du fil (`menuRows`, la MÊME loi de dégrisage et de raison) et la
+ * préférence posée pour cette conversation (`null` : Automatique).
+ */
+export type RowReadingModeMenu = {
+  readonly rows: readonly MenuRow[];
+  readonly sticky: ConversationReadingMode | null;
+};
+
+/** « Automatique » en tête, puis les cinq modes — l'ordre d'iOS (`LentilleModeMenuModel`). */
+function readingModeItems(menu: RowReadingModeMenu | undefined, language: InterfaceLanguage): readonly RowSubmenuItem[] {
+  if (menu === undefined) return [];
+  return [
+    { key: 'auto', label: translate(language, 'readingMode.auto'), checked: menu.sticky === null, choice: { kind: 'readingMode', mode: null } },
+    ...menu.rows.map((row) => ({
+      key: row.mode,
+      label: row.title,
+      checked: menu.sticky === row.mode,
+      choice: { kind: 'readingMode', mode: row.mode } as const,
+      ...(row.isAvailable ? {} : { disabled: true as const, detail: row.reason ?? '' }),
+    })),
+  ];
+}
 
 /**
  * LES SOUS-MENUS — Favori (les huit emojis, puis « Retirer le favori » quand
@@ -295,8 +349,10 @@ export function rowSubmenuItems(params: {
   readonly categoryId: string | undefined;
   readonly categories: readonly { readonly id: string; readonly name: string }[];
   readonly language: InterfaceLanguage;
+  readonly readingMode?: RowReadingModeMenu;
 }): readonly RowSubmenuItem[] {
   const { submenu, favorite, categoryId, categories, language } = params;
+  if (submenu === 'readingMode') return readingModeItems(params.readingMode, language);
   if (submenu === 'favorite') {
     return [
       ...FAVORITE_EMOJIS.map((emoji) => ({ key: emoji, label: emoji, checked: emoji === favorite, choice: { kind: 'favorite', emoji } as const })),

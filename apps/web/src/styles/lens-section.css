@@ -24,8 +24,41 @@
   }
 }
 
+/*
+ * LE DOM DE LA LISTE RESTE BORNÉ — une rangée hors écran ne se met ni en page
+ * ni en peinture (`content-visibility`), sa place est réservée à 84 px, la
+ * hauteur d'une rangée de Lentille. Le balayage rogne déjà sa rangée
+ * (`conversation-row-swipe.css`) : il reprend la visibilité pleine.
+ */
+li[data-row] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 84px;
+}
+
+li[data-row][data-row-swipe] {
+  content-visibility: visible;
+}
+
+/*
+ * UNE RANGÉE QUI ENTRE (`list-reorder-flip.ts`) paraît en fondu : l'opacité
+ * seule, le `transform` du `<li>` appartenant au glissement de la liste.
+ */
+.lens-row-entering {
+  animation: lens-row-enter 240ms ease-out backwards;
+}
+
+@keyframes lens-row-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  [data-section-unfolding] {
+  [data-section-unfolding],
+  .lens-row-entering {
     animation: none;
   }
 }

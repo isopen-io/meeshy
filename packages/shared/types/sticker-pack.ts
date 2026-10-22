@@ -32,6 +32,8 @@ import {
   PACK_STATUSES,
   isPackInstalled,
   isReservedPackSlug,
+  type PackLanguage,
+  type PackNames,
   type PackRegistries,
   type PackStatus,
   type PackSummaryBase,
@@ -355,6 +357,12 @@ export type StickerPackSummary = PackSummaryBase & {
   readonly price?: number | null;
   /** Gratuit ⇒ `true` ; payant ⇒ une ligne de possession existe (additif). */
   readonly owned?: boolean;
+  /**
+   * Le nom et la description par langue de l'interface (#10189, additif) : la
+   * vitrine unique les sert pour les intégrés ; un client les lit par
+   * `stickerPackText`, qui retombe sur le catalogue partagé puis sur `name`.
+   */
+  readonly names?: PackNames;
 };
 
 export type StickerPackDetail = StickerPackSummary & {
@@ -365,38 +373,92 @@ export type StickerPackDetail = StickerPackSummary & {
 
 // ── Les packs intégrés ──────────────────────────────────────────────────
 
+/** Le nom et la description d'un pack dans UNE langue. */
+export type StickerPackText = { readonly name: string; readonly description: string };
+
+/** Les sept langues de l'interface, toutes REQUISES pour un pack intégré : une langue absente ne compile pas (#10189). */
+export type BuiltinStickerPackNames = Readonly<Record<PackLanguage, StickerPackText>>;
+
 export type BuiltinStickerPack = {
   readonly slug: string;
+  /** La projection FRANÇAISE de `names` — ce que le fil `/sticker-packs` a toujours servi à plat. */
   readonly name: string;
   readonly description: string;
+  readonly names: BuiltinStickerPackNames;
   readonly kinds: readonly StickerKind[];
   /** Installé tant que l'utilisateur ne l'a pas retiré. */
   readonly installedByDefault: boolean;
 };
 
+/** `name` / `description` dérivent de `names.fr` : une seule table, jamais deux textes français à accorder. */
+const builtinPack = (pack: Omit<BuiltinStickerPack, 'name' | 'description'>): BuiltinStickerPack => ({
+  ...pack,
+  name: pack.names.fr.name,
+  description: pack.names.fr.description,
+});
+
 export const BUILTIN_STICKER_PACKS: readonly BuiltinStickerPack[] = [
-  {
+  builtinPack({
     slug: 'mee',
-    name: 'Mee',
-    description: 'Le colibri de Meeshy : ses humeurs, ses gestes et ses Instants qui écrivent ton message.',
+    names: {
+      fr: { name: 'Mee', description: 'Le colibri de Meeshy : ses humeurs, ses gestes et ses Instants qui écrivent ton message.' },
+      en: { name: 'Mee', description: "Meeshy's hummingbird: its moods, gestures and Moments that write your message." },
+      es: { name: 'Mee', description: 'El colibrí de Meeshy: sus estados de ánimo, gestos e Instantes que escriben tu mensaje.' },
+      pt: { name: 'Mee', description: 'O beija-flor do Meeshy: seus humores, gestos e Instantes que escrevem a sua mensagem.' },
+      de: { name: 'Mee', description: 'Der Kolibri von Meeshy: seine Launen, Gesten und Momente, die deine Nachricht schreiben.' },
+      it: { name: 'Mee', description: 'Il colibrì di Meeshy: i suoi stati d’animo, i gesti e gli Istanti che scrivono il tuo messaggio.' },
+      ar: { name: 'Mee', description: 'طائر الطنان في Meeshy: مزاجاته وإيماءاته ولحظاته التي تكتب رسالتك.' },
+    },
     kinds: ['static', 'cinematic', 'instant'],
     installedByDefault: true,
-  },
-  {
+  }),
+  builtinPack({
     slug: 'meo',
-    name: 'Meo',
-    description: 'Le complice de Mee, crête au vent : les mêmes envies de dire, avec son caractère.',
+    names: {
+      fr: { name: 'Meo', description: 'Le complice de Mee, crête au vent : les mêmes envies de dire, avec son caractère.' },
+      en: { name: 'Meo', description: "Mee's partner in crime, crest in the wind: the same urge to say it, with his own character." },
+      es: { name: 'Meo', description: 'El cómplice de Mee, con la cresta al viento: las mismas ganas de decir, con su carácter.' },
+      pt: { name: 'Meo', description: 'O cúmplice de Mee, de crista ao vento: a mesma vontade de dizer, com o seu caráter.' },
+      de: { name: 'Meo', description: 'Mees Komplize, Kamm im Wind: dieselbe Lust, etwas zu sagen, mit eigenem Charakter.' },
+      it: { name: 'Meo', description: 'Il complice di Mee, cresta al vento: la stessa voglia di dire, col suo carattere.' },
+      ar: { name: 'Meo', description: 'رفيق Mee بعرفه المتطاير مع الريح: الرغبة نفسها في التعبير، بطابعه الخاص.' },
+    },
     kinds: ['static', 'cinematic', 'instant'],
     installedByDefault: true,
-  },
-  {
+  }),
+  builtinPack({
     slug: 'mee-et-meo',
-    name: 'Mee & Meo',
-    description: 'Les deux ensemble : câlins, chamailleries et fêtes à deux.',
+    names: {
+      fr: { name: 'Mee & Meo', description: 'Les deux ensemble : câlins, chamailleries et fêtes à deux.' },
+      en: { name: 'Mee & Meo', description: 'Both together: cuddles, squabbles and parties for two.' },
+      es: { name: 'Mee & Meo', description: 'Los dos juntos: abrazos, peleítas y fiestas a dos.' },
+      pt: { name: 'Mee & Meo', description: 'Os dois juntos: carinhos, brigas e festas a dois.' },
+      de: { name: 'Mee & Meo', description: 'Beide zusammen: Kuscheln, Zankereien und Feste zu zweit.' },
+      it: { name: 'Mee & Meo', description: 'Tutti e due insieme: coccole, battibecchi e feste in due.' },
+      ar: { name: 'Mee & Meo', description: 'الاثنان معًا: عناق ومشاكسات واحتفالات لشخصين.' },
+    },
     kinds: ['static', 'cinematic'],
     installedByDefault: true,
-  },
+  }),
 ];
+
+/** Les sept langues d'un pack intégré ; `null` pour tout autre slug. */
+export const builtinStickerPackNames = (slug: string): BuiltinStickerPackNames | null =>
+  BUILTIN_STICKER_PACKS.find((pack) => pack.slug === slug)?.names ?? null;
+
+/**
+ * Le texte d'un pack dans la langue de l'INTERFACE — la loi des clients
+ * (#10189) : `names[langue]` servi avec le pack, sinon le catalogue des
+ * intégrés (un ancien serveur sert un intégré à plat), sinon `name` /
+ * `description` tels que l'auteur les a écrits. Seul un pack `builtin`
+ * consulte le catalogue : un tiers ne peut pas prendre un slug intégré, mais
+ * la loi ne s'en remet pas à cette réservation.
+ */
+export const stickerPackText = (
+  pack: Pick<StickerPackSummary, 'slug' | 'name' | 'description' | 'builtin'> & { readonly names?: PackNames | undefined },
+  language: PackLanguage,
+): StickerPackText =>
+  pack.names?.[language] ?? (pack.builtin ? builtinStickerPackNames(pack.slug)?.[language] : undefined) ?? { name: pack.name, description: pack.description };
 
 export const STICKER_PACK_AUTHOR_MEESHY = 'Meeshy';
 

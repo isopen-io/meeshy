@@ -367,3 +367,40 @@ describe('audit #11372 — ce que le web ne sait pas servir honnêtement ne s’
     expect(menuConversationOf({ type: 'group', isActive: true, encryptionMode: null }).encryptionMode).toBeNull();
   });
 });
+
+describe('#11370 — « Transcrire » sur un vocal que le serveur lit, sur le verdict de la loi', () => {
+  const voice = (partial: Partial<Attachment> = {}): Attachment =>
+    ({
+      ...attachmentDefaults,
+      id: 'a-voice',
+      messageId: 'm-1',
+      mimeType: 'audio/mp4',
+      fileName: 'vocal.m4a',
+      originalName: 'vocal.m4a',
+      fileUrl: '/u/vocal.m4a',
+      fileSize: 120,
+      uploadedBy: 'u-other',
+      createdAt: '2026-10-20T11:00:00.000Z',
+      ...partial,
+    }) as Attachment;
+
+  test('un vocal en clair l’offre, dit du mot de la bulle (« Transcrire »)', () => {
+    const items = messageMenuItems(ctxOf(row({ content: '', translations: [], attachments: [voice()] })));
+    const entry = items.find((item) => item.id === 'transcribe');
+    expect(entry).toBeDefined();
+    expect(entry?.catalog === 'interface' ? translate('fr', entry.labelKey) : null).toBe('Transcrire');
+  });
+
+  test('un vocal de bout en bout ne l’offre pas : le verdict est absent, et « Plus… » le dit', () => {
+    const ctx = ctxOf(row({ content: '', translations: [], attachments: [voice()] }), scopeOf({ conversation: { encryptionMode: 'e2ee' } }));
+    expect(ctx.actions?.verdicts.transcribe).toBeNull();
+    expect(ids(messageMenuItems(ctx))).not.toContain('transcribe');
+    expect(ids(messageMenuGroups(ctx).more)).toContain('e2eeNotice');
+  });
+
+  test('un vocal déjà transcrit ou encore local ne l’offre pas — un contrôle existe s’il a un effet', () => {
+    const transcription = { type: 'audio' as const, transcribedText: 'déjà', language: 'fr', confidence: 1, source: 'whisper' as const };
+    expect(ids(messageMenuItems(ctxOf(row({ content: '', translations: [], attachments: [voice({ transcription })] }))))).not.toContain('transcribe');
+    expect(ids(messageMenuItems(ctxOf(row({ content: '', translations: [], attachments: [voice({ id: 'cid_a' })] }))))).not.toContain('transcribe');
+  });
+});

@@ -1,3 +1,7 @@
+import * as z from 'zod/mini';
+
+import { PACK_LANGUAGES, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
+
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
 
@@ -27,6 +31,19 @@ export type PackPort<Summary, Installed, Detail> = {
 
 export type PackDeps = ConversationsDeps & { readonly signal?: AbortSignal };
 const signalOf = (deps: PackDeps) => (deps.signal === undefined ? {} : { signal: deps.signal });
+
+const WireName = z.object({ name: z.string(), description: z.string() });
+
+const isPackLanguage = (value: string): value is PackLanguage => (PACK_LANGUAGES as readonly string[]).includes(value);
+
+/** Les `names` d'un pack, quel que soit son domaine : une langue de l'interface, bien formée, ou rien — jamais une clé étrangère. */
+export const decodePackNames = (raw: Readonly<Record<string, unknown>> | undefined): PackNames =>
+  Object.fromEntries(
+    Object.entries(raw ?? {}).flatMap(([language, value]) => {
+      const parsed = WireName.safeParse(value);
+      return isPackLanguage(language) && parsed.success ? [[language, parsed.data]] : [];
+    }),
+  );
 
 export const listOf = <T,>(raw: unknown, decode: (row: unknown) => T | null): readonly T[] =>
   (Array.isArray(raw) ? raw : []).flatMap((row) => {

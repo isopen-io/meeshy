@@ -192,6 +192,13 @@ struct MessageActionPolicyVectorTests {
             "carte-de-visite-alias-text-x-vcf",
             "carte-de-visite-type-generique-extension-en-majuscules",
             "carte-de-visite-lue-sur-le-nom-de-fichier-sans-nom-d-origine",
+            "serveur-photo-ne-se-transfere-pas",
+            "hybride-photo-ne-se-transfere-pas",
+            "serveur-photo-chiffree-par-le-message-ne-se-transfere-pas",
+            "hybride-texte-se-transfere",
+            "vocal-en-conversation-serveur-transcriptible",
+            "e2ee-texte-d-autrui-se-traduit-sur-l-appareil",
+            "non-membre-supprimer-pour-moi-refuse",
         ]
         for label in required {
             #expect(labels.contains(label), "\(label)")
@@ -205,5 +212,17 @@ struct MessageActionPolicyVectorTests {
             guard result.verdicts.canReply, !result.content.flags.failed else { continue }
             #expect(result.groups.primary.first == .reply, "\(vector.label)")
         }
+    }
+
+    @Test func pieceForwardingUnderAServerRegimeIsRefused_andDeleteForMeNeedsAnActiveMember() throws {
+        let byLabel = Dictionary(uniqueKeysWithValues: try vectors().map { ($0.label, $0) })
+        let verdicts = { (label: String) -> MessageActionPolicy.Verdicts? in
+            byLabel[label].map { MessageActionPolicy.actions(for: $0.input.policyInput).verdicts }
+        }
+        #expect(verdicts("serveur-photo-ne-se-transfere-pas")?.forward == false)
+        #expect(verdicts("hybride-photo-ne-se-transfere-pas")?.forward == false)
+        #expect(verdicts("hybride-texte-se-transfere")?.forward == true)
+        #expect(verdicts("vocal-en-conversation-serveur-transcriptible")?.transcribe == true)
+        #expect(verdicts("non-membre-supprimer-pour-moi-refuse")?.deleteForMe == false)
     }
 }

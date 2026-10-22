@@ -6,14 +6,18 @@ operation depuis l'administration fait DEPOSER par la passerelle un fichier
 <uuid>.json (moins d'1 Ko) dans /opt/meeshy/<env>/ops/requests. Une unite
 systemd .path reveille ce runner, qui :
 
-  - n'accepte qu'un fichier ORDINAIRE (lstat : aucun lien suivi), de 1024 octets
-    au plus, en JSON strict, a la forme exacte du contrat (v = 1, uuid, action de
-    la liste blanche, environnement = celui de l'unite) ;
+  - n'accepte qu'un fichier ORDINAIRE (lstat, puis open en O_NONBLOCK|O_NOFOLLOW et
+    fstat : une FIFO glissee entre les deux ne bloque jamais le runner, #10459), de
+    1024 octets au plus, en JSON strict, a la forme exacte du contrat (v = 1, uuid,
+    action de la liste blanche, environnement = celui de l'unite), datee de moins de
+    2 h et jamais du futur (un runner reveille tard n'execute pas un geste que
+    personne ne tient plus) ;
   - deplace la demande vers done/ ou rejected/ AVANT toute execution, et ne
     recopie jamais le contenu d'une demande refusee ;
   - applique les delais (sauvegarde 6 h, purge 1 h), memorises dans l'etat ;
-  - n'execute que deux gestes fixes : la sauvegarde de l'environnement (son
-    unite systemd) et la purge des images Docker inutilisees (jamais un volume,
+  - n'execute que deux gestes fixes : la sauvegarde de l'environnement (l'instance
+    @on-demand de son unite systemd, qui a sa propre rotation et ne fait jamais
+    sortir une sauvegarde nocturne, #11450) et la purge des images Docker inutilisees (jamais un volume,
     jamais `system prune`) ; la purge vaut pour tout l'hote, production comprise :
     elle prend le verrou de la promotion de la production, pour ne jamais
     effacer l'image qu'une promotion vient de tirer et n'a pas encore demarree ;
@@ -50,6 +54,12 @@ MAX_REQUEST_BYTES = 1024
 IN_PROGRESS_HORIZON_SECONDS = 2 * 3600
 STALE_TEMP_SECONDS = 60
 KEEP_ARCHIVED_SECONDS = 30 * 24 * 3600
+# Une demande valide mais datee hors de cette fenetre est refusee et nommee (#10459) :
+# la passerelle n'a aucun moyen de revérifier le rang d'un demandeur a l'execution,
+# donc le runner borne le DELAI entre le geste et son execution. Le meme horizon que
+# la passerelle (IN_PROGRESS_HORIZON) : au-dela, elle tient deja la demande pour abandonnee.
+REQUEST_MAX_AGE_SECONDS = IN_PROGRESS_HORIZON_SECONDS
+REQUEST_MAX_FUTURE_SECONDS = 5 * 60
 REQUEST_KEYS = {"v", "id", "action", "environment", "requestedBy", "requestedAt"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$")
@@ -58,6 +68,12 @@ UNITS = {"B": 1, "kB": 1000, "KB": 1000, "MB": 1000**2, "GB": 1000**3, "TB": 100
          "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
 
 # Les seuls gestes que le runner sait faire. Rien d'autre ne s'execute.
+# Jamais `container prune`, `system prune`, `rm` ni `rmi` ici (#11452) : sur
+# l'hote partage, l'epingle de retour arriere de la production EST un conteneur
+# ARRETE (`meeshy-rollback-pin-<service>`, pose par meeshy-promote-production.sh)
+# qui retient l'image N-1 hors de `image prune -a`. Un nettoyage lance par un
+# ADMIN de staging ne doit jamais pouvoir toucher cette epingle. Le temoin
+# `meeshy-ops-runner.test.mjs` tient cette liste.
 PRUNE_COMMANDS = (
     ("docker", "image", "prune", "-f"),
     ("docker", "image", "prune", "-af", "--filter", "until=168h"),
@@ -97,7 +113,7 @@ class Paths:
         self.docker_file = os.path.join(self.state, "docker.json")
         self.containers_file = os.path.join(self.state, "containers.json")
         self.compose_dir = os.environ.get("OPS_COMPOSE_DIR") or "/opt/meeshy/%s" % env
-        self.backup_unit = os.environ.get("OPS_BACKUP_UNIT") or "meeshy-%s-backup.service" % env
+        self.backup_unit = os.environ.get("OPS_BACKUP_UNIT") or "meeshy-%s-backup@on-demand.service" % env
         self.backup_status = os.environ.get("OPS_BACKUP_STATUS_FILE") or "/opt/meeshy/%s/backup-status/etat.json" % env
 
 
@@ -198,6 +214,50 @@ def validate(raw, env, name):
     if request["environment"] != env:
         return request, "wrong-environment"
     return request, None
+
+
+def timeliness(request, moment):
+    """Rend None, ou le code fixe d'une demande hors fenetre (trop vieille, ou du futur)."""
+    try:
+        age = (moment - parse_iso(request["requestedAt"])).total_seconds()
+    except ValueError:
+        return "invalid-date"
+    if age > REQUEST_MAX_AGE_SECONDS:
+        return "stale-request"
+    if age < -REQUEST_MAX_FUTURE_SECONDS:
+        return "future-request"
+    return None
+
+
+def read_request(path):
+    """Lit une demande sans jamais bloquer : rend (octets, None) ou (None, code).
+
+    `lstat` a deja dit « fichier ordinaire », mais un processus qui ecrit dans le
+    dossier (la passerelle, uid 1001) peut l'avoir remplace par une FIFO entre ce
+    lstat et l'ouverture : un open bloquant y attendrait un ecrivain jusqu'au
+    TimeoutStartSec de l'unite (#10459 point 2). O_NONBLOCK ouvre une FIFO sans
+    attendre, O_NOFOLLOW refuse un lien, O_NOCTTY un terminal ; et c'est le fstat du
+    descripteur OUVERT — pas le lstat du chemin — qui decide.
+    """
+    flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NOCTTY", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return None, "unreadable"
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            return None, "not-regular-file"
+        if info.st_size > MAX_REQUEST_BYTES:
+            return None, "too-large"
+        raw = os.read(descriptor, MAX_REQUEST_BYTES + 1)
+    except OSError:
+        return None, "unreadable"
+    finally:
+        os.close(descriptor)
+    if len(raw) > MAX_REQUEST_BYTES:
+        return None, "too-large"
+    return raw, None
 
 
 def parse_size(text):
@@ -568,16 +628,15 @@ def handle_request(paths, env, name, state):
         archive(path, paths.rejected, rejected_name)
         log("demande refusee : too-large")
         return
-    try:
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-        with os.fdopen(descriptor, "rb") as handle:
-            raw = handle.read(MAX_REQUEST_BYTES + 1)
-    except OSError:
+    raw, refusal = read_request(path)
+    if refusal:
         archive(path, paths.rejected, rejected_name)
-        log("demande refusee : unreadable")
+        log("demande refusee : %s" % refusal)
         return
 
     request, refusal = validate(raw, env, name)
+    if refusal is None:
+        refusal = timeliness(request, now_utc())
     if refusal:
         archive(path, paths.rejected, rejected_name)
         log("demande refusee : %s" % refusal)

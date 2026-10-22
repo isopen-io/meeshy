@@ -309,6 +309,15 @@ describe('la plaque d’auteur', () => {
     expect(withAuthor(startMoment())).not.toContain('data-photo-art="author"');
   });
 
+  test('sous un cadre décoré (#10159), la plaque reste un dessin source du cadre : la composition et le repli carte simple la relisent', () => {
+    const glory = { crest: { x: 448, y: 114, w: 184, h: 290 }, qr: null };
+    const html = renderToStaticMarkup(<GamePhotoFrame moment={rankMoment({ rank: 'voix', division: 2 })} dateLabel="5 octobre 2026" format="story" author={{ handle: 'atabeth' }} glory={glory} />);
+    expect(html).toContain('data-photo-frame-decorated');
+    expect(html).toMatch(/data-photo-art="author"[^>]*>\s*<svg/);
+    expect(html).toContain('@atabeth');
+    expect(renderToStaticMarkup(<GamePhotoFrame moment={startMoment()} dateLabel="5 octobre 2026" format="story" author={{ handle: 'atabeth' }} glory={glory} />)).not.toContain('data-photo-art="author"');
+  });
+
   test('le trophée d’un succès prend le métal de SA rareté', () => {
     expect(withAuthor(achievementMoment('achievement.first_content', 'common'))).toContain('data-plate-metal="bronze"');
     const rare = render(achievementMoment('achievement.first_content', 'rare'));

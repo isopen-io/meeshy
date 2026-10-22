@@ -1,15 +1,13 @@
 export const meta = {
-  name: 'android-parity-track',
-  description: 'Android parity track: schedule ready lots, then issue → branch/TDD → review → PR → CI watch → fix → merge, until the track is done',
-  whenToUse: 'Run one track of the Android↔iOS parity plan (apps/android/docs/parite-ios/plan/<track>.json); args {track, epic, run, lotsDir}',
+  name: 'android-parity-track-v2',
+  description: 'Android parity track v2: schedule ready lots, issue → branch/TDD (or resume an interrupted branch) → review → PR; CI and merges belong to the merger workflow',
+  whenToUse: 'Run one track of the Android↔iOS parity plan; args {track, epic, run, lotsDir, batch, maxInflight}. Pair it with android-parity-merger.',
   phases: [
     { title: 'Schedule', detail: 'haiku: ready lots from the dev merge ledger', model: 'haiku' },
     { title: 'Issue', detail: 'haiku: sub-issue of the track epic', model: 'haiku' },
     { title: 'Implement', detail: 'sonnet: own branch, TDD, push', model: 'sonnet' },
     { title: 'Review', detail: 'sonnet: pre-CI compile hazards and iOS fidelity', model: 'sonnet' },
     { title: 'PR', detail: 'haiku: open the PR to dev', model: 'haiku' },
-    { title: 'CI', detail: 'haiku: watch checks, merge green PRs', model: 'haiku' },
-    { title: 'Fix', detail: 'sonnet: fix red CI or merge conflicts', model: 'sonnet' },
   ],
 }
 
@@ -19,7 +17,8 @@ const RUN = args.run
 const LOTS = args.lotsDir
 const BATCH = args.batch || 4
 const MAX_FIX_ROUNDS = args.maxFixRounds || 4
-const MAX_IDLE = args.maxIdle || 12
+const MAX_IDLE = args.maxIdle || 36
+const MAX_INFLIGHT = args.maxInflight || 8
 const MAX_STALL = args.maxStall || 5
 const ATTR = 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01EP6Bfac7sFfP8RkuHTATHN'
 
@@ -54,7 +53,7 @@ const COMPILE_SAFETY = `Compile-safety checklist (the GitHub CI is the ONLY Andr
 function schedPrompt(blocked) {
   const ex = blocked.length ? ' --exclude ' + blocked.join(',') : ''
   const rec = blocked.length ? ('First record the blocked lots (one per line, no duplicates) in ' + RUN + '/blocked.txt: for k in ' + blocked.join(' ') + '; do grep -qx "$k" ' + RUN + '/blocked.txt || echo "$k" >> ' + RUN + '/blocked.txt; done\n') : ''
-  return rec + 'Run in Bash: python3 ' + RUN + '/ready.py ' + T + ' --batch ' + BATCH + ex + '\nIt prints one JSON object. If its "ready" list is empty AND "remaining" > 0, run "sleep 600" in Bash and run the same command again; repeat at most 3 times. Return the LAST JSON exactly as printed (fields ready, remaining, waiting_on_deps, claimed_unmerged, track).'
+  return rec + 'Run in Bash: python3 ' + RUN + '/ready.py ' + T + ' --gen 2 --max-inflight ' + MAX_INFLIGHT + ' --batch ' + BATCH + ex + '\nIt prints one JSON object. If its "ready" list is empty AND "remaining" > 0, run "sleep 600" in Bash and run the same command again; repeat at most 3 times. Return the LAST JSON exactly as printed (fields ready, remaining, waiting_on_deps, claimed_unmerged, track).'
 }
 
 function issuePrompt(key) {
@@ -76,8 +75,9 @@ Read first:
 
 Private clone (NEVER edit /home/user/meeshy itself):
 ${clone(key, false)}
-If "git ls-remote --heads origin claude/android-${key}" already lists the branch before you start, another session owns this lot: stop and return status "skipped-claimed".
-Reserve the lot early: after your first failing test or first new file, commit and run git push -u origin claude/android-${key}.
+Before writing anything, check whether the branch already exists on origin: git ls-remote origin refs/heads/claude/android-${key}
+- If it does NOT exist: reserve the lot early — after your first failing test or first new file, commit and run git push -u origin claude/android-${key}.
+- If it exists: look for a pull request on its head (git ls-remote origin 'refs/pull/*/head' | grep <its sha>). If one exists, another run owns the lot: stop and return status "skipped-claimed". If none exists, it is a lot interrupted by a stopped run of this program: RESUME it — git fetch -q origin claude/android-${key} && git checkout -q -B claude/android-${key} origin/claude/android-${key} && git merge -q origin/dev, read what is already done (git log origin/dev..HEAD, git diff origin/dev...HEAD) against the spec, and complete the lot (never redo or discard work that is already right).
 
 Implement with TDD in small increments: failing test → minimal code → green. Pure logic (laws, resolvers, reducers, presenters, decoders) goes in :core:model and is proven locally with: cd "$D/apps/android" && ./meeshy.sh jvm-check --no-daemon -q  (1–2 min; must pass before you push).
 ${COMPILE_SAFETY}
@@ -189,37 +189,10 @@ while (true) {
     }
   })
 
-  let fixRound = 0
-  let stall = 0
-  while (pending.length) {
-    const mon = await agent(monitorPrompt(pending), { label: `ci:${T}#${round}.${fixRound}.${stall}`, phase: 'CI', schema: MON, model: 'haiku', effort: 'low' })
-    const byPr = {}
-    for (const s of ((mon && mon.prs) || [])) byPr[s.pr] = s
-    const merged = pending.filter((p) => byPr[p.pr] && byPr[p.pr].state === 'merged')
-    for (const p of merged) report.push({ key: p.key, pr: p.pr, issue: p.issue, outcome: 'merged', fixRounds: fixRound })
-    const toFix = pending.filter((p) => byPr[p.pr] && ['red', 'conflict', 'merge-failed'].includes(byPr[p.pr].state))
-    const still = pending.filter((p) => !byPr[p.pr] || byPr[p.pr].state === 'pending')
-    if (toFix.length) {
-      stall = 0
-      fixRound++
-      if (fixRound > MAX_FIX_ROUNDS) {
-        for (const p of toFix) { blocked.push(p.key); report.push({ key: p.key, pr: p.pr, outcome: 'blocked-red', detail: JSON.stringify(byPr[p.pr]).slice(0, 800) }) }
-        pending = still
-        continue
-      }
-      log(`${T}: fixing ${toFix.map((p) => p.key).join(', ')} (round ${fixRound})`)
-      await parallel(toFix.map((p) => () => agent(fixPrompt(p, byPr[p.pr]), { label: `fix:${p.key}#${fixRound}`, phase: 'Fix', schema: FIX, model: 'sonnet' })))
-      pending = [...toFix, ...still]
-    } else if (still.length) {
-      if (!merged.length) stall++
-      if (stall >= MAX_STALL) {
-        for (const p of still) { blocked.push(p.key); report.push({ key: p.key, pr: p.pr, outcome: 'stalled' }) }
-        pending = []
-      } else pending = still
-    } else pending = []
-  }
+  for (const p of pending) report.push({ key: p.key, pr: p.pr, issue: p.issue, outcome: 'pr-opened' })
+
 }
 
-const mergedCount = report.filter((r) => r.outcome === 'merged').length
-log(`${T}: ${mergedCount} lots merged, ${blocked.length} blocked`)
-return { track: T, rounds: round, merged: mergedCount, blocked, report, followups }
+const opened = report.filter((r) => r.outcome === 'pr-opened').length
+log(`${T}: ${opened} PRs opened, ${blocked.length} blocked`)
+return { track: T, rounds: round, opened, blocked, report, followups }

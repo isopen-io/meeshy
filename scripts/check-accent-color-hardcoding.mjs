@@ -412,7 +412,9 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // `ConversationRecentMessagesPreview.swift` (1) peint la couleur de fond UNIE que l'utilisateur a choisie pour la
 // conversation (`.solid(let hex)`), à l'identique de `ConversationBackgroundView` (déjà compté, 459 -> 467) : la couleur
 // est la DONNÉE choisie, l'accent de conversation la trahirait. Valeur MESURÉE en CI le 2026-10-21 (PR #11405).
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 481;
+// 481 -> 483 (2026-10-21, fusion des lots appui long dans dev) : les lots #11401 et #11421 ajoutent deux `Color(hex: variable)`
+// de plus que dev ; valeur MESURÉE en local après fusion de dev, à reconfirmer par la CI.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 483;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

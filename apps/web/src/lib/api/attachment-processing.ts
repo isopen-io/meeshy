@@ -4,7 +4,7 @@ import type { AudioTranscription, TranscriptionSegment, TranscriptionSourceType 
 
 import type { ConversationsDeps } from './conversations';
 import { MEDIA_ON_DEMAND } from './fixtures-media';
-import type { ApiResult } from './http';
+import type { ApiResult, HttpTransport } from './http';
 
 /**
  * LES DEMANDES DU LECTEUR AUDIO PLEIN ÉCRAN (#9256) — miroir
@@ -61,7 +61,7 @@ function transcriptionOf(value: unknown): AudioTranscription | null {
 }
 
 export async function requestAttachmentTranscription(
-  params: ConversationsDeps & { readonly attachmentId: string },
+  params: Pick<ConversationsDeps, 'source'> & { readonly transport: Pick<HttpTransport, 'request'>; readonly attachmentId: string },
 ): Promise<ApiResult<TranscriptionRequestOutcome>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
     const supplied = MEDIA_ON_DEMAND[params.attachmentId]?.transcription;

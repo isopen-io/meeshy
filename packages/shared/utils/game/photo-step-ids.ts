@@ -26,14 +26,12 @@
  * Les clients filtrent avec la même fonction avant d'accuser : une identité refusée ferait tomber tout le lot.
  */
 
-import { ACHIEVEMENT_FAMILIES } from '../../types/achievement-families.js';
-import { achievementKey, tiersOf } from '../../types/achievement-catalog.js';
-import { ENGAGEMENT_ACHIEVEMENT_KEYS } from '../../types/engagement.js';
 import { addDays, dayDiff, isDayKey } from './day-prng.js';
 import { GLORY_DIVISIONS, GLORY_RANKS } from './glory.js';
 import { LEAGUE_FIRST_WEEK, LEAGUE_KEYS, leagueWeekKey } from './league.js';
 import { GAME_PRESTIGE_MAX, LEVEL_TIER_KEYS } from './levels.js';
 import { PHOTO_FLAME_THRESHOLDS } from './photo-catch-up.js';
+import { PHOTO_ACHIEVEMENT_KEYS } from './photo-moments.js';
 import { seasonAt } from './season.js';
 import { FLAME_TROPHY_DAYS, parseTrophyKey } from './trophies.js';
 import { TREASURY_TIERS } from './treasury.js';
@@ -50,11 +48,6 @@ export const PHOTO_MEESH_MAX = 10_000;
 
 const range = (from: number, to: number): number[] => Array.from({ length: Math.max(0, to - from + 1) }, (_, index) => from + index);
 
-const ACHIEVEMENT_KEYS: readonly string[] = [
-  ...ENGAGEMENT_ACHIEVEMENT_KEYS,
-  ...ACHIEVEMENT_FAMILIES.flatMap((family) => tiersOf(family).map((tier) => achievementKey(family, tier))),
-];
-
 /** Toutes les étapes qui ne dépendent pas du calendrier : leur nombre est la base du plafond par compte. */
 export const PHOTO_STATIC_STEP_IDS: readonly string[] = [
   'start',
@@ -67,7 +60,7 @@ export const PHOTO_STATIC_STEP_IDS: readonly string[] = [
   ...[1, ...range(1, PHOTO_MEESH_MAX / 10).map((tenth) => tenth * 10)].map((number) => `meesh:${number}`),
   ...TREASURY_TIERS.map((tier) => `treasury:${tier.key}`),
   ...PHOTO_FLAME_THRESHOLDS.map((days) => `flame:${days}`),
-  ...ACHIEVEMENT_KEYS.map((key) => `achievement:${key}`),
+  ...PHOTO_ACHIEVEMENT_KEYS.map((key) => `achievement:${key}`),
   ...range(1, GAME_PRESTIGE_MAX).map((number) => `trophy:trophy.prestige.${number}`),
   ...FLAME_TROPHY_DAYS.map((days) => `trophy:trophy.flame.${days}`),
 ];

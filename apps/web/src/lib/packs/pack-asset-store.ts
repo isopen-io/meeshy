@@ -102,6 +102,48 @@ export async function readPackAssetBytes(ref: PackAssetRef, deps: PackAssetStore
   return fetched;
 }
 
+/**
+ * LE MAGASIN SANS RÉSEAU : les mêmes lectures, servies du seau seulement. C'est
+ * ainsi que le peintre des cadres (#10159) lit les couches d'un cadre — un pack
+ * dont une couche manque n'est pas PRÊT, et la photo part en carte simple sans
+ * attendre : ce qui manque se DEMANDE (`warmPackAssets`), jamais ne s'attend.
+ */
+const NOT_IN_BUCKET: typeof fetch = async () => new Response(null, { status: 404 });
+
+export const bucketOnly = (deps: PackAssetStoreDeps): PackAssetStoreDeps => ({ ...deps, fetcher: NOT_IN_BUCKET });
+
+/**
+ * Le seau TIENT-il ce fichier ? Sans réseau et sans relire ses octets : c'est la
+ * présence qu'une tuile de cadre affiche (#10164) — la relecture vérifiée reste
+ * l'affaire de `readPackAssetBytes`, qui jette ce qui ne se vérifie plus.
+ */
+export async function hasPackAsset(ref: PackAssetRef, deps: PackAssetStoreDeps): Promise<boolean> {
+  const url = urlOf(ref.src, deps.origin);
+  if (url === null) return false;
+  const bucket = await openBucket(deps.cacheStorage === undefined ? defaultCacheStorage() : deps.cacheStorage);
+  const cached = await bucket?.match(url).catch(() => undefined);
+  return cached !== undefined;
+}
+
+const warming = new Set<string>();
+
+/**
+ * Range dans le seau les fichiers qui n'y sont pas encore, un à la fois, sans
+ * rien rendre : la demande d'un peintre ou d'une étagère pour les couches d'un
+ * pack installé. Un fichier déjà en route n'est pas redemandé ; un échec se
+ * tait (la prochaine peinture redemandera). Tient lieu de file en attendant
+ * `downloads.ts` (LP1, § 5.10.6), qui prendra sa place sans changer l'appelant.
+ */
+export async function warmPackAssets(refs: readonly PackAssetRef[], deps: PackAssetStoreDeps): Promise<void> {
+  const fresh = refs.filter((ref) => !warming.has(ref.sha256));
+  fresh.forEach((ref) => warming.add(ref.sha256));
+  try {
+    await fresh.reduce<Promise<unknown>>((chain, ref) => chain.then(() => readPackAssetBytes(ref, deps).catch(() => null)), Promise.resolve());
+  } finally {
+    fresh.forEach((ref) => warming.delete(ref.sha256));
+  }
+}
+
 export async function readPackAssetBlob(ref: PackAssetRef, deps: PackAssetStoreDeps): Promise<Blob | null> {
   const bytes = await readPackAssetBytes(ref, deps);
   return bytes === null ? null : new Blob([bytes], { type: contentTypeOf(ref.src).split(';')[0] ?? '' });

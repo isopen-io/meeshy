@@ -1,5 +1,6 @@
 import { EpisodeList } from './episode-list';
 import { FaceRamp } from './face-ramp';
+import type { SummaryEntryPress } from './summary-entry-press';
 import { SummarySkeleton } from './summary-skeleton';
 import type { ConversationAnalysisSummary } from '@/lib/api/conversation-analysis';
 import type { LivingSummaryModel } from '@/lib/summary/assembly';
@@ -21,6 +22,7 @@ export function LivingSummary({
   onOpenEpisode,
   onResumeThread,
   lang,
+  press,
 }: {
   readonly model: Pick<LivingSummaryModel, 'digest' | 'faceRamp'>;
   readonly agentSummary: ConversationAnalysisSummary | null;
@@ -31,6 +33,8 @@ export function LivingSummary({
   readonly onResumeThread: () => void;
   /** Posé quand la locale de CADRAGE (`READER_LOCALE`) diffère de celle du document. */
   readonly lang?: string;
+  /** Le menu d'appui long des entrées (#11225), étalé sur chaque visage et chaque épisode. */
+  readonly press?: SummaryEntryPress;
 }) {
   return (
     <div data-summary className="flex flex-1 flex-col gap-4 px-0.5 pt-5 pb-4">
@@ -75,9 +79,14 @@ export function LivingSummary({
             )}
           </header>
 
-          <FaceRamp entries={model.faceRamp} onTap={onReplyToPerson} />
+          <FaceRamp entries={model.faceRamp} onTap={onReplyToPerson} {...(press === undefined ? {} : { press })} />
 
-          <EpisodeList episodes={model.digest.episodes} onOpen={onOpenEpisode} {...(lang !== undefined ? { lang } : {})} />
+          <EpisodeList
+            episodes={model.digest.episodes}
+            onOpen={onOpenEpisode}
+            {...(lang !== undefined ? { lang } : {})}
+            {...(press === undefined ? {} : { press })}
+          />
 
           {agentSummary !== null ? (
             <section

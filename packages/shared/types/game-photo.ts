@@ -8,7 +8,9 @@
  *  - la ligne de base des alertes (date et situation `PhotoCatchUpStanding` à cette date).
  *
  * Et un registre DURABLE, une ligne par (compte, étape) : quand l'étape a été détectée, présentée,
- * notifiée. Lu par l'extension `game.photo` du bloc `game` (`GET /me/engagement`), bornée aux
+ * notifiée, immortalisée (`keptAt`, D22 b — #10182 : la photo reste sur l'appareil, seul l'identifiant
+ * d'étape voyage, pour que les autres appareils la sortent de « À rattraper »). Lu par l'extension
+ * `game.photo` du bloc `game` (`GET /me/engagement`), bornée aux
  * `PHOTO_MOMENTS_SERVED_MAX` lignes les plus récentes ; un client qui ne sait pas la lire la perd
  * SEULE (`.optional().catch(undefined)` dans `gameBlockExtensionShape`).
  *
@@ -19,22 +21,21 @@ import { z } from 'zod';
 
 import { GLORY_ATMOSPHERES } from './glory-atmospheres.js';
 import { TREASURY_TIERS } from '../utils/game/treasury.js';
+import { PHOTO_INVITATIONS, PHOTO_KEPT_MAX, PHOTO_MOMENTS_SERVED_MAX, PHOTO_PRESENTED_MAX, PHOTO_STEP_ID_PATTERN } from './game-photo-settings.js';
 import { enumOf, isoDate, nonNegativeInt, writeRequest } from './game-schema-kit.js';
 
-/** « Me proposer d'immortaliser » : chaque étape (défaut), les grands moments, jamais (le carnet garde tout). */
-export const PHOTO_INVITATIONS = ['every', 'major', 'never'] as const;
-export type PhotoInvitations = (typeof PHOTO_INVITATIONS)[number];
-export const DEFAULT_PHOTO_INVITATIONS: PhotoInvitations = 'every';
+/** Les constantes vivent SANS schéma dans `game-photo-settings.ts` (les clients en `zod/mini` les lisent sans ce module) ; ré-exportées ici telles quelles. */
+export {
+  DEFAULT_PHOTO_INVITATIONS,
+  PHOTO_INVITATIONS,
+  PHOTO_KEPT_MAX,
+  PHOTO_MOMENTS_SERVED_MAX,
+  PHOTO_PRESENTED_MAX,
+  PHOTO_STEP_ID_PATTERN,
+  isPhotoInvitations,
+  type PhotoInvitations,
+} from './game-photo-settings.js';
 
-export const isPhotoInvitations = (value: unknown): value is PhotoInvitations =>
-  typeof value === 'string' && (PHOTO_INVITATIONS as readonly string[]).includes(value);
-
-/** Le registre servi : les lignes les plus récentes, jamais plus. */
-export const PHOTO_MOMENTS_SERVED_MAX = 64;
-/** Un accusé de présentation porte au plus ce nombre d'étapes. */
-export const PHOTO_PRESENTED_MAX = 64;
-/** Une étape : `start`, `rank:or:2`, `meesh:40`, `trophy:…`, `league-up:2026-10-12:jade`… */
-export const PHOTO_STEP_ID_PATTERN = '^[A-Za-z0-9][A-Za-z0-9:._-]{0,95}$';
 const stepIdSchema = z.string().regex(new RegExp(PHOTO_STEP_ID_PATTERN));
 
 const treasuryTierKeys = enumOf(TREASURY_TIERS.map((tier) => tier.key));
@@ -58,6 +59,8 @@ export const gamePhotoMomentSchema = z.object({
   detectedAt: isoDate.nullable(),
   presentedAt: isoDate.nullable(),
   notifiedAt: isoDate.nullable(),
+  /** Immortalisée sur un appareil (D22 b) ; absent d'un serveur d'avant le signal ⇒ `null`. */
+  keptAt: isoDate.nullable().default(null),
 });
 
 export const gamePhotoBlockSchema = z.object({
@@ -90,4 +93,16 @@ export const photoMomentsPresentedRequestSchema = writeRequest.extend({
 /** Les étapes accusées, chacune avec la date de sa PREMIÈRE présentation (un rejeu ne la déplace pas). */
 export const photoMomentsPresentedResponseSchema = z.object({
   presented: z.array(z.object({ stepId: stepIdSchema, presentedAt: isoDate })),
+});
+
+/**
+ * Le signal « immortalisée » (D22 b, #10182) : des identifiants d'étape, RIEN d'autre — ni image, ni date de prise,
+ * ni recette (`.strict()` : une clé de plus est refusée, pas ignorée). Une étape immortalisée vaut présentée.
+ */
+export const photoMomentsKeptRequestSchema = writeRequest
+  .extend({ stepIds: z.array(stepIdSchema).min(1).max(PHOTO_KEPT_MAX) })
+  .strict();
+/** Les étapes gardées, chacune avec la date de sa PREMIÈRE immortalisation (un rejeu ne la déplace pas). */
+export const photoMomentsKeptResponseSchema = z.object({
+  kept: z.array(z.object({ stepId: stepIdSchema, keptAt: isoDate })),
 });

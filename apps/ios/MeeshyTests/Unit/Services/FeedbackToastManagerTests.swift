@@ -98,7 +98,7 @@ final class FeedbackToastManagerTests: XCTestCase {
 
         XCTAssertNotNil(sut.currentToast)
 
-        try? await Task.sleep(nanoseconds: 3_500_000_000)
+        try? await Task.sleep(for: .milliseconds(3500))
 
         XCTAssertNil(sut.currentToast)
     }
@@ -117,14 +117,14 @@ final class FeedbackToastManagerTests: XCTestCase {
     func test_dismissDelay_standardToast_voiceOverOff_is3s() {
         XCTAssertEqual(
             FeedbackToastManager.dismissDelay(isTappable: false, voiceOverRunning: false),
-            3_000_000_000
+            .seconds(3)
         )
     }
 
     func test_dismissDelay_tappableToast_voiceOverOff_is6s() {
         XCTAssertEqual(
             FeedbackToastManager.dismissDelay(isTappable: true, voiceOverRunning: false),
-            6_000_000_000
+            .seconds(6)
         )
     }
 
@@ -132,14 +132,14 @@ final class FeedbackToastManagerTests: XCTestCase {
         // VoiceOver users need time to hear the announcement + read the message.
         XCTAssertEqual(
             FeedbackToastManager.dismissDelay(isTappable: false, voiceOverRunning: true),
-            6_000_000_000
+            .seconds(6)
         )
     }
 
     func test_dismissDelay_tappableToast_voiceOverOn_staysAtLeast6s() {
         XCTAssertEqual(
             FeedbackToastManager.dismissDelay(isTappable: true, voiceOverRunning: true),
-            6_000_000_000
+            .seconds(6)
         )
     }
 

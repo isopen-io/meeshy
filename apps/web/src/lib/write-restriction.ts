@@ -15,12 +15,24 @@ import type { OutboxState } from '@/lib/send/outbox-store';
  *
  * Une valeur inconnue ne restreint rien : le serveur refuse de toute façon.
  */
-export type WriteRestriction = ViewerWriteRestriction;
+export type WriteRestriction = ViewerWriteRestriction | 'end-to-end-encrypted';
 
 export const GLOBAL_ADULTS_ONLY = 'GLOBAL_ADULTS_ONLY';
 
+/**
+ * #11216 — la passerelle refuse tout texte en clair dans une conversation
+ * chiffrée de bout en bout (`E2EE_PLAINTEXT_REFUSED`), et le web ne chiffre
+ * pas : le composeur s'y efface au lieu d'échouer à chaque envoi. Les modes
+ * `server` et `hybrid` restent ouverts — la passerelle y chiffre elle-même.
+ */
+export const E2EE_PLAINTEXT_REFUSED = 'E2EE_PLAINTEXT_REFUSED';
+
+const isEndToEnd = (conversation: Conversation | undefined): boolean =>
+  typeof conversation?.encryptionMode === 'string' && conversation.encryptionMode.toLowerCase() === 'e2ee';
+
 export function servedWriteRestriction(conversation: Conversation | undefined): WriteRestriction | null {
-  return conversation?.viewerWriteRestriction === 'minor-global' ? 'minor-global' : null;
+  if (conversation?.viewerWriteRestriction === 'minor-global') return 'minor-global';
+  return isEndToEnd(conversation) ? 'end-to-end-encrypted' : null;
 }
 
 /** Les conversations qu'un refus a fermées pendant CETTE session — mémoire seule. */

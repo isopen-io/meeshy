@@ -80,7 +80,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
       prisma.mythicSeat.findUnique({ where: { userId }, select: { number: true, edition: true, grantedAt: true } }),
       prisma.gamePhotoMoment.findMany({
         where: { userId },
-        select: { stepId: true, detectedAt: true, presentedAt: true, notifiedAt: true },
+        select: { stepId: true, detectedAt: true, presentedAt: true, notifiedAt: true, keptAt: true },
         orderBy: { updatedAt: 'desc' },
         take, skip,
       }),
@@ -102,7 +102,13 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
     gloryLedger: clip(glory),
     meeshLedger: clip(meeshes),
     photoMoments: clip(
-      photoMoments.map((m) => ({ stepId: m.stepId, detectedAt: asIso(m.detectedAt), presentedAt: asIso(m.presentedAt), notifiedAt: asIso(m.notifiedAt) })),
+      photoMoments.map((m) => ({
+        stepId: m.stepId,
+        detectedAt: asIso(m.detectedAt),
+        presentedAt: asIso(m.presentedAt),
+        notifiedAt: asIso(m.notifiedAt),
+        keptAt: asIso(m.keptAt),
+      })),
     ),
   };
 

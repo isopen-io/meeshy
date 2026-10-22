@@ -633,5 +633,74 @@
       "square": null
     },
     "fingerprint": "92d0c297ca7185131de775fda17766234a4aee8ff4ec439363afb34fa14e5a3d"
+  },
+  {
+    "slug": "succes",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 100,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Les hauts faits",
+        "description": "Un cadre par rareté, du commun au mythique, et un cadre neutre : six cadres pour chaque haut fait accompli."
+      },
+      "en": {
+        "name": "Great deeds",
+        "description": "One frame per rarity, from common to mythic, and a neutral one: six frames for every great deed done."
+      },
+      "es": {
+        "name": "Las hazañas",
+        "description": "Un marco por rareza, de común a mítica, y un marco neutro: seis marcos para cada hazaña lograda."
+      },
+      "pt": {
+        "name": "As façanhas",
+        "description": "Uma moldura por raridade, de comum a mítica, e uma moldura neutra: seis molduras para cada façanha cumprida."
+      },
+      "de": {
+        "name": "Die Heldentaten",
+        "description": "Ein Rahmen pro Seltenheit, von gewöhnlich bis mythisch, und ein neutraler Rahmen: sechs Rahmen für jede vollbrachte Heldentat."
+      },
+      "it": {
+        "name": "Le imprese",
+        "description": "Una cornice per rarità, da comune a mitica, e una cornice neutra: sei cornici per ogni impresa compiuta."
+      },
+      "ar": {
+        "name": "المآثر",
+        "description": "إطار لكل ندرة، من الشائع إلى الأسطوري، وإطار محايد: ستة إطارات لكل مأثرة محقّقة."
+      }
+    },
+    "collections": [
+      {
+        "slug": "succes"
+      }
+    ],
+    "version": 1,
+    "cover": {
+      "src": "8d804ea74f058bf8.webp",
+      "bytes": 9892,
+      "sha256": "8d804ea74f058bf8f8391aaa05af5b3511b40a8097c7831ef2db8d650b1dc857"
+    },
+    "preview": null,
+    "contract": {
+      "src": "f48b623dcdbf431a.json",
+      "bytes": 21298,
+      "sha256": "f48b623dcdbf431a1da6f05552ab0e24c56cf8c86b7d808dbad6d8f0d64c54c2"
+    },
+    "strings": {
+      "fr": {
+        "src": "845c7ad9ecb25223.json",
+        "bytes": 1851,
+        "sha256": "845c7ad9ecb252235afaf74faa4dc55cd7600d655ce2bdeeeeea6a4f8c7aaff6"
+      }
+    },
+    "downloadBytes": {
+      "story": 1331259,
+      "square": null
+    },
+    "fingerprint": "8215e1d6b83b97ebbbc3fa6a708e8e4da1261ca29fdd9939c15514215a301c8b"
   }
 ]

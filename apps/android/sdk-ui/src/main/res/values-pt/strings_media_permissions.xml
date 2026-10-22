@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Porte unique des accès caméra, micro, photos, lieu, notifications et contacts (lot media-permissions-au-bon-moment). -->
+    <string name="media_permission_continue">Continuar</string>
+    <string name="media_permission_not_now">Agora não</string>
+    <string name="media_permission_open_settings">Abrir os Ajustes</string>
+    <string name="media_permission_close">Fechar</string>
+    <string name="media_permission_microphone_rationale_title">Permitir o acesso ao microfone?</string>
+    <string name="media_permission_microphone_rationale_body">O Meeshy precisa de acesso ao seu microfone para mensagens de voz, chamadas de vídeo e gravação de áudio.</string>
+    <string name="media_permission_microphone_denied_title">Acesso ao microfone negado</string>
+    <string name="media_permission_microphone_denied_body">Para gravar mensagens de voz e participar de chamadas, ative «Microfone» para o Meeshy em Ajustes &gt; Permissões.</string>
+    <string name="media_permission_microphone_denied_message">Microfone negado — toque para abrir os Ajustes</string>
+    <string name="media_permission_camera_rationale_title">Permitir o acesso à câmera?</string>
+    <string name="media_permission_camera_rationale_body">O Meeshy precisa de acesso à sua câmera para tirar fotos e gravar vídeos para mensagens, chamadas de vídeo e experiências AR.</string>
+    <string name="media_permission_camera_denied_title">Acesso à câmera negado</string>
+    <string name="media_permission_camera_denied_body">Para tirar fotos, gravar vídeos e iniciar chamadas de vídeo, ative «Câmera» para o Meeshy em Ajustes &gt; Permissões.</string>
+    <string name="media_permission_camera_denied_message">Câmera negada — toque para abrir os Ajustes</string>
+    <string name="media_permission_photos_rationale_title">Permitir o acesso às suas fotos?</string>
+    <string name="media_permission_photos_rationale_body">O Meeshy precisa de acesso à sua biblioteca de fotos para compartilhar fotos e vídeos com seus contatos.</string>
+    <string name="media_permission_photos_denied_title">Acesso às fotos negado</string>
+    <string name="media_permission_photos_denied_body">Para escolher fotos e vídeos da sua biblioteca, ative «Fotos e vídeos» para o Meeshy em Ajustes &gt; Permissões.</string>
+    <string name="media_permission_photos_denied_message">Acesso às fotos negado — toque para abrir os Ajustes</string>
+    <string name="media_permission_photos_add_rationale_title">Permitir salvar nas suas fotos?</string>
+    <string name="media_permission_photos_add_rationale_body">O Meeshy precisa de permissão para salvar fotos e vídeos na sua biblioteca.</string>
+    <string name="media_permission_photos_add_denied_title">Salvamento em Fotos negado</string>
+    <string name="media_permission_photos_add_denied_body">Para salvar fotos e vídeos na sua biblioteca, ative «Armazenamento» para o Meeshy em Ajustes &gt; Permissões.</string>
+    <string name="media_permission_photos_add_denied_message">Salvamento em Fotos negado — toque para abrir os Ajustes</string>
+    <string name="media_permission_location_rationale_title">Permitir o acesso à sua localização?</string>
+    <string name="media_permission_location_rationale_body">O Meeshy usa sua localização para compartilhá-la com seus contatos e encontrar amigos próximos.</string>
+    <string name="media_permission_location_denied_title">Acesso à localização negado</string>
+    <string name="media_permission_location_denied_body">Para compartilhar sua localização e encontrar amigos próximos, ative «Localização» para o Meeshy em Ajustes &gt; Permissões.</string>
+    <string name="media_permission_location_denied_message">Localização negada — permita nos Ajustes</string>
+    <string name="media_permission_notifications_rationale_title">Permitir as notificações?</string>
+    <string name="media_permission_notifications_rationale_body">O Meeshy avisa você sobre novas mensagens, respostas e chamadas, mesmo com o aplicativo fechado.</string>
+    <string name="media_permission_notifications_denied_title">Notificações desativadas</string>
+    <string name="media_permission_notifications_denied_body">Para ser avisado de mensagens e chamadas, ative «Notificações» para o Meeshy em Ajustes.</string>
+    <string name="media_permission_notifications_denied_message">Notificações desativadas — ative nos Ajustes</string>
+    <string name="media_permission_contacts_rationale_title">Permitir o acesso aos seus contatos?</string>
+    <string name="media_permission_contacts_rationale_body">O Meeshy usa seus contatos para encontrar amigos que já estão no Meeshy e avisar você quando um deles chegar. Ninguém é contatado em seu nome.</string>
+    <string name="media_permission_contacts_denied_title">Acesso aos contatos negado</string>
+    <string name="media_permission_contacts_denied_body">Para encontrar amigos que já estão no Meeshy, ative «Contatos» para o Meeshy em Ajustes &gt; Permissões.</string>
+    <string name="media_permission_contacts_denied_message">Contatos negados — permita nos Ajustes</string>
+</resources>

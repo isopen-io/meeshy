@@ -4,9 +4,9 @@
  * déclare, verdict par verdict, où le client refuse plus que la passerelle (le
  * test de parité n'y exige alors que l'inclusion).
  *
- * Régénération voulue :
- * `UPDATE_ACTION_POLICY_VECTORS=1 bunx vitest run __tests__/vectors/action-policy.vectors.test.ts`
- * (depuis `packages/shared`). Le même test tombe si le fichier diverge du plan.
+ * Régénération voulue (depuis `packages/shared`) : `bun run action-policy-vectors:generate`
+ * (`scripts/generate-action-policy-vectors.ts`, `--check` pour vérifier sans écrire).
+ * `__tests__/vectors/action-policy.vectors.test.ts` tombe si un fichier diverge du plan.
  */
 
 import { conversationActionsFor, type ConversationActionInput, type ConversationActions } from '../../utils/conversation-action-policy.js';
@@ -21,8 +21,9 @@ import {
 } from '../../utils/message-action-policy.js';
 import { messageContentKind } from '../../utils/message-content-kind.js';
 import { MESSAGE_EFFECT_FLAGS } from '../../types/message-effect-flags.js';
+import { WRITE_PERMISSION_HIERARCHY } from '../../types/role-types.js';
 
-export type StricterVerdict = 'edit' | 'delete' | 'react';
+export type StricterVerdict = 'edit' | 'delete' | 'react' | 'pin';
 
 export type MessageActionVector = {
   readonly _label: string;
@@ -34,7 +35,7 @@ export type MessageActionVector = {
 export type ConversationActionVector = { readonly _label: string; readonly input: ConversationActionInput; readonly expected: ConversationActions };
 
 export const actionPolicyVectorsFormat = (law: string): string =>
-  `Générés en EXÉCUTANT ${law} (packages/shared/utils) sur le plan de __tests__/action-policy/action-policy-vectors-law.ts, jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete, react) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.`;
+  `Générés en EXÉCUTANT ${law} (packages/shared/utils) sur le plan de __tests__/action-policy/action-policy-vectors-law.ts, jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete, react, pin) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.`;
 
 const NOW = Date.parse('2026-10-20T12:00:00.000Z');
 const HOUR = 3_600_000;
@@ -61,6 +62,8 @@ const capture = (overrides: Partial<MessageActionSubject> = {}): Partial<Message
 });
 const announcements = { type: 'broadcast', isAnnouncementChannel: true, defaultWriteRole: 'admin' } as const;
 const vocal = { content: '', messageType: 'audio', attachments: [{ mimeType: 'audio/m4a' }] } as const;
+
+const photoOf = (overrides: Partial<MessageActionSubject> = {}): Partial<MessageActionSubject> => ({ content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg' }], ...overrides });
 
 type MessageCase = readonly [string, Partial<MessageActionSubject>, Partial<ActionConversation>, Partial<ActionViewer>];
 
@@ -105,12 +108,24 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['groupe-clos-auteur', mine, { closedAt: '2026-10-19T00:00:00.000Z' }, {}],
   ['groupe-inactif-auteur', mine, { isActive: false }, {}],
   ['message-epingle-desepingler', { pinnedAt: iso(NOW - HOUR) }, {}, {}],
+  ['broadcast-abonne-ne-desepingle-pas', { pinnedAt: iso(NOW - HOUR) }, announcements, {}],
+  ['broadcast-moderator-plateforme-epingle', {}, announcements, { platformRole: 'MODERATOR' }],
+  ['groupe-ecriture-moderateurs-le-moderateur-epingle', {}, { defaultWriteRole: 'moderator' }, { conversationRole: 'moderator' }],
+  ['groupe-clos-ne-desepingle-pas', { pinnedAt: iso(NOW - HOUR) }, { closedAt: '2026-10-19T00:00:00.000Z' }, { conversationRole: 'creator' }],
+  ['annonces-sur-un-groupe-l-admin-epingle', {}, { isAnnouncementChannel: true }, { conversationRole: 'admin' }],
   ['e2ee-auteur-texte', mine, { encryptionMode: 'e2ee' }, {}],
   ['e2ee-regime-en-majuscules', mine, { encryptionMode: 'E2EE' }, {}],
   ['e2ee-regime-inconnu-ferme', mine, { encryptionMode: 'signal_v3' }, {}],
   ['e2ee-regime-de-message-en-majuscules', { encryptionMode: 'E2EE' }, {}, {}],
   ['e2ee-vocal-d-autrui', vocal, { encryptionMode: 'e2ee' }, {}],
   ['vocal-transcriptible', vocal, {}, {}],
+  ['vocal-en-conversation-serveur-transcriptible', vocal, { encryptionMode: 'server' }, {}],
+  ['e2ee-texte-d-autrui-se-traduit-sur-l-appareil', {}, { encryptionMode: 'e2ee' }, {}],
+  ['serveur-photo-ne-se-transfere-pas', photoOf(), { encryptionMode: 'server' }, {}],
+  ['hybride-photo-ne-se-transfere-pas', photoOf(), { encryptionMode: 'hybrid' }, {}],
+  ['serveur-photo-chiffree-par-le-message-ne-se-transfere-pas', photoOf({ isEncrypted: true, encryptionMode: 'server' }), {}, {}],
+  ['hybride-texte-se-transfere', {}, { encryptionMode: 'hybrid' }, {}],
+  ['non-membre-supprimer-pour-moi-refuse', {}, {}, { isActiveMember: false, conversationRole: null }],
   ['photo-enregistrable', { content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg' }] }, {}, {}],
   ['video-vue-unique', { content: '', messageType: 'video', isViewOnce: true, attachments: [{ mimeType: 'video/mp4' }] }, {}, {}],
   ['photo-floutee', { content: '', messageType: 'image', isBlurred: true, attachments: [{ mimeType: 'image/jpeg' }] }, {}, {}],
@@ -153,6 +168,18 @@ const MESSAGE_CASES: readonly MessageCase[] = [
 
 const EDITABLE_AT_GATEWAY_ONLY: ReadonlySet<string> = new Set(['location', 'poll', 'sticker']);
 const NOTICES: ReadonlySet<string> = new Set(['system', 'call']);
+const WRITE_HIERARCHY_FREE: ReadonlySet<string> = new Set(['direct', 'global']);
+
+/**
+ * Où la loi ferme l'écriture que la passerelle laisse ouverte : un rang d'écriture illisible (la loi le lit
+ * `creator`, `admitDerivedConversationWrite` le lit `everyone`) et un `broadcast` sans le drapeau d'annonces
+ * (la loi le lit comme un canal d'annonces, la passerelle ne lit que le drapeau).
+ */
+function lawClosesWriting(room: ActionConversation): boolean {
+  if (WRITE_HIERARCHY_FREE.has(room.type) || room.isAnnouncementChannel === true) return false;
+  const unknownRank = room.defaultWriteRole != null && !(room.defaultWriteRole in WRITE_PERMISSION_HIERARCHY);
+  return room.type === 'broadcast' || unknownRank;
+}
 
 /** Où le client refuse PLUS que la passerelle — déclaré depuis la forme du cas, jamais depuis la sortie de la loi. */
 function stricterOf(input: MessageActionInput): readonly StricterVerdict[] {
@@ -167,7 +194,13 @@ function stricterOf(input: MessageActionInput): readonly StricterVerdict[] {
   const edit = notLive || noText || e2ee || flags.viewOnce || EDITABLE_AT_GATEWAY_ONLY.has(kind) || incoherent;
   const remove = notLive || (notice && !flags.captureNotice) || incoherent;
   const react = notLive || !reader.canSendMessages;
-  return [...(edit ? ['edit' as const] : []), ...(remove ? ['delete' as const] : []), ...(react ? ['react' as const] : [])];
+  const pin = notLive || notice || flags.viewOnce || !reader.hasAccount || reader.isAnonymous || lawClosesWriting(room);
+  return [
+    ...(edit ? ['edit' as const] : []),
+    ...(remove ? ['delete' as const] : []),
+    ...(react ? ['react' as const] : []),
+    ...(pin ? ['pin' as const] : []),
+  ];
 }
 
 export function buildMessageActionVectors(): readonly MessageActionVector[] {
@@ -202,6 +235,7 @@ const CONVERSATION_EXTRAS: readonly (readonly [string, Partial<ActionConversatio
   ['groupe-e2ee-en-majuscules-porte-le-badge', { encryptionMode: 'E2EE' }, {}],
   ['groupe-regime-inconnu-porte-le-badge', { encryptionMode: 'signal_v3' }, {}],
   ['groupe-chiffrement-serveur-sans-badge', { encryptionMode: 'server' }, {}],
+  ['groupe-non-membre-ne-masque-ni-ne-signale', {}, { isActiveMember: false, conversationRole: null }],
   ['groupe-inscrit-et-anonyme-se-lit-comme-un-invite', {}, { isAnonymous: true }],
   ['groupe-rang-de-ligne-en-majuscules-modere', {}, { conversationRole: 'MODERATOR' }],
   ['groupe-createur-en-majuscules-supprime-pour-tous', {}, { conversationRole: 'CREATOR' }],
@@ -216,4 +250,16 @@ export function buildConversationActionVectors(): readonly ConversationActionVec
     const input: ConversationActionInput = { conversation: conversation(room), viewer: viewer(reader) };
     return { _label: label, input, expected: conversationActionsFor(input) };
   });
+}
+
+export type ActionPolicyVectorFile = { readonly name: 'message-actions' | 'conversation-actions'; readonly content: string };
+
+/** Le contenu EXACT de chaque fichier de `fixtures/action-policy/`, tel que le plan le produit. */
+export function actionPolicyVectorFiles(): readonly ActionPolicyVectorFile[] {
+  const render = (law: string, vectors: readonly unknown[]): string =>
+    `${JSON.stringify({ $format: actionPolicyVectorsFormat(law), vectors }, null, 2)}\n`;
+  return [
+    { name: 'message-actions', content: render('messageActionsFor', buildMessageActionVectors()) },
+    { name: 'conversation-actions', content: render('conversationActionsFor', buildConversationActionVectors()) },
+  ];
 }

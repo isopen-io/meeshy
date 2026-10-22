@@ -179,6 +179,7 @@ export function LensJoinCallButton({
   label,
   text,
   onJoin,
+  outOfTabOrder,
 }: {
   readonly request: JoinCallRequest;
   /** Le nom accessible — « Rejoindre l’appel avec {name} ». */
@@ -186,11 +187,14 @@ export function LensJoinCallButton({
   /** Le mot visible — « Rejoindre ». */
   readonly text: string;
   readonly onJoin: (request: JoinCallRequest) => void;
+  /** Hors du parcours `Tab` : la rangée y mène aux flèches (#11227). */
+  readonly outOfTabOrder?: boolean;
 }) {
   return (
     <button
       type="button"
       data-lens-join={request.callId}
+      {...(outOfTabOrder === true ? { tabIndex: -1 } : {})}
       aria-label={label}
       onClick={() => onJoin(request)}
       className="relative z-10 grid min-h-11 min-w-11 shrink-0 place-items-center focus-visible:outline-2 focus-visible:outline-offset-2"
