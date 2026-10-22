@@ -30,7 +30,7 @@ import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
-import me.meeshy.sdk.net.api.BlockApi
+import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
 import me.meeshy.sdk.net.api.CreateStoryRequest
@@ -67,7 +67,7 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val mediaRepository: MediaRepository,
     private val tusUploadRepository: TusUploadRepository,
     private val mediaBlobStore: MediaBlobStore,
-    private val blockApi: BlockApi,
+    private val blockRepository: BlockRepository,
     private val preferencesApi: PreferencesApi,
     private val blockCache: BlockCache,
     private val friendRepository: FriendRepository,
@@ -259,13 +259,13 @@ class OutboxFlushWorker @AssistedInject constructor(
             result
         },
         OutboxKind.BLOCK_USER to MutationSender { row ->
-            when (apiCall { blockApi.block(row.targetId) }) {
+            when (blockRepository.deliverBlock(row.targetId)) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
         },
         OutboxKind.UNBLOCK_USER to MutationSender { row ->
-            when (apiCall { blockApi.unblock(row.targetId) }) {
+            when (blockRepository.deliverUnblock(row.targetId)) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
