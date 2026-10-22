@@ -98,11 +98,11 @@ describe('sw-legacy-purge.js — la purge des caches du legacy à l’activation
 /**
  * UN SCRIPT QUE LE SERVICE WORKER N'IMPORTE PAS NE PURGE RIEN — et aucun des
  * témoins ci-dessus ne le verrait : ils évaluent le fichier directement.
- * `vite.config.ts` déclare la liste UNE fois (`SERVICE_WORKER_SCRIPTS`), lue
+ * `vite/pwa.ts` déclare la liste UNE fois (`SERVICE_WORKER_SCRIPTS`), lue
  * par `importScripts` (variante A) et par le retrait de la variante B.
  */
-describe('vite.config.ts — le service worker généré importe la purge', () => {
-  const config = readFileSync(join(V2, 'vite.config.ts'), 'utf8');
+describe('vite/pwa.ts — le service worker généré importe la purge', () => {
+  const config = readFileSync(join(V2, 'vite/pwa.ts'), 'utf8');
   const declared = config.match(/const SERVICE_WORKER_SCRIPTS = \[([^\]]*)\]/);
   const scripts = declared === null ? [] : [...(declared[1] ?? '').matchAll(/'([^']+)'/g)].map(([, name]) => name ?? '');
 
