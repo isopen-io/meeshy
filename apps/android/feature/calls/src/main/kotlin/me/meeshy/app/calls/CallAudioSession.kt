@@ -3,7 +3,9 @@ package me.meeshy.app.calls
 import android.content.Context
 import android.media.AudioManager
 import android.os.Build
+import android.os.PowerManager
 import androidx.annotation.RequiresApi
+import me.meeshy.sdk.model.call.CallAudioRouteKind
 
 /**
  * The platform audio routing of ONE call: puts the device in communication mode,
@@ -11,7 +13,10 @@ import androidx.annotation.RequiresApi
  * Pure Android-framework glue — every decision (which route on which API level)
  * is the tested [CallAudioRoute]'s.
  */
-internal class CallAudioSession(private val appContext: Context) {
+internal class CallAudioSession(
+    private val appContext: Context,
+    private val onFocusChanged: (hasFocus: Boolean) -> Unit = {},
+) {
 
     private val audioManager: AudioManager by lazy {
         appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -19,15 +24,49 @@ internal class CallAudioSession(private val appContext: Context) {
 
     private var routed: Boolean = false
 
+    private val focus: CallAudioFocusController by lazy {
+        CallAudioFocusController(audioManager, ::onFocus)
+    }
+
+    private val proximity: CallProximityController by lazy {
+        CallProximityController(appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager)
+    }
+
+    private var isVideo: Boolean = false
+
+    /** Le focus revient : le mode communication et la route sont remis avant de rendre l'audio. */
+    private fun onFocus(hasFocus: Boolean) {
+        if (hasFocus && routed) {
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            applySpeakerRoute(speakerOn)
+        }
+        onFocusChanged(hasFocus)
+    }
+
+    private var speakerOn: Boolean = false
+
+    private fun updateProximity() {
+        val kind = if (speakerOn) CallAudioRouteKind.Speaker else CallAudioRouteKind.Earpiece
+        proximity.update(isVideo, kind)
+    }
+
     /** The call opens: communication mode, on the loudspeaker or the earpiece. */
-    fun route(speakerOn: Boolean) {
+    fun route(speakerOn: Boolean, isVideo: Boolean = false) {
+        this.isVideo = isVideo
+        this.speakerOn = speakerOn
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
         applySpeakerRoute(speakerOn)
         routed = true
+        runCatching { focus.request() }
+        runCatching { updateProximity() }
     }
 
     /** Speaker/earpiece toggle — local audio routing only, never signalled to the peer. */
-    fun setSpeaker(enabled: Boolean) = applySpeakerRoute(enabled)
+    fun setSpeaker(enabled: Boolean) {
+        speakerOn = enabled
+        applySpeakerRoute(enabled)
+        if (routed) runCatching { updateProximity() }
+    }
 
     /**
      * Undoes [route] symmetrically: the speaker route must be cleared BEFORE the
@@ -40,6 +79,8 @@ internal class CallAudioSession(private val appContext: Context) {
     fun restore() {
         if (!routed) return
         routed = false
+        runCatching { proximity.release() }
+        runCatching { focus.abandon() }
         applySpeakerRoute(speakerOn = false)
         audioManager.mode = AudioManager.MODE_NORMAL
     }

@@ -5,6 +5,10 @@
          module that uses it, and merged into the app manifest by AGP. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- lot: calls-audio-routing-and-picker — capteur de proximité (verrou d'écran) et routes Bluetooth. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
     <!-- Components of the call capabilities (foreground services, a picture-in-picture
          activity…) are declared HERE by the lot that adds them, never in :app. -->
 
