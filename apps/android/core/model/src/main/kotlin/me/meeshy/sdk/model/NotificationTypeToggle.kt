@@ -37,8 +37,12 @@ public object NotificationTypeToggle {
         "translation_completed", "translation_ready", "TRANSLATION_READY",
         "transcription_completed", "voice_clone_ready",
         // Gamification + legacy status/affiliate: iOS `return true`.
-        "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "streak_milestone", "badge_earned",
+        "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "streak_milestone", "badge_earned", "level_up",
         "AFFILIATE_SIGNUP", "STATUS_UPDATE",
+        // Loi de visibilité légale (DSA art. 16/17) : le déclarant apprend TOUJOURS l'issue de son
+        // signalement, l'auteur reçoit TOUJOURS l'exposé des motifs d'un retrait. Jamais
+        // `systemEnabled` : ce sont des types CONNUS.
+        "report_resolved", "content_removed",
     )
 
     private val GROUPS: List<ToggleGroup> = listOf(
@@ -61,8 +65,15 @@ public object NotificationTypeToggle {
         ToggleGroup(setOf("incoming_call", "call", "CALL_INCOMING")) { it.callsEnabled },
         ToggleGroup(setOf("friend_new_story", "friend_new_post", "friend_new_mood")) { it.friendContentEnabled },
         ToggleGroup(
-            setOf("contact_request", "friend_request", "FRIEND_REQUEST", "contact_accepted", "friend_accepted", "FRIEND_ACCEPTED"),
+            setOf(
+                "contact_request", "friend_request", "FRIEND_REQUEST", "contact_accepted", "friend_accepted",
+                "FRIEND_ACCEPTED", "contact_joined",
+            ),
         ) { it.contactRequestEnabled },
+        ToggleGroup(setOf("contact_recently_active")) { it.contactActivityEnabled },
+        ToggleGroup(
+            setOf("game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step", "game_mission_window"),
+        ) { it.gameEnabled },
         ToggleGroup(
             setOf("new_conversation", "new_conversation_direct", "new_conversation_group", "added_to_conversation", "removed_from_conversation"),
         ) { it.conversationEnabled },
@@ -81,6 +92,9 @@ public object NotificationTypeToggle {
         buildMap {
             GROUPS.forEach { group -> group.types.forEach { type -> put(type, group.enabled) } }
         }
+
+    /** Les types qu'une règle gouverne explicitement — la garde « un type ajouté ne tombe pas dans le vide ». */
+    public val coveredTypes: Set<String> get() = BY_TYPE.keys
 
     /**
      * Whether a notification of wire [type] passes the user's per-type toggles. An unknown

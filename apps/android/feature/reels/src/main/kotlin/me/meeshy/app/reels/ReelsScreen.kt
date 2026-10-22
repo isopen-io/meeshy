@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -98,20 +97,8 @@ fun ReelsScreen(
             .background(Color.Black),
     ) {
         when {
-            state.reels.isEmpty() && state.isLoading ->
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MeeshyPalette.White,
-                )
-
             state.reels.isEmpty() ->
-                Text(
-                    text = state.errorMessage ?: "",
-                    color = MeeshyPalette.White.copy(alpha = 0.7f),
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(MeeshySpacing.xl),
-                )
+                ReelEmptyStates(state = state, onRetry = viewModel::retry)
 
             else -> {
                 val pagerState = rememberPagerState(pageCount = { state.reels.size })

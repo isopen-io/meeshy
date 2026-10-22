@@ -12,6 +12,9 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
+import me.meeshy.sdk.model.directConversationRequest
+import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.ApiParticipantProfile
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiResponse
@@ -23,6 +26,7 @@ import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
 import me.meeshy.sdk.model.applyRemote
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddParticipantRequest
@@ -120,12 +124,107 @@ class ConversationRepository @Inject constructor(
     suspend fun getById(id: String): NetworkResult<ApiConversation> =
         apiCall { conversationApi.getById(id) }
 
+    /** One cached conversation by id (Room read, no network), or null when never cached or undecodable. */
+    suspend fun cachedById(id: String): ApiConversation? =
+        conversationDao.find(id)?.let {
+            runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull()
+        }
+
+    /** Merges one conversation fetched by id into the cached list (upsert by id: no duplicate). */
+    suspend fun remember(conversation: ApiConversation) {
+        cacheSource.remember(conversation)
+    }
+
     suspend fun create(
         type: String,
         title: String?,
         participantIds: List<String>,
     ): NetworkResult<ApiConversation> =
         apiCall { conversationApi.create(CreateConversationRequest(type, title, participantIds)) }
+
+    /**
+     * La conversation directe la plus récente avec [userId] qui existe DÉJÀ dans le cache local —
+     * une lecture Room, sans réseau, donc ouverte aussi hors ligne. Un direct du cache qui nomme
+     * [userId] est forcément entre le lecteur et lui : le cache ne contient que les conversations
+     * du lecteur. Le pré-filtre SQL sur-sélectionne (toute mention du texte) ; la ligne décodée
+     * est revérifiée ici.
+     */
+    suspend fun cachedDirectWith(userId: String): ApiConversation? {
+        if (userId.isBlank()) return null
+        return conversationDao.payloadsContaining(escapeLikeLiteral(userId))
+            .asSequence()
+            .mapNotNull { row ->
+                runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(row.payload) }.getOrNull()
+            }
+            .firstOrNull { conversation ->
+                conversation.isDirect && conversation.participants.any { it.userId == userId }
+            }
+    }
+
+    /**
+     * Cache puis API (miroir de `ConversationService.findDirectWith`, #11615) : le direct déjà
+     * connu localement s'ouvre sans réseau ; sinon `GET /conversations?type=direct&withUserId=…`
+     * rend le plus récent, ou `null` quand il n'en existe aucun. Un direct trouvé par l'API est
+     * rangé dans le cache pour que l'écran de discussion — qui lit la ligne Room — l'ait sous la
+     * main.
+     */
+    suspend fun findDirectWith(userId: String): NetworkResult<ApiConversation?> {
+        cachedDirectWith(userId)?.let { return NetworkResult.Success(it) }
+        return fetchDirectWith(userId)
+    }
+
+    private suspend fun fetchDirectWith(userId: String): NetworkResult<ApiConversation?> =
+        when (
+            val result = apiCall {
+                conversationApi.directWith(type = DIRECT_CONVERSATION_TYPE, withUserId = userId, limit = 1)
+            }
+        ) {
+            is NetworkResult.Success -> {
+                val found = result.data.firstOrNull { it.isDirect }
+                found?.let { cacheSource.remember(it) }
+                NetworkResult.Success(found)
+            }
+            is NetworkResult.Failure -> result
+        }
+
+    /**
+     * Le résolveur UNIQUE de « la conversation directe avec [userId] » : le dernier direct qui
+     * existe, sinon un neuf (miroir de `DirectConversationResolver.resolve`, #11615). La réponse à
+     * une story, à une humeur et le bouton Message d'un profil passent tous par ici, si bien que
+     * deux gestes différents ne choisissent jamais deux conversations pour un même auteur.
+     *
+     * Hors ligne : un direct en cache s'ouvre quand même ; sans cache, la création est mise en
+     * file par [creationQueue] quand elle est fournie (sinon l'échec dit qu'il manque le réseau).
+     */
+    suspend fun directConversationWith(
+        userId: String,
+        creationQueue: DirectCreationQueue? = null,
+    ): DirectConversationResolution {
+        cachedDirectWith(userId)?.let { return DirectConversationResolution.Found(it, fromCache = true) }
+        when (val lookup = fetchDirectWith(userId)) {
+            is NetworkResult.Failure -> return failedOrQueued(userId, lookup.error, creationQueue)
+            is NetworkResult.Success ->
+                lookup.data?.let { return DirectConversationResolution.Found(it, fromCache = false) }
+        }
+        val request = directConversationRequest(userId)
+        return when (val created = create(request.type, request.title, request.participantIds)) {
+            is NetworkResult.Success -> {
+                cacheSource.remember(created.data)
+                DirectConversationResolution.Created(created.data)
+            }
+            is NetworkResult.Failure -> failedOrQueued(userId, created.error, creationQueue)
+        }
+    }
+
+    private suspend fun failedOrQueued(
+        userId: String,
+        error: ApiError,
+        creationQueue: DirectCreationQueue?,
+    ): DirectConversationResolution {
+        val offline = error.code == OFFLINE_ERROR_CODE
+        if (offline && creationQueue?.enqueue(userId) == true) return DirectConversationResolution.Queued(userId)
+        return DirectConversationResolution.Failed(error, offline)
+    }
 
     suspend fun markRead(id: String): NetworkResult<Unit> =
         apiCall { conversationApi.markRead(id) }
@@ -514,6 +613,13 @@ class ConversationRepository @Inject constructor(
     }
 
     companion object {
+        /** [ApiError.code] of a call that never reached the server (airplane mode, DNS, timeout). */
+        private const val OFFLINE_ERROR_CODE: String = "NETWORK"
+
+        /** Escapes `\\`, `%` and `_` so [text] matches literally in a `LIKE … ESCAPE '\\'` clause. */
+        private fun escapeLikeLiteral(text: String): String =
+            text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
         /**
          * Members fetched per roster page. The gateway defaults to 20 and caps at
          * 100; 30 fills a phone screen with headroom so the first "load more" only

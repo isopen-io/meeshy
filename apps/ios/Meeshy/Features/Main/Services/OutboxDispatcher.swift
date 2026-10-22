@@ -14,7 +14,7 @@ import os
 /// to the in-memory queues.
 struct OutboxDispatcher: OutboxDispatching {
 
-    let logger = Logger(subsystem: "com.meeshy.ios", category: "outbox-dispatcher")
+    let logger = MeeshyLog.logger(.outboxDispatcher, subsystem: .legacyIOS)
 
     // `internal` et non `private` : la famille « messages » vit dans
     // `OutboxDispatcher+Messages.swift` depuis l'extraction du budget, et une
@@ -32,7 +32,7 @@ struct OutboxDispatcher: OutboxDispatching {
 
     init(
         messageService: any MessageServiceProviding = MessageService.shared,
-        persistence: @escaping @Sendable @concurrent () async -> MessagePersistenceActor = { await DependencyContainer.shared.messagePersistence }
+        persistence: @escaping @Sendable @concurrent () async -> MessagePersistenceActor = { DependencyContainer.shared.messagePersistence }
     ) {
         self.messageService = messageService
         self.persistence = persistence

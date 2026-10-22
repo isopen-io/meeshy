@@ -92,7 +92,7 @@ extension UniversalComposerBar {
                     .transition(tourbillonTransition)
             }
         }
-        .frame(width: showsQuickEmoji ? Self.quickEmojiSlotWidth : Self.sendSlotWidth, height: 44)
+        .frame(width: showsQuickEmoji ? quickEmojiBandWidth : Self.sendSlotWidth, height: 44)
         .animation(.spring(response: ComposerSlotMotion.response, dampingFraction: ComposerSlotMotion.damping), value: showsQuickEmoji)
         .animation(.spring(response: ComposerSlotMotion.response, dampingFraction: ComposerSlotMotion.damping), value: hasContent)
         .animation(.spring(response: 0.25, dampingFraction: ComposerSlotMotion.damping), value: sendBounce)
@@ -187,6 +187,17 @@ extension UniversalComposerBar {
         RecentEmojiHistory.row(history: RecentEmojiStore.load(), defaults: Self.quickSendDefaultEmojis)
     }
 
+    /// Le défilement en cours, borné ; la bande s'élargit de ce qu'il a gagné
+    /// vers la gauche depuis le début du geste, au repos dès le relâcher.
+    private var quickEmojiLiveScroll: CGFloat {
+        QuickEmojiGrid.clampedScroll(quickEmojiScroll + quickEmojiDrag, itemCount: QuickEmojiGrid.row(quickSendEmojis).count)
+    }
+
+    var quickEmojiBandWidth: CGFloat {
+        QuickEmojiExpansion.bandWidth(sharedWidth: quickEmojiFieldWidth + Self.quickEmojiSlotWidth, restingWidth: Self.quickEmojiSlotWidth,
+                                      leftwardTravel: quickEmojiDrag == 0 ? 0 : quickEmojiScroll - quickEmojiLiveScroll)
+    }
+
     @ViewBuilder
     private var quickEmojiButtons: some View {
         // Trois et demi visibles, le reste au défilement (#10842). Défilement
@@ -229,12 +240,13 @@ extension UniversalComposerBar {
         }
         .padding(.horizontal, QuickEmojiGrid.inset)
         .fixedSize()
-        .offset(x: QuickEmojiGrid.clampedScroll(quickEmojiScroll + quickEmojiDrag, itemCount: emojis.count))
-        .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.rowHeight, alignment: .leading)
+        .offset(x: QuickEmojiExpansion.contentOffset(scroll: quickEmojiLiveScroll, bandWidth: quickEmojiBandWidth,
+                                                     restingWidth: Self.quickEmojiSlotWidth))
+        .frame(width: quickEmojiBandWidth, height: QuickEmojiGrid.rowHeight, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         .contentShape(Rectangle())
         .highPriorityGesture(
-            DragGesture(minimumDistance: 8)
+            DragGesture(minimumDistance: 8, coordinateSpace: .global)
                 .onChanged { quickEmojiDrag = $0.translation.width }
                 .onEnded { value in
                     let landing = QuickEmojiGrid.clampedScroll(quickEmojiScroll + value.predictedEndTranslation.width,

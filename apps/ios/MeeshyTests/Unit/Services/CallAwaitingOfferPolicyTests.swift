@@ -74,3 +74,46 @@ final class CallAwaitingOfferPolicyTests: XCTestCase {
         )
     }
 }
+
+/// #11468 — un autre appareil du compte a décroché. Celui-ci s'efface en silence
+/// pour le serveur : la passerelle clôt la participation PAR UTILISATEUR, un
+/// `call:leave` d'ici finirait l'appel de l'appareil qui a décroché.
+@MainActor
+final class CallAnsweredElsewhereTests: XCTestCase {
+
+    func test_aRingingDevice_yields() {
+        XCTAssertTrue(CallResumePolicy.yieldsToAnotherDevice(callState: .ringing(isOutgoing: false)))
+    }
+
+    func test_aDeviceThatAnsweredToo_andLostTheRace_yields() {
+        XCTAssertTrue(CallResumePolicy.yieldsToAnotherDevice(callState: .connecting))
+    }
+
+    func test_anEstablishedOrOutgoingCall_neverYields() {
+        for state: CallState in [.connected, .reconnecting(attempt: 1), .offering, .ringing(isOutgoing: true), .idle] {
+            XCTAssertFalse(CallResumePolicy.yieldsToAnotherDevice(callState: state), "\(state)")
+        }
+    }
+
+    func test_yielding_tellsTheServerNothing_andReportsNoAnalytics() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Signaling.swift")
+        guard let start = source.range(of: "private func observeAnsweredElsewhere("),
+              let end = source.range(of: "private func observeRemoteMedia(", range: start.upperBound..<source.endIndex) else {
+            return XCTFail("observeAnsweredElsewhere introuvable")
+        }
+        let sink = source[start.upperBound..<end.lowerBound]
+        XCTAssertTrue(sink.contains("CallResumePolicy.yieldsToAnotherDevice(callState: self.callState)"))
+        XCTAssertTrue(sink.contains("reason: .answeredElsewhere"))
+        XCTAssertTrue(sink.contains("self.endCallInternal(reason: .remote, reportsAnalytics: false)"))
+        for forbidden in ["emitCallLeave", "abandonOnServer", "emitCallEnd", "failCall", "endCall()"] {
+            XCTAssertFalse(sink.contains(forbidden), "\(forbidden) préviendrait le serveur")
+        }
+    }
+
+    func test_analyticsAreSkipped_onlyWhenAsked() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Teardown.swift")
+        XCTAssertTrue(source.contains("func endCallInternal(reason: CallEndReason, reportsAnalytics: Bool = true)"))
+        XCTAssertTrue(source.contains("emitCallAnalyticsIfNeeded(reason: reason, reports: reportsAnalytics)"))
+        XCTAssertTrue(source.contains("if reports {\n            emitCallAnalyticsSnapshot("))
+    }
+}

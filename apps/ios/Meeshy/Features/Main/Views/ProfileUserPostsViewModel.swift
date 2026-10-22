@@ -421,21 +421,26 @@ final class ProfileUserPostsViewModel: ObservableObject {
     // MARK: - Options « … » (parité avec FeedViewModel — menu de la carte poste/réel)
 
     func deletePost(_ postId: String, reason: String? = nil) async {
+        await withdrawPost(postId, .delete(reason: reason))
+    }
+
+    /// Suppression, retrait ou passage en privé (#11535) : la carte quitte le profil vu par qui agit.
+    func withdrawPost(_ postId: String, _ withdrawal: PublicationWithdrawal) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
         let removed = posts.remove(at: index)
         do {
-            try await postService.delete(postId: postId, reason: reason)
+            try await withdrawal.perform(postId: postId, with: postService)
             // Le cache vit sous PLUSIEURS clés (`user:<id>`, main-feed, la clé
             // détail, bookmarks) : sans cette purge, la carte supprimée
             // ressortait à la réouverture du profil, servie cache-first.
             await CacheCoordinator.shared.feed.removeEverywhere(itemId: postId)
-            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
+            FeedbackToastManager.shared.showSuccess(withdrawal.successText(deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
         } catch {
             // Défaire CE retrait (`OptimisticRollback`) : un post supprimé par
             // socket ou une page chargée pendant l'attente survivaient mal à
             // l'instantané.
             posts = OptimisticRollback.restoring(removed, at: index, into: posts)
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
+            FeedbackToastManager.shared.showError(withdrawal.failureText(deleteError: String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main)))
         }
     }
 

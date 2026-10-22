@@ -55,7 +55,7 @@ public struct LentilleSticker: View {
             Text(LentilleSticker.displayTitle(title))
                 .tracking(LentilleSticker.letterSpacing)
                 .font(MeeshyFont.relative(LentilleMetrics.Sticker.size, weight: LentilleMetrics.Sticker.weight))
-                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
             Spacer(minLength: 0)
             // D5 — `isExpanded` était DÉCLARÉ, STOCKÉ, et jamais lu : replier
             // une section rendait deux bandes rigoureusement identiques
@@ -83,7 +83,7 @@ public struct LentilleSticker: View {
                 }
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.forward")
                     .font(MeeshyFont.relative(LentilleMetrics.Sticker.size, weight: LentilleMetrics.Sticker.weight))
-                    .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                    .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
                     // Décoratif : l'état est porté par le bouton lui-même, et
                     // VoiceOver annoncerait sinon « chevron » entre le titre de
                     // section et son action.

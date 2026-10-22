@@ -1,0 +1,10 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="location_precision_around">Arredores (~100 m)</string>
+    <string name="location_precision_city">Cidade (~10 km)</string>
+    <string name="location_precision_exact">Exata</string>
+    <string name="location_precision_footnote">Nos níveis Bairro e Cidade, apenas a área é compartilhada — não o endereço exato.</string>
+    <string name="location_precision_neighborhood">Bairro (~1 km)</string>
+    <string name="location_precision_section">Precisão do compartilhamento</string>
+    <string name="location_settings_title">Compartilhamento de localização</string>
+</resources>

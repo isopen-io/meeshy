@@ -10,6 +10,8 @@ import { prismFor, served, type Served } from '@/lib/api/prism';
 import { reactAction } from '@/lib/api/query';
 import { findCachedConversation } from '@/lib/api/conversations';
 import { appQueryClient } from '@/lib/api/query-client';
+import { regimeAfterNotices } from '@/lib/api/realtime-encryption-regime';
+import { transcribeOnDemand } from '@/lib/api/realtime-transcription-ready';
 import { conversationEncrypted } from '@/lib/send/share-entry';
 import { apiDeps } from '@/lib/api/deps';
 import type { DataSource } from '@/lib/api/config';
@@ -33,6 +35,7 @@ import {
   imageableOf,
   messageMenuContextOf,
   messageMenuItems,
+  transcribablePieceOf,
   translationChoices,
   type MenuViewer,
   type MessageActionId,
@@ -172,7 +175,14 @@ export function useMessageMenu(params: {
 }) {
   const { conversationId, messages, readerLanguages, announce, viewer, send } = params;
   const viewerId = viewer.id;
-  const { conversation } = params;
+  /**
+   * LE RÉGIME QUE LE FIL DIT (#11373) — l'avis d'activation du bout en bout,
+   * lu dans le fil, ferme le régime avant que le détail ne soit relu : le menu
+   * ne juge jamais « en clair » une conversation dont le fil annonce le contraire.
+   */
+  const given = params.conversation;
+  const encryptionMode = regimeAfterNotices(given.encryptionMode, messages);
+  const conversation: ActionConversation = encryptionMode === undefined || encryptionMode === given.encryptionMode ? given : { ...given, encryptionMode };
   /* LE LECTEUR ET LA CONVERSATION, PAR LEURS VALEURS — l'hôte les recompose à chaque rendu. */
   const scope = useMemo<ActionScope>(
     () => ({ viewer, conversation }),
@@ -571,6 +581,26 @@ export function useMessageMenu(params: {
     [announce, menuContextOf],
   );
 
+  /**
+   * « TRANSCRIRE » (#11370) — la demande à la passerelle, sur le verdict de la
+   * loi (jamais en bout en bout) et la pièce que vise le menu. Faite sur-le-
+   * champ, la transcription se greffe sur la pièce du fil ; mise en file, elle
+   * arrivera par le temps réel (`audio:transcription-ready`) et l'attente se dit.
+   */
+  const transcribe = useCallback(
+    (messageId: string) => {
+      const message = messageOf(messageId);
+      const target = message === undefined ? null : transcribablePieceOf(message);
+      if (message === undefined || target === null || actionsOf(message).verdicts.transcribe !== true) return;
+      const lang = currentInterfaceLanguage();
+      const queryClient = params.queryClient ?? appQueryClient;
+      void transcribeOnDemand({ queryClient, conversationId, messageId, attachmentId: target.id, source, transport }).then((outcome) => {
+        if (outcome !== 'grafted') announce(translate(lang, outcome === 'queued' ? 'media.audio.transcribing' : 'media.audio.transcribe_failed'));
+      });
+    },
+    [messageOf, actionsOf, source, transport, announce, params.queryClient, conversationId],
+  );
+
   const onMenuAction = useCallback(
     (messageId: string, id: MessageActionId) => {
       if (id === 'copy') {
@@ -604,11 +634,11 @@ export function useMessageMenu(params: {
       if (id === 'translateOnDevice') {
         const message = messageOf(messageId);
         if (message === undefined || actionsOf(message).verdicts.translate !== 'device') return;
-        if (!deviceTranslationWanted(message, { viewerId, languages: readerLanguages, conversationEncryptionMode: conversation.encryptionMode ?? null })) return;
+        if (!deviceTranslationWanted(message, { viewerId, languages: readerLanguages, conversationEncryptionMode: encryptionMode ?? null })) return;
         void requestDeviceTranslation({
           ports: params.deviceTranslation ?? deviceTranslationPorts,
           queryClient: params.queryClient ?? appQueryClient,
-          params: { messages: [message], viewerId, preferredLanguages: readerLanguages, conversationEncryptionMode: conversation.encryptionMode ?? null },
+          params: { messages: [message], viewerId, preferredLanguages: readerLanguages, conversationEncryptionMode: encryptionMode ?? null },
         })
           .then((outcome) =>
             announce(
@@ -619,6 +649,10 @@ export function useMessageMenu(params: {
             ),
           )
           .catch(() => undefined);
+        return;
+      }
+      if (id === 'transcribe') {
+        transcribe(messageId);
         return;
       }
       if (isTypeAction(id)) {
@@ -692,7 +726,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, conversation, replyableOf, retryableOf, menuContextOf],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, encryptionMode, replyableOf, retryableOf, menuContextOf, transcribe],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -851,7 +885,7 @@ export function useMessageMenu(params: {
     const ctx = {
       ...menuContextOf(message),
       canRetry: send !== undefined,
-      deviceTranslationWanted: deviceTranslationWanted(message, { viewerId, languages: readerLanguages, conversationEncryptionMode: conversation.encryptionMode ?? null }),
+      deviceTranslationWanted: deviceTranslationWanted(message, { viewerId, languages: readerLanguages, conversationEncryptionMode: encryptionMode ?? null }),
       piecesLabels: isMessagePiecesCatalogLoaded(lang),
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
       discussionImageable: discussionImageableOf(menuTarget.messageId),

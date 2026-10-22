@@ -31,7 +31,7 @@ final class TusUploadCancellationPropagationTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshySDK/Networking/TusUploadManager.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertTrue(code.contains("progressFileId: fileId)"), "la file remet sa ligne à l'envoi")
+        XCTAssertTrue(code.contains("progressFileId: fileId"), "la file remet sa ligne à l'envoi")
         XCTAssertFalse(code.contains("markFileFailed(fileName:"), "l'échec vise la ligne de l'envoi, pas un homonyme")
     }
 }

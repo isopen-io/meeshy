@@ -205,8 +205,7 @@ final class AppleTranslationEngine: ObservableObject, DeviceTranslationEnginePro
     private func armWatchdog(for jobId: UUID) {
         watchdog?.cancel()
         watchdog = Task { [weak self] in
-            try? await Task.sleep(for: Self.claimTimeout)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: Self.claimTimeout), !Task.isCancelled else { return }
             self?.expire(jobId)
         }
     }

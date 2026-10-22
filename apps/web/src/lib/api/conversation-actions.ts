@@ -28,7 +28,19 @@ import type { Conversation } from './types';
 export type ConversationActionDeps = ConversationsDeps & {
   readonly store: StoreApi<ConversationStoreState>;
   readonly queryClient: QueryClient;
+  /** Reçoit l'issue du geste (voir {@link RowActionEvent}) ; absent, le geste reste muet. */
+  readonly notify?: (event: RowActionEvent) => void;
 };
+
+/**
+ * L'ISSUE D'UN GESTE DE RANGÉE, dite à qui l'annonce — `applied` à l'instant
+ * où l'override optimiste est posé (`on` : l'état NOUVEAU ; pour `read`, vrai
+ * quand la rangée devient lue), `refused` quand la passerelle défait le geste
+ * (4xx). Une panne réseau ne dit rien : l'override reste, le geste est tenu.
+ */
+export type RowActionEvent =
+  | { readonly kind: 'applied'; readonly action: RowFlagActionId; readonly on: boolean }
+  | { readonly kind: 'refused'; readonly action: RowFlagActionId };
 
 function successDataOf(result: unknown): Record<string, unknown> | undefined {
   if (typeof result !== 'object' || result === null) return undefined;
@@ -48,6 +60,8 @@ type ActionPlan = {
   readonly request: (() => Promise<unknown>) | null;
   /** Écrit la valeur CONFIRMÉE dans le cache — appelé seulement sur succès. */
   readonly applyConfirmed: (result: unknown) => void;
+  /** L'état nouveau de la bascule, tel que {@link RowActionEvent} le porte. */
+  readonly on: boolean;
 };
 
 function planOf(params: {
@@ -71,6 +85,7 @@ function planOf(params: {
     if (action === 'archive') store.toggleArchive(conversationId, current);
     return {
       keys: [field],
+      on: next,
       request: gateway ? () => pushConversationFlags(transport, conversationId, { [field]: next }) : null,
       applyConfirmed: (result) => {
         const confirmed = successDataOf(result) ?? { [field]: next };
@@ -87,6 +102,7 @@ function planOf(params: {
     store.markRead(conversationId);
     return {
       keys: ['unreadCount'],
+      on: true,
       request: gateway ? () => pushRead(transport, conversationId) : null,
       applyConfirmed: () => {
         const readThrough = readThroughLastMessage(conversation);
@@ -98,6 +114,7 @@ function planOf(params: {
   store.markUnread(conversationId);
   return {
     keys: ['unreadCount'],
+    on: false,
     request: gateway ? () => pushUnread(transport, conversationId) : null,
     applyConfirmed: () =>
       patchConversation(queryClient, conversationId, (c) => ({
@@ -141,6 +158,7 @@ export async function performRowAction(params: {
 
   const store = deps.store.getState();
   const plan = planOf({ conversationId, action, conversation, deps, store });
+  deps.notify?.({ kind: 'applied', action, on: plan.on });
 
   if (plan.request === null) return; // source fixtures : l'override reste, jamais d'appel.
 
@@ -155,6 +173,7 @@ export async function performRowAction(params: {
   if (outcome === 'transient') return;
   if (outcome === 'permanent') {
     deps.store.getState().clearOverride(conversationId, plan.keys);
+    deps.notify?.({ kind: 'refused', action });
     return;
   }
   plan.applyConfirmed(result);

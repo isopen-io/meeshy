@@ -60,7 +60,7 @@ struct FeedPostCard: View {
     var onSeeMore: (() -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
     /// #11151 — « Retirer » la publication d'un autre (modération) : l'hôte présente le motif.
-    var onRemove: ((String) -> Void)? = nil
+    var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
     var onEdit: ((FeedPost) -> Void)? = nil

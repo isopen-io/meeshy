@@ -218,6 +218,7 @@ internal fun ChatComposer(
     val ladderTiles = remember(affordances) {
         ComposerAttachmentLadder.tiles(
             affordances = affordances,
+            hasRecentMediaStrip = true,
             showCamera = true,
             showLocation = false,
             showEmoji = true,
@@ -251,6 +252,9 @@ internal fun ChatComposer(
             if (attachmentTrayOpen && ladderTiles.isNotEmpty() && !recording.isRecording && !affordances.isReadOnly) {
                 ComposerAttachmentTray(
                     tiles = ladderTiles,
+                    recentMedia = {
+                        ComposerRecentMedia(affordances.canSendImages || affordances.canSendVideos, accentColor, onPickFile)
+                    },
                     onTileClick = { kind ->
                         attachmentTrayOpen = false
                         when (kind) {

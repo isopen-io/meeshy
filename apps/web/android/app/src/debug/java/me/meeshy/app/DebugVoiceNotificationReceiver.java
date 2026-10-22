@@ -71,9 +71,7 @@ public class DebugVoiceNotificationReceiver extends BroadcastReceiver {
         }
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return;
-        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-            ? new Notification.Builder(context, "meeshy_notifications")
-            : new Notification.Builder(context);
+        Notification.Builder builder = builder(context);
         Intent open = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         builder.setSmallIcon(R.drawable.ic_stat_meeshy)
             .setContentTitle(data.get("senderDisplayName"))
@@ -82,6 +80,14 @@ public class DebugVoiceNotificationReceiver extends BroadcastReceiver {
         if (open != null) builder.setContentIntent(PendingIntent.getActivity(context, 0, open, PendingIntent.FLAG_IMMUTABLE));
         manager.notify(tag, 0, builder.build());
         NotificationVoiceBanner.offer(context, data);
+    }
+
+    // Le constructeur sans canal est la seule voie avant l'API 26 (minSdk 24).
+    @SuppressWarnings("deprecation")
+    private static Notification.Builder builder(Context context) {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? new Notification.Builder(context, "meeshy_notifications")
+            : new Notification.Builder(context);
     }
 
     private static String extra(Intent intent, String key, String fallback) {

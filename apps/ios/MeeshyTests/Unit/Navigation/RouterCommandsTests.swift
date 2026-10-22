@@ -118,4 +118,69 @@ final class RouterCommandsTests: XCTestCase {
 
         XCTAssertTrue(env.routerCommands === router.commands)
     }
+
+    func test_openProfileSheet_setsDeepLinkProfileUser() {
+        let router = makeRouter()
+        let user = ProfileSheetUser(userId: "u-1", username: "alice")
+
+        router.commands.openProfileSheet(user)
+
+        XCTAssertEqual(router.deepLinkProfileUser, user)
+    }
+
+    func test_openProfile_anonymousParticipantInConversation_setsParticipantProfileTarget() {
+        let router = makeRouter()
+        let visitor = ProfileSheetUser(username: "guest", participantId: "p-1", isAnonymous: true)
+
+        router.commands.openProfile(visitor, inConversation: "c-1")
+
+        XCTAssertEqual(router.participantProfileTarget, ParticipantProfileTarget(conversationId: "c-1", participantId: "p-1"))
+        XCTAssertNil(router.deepLinkProfileUser)
+    }
+
+    func test_requestFeedComposer_armsPendingOpenFeedComposer() {
+        let router = makeRouter()
+
+        router.commands.requestFeedComposer()
+
+        XCTAssertTrue(router.consumePendingFeedComposer())
+        XCTAssertFalse(router.consumePendingFeedComposer())
+    }
+
+    func test_armSearch_setsPendingOpenSearch() {
+        let router = makeRouter()
+
+        router.commands.armSearch()
+
+        XCTAssertTrue(router.pendingOpenSearch)
+    }
+
+    func test_requestHighlight_setsMessageThenConversation() {
+        let router = makeRouter()
+
+        router.commands.requestHighlight(messageId: "m-1", inConversation: "c-1")
+
+        XCTAssertEqual(router.pendingHighlightMessageId, "m-1")
+        XCTAssertEqual(router.pendingHighlightConversationId, "c-1")
+    }
+
+    func test_openPackShop_replacesStackWithSettings() {
+        let router = makeRouter()
+        router.path = [.profile]
+
+        router.commands.openPackShop(domain: .sticker)
+
+        XCTAssertEqual(router.path, [.settings])
+    }
+
+    func test_inertCommands_doNothing() {
+        let inert = RouterCommands.inert
+
+        inert.openProfileSheet(ProfileSheetUser(username: "alice"))
+        inert.openProfile(ProfileSheetUser(username: "alice"), inConversation: nil)
+        inert.requestFeedComposer()
+        inert.armSearch()
+        inert.requestHighlight(messageId: "m-1", inConversation: "c-1")
+        inert.openPackShop(domain: nil)
+    }
 }

@@ -44,7 +44,7 @@ nonisolated enum ArrivalFireworks {
     static func sparks(at time: Double, burstCount: Int = burstCount, sparksPerBurst: Int = sparksPerBurst) -> [Spark] {
         (0..<burstCount).flatMap { burst -> [Spark] in
             let progress = (time - Double(burst) * burstInterval) / burstLife
-            guard progress >= 0, progress <= 1 else { return [] }
+            guard progress >= 0, progress < 1 else { return [] }
             return burstSparks(burst: burst, progress: progress, count: sparksPerBurst)
         }
     }
@@ -188,7 +188,7 @@ struct ArrivalFireworksCanvas: View {
             isOver = false
             let elapsed = Date().timeIntervalSince(startDate)
             if !ArrivalFireworks.isOver(at: elapsed) {
-                try? await Task.sleep(for: .seconds(ArrivalFireworks.showDuration - elapsed))
+                _ = await cancellableSleep(for: .seconds(ArrivalFireworks.showDuration - elapsed))
             }
             guard !Task.isCancelled else { return }
             isOver = true

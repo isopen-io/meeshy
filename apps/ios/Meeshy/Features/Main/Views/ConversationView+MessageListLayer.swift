@@ -273,7 +273,7 @@ struct ConversationMessageListLayer: View {
             // message, doivent faire la même chose.
             onEditMessage: { messageId in
                 guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                messageActions.edit(msg)
+                messageActions.beginEdit(msg)
             },
             onSelectMessage: { messageId in messageActions.beginSelection(messageId) },
             onComposeFromMessage: { messageId in

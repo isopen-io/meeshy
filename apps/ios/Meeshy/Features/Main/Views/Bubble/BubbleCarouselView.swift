@@ -136,7 +136,7 @@ struct BubbleCarouselView: View {
                 Image(systemName: "xmark")
                     // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(.ultraThinMaterial.opacity(MeeshyOpacity.intense)))
                     .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
@@ -190,7 +190,7 @@ struct BubbleCarouselView: View {
         } else {
             Text("\(carouselIndex + 1) / \(items.count)")
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(.horizontal, MeeshySpacing.smPlus)
                 .padding(.vertical, MeeshySpacing.xs)
                 .background(
@@ -245,22 +245,25 @@ struct BubbleCarouselView: View {
         let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
         if fullUrl != nil || thumbUrl != nil || attachment.thumbHash != nil {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl ?? thumbUrl,
-                onFullImageLoaded: { _ = landedImageIds.insert(attachment.id) }
-            ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
+            OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: fullUrl ?? thumbUrl,
+                    onFullImageLoaded: { _ = landedImageIds.insert(attachment.id) },
+                    reloadToken: originalLanded
+                ) {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
+                .aspectRatio(contentMode: .fit)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             }
-            .aspectRatio(contentMode: .fit)
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         } else {
             Color(hex: attachment.thumbnailColor)
                 .overlay(
                     Image(systemName: "photo")
                         .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundStyle(Color.white.opacity(0.4))
                         .accessibilityHidden(true)
                 )
         }

@@ -76,14 +76,14 @@ public struct CodeViewerView: View {
 
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
             .overlay(alignment: .topTrailing) {
                 if let onDelete {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
                     .offset(x: 6, y: -6)
@@ -105,7 +105,7 @@ public struct CodeViewerView: View {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(4)
                     .background(
                         RoundedRectangle(cornerRadius: 5)
@@ -342,11 +342,11 @@ public struct CodeFullSheet: View {
 
             Text(attachment.originalName.isEmpty ? language.displayName : attachment.originalName)
                 .font(MeeshyFont.relative(16, weight: .semibold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.code.loadingFile", defaultValue: "Chargement du fichier...", bundle: .module))
                 .font(.system(size: 14))
-                .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
         }
     }
 }

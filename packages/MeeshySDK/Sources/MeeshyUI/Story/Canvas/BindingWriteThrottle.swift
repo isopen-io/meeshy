@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import QuartzCore
 
 /// Cadence d'écriture d'un binding alimenté par un geste continu.
@@ -89,7 +90,9 @@ public func trailingMainSchedule(
     delay: TimeInterval,
     run: @escaping @MainActor () -> Void
 ) -> () -> Void {
-    let item = DispatchWorkItem { MainActor.assumeIsolated { run() } }
-    DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay), execute: item)
-    return { item.cancel() }
+    let task = Task { @MainActor in
+        guard await cancellableSleep(for: .seconds(max(0, delay))) else { return }
+        run()
+    }
+    return { task.cancel() }
 }

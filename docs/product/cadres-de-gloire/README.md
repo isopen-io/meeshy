@@ -48,12 +48,14 @@ messagers entre les deux mondes, l'immortalisent avec lui dans une photo qui rej
 | `neon` | Néon | 19 | 13 | 18 → 0 |
 | `moments` | Autres signes des aïeux | 16 | 10 | 10 → 0 |
 | `tresor` | L'Héritage | 14 | 6 | 7 → 0 |
+| `succes` | Les hauts faits | 6 | 4 | 0 → 0 |
 | `poses` | Poses et messages | 9 | 5 | 6 → 0 |
 
 Chaque manifeste (`manifests/<collection>.json`) liste, par cadre : `file`, `rank`, `division` (la marche, 5→1, ou null), `option` (V…I, A/B/C, ou le palier), `name` et `story` (le nom et la courte histoire du cadre, en français), `layout` (la pose de Mee et Meo), `message` (exemple de message de l'auteur, ou null). Les planches-contacts sont dans `planches/`.
 
 - `moments` : états de ta lumière (Lueur 10, Aurore 50, Galaxie 90, Nébuleuse 101, Supernova 400, Singularité 1000), formes de la Flamme (7, 30, 100, 365 jours), Meesh frappée (n° 1, 10, 100, 1000), rêve réalisé (A, B).
 - `tresor` : les contenants de l'Héritage — Bourse (a, b), Escarcelle (a, b), Coffret (a, b), Coffre (a, b, c — chambre forte moderne), Trésor (a, b), Réserve (a, b, c — bâtiment de banque).
+- `succes` : les hauts faits (lot LS, #10168, PP9 #10184) — un cadre par rareté (commun, rare, épique, légendaire, mythique) et un cadre NEUTRE sans marque de rareté, pour un haut fait dont la rareté n'est pas servie. Pack `succes` UNIQUE, installé par défaut et non retirable ; la plaque porte le TITRE VIVANT du haut fait (emplacement `title`) et son sur-titre « Haut fait accompli · <Rareté> » ; aucun cadre de rang ni libre ne sert un haut fait. L'atelier emprunte le kit de `moments` (fenêtres, reliefs, inscription) plutôt que d'en recopier un.
 - `poses` : un même cadre (Ambassadeur I · Olympe) décliné en cinq poses de Mee et Meo et trois supports de message (cartouche, ruban, parchemin), plus une photo à trois.
 
 ## Anatomie d'un cadre
@@ -85,8 +87,8 @@ node lib/overlap.mjs [--only <collection>] [--png <dossier>]   # → ../controle
 L'app ne peint pas ces SVG : elle compose des **couches raster** et peint elle-même le texte, Mee et Meo, le blason et le bandeau (prompt § 5.1, § 5.3). Une commande, depuis `generateur/` :
 
 ```bash
-node lib/export.mjs --generate      # régénère les 11 ateliers (et leurs plaques dans les deux variantes, out-plate/)
-                                    # puis exporte les 191 cadres → generateur/export/ (ignorés par git)
+node lib/export.mjs --generate      # régénère les 12 ateliers (et leurs plaques dans les deux variantes, out-plate/)
+                                    # puis exporte les 197 cadres → generateur/export/ (ignorés par git)
 node lib/export-check.mjs           # ROUGE tant qu'une couche porte un texte ou un oiseau, qu'une fenêtre est voilée,
                                     # que la bande du bandeau est trouée, qu'un emplacement n'a pas de contraste mesuré ou
                                     # qu'une plaque dessinée n'a pas ses deux variantes
@@ -116,6 +118,25 @@ Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--
 **Comment le générateur le dit.** `lib/base.py` : `Card.layer(kind)` pose un `<g data-layer>` (photo, fond, blason, oiseaux, plaque) ; chaque `<text>` reçoit `data-slot` ; `@plate_layer` sur une fonction d'inscription range ce qu'elle dessine dans la plaque et nomme ses emplacements par ses arguments ; `nid()` est un compteur porté par `Card` (une régénération partielle rend des SVG identiques à l'octet) ; un cadre qui dessine avec la bibliothèque africaine ou cosmique d'un atelier porte le motif `afrique` ou `cosmos`, et un atelier qui dessine l'Afrique sans module nommé le dit lui-même (`card.motif("afrique")` : Malindi et le carillon aux cauris de l'Empire céleste, l'or de Nubie, le baobab de la première lueur et le journal au bogolan, le drakkar au kente, la bourse aux cauris et le kuduo akan). Le rendu ne bouge pas : les 191 SVG instrumentés rendent, au pixel près, la référence ci-dessous. L'export charge les polices variables dans leur plage de graisses (`lib/page.mjs`, `exactFontsCss`) : Manrope 600, Fraunces 700 ou Caveat 600 ne sont plus substituées.
 
 **La référence de fidélité** (`reference/`, lot L0) : la génération de `c5b1390040` rendue en 1080×1920, `sha256.json` (empreinte de chaque SVG et de chaque rendu, versions de Chromium et de libwebp) et un WebP sans perte par collection (`reference/samples/`). `node lib/reference.mjs out ../reference --commit <sha>` la reproduit ; `recompose.mjs` vérifie d'abord que le rendu de référence retrouve son sha256, puis juge la recomposition hors boîtes de texte et de blason. **La tolérance du § 8.3 juge la SÉPARATION des couches : elle se mesure sur un export `--lossless`.** L'encodage de livraison (WebP q82, le poids visé par le § 5.1) ajoute sa propre perte, que `recompose.mjs` chiffre à part (part de pixels, PSNR) : sur un décor texturé (papier, grain), aucune qualité avec perte raisonnable ne tient |Δ| ≤ 6 sur 99,5 % des pixels, et le compromis poids / perte se tranche au L3, où le poids des packs se mesure. sharp est celui du workspace de la passerelle (ou `$SHARP_MODULE`) : sa version épingle les octets des couches.
+
+## Les cibles de fidélité
+
+**Ce contre quoi les peintres web et iOS se jugent (prompt § 8.3, lot L21a, #10177), rendu par le générateur AVANT que l'app ne peigne.** L'échantillon versionné sous `cible/` : **un cadre par collection** (l'Ambassadeur I des sept atmosphères, comme la référence L0 ; `moments-flamme-30`, `tresor-coffre-a`, `poses-pied` pour les trois autres), dans la mise en page que le contrat lui connaît (chaque cadre en déclare exactement une, `birds.default`), **avec et sans message** (`<cadre>.plain.webp`, `<cadre>.message.webp` — les deux variantes de plaque, `CADRES_PLATE`), en **9:16**. Vingt-deux fichiers et `cible/index.json` (versions de Chromium, de sharp et de libwebp, boîte de la fenêtre, sha256, poids et verdict de stabilité de chaque cible). Une commande, depuis `generateur/` :
+
+```bash
+node lib/cible.mjs --generate        # régénère les 12 ateliers dans les deux variantes, puis rend l'échantillon → ../cible/
+node lib/cible.mjs --generate --check  # le rend à part et exige l'identité à l'octet avec les cibles versionnées
+node lib/cible.mjs --full            # le jeu COMPLET (197 cadres × 2 variantes) → generateur/cible-complete/, jamais versionné
+```
+
+Options : `--jobs 3` ; `--only savane,poses` et `--final` (garde le 1080×1920) **exigent `--cible <dossier>`** (hors `--check`) : le dossier versionné `cible/` ne reçoit que l'échantillon complet, et un plan vide (collection inconnue, `out/` vide) est rouge. Chromium par `lib/launch.mjs` — en CI, `playwright@1.56.1`, dont le Chromium 141.0.7390.37 est celui de `cible/index.json` ; les témoins du générateur (`node --test lib/*.test.mjs`, lancés par le job) tiennent l'épingle et l'index ensemble, et se lancent localement après `npm install --prefix . --no-save --no-package-lock playwright@1.56.1` depuis `generateur/`. sharp par `lib/sharp.mjs`.
+
+- **La photo est une FIXTURE versionnée**, `generateur/fixture/photo.jpg` : un paysage dessiné par `lib/fixture.mjs` (libre de droits, aucun visage), au format d'une photo développée par l'app (1 080 × 1 440, JPEG q0,85). Elle prend la place des silhouettes, **recadrée en `cover` sur la boîte de la fenêtre** (trouvée comme à l'export, par différence magenta / vert) et centrée : c'est la pose par défaut que les peintres reproduisent. Le texte français et la date « 10 octobre 2026 » sont ceux des SVG.
+- **Chaque cible se prouve** : le cadre est rendu deux fois, depuis deux chargements de page ; des octets différents rendent la commande rouge et la cible `stable: false`. C'est pour cela que les trois collections hors atmosphère n'échantillonnent pas le cadre de la référence L0 : un titre en dégradé sur chemin courbe (`poses-ruban`, `moments-meesh-100`, `tresor-reserve-a`) ne se rend pas deux fois à l'identique dans Chromium.
+- **Rendues en 1080 × 1920 comme l'app peint, versionnées à l'échelle de design (540 × 960)** par la moyenne EXACTE de chaque bloc 2 × 2 en alpha prémultiplié (`lib/cible-plan.mjs`, `halve`), WebP sans perte : 7,5 Mo pour l'échantillon, contre plus de 20 Mo en 1080 × 1920 (0,9 Mo par cible mesurés sur la Savane, la plus légère). Un peintre qui se juge contre ces cibles applique la même descente à sa composition avant la comparaison du § 8.3 ; `--final` rend le 1080 × 1920 quand il le faut.
+- **Pas de carré** : D1 (#10180) tient le 1:1 d'un cadre décoré pour la carte simple (`formats.square: null`), et le médaillon viendra en lot additif avec sa cible ; `index.json` le dit (`formats.square`).
+- **La fraîcheur se juge sur l'export normalisé, jamais sur ces octets** (§ 8.3) : en CI, le job du générateur régénère l'échantillon, le publie en artefact et ne fait que SIGNALER un écart avec les cibles versionnées ; le jeu complet n'est produit (artefact) que sur `workflow_dispatch`.
+- Les cibles sont rendues sur l'**état courant des cadres** (ancres L2, #10153) ; la revalidation du porteur reste attendue, et un cadre qu'elle ferait bouger se régénère par la même commande.
 
 ## La règle d'empiètement
 

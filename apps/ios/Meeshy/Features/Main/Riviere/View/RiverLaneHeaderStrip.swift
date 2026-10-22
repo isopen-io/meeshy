@@ -103,7 +103,7 @@ struct RiverLaneHeaderStrip: View {
                 // (`RightToLeftLayoutGuardTests`).
                 Image(systemName: edge == .leading ? "chevron.backward" : "chevron.forward")
                     .font(MeeshyFont.relative(9, weight: .bold))
-                    .foregroundColor(ThemeManager.shared.textMuted)
+                    .foregroundStyle(ThemeManager.shared.textMuted)
                 if edge == .leading { dots(hidden) }
             }
             .padding(.horizontal, MeeshySpacing.xsPlus)
@@ -137,7 +137,7 @@ struct RiverLaneHeaderStrip: View {
             if hidden.count > 3 {
                 Text("\(hidden.count)")
                     .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                    .foregroundColor(ThemeManager.shared.textMuted)
+                    .foregroundStyle(ThemeManager.shared.textMuted)
             }
         }
     }

@@ -308,7 +308,7 @@ final class FullscreenMediaReplyTests: XCTestCase {
             messageId: "srv-1", clientMessageId: nil, createdAt: Date()
         )
 
-        _ = await sut.sendMessage(content: "bonjour")
+        _ = await sut.send(outgoingMessage(content: "bonjour", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertEqual(messageSocket.sendViaSocketFallbackCallCount, 1)
         XCTAssertEqual(messageService.sendCallCount, 0)

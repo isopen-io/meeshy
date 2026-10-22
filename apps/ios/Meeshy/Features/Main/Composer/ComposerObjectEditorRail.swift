@@ -3,8 +3,7 @@ import MeeshySDK
 import MeeshyUI
 import SwiftUI
 
-/// **Les sections de l'éditeur d'objet — dix depuis l'EFFET (#4870) — et
-/// laquelle est OUVERTE** (#4842).
+/// **Les sections de l'éditeur d'objet — dix — et laquelle est OUVERTE.**
 ///
 /// ## Le défaut
 ///
@@ -14,7 +13,7 @@ import SwiftUI
 /// quatre dernières, et rien n'annonçait qu'elles existaient.
 ///
 /// > « ne pas tout montrer d'un coup (la vue plein ecran actuelle est trop
-/// > chargé) » — directive porteur, 2026-09-01 23h04.
+/// > chargé) » — directive porteur.
 ///
 /// C'est la **loi 8** : le prisme n'affiche que ce dont on a besoin, au moment
 /// où on en a besoin.
@@ -38,21 +37,21 @@ import SwiftUI
 /// se mesure sur toutes les paires (90 pour dix sections), et qu'un témoin de
 /// vue n'en éprouverait qu'un
 /// chemin. Écrite dans un `body`, la même logique serait hors de portée.
-/// **Les outils d'un média dans l'éditeur plein écran** (#4082, vue `2d`).
+/// **Les outils d'un média dans l'éditeur plein écran** (vue `2d`).
 ///
 /// > « Un seul écran pour les trois gestes. Le cadre porte le recadrage, la
 /// > bande porte le rognage, la coupe scinde à la tête de lecture — l'ordre des
 /// > rangées suit l'ordre des décisions. »
 ///
 /// **`served` n'est PAS `allCases`, et c'est la moitié qui compte.** La planche
-/// en dessine cinq ; deux restent hors du jeu servi, mais **plus pour la même
-/// raison depuis le 2026-09-04** — et la distinction vaut d'être tenue à jour,
-/// parce qu'un motif périmé se relit comme une raison de ne pas y toucher.
+/// en dessine cinq ; deux restent hors du jeu servi, **et pas pour la même
+/// raison** — la distinction vaut d'être tenue à jour, parce qu'un motif
+/// périmé se relit comme une raison de ne pas y toucher.
 ///
-/// | outil | ce qui le retient AUJOURD'HUI |
+/// | outil | ce qui le retient |
 /// |---|---|
-/// | ✂ COUPER | le contrat, toujours — aucun champ ne porte une scission (#5085) |
-/// | ⌗ RECADRER | **plus le contrat** : `a0f2a86aa9` a posé `MediaCropRect`, `StoryMediaObject.crop`, le round-trip `CanvasV3Migration` et `StoryMediaLayer.applyCrop`. Ce qui reste est #5100 — `aspectRatio` ne sait pas distinguer « carré » de « pas encore mesuré », et sur les chemins vidéo elle arrive de façon asynchrone : taper `9:16` dans cette fenêtre sur une source 16:9 POSERAIT une borne dont le rapport réel vaut 1:1, et elle est persistée. Plus les deux autres clients, qui ne déclarent pas encore `crop` (#5085) |
+/// | ✂ COUPER | le contrat, toujours — aucun champ ne porte une scission |
+/// | ⌗ RECADRER | **pas le contrat** : `MediaCropRect`, `StoryMediaObject.crop`, le round-trip `CanvasV3Migration` et `StoryMediaLayer.applyCrop` existent. Ce qui retient est le rapport mesuré — `aspectRatio` ne sait pas distinguer « carré » de « pas encore mesuré », et sur les chemins vidéo elle arrive de façon asynchrone : taper `9:16` dans cette fenêtre sur une source 16:9 POSERAIT une borne dont le rapport réel vaut 1:1, et elle est persistée. Plus les deux autres clients, qui ne déclarent pas encore `crop` |
 ///
 /// Le verdict ne change pas — les servir ferait paraître deux outils qui ne
 /// changeraient rien, ou pire, un qui écrirait faux ; la loi 4 bannit les deux.
@@ -67,12 +66,12 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     case actions
     /// ⌗ RECADRER — hors de `served`, parce que sa portée n'est pas une
     /// famille entière : `ComposerInlineEditing.sections` le sert à l'IMAGE
-    /// posée (#9499) et au fond image d'une retouche (#9136), ses pastilles
-    /// attendant un ratio mesuré (#5100). La table ci-dessus date du 2026-09-04.
+    /// posée et au fond image d'une retouche, ses pastilles
+    /// attendant un ratio mesuré.
     case crop
-    /// ✂ COUPER — absent du contrat (#5085).
+    /// ✂ COUPER — absent du contrat.
     case split
-    /// ✦ FILTRE — la teinte de la SLIDE (#5041).
+    /// ✦ FILTRE — la teinte de la SLIDE.
     ///
     /// **Servi, contrairement à `crop` et `split`** : `StoryFilterGridView` et
     /// `StoryComposerViewModel.applyFilter` existent de bout en bout, et
@@ -84,19 +83,19 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// C'est exactement ce que la directive demande — « editer l'image general
     /// avec filtre » — et c'est déjà la portée que l'inspecteur du document
     /// sert pour toute sélection `.media`. Un filtre PAR média serait un ajout
-    /// de contrat, de la même nature que recadrer et couper (#5085).
+    /// de contrat, de la même nature que recadrer et couper.
     case filter
-    /// **◐ RÉGLER — exposition, contraste, température… d'une IMAGE posée**
-    /// (#9175). Ce que l'éditeur d'image plein écran offrait en composition et
-    /// que la scène n'offrait plus depuis #9170 : les réglages sont une
+    /// **◐ RÉGLER — exposition, contraste, température… d'une IMAGE posée.**
+    /// Ce que l'éditeur d'image plein écran offre en composition : les réglages
+    /// sont une
     /// propriété de l'objet (`StoryMediaObject.adjustments`), cuite par le
-    /// player après son filtre. La VIDÉO posée les reçoit aussi depuis #9169 :
+    /// player après son filtre. La VIDÉO posée les reçoit aussi :
     /// son player les peint trame par trame (`StoryVideoAdjustmentsProcessor`),
     /// sans netteté ni flou (`AdjustmentKind.served(for: .video)`). Le FOND,
-    /// image ou vidéo, les reçoit depuis #9496 : sa couche les peint par
+    /// image ou vidéo, les reçoit aussi : sa couche les peint par
     /// `StoryBackgroundLook`, après le filtre de slide.
     case adjust
-    /// **✦ EFFETS — le bloom et le grain d'une IMAGE** (#9498), ce que l'outil
+    /// **✦ EFFETS — le bloom et le grain d'une IMAGE**, ce que l'outil
     /// « Effets » de l'éditeur d'image plein écran offrait de PLUS que les
     /// réglages ; son flou, sa vignette et sa netteté sont des curseurs de
     /// `adjust`. Ils voyagent dans le même sac (`StoryMediaObject.adjustments`,
@@ -104,19 +103,18 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// seulement — posée ou fond : aucune vidéo ne les peint
     /// (`AdjustmentKind.isServedForVideo`), donc le sous-outil suit le filtre.
     case effects
-    /// **⌾ DÉCRIRE — le texte alternatif du média** (#4756).
+    /// **⌾ DÉCRIRE — le texte alternatif du média**.
     ///
     /// Servi, et c'est la loi 4 qui l'exige autant qu'elle l'autorise : le
     /// contrat existe de bout en bout (`PostMedia.mediaAlt` sur le fil,
     /// `PostService.create(mediaAlt:)`, `ComposerMediaAccessibility`), et
-    /// l'atome de saisie aussi (`MediaAltTextField(kind: .alt)`, SDK). Ce qui
-    /// manquait était la SOURCE — le nouveau composer publiait
-    /// `ComposerMediaAccessibility.empty`, et son doc-comment l'admettait.
+    /// l'atome de saisie aussi (`MediaAltTextField(kind: .alt)`, SDK). La SOURCE
+    /// est ce que le composer publie dans `ComposerMediaAccessibility`, plutôt
+    /// que `ComposerMediaAccessibility.empty`.
     ///
-    /// > L'UI existait, mais dans l'ANCIENNE peau : `MediaAccessibilityPanel`
-    /// > est monté par `ComposerToolPanelHost` → `ComposerBottomBand`, la bande
-    /// > de l'atelier plein écran. Le contrôle n'avait pas été supprimé, il
-    /// > était resté là où l'on ne va plus.
+    /// > `MediaAccessibilityPanel` existe aussi dans l'atelier : il est monté par
+    /// > `ComposerToolPanelHost` → `ComposerBottomBand`, la bande de l'atelier
+    /// > plein écran — là où l'on ne va plus.
     ///
     /// **Sa portée est l'OBJET**, contrairement au filtre : un texte alternatif
     /// décrit CE média, pas la slide. C'est aussi ce qui le sépare de
@@ -125,7 +123,7 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     case altText
 
     /// **Ce que le rail sert pour un média.** `crop` et `split` restent hors du
-    /// jeu tant que le contrat ne les porte pas (#5085) ; les monter inertes
+    /// jeu tant que le contrat ne les porte pas ; les monter inertes
     /// ferait croire à l'auteur qu'il a recadré.
     ///
     /// Le filtre ouvre la liste parce qu'il agit sur ce qu'on VOIT en premier —
@@ -137,19 +135,18 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     ///
     /// `adjust` suit le filtre (#9175) : on choisit un rendu, puis on le règle —
     /// l'ordre de l'éditeur d'image, dont la scène reprend la chaîne. `effects`
-    /// suit les réglages (#9498), comme l'étage effet clôt cette chaîne.
+    /// suit les réglages, comme l'étage effet clôt cette chaîne.
     static let served: [MediaEditTool] = [.filter, .adjust, .effects, .trim, .actions, .altText]
 }
 
 nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
-    /// Les outils du SDK — sept alors, huit depuis l'EFFET (#4870), et le
-    /// huitième est entré ici sans qu'une ligne change : le cas porte
+    /// Les outils du SDK — le huitième (l'EFFET) est entré ici sans qu'une ligne
+    /// change : le cas porte
     /// `TextEditTool` plutôt que de recopier ses cas, pour la même raison qui
     /// fait lire `TextEditTool.all` à l'écran plutôt qu'une liste écrite à la
     /// main.
     case tool(TextEditTool)
-    /// **Les outils d'un MÉDIA** (#4082, vue `2d`). Le `switch` d'`entries`
-    /// disait « différées, pas oubliées » ; les voici.
+    /// **Les outils d'un MÉDIA** (vue `2d`).
     case media(MediaEditTool)
     /// D'où à où l'objet vit dans la slide.
     case timing
@@ -174,9 +171,9 @@ nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
     }
 }
 
-/// **Le rail d'outils de l'éditeur d'objet** (#4936).
+/// **Le rail d'outils de l'éditeur d'objet**.
 ///
-/// > Directive porteur 2026-09-03 : « Plutôt que d'avoir une liste de fold, ce
+/// > Directive porteur : « Plutôt que d'avoir une liste de fold, ce
 /// > n'est pas mieux d'avoir une rangée de tool à gauche et à droite le undo
 /// > redo au même endroit et préserver le bas pour afficher les options des
 /// > tools à chaque fois ? Avec toujours en haut le texte touché ? »
@@ -190,17 +187,14 @@ nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
 /// | zone | sur la scène | ici |
 /// |---|---|---|
 /// | haut | la scène 9:16 | le sujet touché, toujours visible |
-/// | gauche | les portes qui font ENTRER | *(rendu au sujet — #4997)* |
+/// | gauche | les portes qui font ENTRER | *(rendu au sujet)* |
 /// | droite | contrôleurs + historique | undo / redo, au même endroit |
 /// | bas | les options de l'outil ouvert | les outils, PUIS leurs options |
 ///
-/// **Le couloir gauche a été rendu au sujet au #4997** (directive porteur
-/// 2026-09-03 : « lister les outils entièrement en bas […] pour laisser la
-/// place au canvas d'occuper suffisamment l'espace »). La symétrie avec la
-/// surface de scène était un moyen, pas la fin : ici le couloir coûtait 52 pt
-/// de largeur de carte — donc ≈ 92 pt de hauteur, le ratio 9:16 les liant —
-/// pour ranger dix entrées qu'une rangée basse porte sans rien prendre au
-/// sujet. Ce type ne décrit plus qu'un ORDRE et une SÉLECTION ; la place, elle,
+/// **La place du rail appartient à la vue, pas à ce type.** La symétrie avec
+/// la surface de scène est un moyen, pas la fin : un couloir de tête coûte
+/// 52 pt de largeur de carte — donc ≈ 92 pt de hauteur, le ratio 9:16 les
+/// liant. Ce type ne décrit qu'un ORDRE et une SÉLECTION ; la place, elle,
 /// appartient à la vue.
 ///
 /// ## Ce que le passage de la LISTE au RAIL change — une seule règle
@@ -208,10 +202,10 @@ nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
 /// Les deux modèles portent le même jeu d'entrées : `ComposerObjectEditorSection`
 /// avait déjà une entrée par outil. Ce qui change est la BASCULE.
 ///
-/// Le modèle DÉPLIANT d'hier rendait `nil` quand on
-/// retape l'entrée ouverte, et son doc-comment dit pourquoi c'est juste CHEZ
-/// LUI : « pouvoir tout replier rend la hauteur à la scène — c'est le geste de
-/// celui qui positionne ». Dans un rail, la scène ne récupère rien : le rail
+/// Un modèle DÉPLIANT rend `nil` quand on
+/// retape l'entrée ouverte, et c'est juste CHEZ LUI : « pouvoir tout replier
+/// rend la hauteur à la scène — c'est le geste de celui qui positionne ».
+/// Dans un rail, la scène ne récupère rien : le rail
 /// occupe le couloir, pas le bas. Un `nil` y viderait la zone basse, et un bas
 /// vide est le défaut que cet écran existe pour fermer — « `MeeshyToolOptionsPanel`
 /// ne rend quelque chose que si un outil est DÉPLIÉ […] "toutes les options"
@@ -226,9 +220,8 @@ nonisolated enum ComposerObjectEditorRail {
     ///
     /// **Dérivées, jamais recopiées** : `TextEditTool.all` porte l'ordre de la
     /// rangée du SDK, et le lire ici garantit qu'un neuvième outil entre sans
-    /// qu'une ligne change — comme l'EFFET (#4870) est entré dans les sections.
-    /// Une liste écrite à la main se périme à la prochaine capacité ; c'est le
-    /// motif qui a fait tomber deux témoins au #4919.
+    /// qu'une ligne change — comme l'EFFET est entré dans les sections.
+    /// Une liste écrite à la main se périme à la prochaine capacité.
     ///
     /// Le TEMPS et le PLAN ferment le rail parce qu'ils ne dessinent pas
     /// l'objet, ils le QUALIFIENT — d'où à où il vit, et où il se pose.
@@ -236,9 +229,9 @@ nonisolated enum ComposerObjectEditorRail {
         entries(for: .text)
     }
 
-    /// **Les entrées d'une FAMILLE** (#4937).
+    /// **Les entrées d'une FAMILLE**.
     ///
-    /// > Directive porteur 2026-09-03 : « Faire la même vue pour les audio de la
+    /// > Directive porteur : « Faire la même vue pour les audio de la
     /// > scène, pour les images de la scène, et les vidéos de la scène et même
     /// > les stickers de la scène ! »
     ///
@@ -271,18 +264,18 @@ nonisolated enum ComposerObjectEditorRail {
     /// > règle absente : elle rend un verdict plausible, et rien ne dit qu'il
     /// > répond à autre chose.
     ///
-    /// **`hasTrimmableSource`** (retour porteur 2026-09-28) : « Rogner » borne
+    /// **`hasTrimmableSource`** : « Rogner » borne
     /// la LECTURE d'une source qui a une durée — une vidéo, un son. Une image
     /// n'en a pas, et l'outil y ouvrait une plaque vide. Le défaut `true` garde
     /// l'inventaire de la famille ; l'éditeur passe le fait de l'objet.
     ///
-    /// **`offersFilter`** (même retour) : le filtre d'un objet se cuit dans son
+    /// **`offersFilter`** : le filtre d'un objet se cuit dans son
     /// IMAGE ; une vidéo posée n'en rend aucun, et l'outil y serait inerte.
     ///
-    /// **`offersAdjust`** (#9175, #9169, #9496) : les réglages se peignent sur
+    /// **`offersAdjust`** : les réglages se peignent sur
     /// tout média de la scène — posé ou fond, image ou vidéo.
     ///
-    /// **Les effets** (#9498) se cuisent dans une IMAGE qui se règle : ils
+    /// **Les effets** se cuisent dans une IMAGE qui se règle : ils
     /// suivent le filtre ET les réglages, sans paramètre de plus.
     static func entries(for family: MeeshySceneObject.Kind,
                         hasTrimmableSource: Bool = true,
@@ -306,11 +299,10 @@ nonisolated enum ComposerObjectEditorRail {
         // qu'elle règle.
         case .media:
             outils = MediaEditTool.served.map { ComposerObjectEditorSection.media($0) }
-        // **L'AUDIO a gagné son ROGNAGE le 2026-09-05**, et pas par confort :
-        // la bande `timeline` du bas de scène était l'unique chemin pour borner
-        // une PUCE DE SON posée (`StoryAudioPlayerObject`), et la directive qui
-        // vide la première vue de ses éditions la retire. Sans cette ligne, le
-        // lot aurait supprimé une capacité au lieu d'un doublon.
+        // **L'AUDIO a son ROGNAGE**, et pas par confort : la bande `timeline` du
+        // bas de scène n'est pas le chemin pour borner une PUCE DE SON posée
+        // (`StoryAudioPlayerObject`) dans la première vue, qui n'édite rien. Sans
+        // cette ligne, la capacité manquerait.
         //
         // > Un retrait ne se mesure pas à ce qu'il enlève, mais à ce qui
         // > SURVIT ailleurs. Les quatre autres surfaces retirées avaient leur
@@ -334,7 +326,7 @@ nonisolated enum ComposerObjectEditorRail {
     /// reprise : l'écran ne naît jamais muet.
     static let initiallySelected: ComposerObjectEditorSection = .tool(.style)
 
-    /// **La hauteur MAXIMALE de la zone d'options** (#4997).
+    /// **La hauteur MAXIMALE de la zone d'options**.
     ///
     /// Mesurée sur le plus grand panneau servi — la grille des dix-huit styles,
     /// deux rangées de ~64 pt plus son titre et ses marges. Nommée ici plutôt
@@ -344,22 +336,20 @@ nonisolated enum ComposerObjectEditorRail {
     /// la directive du porteur tranche.
     static let optionsMaxHeight: CGFloat = 260
 
-    /// **La largeur du couloir de tête** (#5026) — 52 pt, celle du #4936.
+    /// **La largeur du couloir de tête** — 52 pt.
     ///
-    /// Elle est passée à 68 le temps que le rail porte le NOM de chaque outil
-    /// (#5029), puis est revenue : la directive du porteur a retiré les noms,
-    /// et un couloir large pour un contenu qui ne l'occupe plus prendrait à la
+    /// Un rail qui porterait le NOM de chaque outil demanderait 68 ; sans noms,
+    /// un couloir large pour un contenu qui ne l'occupe pas prendrait à la
     /// carte une largeur que rien ne réclame.
     ///
     /// La CIBLE reste bornée à 44 pt de HAUT — c'est le contact qui doit rester
     /// atteignable, pas le dessin qui doit grossir.
     static let railWidth: CGFloat = 52
 
-    /// **La bascule a été REFUSÉE au #4936, puis RENDUE POSSIBLE au #5027.**
+    /// **La bascule : retaper l'entrée OUVERTE range son panneau.**
     ///
-    /// Ce qui était écrit ici — « il n'y a pas de fonction de bascule, et c'est
-    /// le cœur du lot » — n'était pas une négligence, et sa raison mérite d'être
-    /// relue avant d'être révoquée :
+    /// Une fonction de bascule semble contredire l'invariant du type, et sa
+    /// raison mérite d'être relue :
     ///
     /// > « Un rail n'en a pas besoin : taper une entrée la sélectionne, point.
     /// > […] L'invariant "le bas n'est jamais vide" est porté par le TYPE :
@@ -368,25 +358,25 @@ nonisolated enum ComposerObjectEditorRail {
     ///
     /// Ce raisonnement liait deux choses qui ne le sont plus. Replier exigeait
     /// alors de **vider la sélection**, donc de rejouer le défaut que cet écran
-    /// existe pour fermer. Le #5027 a séparé les deux faits : `optionsAreCollapsed`
+    /// existe pour fermer. Les deux faits sont séparés : `optionsAreCollapsed`
     /// est un fait d'AFFICHAGE, posé à côté de la sélection et jamais à sa
     /// place. L'outil reste choisi pendant que son panneau se range.
     ///
     /// > **Une bascule refusée parce qu'elle casserait un invariant cesse de le
     /// > casser le jour où l'état qu'elle demandait existe ailleurs.** L'invariant
-    /// > du #4936 n'est pas levé ici — il reste vrai, et c'est très exactement ce
+    /// > du type n'est pas levé ici — il reste vrai, et c'est très exactement ce
     /// > qui rend la bascule sûre. La question à poser à un refus documenté n'est
     /// > donc pas « la raison était-elle bonne ? » mais **« tient-elle encore
     /// > dans le monde d'aujourd'hui ? »**
     ///
-    /// > Directive porteur 2026-09-04 : « Lorsqu'on active un outil le retoucher
+    /// > Directive porteur : « Lorsqu'on active un outil le retoucher
     /// > le desactive et ses options se cachent. »
     ///
     /// Le geste ne vaut que sur l'entrée DÉJÀ ouverte. Taper une autre entrée
     /// déplie toujours : choisir un outil dit qu'on veut le régler, et laisser
     /// son panneau rangé rendrait le rail muet — c'est ce qui distingue une
     /// bascule d'un interrupteur global.
-    /// **Ce panneau porte-t-il son PROPRE champ de saisie ?** (#6156)
+    /// **Ce panneau porte-t-il son PROPRE champ de saisie ?**
     ///
     /// Un seul le fait : ⌾ DÉCRIRE d'un média (`MediaAltTextField`). C'est la
     /// seule section dont le clavier sert un champ INTÉRIEUR au panneau ; pour
@@ -396,23 +386,23 @@ nonisolated enum ComposerObjectEditorRail {
     /// > La distinction porte sur ce que le panneau POSSÈDE, jamais sur l'état
     /// > du clavier. Écrite « si le clavier est levé, range le panneau », la
     /// > règle retirerait sous le doigt le champ qu'on vient de toucher — le
-    /// > défaut exact que #5083 a payé sur cet écran, un champ à y=884 sur un
+    /// > défaut exact que cet écran a déjà payé, un champ à y=884 sur un
     /// > écran de 874 points.
     static func ownsTextField(_ section: ComposerObjectEditorSection) -> Bool {
         if case .media(let outil) = section { return outil == .altText }
         return false
     }
 
-    /// **Le clavier vient de monter : faut-il ranger le panneau ?** (#6156)
+    /// **Le clavier vient de monter : faut-il ranger le panneau ?**
     ///
     /// > « C'est soit le clavier soit les choix de police. » — directive porteur
-    /// > 2026-09-12, capture à l'appui : les deux occupaient le bas ensemble et
+    /// > capture à l'appui : les deux occupaient le bas ensemble et
     /// > le texte édité tenait dans 200 × 330 pt sur un écran de 874.
     static func collapsesWhenKeyboardRises(_ section: ComposerObjectEditorSection) -> Bool {
         !ownsTextField(section)
     }
 
-    /// **Taper cet outil doit-il rendre le clavier ?** (#6156)
+    /// **Taper cet outil doit-il rendre le clavier ?**
     ///
     /// > « Si on veut changer le style ça enlève le focus. »
     ///
@@ -423,12 +413,12 @@ nonisolated enum ComposerObjectEditorRail {
         !ownsTextField(section)
     }
 
-    /// **Le clavier a bougé : quel panneau ?** (#6156, réciproque de la loi
-    /// #6132 — « à la sortie du geste, tout ce qui a disparu revient »).
+    /// **Le clavier a bougé : quel panneau ?** (réciproque de la loi « à la
+    /// sortie du geste, tout ce qui a disparu revient »).
     ///
     /// Le clavier qui MONTE range le panneau et s'en souvient ; celui qui
     /// DESCEND rend le panneau qu'IL avait rangé, et lui seul. Un panneau rangé
-    /// par l'auteur (glissement bas #5027, bascule du rail #5098) reste rangé :
+    /// par l'auteur (glissement bas, bascule du rail) reste rangé :
     /// ce geste-là disait « rends-moi la scène », le clavier qui part ensuite
     /// ne le contredit pas. DÉCRIRE ne bouge ni à l'aller ni au retour.
     static func panelState(keyboardRises rises: Bool,
@@ -456,7 +446,7 @@ nonisolated enum ComposerObjectEditorRail {
         return !wasCollapsed
     }
 
-    /// **L'outil qui reste sélectionné quand la FAMILLE change** (#4937).
+    /// **L'outil qui reste sélectionné quand la FAMILLE change**.
     ///
     /// Cet écran laisse changer d'objet sans en sortir — le plan 2D désigne une
     /// autre piste, et l'éditeur suit. Si le nouvel objet n'est pas de la même
@@ -490,10 +480,9 @@ nonisolated enum ComposerObjectEditorRail {
 
     /// **Le glyphe d'une entrée — un seul site, et provisoire par contrat.**
     ///
-    /// #4919 a montré ce que coûte une iconographie décidée dans un corps de
-    /// vue ; celle-ci vit donc ici, en une table, et l'issue #4936 dit
-    /// explicitement que « l'iconographie des outils et l'ordre exact du rail
-    /// relèvent de la planche ». Ce qui est livré est l'ANATOMIE ; ces neuf
+    /// Une iconographie décidée dans un corps de vue coûte cher ; celle-ci vit
+    /// donc ici, en une table, et « l'iconographie des outils et l'ordre exact
+    /// du rail relèvent de la planche ». Ce qui est livré est l'ANATOMIE ; ces neuf
     /// symboles sont ce qui se défend en attendant qu'elle tranche.
     ///
     /// **Ils ne redessinent PAS l'indicateur du SDK.**
@@ -535,7 +524,7 @@ nonisolated enum ComposerObjectEditorRail {
     }
 }
 
-/// **L'état du panneau d'options de l'éditeur d'objet** (#5027, #6156) :
+/// **L'état du panneau d'options de l'éditeur d'objet** :
 /// rangé ou non, et — s'il l'est — si c'est le CLAVIER qui l'a rangé. Le
 /// second fait n'existe que pour rendre le panneau quand le clavier redescend.
 nonisolated struct ComposerObjectEditorPanelState: Equatable, Sendable {
@@ -545,9 +534,8 @@ nonisolated struct ComposerObjectEditorPanelState: Equatable, Sendable {
     static let open = ComposerObjectEditorPanelState(optionsAreCollapsed: false, collapsedByKeyboard: false)
 }
 
-/// **Le geste de retour au bord de tête** (#4997, directive porteur
-/// 2026-09-03 : « le swipe bordure gauche vers la droite doit retourner sur la
-/// scène principale »).
+/// **Le geste de retour au bord de tête** (« le swipe bordure gauche vers la
+/// droite doit retourner sur la scène principale »).
 ///
 /// ## Pourquoi une règle pour deux comparaisons
 ///
@@ -565,8 +553,7 @@ nonisolated struct ComposerObjectEditorPanelState: Equatable, Sendable {
 /// le geste naturel pour attraper une glissière de gauche — refermerait
 /// l'écran. C'est le cas que le seuil horizontal seul laisse passer, et le seul
 /// que l'utilisateur ne comprendrait pas.
-/// **Le glissement qui REND l'écran à la scène** (#5027, directive porteur
-/// 2026-09-03).
+/// **Le glissement qui REND l'écran à la scène.**
 ///
 /// > « Le swipe bas doit tout cacher, même l'outil activé à l'instant doit se
 /// > désactiver pour laisser pleine place à la scène. »
@@ -579,13 +566,13 @@ nonisolated struct ComposerObjectEditorPanelState: Equatable, Sendable {
 ///
 /// ## L'invariant que ça semble casser, et pourquoi il tient
 ///
-/// `ComposerObjectEditorSection` est NON optionnel depuis #4936, et son
+/// `ComposerObjectEditorSection` est NON optionnel, et son
 /// doc-comment dit pourquoi : « un `nil` viderait la zone basse, et un bas vide
 /// est le défaut que cet écran existe pour fermer ». Un outil désactivé
 /// paraît donc contredire le type.
 ///
 /// Il ne le contredit pas, parce que **les deux vides ne sont pas le même** :
-/// celui de #4936 était le vide par DÉFAUT — un écran qui s'ouvre muet, sans
+/// le premier est le vide par DÉFAUT — un écran qui s'ouvre muet, sans
 /// que personne l'ait demandé. Celui-ci est un vide DEMANDÉ, par un geste
 /// délibéré, et réversible d'un tap sur n'importe quel outil.
 ///
@@ -640,12 +627,12 @@ nonisolated enum ComposerEdgeBackGesture {
     }
 }
 
-/// **La hauteur SERVIE au panneau d'options** (#5083) — le contenu, plafonné.
+/// **La hauteur SERVIE au panneau d'options** — le contenu, plafonné.
 ///
 /// Écrite hors du corps de vue pour être éprouvable : c'est une règle à deux
 /// bornes, et chacune répond à un défaut distinct.
 ///
-/// Le PLAFOND est celui de #4997 : au-delà, les options mangeraient la carte.
+/// Le PLAFOND est celui du couloir de tête : au-delà, les options mangeraient la carte.
 /// Le PLANCHER à 1 est plus subtil — la hauteur mesurée vaut zéro à la première
 /// passe de layout, avant que la préférence ne remonte. Servie telle quelle,
 /// elle ferait disparaître le panneau une frame, ce qui se voit comme un
@@ -656,7 +643,7 @@ nonisolated enum ComposerObjectEditorOptions {
     }
 }
 
-/// **La hauteur du contenu du panneau d'options** (#5083).
+/// **La hauteur du contenu du panneau d'options**.
 ///
 /// Jumelle verticale de ce que `ComposerSceneCardLeadingKey` fait pour le bord
 /// gauche de la scène : une vue ne peut pas calculer ce que son enfant mesure,

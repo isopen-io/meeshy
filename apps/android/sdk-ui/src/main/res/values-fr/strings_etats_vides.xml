@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="content_failure_network_title">Impossible de charger ce contenu</string>
+    <string name="content_failure_network_body">Vérifiez votre connexion, puis réessayez.</string>
+    <string name="content_failure_server_title">Meeshy n\'a pas pu charger ce contenu</string>
+    <string name="content_failure_server_body">Le problème vient de notre côté. Réessayez dans un instant.</string>
+    <string name="content_failure_unavailable_title">Ce contenu n\'est plus disponible</string>
+    <string name="content_failure_unavailable_body">Il a peut-être expiré ou été retiré par son auteur.</string>
+    <string name="content_failure_retry">Réessayer</string>
+</resources>

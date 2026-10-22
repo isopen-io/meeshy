@@ -35,3 +35,19 @@ fun ApiCategory.toOption(): CategoryOption =
 
 /** Maps a wire category list to catalogue options, preserving order. */
 fun List<ApiCategory>.toOptions(): List<CategoryOption> = map { it.toOption() }
+
+/**
+ * Body of `PATCH /me/preferences/categories/{id}` — the only field iOS
+ * `PreferenceService.patchCategory(id:isExpanded:)` ever sends: whether the user folded
+ * or unfolded the category's section in the conversation list.
+ */
+@Serializable
+data class CategoryPatchBody(val isExpanded: Boolean)
+
+/**
+ * The fold state the gateway holds per category, keyed by id. A row that does not state
+ * it (`isExpanded == null`, a category created before its first fold) is absent from the
+ * map, so the section keeps its default (expanded) rather than inheriting a guess.
+ */
+fun List<ApiCategory>.expansionById(): Map<String, Boolean> =
+    mapNotNull { category -> category.isExpanded?.let { category.id to it } }.toMap()

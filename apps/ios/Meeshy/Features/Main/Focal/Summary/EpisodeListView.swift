@@ -43,7 +43,7 @@ private struct EpisodeRow: View {
                 if episode.isAgentTitled {
                     Text("✦")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .heavy))
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                 }
                 Text(episode.displayTitle)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))

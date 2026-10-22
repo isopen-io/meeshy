@@ -70,8 +70,7 @@ struct StoryCardView: View {
     /// Cadre du bouton cœur dans `StoryScrubSpace`, publié par le Sidebar via
     /// `StoryHeartFrameKey` et capté ici (`.onPreferenceChange`) — cible du vol.
     @Binding var heartFrame: CGRect
-    /// Tique à l'arrivée du vol (Layer 9 `onArrived`) — d'où le `@Binding`
-    /// (avant : simple `let`, jamais muté depuis cette vue).
+    /// Tique à l'arrivée du vol (Layer 9 `onArrived`) — d'où le `@Binding`.
     @Binding var heartBouncePulse: Int
 
     // Sidebar inputs
@@ -169,7 +168,7 @@ struct StoryCardView: View {
     @Binding var isLongPressPaused: Bool
 
     /// `shouldPauseTimer` du parent : le canvas gèle EN PHASE avec la barre, et
-    /// joue pendant une boucle (#9821).
+    /// joue pendant une boucle.
     let isCanvasPlaybackPaused: Bool
     /// Tour de boucle de la story courante : chaque tour rembobine le canvas.
     let loopPass: Int
@@ -186,25 +185,25 @@ struct StoryCardView: View {
     /// Relayé tel quel au rail : la barre de réactions y revendique le glissé
     /// horizontal (cf. `StoryReactionStripGesture`), le drag parent y cède.
     @Binding var reactionStripOwnsDrag: Bool
-    /// Le composeur revendique le glissé vertical né sur lui (#8431).
+    /// Le composeur revendique le glissé vertical né sur lui.
     @Binding var composerOwnsDrag: Bool
 
     @ObservedObject var keyboard: KeyboardObserver
 
     /// Fraction `[0, 1]` de contenu de la slide active disponible localement.
     /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) — seul
-    /// loader actif (l'ancien `ProgressView` blanc redondant a été retiré).
+    /// loader actif.
     /// Cf. spec stories-video-layers-text-sprint § 3.D.
-    /// **Le token de retour en tête du corpus** (#4831). État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
+    /// **Le token de retour en tête du corpus.** État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
     /// suspend l'horloge de lecture et appartient donc au parent — remonter une
     /// fenêtre de défilement ne regarde personne d'autre que cette carte.
     @State var captionScrollToTopToken: Int = 0 // internal for cross-file extension access
-    /// Repli du composeur, hauteur mesurée de son bloc (#8431), prise vocale en cours (#9893).
+    /// Repli du composeur, hauteur mesurée de son bloc, prise vocale en cours.
     @State var isComposerFolded: Bool = false // internal for cross-file extension access
     @State var composerBlockHeight: CGFloat? // internal for cross-file extension access
     @State var isComposerRecording: Bool = false // internal for cross-file extension access
     @State private var slideContentProgress: Double = 0
-    /// Le pont du parcours au doigt (#7878) : la barre le pilote, le canvas de
+    /// Le pont du parcours au doigt : la barre le pilote, le canvas de
     /// la story COURANTE s'y attache au montage.
     @State var sceneScrubber = ScenePlaybackScrubber() // internal : `+Canvas+Layers`
 
@@ -234,7 +233,7 @@ struct StoryCardView: View {
     /// Vrai pendant un scrub longpress→drag sur le rail (pause le timer,
     /// neutralise la navigation du canvas).
     let onScrubStateChanged: (Bool) -> Void
-    /// Recale le compte à rebours à la fraction choisie sur la barre (#7878).
+    /// Recale le compte à rebours à la fraction choisie sur la barre.
     let seekTimer: (Double) -> Void
     let pauseTimer: () -> Void
     let resumeTimer: () -> Void
@@ -251,7 +250,7 @@ struct StoryCardView: View {
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: @MainActor (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
-    let deleteCurrentStory: (_ reason: String?) -> Void
+    let storyWithdrawal: StoryWithdrawalActions
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
     let composerBottomPadding: (GeometryProxy) -> CGFloat
@@ -262,20 +261,19 @@ struct StoryCardView: View {
     /// `showCommentsOverlay`. Placed in the ZStack BEFORE the controls
     /// (sidebar / header / composer) so it renders BEHIND them — user can
     /// still tap React / Reply / Settings even with comments visible
-    /// (user spec 2026-05-28 « le layer de commentaire doit apparaitre en
-    /// dessous des layer des controles de la story »).
+    /// (le layer de commentaire doit apparaître en dessous des layers des
+    /// contrôles de la story).
     let makeCommentsOverlay: () -> StoryCommentsOverlayHost
 
     var topInset: CGFloat { // internal for cross-file extension access
         max(geometry.safeAreaInsets.top, 59)
     }
 
-    /// **La description de la story, affichée PAR-DESSUS le canvas composé (B2, #3925).**
+    /// **La description de la story, affichée PAR-DESSUS le canvas composé.**
     ///
     /// Le composer unifié garde UN seul contenu (`documentText` → `slide.content`
-    /// → `story.content`) et le publie ; jusqu'ici le viewer ne le rendait JAMAIS
-    /// au-dessus du média (seule la transcription vocale s'y superposait). B2 le
-    /// rend, comme la légende d'un réel (`ReelsPlayerView.reelDescriptionText`) —
+    /// → `story.content`) et le publie ; le viewer le rend au-dessus du média,
+    /// comme la légende d'un réel (`ReelsPlayerView.reelDescriptionText`) —
     /// c'est la face lecture de la section description repliable du composer.
     ///
     /// **Résolu par le Prisme** : `resolvedContent(preferredLanguages:)` descend
@@ -283,18 +281,18 @@ struct StoryCardView: View {
     /// > deviceLocale) et retombe sur l'ORIGINAL, jamais `translations.first`.
     /// `nil` sur contenu vide — un contrôle sans matière est absent (loi 4).
     ///
-    /// **Et il ne rend une légende que s'il y en a une** (#4502). Le `content`
+    /// **Et il ne rend une légende que s'il y en a une.** Le `content`
     /// d'une story a DEUX natures pour un seul nom : la légende de l'auteur, ou
     /// l'index de recherche que la passerelle fabrique en concaténant les
     /// objets texte d'une story qui n'en a pas. Rendu tel quel, cet index
-    /// affichait le texte du canvas une SECONDE fois, en légende, juste
+    /// afficherait le texte du canvas une SECONDE fois, en légende, juste
     /// dessous.
     ///
     /// La décision est prise sur l'ORIGINAL et le RÉSOLU est rendu — décider
     /// sur le résolu ramènerait le doublon pour les seuls lecteurs d'une autre
     /// langue, la passerelle composant aussi l'index dans chaque langue. Toute
     /// la règle, son fail-safe compris, vit dans `StoryDerivedContent` (SDK) :
-    /// ce corps ne fait plus que lui poser la question.
+    /// ce corps ne fait que lui poser la question.
     var currentStoryDescription: String? { // internal for cross-file extension access
         guard let story = currentStory else { return nil }
         return StoryDerivedContent.caption(
@@ -302,10 +300,9 @@ struct StoryCardView: View {
             resolved: story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
             // `\.text` est la BONNE clé : le décodeur du SDK normalise déjà
             // l'alias legacy `content` vers `text` (`StoryTextObject.init(from:)`,
-            // « prefer new key, fall back to legacy »). Lire la mauvaise aurait
-            // vidé la comparaison — donc rendu « vraie légende » et laissé le
-            // doublon intact, sans que rien ne rougisse. Mesuré avant de poser
-            // cette ligne, sur demande de la session qui a écrit la règle.
+            // « prefer new key, fall back to legacy »). Lire la mauvaise viderait
+            // la comparaison — donc rendu « vraie légende » et doublon intact, sans
+            // que rien ne rougisse.
             overlayTexts: story.storyEffects?.textObjects.map(\.text) ?? []
         )
     }
@@ -321,30 +318,24 @@ struct StoryCardView: View {
     /// snapshot de LECTURE du document reçu, et rend le runtime v1 depuis lui —
     /// servir ce snapshot au player est l'identité, pas une conversion.
     ///
-    /// **Pourquoi une porte, et non un montage inconditionnel.** La raison
-    /// d'origine — iOS ne posait AUCUN `X-Canvas-Caps`, donc `canvasV3` valait
-    /// `nil` pour cent pour cent des stories — N'EST PLUS VRAIE : l'en-tête est
-    /// posé depuis le 2026-08-22 (`ClientInfoProvider.swift`) et le gateway sert
-    /// du v3 natif. La seconde raison est tombée le même jour : l'aller-retour
-    /// n'est plus lossy, la scène logeant son `carrierAspect` et le retour
-    /// appliquant le remap inverse (`CanvasV3MigrationTests`
+    /// **Pourquoi une porte, et non un montage inconditionnel.** `X-Canvas-Caps`
+    /// est posé (`ClientInfoProvider.swift`) et le gateway sert du v3 natif ;
+    /// l'aller-retour n'est pas lossy, la scène logeant son `carrierAspect` et
+    /// le retour appliquant le remap inverse (`CanvasV3MigrationTests`
     /// `.v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect`).
     ///
-    /// Ce qui MAINTIENT la porte aujourd'hui n'est donc plus une perte, mais la
-    /// prudence : la retirer change ce que le lecteur peint pour toute
-    /// l'archive v1 restante. Ce changement de rendu se mesure et se livre
-    /// pour lui-même.
+    /// Ce qui MAINTIENT la porte est la prudence : la retirer change ce que le
+    /// lecteur peint pour toute l'archive v1 restante. Ce changement de rendu se
+    /// mesure et se livre pour lui-même.
     ///
-    /// La porte rend les deux branches SELF-COHÉRENTES. L'archive v1 se peint
-    /// dans son propre cadre, exactement comme avant le swap E4.
+    /// La porte rend les deux branches SELF-COHÉRENTES : l'archive v1 se peint
+    /// dans son propre cadre.
     ///
-    /// **Superseded le 2026-09-17 (#6896, lot #6904)** : une story v3-native
-    /// ne se peint PLUS dans le cadre RÉEL de son fond — `readerCanvasRatio`
-    /// est TOUJOURS `SceneShape.aspect` (9:16), que la scène ait ou non logé
-    /// un `carrierAspect`. Le paragraphe qui précède décrit le comportement
-    /// d'AVANT ce lot ; `carrierAspect` reste lu par `StoryEffects(rendering:)`
-    /// pour l'archive v1 (mémoire d'ÉDITION, contrat S8), mais plus aucun
-    /// lecteur ne s'en sert pour choisir un cadre.
+    /// **Une story v3-native ne se peint PAS dans le cadre RÉEL de son fond** :
+    /// `readerCanvasRatio` est TOUJOURS `SceneShape.aspect` (9:16), que la scène
+    /// ait ou non logé un `carrierAspect`. `carrierAspect` reste lu par
+    /// `StoryEffects(rendering:)` pour l'archive v1 (mémoire d'ÉDITION, contrat
+    /// S8), mais aucun lecteur ne s'en sert pour choisir un cadre.
     private func nativeSceneDocument(of story: StoryItem) -> CanvasV3? {
         story.storyEffects?.canvasV3
     }
@@ -353,8 +344,8 @@ struct StoryCardView: View {
     ///
     /// `isOutgoing: true` des deux côtés : le sortant naît en `.edit` dès
     /// `makeUIView`, ses AVPlayer bg/FG et son mixer audio ne démarrent JAMAIS —
-    /// sans quoi les deux canvas jouent en double 350-400 ms à chaque avance
-    /// (bug user 2026-05-28). Visuellement le slide reste rendu (image bg +
+    /// sans quoi les deux canvas jouent en double 350-400 ms à chaque avance.
+    /// Visuellement le slide reste rendu (image bg +
     /// textes), seule l'animation vidéo est gelée — invisible à l'œil pendant
     /// une sortie en opacity sur 350 ms.
     ///
@@ -470,9 +461,8 @@ struct StoryCardView: View {
     ///
     /// Une fois le contenu prêt (≥ 0.95), on ne redescend JAMAIS : sans ça chaque
     /// `scheduleContentReadyEvaluation` (déclenché par les didSet slide cumulés)
-    /// remettait `contentReadyFired = false` → `recomputeContentProgress` émettait
-    /// 0 → l'overlay de chargement réapparaissait → scintillement (user-reporté
-    /// 2026-05-27 « la story scintille seulement »). Le reset à 0 se fait
+    /// remettrait `contentReadyFired = false` → `recomputeContentProgress` émettrait
+    /// 0 → l'overlay de chargement réapparaîtrait → scintillement. Le reset à 0 se fait
     /// UNIQUEMENT sur slide-change (cf. le `.task(id:)` plus bas).
     private func latchedContentProgress(_ progress: Double) -> Double {
         (slideContentProgress >= 0.95 && progress < slideContentProgress)
@@ -517,22 +507,20 @@ struct StoryCardView: View {
 
             // === Layer 1.5 : LE SOL — le même que la galerie de post et le réel ===
             //
-            // **`SceneFloorView` (MeeshyUI) est la recette, et elle a quitté cet
-            // hôte** (directive porteur du 2026-09-17, lot #6904 : « On préserve
-            // le même fond que pour la story ! »). Le lecteur la portait seul —
-            // empreinte décodée, flou 60, échelle 1,18, opacité 0,85, voile — et
-            // la galerie de post peignait du NOIR PUR autour de la MÊME carte.
-            // Une convergence mesurée DANS la carte ne disait rien de ce qui se
-            // peint à côté d'elle.
+            // **`SceneFloorView` (MeeshyUI) est la recette du sol**, partagée avec la
+            // galerie de post et le réel : empreinte décodée, flou 60, échelle 1,18,
+            // opacité 0,85, voile. Un sol noir pur autour de la MÊME carte ferait
+            // deux fonds pour une scène : une convergence mesurée DANS la carte ne
+            // dirait rien de ce qui se peint à côté d'elle.
             //
             // Ce qui reste ici est de l'ORCHESTRATION, et rien d'autre :
             //
             // - `.id(currentStory?.id)` + `.transition(.opacity)` — SINGLE
             //   BACKDROP : un seul sol, que SwiftUI échange nativement sur
             //   changement d'identité (fusion gérée par le `withAnimation` du
-            //   `crossFadeStory`). Le motif précédent — deux sols dont les
-            //   opacités s'ADDITIONNAIENT dans le ZStack — produisait un pic de
-            //   luminosité au milieu de la transition ;
+            //   `crossFadeStory`). Deux sols dont les opacités s'ADDITIONNERAIENT
+            //   dans le ZStack produiraient un pic de luminosité au milieu de la
+            //   transition ;
             // - le VOILE, dont la valeur suit l'état de la carte (0,18 cardé,
             //   0 au plein bord) et dont le ressort est celui de la carte : une
             //   décision de « quand », donc de l'hôte ;
@@ -557,10 +545,10 @@ struct StoryCardView: View {
                 outgoingContentHost(outgoing)
                     .id("out-\(outgoing.id)")
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
-                    // Sans contrainte, le reader s'étirait à la hauteur écran et
+                    // Sans contrainte, le reader s'étirerait à la hauteur écran et
                     // la projection design→render (scaleFactor = width/1080)
-                    // décalait visuellement les textes/stickers de ~77pt vers le
-                    // haut sur iPhone 16 Pro (bug audit 2026-05-27).
+                    // décalerait visuellement les textes/stickers de ~77pt vers le
+                    // haut sur iPhone 16 Pro.
                     // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
                     // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
                     // ne contraint pas correctement le UIViewRepresentable
@@ -571,7 +559,7 @@ struct StoryCardView: View {
                     .scaleEffect(closingScale)
                     // Canvas sortant suit la carte : MÊME composant, donc même
                     // cadre, même fond et même coins que la couche courante —
-                    // et que le plein écran cadré d'un post (#6904).
+                    // et que le plein écran cadré d'un post.
                     .readerCard(layout: readerSceneLayout,
                                 framing: readerCanvasFraming, resting: readerRestingFraming,
                                 thumbHash: readerBackdropHash(of: outgoing))
@@ -582,7 +570,7 @@ struct StoryCardView: View {
 
             // === Layers 2–4: Canvas pixel-perfect (media + filter + text + stickers) ===
             // La SENTINELLE prend la place de la scène quand ce build ne sait pas
-            // la peindre (#4088). La bifurcation est ICI, au-dessus de la chaîne
+            // la peindre. La bifurcation est ICI, au-dessus de la chaîne
             // d'accessibilité du canvas : plus bas, `children: .ignore` aplatirait
             // ses deux boutons — le seul geste utile deviendrait inatteignable.
             if currentStoryIsUnpaintable {
@@ -617,9 +605,8 @@ struct StoryCardView: View {
                     )) {
                         // Rotor VoiceOver = navigation MANUELLE au même titre
                         // qu'un tap — sans ce tick, un utilisateur VoiceOver
-                        // perdait tout retour haptique de navigation (post-revue
-                        // 2026-07-13 : seuls les deux gestes tactiles avaient
-                        // été raccordés au tick unique).
+                        // perdrait tout retour haptique de navigation (seuls les deux gestes
+                        // tactiles seraient raccordés au tick unique).
                         HapticFeedback.light()
                         goToNext()
                     }
@@ -663,15 +650,13 @@ struct StoryCardView: View {
                                 framing: readerCanvasFraming, resting: readerRestingFraming,
                                 thumbHash: readerBackdropHash(of: story))
                     // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
-                    // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
-                    // (demande user 2026-06-02 « bords arrondis + ThumbHash en fond »).
+                    // contenu) par son BORD arrondi + son ombre, pas par un voile sombre.
                     // Coupée en plein écran (carte = plein bord, pas d'ombre).
                     .shadow(color: .black.opacity(canvasIsExpanded ? 0 : 0.4),
                             radius: 20, y: 8)
-                    // **Déplier la légende FLOUTE la scène** (directive porteur
-                    // 2026-09-02) : « pour les story pas besoin de cacher quoi
-                    // que ce soit, quand on déplie, on floute juste la story et
-                    // on affiche le texte déplié ».
+                    // **Déplier la légende FLOUTE la scène** : pour les story pas besoin de
+                    // cacher quoi que ce soit, quand on déplie, on floute juste la story et
+                    // on affiche le texte déplié.
                     //
                     // La story n'a rien à sacrifier — pas de carte d'auteur en
                     // bas, pas de pellicule : sa scène OCCUPE déjà tout. Elle
@@ -758,12 +743,12 @@ struct StoryCardView: View {
             backgroundAudioLayer
 
             // === Translation indicator (Prisme Linguistique — discret) ===
-            // Le badge de langue courante a QUITTÉ le coin bas-gauche (directive
-            // user 2026-07-26) : il est désormais accolé au bouton « Abc » du
+            // Le badge de langue courante n'est pas dans le coin bas-gauche : il est
+            // accolé au bouton « Abc » du
             // rail (`StoryActionSidebarView`, via `displayedLanguageCode`), au
             // point d'entrée des traductions. Plus de badge flottant ici.
 
-            // === Layer 5: voiles de lisibilité — ils suivent le chrome (#6701) ===
+            // === Layer 5: voiles de lisibilité — ils suivent le chrome ===
             StoryReaderScrims(topInset: topInset, chromeVisible: readerChromeShown)
 
             // === Layer 6: Gesture overlay (tap left/right, long press) ===
@@ -795,8 +780,8 @@ struct StoryCardView: View {
                     // pause : le double tap la bascule, donc timer, vidéo de
                     // fond, audios et effets gèlent et repartent ensemble.
                     //
-                    // Le double tap NE TOUCHE PAS au chrome (directive user
-                    // 2026-07-25) : c'est une pause, pas une mise en immersion.
+                    // Le double tap NE TOUCHE PAS au chrome : c'est une pause, pas une
+                    // mise en immersion.
                     // Seuls le long-press (immersion pendant le maintien) et le
                     // swipe vertical (plein écran) changent le cadrage.
                     isLongPressPaused.toggle()
@@ -823,12 +808,12 @@ struct StoryCardView: View {
             // NOTE: Live comments overlay (Instagram-style) is rendered by
             // `StoryViewerContentView` as a sibling of the card transform
             // stack — see this file's `StoryViewerContentView.body`.
-            // Keeping it inside the card meant it inherited the card's
-            // `.offset(x: totalSlideX)`, scale and rotation3D, and shifted
-            // left during drag / scale / 3D transitions (bug 2026-05-28).
+            // Keeping it inside the card would make it inherit the card's
+            // `.offset(x: totalSlideX)`, scale and rotation3D, and shift
+            // left during drag / scale / 3D transitions.
 
             // Bottom area — le composeur, son repli et la mesure qui sert
-            // de sol au texte de la story (`+CanvasComposerLayer`, #8431).
+            // de sol au texte de la story (`+CanvasComposerLayer`).
             composerLayer(geometry: geometry)
 
             fullEmojiPickerLayer
@@ -854,7 +839,7 @@ struct StoryCardView: View {
         // origine décalée d'environ (480-402)/2 ≈ 44pt vers la gauche par
         // rapport à Layer 9 (rendu, lui, à l'intérieur du `.frame` pinné) —
         // tuiles, position du doigt et cible du vol partageraient alors des
-        // repères désalignés (revue fix round 1, 2026-08-11).
+        // repères désalignés.
         .coordinateSpace(name: StoryScrubSpace.name)
         .onPreferenceChange(StoryHeartFrameKey.self) { heartFrame = $0 }
         .clipped()
@@ -899,8 +884,8 @@ struct StoryCardView: View {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             // Signal VISUEL uniquement : les haptics de stall/reprise
-            // s'empilaient sur celle de navigation et hachaient la lecture
-            // (retour user 2026-07-13) — le spinner suffit.
+            // s'empileraient sur celle de navigation et hacheraient la lecture —
+            // le spinner suffit.
             withAnimation(.easeIn(duration: 0.2)) { showStallIndicator = true }
         }
     }
@@ -912,8 +897,8 @@ struct StoryCardView: View {
     /// les letterbox d'un flou DÉRIVÉ du média. Dans ce cas le fond de canvas couleur/gradient
     /// (`storyBackground`, Layer 1) est redondant — pire, il bleed (~15 %) derrière le backdrop
     /// semi-transparent, teintant le média d'un voile indigo parasite. On le neutralise en noir
-    /// (user 2026-06-03 : « le reader/preview ne doit pas afficher de fond de canvas quand le fond
-    /// est déjà une image/vidéo »).
+    /// : le reader/preview n'affiche pas de fond de canvas quand le fond
+    /// est déjà une image/vidéo.
     private var currentSlideHasMediaBackground: Bool {
         guard let story = currentStory else { return false }
         return renderableSlideCache.slide(for: story, chain: resolvedViewerLanguageChain)
@@ -922,8 +907,8 @@ struct StoryCardView: View {
 
     /// Scheme épinglé sur le chrome du reader (header + sidebar) : suit la
     /// luminance du FOND de la slide affichée, pas le thème de l'app — même
-    /// règle que le composer (`CanvasChromeScheme`, capture user 2026-07-11 :
-    /// icônes glass illisibles selon la couleur de fond).
+    /// règle que le composer (`CanvasChromeScheme`) : sans cela, les icônes
+    /// glass seraient illisibles selon la couleur de fond.
     var readerChromeScheme: ColorScheme { // internal : `+Canvas+Layers`
         CanvasChromeScheme.scheme(
             background: currentStory?.storyEffects?.background,
@@ -934,31 +919,24 @@ struct StoryCardView: View {
     // MARK: - Le SOL du lecteur : plus aucune recette ici
 
     // **La recette du sol vit dans `SceneFloorView` (MeeshyUI), et son empreinte
-    // dans `StoryItem.sceneBackdropHash`** (lot #6904, 2026-09-17).
+    // dans `StoryItem.sceneBackdropHash`.**
     //
-    // Ce fichier portait les deux : `storyBlurredBackdrop(for:)` (flou 60,
-    // échelle 1,18, opacité 0,85) et `resolvedBackdropImage(for:)`, sa cascade
-    // d'empreinte — slide, puis média de fond, puis premier média. La cascade
-    // était déjà EN DOUBLE dans cet écran : la CARTE lisait
-    // `story.sceneBackdropHash` (`readerBackdropHash`) pendant que le sol
-    // descendait la sienne, si bien qu'une story à plusieurs médias pouvait
-    // peindre son sol avec une empreinte et sa carte avec une autre. Les deux
-    // lisent désormais le même site — le fond DANS la carte et le sol AUTOUR
-    // parlent du même contenu, ce qui est tout l'objet de #6797.
-    //
-    // L'étape 1 des deux cascades était identique (`toRenderableSlide` recopie
-    // `storyEffects` et n'écrit jamais `thumbHash`) ; elles ne divergeaient que
-    // lorsqu'un média de fond n'était pas le PREMIER média porteur d'empreinte.
+    // La CARTE lit `story.sceneBackdropHash` (`readerBackdropHash`) et le sol
+    // la même empreinte : le fond DANS la carte et le sol AUTOUR parlent du
+    // même contenu. Deux cascades d'empreinte (slide, puis média de fond, puis
+    // premier média) pourraient diverger lorsqu'un média de fond n'est pas le
+    // PREMIER média porteur d'empreinte, et une story à plusieurs médias
+    // peindrait son sol avec une empreinte et sa carte avec une autre.
 
     // MARK: - Background Audio Badge
 
 
-    // Le chip « note + onde » d'une piste de fond ENREGISTRÉE/IMPORTÉE a été
-    // retiré du canvas (directive user 2026-07-30) : le header du reader porte
-    // désormais ce même signal — note musicale puis onde animée — juste après
+    // Le chip « note + onde » d'une piste de fond ENREGISTRÉE/IMPORTÉE n'est pas
+    // dans le canvas : le header du reader porte
+    // ce même signal — note musicale puis onde animée — juste après
     // l'heure de publication. Une piste de fond sans entrée bibliothèque n'a
-    // donc plus rien à afficher au milieu de l'image.
+    // donc rien à afficher au milieu de l'image.
 
-    // Le badge de langue courante vit désormais dans le rail (accolé à « Abc »),
-    // plus dans le canvas — voir `StoryActionSidebarView.displayedLanguageCode`.
+    // Le badge de langue courante vit dans le rail (accolé à « Abc »),
+    // pas dans le canvas — voir `StoryActionSidebarView.displayedLanguageCode`.
 }

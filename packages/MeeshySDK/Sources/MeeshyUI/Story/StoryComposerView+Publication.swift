@@ -315,14 +315,14 @@ extension StoryComposerView {
                     bundle: .module
                 ))
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 Text(String(
                     localized: "story.composer.openingHint",
                     defaultValue: "Animation d'entrée du slide courant, visible en aperçu et en lecture.",
                     bundle: .module
                 ))
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.55))
+                .foregroundStyle(Color.white.opacity(0.55))
             }
             // Persistance via granularCanvasSync (openingEffect tracké) —
             // même chemin que le panneau Fond du band (C1, source unique VM).

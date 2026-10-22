@@ -75,7 +75,7 @@ final class ConversationCommandHandler: ConversationCommandProviding {
     private let personalHiding: any PersonalMessageHiding
     private let now: () -> Date
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-commands")
+    private static let logger = MeeshyLog.logger(.conversationCommands)
     private static let reactionMaxTokens: Double = 10
     private static let reactionRefillRate: Double = 3
 

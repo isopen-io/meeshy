@@ -699,9 +699,12 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (joined === null || call === null || call.callId !== joined.callId || call.phase.kind === 'ended' || call.phase.kind === 'incoming') return;
     if (joined.person.userId === deps.viewerId()) return;
     if (joined.iceServers !== null) session.iceServers = joined.iceServers;
-    remember(joined.person, joined.participantId, { micMuted: !joined.audio, cameraOn: joined.video });
-    session.telemetry = markNegotiating(session.telemetry, deps.now());
     const existing = session.links.get(joined.person.userId);
+    const sameRow = joined.participantId !== null && session.currentRows.get(joined.person.userId) === joined.participantId;
+    const stillNegotiating = existing !== undefined && call.members[joined.person.userId]?.link === 'connecting';
+    remember(joined.person, joined.participantId, { micMuted: !joined.audio, cameraOn: joined.video });
+    if (sameRow && stillNegotiating) return;
+    session.telemetry = markNegotiating(session.telemetry, deps.now());
     if (existing !== undefined) {
       existing.close();
       session.links.delete(joined.person.userId);

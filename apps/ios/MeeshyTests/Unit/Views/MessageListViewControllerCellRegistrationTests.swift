@@ -45,10 +45,10 @@ final class MessageListViewControllerCellRegistrationTests: XCTestCase {
 
     func test_chaqueTypeDeLigne_aSonPoolDeReutilisation() async throws {
         let (vc, window) = try await makeMountedList(count: 6)
-        defer { withExtendedLifetime(window) {} }
-        vc.conversationViewModel = try await makeConversationViewModel()
-        let typers = [TypingParticipant(id: "user_other", displayName: "Autre")]
-        vc.conversationViewModel?.typingParticipants = typers
+        let viewModel = try await makeConversationViewModel()
+        defer { withExtendedLifetime((window, viewModel)) {} }
+        vc.conversationViewModel = viewModel
+        viewModel.typingParticipants = [TypingParticipant(id: "user_other", displayName: "Autre")]
         vc.applySnapshot(reconfigure: .allItems)
         let isDay: (MessageListItem) -> Bool = { if case .dayHeader = $0 { return true } else { return false } }
         for _ in 0..<40 {

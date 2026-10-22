@@ -1,6 +1,10 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import me.meeshy.sdk.model.serialization.LossyListSerializer
+import me.meeshy.sdk.model.serialization.LossyNullableListSerializer
+import me.meeshy.sdk.model.serialization.TolerantSerializer
 
 /** A mentioned user attached to a message or post — port of MentionedUser (UserDisplayNameCache.swift). */
 @Serializable
@@ -49,20 +53,6 @@ data class ApiMessageSenderUser(
     val avatar: String? = null,
 )
 
-/** Full message sender embedded in a message API response — port of APIMessageSender (MessageModels.swift). */
-@Serializable
-data class ApiMessageSenderDetail(
-    val id: String,
-    val username: String? = null,
-    val displayName: String? = null,
-    val avatar: String? = null,
-    val type: String? = null,
-    val userId: String? = null,
-    val firstName: String? = null,
-    val lastName: String? = null,
-    val user: ApiMessageSenderUser? = null,
-)
-
 /** Attachment transcription payload — port of APIAttachmentTranscription (MessageModels.swift). */
 @Serializable
 data class ApiAttachmentTranscription(
@@ -90,28 +80,6 @@ data class ApiAttachmentTranslation(
     val segments: List<TranscriptionSegment>? = null,
 )
 
-/** A message attachment in an API response — port of APIMessageAttachment (MessageModels.swift). */
-@Serializable
-data class ApiMessageAttachment(
-    val id: String,
-    val fileName: String? = null,
-    val originalName: String? = null,
-    val mimeType: String? = null,
-    val fileSize: Int? = null,
-    val fileUrl: String? = null,
-    val thumbnailUrl: String? = null,
-    val thumbHash: String? = null,
-    val width: Int? = null,
-    val height: Int? = null,
-    val duration: Int? = null,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    /** Author-authored accessibility description (`MessageAttachment.alt`, #6813). Bare pass-through, no Prisme translation. */
-    val alt: String? = null,
-    val transcription: ApiAttachmentTranscription? = null,
-    val translations: Map<String, ApiAttachmentTranslation>? = null,
-)
-
 /** The message a forward originates from — port of APIForwardedFrom (MessageModels.swift). */
 @Serializable
 data class ApiForwardedFrom(
@@ -119,7 +87,9 @@ data class ApiForwardedFrom(
     val content: String? = null,
     val messageType: String? = null,
     val createdAt: String? = null,
-    val sender: ApiMessageSenderDetail? = null,
+    @Serializable(with = TolerantMessageSenderSerializer::class)
+    val sender: ApiMessageSender? = null,
+    @Serializable(with = LossyApiMessageAttachmentListOrNullSerializer::class)
     val attachments: List<ApiMessageAttachment>? = null,
 )
 
@@ -171,3 +141,21 @@ data class ConsumeViewOnceResponse(
     val maxViewOnceCount: Int = 0,
     val isFullyConsumed: Boolean = false,
 )
+
+// ── Sérialiseurs tolérants des messages : un champ malformé ne coûte que lui-même ──
+
+internal object TolerantMessageSenderSerializer :
+    KSerializer<ApiMessageSender?> by TolerantSerializer(ApiMessageSender.serializer())
+
+/** Liste de traductions : une traduction malformée est écartée, les autres restent, dans l'ordre. */
+object LossyApiTextTranslationListSerializer :
+    KSerializer<List<ApiTextTranslation>> by LossyListSerializer(ApiTextTranslation.serializer())
+
+object LossyApiTextTranslationListOrNullSerializer :
+    KSerializer<List<ApiTextTranslation>?> by LossyNullableListSerializer(ApiTextTranslation.serializer())
+
+object LossyMentionedUserListOrNullSerializer :
+    KSerializer<List<MentionedUser>?> by LossyNullableListSerializer(MentionedUser.serializer())
+
+object LossyTrackedLinkListOrNullSerializer :
+    KSerializer<List<TrackedLink>?> by LossyNullableListSerializer(TrackedLink.serializer())

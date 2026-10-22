@@ -87,7 +87,7 @@ final class VoiceRecordingLiveActivityCoordinator {
     private func makeHost() -> (any LiveActivityHostProviding<VoiceRecordingSnapshot>)? {
         #if canImport(ActivityKit)
         guard #available(iOS 16.1, *) else { return nil }
-        return LiveActivityHost<VoiceRecordingActivityAttributes> {
+        return LiveActivityHost<VoiceRecordingActivityAttributes, VoiceRecordingSnapshot> {
             VoiceRecordingActivityAttributes(labels: VoiceRecordingLabels(
                 stop: String(localized: "composer.recording.stopAndAttach", defaultValue: "Arrêter et ajouter aux pièces jointes", bundle: .main),
                 cancel: String(localized: "composer.recording.cancel", defaultValue: "Annuler l'enregistrement", bundle: .main)

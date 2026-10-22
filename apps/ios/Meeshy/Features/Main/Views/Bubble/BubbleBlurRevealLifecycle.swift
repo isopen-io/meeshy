@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 
 /// Logique pure de cycle de vie pour la revelation d'un message floute.
 /// Was: ThemedMessageBubble.scheduleBlurReveal() + revealBlurredContent().
@@ -109,22 +110,19 @@ final class BubbleBlurRevealController: ObservableObject {
         revealTask?.cancel()
         revealTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: .seconds(self.visibilityDuration))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(self.visibilityDuration)), !Task.isCancelled else { return }
 
             // Phase 1: Fog condensation appears
             withAnimation(.easeIn(duration: BubbleBlurRevealLifecycle.Phase.fogIn.duration)) {
                 self.fogOpacity = 1
             }
-            try? await Task.sleep(for: .seconds(BubbleBlurRevealLifecycle.Phase.fogIn.duration - 0.05))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(BubbleBlurRevealLifecycle.Phase.fogIn.duration - 0.05)), !Task.isCancelled else { return }
 
             // Phase 2: Blur applies behind fog
             withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.blurApply.duration)) {
                 self.isRevealed = false
             }
-            try? await Task.sleep(for: .seconds(BubbleBlurRevealLifecycle.Phase.blurApply.duration + 0.05))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(BubbleBlurRevealLifecycle.Phase.blurApply.duration + 0.05)), !Task.isCancelled else { return }
 
             // Phase 3: Fog dissipates
             withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.fogOut.duration)) {

@@ -22,6 +22,32 @@ export type SocketIORedisAdapterHandle = {
 };
 
 /**
+ * `@socket.io/redis-adapter` fires these commands without awaiting or catching
+ * them. At shutdown (#11468), the sockets' departures still broadcast presence
+ * while `close()` has already dropped the connection: each command rejected
+ * with « Connection is closed. » and reached the process as an UNHANDLED
+ * rejection. Observing the promise logs the failure and leaves it to any
+ * caller that does await it.
+ */
+const FIRE_AND_FORGET_COMMANDS: ReadonlySet<PropertyKey> = new Set(['publish', 'subscribe', 'psubscribe', 'unsubscribe', 'punsubscribe']);
+
+function withObservedCommands(client: Redis, role: 'pub' | 'sub'): Redis {
+  return new Proxy(client, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target);
+      if (!FIRE_AND_FORGET_COMMANDS.has(property) || typeof value !== 'function') return value;
+      return (...args: unknown[]) => {
+        const result: unknown = value.apply(target, args);
+        if (result instanceof Promise) {
+          result.catch((err: unknown) => logger.warn('Socket.IO Redis adapter command failed', { role, command: String(property), err }));
+        }
+        return result;
+      };
+    },
+  });
+}
+
+/**
  * Attaches the Redis pub/sub adapter to `io` when a Redis URL is configured.
  * Returns `null` when no URL is available — the caller keeps the default
  * single-process adapter, so horizontal scaling is opt-in via REDIS_URL.
@@ -51,7 +77,7 @@ export function attachSocketIORedisAdapter(
   pubClient.on('error', (err) => logger.error('Socket.IO Redis adapter pub client error', { err }));
   subClient.on('error', (err) => logger.error('Socket.IO Redis adapter sub client error', { err }));
 
-  io.adapter(createAdapter(pubClient, subClient));
+  io.adapter(createAdapter(withObservedCommands(pubClient, 'pub'), withObservedCommands(subClient, 'sub')));
   logger.info('Socket.IO Redis adapter attached — broadcasts now fan out across gateway instances sharing this Redis');
 
   return {

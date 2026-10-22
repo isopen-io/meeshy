@@ -139,7 +139,7 @@ enum VitrineInteractions {
         }
         VitrineTournage.etape("choix")
         reagir(emojiDuMessage)
-        try? await Task.sleep(for: tenueDeLaReaction)
+        guard await cancellableSleep(for: tenueDeLaReaction) else { return }
     }
 
     /// Le toucher du compteur (`ProgressionHeaderStanding.onOpenMeesh`) pousse la fiche des Meeshes ; la scène y

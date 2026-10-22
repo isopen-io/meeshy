@@ -166,8 +166,7 @@ final class OutboxRetryScheduler {
             // Cap à 1 h : au-delà, un évènement de cycle de vie aura de toute
             // façon redéclenché un flush entre-temps.
             let delay = min(max(0, date.timeIntervalSinceNow), 3600)
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(delay)), !Task.isCancelled else { return }
             Task { @MainActor in await flush() }
         }
     }

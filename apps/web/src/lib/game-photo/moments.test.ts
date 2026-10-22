@@ -9,11 +9,14 @@ import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture } from '@
 
 import {
   achievementMoment,
+  dayMoment,
+  dayOfYear,
   flameMoment,
   levelHundredMoment,
   meeshMoment,
   photoMomentFromCard,
   photoMomentOfEmblemV2,
+  momentPlate,
   photoMomentsOfTransition,
   rankMoment,
   startMoment,
@@ -110,6 +113,48 @@ describe('chaque moment porte son identité, son emblème et ses mots', () => {
     expect(flameMoment(8).id).toBe('flame:7');
     expect(flameMoment(30).emblem).toEqual({ kind: 'flame', form: 'brasier', days: 30 });
     expect(flameMoment(365).title).toBe('365 jours de Flamme');
+  });
+
+  test('D17 (#10167) : la ligne du dessus d’une Flamme est la FORME de la loi (`FLAME_FORMS`), jamais l’étiquette du manifeste — 7 flamme, 30 brasier, 100 astre, 365 soleil', () => {
+    expect([7, 30, 100, 365].map((days) => flameMoment(days).kicker)).toEqual(['Flamme', 'Brasier', 'Astre', 'Soleil']);
+  });
+
+  test('la réalisation du jour (D6, #10167) : identité `day:<AAAA-MM-JJ>`, quantième de l’année en ligne du dessus, l’Offrande ouverte en titre ; une clé illisible n’a pas de moment', () => {
+    const moment = dayMoment('2026-10-10');
+    expect(moment?.id).toBe('day:2026-10-10');
+    expect(moment?.emblem).toEqual({ kind: 'day', dayKey: '2026-10-10' });
+    expect(moment?.kicker).toBe('Réalisation du jour · Jour 283');
+    expect(moment?.title).toBe('L’Offrande ouverte');
+    expect(dayOfYear('2026-01-01')).toBe(1);
+    expect(dayOfYear('2024-12-31')).toBe(366);
+    expect(dayMoment('2026-13-01')).toBeNull();
+    expect(dayMoment('hier')).toBeNull();
+  });
+});
+
+describe('momentPlate — ce que la PLAQUE grave quand le cadre lui réserve `plate.1` (L14, #10167)', () => {
+  test('un palier du trésor : le compte de Meeshes gardées du palier, accordé', () => {
+    expect(momentPlate({ kind: 'treasury', tier: 'bourse' })).toBe('1 Meesh gardée');
+    expect(momentPlate({ kind: 'treasury', tier: 'coffre' })).toBe('100 Meeshes gardées');
+    expect(momentPlate({ kind: 'treasury', tier: 'reserve' })?.replace(/\s/g, ' ')).toBe('1 000 Meeshes gardées');
+  });
+
+  test('la réalisation du jour : la plaque dit ce que la ligne du dessus dit (jour-a n’a pas de ligne du dessus, jour-b n’a pas de plaque)', () => {
+    const moment = dayMoment('2026-10-10');
+    expect(moment === null ? null : momentPlate(moment.emblem)).toBe('Réalisation du jour · Jour 283');
+  });
+
+  test('un Mythe : sa place sur cent ; sans place servie, rien — jamais le « Nº 42 / 100 » d’exemple', () => {
+    expect(momentPlate({ kind: 'rank', rank: 'mythe', division: null, mythic: { number: 42, edition: 1 } })).toBe('Nº 42 / 100');
+    expect(momentPlate({ kind: 'rank', rank: 'mythe', division: null, mythic: null })).toBeNull();
+  });
+
+  test('un moment sans plaque vivante ne grave rien : le palier, la Meesh, la Flamme, le départ, un rang de division', () => {
+    expect(momentPlate(tierMoment({ tier: 'comete', level: 60 }).emblem)).toBeNull();
+    expect(momentPlate(meeshMoment({ number: 100 }).emblem)).toBeNull();
+    expect(momentPlate(flameMoment(30).emblem)).toBeNull();
+    expect(momentPlate(startMoment().emblem)).toBeNull();
+    expect(momentPlate(rankMoment({ rank: 'ambassadeur', division: 3 }).emblem)).toBeNull();
   });
 });
 

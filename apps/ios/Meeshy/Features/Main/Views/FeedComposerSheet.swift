@@ -34,6 +34,7 @@ struct FeedComposerSheet: View {
     private var isDark: Bool { colorScheme == .dark }
     @ObservedObject private var authManager = AuthManager.shared
     @State private var composerText = ""
+    @State private var delays = DelayedActions()
     @FocusState private var isFocused: Bool
     /// Une pièce en attente, ouverte dans la retouche de la caméra (#11170).
     @State private var pieceToRetouch: ComposerRetouchPiece?
@@ -493,11 +494,9 @@ struct FeedComposerSheet: View {
         }
         .onAppear {
             composerText = initialText
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isFocused = true
-                openInitialPicker()
-            }
+            delays.run(after: .milliseconds(300)) { isFocused = true; openInitialPicker() }
         }
+        .onDisappear { delays.cancelAll() }
     }
 
     // MARK: - Open Initial Picker

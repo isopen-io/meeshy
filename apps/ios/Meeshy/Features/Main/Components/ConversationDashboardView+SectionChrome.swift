@@ -57,7 +57,7 @@ struct ConversationDashboardSectionHeader: View {
                 .foregroundColor(accent)
             Text(title.uppercased())
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .heavy, design: .rounded))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .tracking(1.5)
         }
     }

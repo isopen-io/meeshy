@@ -48,8 +48,10 @@ public protocol PhotoLibraryAssetCreating: Sendable {
 }
 
 /// Ce qu'il faut écrire — le nom d'origine porte déjà la marque de l'empreinte.
+// unchecked: la requête ne porte que des valeurs immuables ; UIImage n'est pas Sendable.
 public struct PhotoLibraryAssetRequest: @unchecked Sendable {
     public enum Kind: Sendable, Equatable { case photo, video }
+    // unchecked: cas immuables ; UIImage n'est pas Sendable.
     public enum Source: @unchecked Sendable {
         case data(Data)
         case file(URL, move: Bool)
@@ -145,6 +147,7 @@ public actor PhotoLibraryDeduplicator {
 
 /// Registre borné dans `UserDefaults`. Il ne survit pas à une désinstallation —
 /// c'est la marque du nom d'origine qui prend alors le relais.
+// unchecked: état mutable sous `state` (Locked) ; `UserDefaults` n'est pas Sendable.
 public final class PhotoLibraryMediaRegistry: PhotoLibraryMediaRegistering, @unchecked Sendable {
 
     public static let shared = PhotoLibraryMediaRegistry()
@@ -153,58 +156,63 @@ public final class PhotoLibraryMediaRegistry: PhotoLibraryMediaRegistering, @unc
     static let aliasesKey = "meeshy.photoLibrary.aliases.v1"
     static let capacity = 5000
 
+    private struct State {
+        var entries: [String: String]
+        var entryOrder: [String]
+        var aliases: [String: String]
+        var aliasOrder: [String]
+    }
+
     private let defaults: UserDefaults
-    private let lock = NSLock()
-    private var entries: [String: String]
-    private var entryOrder: [String]
-    private var aliases: [String: String]
-    private var aliasOrder: [String]
+    private let state: Locked<State>
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let storedEntries = defaults.dictionary(forKey: Self.entriesKey) as? [String: String] ?? [:]
         let storedAliases = defaults.dictionary(forKey: Self.aliasesKey) as? [String: String] ?? [:]
-        self.entries = storedEntries
-        self.entryOrder = Array(storedEntries.keys)
-        self.aliases = storedAliases
-        self.aliasOrder = Array(storedAliases.keys)
+        self.state = Locked(uncheckedState: State(
+            entries: storedEntries,
+            entryOrder: Array(storedEntries.keys),
+            aliases: storedAliases,
+            aliasOrder: Array(storedAliases.keys)
+        ))
     }
 
     public func localIdentifier(for signature: PhotoLibraryMediaSignature) -> String? {
-        lock.withLock { entries[signature.token] }
+        state.mutateUnchecked { $0.entries[signature.token] }
     }
 
     public func record(_ signature: PhotoLibraryMediaSignature, localIdentifier: String) {
-        lock.withLock {
-            if entries.updateValue(localIdentifier, forKey: signature.token) == nil {
-                entryOrder.append(signature.token)
+        state.mutateUnchecked { state in
+            if state.entries.updateValue(localIdentifier, forKey: signature.token) == nil {
+                state.entryOrder.append(signature.token)
             }
-            Self.trim(&entries, order: &entryOrder)
-            defaults.set(entries, forKey: Self.entriesKey)
+            Self.trim(&state.entries, order: &state.entryOrder)
+            defaults.set(state.entries, forKey: Self.entriesKey)
         }
     }
 
     public func forget(_ signature: PhotoLibraryMediaSignature) {
-        lock.withLock {
-            guard entries.removeValue(forKey: signature.token) != nil else { return }
-            entryOrder.removeAll { $0 == signature.token }
-            defaults.set(entries, forKey: Self.entriesKey)
+        state.mutateUnchecked { state in
+            guard state.entries.removeValue(forKey: signature.token) != nil else { return }
+            state.entryOrder.removeAll { $0 == signature.token }
+            defaults.set(state.entries, forKey: Self.entriesKey)
         }
     }
 
     public func noteAlias(_ alias: String, for signature: PhotoLibraryMediaSignature) {
-        lock.withLock {
-            guard aliases[alias] != signature.token else { return }
-            if aliases.updateValue(signature.token, forKey: alias) == nil {
-                aliasOrder.append(alias)
+        state.mutateUnchecked { state in
+            guard state.aliases[alias] != signature.token else { return }
+            if state.aliases.updateValue(signature.token, forKey: alias) == nil {
+                state.aliasOrder.append(alias)
             }
-            Self.trim(&aliases, order: &aliasOrder)
-            defaults.set(aliases, forKey: Self.aliasesKey)
+            Self.trim(&state.aliases, order: &state.aliasOrder)
+            defaults.set(state.aliases, forKey: Self.aliasesKey)
         }
     }
 
     public func signature(forAlias alias: String) -> PhotoLibraryMediaSignature? {
-        lock.withLock { aliases[alias].flatMap { PhotoLibraryMediaSignature(token: $0) } }
+        state.mutateUnchecked { $0.aliases[alias].flatMap { PhotoLibraryMediaSignature(token: $0) } }
     }
 
     private static func trim(_ map: inout [String: String], order: inout [String]) {

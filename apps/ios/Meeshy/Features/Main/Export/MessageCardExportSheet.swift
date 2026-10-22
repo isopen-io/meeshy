@@ -81,6 +81,8 @@ struct MessageCardExportSheet: View {
     @State var compositionMode: PostCommentCardMode?
     @State var showsPost = true
     @State var chosenReplies: Set<String> = []
+    /// Le média du support choisi pour la tête (#11783) — `nil` : le premier visuel.
+    @State var headMediaID: String?
 
     struct Rendered {
         let key: String
@@ -101,7 +103,7 @@ struct MessageCardExportSheet: View {
 
     var subject: MessageCardSubject {
         if let composition = request.composition, let compositionMode,
-           let composed = composition.subject(mode: compositionMode, showsPost: showsPost, chosen: chosenReplies) {
+           let composed = composition.subject(mode: compositionMode, showsPost: showsPost, chosen: chosenReplies, headMediaID: headMediaID) {
             return composed
         }
         return exportLanguage.flatMap(request.subjectIn) ?? request.subject
@@ -110,7 +112,7 @@ struct MessageCardExportSheet: View {
     /// Le choix de composition, dans la clé de peinture : changer de mode repeint l'aperçu.
     var compositionKey: String {
         guard let compositionMode else { return "" }
-        return "\(compositionMode.rawValue)|\(showsPost)|\(chosenReplies.sorted().joined(separator: ","))"
+        return "\(compositionMode.rawValue)|\(showsPost)|\(chosenReplies.sorted().joined(separator: ","))|\(headMediaID ?? "")"
     }
 
     /// Les médias tels qu'on les peint — chaque son avec l'onde et la durée de

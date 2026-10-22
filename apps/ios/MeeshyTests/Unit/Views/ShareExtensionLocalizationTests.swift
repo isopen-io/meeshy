@@ -1,4 +1,6 @@
 import XCTest
+import MeeshySDK
+@testable import Meeshy
 
 /// **The share extension speaks the APP's vocabulary** (#10947).
 ///
@@ -79,6 +81,43 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         XCTAssertFalse(copy.contains("bundle: .main"), "In the extension, .main is the .appex: its catalog has none of these keys.")
     }
 
+    /// The extension runs in its own process: the `AppleLanguages` override the app
+    /// sets at launch never reaches it, so the sheet spoke the DEVICE language under an
+    /// app set to French (#11515). The App Group language is the only shared channel.
+    func test_theShareScreenWords_speakTheLanguagePublishedByTheApp_notTheDevice() {
+        let french = Bundle.shareCatalog(
+            in: .main,
+            store: ShareLanguageStoreStub(publishedCode: "fr"),
+            devicePreferred: ["en-US"]
+        )
+        XCTAssertEqual(
+            String(localized: "share.sheet.title.extension", defaultValue: "?", bundle: french),
+            "Envoyer avec Meeshy"
+        )
+
+        let german = Bundle.shareCatalog(
+            in: .main,
+            store: ShareLanguageStoreStub(publishedCode: "de"),
+            devicePreferred: ["fr-FR"]
+        )
+        XCTAssertEqual(
+            String(localized: "share.sheet.title.extension", defaultValue: "?", bundle: german),
+            "Mit Meeshy senden"
+        )
+    }
+
+    func test_withoutAPublishedLanguage_theShareScreenFollowsTheDevice() {
+        let catalog = Bundle.shareCatalog(
+            in: .main,
+            store: ShareLanguageStoreStub(publishedCode: nil),
+            devicePreferred: ["es-ES"]
+        )
+        XCTAssertEqual(
+            String(localized: "share.sheet.title.extension", defaultValue: "?", bundle: catalog),
+            "Enviar con Meeshy"
+        )
+    }
+
     func test_shareSheetDisplayNameIsLocalized() throws {
         // CFBundleDisplayName is what iOS shows in the system share sheet — the single
         // most visible string of the extension, and the one users see before anything
@@ -146,4 +185,9 @@ final class ShareExtensionLocalizationTests: XCTestCase {
             + "never offers Meeshy for any content type."
         )
     }
+}
+
+private struct ShareLanguageStoreStub: InterfaceLanguageProviding {
+    let publishedCode: String?
+    func publish(_ code: String?) {}
 }

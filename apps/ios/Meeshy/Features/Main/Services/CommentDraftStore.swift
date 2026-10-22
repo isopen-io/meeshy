@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import UIKit
+import MeeshySDK
 
 // MARK: - CommentDraftStore
 
@@ -107,8 +108,7 @@ final class CommentDraftStore {
         pendingTexts[postId] = text
         let delay = debounceNanos
         pendingSaves[postId] = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: delay)
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .nanoseconds(delay)), !Task.isCancelled, let self else { return }
             self.write(text, for: postId)
             self.pendingTexts.removeValue(forKey: postId)
             self.pendingSaves.removeValue(forKey: postId)

@@ -82,12 +82,11 @@ final class SocialSocketHeartbeatGuardTests: XCTestCase {
 
     func test_messageSocketManager_keepsItsHeartbeatCarryingClientTime() throws {
         let source = try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
-            + "\n" + sdkSource("Sources/MeeshySDK/Sockets/SocketHeartbeat.swift")
 
         XCTAssertTrue(
-            source.contains("self?.safeEmit(\"heartbeat\", [\"clientTime\": clientTimeMs])")
-                && source.contains("let clientTimeMs = Int64(Date().timeIntervalSince1970 * 1000)"),
-            "Le battement de MessageSocketManager RESTE : il porte `clientTime`, alimente `heartbeat:ack` " +
+            source.contains("self?.safeEmit(\"heartbeat\", [\"clientTime\": clientTimeMs])"),
+            "Le battement de MessageSocketManager RESTE : il porte `clientTime` (l'horloge de la boucle est tenue par " +
+            "`SocketHeartbeatTests`), alimente `heartbeat:ack` " +
             "et donc `connectionRTT`. Le retrait de BW-IOS-07 ne vise que le battement NU de la socket sociale"
         )
     }

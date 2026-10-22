@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { parsePackIndex } from '../../types/content-pack-index';
 import { canUseFrame } from '../../types/frame-usage';
 import { parseGloryFrameContract } from '../../types/glory-frames';
+import { ACHIEVEMENT_RARITIES, type AchievementRarity } from '../../utils/game/glory';
+import { LEVEL_TIER_KEYS } from '../../utils/game/levels';
 import { PHOTO_STATIC_STEP_IDS } from '../../utils/game/photo-step-ids';
 import {
   GLORY_FRAME_OFFER_EXEMPT_FAMILIES,
@@ -24,7 +26,8 @@ const catalog: readonly GloryFrameOfferPack[] = parsePackIndex(readJson(join(REP
   frames: parseGloryFrameContract(readJson(join(REPO, 'services/gateway/assets/packs', entry.contract.src)))?.contract.frames ?? [],
 }));
 
-const DEFAULTS = ['afrique', 'moments', 'tresor'];
+/** Les packs installés par défaut et non retirables : l'Afrique éternelle, les moments, le trésor et, depuis LS (#10168), les hauts faits. */
+const DEFAULTS = ['afrique', 'moments', 'tresor', 'succes'];
 const offer = (over: Partial<GloryFramesForInput> & Pick<GloryFramesForInput, 'stepId'>) =>
   gloryFramesFor({ atmosphere: null, lastChosen: null, catalog, installed: new Set(DEFAULTS), ...over });
 const ids = (refs: readonly { readonly frameId: string }[]) => refs.map((ref) => ref.frameId);
@@ -144,8 +147,43 @@ describe('la loi d’usage (#10146) — jamais un cadre hors de son usage', () =
     }
   });
 
-  it('un succès sans pack de succès ⇒ carte simple (LS l’amènera)', () => {
-    expect(offer({ stepId: 'achievement:messages.3', rarity: 'rare' }).suggested).toEqual([]);
+  it('un haut fait sans le pack des hauts faits (ancien client) ⇒ carte simple, jamais un cadre de rang ni un cadre libre', () => {
+    expect(offer({ stepId: 'achievement:messages.3', rarity: 'rare', installed: new Set(['afrique', 'moments', 'tresor']) }).suggested).toEqual([]);
+  });
+});
+
+describe('les hauts faits (LS, #10168, PP9) — un haut fait se photographie dans SA rareté', () => {
+  const withSucces = (over: Partial<GloryFramesForInput> & Pick<GloryFramesForInput, 'stepId'>) => offer({ installed: new Set(DEFAULTS), ...over });
+
+  it('rare ⇒ succes.rare, et chaque rareté a son cadre, seul proposé', () => {
+    for (const rarity of ACHIEVEMENT_RARITIES) {
+      expect({ rarity, ids: ids(withSucces({ stepId: 'achievement:messages.3', rarity }).suggested) }).toEqual({ rarity, ids: [`succes.${rarity}`] });
+    }
+    expect(withSucces({ stepId: 'achievement:messages.3', rarity: 'rare' }).preselected?.frameId).toBe('succes.rare');
+  });
+
+  it('rareté non servie ⇒ le cadre NEUTRE, jamais celui d’une rareté — pour un haut fait simple comme pour un composé', () => {
+    expect(ids(withSucces({ stepId: 'achievement:messages.3' }).suggested)).toEqual(['succes.neutre']);
+    expect(ids(withSucces({ stepId: 'achievement:defi.streak-3', rarity: null }).suggested)).toEqual(['succes.neutre']);
+    expect(ids(withSucces({ stepId: 'achievement:defi.streak-3', rarity: 'epic' }).suggested)).toEqual(['succes.epic']);
+  });
+
+  it('une rareté dont le cadre est masqué ⇒ le neutre, jamais une autre rareté', () => {
+    const hiddenMythic = catalog.map((pack) => ({ ...pack, frames: pack.frames.map((frame) => (frame.id === 'succes.mythic' ? { ...frame, hidden: true } : frame)) }));
+    expect(ids(withSucces({ stepId: 'achievement:messages.3', rarity: 'mythic', catalog: hiddenMythic }).suggested)).toEqual(['succes.neutre']);
+  });
+
+  it('le pack `succes` ne porte que des cadres de hauts faits : aucun cadre de rang, aucun cadre libre, et chaque rareté plus le neutre', () => {
+    const succes = catalog.find((pack) => pack.slug === 'succes');
+    expect(succes?.atmosphere).toBeNull();
+    expect(succes?.frames.map((frame) => frame.usage.kind)).toEqual(Array(6).fill('achievement'));
+    expect(succes?.frames.map((frame) => (frame.appliesTo.family === 'achievement' ? frame.appliesTo.rarity : 'autre')).sort()).toEqual([...ACHIEVEMENT_RARITIES, null].sort());
+  });
+
+  it('un cadre de haut fait n’est jamais proposé à une autre étape', () => {
+    for (const stepId of ['rank:ambassadeur:3', 'tier:lueur', 'treasury:coffre', 'flame:30', 'day:2026-10-12', 'meesh:1']) {
+      expect({ stepId, leaked: ids(withSucces({ stepId }).suggested).filter((id) => id.startsWith('succes.')) }).toEqual({ stepId, leaked: [] });
+    }
   });
 
   it('chaque cadre proposé, suggéré ou dans others, peut servir le contexte de l’étape', () => {
@@ -179,9 +217,54 @@ describe('la loi d’usage (#10146) — jamais un cadre hors de son usage', () =
 });
 
 describe('la matrice de couverture (§ 7 L3) — chaque étape a un cadre, ou une exemption NOMMÉE (cliquet qui ne fait que se vider)', () => {
-  it('toute identité fixe du carnet reçoit au moins un cadre de l’Afrique, des moments ou du trésor, sauf les familles exemptées', () => {
+  it('toute identité fixe du carnet reçoit au moins un cadre de l’Afrique, des moments, du trésor ou des hauts faits, sauf les familles exemptées', () => {
     const uncovered = PHOTO_STATIC_STEP_IDS.filter((stepId) => offer({ stepId }).suggested.length === 0);
     const families = [...new Set(uncovered.map((stepId) => (stepId.startsWith('rank:') ? `rank:${stepId.split(':')[1]}` : stepId.split(':')[0])))].sort();
     expect(families).toEqual([...GLORY_FRAME_OFFER_EXEMPT_FAMILIES].sort());
   });
 });
+
+describe('L14 (#10167) — les collections `moments` et `tresor` sont branchées par la loi TELLE QUELLE (#10180)', () => {
+  const everywhere = new Set(catalog.map((pack) => pack.slug));
+  const steps = [...PHOTO_STATIC_STEP_IDS, 'day:2026-10-22'];
+  const momentFrames = catalog.filter((pack) => pack.atmosphere === null).flatMap((pack) => pack.frames);
+  const familyOf = (stepId: string): string => stepId.split(':')[0] ?? '';
+  /* Un haut fait se lit avec chaque rareté servie et sans rareté : c'est la rareté, pas l'identité, qui élit son cadre (LS, #10168). */
+  const raritiesOf = (stepId: string): readonly (AchievementRarity | null)[] => (familyOf(stepId) === 'achievement' ? [null, ...ACHIEVEMENT_RARITIES] : [null]);
+  const proposedAt = (frameId: string): readonly string[] =>
+    steps.filter((stepId) =>
+      raritiesOf(stepId).some((rarity) => {
+        const result = offer({ stepId, installed: everywhere, rarity });
+        return [...result.suggested, ...result.others.flatMap((other) => other.frames)].some((ref) => ref.frameId === frameId);
+      }),
+    );
+
+  it('un cadre de moment n’est jamais proposé hors de sa famille : un palier, une Meesh, un trésor, une Flamme, un jour, un haut fait — jamais un rang, jamais une autre famille', () => {
+    expect(momentFrames.length).toBeGreaterThanOrEqual(36);
+    for (const frame of momentFrames) {
+      const outside = proposedAt(frame.id).filter((stepId) => familyOf(stepId) !== frame.appliesTo.family);
+      expect({ id: frame.id, outside }).toEqual({ id: frame.id, outside: [] });
+    }
+  });
+
+  it('chaque cadre des moments, du trésor et des hauts faits sert au moins une étape : aucun cadre orphelin dans un pack non retirable', () => {
+    const orphans = momentFrames.filter((frame) => proposedAt(frame.id).length === 0).map((frame) => frame.id);
+    expect(orphans).toEqual([]);
+  });
+
+  it('D4 : le palier sans cadre dessiné prend le palier dessiné en dessous, et l’étape GARDE son identité — le titre vivant dit le vrai palier, le cadre dit le dessin', () => {
+    const drawn = momentFrames.filter((frame) => frame.appliesTo.family === 'tier').map((frame) => (frame.appliesTo.family === 'tier' ? frame.appliesTo.tier : ''));
+    const undrawn = LEVEL_TIER_KEYS.slice(1).filter((tier) => !drawn.includes(tier));
+    expect(undrawn.length).toBeGreaterThan(0);
+    for (const tier of undrawn) {
+      const below = LEVEL_TIER_KEYS.slice(0, LEVEL_TIER_KEYS.indexOf(tier)).reverse().find((candidate) => drawn.includes(candidate));
+      expect({ tier, suggested: ids(offer({ stepId: `tier:${tier}` }).suggested) }).toEqual({ tier, suggested: below === undefined ? [] : [`moments.palier-${below}`] });
+    }
+  });
+
+  it('D5 (#10180) : départ, niveau 100, Prestige et trophée restent des exemptions NOMMÉES du cliquet, à côté des rangs des mythologies et des succès', () => {
+    for (const family of ['start', 'level-100', 'prestige', 'trophy']) expect(GLORY_FRAME_OFFER_EXEMPT_FAMILIES).toContain(family);
+    for (const family of ['tier', 'meesh', 'treasury', 'flame', 'day']) expect(GLORY_FRAME_OFFER_EXEMPT_FAMILIES).not.toContain(family);
+  });
+});
+

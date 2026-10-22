@@ -157,6 +157,12 @@ describe('le chargement', () => {
     expect(input(host, '[data-scale-abuse="heavyPoints"]').value).toBe(String(DEFAULT_ENGAGEMENT_SCALE.abuse.heavyPoints));
   });
 
+  test('la console ne propose plus de fenêtre de reprise : la loi des 30 jours ne se règle pas (#11491)', async () => {
+    const host = await mountPanel(scaleTransport());
+    expect(host.querySelector('[data-scale-abuse="clawbackHours"]')).toBeNull();
+    expect(host.querySelector('[data-scale-abuse="unverifiedMaxPoints"]')).not.toBeNull();
+  });
+
   test('un barème servi illisible n’est pas édité : l’écran le dit', async () => {
     const host = await mountPanel(scaleTransport({ getBody: { scale: { operations: {} } } }));
     expect(host.querySelector('[data-scale-load-failed]')).not.toBeNull();

@@ -12,6 +12,7 @@ import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { photoMomentFromCard, photoMomentOfEmblemV2, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import { useGamePrefs } from '@/lib/game/preferences';
+import { useAtmosphereGate } from '@/lib/game/use-atmosphere-gate';
 import { gameText } from '@/lib/view/game-copy';
 import { useViewerId } from '@/routes/game-friends';
 import { useGameGuide } from '@/routes/progression-guide';
@@ -71,6 +72,7 @@ export function GameLead({
   const awake = prefs.celebrations && !prefs.hidden;
   const guide = useGameGuide({ view: awake ? view : undefined, settled, userId, ...(transport === undefined ? {} : { transport }) });
   const photo = usePhotoMoments({ view: awake ? view : undefined, env, settled });
+  const atmosphere = useAtmosphereGate(view.game);
   const game = view.game;
 
   const cardMoment = useCallback(
@@ -116,7 +118,7 @@ export function GameLead({
     [photo, env],
   );
 
-  const flow = photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} flameDays={game?.flame.days ?? null} onClose={photo.close} />;
+  const flow = photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} flameDays={game?.flame.days ?? null} atmosphere={atmosphere} onClose={photo.close} />;
   if (collapsed) return flow;
 
   return (

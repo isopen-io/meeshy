@@ -20,7 +20,7 @@ struct GameCard<Content: View>: View {
                 if let title {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                 }
                 content()
@@ -58,7 +58,7 @@ struct GameChip: View {
     var body: some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundColor(ThemeManager.shared.textPrimary)
+            .foregroundStyle(ThemeManager.shared.textPrimary)
             .lineLimit(1)
             .minimumScaleFactor(GameChip.minimumScale)
             .truncationMode(.tail)
@@ -134,7 +134,7 @@ struct GameErrorLine: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-            .foregroundColor(MeeshyColors.error)
+            .foregroundStyle(MeeshyColors.error)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier(identifier)
         }
@@ -238,16 +238,16 @@ struct GameFactChipRow: View {
                         // Le manque est une phrase : elle se lit en entier, sur autant de lignes qu'il faut.
                         Text(sentence)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text(item.label)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                         Text(item.value)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(GameChip.minimumScale)
                     }

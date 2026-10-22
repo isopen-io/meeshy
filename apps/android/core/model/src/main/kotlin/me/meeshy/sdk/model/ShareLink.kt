@@ -180,6 +180,32 @@ data class MyShareLink(
     val expiresAt: String? = null,
     val createdAt: String? = null,
     val conversationTitle: String? = null,
+    // Servis avec `?expand=conversation,policy` (#7797). Tous optionnels : une vieille
+    // passerelle ou une ligne de cache ancienne les omet, `ShareLinkEditDraft.from`
+    // résout alors les défauts du schéma.
+    val description: String? = null,
+    val maxConcurrentUsers: Int? = null,
+    val currentConcurrentUsers: Int? = null,
+    val allowAnonymousMessages: Boolean? = null,
+    val allowAnonymousFiles: Boolean? = null,
+    val allowAnonymousImages: Boolean? = null,
+    val allowViewHistory: Boolean? = null,
+    val requireAccount: Boolean? = null,
+    val requireNickname: Boolean? = null,
+    val requireEmail: Boolean? = null,
+    val requireBirthday: Boolean? = null,
+    val allowedLanguages: List<String>? = null,
+    val conversation: ShareLinkConversationSummary? = null,
+)
+
+/** La conversation d'un lien (`?expand=conversation`) — miroir de `ShareLinkConversationSummary` (iOS). */
+@Serializable
+data class ShareLinkConversationSummary(
+    val id: String = "",
+    val title: String? = null,
+    val type: String? = null,
+    val description: String? = null,
+    val avatar: String? = null,
 )
 
 @Serializable

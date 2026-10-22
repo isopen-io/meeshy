@@ -484,7 +484,13 @@ export const callersIn = (contents, nsNames) => {
 // (run 38990820855, « AMÉLIORATION NON ENREGISTRÉE ») et en local sur origin/dev.
 // 276 -> 275 (2026-10-19) : une entrée de plus a trouvé son appelant sur dev, révélé une fois la première
 // peinture repassée sous son plafond (#10974). Valeur MESURÉE en CI (run 39191671718, « AMÉLIORATION NON ENREGISTRÉE ») et en local sur origin/dev.
-const BASELINE_DEAD_ENTRIES = 275;
+// 275 -> 276 (#10162, 2026-10-22) : `me.gamePhotoMomentsKept` (`POST /api/v1/me/game/photo-moments/kept`, le
+// signal « immortalisée » de D22(b), #10182). La passerelle le sert et son miroir Swift est déjà compté
+// prématuré (check-swift-catalog-dead-entries.mjs) ; le web l'émettra quand le carnet gardera une photo par
+// ce signal (#11585), iOS dans son lot. Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le
+// 2026-10-22 en CI (Quality, run 39754795559) et en local en diffant les entrées mortes entre origin/dev
+// (275) et la branche de #11538 (276) : une seule entrée nouvelle.
+const BASELINE_DEAD_ENTRIES = 276;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

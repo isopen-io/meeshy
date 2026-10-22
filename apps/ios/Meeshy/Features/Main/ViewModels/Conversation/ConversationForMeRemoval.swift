@@ -14,7 +14,7 @@ nonisolated struct ForMeTarget: Equatable, Sendable {
 /// posséder : cacher avant la réponse, rendre au refus.
 struct ForMeProjection {
     let conceal: ([String]) -> Void
-    let reveal: ([String]) async -> Void
+    let reveal: @MainActor ([String]) async -> Void
 }
 
 /// **Le retrait optimiste se fait dans la PROJECTION du fil, jamais en base.**
@@ -36,10 +36,6 @@ nonisolated struct PersonalConcealment: Equatable, Sendable {
 
     func conceals(_ record: MessageRecord) -> Bool {
         ids.contains(record.localId) || record.serverId.map(ids.contains) == true
-    }
-
-    func filtering(_ records: [MessageRecord]) -> [MessageRecord] {
-        ids.isEmpty ? records : records.filter { !conceals($0) }
     }
 }
 

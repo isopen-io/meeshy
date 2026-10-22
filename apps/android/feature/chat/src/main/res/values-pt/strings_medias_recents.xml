@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recent_media_limited_access">Acesso limitado às fotos</string>
+    <string name="recent_media_limited_access_hint">Toque para escolher mais fotos</string>
+</resources>

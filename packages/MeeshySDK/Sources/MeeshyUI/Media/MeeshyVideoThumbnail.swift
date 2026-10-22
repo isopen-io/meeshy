@@ -148,7 +148,7 @@ public struct MeeshyVideoThumbnail: View {
             .overlay(
                 Image(systemName: "video.fill")
                     .font(.system(size: 32))
-                    .foregroundColor(.white.opacity(0.2))
+                    .foregroundStyle(Color.white.opacity(0.2))
             )
     }
 
@@ -160,7 +160,7 @@ public struct MeeshyVideoThumbnail: View {
             Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             Image(systemName: "play.fill")
                 .font(.system(size: MeeshyIconSize.md, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .offset(x: 1.5)
         }
         .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
@@ -175,7 +175,7 @@ public struct MeeshyVideoThumbnail: View {
             HStack {
                 Text(formatted)
                     .font(.system(size: MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xs)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.black.opacity(0.6)))

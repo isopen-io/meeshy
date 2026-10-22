@@ -568,7 +568,7 @@ public struct ConversationScrollControlsView: View {
                     .overlay(
                         Image(systemName: unreadAttachmentTypeLabel == "Video" ? "video.fill" : "photo.fill")
                             .font(.system(size: MeeshyIconSize.sm))
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundStyle(Color.white.opacity(0.6))
                     )
             }
             .aspectRatio(contentMode: .fill)
@@ -579,7 +579,7 @@ public struct ConversationScrollControlsView: View {
             // render the type glyph so the preview still reads as media.
             Image(systemName: symbol)
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color.white.opacity(0.2)))
         } else if let callSymbol = unreadCallSymbol {

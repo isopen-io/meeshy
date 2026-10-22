@@ -1,6 +1,9 @@
 package me.meeshy.app.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,7 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Visibility
@@ -43,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
+import me.meeshy.sdk.model.LocationPrecision
 import me.meeshy.sdk.model.PrivacyCatalog
 import me.meeshy.sdk.model.PrivacyCategory
 import me.meeshy.sdk.model.PrivacyToggle
@@ -111,6 +118,10 @@ fun PrivacySettingsScreen(
                         }
                     }
                 }
+                LocationPrecisionSection(
+                    selected = state.locationPrecision,
+                    onSelect = viewModel::setLocationPrecision,
+                )
                 EncryptionComingSoonSection()
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
@@ -177,6 +188,59 @@ private fun PrivacyToggleRow(
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
+}
+
+@Composable
+private fun LocationPrecisionSection(
+    selected: LocationPrecision,
+    onSelect: (LocationPrecision) -> Unit,
+) {
+    PrivacySection(
+        title = stringResource(R.string.location_precision_section),
+        icon = Icons.Filled.LocationOn,
+        iconColor = MeeshyPalette.Info,
+    ) {
+        Column(modifier = Modifier.selectableGroup()) {
+            LocationPrecision.entries.forEach { precision ->
+                val isSelected = precision == selected
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .selectable(selected = isSelected, role = Role.RadioButton) { onSelect(precision) }
+                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(precisionTitle(precision)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = MeeshyPalette.Indigo500,
+                        )
+                    }
+                }
+            }
+        }
+        Text(
+            text = stringResource(R.string.location_precision_footnote),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
+        )
+    }
+}
+
+private fun precisionTitle(precision: LocationPrecision): Int = when (precision) {
+    LocationPrecision.EXACT -> R.string.location_precision_exact
+    LocationPrecision.AROUND -> R.string.location_precision_around
+    LocationPrecision.NEIGHBORHOOD -> R.string.location_precision_neighborhood
+    LocationPrecision.CITY -> R.string.location_precision_city
 }
 
 @Composable

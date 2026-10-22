@@ -40,7 +40,7 @@ extension VitrineInteractions {
         try? await Task.sleep(for: tenueDuHub)
         ouvrir(.affiliate)
         VitrineTournage.etape("affiliation")
-        try? await Task.sleep(for: tenueDeLAffiliation)
+        guard await cancellableSleep(for: tenueDeLAffiliation) else { return }
     }
 
     /// Le nom que tape le client du SAV : celui du lecteur du kit, qui découvre le SAV par son lien.
@@ -66,13 +66,13 @@ extension VitrineInteractions {
         try? await Task.sleep(for: entreDeuxChamps)
         parcours.language = f.lang
         VitrineTournage.etape("formulaire")
-        try? await Task.sleep(for: tenueDuFormulaire)
+        guard await cancellableSleep(for: tenueDuFormulaire) else { return }
     }
 
     /// Un écran qui se LIT : la conversation « Dis-moi tout », la liste des SAV. L'étape date son instant.
     static func tenirLEcran(_ scene: VitrineScene) async {
         VitrineTournage.etape("ecran")
-        try? await Task.sleep(for: tenueDeLEcran)
+        guard await cancellableSleep(for: tenueDeLEcran) else { return }
     }
 }
 #endif

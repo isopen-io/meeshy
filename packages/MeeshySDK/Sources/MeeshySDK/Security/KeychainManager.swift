@@ -24,8 +24,43 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
 
     private let service = "me.meeshy.app"
     private let logger = MeeshyLog.logger(.keychain, subsystem: .legacySDK)
+    /// Les lectures du premier écran, faites d'avance hors du fil principal (#11587).
+    let prefetch = KeychainPrefetch()
+    private static let prefetchQueue = DispatchQueue(label: "me.meeshy.keychain.prefetch", qos: .userInitiated)
 
     private init() {}
+
+    // MARK: - Lecture d'avance du premier écran
+
+    /// Lance, sur une file à part, les lectures dont le premier écran a besoin
+    /// (`ColdStartKeychainPlan`) : `load` ramassera leurs réponses au lieu
+    /// d'aller-retours XPC synchrones sur le fil principal (#11587). Sans effet
+    /// au second appel.
+    public func prefetchColdStartSession() {
+        let service = service
+        prefetch.start(ColdStartKeychainPlan.plan, on: Self.prefetchQueue, lifetime: .seconds(30)) { key in
+            Self.read(key, service: service)
+        }
+    }
+
+    private static func read(_ resolvedKey: String, service: String) -> KeychainRead {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: resolvedKey,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return .absent }
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let value = String(data: data, encoding: .utf8) else {
+            return .unavailable
+        }
+        return .value(value)
+    }
 
     // MARK: - Namespace Helper
 
@@ -47,6 +82,7 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
         guard let data = value.data(using: .utf8) else { return }
 
         let resolvedKey = namespacedKey(key, account: account)
+        prefetch.invalidate(resolvedKey)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -76,25 +112,18 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     /// Loads a value for `key`, optionally scoped to `account` (a userId).
     /// - Parameter account: When non-nil, only values stored under the user's namespace are
     ///   returned. A call with `account: nil` will NOT return namespaced values.
+    ///
+    /// Une réponse lue d'avance (`prefetchColdStartSession`) est ramassée une
+    /// fois ; un trousseau indisponible n'en laisse aucune, et la lecture
+    /// directe tranche.
     public func load(forKey key: String, account: String? = nil) -> String? {
         let resolvedKey = namespacedKey(key, account: account)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: resolvedKey,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let value = String(data: data, encoding: .utf8) else {
-            return nil
+        switch prefetch.take(resolvedKey) {
+        case .value(let value)?: return value
+        case .absent?: return nil
+        case .unavailable?, nil: break
         }
-
+        guard case .value(let value) = Self.read(resolvedKey, service: service) else { return nil }
         return value
     }
 
@@ -103,6 +132,7 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     /// Deletes the value for `key`, optionally scoped to `account` (a userId).
     public func delete(forKey key: String, account: String? = nil) {
         let resolvedKey = namespacedKey(key, account: account)
+        prefetch.invalidate(resolvedKey)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -115,6 +145,7 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     // MARK: - Delete All
 
     public func deleteAll() {
+        prefetch.invalidateAll()
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -161,7 +192,12 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     /// actually needs rewriting. Kept synchronous on purpose — the rewrite is a
     /// delete + add, and a token read landing between the two would find the
     /// item missing.
-    public func migrateToAfterFirstUnlock() {
+    ///
+    /// Rend `true` quand plus AUCUN élément n'est à migrer — un trousseau vide
+    /// compris. `false` quand un élément n'a pas pu être relu ni réécrit
+    /// (appareil verrouillé) : la passe est à refaire.
+    @discardableResult
+    public func migrateToAfterFirstUnlock() -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -171,9 +207,11 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let items = result as? [[String: Any]] else { return }
+        if status == errSecItemNotFound { return true }
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else { return false }
 
         let targetAccessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String
+        var complete = true
 
         for item in items {
             guard let account = item[kSecAttrAccount as String] as? String else { continue }
@@ -191,15 +229,33 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
             dataQuery[kSecMatchLimit as String] = kSecMatchLimitOne
             var dataResult: AnyObject?
             guard SecItemCopyMatching(dataQuery as CFDictionary, &dataResult) == errSecSuccess,
-                  let data = dataResult as? Data else { continue }
+                  let data = dataResult as? Data else {
+                complete = false
+                continue
+            }
 
+            // La réécriture est une écriture : une lecture d'avance tombée entre
+            // la suppression et l'ajout aurait lu « absent » (#11587).
+            prefetch.invalidate(account)
             SecItemDelete(itemQuery as CFDictionary)
 
             var addQuery = itemQuery
             addQuery[kSecValueData as String] = data
             addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            SecItemAdd(addQuery as CFDictionary, nil)
+            if SecItemAdd(addQuery as CFDictionary, nil) != errSecSuccess { complete = false }
         }
+        return complete
+    }
+
+    /// La migration d'accessibilité, UNE fois par installation (#11558).
+    ///
+    /// Elle énumérait tout le trousseau à CHAQUE démarrage à froid, sur le fil
+    /// principal, avant le premier écran. Une passe complète suffit : chaque
+    /// écriture du dépôt (`save`, `SecItemAdd`) pose déjà `AfterFirstUnlock`,
+    /// aucun élément ne peut redevenir `WhenUnlocked`. Une passe incomplète se
+    /// rejoue au lancement suivant.
+    public func migrateToAfterFirstUnlockOnce(defaults: UserDefaults = .standard) {
+        KeychainAccessibilityMigrationGate(defaults: defaults).runOnce { migrateToAfterFirstUnlock() }
     }
 
     // MARK: - Migration: UserDefaults → Keychain
@@ -207,15 +263,14 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     public func migrateFromUserDefaults(keys: [String]) {
         let defaults = UserDefaults.standard
 
+        // Les préférences d'abord : elles sont en mémoire, alors que chaque
+        // `load` est un aller-retour XPC — rejoué à chaque démarrage pour des
+        // clés que plus personne n'a (#11558).
         for key in keys {
-            guard load(forKey: key) == nil else { continue }
-
-            if let stringValue = defaults.string(forKey: key) {
-                migrate(stringValue, forKey: key, from: defaults)
-            } else if let dataValue = defaults.data(forKey: key),
-                      let stringValue = String(data: dataValue, encoding: .utf8) {
-                migrate(stringValue, forKey: key, from: defaults)
-            }
+            let legacy = defaults.string(forKey: key)
+                ?? defaults.data(forKey: key).flatMap { String(data: $0, encoding: .utf8) }
+            guard let legacy, load(forKey: key) == nil else { continue }
+            migrate(legacy, forKey: key, from: defaults)
         }
     }
 

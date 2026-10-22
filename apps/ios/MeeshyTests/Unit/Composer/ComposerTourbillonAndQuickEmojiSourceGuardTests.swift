@@ -42,9 +42,11 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
     /// qui portait l'invariant « le slot ne s'effondre pas ».
     func test_actionButtonSlot_widensForTwoTargetsInsteadOfSqueezingThem() throws {
         let block = try Self.actionButtonBlock()
+        // La bande des emojis part de sa largeur de repos NOMMÉE et s'élargit sous le doigt
+        // (`quickEmojiBandWidth`, `QuickEmojiExpansion`, #11566).
         XCTAssertTrue(
-            block.contains("quickEmojiSlotWidth"),
-            "la largeur du slot doit suivre son contenu — une constante NOMMÉE pour le cas deux-emojis"
+            block.contains("quickEmojiSlotWidth") || block.contains("quickEmojiBandWidth"),
+            "la largeur du slot doit suivre son contenu — une largeur NOMMÉE pour le cas emojis"
         )
         XCTAssertTrue(
             block.contains("sendSlotWidth"),

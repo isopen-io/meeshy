@@ -154,6 +154,39 @@ class SensitiveBodyLoggingGuardTest {
     }
 
     /**
+     * Les routes d'authentification qui portent un secret au corps ou dans la
+     * reponse — NOMMEES ici une a une, hors de l'iteration du set : un set auquel on
+     * oublierait d'ajouter la route de demain ne ferait tomber aucun temoin qui
+     * n'itere que sur ce qu'il contient deja.
+     */
+    @Test
+    fun `les secrets de la preuve d'adresse, de la reinitialisation et du telephone ne fuient pas`() {
+        listOf(
+            "/auth/verify-email",
+            "/auth/magic-link/validate",
+            "/auth/verification/status",
+            "/auth/reset-password",
+            "/auth/reset-password/verify-token",
+            "/auth/forgot-password/phone/verify-identity",
+            "/auth/forgot-password/phone/verify-code",
+            "/auth/2fa/verify",
+            "/auth/verify-phone",
+            "/auth/phone-transfer/verify",
+            "/auth/phone-transfer/verify-registration",
+            "/anonymous/refresh",
+        ).forEach { route ->
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
+
+            assertTrue("$route n'a rien journalise", lignes.isNotEmpty())
+            assertTrue(
+                "$route a journalise son corps : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
+    }
+
+    /**
      * LA COURSE, mesuree. Cinquante appels sensibles et cinquante ordinaires,
      * melanges sur huit fils. Avec un `level` partage et mute par requete, il
      * suffit qu'un seul appel ordinaire repose BODY entre l'ecriture d'un appel
@@ -191,5 +224,34 @@ class SensitiveBodyLoggingGuardTest {
             50,
             fuites.size,
         )
+    }
+
+    /**
+     * Le jeton FCM, une transcription d'appel et le protocole Signal portent un
+     * secret ou une donnee sensible dans leur corps ou leur reponse. Ce temoin
+     * cible les ROUTES telles qu'elles partent, avec leurs identifiants, sans
+     * iterer le set : une route omise du set ne ferait tomber aucun temoin qui
+     * ne lit que ce que le set contient deja.
+     */
+    @Test
+    fun `le jeton push, la transcription et Signal ne journalisent pas leur corps`() {
+        val routes = listOf(
+            "/users/register-device-token",
+            "/calls/68b0000000000000000000aa/transcript",
+            "/signal/keys",
+            "/signal/keys/68b0000000000000000000bb",
+            "/signal/session/establish",
+        )
+
+        for (route in routes) {
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
+
+            assertTrue("$route n'a rien journalise — le garde ne s'est pas execute", lignes.isNotEmpty())
+            assertTrue(
+                "$route a journalise son corps : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
     }
 }

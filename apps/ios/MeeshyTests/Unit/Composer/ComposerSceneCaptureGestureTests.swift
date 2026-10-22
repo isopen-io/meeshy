@@ -67,16 +67,6 @@ final class ComposerSceneCaptureGestureTests: XCTestCase {
     }
 
     private func hostSource() throws -> String {
-        // `#filePath` = …/apps/ios/MeeshyTests/Unit/Composer/<ce fichier>.
-        // QUATRE remontées mènent à `apps/ios`, pas cinq : la cinquième donne
-        // `apps/`, et le fichier « n'existe pas ». La garde a échoué FRANCHEMENT
-        // plutôt que de passer au vert en ne lisant rien — c'est ce que le
-        // `throws` achète, et c'est pour ça qu'il est là.
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Composer
-            .deletingLastPathComponent()   // Unit
-            .deletingLastPathComponent()   // MeeshyTests
-            .deletingLastPathComponent()   // apps/ios
         // **DEUX fichiers, et c'est le point** (2026-09-04). Le viseur a été
         // extrait dans `MeeshyComposerHost+Viewfinder.swift` le jour où l'hôte
         // a passé 1200 lignes. Cette garde est NÉGATIVE — elle interdit trois

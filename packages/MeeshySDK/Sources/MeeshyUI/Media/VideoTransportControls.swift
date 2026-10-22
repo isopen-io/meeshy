@@ -169,7 +169,7 @@ public struct VideoTransportControls: View {
             // Glass appliqué APRÈS le sizing (règle AdaptiveGlass).
             Image(systemName: systemName)
                 .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 52, height: 52)
                 .adaptiveGlass(in: Circle(), interactive: true)
         }
@@ -185,7 +185,7 @@ public struct VideoTransportControls: View {
         } label: {
             Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
                 .font(.system(size: MeeshyIconSize.xxxl, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .offset(x: manager.isPlaying ? 0 : 2)
                 .adaptiveSymbolReplace(id: manager.isPlaying)
                 .frame(width: 64, height: 64)
@@ -261,7 +261,7 @@ public struct VideoTransportControls: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .contentShape(Circle())
         }

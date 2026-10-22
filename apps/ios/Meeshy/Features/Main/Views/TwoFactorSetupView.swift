@@ -26,6 +26,7 @@ struct TwoFactorSetupView: View {
     @State private var codeError: String?
     @State private var copiedKey = false
     @State private var copiedCodes = false
+    @State private var delays = DelayedActions()
 
     private let tfaColor = MeeshyColors.indigo500
 
@@ -72,6 +73,7 @@ struct TwoFactorSetupView: View {
             }
         }
         .onAppear { initiateSetup() }
+        .onDisappear { delays.cancelAll() }
     }
 
     // MARK: - Secret / QR Code Step
@@ -124,18 +126,10 @@ struct TwoFactorSetupView: View {
                         .accessibilityValue(setup.secret)
 
                     Button {
-                        UIPasteboard.general.string = setup.secret
+                        ExpiringClipboard.write(setup.secret)
                         HapticFeedback.light()
                         copiedKey = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            copiedKey = false
-                        }
-                        // Clear sensitive OTP secret from clipboard after 30s
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                            if UIPasteboard.general.string == setup.secret {
-                                UIPasteboard.general.string = ""
-                            }
-                        }
+                        delays.run(after: .seconds(2)) { copiedKey = false }
                     } label: {
                         Image(systemName: copiedKey ? "checkmark" : "doc.on.doc")
                             .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
@@ -270,17 +264,10 @@ struct TwoFactorSetupView: View {
             backupCodesList(codes)
 
             Button {
-                UIPasteboard.general.string = codes.joined(separator: "\n")
+                ExpiringClipboard.write(codes.joined(separator: "\n"))
                 HapticFeedback.success()
                 copiedCodes = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedCodes = false }
-                // Clear sensitive backup codes from clipboard after 30s
-                let codesSnapshot = codes.joined(separator: "\n")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                    if UIPasteboard.general.string == codesSnapshot {
-                        UIPasteboard.general.string = ""
-                    }
-                }
+                delays.run(after: .seconds(2)) { copiedCodes = false }
             } label: {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
@@ -555,6 +542,7 @@ struct TwoFactorBackupCodesView: View {
     @State private var verificationCode = ""
     @State private var codeSubmitted = false
     @State private var copiedCodes = false
+    @State private var delays = DelayedActions()
 
     private let tfaColor = MeeshyColors.indigo500
 
@@ -628,16 +616,10 @@ struct TwoFactorBackupCodesView: View {
                             .padding(.horizontal, MeeshySpacing.sm)
 
                             Button {
-                                UIPasteboard.general.string = viewModel.recoveryCodes.joined(separator: "\n")
+                                ExpiringClipboard.write(viewModel.recoveryCodes.joined(separator: "\n"))
                                 HapticFeedback.success()
                                 copiedCodes = true
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedCodes = false }
-                                let codesSnapshot = viewModel.recoveryCodes.joined(separator: "\n")
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                                    if UIPasteboard.general.string == codesSnapshot {
-                                        UIPasteboard.general.string = ""
-                                    }
-                                }
+                                delays.run(after: .seconds(2)) { copiedCodes = false }
                             } label: {
                                 HStack(spacing: MeeshySpacing.sm) {
                                     Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
@@ -673,6 +655,7 @@ struct TwoFactorBackupCodesView: View {
                 }
             }
         }
+        .onDisappear { delays.cancelAll() }
     }
 
     private var codeEntryStep: some View {

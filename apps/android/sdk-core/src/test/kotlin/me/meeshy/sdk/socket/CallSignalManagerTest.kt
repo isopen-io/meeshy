@@ -35,7 +35,7 @@ class CallSignalManagerTest {
         every { socket.on(any(), any()) } answers {
             handlers[firstArg()] = secondArg()
         }
-        val manager = CallSignalManager(socket)
+        val manager = CallSignalManager(socket, CallSocialSignalManager(socket))
         manager.attach()
         return (manager to socket) to handlers
     }

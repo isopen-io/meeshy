@@ -70,31 +70,6 @@ fun FeedMedia.resolvedCaption(preferredLanguages: List<String>): String? =
         preferredLanguages = preferredLanguages,
     )
 
-/** Embedded reposted content in a feed post — port of RepostContent (FeedModels.swift). */
-@Serializable
-data class RepostContent(
-    val id: String,
-    val author: String = "",
-    val authorId: String = "",
-    val authorUsername: String? = null,
-    val authorColor: String = "",
-    val authorAvatarURL: String? = null,
-    val content: String = "",
-    val timestamp: String? = null,
-    val likes: Int = 0,
-    val isQuote: Boolean = false,
-    val type: String? = null,
-    val originalLanguage: String? = null,
-    val audioUrl: String? = null,
-    @Serializable(with = StoryEffectsWireSerializer::class)
-    val storyEffects: StoryEffects? = null,
-    val media: List<FeedMedia> = emptyList(),
-    val translations: Map<String, PostTranslation>? = null,
-    val originalRepostOfId: String? = null,
-    val visibility: String? = null,
-    val expiresAt: String? = null,
-)
-
 /** A comment on a feed post — port of FeedComment (FeedModels.swift). */
 @Serializable
 data class FeedComment(

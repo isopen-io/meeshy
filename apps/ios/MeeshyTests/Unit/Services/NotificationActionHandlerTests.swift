@@ -1246,7 +1246,7 @@ final class NotificationActionHandlerTests: XCTestCase {
     }
 
     func test_app_wiresSocketDeletions_toTheBannerRevocation() throws {
-        let code = AppSourceGuard.stripComments(try appSource("Meeshy/MeeshyApp.swift"))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/MeeshyApp.swift"))
         XCTAssertTrue(code.contains("observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted"),
                       "le socket `notification:deleted` doit retirer la bannière livrée par le même atome que le push")
     }

@@ -58,6 +58,17 @@ enum PrimaryAction: String, Equatable {
     /// gabarit du catalogue ou Mee : à la place d'« Ajouter à mes stickers »,
     /// qui n'a de sens que pour ce qu'on n'a pas.
     case favoriteSticker, unfavoriteSticker
+    /// **Supprimer le MESSAGE, à un geste** — la loi range la suppression dans
+    /// son groupe `destructive` (`MessageActionPolicy.Groups`) ; elle n'était
+    /// atteignable que par « Plus… » (deux gestes). L'entrée est rouge et ne
+    /// supprime rien d'elle-même : l'hôte ouvre la confirmation qui offre
+    /// « pour tous », « retirer » ou « pour moi » selon les verdicts.
+    case deleteMessage
+}
+
+extension PrimaryAction {
+    /// Les entrées qui détruisent : teintées en rouge, jamais à l'accent.
+    var isDestructive: Bool { self == .deletePiece || self == .deleteMessage }
 }
 
 /// Item d'une section de la feuille « Plus… ».
@@ -185,6 +196,15 @@ struct MessageMenuContext: Equatable {
     var canStar: Bool = true
     var canReport: Bool = true
     var canTranslate: Bool = true
+    /// **Traduire SUR L'APPAREIL** (verdict `.device` de la loi) : en E2EE le
+    /// serveur ne lit pas le clair, la vue Langue ne sait demander qu'à lui.
+    /// La traduction se fait alors par `DeviceTranslationCoordinator`, et
+    /// « Traduire » reste offert au lieu de disparaître.
+    var translatesOnDevice: Bool = false
+    /// Le verdict `canReact` de la loi : message vivant, non système, lecteur
+    /// membre actif d'une conversation ouverte. Faux ⇒ ni barre d'emojis, ni
+    /// réaction de pièce.
+    var canReact: Bool = true
     /// Les verdicts de suppression, distincts : un tiers modérateur RETIRE
     /// avec motif, l'auteur supprime pour tous, chacun pour soi, et un envoi
     /// jamais parti s'abandonne (`.discard`). `canDelete` en est l'union — la
@@ -348,9 +368,17 @@ enum MessageActionResolver {
     /// `MessageActionPolicy.maxPrimaryActions` actions clés, puis `.more`
     /// toujours en fin. `pin`/`star`/`delete` sont routés vers « Plus… »
     /// (`moreSections`), jamais affichés ici.
+    ///
+    /// **« Supprimer » est à un geste** (`.deleteMessage`, rouge, juste avant
+    /// « Plus… ») dès que la loi ouvre une suppression (`canDelete` = l'union
+    /// de son groupe `destructive`). Sa place suit le contenu : après les
+    /// actions du contenu d'un message vivant, mais SEUL devant « Plus… » quand
+    /// le contenu ne se montre pas (vue unique, supprimé, échu) — c'est alors
+    /// le seul geste qui reste.
     static func primaryActions(_ ctx: MessageMenuContext) -> [PrimaryAction] {
-        guard !ctx.isViewOnce, !ctx.isGone else { return [.more] }
-        return capped(candidates(ctx)) + [.more]
+        let removal: [PrimaryAction] = ctx.canDelete ? [.deleteMessage] : []
+        guard !ctx.isViewOnce, !ctx.isGone else { return removal + [.more] }
+        return capped(candidates(ctx)) + removal + [.more]
     }
 
     /// Au-delà de six, ce qui a un JUMEAU dans « Plus… » y passe d'abord —
@@ -378,7 +406,7 @@ enum MessageActionResolver {
         // « Sélectionner » — retour porteur 2026-08-27 : juste À CÔTÉ
         // d'Éditer, parmi les premiers éléments (jamais dans « Plus… »).
         out.append(.select)
-        if ctx.hasText && showsContent && ctx.canTranslate { out.append(.translate) }
+        if ctx.hasText && showsContent && (ctx.canTranslate || ctx.translatesOnDevice) { out.append(.translate) }
         if ctx.hasText && showsContent && !ctx.isLocation && ctx.exits.offers(.copy) { out.append(.copy) }
         if ctx.canImagine && showsContent && ctx.exits.offers(.imagine) {
             out.append(.exportImage)

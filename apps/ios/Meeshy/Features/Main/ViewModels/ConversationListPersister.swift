@@ -34,8 +34,7 @@ final class ConversationListPersister {
     func schedule(snapshot: [Conversation], cursor: String?, hasMore more: Bool, debounce: TimeInterval) {
         task?.cancel()
         task = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(debounce))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(debounce)), !Task.isCancelled else { return }
             // Un seul écrivain du groupe « dernier message », le moteur (#7548) :
             // voir `ConversationListLastMessage.persisting`.
             let store = await CacheCoordinator.shared.conversations

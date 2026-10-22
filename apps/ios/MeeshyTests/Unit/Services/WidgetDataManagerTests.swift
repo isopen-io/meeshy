@@ -6,6 +6,49 @@ import MeeshySDK
 @MainActor
 final class WidgetDataManagerTests: XCTestCase {
 
+    // MARK: - #11558 — l'environnement API part hors du fil principal
+
+    /// Ouvrir le groupe d'app et y écrire sont des XPC synchrones, et seules les
+    /// extensions lisent la valeur : l'écriture part sur la file `AppGroupIO`.
+    func test_publishAPIBaseURL_writesTheAppGroupOnItsQueue_notOnTheCallingThread() throws {
+        let suite = "group.test.meeshy.apibase.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let io = AppGroupIO(label: "WidgetDataManagerTests.apiBase")
+        let gate = DispatchSemaphore(value: 0)
+        io.enqueue { gate.wait() }
+        let sut = WidgetDataManager(suiteName: suite)
+
+        sut.publishAPIBaseURL("https://staging.meeshy.me", io: io)
+
+        XCTAssertNil(defaults.string(forKey: "meeshy_api_base_url"), "rien ne s'écrit avant le tour de la file")
+        gate.signal()
+        io.drain()
+        XCTAssertEqual(defaults.string(forKey: "meeshy_api_base_url"), "https://staging.meeshy.me")
+    }
+
+    /// L'assertion d'arrière-plan qui garantit l'écriture (`beginBackgroundTask`)
+    /// est elle-même un XPC synchrone vers le démon d'exécution. Ouverte dans
+    /// `prepareProcess`, elle tombait sur le fil principal avant la liste ; la
+    /// publication attend donc que l'écran de lancement se soit levé, liste rendue.
+    func test_coldStart_publishesTheAPIEnvironmentOnlyOnceTheSplashHasLifted() throws {
+        let sequence = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/MeeshyApp+LaunchSequence.swift")
+        let source = DeclarationBodyScanner.mask(try String(contentsOf: sequence, encoding: .utf8))
+        let prepare = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func prepareProcess()", in: source))
+        let finish = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func finishLaunch()", in: source))
+
+        XCTAssertFalse(prepare.contains("publishAPIBaseURL"), "prepareProcess précède le premier rendu : aucune assertion d'arrière-plan n'y part")
+        XCTAssertFalse(prepare.contains("beginBackgroundTask"))
+        let ready = try XCTUnwrap(finish.range(of: "launchSplash.markReady()"))
+        let publish = try XCTUnwrap(finish.range(of: "publishAPIBaseURL()"), "l'environnement API reste publié à chaque démarrage")
+        XCTAssertLessThan(ready.upperBound, publish.lowerBound, "la publication suit la levée de l'écran de lancement")
+    }
+
     // MARK: - appgroup-01 — wipeAll (wipe de logout)
 
     private func makeWipeSUT() throws -> (WidgetDataManager, UserDefaults, [URL]) {

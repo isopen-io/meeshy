@@ -34,11 +34,11 @@ struct ConversationDashboardBreakdownSection: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(stat.name)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                         Text(String(format: String(localized: "dashboard.words-count", defaultValue: "%@ mots", bundle: .main), formatNumber(stat.wordCount)))
                             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     .frame(width: 80, alignment: .leading)
 
@@ -58,7 +58,7 @@ struct ConversationDashboardBreakdownSection: View {
 
                     Text("\(stat.messageCount)")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .frame(width: 40, alignment: .trailing)
                 }
                 .padding(.vertical, MeeshySpacing.xxs)

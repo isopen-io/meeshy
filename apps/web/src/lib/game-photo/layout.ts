@@ -94,7 +94,26 @@ const flipLine = (line: TextLine, width: number): TextLine => ({ ...line, x: wid
 function bannerOf(width: number, height: number): BannerLayout {
   const margin = width * MARGIN;
   const h = width * BANNER_HEIGHT;
-  const frame: Rect = { x: margin, y: height - margin - h, w: width - margin * 2, h };
+  return bannerFrom({ x: margin, y: height - margin - h, w: width - margin * 2, h }, width);
+}
+
+/**
+ * Le bandeau DANS une boîte donnée — celle qu'un cadre de gloire déclare
+ * (`banner.box`, #10159) : il garde la hauteur de la carte simple s'il y tient,
+ * se resserre sinon, et se centre verticalement dans la boîte, avec la marge de
+ * la carte sur les côtés quand la boîte touche les bords.
+ */
+export function bannerWithin(box: Rect, width: number, rtl = false): BannerLayout {
+  const margin = width * MARGIN;
+  const h = Math.min(width * BANNER_HEIGHT, box.h * 0.9);
+  const inset = box.x <= 0 && box.w >= width ? margin : 0;
+  const frame: Rect = { x: box.x + inset, y: box.y + (box.h - h) / 2, w: box.w - inset * 2, h };
+  const ltr = bannerFrom(frame, width);
+  return rtl ? mirrored(ltr, width) : ltr;
+}
+
+function bannerFrom(frame: Rect, width: number): BannerLayout {
+  const { h } = frame;
   const pad = h * 0.14;
   const signatureSize = h * 0.4;
   const signature: Rect = { x: frame.x + pad, y: frame.y + (h - signatureSize) / 2, w: signatureSize, h: signatureSize };

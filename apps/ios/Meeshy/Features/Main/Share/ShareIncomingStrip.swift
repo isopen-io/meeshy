@@ -1,5 +1,6 @@
 import SwiftUI
 import ImageIO
+import AVFoundation
 import MeeshySDK
 import MeeshyUI
 
@@ -91,7 +92,7 @@ struct ShareIncomingStrip: View {
     }
 }
 
-/// La vignette d'une pièce copiée : réduite pour une image, un glyphe sinon.
+/// La vignette d'une pièce copiée : réduite pour une image ou une vidéo, un glyphe sinon.
 struct ShareIncomingThumbnail: View {
     let piece: ShareIncomingMedia
     let accentColor: String
@@ -110,8 +111,12 @@ struct ShareIncomingThumbnail: View {
             }
         }
         .task(id: piece.id) {
-            guard piece.kind == .image, let url = piece.fileURL else { return }
-            image = await Self.downsampled(url, maxPixel: 160)
+            guard let url = piece.fileURL else { return }
+            switch piece.kind {
+            case .image: image = await Self.downsampled(url, maxPixel: 160)
+            case .video: image = await Self.videoPoster(url, maxPixel: 160)
+            default: return
+            }
         }
     }
 
@@ -138,5 +143,26 @@ struct ShareIncomingThumbnail: View {
             guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
             return UIImage(cgImage: thumbnail)
         }.value
+    }
+
+    /// Le décodeur sort l'image DÉJÀ réduite (`maximumSize`) depuis l'image clé
+    /// la plus proche : ni les octets du fichier ni une image pleine résolution
+    /// ne passent en mémoire. Un fichier non décodable rend `nil` et la tuile
+    /// garde son glyphe.
+    nonisolated static func videoPoster(_ url: URL, maxPixel: Int) async -> UIImage? {
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: maxPixel, height: maxPixel)
+        generator.requestedTimeToleranceBefore = .positiveInfinity
+        generator.requestedTimeToleranceAfter = .positiveInfinity
+        do {
+            let duration = try await asset.load(.duration)
+            let seconds = min(0.1, max(0, duration.seconds.isFinite ? duration.seconds : 0))
+            let cgImage = try await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600)).image
+            return UIImage(cgImage: cgImage)
+        } catch {
+            return nil
+        }
     }
 }

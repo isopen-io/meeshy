@@ -17,7 +17,7 @@ struct StarredMessagesView: View {
         PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
     }
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     var body: some View {
         ZStack {
@@ -108,8 +108,7 @@ struct StarredMessagesView: View {
         // Le highlight est SCOPÉ à la conversation cible, et la notification
         // est observée par RootView/iPadRootView (elle était sans observateur —
         // tap étoilé = no-op silencieux + highlight qui fuitait ailleurs).
-        router.pendingHighlightMessageId = snapshot.id
-        router.pendingHighlightConversationId = snapshot.conversationId
+        router.requestHighlight(messageId: snapshot.id, inConversation: snapshot.conversationId)
         NotificationCenter.default.post(
             name: .meeshyNavigateToConversation,
             object: snapshot.conversationId

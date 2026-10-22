@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import org.junit.Test
 
 /**
@@ -691,5 +692,45 @@ class StoryComposerDraftTest {
     fun `a caption-only draft leaves storyEffects null even though drawingStrokes is checked`() {
         val request = StoryComposerDraft(text = "hello").toCreateStoryRequest(originalLanguage = "en")
         assertThat(request.storyEffects).isNull()
+    }
+
+    // --- the post owns every media its canvas designates (#5280) ---
+
+    private fun backgroundImage(mediaId: String) = StoryBackgroundMedia(
+        mediaId = mediaId,
+        url = "https://cdn/$mediaId.jpg",
+        mimeType = "image/jpeg",
+        durationSeconds = null,
+    )
+
+    @Test
+    fun `the post lists the media its canvas designates even when the draft did not`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = backgroundImage("bg-9"),
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.mediaIds).containsExactly("m1", "bg-9").inOrder()
+        assertThat(request.storyEffects?.mediaObjects?.single()?.postMediaId).isEqualTo("bg-9")
+    }
+
+    @Test
+    fun `a background media that the draft already lists is not listed twice`() {
+        val request = StoryComposerDraft(mediaIds = listOf("m1"), backgroundMedia = backgroundImage("m1"))
+            .toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.mediaIds).containsExactly("m1")
+    }
+
+    @Test
+    fun `a canvas designating no media leaves the post media ids as the draft lists them`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1", "m2"),
+            stickers = listOf(StoryStickerElement(id = "k", emoji = "🎉")),
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.mediaIds).containsExactly("m1", "m2").inOrder()
     }
 }

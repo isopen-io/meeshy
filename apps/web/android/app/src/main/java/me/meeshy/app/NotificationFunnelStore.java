@@ -41,6 +41,10 @@ final class NotificationFunnelStore {
         Map<String, String> data = new HashMap<>();
         if (extras == null) return data;
         for (String key : extras.keySet()) {
+            // La charge FCM melange les types (google.sent_time est un Long) :
+            // aucun getter type ne lit une valeur de type inconnu sans journaliser
+            // une ClassCastException, et chaque valeur doit garder son texte.
+            @SuppressWarnings("deprecation")
             Object value = extras.get(key);
             if (value != null) data.put(key, String.valueOf(value));
         }

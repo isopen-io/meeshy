@@ -100,7 +100,7 @@ final class PostServiceTests: XCTestCase {
     }
 
     func test_delete_withReason_sendsReasonInJSONBody() async throws {
-        mock.stub("/posts/\(postId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+        mock.stub("/posts/\(postId)", result: try MessageServiceTests.gatewayAcknowledgement(#"{"success":true,"data":{"deleted":true}}"#))
 
         try await service.delete(postId: postId, reason: "Contenu violent")
 
@@ -117,7 +117,7 @@ final class PostServiceTests: XCTestCase {
     }
 
     func test_deleteComment_withReason_sendsReasonInJSONBody() async throws {
-        mock.stub("/posts/\(postId)/comments/c1", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+        mock.stub("/posts/\(postId)/comments/c1", result: try MessageServiceTests.gatewayAcknowledgement(#"{"success":true,"data":{"deleted":true}}"#))
 
         try await service.deleteComment(postId: postId, commentId: "c1", reason: "Harcèlement")
 

@@ -53,19 +53,19 @@ struct ComposerDocumentSurface: View {
 
     var onTool: ((ComposerDocumentTool) -> Void)? = nil
 
-    /// **Les médias qui ont une TUILE — les FONDS de slide (B, #3883, #4724).**
+    /// **Les médias qui ont une TUILE — les FONDS de slide .**
     /// La surface les REÇOIT et les peint — elle reste sans état ; le meuble
     /// possède `documentLocalMedia` et décide qui gagne une tuile
     /// (`headerTileMedia`).
     ///
-    /// **Ce n'est plus l'inventaire des pièces jointes**, et la nuance est le
-    /// #4724. « En Post une slide EST un média » reste vrai ; « donc le rail des
+    /// **Ce n'est pas l'inventaire des pièces jointes**, et la nuance compte.
+    /// « En Post une slide EST un média » reste vrai ; « donc le rail des
     /// slides et l'inventaire des pièces jointes sont le MÊME objet » ne l'est
-    /// plus depuis qu'un média peut être posé SUR la scène sans ouvrir de page.
+    /// pas, puisqu'un média peut être posé SUR la scène sans ouvrir de page.
     /// Un son, un document, une image de premier plan sont des pièces jointes
-    /// qui ne sont aucune page — les compter ici faisait grossir le carrousel
-    /// d'une tuile qui ne menait nulle part.
-    /// **Le rail des SCÈNES**, monté par l'hôte (constat porteur 2026-09-06).
+    /// qui ne sont aucune page — les compter ici ferait grossir le carrousel
+    /// d'une tuile qui ne mène nulle part.
+    /// **Le rail des SCÈNES**, monté par l'hôte.
     /// Slot opaque, comme `formatFan` : une mini-preview demande les effets
     /// vivants et les bitmaps chargés, donc le ViewModel — que cette surface ne
     /// connaît pas. `nil` ⇒ pas de rail.
@@ -74,16 +74,16 @@ struct ComposerDocumentSurface: View {
     /// Retirer une vignette. Le meuble ôte l'élément de `documentLocalMedia`, ce
     /// qui RE-JUGE le format (loi 4 : le toggle POST↔RÉEL suit le média).
 
-    /// **Choisir une couleur de FOND (F2, #3885).** Le geste REMONTE au meuble,
+    /// **Choisir une couleur de FOND.** Le geste REMONTE au meuble,
     /// qui pose le fond du socle (`documentBackground`) et bascule la scène 9:16
     /// (« un post sans visuel devient une toile »). `nil` ⇒ aucune bande de
     /// fond (loi 4) — la surface reste sans état.
     var onPickBackground: ((String) -> Void)? = nil
 
-    /// **La scène incrustée (Phase 2 du composer unifié, #3939).** La slide
+    /// **La scène incrustée.** La slide
     /// éditée par la scène 9:16 qui s'incruste EN HAUT de l'écran document dès
     /// qu'un fond est choisi (ou qu'un média/scène existe). `nil` ⇒ pas de
-    /// scène, l'écran reste texte seul (comportement historique).
+    /// scène, l'écran reste texte seul.
     var sceneSlide: Binding<StorySlide>? = nil
 
     /// La scène doit-elle être montée ? Découplé de `sceneSlide != nil` pour
@@ -96,24 +96,23 @@ struct ComposerDocumentSurface: View {
     var sceneAspectRatio: CGFloat = CanvasGeometry.portraitRatio
 
     /// **Relais du tap sur un objet de la scène incrustée (lot 3A du composer
-    /// unifié, #4035).** L'hôte retient la sélection et décide de monter
+    /// unifié).** L'hôte retient la sélection et décide de monter
     /// `sceneInspector` — la surface reste sans état sur CE que ce tap
-    /// signifie. `nil` ⇒ la scène reste sans sélection observable
-    /// (comportement Phase 1/2 inchangé).
+    /// signifie. `nil` ⇒ la scène reste sans sélection observable.
     var onSceneItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil
 
     /// Relais du tap sur le FOND de la scène (désélection).
     var onSceneBackgroundTapped: (() -> Void)? = nil
-    /// **L'appui long sur la scène VIDE d'un Post ouvre la caméra** (#4036).
+    /// **L'appui long sur la scène VIDE d'un Post ouvre la caméra**.
     var onSceneBackgroundLongPressed: (() -> Void)? = nil
 
-    /// **Naviguer entre les slides depuis le RAIL (#4038, monté en barre haute
-    /// par #4047).** En Post, une slide EST un média — le rail DIT donc déjà les
+    /// **Naviguer entre les slides depuis le RAIL, monté en barre haute.**
+    /// En Post, une slide EST un média — le rail DIT donc déjà les
     /// slides. Lui donner la navigation évite d'ajouter un second rail à côté du
     /// premier, qui montrerait exactement la même chose (loi 2). `nil` ⇒ le rail
     /// reste ce qu'il était, un inventaire avec son bouton de retrait.
-    /// **Le son de FOND de la publication** (#4657) — `nil` quand il n'y en a
-    /// pas, et la rangée retrouve alors sa forme d'avant : avatar et texte côte
+    /// **Le son de FOND de la publication** — `nil` quand il n'y en a
+    /// pas, et la rangée retrouve alors sa forme simple : avatar et texte côte
     /// à côte. Une pastille toujours montée, vide, occuperait la place d'un son
     /// qui n'existe pas.
     var backgroundSound: StoryAudioPlayerObject? = nil
@@ -122,7 +121,7 @@ struct ComposerDocumentSurface: View {
     /// ne lui a pas donnée.
     var onEditBackgroundSound: (() -> Void)?
 
-    /// **Le RETRAIT du son de fond, par appui long** (#4930).
+    /// **Le RETRAIT du son de fond, par appui long**.
     ///
     /// `nil` ⇒ aucun menu. Deux cas le rendent : aucun fond, et un fond LEGACY
     /// — celui que `resolvedBackgroundAudio` synthétise depuis
@@ -136,27 +135,26 @@ struct ComposerDocumentSurface: View {
     /// composer qui sert la carte sans servir l'édition existe : c'est celui
     /// d'une surface en lecture seule.
     ///
-    /// **Le son touché voyage en ARGUMENT depuis #4672** : avec N cartes, un
+    /// **Le son touché voyage en ARGUMENT** : avec N cartes, un
     /// rappel sans argument ouvrirait toujours le même — un contrôle qui a l'air
     /// de répondre et désigne son voisin.
     var onEditForegroundSound: ((ComposerForegroundSound) -> Void)? = nil
 
-    /// **Retirer le son de la carte, par appui LONG** (#4696, directive porteur
-    /// 2026-09-01 : « introduire le longpress sur les objets pour avoir un menu
-    /// contenant la suppression »).
+    /// **Retirer le son de la carte, par appui LONG** (« introduire le longpress
+    /// sur les objets pour avoir un menu contenant la suppression »).
     ///
     /// Le geste double celui de la feuille, et c'est voulu : ouvrir puis
     /// supprimer demande trois gestes pour défaire ce qu'un seul a posé.
     /// `nil` ⇒ pas de menu — la surface ne fabrique pas une entrée sans effet.
     var onDeleteForegroundSound: ((ComposerForegroundSound) -> Void)? = nil
 
-    /// **Le son placé en CONTENU de publication** (directive porteur
-    /// 2026-09-01). Résolu par le meuble (`ComposerForegroundSound.resolve`),
+    /// **Le son placé en CONTENU de publication.**
+    /// Résolu par le meuble (`ComposerForegroundSound.resolve`),
     /// jamais fouillé ici : la surface reste une présentation. `nil` ⇒ aucune
     /// carte — et c'est le cas de l'écrasante majorité des publications.
     var foregroundSounds: [ComposerForegroundSound] = []
 
-    /// **Le menu `⋯` de la barre haute (#4047).**
+    /// **Le menu `⋯` de la barre haute.**
     ///
     /// Slot OPAQUE, comme `formatFan` : la surface lui donne sa PLACE — au bout
     /// de la barre, après le rail — et ignore ce qu'il ouvre. Ce qui a du sens
@@ -167,13 +165,13 @@ struct ComposerDocumentSurface: View {
     /// nominal d'un composer vierge : aucune de ses entrées n'aurait d'objet.
     var overflowMenu: AnyView? = nil
 
-    /// **Le média dont la slide est à l'écran (#4047).** Le rail le cercle.
+    /// **Le média dont la slide est à l'écran.** Le rail le cercle.
     /// L'hôte le RÉSOUT (il seul tient la carte `média → slide` et la slide
     /// courante) ; la surface ne fait que le peindre — sans quoi elle aurait
     /// besoin du ViewModel pour savoir où l'on est, et cesserait d'être sans
     /// état. `nil` ⇒ aucun anneau : c'est l'état d'un document sans scène.
 
-    /// **Les médias qu'une slide peut ramener à l'écran (#4052).** Depuis que le
+    /// **Les médias qu'une slide peut ramener à l'écran.** Le
     /// son se pose en BANDE-SON plutôt qu'en page du carrousel, « être dans le
     /// rail » n'implique plus « avoir une slide ». Le meuble le sait — c'est lui
     /// qui tient la carte média → slide —, la surface ne le devine pas : une
@@ -181,7 +179,7 @@ struct ComposerDocumentSurface: View {
     /// gagnerait sa slide.
 
     /// **La teinte du PLATEAU, pour que l'occultation de la rangée d'outils s'y
-    /// fonde (#4032).**
+    /// fonde.**
     ///
     /// Elle vient du meuble — c'est lui qui peint l'écran entier de cette
     /// couleur (`PlateauTint`, trois teintes, réglable par l'auteur). La
@@ -193,7 +191,7 @@ struct ComposerDocumentSurface: View {
     /// ne peut pas jurer.
     var plateauTint: Color = .clear
 
-    /// **La zone contextuelle de l'état INSPECTEUR (lot 3A, #4035 — planche
+    /// **La zone contextuelle de l'état INSPECTEUR (planche
     /// P4 §3).** Rendue DIRECTEMENT au-dessus de `toolRow` — seulement quand
     /// l'hôte retient une sélection sur la scène. `nil` ⇒ ABSENTE (loi 4 :
     /// « jamais de vide-mystère, jamais de contrôle grisé »). Même patron que
@@ -201,17 +199,17 @@ struct ComposerDocumentSurface: View {
     /// la surface ne sait rien de CE qui compose la zone.
     var sceneInspector: AnyView? = nil
 
-    /// **Les bitmaps de la scène incrustée (#4038).** Sans eux, un fond MÉDIA ne
-    /// se stampe pas — la Phase 2 n'ayant montré que des fonds de COULEUR, le
-    /// manque n'a mordu qu'au premier post à photos. `sceneImagesVersion` est le
+    /// **Les bitmaps de la scène incrustée.** Sans eux, un fond MÉDIA ne
+    /// se stampe pas — une scène de fonds de COULEUR seuls n'en a pas besoin, le
+    /// manque ne mord qu'au premier post à photos. `sceneImagesVersion` est le
     /// cookie qui dit au canvas qu'un bitmap a changé (un dictionnaire d'images
     /// n'est pas `Equatable`).
     var sceneImages: [String: UIImage] = [:]
-    /// Octets animés des stickers collés, keyés par `sticker.id` (#3956).
+    /// Octets animés des stickers collés, keyés par `sticker.id`.
     var sceneStickerAnimations: [String: Data] = [:]
     var sceneImagesVersion: UInt64 = 0
 
-    /// **Le slot de tête de `toolRow` (#3903).** Un chip d'état actif (le lieu,
+    /// **Le slot de tête de `toolRow`.** Un chip d'état actif (le lieu,
     /// aujourd'hui) qui doit s'insérer DANS la disposition de la rangée d'outils
     /// plutôt que d'être stacké par-dessus : deux enfants d'un `HStack` ne se
     /// superposent jamais, quelle que soit la taille d'écran ou le palier de
@@ -219,22 +217,22 @@ struct ComposerDocumentSurface: View {
     /// chevauchement. `nil` ⇒ aucun chip, la rangée ne réserve aucune place.
     var toolRowLeadingAccessory: AnyView? = nil
 
-    /// **Le slot de queue de `toolRow` (#3904, revue Opus 2026-08-27).** Même
+    /// **Le slot de queue de `toolRow`.** Même
     /// raisonnement que le slot de tête, à l'autre bout : la capsule de langue
     /// voyageait en `.overlay(alignment: .bottomTrailing)` sur TOUTE la
     /// surface, un raisonnement valable tant que `toolRow` était la dernière
     /// ligne peinte — ce qui a cessé d'être vrai dès que la bande de mentions
-    /// (#3904) a pu s'afficher SOUS elle. Un enfant du `HStack` ne chevauche
+    /// a pu s'afficher SOUS elle. Un enfant du `HStack` ne chevauche
     /// jamais la bande, quel que soit ce qui se peint plus bas dans le
     /// `VStack` parent.
     var toolRowTrailingAccessory: AnyView? = nil
 
-    /// **Le sélecteur de langue du CONTENU, au pied de son champ** (#5137,
-    /// directive porteur 2026-09-04 : « indiquer le sélecteur pour choisir la
-    /// langue du contenu ! Du coup enlever cela de la ligne canonique ! »).
+    /// **Le sélecteur de langue du CONTENU, au pied de son champ** (« indiquer
+    /// le sélecteur pour choisir la langue du contenu ! Du coup enlever cela de
+    /// la ligne canonique ! »).
     ///
     /// Il voyageait par `toolRowTrailingAccessory` — en queue de la **rangée
-    /// canonique**, où il était arrivé au #3904 pour une raison de DISPOSITION
+    /// canonique**, où il était arrivé pour une raison de DISPOSITION
     /// (il chevauchait la bande de mentions en `.overlay`), jamais parce que sa
     /// place sémantique y était. La rangée porte ce qu'on ATTACHE à un texte ;
     /// la langue le QUALIFIE.
@@ -257,8 +255,8 @@ struct ComposerDocumentSurface: View {
     /// dépend, il ne fait que donner à la valeur d'effet une raison de changer.
     @State private var lastTappedTool: ComposerDocumentTool?
 
-    /// **La palette de couleur de fond est REPLIÉE par défaut (#4031, retour
-    /// porteur 2026-08-27).** L'icône « couleur de fond » de `toolRow` (juste
+    /// **La palette de couleur de fond est REPLIÉE par défaut.**
+    /// L'icône « couleur de fond » de `toolRow` (juste
     /// après l'emoji) la déplie ; au repos, la bande n'occupe plus l'espace en
     /// permanence.
     @State private var showColorPalette = false
@@ -280,22 +278,20 @@ struct ComposerDocumentSurface: View {
         VStack(alignment: .leading, spacing: 0) {
             exitAffordance
             content
-            // **Sous la zone de texte, pas au bas de l'écran (retour porteur
-            // 2026-08-27).** La bande vivait après `toolRow` — à côté des
+            // **Sous la zone de texte, pas au bas de l'écran.** La bande ne vit pas
+            // après `toolRow` — à côté des
             // boutons d'action, loin d'où l'auteur tape. Elle voyage
-            // maintenant DIRECTEMENT sous `content`, avant le `Spacer` qui
+            // DIRECTEMENT sous `content`, avant le `Spacer` qui
             // pousse le reste vers le bas : la plus proche approximation du
             // curseur sans faire passer `TextEditor` par un pont UIKit
             // (`UITextView` + `caretRect`, qu'aucun composant du dépôt ne
-            // fait aujourd'hui) — décision confirmée avec le porteur.
-            // **La condition de montage a quitté ce site** (2026-09-05).
-            //
-            // Elle disait « en `.composerDraft`, il n'y a AUCUN appel réseau
-            // en attente qui remplirait la liste plus tard ». C'était vrai
-            // d'une liste d'amis chargée une fois ; un brouillon interroge
-            // désormais l'annuaire, donc « vide » a cessé d'être un seul
-            // état. `showsSuggestions` porte la distinction, à un seul
-            // endroit — cette phrase-ci vivait en trois copies.
+            // fait aujourd'hui).
+            // **La condition de montage n'est pas sur ce site.** Une condition du
+            // type « en `.composerDraft`, il n'y a AUCUN appel réseau en attente qui
+            // remplirait la liste plus tard » vaut pour une liste d'amis chargée une
+            // fois ; un brouillon interroge l'annuaire, donc « vide » n'est pas un
+            // seul état. `showsSuggestions` porte la distinction, à un seul
+            // endroit.
             if mentionBox.controller.showsSuggestions {
                 ComposerMentionStrip(
                     controller: mentionBox.controller,
@@ -305,9 +301,9 @@ struct ComposerDocumentSurface: View {
                 )
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
-            // **La langue, au PIED du texte qu'elle qualifie** (#5137). Après la
+            // **La langue, au PIED du texte qu'elle qualifie.** Après la
             // bande de mentions, jamais avant : la bande est « la plus proche
-            // approximation du curseur » (retour porteur 2026-08-27), et
+            // approximation du curseur », et
             // s'insérer entre elle et le champ l'aurait décollée de la frappe.
             if let contentLanguageAccessory {
                 contentLanguageAccessory
@@ -317,7 +313,7 @@ struct ComposerDocumentSurface: View {
             }
             Spacer(minLength: 0)
             backgroundStrip
-            // **État INSPECTEUR (lot 3A, #4035 — planche P4 §3).** Juste
+            // **État INSPECTEUR (planche P4 §3).** Juste
             // au-dessus de `toolRow`, montée SEULEMENT quand une sélection
             // existe sur la scène — `nil` ⇒ rien peint (loi 4).
             //
@@ -349,30 +345,29 @@ struct ComposerDocumentSurface: View {
     /// geste. Elle n'est PAS dans le socle : le socle a trois zones et ne bouge
     /// jamais (loi 5), y ajouter une quatrième pour la seule surface document
     /// l'aurait fait dépendre de la porte.
-    /// **La barre haute : fermer, puis le RAIL DES SLIDES (#4047).**
+    /// **La barre haute : fermer, puis le RAIL DES SLIDES.**
     ///
     /// La planche la dessine `✕ · [type ▾] · ▭ ▭ ＋ · ⋯`. Trois des quatre
     /// zones y sont : la fermeture, le TYPE DE PUBLICATION (descendu de sa
     /// rangée propre, où il flottait seul au-dessus de la surface) et le RAIL.
     ///
-    /// **Le `⋯` est arrivé avec son premier contenu**, exactement comme cette
-    /// note l'annonçait quand il était encore absent. Il ne reprend PAS les
-    /// entrées de l'atelier (transitions, timeline, purge de slides), dont
-    /// aucune n'a d'équivalent atteignable ici : il porte ce que le DOCUMENT
-    /// sait faire et que rien d'autre à l'écran ne fait — et il disparaît
-    /// entièrement quand aucune de ses entrées n'a d'objet.
+    /// **Le `⋯` porte ce que le DOCUMENT sait faire** et que rien d'autre à
+    /// l'écran ne fait. Il ne reprend PAS les entrées de l'atelier
+    /// (transitions, timeline, purge de slides), dont aucune n'a d'équivalent
+    /// atteignable ici — et il disparaît entièrement quand aucune de ses
+    /// entrées n'a d'objet.
     ///
     /// **Le rail REMPLACE la bande basse, il ne s'y ajoute pas.** Deux bandes
     /// montrant les mêmes vignettes auraient été deux inventaires à faire
     /// diverger, et la seconde aurait menti la première fois qu'un média serait
     /// entré par un chemin qui ne les alimente pas toutes les deux. C'est le
-    /// « d'un seul tenant » de #4047, pris au mot.
+    /// « d'un seul tenant » de la barre haute, pris au mot.
     ///
     /// Les slides sont la STRUCTURE du document : elles se lisent donc là où se
     /// lit le type de publication, pas au milieu des outils.
-    /// La barre haute vit désormais dans `ComposerTopBar` (#4070) — elle agit
+    /// La barre haute vit dans `ComposerTopBar` — elle agit
     /// sur la `MeeshyPublication`, pas sur le document, et la scène incrustée
-    /// en a le même besoin. La garder privée ici aurait obligé la surface de
+    /// en a le même besoin. La garder privée ici obligerait la surface de
     /// scène à la recopier.
     private var exitAffordance: some View {
         ComposerTopBar(
@@ -391,10 +386,10 @@ struct ComposerDocumentSurface: View {
     @ViewBuilder
     private var content: some View {
         if showsScene, let sceneSlide {
-            // **Phase 2 (#3939) — la scène est incrustée EN HAUT.** Dès qu'un
+            // **La scène est incrustée EN HAUT.** Dès qu'un
             // fond est choisi, la scène 9:16 (peinte de ce fond) occupe le haut
             // de l'écran document, arrondie ; le texte devient la DESCRIPTION,
-            // sous la scène. Plus de switch vers l'atelier plein écran.
+            // sous la scène. Pas de switch vers l'atelier plein écran.
             VStack(spacing: MeeshySpacing.sm) {
                 EmbeddedSceneCanvas(
                     slide: sceneSlide,
@@ -409,9 +404,9 @@ struct ComposerDocumentSurface: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // **L'encastrement se lit de la RÈGLE, jamais d'un littéral**
-                // (#4061). `railsShown: false` dit ce que cette surface EST :
+                // `railsShown : false` dit ce que cette surface EST :
                 // le DOCUMENT n'a pas de rails. Ils appartiennent à la surface
-                // de SCÈNE, qui n'existe pas encore (lot B) — et les monter ici
+                // de SCÈNE, qui est une autre vue — et les monter ici
                 // aurait obligé chaque règle du document à porter une exception
                 // de scène, exactement ce que la tâche 4.3 de la planche a
                 // fermé en faisant du mood une SURFACE plutôt qu'un cas.
@@ -427,15 +422,15 @@ struct ComposerDocumentSurface: View {
 
     /// L'écran document HISTORIQUE — texte long seul, sans scène.
     ///
-    /// **L'avatar dit QUI publie (#4071).** La maquette `1a` le pose à gauche du
+    /// **L'avatar dit QUI publie.** La maquette `1a` le pose à gauche du
     /// champ, et il n'est pas décoratif : le composer s'ouvre depuis le fil, où
     /// plusieurs comptes peuvent se succéder, et la seule chose qui distingue
     /// « je publie » de « je réponds » est le visage à côté du curseur. Il est
     /// posé par la loi 8 sans y contrevenir — il ne dépend d'aucun contenu,
     /// c'est une propriété de la SESSION, présente dès l'ouverture.
     private var textOnlyContent: some View {
-        // **Deux dispositions, et le son décide** (#4657). Sans son de fond, la
-        // rangée reste ce qu'elle était : avatar et texte côte à côte. Avec un
+        // **Deux dispositions, et le son décide**. Sans son de fond, la
+        // rangée reste simple : avatar et texte côte à côte. Avec un
         // son, la pastille prend la place à droite de l'avatar — les deux
         // attributs qui existent AVANT le premier caractère tapé se lisent d'un
         // coup d'œil — et le texte descend de ce qu'ils occupent, au lieu
@@ -457,9 +452,9 @@ struct ComposerDocumentSurface: View {
             } else {
                 VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                     HStack(alignment: .top, spacing: MeeshySpacing.md) {
-                        // **La colonne d'outils suit l'AVATAR, pas le champ**
-                        // (#5082). Posée en frère de `content`, elle se rangeait
-                        // sous `textOnlyField` — qui s'étend — et retombait à
+                        // **La colonne d'outils suit l'AVATAR, pas le champ.**
+                        // Posée en frère de `content`, elle se rangerait
+                        // sous `textOnlyField` — qui s'étend — et retomberait à
                         // `y = 428` au lieu de `155`. Dans la colonne gauche de
                         // l'en-tête, elle reste sous l'avatar quelle que soit la
                         // hauteur prise par le texte.
@@ -488,9 +483,9 @@ struct ComposerDocumentSurface: View {
     /// et s'y édite ; il n'a pas besoin d'une carte sous le texte.
     @ViewBuilder
     private var foregroundSoundCard: some View {
-        // **UNE carte par son** (#4672). Une seule se montait, celle du DERNIER
-        // fichier : les précédents restaient dans la publication — donc ils
-        // partaient — sans que rien à l'écran ne dise qu'ils existaient. Un
+        // **UNE carte par son.** Une seule carte, celle du DERNIER
+        // fichier, laisserait les précédents dans la publication — donc ils
+        // partiraient — sans que rien à l'écran ne dise qu'ils existent. Un
         // contenu publié qu'on ne peut ni entendre, ni rogner, ni retirer.
         //
         // `ForEach` sur l'identité du FICHIER : deux sons peuvent partager
@@ -590,10 +585,10 @@ struct ComposerDocumentSurface: View {
         // alors que ni l'un ni l'autre ne dépend de `tools`.
         if toolRowLeadingAccessory != nil || toolRowTrailingAccessory != nil {
             // **La rangée DÉFILE, et son occultation est peinte de la teinte du
-            // PLATEAU (#4032).**
+            // PLATEAU.**
             //
-            // Elle fut scrollable, puis rendue STATIQUE sur retour porteur du
-            // 2026-08-27 — le fond noir sous le drapeau ne matchait pas le
+            // Elle fut scrollable, puis rendue STATIQUE sur retour porteur — le
+            // fond noir sous le drapeau ne matchait pas le
             // plateau navy. Le retour ne condamnait pas le défilement : il
             // condamnait un fond CODÉ EN DUR, et posait la condition de retour
             // en toutes lettres — « un fond d'occultation ALIGNÉ sur la teinte
@@ -609,7 +604,7 @@ struct ComposerDocumentSurface: View {
                     // L'ecart et la largeur de tuile viennent de
                     // `ComposerDocumentToolRowFit`, qui porte la MESURE : a
                     // 52 pt et 8 pt d'ecart, trois entrees sur sept ne rendaient
-                    // aucun pixel a taille nominale sur 402 pt (#4071). Resserrer
+                    // aucun pixel a taille nominale sur 402 pt. Resserrer
                     // ne fait pas tout tenir — rien ne le pourrait sans passer
                     // sous la cible tactile — mais fait PARAITRE la derniere,
                     // et c'est le signal qui manquait.
@@ -649,13 +644,13 @@ struct ComposerDocumentSurface: View {
     }
 
     /// Un bouton d'outil de la rangée (extrait pour intercaler l'icône couleur).
-    /// **Une TUILE : l'icône, et son mot dessous** (`1a`, #4071).
+    /// **Une TUILE : l'icône, et son mot dessous** (`1a`).
     ///
-    /// Elle fut un glyphe nu. Les libellés existaient — traduits en sept langues
-    /// par `ComposerDocumentCopy.label` — mais uniquement en `accessibilityLabel` :
-    /// **lus par VoiceOver, jamais vus.** Mesuré le 2026-08-30 sur Meeshy-iOS26,
-    /// la rangée alignait huit glyphes muets, dont deux paires que rien ne
-    /// distingue à l'œil pour qui ne connaît pas le jeu SF — `photo`/`paperclip`
+    /// Un glyphe nu ne suffirait pas. Les libellés existent — traduits en sept
+    /// langues par `ComposerDocumentCopy.label` — mais seulement en
+    /// `accessibilityLabel` : **lus par VoiceOver, jamais vus.** Sans mot
+    /// dessous, la rangée aligne huit glyphes muets, dont deux paires que rien
+    /// ne distingue à l'œil pour qui ne connaît pas le jeu SF — `photo`/`paperclip`
     /// et `mappin.and.ellipse`/`mic`.
     ///
     /// C'est la loi 12 : la complexité se paie dans le CODE, jamais chez
@@ -670,43 +665,42 @@ struct ComposerDocumentSurface: View {
     ///
     /// `.caption2`, pas une taille en points : sur la seule surface où il faut LIRE
     /// pour choisir sa porte, ignorer Dynamic Type serait le pire endroit.
-    /// **Les outils, en COLONNE sous l'avatar** (#5082).
+    /// **Les outils, en COLONNE sous l'avatar**.
     ///
-    /// > Directive porteur 2026-09-04 : « classer les icones d'action / outils
+    /// > Directive porteur : « classer les icones d'action / outils
     /// > en dessous de l'avatar au lieu de classer en bas ! Ainsi ce restera
     /// > toujours à gauche comme pour le cas des Story et Reel ! »
     ///
-    /// Le même composer posait ses outils à deux endroits selon le format : rail
-    /// GAUCHE en Story (`x = 10, y = 190`), rangée BASSE en Post (`y = 694` sur
-    /// 874) — avec, entre l'avatar et elle, cinq cents points de vide sur toute
-    /// la moitié gauche. Un auteur qui passe d'un format à l'autre devait
-    /// rechercher ce qu'il venait d'utiliser.
+    /// Poser les outils à deux endroits selon le format — rail GAUCHE en Story
+    /// (`x = 10, y = 190`), rangée BASSE en Post (`y = 694` sur 874) — laisserait,
+    /// entre l'avatar et elle, cinq cents points de vide sur toute la moitié
+    /// gauche. Un auteur qui passe d'un format à l'autre devrait rechercher ce
+    /// qu'il vient d'utiliser.
     ///
-    /// C'est le second déplacement du même genre : le retour porteur du
-    /// 2026-08-27 avait déjà sorti la bande de mentions de cette rangée basse,
-    /// « à côté des boutons d'action, LOIN D'OÙ L'AUTEUR TAPE ». Le motif se
-    /// répète — le bas de l'écran attire ce qui n'a pas de place, et l'y laisse.
+    /// La bande de mentions suit le même principe : elle ne reste pas dans la
+    /// rangée basse, « à côté des boutons d'action, LOIN D'OÙ L'AUTEUR TAPE ».
+    /// Le bas de l'écran attire ce qui n'a pas de place, et l'y laisse.
     ///
     /// ## Ce que la directive ne demande PAS
     ///
     /// « Comme pour Story et Reel » dit **où**, pas **comment**. Les deux rails
     /// restent différents, et c'est délibéré. La vue `1a` prescrit ici « une
-    /// TUILE : l'icône, et son mot dessous » (#4071), et les libellés y furent
-    /// AJOUTÉS sur mesure — huit glyphes muets, dont deux paires que rien ne
-    /// distinguait.
+    /// TUILE : l'icône, et son mot dessous », et les libellés y sont
+    /// posés sur mesure — huit glyphes muets, dont deux paires que rien ne
+    /// distingue.
     ///
     /// > **Le discriminant n'est pas « glyphe ou libellé », c'est : LE NOM
     /// > EST-IL REPRIS AILLEURS À L'ÉCRAN ?** Sur la scène, ouvrir un outil fait
     /// > apparaître un panneau dont le titre redit son nom — le glyphe peut donc
-    /// > rester nu (#5029, retrait des noms du rail de l'éditeur). Le Post n'a
-    /// > aucun panneau, la barre de prise de vue non plus (#4080) : les deux
+    /// > rester nu (rail de l'éditeur). Le Post n'a
+    /// > aucun panneau, la barre de prise de vue non plus : les deux
     /// > étiquettent, pour la même raison. La règle unifie trois décisions que
     /// > « glyphe ou libellé » présentait comme contradictoires.
     ///
     /// ## Ce que la colonne RÉSOUT au passage
     ///
-    /// La rangée défilait horizontalement pour une raison mesurée : à
-    /// `accessibility-XXXL` elle occupait 630 pt sur un écran de 402, calée à
+    /// Une rangée horizontale défile pour une raison mesurée : à
+    /// `accessibility-XXXL` elle occupe 630 pt sur un écran de 402, calée à
     /// `x = −114`, coupée des DEUX côtés. **Une colonne n'a pas ce problème** —
     /// sa largeur est celle d'une tuile, et la hauteur est ce qui manque le
     /// moins ici. Le défilement vertical reprend le rôle, dans un espace qui
@@ -727,8 +721,7 @@ struct ComposerDocumentSurface: View {
                         // La porte du FOND garde sa place derrière l'emoji — sa
                         // position fut mesurée (elle fait NAÎTRE la scène, vue
                         // `1b`), et passer en colonne ne change pas cette raison.
-                        // Le Texte, l'autre naissance de la scène, s'y intercale
-                        // (#9137).
+                        // Le Texte, l'autre naissance de la scène, s'y intercale.
                         if tool == ComposerDocumentTool.paletteAnchor(in: tools),
                            onPickBackground != nil {
                             backgroundColorToggle
@@ -757,9 +750,8 @@ struct ComposerDocumentSurface: View {
             lastTappedTool = tool
             onTool?(tool)
         } label: {
-            // **Un glyphe blanc en relief, SANS légende ni cercle** (directive
-            // porteur 2026-09-27 : « enlève les captions partout » ; #10364 :
-            // « enlever les cercles autour des outils »), le même dessin que
+            // **Un glyphe blanc en relief, SANS légende ni cercle** (« enlève les
+            // captions partout », « enlever les cercles autour des outils »), le même dessin que
             // les rails de la scène. Le nom de l'outil reste celui que
             // VoiceOver annonce.
             Image(systemName: tool.symbolName)
@@ -775,8 +767,8 @@ struct ComposerDocumentSurface: View {
         .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
     }
 
-    /// L'icône « couleur de fond » (#4031) — replie/déplie `backgroundStrip`.
-    /// Active (palette dépliée) : jaune pour dire « ouvert » (#10364).
+    /// L'icône « couleur de fond » — replie/déplie `backgroundStrip`.
+    /// Active (palette dépliée) : jaune pour dire « ouvert ».
     @ViewBuilder
     private var backgroundColorToggle: some View {
         Button {
@@ -785,7 +777,7 @@ struct ComposerDocumentSurface: View {
             }
             HapticFeedback.light()
         } label: {
-            // Même TUILE que ses voisines (#4071) : la rangée se lit comme une
+            // Même TUILE que ses voisines : la rangée se lit comme une
             // famille, et un bouton qui porterait seul un glyphe nu au milieu de
             // six tuiles nommées se lirait comme un accident, pas comme un choix.
             Image(systemName: "paintpalette")
@@ -798,33 +790,32 @@ struct ComposerDocumentSurface: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.background))
-        // Le doc-comment ci-dessus écrivait la règle à l'envers — « Active
-        // (palette dépliée) : teintée accent pour dire "ouvert" » : l'état ne
-        // se disait QUE par la teinte, ce qui est exactement WCAG 1.4.1
-        // (253i, #4266). Il se dit maintenant aussi.
+        // L'état « ouvert » ne se dit pas par la seule teinte (WCAG 1.4.1) : il
+        // se dit aussi par un autre signe.
         .toggleStateAccessibility(isToggle: true, isActive: showColorPalette)
     }
 
-    /// **Le picker de couleur de fond (F2, #3885)** — « un post sans visuel
+    /// **Le picker de couleur de fond** — « un post sans visuel
     /// devient une toile ». Une bande horizontale de pastilles sur la palette
     /// PARTAGÉE du SDK (`StoryBackgroundPalette.colors`, jamais recopiée) ;
     /// taper une couleur REMONTE au meuble (`onPickBackground`), qui pose le
     /// fond du socle. `nil` closure ⇒ aucune bande (loi 4) — la surface reste
     /// sans état.
     ///
-    /// **Ne fait plus naître la scène (#3939, retour porteur 2026-08-27) :**
+    /// **Ne fait pas naître la scène :**
     /// choisir une couleur pose `documentBackground` (utile pour l'atelier
-    /// quand il finira par s'incruster) mais ne bascule plus `mountedSurface`
+    /// quand il finira par s'incruster) mais ne bascule pas `mountedSurface`
     /// — cette bande reste donc temporairement SANS effet visuel tant que
-    /// #3939 (incrustation du canvas dans l'écran document) n'est pas livré.
+    /// l'incrustation du canvas dans l'écran document n'est pas livrée.
     /// La forme CIBLE — révéler la palette via l'icône de fond DANS `toolRow`,
-    /// plutôt qu'un champ repliable séparé — appartient aussi à #3939 ; cette
-    /// bande garde volontairement sa forme antérieure (toujours visible) dans
-    /// cet incrément sûr, pour ne pas inventer un patron d'UI qui sera jeté.
+    /// plutôt qu'un champ repliable séparé — appartient aussi à cette
+    /// incrustation ; cette bande garde volontairement sa forme actuelle
+    /// (toujours visible) dans cet incrément sûr, pour ne pas inventer un
+    /// patron d'UI qui sera jeté.
     @ViewBuilder
     private var backgroundStrip: some View {
         // Repliée par défaut — dépliée par l'icône « couleur de fond » de la
-        // toolRow (#4031). Ne s'affiche plus en permanence.
+        // toolRow. Ne s'affiche pas en permanence.
         if onPickBackground != nil && showColorPalette {
             BackgroundColorPalette(colors: StoryBackgroundPalette.colors) { hex in
                 onPickBackground?(hex)
@@ -867,23 +858,22 @@ extension View {
     }
 }
 
-// **La vignette et sa règle de croix sont PARTIES au #6577.**
+// **La vignette et sa règle de croix ont quitté ce fichier.**
 //
 // `ComposerMediaThumbnail` (avec son décodeur) et `ComposerMediaChipAffordance`
-// décrivaient la BANDE de médias, remplacée par le rail de SCÈNES au #5599 :
+// décrivaient la BANDE de médias, remplacée par le rail de SCÈNES :
 // depuis, plus aucun site de production ne les montait. Seuls trois témoins les
 // interrogeaient encore, et ils passaient au vert — sur un contrôle démonté,
 // donc pour un motif étranger à ce qu'ils affirmaient (« le média est
-// retirable »). C'est ce vert-là qui a laissé passer la régression que #6577
-// ferme : la croix de la rangée de scènes ne retirait, elle, que la moitié qui
-// se voit.
+// retirable »). Ce vert-là laisse passer une régression : la croix de la
+// rangée de scènes ne retirerait que la moitié qui se voit.
 //
 // > Une garde de câblage ne voit que ce que sa surface DÉCLARE
 // > (`ComposerCallbackWiringGuardTests` lit les rappels de cette surface-ci).
 // > Un contrôle mort dans un FICHIER VOISIN n'apparaît dans aucune des deux
 // > moitiés — ni chez celui qui déclare, ni chez celui qui monte.
 
-/// **Le menu de suppression d'une carte de son** (#4696).
+/// **Le menu de suppression d'une carte de son**.
 ///
 /// Un modificateur plutôt qu'un `.contextMenu` posé en ligne : sans fermeture,
 /// AUCUN menu ne se monte — un `.contextMenu` vide s'ouvrirait quand même, sur

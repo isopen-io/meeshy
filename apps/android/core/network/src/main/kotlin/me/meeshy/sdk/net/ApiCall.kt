@@ -67,11 +67,11 @@ suspend fun <T> apiCall(block: suspend () -> ApiResponse<T>): NetworkResult<T> =
         NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     } catch (e: SerializationException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+            parseApiError(e),
         )
     }
 
@@ -95,11 +95,11 @@ suspend fun <T> pagedApiCall(block: suspend () -> ApiResponse<T>): NetworkResult
         NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     } catch (e: SerializationException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+            parseApiError(e),
         )
     }
 
@@ -144,7 +144,7 @@ suspend fun <T> headerCall(headerName: String, block: suspend () -> Response<T>)
         )
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     }
 
@@ -170,7 +170,7 @@ suspend fun chunkCall(block: suspend () -> Response<Unit>): NetworkResult<Unit> 
         )
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     }
 
@@ -186,11 +186,11 @@ suspend fun <T> rawApiCall(block: suspend () -> T): NetworkResult<T> =
         NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     } catch (e: SerializationException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+            parseApiError(e),
         )
     }
 
@@ -265,7 +265,7 @@ suspend fun <T> conditionalApiCall(block: suspend () -> Response<ApiResponse<T>>
     } catch (e: HttpException) {
         ConditionalResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
-        ConditionalResult.Failure(ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"))
+        ConditionalResult.Failure(ioApiError(e))
     } catch (e: SerializationException) {
-        ConditionalResult.Failure(ApiError(message = e.message ?: "Malformed response", code = "PARSE"))
+        ConditionalResult.Failure(parseApiError(e))
     }

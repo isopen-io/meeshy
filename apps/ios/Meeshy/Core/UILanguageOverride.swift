@@ -124,11 +124,35 @@ enum UILanguageOverride {
     static func publishInterfaceLanguage(
         to store: InterfaceLanguageProviding = AppGroupInterfaceLanguageStore()
     ) -> Bool {
-        let code = interfaceCode(
+        publish(currentInterfaceCode(), to: store)
+    }
+
+    /// Publie la langue sur la file du groupe d'app (#11558) : `MeeshyApp.init`
+    /// et la reprise de session le font avant le premier rendu de la liste, et
+    /// seules les extensions la lisent. `whenChanged` reçoit, sur le main actor,
+    /// le bundle de la langue publiée.
+    static func publishInterfaceLanguageInBackground(
+        io: AppGroupIO = .shared,
+        store: any InterfaceLanguageProviding & Sendable = AppGroupInterfaceLanguageStore(),
+        whenChanged: (@MainActor @Sendable (Bundle) -> Void)? = nil
+    ) {
+        let code = currentInterfaceCode()
+        io.enqueue {
+            guard publish(code, to: store), let whenChanged else { return }
+            let bundle = InterfaceLanguageResolver.bundle(store: store)
+            Task { @MainActor in whenChanged(bundle) }
+        }
+    }
+
+    private static func currentInterfaceCode() -> String? {
+        interfaceCode(
             explicit: explicitChoice,
             fallback: UserDefaults.standard.string(forKey: cacheKey),
             running: Bundle.main.preferredLocalizations.first
         )
+    }
+
+    private nonisolated static func publish(_ code: String?, to store: any InterfaceLanguageProviding) -> Bool {
         guard store.publishedCode != code else { return false }
         store.publish(code)
         return true
@@ -138,7 +162,6 @@ enum UILanguageOverride {
     /// les extensions la lisent à la prochaine notification, et les actions
     /// enregistrées par l'app se réenregistrent dans la même langue.
     static func refreshNotificationLanguage() {
-        guard publishInterfaceLanguage() else { return }
-        AppDelegate.registerNotificationCategories()
+        publishInterfaceLanguageInBackground(whenChanged: { AppDelegate.registerNotificationCategories(bundle: $0) })
     }
 }

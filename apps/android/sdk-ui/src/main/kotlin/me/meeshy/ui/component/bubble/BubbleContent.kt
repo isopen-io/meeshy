@@ -66,6 +66,20 @@ public data class BubbleFile(
     val name: String?,
     val sizeBytes: Int? = null,
     val url: String? = null,
+    val isVideo: Boolean = false,
+    val isContactCard: Boolean = false,
+)
+
+/**
+ * A shared contact card (vCard attachment). [name] is the card's display name when known, else
+ * the attachment's file name without extension; [accountUsername] is the resolved Meeshy account
+ * handle (without `@`) when the contact is registered.
+ */
+@Immutable
+public data class BubbleContactCard(
+    val attachmentId: String,
+    val name: String? = null,
+    val accountUsername: String? = null,
 )
 
 /**
@@ -206,6 +220,15 @@ public data class BubbleContent(
      * `ApiMessage.isSystemMessage` (`messageSource == "system"`).
      */
     val isSystem: Boolean = false,
+    /** Number of video attachments (read separately from images by the accessibility label). */
+    val videoCount: Int = 0,
+    val contactCards: List<BubbleContactCard> = emptyList(),
+    /** True when the message carries the blurred lifecycle bit: its text is never read aloud. */
+    val isBlurred: Boolean = false,
+    /** True when the quoted message was written by the current user. */
+    val replyToIsMe: Boolean = false,
+    /** True when an outgoing message has been in flight long enough to be called slow. */
+    val isSlowSend: Boolean = false,
 )
 
 /**

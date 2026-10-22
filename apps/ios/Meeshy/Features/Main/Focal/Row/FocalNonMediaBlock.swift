@@ -96,7 +96,7 @@ struct FocalNonMediaBlock: View, Equatable {
             } else if hasSharedPlace {
                 Text(locationLabel)
                     .font(MeeshyFont.relative(FocalMetrics.Text.size))
-                    .foregroundColor(ThemeManager.shared.textMuted)
+                    .foregroundStyle(ThemeManager.shared.textMuted)
             }
 
             ForEach(items) { attachment in

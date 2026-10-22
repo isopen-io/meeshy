@@ -2,6 +2,12 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.model.scene.StoryElementTiming
+import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextBidi
+import me.meeshy.sdk.model.scene.StoryTextDirection
+import me.meeshy.sdk.model.scene.StoryTextFade
+import me.meeshy.sdk.model.scene.StoryTextOutline
 
 /**
  * The visual style of an on-canvas text element — parity with the iOS

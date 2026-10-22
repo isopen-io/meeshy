@@ -35,6 +35,23 @@ interface StoryApi {
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
 
+    /**
+     * `GET /posts/stories/mine` — the caller's COMPLETE story archive (active and expired),
+     * keyset-paginated: the envelope's `pagination.nextCursor` drives the next page.
+     */
+    @GET("posts/stories/mine")
+    suspend fun listMine(
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPost>>
+
+    /**
+     * `POST /posts/{id}/republish` — the SAME story restarts with a fresh publication date and
+     * zeroed engagement (works on an expired or FRIENDS story, unlike a repost).
+     */
+    @POST("posts/{id}/republish")
+    suspend fun republish(@Path("id") storyId: String): ApiResponse<ApiPost>
+
     @POST("posts/{id}/view")
     suspend fun markViewed(@Path("id") storyId: String): ApiResponse<Unit>
 

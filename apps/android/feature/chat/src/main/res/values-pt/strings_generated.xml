@@ -1,0 +1,21 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="composer_a11y_addSelection">Adicionar a seleção</string>
+    <string name="composer_a11y_cancelSelection">Cancelar a seleção</string>
+    <string name="composer_a11y_openFullLibrary">Abrir toda a fototeca</string>
+    <string name="composer_a11y_recentPhoto">Foto recente</string>
+    <string name="composer_a11y_recentVideo">Vídeo recente</string>
+    <string name="composer_a11y_selectedState">Selecionado</string>
+    <string name="composer_recent_accessDenied">Acesso às fotos negado</string>
+    <string name="composer_recent_accessDenied_hint">Toque para abrir os Ajustes</string>
+    <string name="composer_recent_add">Adicionar</string>
+    <string name="composer_recent_addSelected">Adicionar (%d)</string>
+    <string name="composer_recent_alreadyAttached">Já está nos anexos</string>
+    <string name="composer_recent_cancelSelection">Cancelar</string>
+    <string name="composer_recent_edit">Editar</string>
+    <string name="composer_recent_grantAccess">Permitir acesso às fotos</string>
+    <string name="composer_recent_grantAccess_hint">Para encontrar suas mídias recentes aqui</string>
+    <string name="composer_recent_select">Selecionar</string>
+    <string name="recentMedia_resolveFailed">Não foi possível preparar esta mídia — use a biblioteca de fotos completa</string>
+    <string name="recentMedia_resolveFailed_multiple">Não foi possível preparar %d mídias — use toda a fototeca</string>
+</resources>

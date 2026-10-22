@@ -161,7 +161,8 @@ final class ConversationChipAutoScrollTests: XCTestCase {
 
     func test_driver_fingerLeavesTheEdgeZone_theDropIsNoLongerHeldAsAutoScrolling() {
         let driver = ChipAutoScrollDriver()
-        driver.scrollView = makeScrollableList()
+        let scroll = makeScrollableList()
+        driver.scrollView = scroll
         driver.update(fingerLocation: CGPoint(x: 100, y: 890))
         driver.advance(elapsed: 1.0 / 60.0)
         XCTAssertTrue(driver.isActivelyScrolling)
@@ -171,7 +172,7 @@ final class ConversationChipAutoScrollTests: XCTestCase {
         // visée serait rendu inerte (`ChipDropResolver.action(isAutoScrolling:)`).
         driver.update(fingerLocation: CGPoint(x: 100, y: 450))
         XCTAssertFalse(driver.isActivelyScrolling)
-        driver.stop()
+        withExtendedLifetime(scroll) { driver.stop() }
     }
 
     func test_driver_atZeroSpeed_theStepAsksTheClockToSleep() {

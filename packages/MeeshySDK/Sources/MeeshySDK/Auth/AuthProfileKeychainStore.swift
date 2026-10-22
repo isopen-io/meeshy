@@ -9,6 +9,9 @@ enum AuthStorageKeys {
     static func sessionToken(for userId: String) -> String { "meeshy_session_token_\(userId)" }
     static func tokenDate(for userId: String) -> String { "meeshy_token_date_\(userId)" }
     static func pendingProfile(for userId: String) -> String { "meeshy_pending_profile_\(userId)" }
+    static let savedAccounts = "meeshy_saved_accounts"
+    static let legacyToken = "meeshy_auth_token"
+    static let legacyUser = "meeshy_current_user"
 }
 
 /// Persistance trousseau du profil d'un compte : l'utilisateur courant et la

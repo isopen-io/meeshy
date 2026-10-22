@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { ENGAGEMENT_OPERATIONS, ENGAGEMENT_OPERATION_CATALOG } from '../types/engagement-operations.js';
 import {
   DEFAULT_ENGAGEMENT_SCALE,
+  bonusPointsForAccount,
   conversationEngagementForDay,
   elanUnderScale,
   elanUnderScaleFromRows,
@@ -135,6 +136,17 @@ describe('parseEngagementScale', () => {
     expect(parsed?.abuse).toEqual(DEFAULT_ENGAGEMENT_SCALE.abuse);
   });
 
+  it('ne garde plus de fenêtre de reprise réglable : la fenêtre est la loi des 30 jours (#11491)', () => {
+    expect(Object.keys(DEFAULT_ENGAGEMENT_SCALE.abuse).sort()).toEqual(['heavyPoints', 'unverifiedMaxPoints']);
+  });
+
+  it('accepte et ignore le clawbackHours qu’un ancien client ou un ancien barème stocké porte encore (#11491)', () => {
+    for (const clawbackHours of [24, 99999, 'x', null]) {
+      const parsed = parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, abuse: { ...DEFAULT_ENGAGEMENT_SCALE.abuse, clawbackHours } });
+      expect(parsed?.abuse).toEqual({ heavyPoints: DEFAULT_ENGAGEMENT_SCALE.abuse.heavyPoints, unverifiedMaxPoints: DEFAULT_ENGAGEMENT_SCALE.abuse.unverifiedMaxPoints });
+    }
+  });
+
   it('refuse une variante que le catalogue ne déclare pas', () => {
     const ops = DEFAULT_ENGAGEMENT_SCALE.operations;
     const post = { ...ops['content.post'], variantPoints: { secret: 5 } };
@@ -220,6 +232,29 @@ describe('les bonus de constance', () => {
     expect(streakBonusPoints(bonuses, 7, 8)).toBe(0);
     expect(streakBonusPoints(bonuses, 29, 30)).toBe(30);
     expect(streakBonusPoints(bonuses, 99, 100)).toBe(100);
+  });
+});
+
+describe('ce qu’un palier de série ou de fidélité paie à un compte (#10422)', () => {
+  const abuse = DEFAULT_ENGAGEMENT_SCALE.abuse;
+
+  it('paie le palier entier à un compte dont un contact est vérifié', () => {
+    expect(bonusPointsForAccount({ points: 100_000, verified: true, abuse })).toBe(100_000);
+  });
+
+  it('borne un palier qui atteint le seuil des gros poids à la valeur d’un gros acte, pour un compte non vérifié', () => {
+    expect(bonusPointsForAccount({ points: 100_000, verified: false, abuse })).toBe(abuse.unverifiedMaxPoints);
+    expect(bonusPointsForAccount({ points: abuse.heavyPoints, verified: false, abuse })).toBe(abuse.unverifiedMaxPoints);
+  });
+
+  it('laisse intact un palier sous le seuil, vérifié ou non', () => {
+    expect(bonusPointsForAccount({ points: 10, verified: false, abuse })).toBe(10);
+    expect(bonusPointsForAccount({ points: abuse.heavyPoints - 1, verified: false, abuse })).toBe(abuse.heavyPoints - 1);
+  });
+
+  it('ne paie rien d’un palier nul, et ne relève jamais un palier sous la borne', () => {
+    expect(bonusPointsForAccount({ points: 0, verified: false, abuse })).toBe(0);
+    expect(bonusPointsForAccount({ points: 60, verified: false, abuse: { heavyPoints: 50, unverifiedMaxPoints: 80 } })).toBe(60);
   });
 });
 

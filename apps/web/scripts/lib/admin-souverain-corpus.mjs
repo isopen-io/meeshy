@@ -11,7 +11,7 @@
  * n'atteignait pas) et l'hôte passait 1 000 lignes, le seuil « au-delà duquel
  * un découpage se justifie sans se discuter » (`CLAUDE.md` § Code Style).
  *
- * AUCUNE ROUTE HTTP N'EST INVENTÉE : les huit adresses servies par l'hôte
+ * AUCUNE ROUTE HTTP N'EST INVENTÉE : les dix adresses servies par l'hôte
  * existent toutes dans `services/gateway/src/routes/{me,admin}`, et la forme
  * de chaque ligne est celle de `sovereign-message-projection.ts`.
  *
@@ -583,4 +583,31 @@ const messageDuFilLong = (rang) => ({
 export function pageDuFilLong(offset, limit) {
   const servis = Array.from({ length: FIL_LONG_TAILLE }, (_, index) => messageDuFilLong(FIL_LONG_TAILLE - index));
   return { data: servis.slice(offset, offset + limit), pagination: { total: FIL_LONG_TAILLE, offset, limit, hasMore: offset + limit < FIL_LONG_TAILLE } };
+}
+
+/**
+ * LES PIÈCES SERVIES PAR `GET /admin/conversations/:id/attachments` (#11510) —
+ * dérivées des messages du corpus, dans la forme de la route : chaque pièce
+ * avec son PORTEUR résumé, le plus récent d'abord, au curseur (une seule page
+ * ici : la recette mesure la pellicule, pas la pagination, que les témoins
+ * `bun test` tiennent). Une pièce d'un message RETENU part `isProtected: true`
+ * — et reste DÉLIBÉRÉMENT bavarde, comme dans le fil : le client la voile ou
+ * l'écarte lui-même.
+ */
+export function piecesServies(messages) {
+  const data = messages.flatMap((message) =>
+    (message.attachments ?? []).map((piece) => ({
+      ...piece,
+      isProtected: piece.isProtected === true || message.isProtected === true,
+      message: {
+        id: message.id,
+        createdAt: message.createdAt,
+        senderId: message.senderId,
+        senderParticipantId: message.sender?.id ?? null,
+        sender: message.sender,
+        isProtected: message.isProtected === true,
+      },
+    })),
+  );
+  return { data, pagination: { limit: 60, hasMore: false, nextCursor: null, form: 'keyset' } };
 }

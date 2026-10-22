@@ -11,10 +11,10 @@ final class GameElementDetailTests: XCTestCase {
 
     private var ecran: RenderedScreen?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private let game = GameWave2Fixture.game()
@@ -474,11 +474,19 @@ final class GameElementDetailTests: XCTestCase {
 
     /// Le Voyage compte des PAS et la Renaissance des RENAISSANCES : « étoile » n'appartient qu'au ciel des aïeux
     /// (épopée § 4). La clé `game.concept.fact.stars` servait les deux, et disait « Étoiles » aux deux (#11173).
+    ///
+    /// Le français se lit dans la table `fr` du bundle, jamais dans la langue de l'HÔTE : le simulateur de la CI
+    /// n'a aucune langue configurée et rend l'anglais (« Strides »), comme `ProgressionStreakPluralTests` l'a payé.
     func test_theVoyageCountsStrides_andTheRebirthCountsRebirths_neverStars() throws {
         let season = try XCTUnwrap(game.season)
         let prestige = try XCTUnwrap(game.prestige)
-        XCTAssertEqual(ConceptText.factStrides, "Pas")
-        XCTAssertEqual(ConceptText.factRebirths, "Renaissances")
+        let frPath = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"),
+                                   "localisation « fr » absente du bundle — régression de packaging")
+        let french = try XCTUnwrap(Bundle(path: frPath))
+        XCTAssertEqual(french.localizedString(forKey: "game.fact.strides", value: nil, table: nil), "Pas")
+        XCTAssertEqual(french.localizedString(forKey: "game.fact.rebirths", value: nil, table: nil), "Renaissances")
+        XCTAssertEqual(ConceptText.factStrides, Bundle.main.localizedString(forKey: "game.fact.strides", value: nil, table: nil))
+        XCTAssertEqual(ConceptText.factRebirths, Bundle.main.localizedString(forKey: "game.fact.rebirths", value: nil, table: nil))
         XCTAssertTrue(GameElementDetails.seasonStep(1, in: season).facts.map(\.label).contains(ConceptText.factStrides))
         XCTAssertTrue(GameElementDetails.prestigeStar(1, in: prestige).facts.map(\.label).contains(ConceptText.factRebirths))
         let labels = GameElementDetails.seasonStep(1, in: season).facts.map(\.label) + GameElementDetails.prestigeStar(1, in: prestige).facts.map(\.label)

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="empty_states_search_no_results">Aucun résultat</string>
+    <string name="empty_states_search_try_other_terms">Essayez d\'autres termes</string>
+    <string name="empty_states_new_conversation">Nouvelle conversation</string>
+</resources>

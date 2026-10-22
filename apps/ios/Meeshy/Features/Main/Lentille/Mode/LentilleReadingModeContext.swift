@@ -20,16 +20,10 @@ nonisolated enum LentilleReadingModeContext {
 
     // MARK: - Type de conversation
 
-    /// `MeeshyConversation.ConversationType` porte plus de cas
-    /// (`community`, `channel`, `bot`) que le jeu GELÉ de l'orchestrateur
-    /// (`direct | group | public | global | broadcast` — cf. le commentaire
-    /// d'en-tête de `ReadingModeOrchestrator`, qui refuse délibérément de
-    /// réutiliser le type SDK pour garder son `switch` exhaustif fidèle aux
-    /// vecteurs gelés). Les trois cas surnuméraires sont rabattus sur
-    /// `.group` : aucun n'est jamais `direct` (donc aucun n'entrave
-    /// l'éligibilité Rivière, qui exclut seulement `direct`) et le catalogue
-    /// de modes ne les distingue pas plus finement. Décision d'INTÉGRATION
-    /// locale à ce fichier, pas une extension du miroir gelé.
+    /// `community`, `channel` et `bot` sont rabattus sur `.group` : aucun
+    /// n'est jamais `direct` (donc aucun n'entrave l'éligibilité Rivière, qui
+    /// exclut seulement `direct`) et le catalogue de modes ne les distingue
+    /// pas plus finement.
     static func orchestratorType(
         for type: Conversation.ConversationType
     ) -> ReadingModeOrchestrator.ConversationType {
