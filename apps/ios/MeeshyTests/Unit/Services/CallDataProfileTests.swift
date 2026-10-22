@@ -240,4 +240,31 @@ final class CallNetworkPathMonitorTests: XCTestCase {
         XCTAssertEqual(floor.maxFramerate, QualityThresholds.survivalFrozenFPS)
         XCTAssertEqual(floor.degradationPreference, .maintainResolution)
     }
+
+    // MARK: - La caméra descend avec le palier et l'état thermique (#11293)
+
+    func test_captureCeiling_coolDeviceAndHDEncode_capturesHD() {
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 1, thermal: .fair), .hd)
+        XCTAssertEqual(CallCaptureCeiling.hd, CallCaptureCeiling(width: 1280, height: 720, fps: 30))
+    }
+
+    func test_captureCeiling_seriousThermal_drops_to640x480At24() {
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 1, thermal: .serious), .reduced)
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 1, thermal: .critical), .reduced)
+        XCTAssertEqual(CallCaptureCeiling.reduced, CallCaptureCeiling(width: 640, height: 480, fps: 24))
+    }
+
+    func test_captureCeiling_encoderAt360pOrBelow_capturesReducedToo() {
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 2, thermal: .nominal), .reduced)
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 1.5, thermal: .nominal), .hd)
+    }
+
+    func test_sourceOutput_followsTheEncoder_neverAboveTheCapture() {
+        let hd = CallCaptureCeiling.sourceOutput(scaleDownBy: 1.5, framerate: 24, capture: .hd)
+        XCTAssertEqual(hd.height, 480)
+        XCTAssertEqual(hd.fps, 24)
+        let reduit = CallCaptureCeiling.sourceOutput(scaleDownBy: 1, framerate: 30, capture: .reduced)
+        XCTAssertEqual(reduit.height, 480, "la sortie ne dépasse jamais la capture")
+        XCTAssertEqual(reduit.fps, 24)
+    }
 }
