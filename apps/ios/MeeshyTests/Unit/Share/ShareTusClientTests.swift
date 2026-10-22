@@ -213,6 +213,41 @@ final class ShareTusClientTests: XCTestCase {
         XCTAssertEqual(TusStubURLProtocol.headers[1]["Upload-Offset"], "0")
     }
 
+    /// Le nom que le serveur garde (`originalName`) est celui de l'app hôte,
+    /// pas celui de la copie `0.jpg` (#11531).
+    func test_upload_sendsTheOriginalNameAsTheTusFilename() async throws {
+        let file = try makeFile(bytes: 16)
+        TusStubURLProtocol.exchanges = [
+            .init(status: 201, headers: ["Location": "https://gate.meeshy.me/api/v1/uploads/abc"], body: Data()),
+            .init(status: 200, headers: [:], body: finishBody(id: "att1"))
+        ]
+        let named = ShareStagedMedia(relPath: "cid_abc/0.jpg", ext: "jpg", mime: "image/jpeg", bytes: 16,
+                                     originalName: "IMG_0111.jpg")
+
+        _ = try await ShareTusClient.upload(file: file, media: named, session: makeSession(), urlSession: makeStubbedSession())
+
+        XCTAssertEqual(uploadedFileName(TusStubURLProtocol.headers[0]["Upload-Metadata"]), "IMG_0111.jpg")
+    }
+
+    /// Une fiche d'avant le nom d'origine envoie le nom de la copie, comme avant.
+    func test_upload_withoutAnOriginalName_sendsTheCopyName() async throws {
+        let file = try makeFile(bytes: 16)
+        TusStubURLProtocol.exchanges = [
+            .init(status: 201, headers: ["Location": "https://gate.meeshy.me/api/v1/uploads/abc"], body: Data()),
+            .init(status: 200, headers: [:], body: finishBody(id: "att1"))
+        ]
+
+        _ = try await ShareTusClient.upload(file: file, media: media(bytes: 16), session: makeSession(), urlSession: makeStubbedSession())
+
+        XCTAssertEqual(uploadedFileName(TusStubURLProtocol.headers[0]["Upload-Metadata"]), "0.jpg")
+    }
+
+    private func uploadedFileName(_ metadata: String?) -> String? {
+        let pair = metadata?.split(separator: ",").first { $0.hasPrefix("filename ") }
+        return pair.flatMap { Data(base64Encoded: String($0.dropFirst("filename ".count))) }
+            .flatMap { String(data: $0, encoding: .utf8) }
+    }
+
     /// Les octets envoyés doivent être EXACTEMENT ceux du fichier : une copie
     /// tronquée passerait un test qui ne compte que la taille.
     func test_upload_sendsTheExactBytes() async throws {

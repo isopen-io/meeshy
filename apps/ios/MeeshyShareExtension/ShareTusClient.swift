@@ -109,7 +109,7 @@ nonisolated enum ShareTusClient {
     ) async throws -> String {
         guard let create = createRequest(
             baseURL: session.apiBaseURL, bytes: media.bytes,
-            fileName: URL(fileURLWithPath: media.relPath).lastPathComponent,
+            fileName: media.uploadFileName,
             mime: media.mime, session: session
         ) else { throw ShareTusError.missingLocation }
 

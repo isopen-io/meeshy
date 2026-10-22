@@ -231,7 +231,7 @@ extension OfflineQueue {
                         attachmentKinds: item.attachmentKinds,
                         localAudioPath: item.localAudioPath,
                         localAudioPaths: item.localAudioPaths,
-                        localMediaPaths: item.localMediaPaths,
+                        localMediaPaths: item.localMediaPaths, localMediaOriginalNames: item.localMediaOriginalNames,
                         // L'édition ne porte que le texte : le lieu du send en
                         // attente est conservé, pas silencieusement perdu.
                         location: item.location,
