@@ -160,7 +160,7 @@ final class ContentRemovalOfferTests: XCTestCase {
         FeedPost(id: "p1", author: "Awa", authorId: authorId, type: type, content: "Bonjour")
     }
 
-    private static func offer(_ post: FeedPost, viewerId: String? = "mod", role: String?) -> ((String) -> Void)? {
+    private static func offer(_ post: FeedPost, viewerId: String? = "mod", role: String?) -> PublicationModerationOffer? {
         ContentRemovalOffer.publication(for: post, viewerId: viewerId, viewerRole: role) { _, _ in }
     }
 

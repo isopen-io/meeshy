@@ -23,12 +23,18 @@ extension PostDetailViewModel {
     /// reports true and the caller (`PostDetailView`) pops the screen.
     @discardableResult
     func deletePost(_ postId: String, reason: String? = nil) async -> Bool {
+        await withdrawPost(postId, .delete(reason: reason))
+    }
+
+    /// Suppression, retrait ou passage en privé (#11535) : `true` quand le serveur l'a appliqué — l'écran se referme.
+    @discardableResult
+    func withdrawPost(_ postId: String, _ withdrawal: PublicationWithdrawal) async -> Bool {
         do {
-            try await postService.delete(postId: postId, reason: reason)
-            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
+            try await withdrawal.perform(postId: postId, with: postService)
+            FeedbackToastManager.shared.showSuccess(withdrawal.successText(deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
             return true
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
+            FeedbackToastManager.shared.showError(withdrawal.failureText(deleteError: String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main)))
             return false
         }
     }

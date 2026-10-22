@@ -33,7 +33,24 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     public static let shared = PushNotificationManager()
 
     @Published public var isAuthorized = false
-    @Published public var deviceToken: String?
+
+    /// Le jeton APNs, lu au trousseau au PREMIER accès (#11558) : le
+    /// gestionnaire est construit par `MeeshyApp` avant le premier écran, et
+    /// chaque lecture du trousseau y était un XPC synchrone du fil principal.
+    public var deviceToken: String? {
+        get {
+            if case .some(let token) = knownDeviceToken { return token }
+            let token = keychainStore.load(forKey: Self.persistedTokenKey, account: nil)
+            knownDeviceToken = .some(token)
+            return token
+        }
+        set {
+            objectWillChange.send()
+            knownDeviceToken = .some(newValue)
+        }
+    }
+    /// `.none` : le trousseau n'a pas encore été lu.
+    private var knownDeviceToken: String?? = .none
 
     /// Published notification payload when user taps a notification.
     /// The app layer observes this to perform navigation.
@@ -86,7 +103,6 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         self.keychainStore = keychainStore
         super.init()
         migrateDeviceTokenFromUserDefaultsIfNeeded()
-        deviceToken = keychainStore.load(forKey: Self.persistedTokenKey, account: nil)
     }
 
     private func migrateDeviceTokenFromUserDefaultsIfNeeded() {

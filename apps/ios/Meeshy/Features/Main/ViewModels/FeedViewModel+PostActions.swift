@@ -130,7 +130,9 @@ extension FeedViewModel {
         }
     }
 
-    func deletePost(_ postId: String, reason: String? = nil) async {
+    func deletePost(_ postId: String, reason: String? = nil) async { await withdrawPost(postId, .delete(reason: reason)) }
+
+    func withdrawPost(_ postId: String, _ withdrawal: PublicationWithdrawal) async {
         guard !ClientMutationId.isValid(postId) else { return await withdrawPendingPublication(postId) }
         // Un post absent du fil chargé (ouvert par un lien, depuis un profil, ou sorti de la fenêtre paginée) se
         // supprime quand même : seul le retrait optimiste — et donc son retour en arrière — n'a rien à faire.
@@ -138,23 +140,21 @@ extension FeedViewModel {
         let removedPost = removedIndex.map { posts.remove(at: $0) }
 
         do {
-            try await postService.delete(postId: postId, reason: reason)
+            try await withdrawal.perform(postId: postId, with: postService)
             debouncedCacheSave()
-
-            // Remove from GRDB
             if let persistence = feedPersistence {
                 Task.detached(priority: .utility) {
                     try? await persistence.deletePost(id: postId)
                 }
             }
 
-            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
+            FeedbackToastManager.shared.showSuccess(withdrawal.successText(deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
         } catch {
             // Remet CE post à sa place — ce qui a été chargé pendant l'appel reste (`OptimisticRollback`).
             if let removedPost, let removedIndex {
                 posts = OptimisticRollback.restoring(removedPost, at: removedIndex, into: posts)
             }
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
+            FeedbackToastManager.shared.showError(withdrawal.failureText(deleteError: String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main)))
         }
     }
 
