@@ -52,8 +52,6 @@
     <string name="emoji_category_faces">Gesichter</string>
     <string name="emoji_category_gestures">Gesten</string>
     <string name="emoji_category_hearts">Herzen</string>
-    <string name="emoji_category_animals">Tiere</string>
-    <string name="emoji_category_objects">Objekte</string>
     <string name="language_strip_select">Lesen in %1$s</string>
     <string name="time_relative_now">jetzt</string>
     <string name="time_relative_seconds">%1$d s</string>
