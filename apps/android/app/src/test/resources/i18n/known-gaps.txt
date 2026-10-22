@@ -7,18 +7,20 @@
 # est périmée (la retirer). Le fichier ne peut donc que rétrécir. Les lignes à ajouter sont
 # imprimées par le test lui-même.
 
+# de et it ont rejoint le menu avec les Réglages (#11885) ; les autres modules les livrent par leur propre lot.
 # --- Langue déclarée dans l'app sans aucune ressource ---------------------------------------
 # ar est dans AppLanguage.supportedCodes (sélecteur de langue d'interface) mais aucun module
 # ne livre values-ar : choisir l'arabe laisse l'interface en anglais. Comblé par le lot qui
 # génère les ressources des sept langues depuis les catalogues iOS (./apps/android/meeshy.sh i18n).
 declared-locale-without-resources - ar -
+declared-locale-without-resources - de -
+declared-locale-without-resources - it -
 
 # --- Spécificateur nu (sans position) -------------------------------------------------------
 # « %d members » ne se réordonne pas en traduction ; la génération depuis iOS produit des
 # spécificateurs positionnels (%1$d). Comblé quand le lot de la fonctionnalité adopte la clé iOS
 # (ou la réécrit en %1$d).
 bare-specifier :feature:chat en chat_forward_members
-bare-specifier :feature:stories en story_send_members
 # Chaînes GÉNÉRÉES à un seul spécificateur : xcstrings_to_android.py ne numérote un spécificateur
 # que s'il y en a plusieurs ou que la source iOS est déjà positionnelle ; le cliquet les garde
 # jusqu'à ce que le générateur les émette en %1$s / %1$d.
@@ -32,6 +34,16 @@ bare-specifier :sdk-ui en time_lastSeen_seen
 bare-specifier :sdk-ui en time_lastSeen_yesterdayAt
 bare-specifier :feature:chat en composer_recent_addSelected
 bare-specifier :feature:chat en recentMedia_resolveFailed_multiple
+bare-specifier :feature:feed en feed_new_posts
+bare-specifier :feature:feed en feed_repost_likes_count
+bare-specifier :feature:feed en post_comments_replying_to
+bare-specifier :feature:feed en post_comments_view_replies
+bare-specifier :feature:feed en status_bar_via
+bare-specifier :feature:reels en reels_comments_count
+bare-specifier :feature:stories en stories_comments_count
+bare-specifier :feature:stories en stories_composer_slide_duration_value
+bare-specifier :feature:stories en stories_viewers_count
+bare-specifier :feature:stories en story_send_members
 
 # --- Quantité plurielle CLDR « many » absente en fr, es, pt ---------------------------------
 # CLDR exige one, many, other pour le français, l'espagnol et le portugais (« 1 million DE
@@ -41,62 +53,12 @@ bare-specifier :feature:chat en recentMedia_resolveFailed_multiple
 missing-quantity :feature:chat fr chat_reply_count
 missing-quantity :feature:chat es chat_reply_count
 missing-quantity :feature:chat pt chat_reply_count
-missing-quantity :feature:feed fr post_comments_view_replies
-missing-quantity :feature:feed es post_comments_view_replies
-missing-quantity :feature:feed pt post_comments_view_replies
-missing-quantity :feature:feed fr post_comments_view_all_replies
 missing-quantity :feature:feed es post_comments_view_all_replies
+missing-quantity :feature:feed fr post_comments_view_all_replies
 missing-quantity :feature:feed pt post_comments_view_all_replies
-missing-quantity :feature:feed fr feed_new_posts
-missing-quantity :feature:feed es feed_new_posts
-missing-quantity :feature:feed pt feed_new_posts
-missing-quantity :feature:feed fr feed_repost_likes_count
-missing-quantity :feature:feed es feed_repost_likes_count
-missing-quantity :feature:feed pt feed_repost_likes_count
-missing-quantity :feature:stories fr stories_publish_media_summary
 missing-quantity :feature:stories es stories_publish_media_summary
+missing-quantity :feature:stories fr stories_publish_media_summary
 missing-quantity :feature:stories pt stories_publish_media_summary
-
-# --- sdk-ui : atomes d'authentification absents en ar, de, it ---------------------------------
-# Le mot de passe révélable, la jauge de robustesse et la signature de marque n'ont pas encore
-# de traduction arabe, allemande ni italienne. Comblé par la génération des sept langues
-# depuis les catalogues iOS (./apps/android/meeshy.sh i18n).
-missing-key :sdk-ui ar password_reveal_show
-missing-key :sdk-ui ar password_reveal_hide
-missing-key :sdk-ui ar password_reveal_state_revealed
-missing-key :sdk-ui ar password_reveal_state_masked
-missing-key :sdk-ui ar auth_password_strength_veryWeak
-missing-key :sdk-ui ar auth_password_strength_weak
-missing-key :sdk-ui ar auth_password_strength_medium
-missing-key :sdk-ui ar auth_password_strength_good
-missing-key :sdk-ui ar auth_password_strength_strong
-missing-key :sdk-ui ar auth_password_strength_excellent
-missing-key :sdk-ui ar brand_signature_accessibilityLabel
-missing-key :sdk-ui ar brand_signature_credit_open
-missing-key :sdk-ui de password_reveal_show
-missing-key :sdk-ui de password_reveal_hide
-missing-key :sdk-ui de password_reveal_state_revealed
-missing-key :sdk-ui de password_reveal_state_masked
-missing-key :sdk-ui de auth_password_strength_veryWeak
-missing-key :sdk-ui de auth_password_strength_weak
-missing-key :sdk-ui de auth_password_strength_medium
-missing-key :sdk-ui de auth_password_strength_good
-missing-key :sdk-ui de auth_password_strength_strong
-missing-key :sdk-ui de auth_password_strength_excellent
-missing-key :sdk-ui de brand_signature_accessibilityLabel
-missing-key :sdk-ui de brand_signature_credit_open
-missing-key :sdk-ui it password_reveal_show
-missing-key :sdk-ui it password_reveal_hide
-missing-key :sdk-ui it password_reveal_state_revealed
-missing-key :sdk-ui it password_reveal_state_masked
-missing-key :sdk-ui it auth_password_strength_veryWeak
-missing-key :sdk-ui it auth_password_strength_weak
-missing-key :sdk-ui it auth_password_strength_medium
-missing-key :sdk-ui it auth_password_strength_good
-missing-key :sdk-ui it auth_password_strength_strong
-missing-key :sdk-ui it auth_password_strength_excellent
-missing-key :sdk-ui it brand_signature_accessibilityLabel
-missing-key :sdk-ui it brand_signature_credit_open
 
 # --- :feature:chat : dossiers ar, de, it partiels (chaînes générées seules) ----------------------
 # Les dossiers values-ar/de/it n'existent que par strings_generated.xml ; les chaînes écrites à la

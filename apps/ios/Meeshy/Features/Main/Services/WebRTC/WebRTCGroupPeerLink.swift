@@ -97,13 +97,8 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
         self.audioTrack = factory.audioTrack(with: source, trackId: "mesh-audio-\(configuration.remoteUserId)")
         self.audioTrack.isEnabled = configuration.sendsAudio
         super.init()
-        let rtcConfiguration = RTCConfiguration()
-        rtcConfiguration.iceServers = Self.rtcIceServers(configuration.iceServers)
-        rtcConfiguration.sdpSemantics = .unifiedPlan
-        rtcConfiguration.continualGatheringPolicy = .gatherContinually
-        rtcConfiguration.bundlePolicy = .maxBundle
-        rtcConfiguration.rtcpMuxPolicy = .require
-        rtcConfiguration.iceCandidatePoolSize = Int32(QualityThresholds.iceCandidatePoolSize)
+        let rtcConfiguration = WebRTCPeerConfiguration.make(iceServers: Self.rtcIceServers(configuration.iceServers),
+                                                            transport: CallAddressPrivacySetting.transport())
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: ["DtlsSrtpKeyAgreement": "true"])
         peerConnection = factory.peerConnection(with: rtcConfiguration, constraints: constraints, delegate: self)
         if peerConnection == nil {

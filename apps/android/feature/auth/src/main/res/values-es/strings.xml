@@ -1,103 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="login_welcome_back">Bienvenido de nuevo</string>
-    <string name="login_username_label">Nombre de usuario</string>
-    <string name="login_password_label">Contraseña</string>
-    <string name="login_button">Iniciar sesión</string>
     <string name="login_error_required">El nombre de usuario y la contraseña son obligatorios</string>
-    <string name="login_signup_prompt">¿No tienes una cuenta?</string>
-    <string name="login_signup_link">Regístrate</string>
-    <string name="login_other_account">Otra cuenta</string>
-    <string name="login_remove_account">Eliminar esta cuenta</string>
-    <string name="login_saved_accounts">Cuentas guardadas</string>
     <string name="login_custom_host_label">Host personalizado</string>
     <string name="login_apply_custom_host">Aplicar host personalizado</string>
-    <string name="login_server_origin">Conectado a: %1$s</string>
 
-    <string name="registration_back">Atrás</string>
 
-    <string name="guest_join_title">Unirse a la conversación</string>
     <string name="guest_join_subtitle">Crea una identidad temporal para unirte</string>
-    <string name="guest_join_first_name">Nombre</string>
-    <string name="guest_join_last_name">Apellido</string>
-    <string name="guest_join_username">Nombre de usuario</string>
-    <string name="guest_join_username_optional">Nombre de usuario (opcional)</string>
-    <string name="guest_join_email">Correo electrónico</string>
-    <string name="guest_join_birthday">Fecha de nacimiento</string>
     <string name="guest_join_language">Idioma hablado</string>
-    <string name="guest_join_submit">Unirse</string>
     <string name="guest_join_joining">Uniéndose…</string>
-    <string name="guest_join_back">Atrás</string>
-    <string name="guest_join_retry">Reintentar</string>
     <string name="guest_join_preview_error">No se pudo abrir este enlace</string>
     <string name="guest_join_requires_account">Este enlace requiere una cuenta.</string>
-    <string name="guest_join_sign_in">Iniciar sesión</string>
     <string name="share_link_entry_resolving">Abriendo el enlace…</string>
     <string name="share_link_choose_title">¿Cómo quieres unirte?</string>
     <string name="share_link_choose_subtitle">Únete a %1$s con tu cuenta o como invitado.</string>
     <string name="share_link_choose_subtitle_generic">Únete con tu cuenta o como invitado.</string>
     <string name="share_link_continue_with_account">Continuar con mi cuenta</string>
-    <string name="share_link_join_anonymously">Unirse de forma anónima</string>
-    <string name="share_link_resume_anonymously">Reanudar de forma anónima</string>
 
     <!-- Account recovery -->
-    <string name="login_forgot_password">¿Olvidaste tu contraseña?</string>
-    <string name="login_magic_link">Iniciar sesión por correo</string>
-    <string name="auth_back">Atrás</string>
     <string name="auth_back_to_login">Volver al inicio de sesión</string>
-    <string name="auth_email_label">Correo electrónico</string>
-    <string name="auth_forgot_title">Contraseña olvidada</string>
-    <string name="auth_forgot_subtitle">Recibe por correo un enlace para elegir una nueva contraseña.</string>
-    <string name="auth_forgot_never_had_label">¿Nunca has tenido contraseña?</string>
-    <string name="auth_forgot_never_had_text">Ese mismo enlace te permite crear una.</string>
-    <string name="auth_magic_title">Inicio de sesión por correo</string>
-    <string name="auth_magic_header">Tu dirección de correo</string>
-    <string name="auth_magic_how_label">Cómo funciona</string>
-    <string name="auth_magic_subtitle">Sin contraseña que recordar: te enviamos un enlace por correo. Ábrelo y habrás iniciado sesión.</string>
-    <string name="auth_magic_send">Recibir el enlace</string>
-    <string name="auth_magic_sent_title">Correo enviado</string>
     <string name="auth_magic_sent">Abre el enlace enviado a %1$s</string>
-    <string name="auth_magic_nothing_label">¿No has recibido nada?</string>
-    <string name="auth_magic_nothing_text">Revisa tu carpeta de correo no deseado (spam): el mensaje puede haber llegado ahí.</string>
     <string name="auth_magic_countdown">Enlace válido durante %1$s</string>
-    <string name="auth_magic_expired">El enlace expiró. Envía uno nuevo.</string>
-    <string name="auth_magic_resend">Reenviar el enlace</string>
     <string name="auth_magic_validating">Iniciando sesión…</string>
-    <string name="auth_magic_success">¡Sesión iniciada!</string>
-    <string name="auth_magic_invalid">Enlace inválido o caducado</string>
 
     <!-- Account creation (one screen, no wizard) -->
-    <string name="signup_back">Volver</string>
-    <string name="signup_title">Crea tu cuenta</string>
-    <string name="signup_subtitle">Leerás a todo el mundo en tu idioma.</string>
-    <string name="signup_display_name_label">¿Cómo te llamamos?</string>
     <string name="signup_display_name_required">Escribe al menos una letra.</string>
     <string name="signup_display_name_too_long">Este nombre es demasiado largo.</string>
     <string name="signup_display_name_taken">Este nombre ya está ocupado. Prueba con otro.</string>
-    <string name="signup_email_label">Correo electrónico</string>
     <string name="signup_email_invalid">Esta dirección parece incompleta.</string>
-    <string name="signup_email_taken">Ya hay una cuenta con esta dirección.</string>
-    <string name="signup_phone_label">Teléfono</string>
     <string name="signup_phone_invalid">Este número no se puede marcar.</string>
     <string name="signup_phone_conflict">Este número ya está vinculado a una cuenta. Déjalo vacío para continuar.</string>
     <string name="signup_choose_country">Elegir país</string>
     <string name="signup_country_picker_title">Elige un país</string>
-    <string name="signup_country_search_hint">Buscar país o código</string>
-    <string name="signup_password_label">Contraseña</string>
     <string name="signup_password_too_short">Mínimo 6 caracteres.</string>
-    <string name="signup_password_show">Mostrar contraseña</string>
-    <string name="signup_password_hide">Ocultar contraseña</string>
-    <string name="signup_language_pill">Leerás Meeshy en %1$s</string>
-    <string name="signup_language_change">Cambiar</string>
-    <string name="signup_language_picker_title">Tu idioma de lectura</string>
-    <string name="signup_language_search_hint">Buscar un idioma…</string>
     <string name="signup_submit">Crear mi cuenta</string>
-    <string name="signup_legal">Al continuar, aceptas las condiciones de uso y la política de privacidad.</string>
-    <string name="signup_legal_terms">Condiciones de uso</string>
-    <string name="signup_legal_privacy">Política de privacidad</string>
-    <string name="signup_have_account">¿Ya tienes una cuenta?</string>
-    <string name="signup_sign_in">Iniciar sesión</string>
-    <string name="signup_error_network">Conexión no disponible. Comprueba tu red e inténtalo de nuevo.</string>
-    <string name="signup_error_generic">No se pudo crear la cuenta. Inténtalo de nuevo.</string>
     <string name="signup_error_invalid_field">Este valor fue rechazado.</string>
 </resources>

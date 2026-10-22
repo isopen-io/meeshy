@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_waiting_reject">Rechazar</string>
+    <string name="call_waiting_answer">Responder</string>
+    <string name="call_waiting_reject_hint">Rechaza la nueva llamada entrante sin interrumpir la llamada en curso</string>
+    <string name="call_waiting_answer_hint">Termina la llamada en curso y responde a la nueva llamada entrante</string>
+</resources>

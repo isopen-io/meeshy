@@ -27,6 +27,7 @@ public enum class OutboxKind {
     BOOKMARK_POST,
     UNBOOKMARK_POST,
     RESPOND_FRIEND_REQUEST,
+    REPORT_ATTACHMENT_STATUS,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -62,6 +63,7 @@ public object OutboxLanes {
     public const val BLOCK: String = "block"
     public const val FRIEND: String = "friend"
     public const val PIN: String = "pin"
+    public const val MEDIA_STATUS: String = "mediaStatus"
 }
 
 /**
@@ -127,6 +129,8 @@ public object OutboxLaneMap {
         OutboxKind.BOOKMARK_POST,
         OutboxKind.UNBOOKMARK_POST,
         -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
+
+        OutboxKind.REPORT_ATTACHMENT_STATUS -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA_STATUS)
     }
 
     /**

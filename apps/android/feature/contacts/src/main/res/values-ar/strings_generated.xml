@@ -1,0 +1,41 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="contacts_back">رجوع</string>
+    <string name="contacts_blocked_empty">لا يوجد مستخدمون محظورون</string>
+    <string name="contacts_blocked_unblock">إلغاء الحظر</string>
+    <string name="contacts_blocked_unblock_a11y">إلغاء حظر %s</string>
+    <string name="contacts_blocked_unblock_cancel">إلغاء</string>
+    <string name="contacts_blocked_unblock_confirm">إلغاء الحظر</string>
+    <string name="contacts_blocked_unblock_message">إلغاء حظر %s؟</string>
+    <string name="contacts_blocked_unblock_title">إلغاء الحظر؟</string>
+    <string name="contacts_discover_blocked">المحظورون</string>
+    <string name="contacts_discover_email_error">تعذر إرسال الدعوة</string>
+    <string name="contacts_discover_email_placeholder">عنوان البريد الإلكتروني</string>
+    <string name="contacts_discover_email_send">إرسال</string>
+    <string name="contacts_discover_email_send_a11y">إرسال الدعوة بالبريد الإلكتروني</string>
+    <string name="contacts_discover_email_title">دعوة بالبريد الإلكتروني</string>
+    <string name="contacts_discover_no_results">لم يتم العثور على مستخدم</string>
+    <string name="contacts_discover_pending">في الانتظار</string>
+    <string name="contacts_discover_search_hint">البحث عن مستخدم في Meeshy</string>
+    <string name="contacts_discover_sms_placeholder">رقم الهاتف</string>
+    <string name="contacts_discover_sms_send">إرسال</string>
+    <string name="contacts_discover_sms_send_a11y">إرسال الدعوة برسالة نصية</string>
+    <string name="contacts_discover_sms_title">دعوة برسالة نصية</string>
+    <string name="contacts_filter_all">الكل</string>
+    <string name="contacts_filter_offline">غير متصل</string>
+    <string name="contacts_filter_online">متصل</string>
+    <string name="contacts_list_empty">لا توجد جهات اتصال</string>
+    <string name="contacts_list_filtered_empty">لا توجد نتائج</string>
+    <string name="contacts_list_retry">إعادة المحاولة</string>
+    <string name="contacts_request_accept">قبول</string>
+    <string name="contacts_request_cancel">إلغاء</string>
+    <string name="contacts_request_decline">رفض</string>
+    <string name="contacts_requests_received">الواردة</string>
+    <string name="contacts_requests_sent">المُرسَلة</string>
+    <string name="contacts_search_hint">البحث عن جهة اتصال</string>
+    <string name="contacts_tab_blocked">المحظورون</string>
+    <string name="contacts_tab_contacts">جهات الاتصال</string>
+    <string name="contacts_tab_discover">اكتشاف</string>
+    <string name="contacts_tab_requests">الطلبات</string>
+    <string name="contacts_title">جهات الاتصال</string>
+</resources>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Atomes d'authentification : libellés alignés sur le catalogue iOS (MeeshyUI). -->
+    <string name="password_reveal_show">إظهار كلمة المرور</string>
+    <string name="password_reveal_hide">إخفاء كلمة المرور</string>
+    <string name="password_reveal_state_revealed">ظاهرة</string>
+    <string name="password_reveal_state_masked">مخفية</string>
+
+    <string name="auth_password_strength_veryWeak">ضعيفة جدًا</string>
+    <string name="auth_password_strength_weak">ضعيفة</string>
+    <string name="auth_password_strength_medium">متوسطة</string>
+    <string name="auth_password_strength_good">جيدة</string>
+    <string name="auth_password_strength_strong">قوية</string>
+    <string name="auth_password_strength_excellent">ممتازة</string>
+
+    <string name="brand_signature_accessibilityLabel">Meeshy الإصدار %1$s، البناء %2$s.</string>
+    <string name="brand_signature_credit_open">فتح منصة services.ceo في المتصفح</string>
+</resources>

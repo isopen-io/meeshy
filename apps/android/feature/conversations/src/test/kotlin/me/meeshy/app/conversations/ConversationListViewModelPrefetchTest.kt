@@ -92,3 +92,6 @@ class ConversationListViewModelPrefetchTest {
         assertThat(h.source.requested).isEmpty()
     }
 }
+
+private fun row(id: String) =
+    ApiConversation(id = id, lastMessage = ApiConversationLastMessage(id = "m-$id", createdAt = "2026-10-01T10:00:00.000Z"))

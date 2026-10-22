@@ -50,8 +50,11 @@ fun ChatScreen(
         ?.takeIf { it != Color.Unspecified }
         ?: MeeshyPalette.Indigo500
     val actions = remember(viewModel) { viewModel.hostActions() }
+    val pendingTray = remember(viewModel) { viewModel.controllers.find<ComposerTrayController>() }
+    val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
+        pending = pending,
         accentColor = accentColor,
         actions = actions,
         navigation = ChatNavigationActions(

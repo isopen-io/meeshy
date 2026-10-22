@@ -14,7 +14,6 @@ import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.composer.PendingAttachmentsState
 import me.meeshy.sdk.model.report.ReportReason
-import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Navigation-level callbacks the screen receives from its host (the nav graph): leaving the
@@ -41,7 +40,8 @@ internal class ChatSheetVisibility {
 }
 
 /**
- * Everything the five hosts of the chat screen share: the collected [state], the conversation
+ * Everything the five hosts of the chat screen share: the collected [state], the composer's
+ * [pending] attachments tray, the conversation
  * [accentColor], the ViewModel entry points reduced to [actions] (hosts never read the
  * ViewModel), the [navigation] callbacks, the [sheets] visibility and the window-space
  * [bubbleFrames] captured by the list for the long-press preview hero.
@@ -49,6 +49,7 @@ internal class ChatSheetVisibility {
 @Stable
 internal class ChatHostContext(
     val state: ChatUiState,
+    val pending: PendingAttachmentsState,
     val accentColor: Color,
     val actions: ChatHostActions,
     val navigation: ChatNavigationActions,
@@ -59,6 +60,7 @@ internal class ChatHostContext(
 @Composable
 internal fun rememberChatHostContext(
     state: ChatUiState,
+    pending: PendingAttachmentsState,
     accentColor: Color,
     actions: ChatHostActions,
     navigation: ChatNavigationActions,
@@ -67,7 +69,7 @@ internal fun rememberChatHostContext(
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    return ChatHostContext(state, accentColor, actions, navigation, sheets, bubbleFrames)
+    return ChatHostContext(state, pending, accentColor, actions, navigation, sheets, bubbleFrames)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -103,9 +105,7 @@ internal class ChatHostActions(
     val cancelEdit: () -> Unit,
     val cancelReply: () -> Unit,
     val removeClipboardContent: () -> Unit,
-    val sendFileAttachment: (ByteArray, String, String?) -> Unit,
-    val onPickFile: (ByteArray, String, String?) -> Unit,
-    val pendingAttachments: StateFlow<PendingAttachmentsState>,
+    val pickFile: (ByteArray, String, String?) -> Unit,
     val removePendingAttachment: (String) -> Unit,
     val stagePendingUris: (List<Uri>) -> Unit,
     val dismissImageViewer: () -> Unit,
@@ -175,11 +175,9 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     cancelEdit = this::cancelEdit,
     cancelReply = this::cancelReply,
     removeClipboardContent = this::removeClipboardContent,
-    sendFileAttachment = this::sendFileAttachment,
-    onPickFile = this::onPickFile,
-    pendingAttachments = controllers.find<ComposerTrayController>()?.state ?: NO_PENDING,
-    removePendingAttachment = { controllers.find<ComposerTrayController>()?.remove(it) },
-    stagePendingUris = { controllers.find<ComposerTrayController>()?.stageUris(it) },
+    pickFile = this::onPickFile,
+    removePendingAttachment = { id -> controllers.find<ComposerTrayController>()?.remove(id) },
+    stagePendingUris = { uris -> controllers.find<ComposerTrayController>()?.stageUris(uris) },
     dismissImageViewer = this::dismissImageViewer,
     openEmojiPicker = this::openEmojiPicker,
     startEdit = this::startEdit,
