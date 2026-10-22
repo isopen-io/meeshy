@@ -65,7 +65,7 @@ import me.meeshy.ui.theme.hexColor
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationAnalysisSheet(
+internal fun ConversationAnalysisSheet(
     conversationId: String,
     accentColor: Color,
     onDismiss: () -> Unit,
