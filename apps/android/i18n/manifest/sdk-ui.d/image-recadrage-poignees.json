@@ -78,6 +78,14 @@
           "catalog": "ui",
           "iosKey": "media.crop.a11y.size",
           "status": "adopted"
+        },
+        {
+          "androidName": "image_crop_action_grow",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_crop_action_shrink",
+          "status": "android-only"
         }
       ]
     }
