@@ -13,6 +13,8 @@ import type { PlainMessagePiecesKey } from '@/lib/i18n-message-pieces-catalog';
 import { kindOf, translationsOf } from '@/lib/view/message';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
+import { transcriptionOffered } from './audio-on-demand';
+
 import { menuRegimeKnown, messageActionsOf, webEditsAsAuthor, webSendsHere, type ActionMessage, type ActionScope } from './message-action-scope';
 import { placeOf, type SharedPlace } from './message-body';
 
@@ -62,6 +64,7 @@ export type MessageActionId =
   | 'translate'
   | 'translateOnDevice'
   | 'save'
+  | 'transcribe'
   | 'select'
   | 'pin'
   | 'unpin'
@@ -91,6 +94,7 @@ export type MessageMenuGlyph =
   | 'pushPin'
   | 'prohibit'
   | 'lockSimple'
+  | 'chatText'
   | 'trash';
 
 export type MessageMenuGroupName = MessageActionGroupName;
@@ -120,6 +124,8 @@ const INTERFACE_LABELS = {
   remove: 'moderation.remove.action',
   /* La carte de contact (#11210) — le mot de la carte elle-même. */
   saveContact: 'contactCard.download',
+  /* « TRANSCRIRE » (#11370) — le mot de la zone de la bulle vocale : même geste, même mot. */
+  transcribe: 'media.audio.transcribe',
 } as const satisfies Readonly<Partial<Record<MessageActionId, InterfaceCatalogKey>>>;
 
 const PIECES_LABELS = {
@@ -163,6 +169,7 @@ const GLYPHS: Readonly<Record<MessageActionId, MessageMenuGlyph>> = {
   translate: 'globe',
   translateOnDevice: 'globe',
   save: 'downloadSimple',
+  transcribe: 'chatText',
   select: 'checkCircle',
   pin: 'pushPin',
   unpin: 'pushPin',
@@ -234,9 +241,14 @@ export type MessageMenuContext = {
    * n'est pas déjà écrit dans la langue primaire du lecteur. Absent ⇒ non.
    */
   readonly deviceTranslationWanted?: boolean;
+  /** UN VOCAL QUE LE SERVEUR PEUT TRANSCRIRE (#11370, `transcribablePieceOf`) — pas encore transcrit, ni local, ni voilé. */
+  readonly transcribable?: boolean;
 };
 
 type MenuPiece = {
+  readonly id?: string;
+  readonly fileUrl?: string;
+  readonly transcription?: unknown;
   readonly mimeType: string;
   readonly originalName?: string | null;
   readonly fileName?: string | null;
@@ -276,6 +288,19 @@ const actionMessageOf = (message: MenuMessage): ActionMessage | null =>
     : { ...message, id: message.id, senderId: message.senderId, createdAt: message.createdAt, isViewOnce: message.isViewOnce === true, isBlurred: message.isBlurred === true };
 
 /**
+ * LE VOCAL QUE « TRANSCRIRE » VISE (#11370) — la première pièce audio, ni
+ * voilée, ni déjà transcrite, que la passerelle connaît et sait lire
+ * (`transcriptionOffered` : jamais un envoi local, jamais un message chiffré).
+ * Le bout en bout de la CONVERSATION est l'affaire du verdict `transcribe`.
+ */
+export function transcribablePieceOf(message: MenuMessage): { readonly id: string } | null {
+  const piece = (message.attachments ?? []).find((candidate) => kindOf(candidate) === 'audio');
+  if (piece?.id === undefined || piece.transcription != null || !pieceIsOpen(piece)) return null;
+  const subject = message.id === undefined ? undefined : { id: message.id, isEncrypted: message.isEncrypted === true, encryptionMode: message.encryptionMode ?? null };
+  return transcriptionOffered({ attachment: { id: piece.id, fileUrl: piece.fileUrl ?? '' }, message: subject }) ? { id: piece.id } : null;
+}
+
+/**
  * Dérive le contexte d'UN message, à l'instant `now` — jamais de seconde
  * horloge. `scope` (#11210) : le lecteur et la conversation, remis à
  * `messageActionsFor` ; absent, aucun verdict n'est posé. `failed` : l'envoi
@@ -312,6 +337,7 @@ export function messageMenuContextOf(
     link: firstLinkOf(message.content),
     place: placeOf(message),
     deviceClear: actions !== undefined && !actions.content.flags.encrypted,
+    transcribable: transcribablePieceOf(message) !== null,
     ...(input.scope === undefined ? {} : { regimeKnown: menuRegimeKnown(input.scope.conversation) }),
     ...(actions === undefined ? {} : { actions }),
   };
@@ -357,6 +383,7 @@ const SERVABLE: Readonly<Partial<Record<PolicyActionId, Servable>>> = {
   forward: { id: 'forward', offered: (ctx) => ctx.canForward },
   translate: { id: 'translate', offered: (ctx) => ctx.hasText && !ctx.isProtected && (ctx.languageCount > 1 || deviceTranslatable(ctx)) },
   save: { id: 'save', offered: (ctx) => ctx.canSave === true && ctx.sticker === undefined && exportsOut(ctx) },
+  transcribe: { id: 'transcribe', offered: (ctx) => ctx.transcribable === true && ctx.actions?.verdicts.transcribe === true },
 };
 
 /** Sans la loi, seuls les gestes que la loi de SORTIE gouverne — aucun rôle, aucun auteur. */

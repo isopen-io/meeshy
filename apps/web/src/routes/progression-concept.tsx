@@ -18,6 +18,7 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import { missionMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import { useGamePrefs } from '@/lib/game/preferences';
+import { useAtmosphereGate } from '@/lib/game/use-atmosphere-gate';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -338,10 +339,11 @@ function FicheScreenBody({ concept, progress }: { readonly concept: ProgressionC
   const actions = useGameActions();
   /* Le moment est construit UNE fois au toucher : le déroulé de la photo en dépend, il ne se relance pas à chaque rendu. */
   const [taking, setTaking] = useState<PhotoMoment | null>(null);
+  const atmosphere = useAtmosphereGate(progress.game);
   return (
     <>
       <ConceptFiche concept={concept} progress={progress} host={{ actions, online, onPhotoMission: (mission) => setTaking(missionMoment(mission)) }} />
-      {taking === null ? null : <GamePhotoFlow moment={taking} env={appPhotoEnv()} flameDays={progress.game?.flame.days ?? null} onClose={() => setTaking(null)} />}
+      {taking === null ? null : <GamePhotoFlow moment={taking} env={appPhotoEnv()} flameDays={progress.game?.flame.days ?? null} atmosphere={atmosphere} onClose={() => setTaking(null)} />}
     </>
   );
 }

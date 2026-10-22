@@ -66,7 +66,12 @@
   gap: 8px;
   overflow: hidden;
   padding: 8px 12px 12px;
-  mask-image: linear-gradient(to bottom, transparent 0, black 28px);
+}
+
+/* Le fondu ne se pose que si un message est réellement coupé par le haut, et
+   reste court : le plus ancien des cinq, quand ils tiennent, est net. */
+.conversation-peek-body[data-peek-overflowing] {
+  mask-image: linear-gradient(to bottom, transparent 0, black 12px);
 }
 
 .conversation-peek-placeholder {

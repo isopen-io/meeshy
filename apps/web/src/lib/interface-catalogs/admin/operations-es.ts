@@ -43,7 +43,7 @@ const f = {
   'admin.ops.action.backup': 'Lanzar la copia de seguridad',
   'admin.ops.action.image-prune': 'Limpiar Docker',
   'admin.ops.action.backup.body': 'Una copia completa de la base y los volúmenes de este entorno empieza ahora. Como mucho una cada 6 horas.',
-  'admin.ops.action.image-prune.body': 'Se eliminan las imágenes Docker sin uso de más de una semana y la caché de construcción para liberar el disco; los contenedores en marcha y los volúmenes no se tocan. La limpieza abarca toda la máquina: en un servidor compartido, también afecta a las imágenes de producción. Como máximo una limpieza por hora.',
+  'admin.ops.action.image-prune.body': 'Se eliminan las imágenes Docker sin uso de más de una semana y la caché de construcción para liberar el disco; los contenedores en marcha y los volúmenes no se tocan. La limpieza abarca toda la máquina: en un servidor compartido, también afecta a las imágenes de producción. La imagen anterior de cada servicio de producción se conserva para una vuelta atrás; las más antiguas se vuelven a descargar desde el registro. Como máximo una limpieza por hora.',
   'admin.ops.action.confirmType': 'Escriba «{name}» para confirmar',
   'admin.ops.action.reason': 'Motivo (opcional)',
   'admin.ops.action.cancel': 'Cancelar',

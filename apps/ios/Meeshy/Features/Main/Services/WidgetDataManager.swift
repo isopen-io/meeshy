@@ -274,9 +274,12 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// production si elle en sort — un environnement inattendu ne peut donc pas
     /// détourner un partage vers un hôte arbitraire.
     ///
-    /// Publiée depuis `prepareProcess`, avant le premier rendu de la liste
-    /// (#11558) : l'ouverture du groupe d'app et l'écriture partent sur la file
-    /// `AppGroupIO`. L'assertion d'arrière-plan court jusqu'à l'écriture faite.
+    /// Au démarrage à froid, publiée par `finishLaunch` une fois l'écran de
+    /// lancement levé, la liste rendue (#11558) : l'assertion d'arrière-plan
+    /// (`beginBackgroundTask`) est un XPC synchrone sur le fil principal, et
+    /// seules les extensions lisent la valeur, déjà écrite au lancement
+    /// précédent. L'ouverture du groupe d'app et l'écriture partent sur la file
+    /// `AppGroupIO` ; l'assertion court jusqu'à l'écriture faite.
     func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin, io: AppGroupIO = .shared) {
         let suiteName = suiteName
         let key = apiBaseURLKey

@@ -10,14 +10,13 @@ enum PrismTranslationLaw {
     static func prismTranslation(
         in translations: [MessageTranslation], originalLanguage: String?, preferredLanguages: [String]
     ) -> MessageTranslation? {
-        for lang in preferredLanguages {
-            let langLower = lang.lowercased()
-            if originalLanguage == langLower { return nil }
-            if let match = translations.first(where: { $0.targetLanguage.lowercased() == langLower }) {
-                return match
-            }
-        }
-        return nil
+        PrismTranslationResolver.resolveElement(
+            originalLanguage: originalLanguage,
+            elements: translations,
+            languageOf: { $0.targetLanguage },
+            isServable: { !$0.translatedContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty },
+            preferredLanguages: preferredLanguages
+        )
     }
 
     /// Langue SOURCE déclarée par les traductions d'un message — repli quand le message n'est

@@ -26,6 +26,7 @@ import type {
 } from '../types/glory-frame-format.js';
 import type { GloryFrame, GloryFrameAppliesTo, MeeshFrameEdition } from '../types/glory-frames.js';
 import type { GloryAtmosphere } from '../types/glory-atmospheres.js';
+import { ACHIEVEMENT_RARITIES } from '../utils/game/glory.js';
 
 /** L'atmosphère de chaque collection d'atmosphère ; les autres sont hors atmosphère. */
 export const COLLECTION_ATMOSPHERES: Readonly<Record<string, GloryAtmosphere>> = {
@@ -47,7 +48,7 @@ const MEESH_EDITIONS: Readonly<Record<string, MeeshFrameEdition>> = { '1': 'firs
 
 export type FrameTarget = { readonly appliesTo: GloryFrameAppliesTo; readonly option: string | null };
 
-/** La cible d'un cadre, lue dans son slug (`ambassadeur-5`, `oracle-b`, `palier-aurore`, `meesh-100`, `coffre-c`…). */
+/** La cible d'un cadre, lue dans son slug (`ambassadeur-5`, `oracle-b`, `palier-aurore`, `meesh-100`, `coffre-c`, `rare`, `neutre`…). */
 export function targetOfSlug(collection: string, slug: string): FrameTarget | null {
   const [, divisionRank, divisionValue] = /^(ambassadeur|legende)-([1-5])$/.exec(slug) ?? [];
   if (divisionRank !== undefined && divisionValue !== undefined) {
@@ -65,6 +66,9 @@ export function targetOfSlug(collection: string, slug: string): FrameTarget | nu
   if (meesh !== undefined) return edition === undefined ? null : { appliesTo: { family: 'meesh', edition }, option: null };
   const [, day] = /^jour-([a-c])$/.exec(slug) ?? [];
   if (day !== undefined) return { appliesTo: { family: 'day' }, option: day };
+  if (collection === 'succes' && slug === 'neutre') return { appliesTo: { family: 'achievement', rarity: null }, option: null };
+  const rarity = ACHIEVEMENT_RARITIES.find((candidate) => candidate === slug);
+  if (collection === 'succes' && rarity !== undefined) return { appliesTo: { family: 'achievement', rarity }, option: null };
   const [, treasury, treasuryOption] = /^([a-z]+)-([a-c])$/.exec(slug) ?? [];
   if (collection === 'tresor' && treasury !== undefined && treasuryOption !== undefined) return { appliesTo: { family: 'treasury', treasury: treasury as never }, option: treasuryOption };
   return null;

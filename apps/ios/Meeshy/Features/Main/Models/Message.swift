@@ -38,6 +38,7 @@ nonisolated enum MessageExit: String, CaseIterable, Sendable {
 /// | nature | transférer | copier, enregistrer, partager, imager, publier |
 /// |---|---|---|
 /// | ordinaire | oui | oui |
+/// | chiffré de bout en bout | non | oui (jamais publier) |
 /// | flamme à durée | oui, durée ≤ source | non |
 /// | flamme après lecture, vue unique | non | non |
 ///
@@ -77,10 +78,13 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
     func offers(_ exit: MessageExit) -> Bool {
         // D8 (#10949, porteur 2026-10-18) : un flouté se TRANSFÈRE, son flou
         // hérité par la copie (la passerelle l'impose) ; rien d'autre ne sort.
-        if exit == .forward { return law.forward.isAllowed }
+        // E2EE ⇒ pas de transfert (`MessageActionPolicy.forward`) : le texte déchiffré
+        // sur l'appareil partirait EN CLAIR vers le serveur et la cible. Une seule
+        // loi pour toutes les portes (menu, Plus…, glissé, double toucher, sélection).
+        if exit == .forward { return law.forward.isAllowed && !isEncrypted }
         guard !holdsBlur else { return false }
         switch exit {
-        case .forward: return law.forward.isAllowed
+        case .forward: return law.forward.isAllowed && !isEncrypted
         case .copy, .save, .share: return law.exportable
         case .imagine: return law.exportable && !quotesProtectedContent
         case .publish: return law.exportable && !isEncrypted

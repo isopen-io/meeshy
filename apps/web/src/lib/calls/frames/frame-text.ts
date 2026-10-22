@@ -1,5 +1,8 @@
 import type { FrameNames, FrameTitle } from './frame-spec';
 
+/** La règle « rétrécir puis tronquer » vit dans `lib/canvas/text-fit.ts`, partagée avec les cadres de gloire (#10159). */
+export { fitText, type FittedText, type MeasureText } from '@/lib/canvas/text-fit';
+
 /**
  * **LES MOTS D'UN CADRE** (#8743) — ce que le titre, le sous-titre et les
  * noms ÉCRIVENT, en fonctions pures : la mesure du texte est injectée, pour
@@ -87,36 +90,3 @@ export function personLines(person: FramePerson, show: FrameNames['show']): read
 
 /** Une ligne de la liste des noms (style `list`) : « Awa », « @awa » ou « Awa @awa ». */
 export const listEntry = (person: FramePerson, show: FrameNames['show']): string => personLines(person, show).join(' ');
-
-/** Mesure la largeur de `text` à `px` pixels — le canevas en production, une règle fixe dans les témoins. */
-export type MeasureText = (text: string, px: number) => number;
-
-export type FittedText = { readonly text: string; readonly px: number };
-
-const MIN_SHARE = 0.6;
-const ELLIPSIS = '…';
-
-/**
- * Un texte trop long pour `maxWidth` rétrécit jusqu'à 60 % de sa taille,
- * puis se tronque d'une ellipse (§ 5.3) — coupé entre deux points de code,
- * jamais au milieu d'un caractère.
- */
-export function fitText(measure: MeasureText, text: string, maxWidth: number, fontPx: number): FittedText {
-  if (text.length === 0 || maxWidth <= 0) return { text: maxWidth <= 0 ? '' : text, px: fontPx };
-  const width = measure(text, fontPx);
-  if (width <= maxWidth) return { text, px: fontPx };
-  const floor = fontPx * MIN_SHARE;
-  const scaled = Math.max(floor, (fontPx * maxWidth) / width);
-  const settle = (px: number): number => (px > floor && measure(text, px) > maxWidth ? settle(Math.max(floor, px * 0.97)) : px);
-  const px = settle(scaled);
-  if (measure(text, px) <= maxWidth) return { text, px };
-  const glyphs = Array.from(text);
-  const cut = (keep: number): string => (keep <= 0 ? ELLIPSIS : `${glyphs.slice(0, keep).join('').trimEnd()}${ELLIPSIS}`);
-  const longest = (low: number, high: number): number => {
-    if (low >= high) return low;
-    const middle = Math.ceil((low + high) / 2);
-    return measure(cut(middle), px) <= maxWidth ? longest(middle, high) : longest(low, middle - 1);
-  };
-  const keep = longest(0, glyphs.length - 1);
-  return { text: keep === 0 && measure(ELLIPSIS, px) > maxWidth ? '' : cut(keep), px };
-}

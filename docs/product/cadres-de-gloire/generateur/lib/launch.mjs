@@ -9,8 +9,10 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
+// `playwright` d'abord : c'est le paquet que le job de CI épingle sous generateur/node_modules (ci.yml, glory-frames),
+// et que lib/cible-ci.test.mjs juge ; `@playwright/test` du monorepo n'est qu'un repli local.
 function loadChromium() {
-  for (const id of ['@playwright/test', 'playwright']) {
+  for (const id of ['playwright', '@playwright/test']) {
     try {
       return require(id).chromium;
     } catch {}

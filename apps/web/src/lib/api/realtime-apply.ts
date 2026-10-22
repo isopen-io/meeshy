@@ -27,6 +27,7 @@ import {
 } from './messages';
 import { messageReceiptsPeopleQueryKey } from './receipts';
 import type { Attachment, Message, Participant } from './types';
+import { applyEncryptionAnnounced, encryptionAnnounced } from './realtime-encryption-regime';
 import { keepLiveListOverFetch, keepLiveMessageOverFetch } from './realtime-thread-catch-up';
 import { purgeViewOnceIn, sealViewOnceIn } from './view-once-seal';
 
@@ -235,6 +236,8 @@ export function applyMessageNew(
   offerLastMessage(queryClient, raw.conversationId, message, buildTranslationRecord(raw.translations));
   /* Une relecture de la LISTE en vol remettrait l'aperçu précédent (#9637). */
   keepLiveListOverFetch(queryClient);
+  /* L'AVIS D'ACTIVATION DU CHIFFREMENT (#11373) ferme le régime en cache. */
+  applyEncryptionAnnounced(queryClient, raw.conversationId, encryptionAnnounced(raw));
 }
 
 /** Garde de FORME pour `conversation:unread-updated` (§ 3.4 de la

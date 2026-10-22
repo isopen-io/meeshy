@@ -94,49 +94,53 @@ export function AdminPostGestureBar({
   const audiences = audiencesOffered(post);
   const settable = audiences.find((candidate) => candidate === post.visibility && post.state !== 'offline');
 
+  /* La feuille de confirmation est un FRÈRE du groupe, pas un de ses gestes (#10461) : le groupe se
+     replie ENTRE ses contrôles de 44 px, la feuille replie son texte comme n'importe quel dialogue. */
   return (
-    <div
-      role="group"
-      aria-label={translateAdmin(language, 'admin.gesture.group')}
-      data-admin-post-gestures={post.id}
-      className={`flex flex-wrap items-center ${compact ? 'gap-1.5' : 'gap-2'}`}
-    >
-      {offered.includes('take-offline') ? (
-        <AdminButton tone="danger" disabled={!online} onClick={() => setPending({ gesture: 'take-offline' })} data={{ 'data-admin-post-gesture': 'take-offline' }}>
-          {translateAdmin(language, 'admin.gesture.takeOffline')}
-        </AdminButton>
-      ) : null}
-      {offered.includes('restore') ? (
-        <AdminButton tone="primary" disabled={!online} onClick={() => setPending({ gesture: 'restore' })} data={{ 'data-admin-post-gesture': 'restore' }}>
-          {translateAdmin(language, 'admin.gesture.restore')}
-        </AdminButton>
-      ) : null}
-      {offered.includes('set-visibility') ? (
-        <span className="inline-flex items-center gap-2">
-          <label htmlFor={selectId} className="sr-only">
-            {translateAdmin(language, 'admin.gesture.audience')}
-          </label>
-          <select
-            id={selectId}
-            data-admin-post-gesture="set-visibility"
-            disabled={!online}
-            value={settable ?? ''}
-            onChange={(event) => {
-              const visibility = audiences.find((candidate) => candidate === event.currentTarget.value);
-              if (visibility !== undefined && visibility !== settable) setPending({ gesture: 'set-visibility', visibility });
-            }}
-            className="rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ minHeight: 44, backgroundColor: SURFACE, color: INK, border: `1px solid ${EDGE}`, outlineColor: BRAND }}
-          >
-            {settable === undefined ? <option value="">{translateAdmin(language, 'admin.gesture.audience.placeholder')}</option> : null}
-            {audiences.map((visibility: AdminSettableVisibility) => (
-              <option key={visibility} value={visibility}>
-                {audienceLabel(visibility)}
-              </option>
-            ))}
-          </select>
-        </span>
-      ) : null}
+    <>
+      <div
+        role="group"
+        aria-label={translateAdmin(language, 'admin.gesture.group')}
+        data-admin-post-gestures={post.id}
+        className={`flex flex-wrap items-center ${compact ? 'gap-1.5' : 'gap-2'}`}
+      >
+        {offered.includes('take-offline') ? (
+          <AdminButton tone="danger" disabled={!online} onClick={() => setPending({ gesture: 'take-offline' })} data={{ 'data-admin-post-gesture': 'take-offline' }}>
+            {translateAdmin(language, 'admin.gesture.takeOffline')}
+          </AdminButton>
+        ) : null}
+        {offered.includes('restore') ? (
+          <AdminButton tone="primary" disabled={!online} onClick={() => setPending({ gesture: 'restore' })} data={{ 'data-admin-post-gesture': 'restore' }}>
+            {translateAdmin(language, 'admin.gesture.restore')}
+          </AdminButton>
+        ) : null}
+        {offered.includes('set-visibility') ? (
+          <span className="inline-flex items-center gap-2 whitespace-nowrap">
+            <label htmlFor={selectId} className="sr-only">
+              {translateAdmin(language, 'admin.gesture.audience')}
+            </label>
+            <select
+              id={selectId}
+              data-admin-post-gesture="set-visibility"
+              disabled={!online}
+              value={settable ?? ''}
+              onChange={(event) => {
+                const visibility = audiences.find((candidate) => candidate === event.currentTarget.value);
+                if (visibility !== undefined && visibility !== settable) setPending({ gesture: 'set-visibility', visibility });
+              }}
+              className="rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ minHeight: 44, backgroundColor: SURFACE, color: INK, border: `1px solid ${EDGE}`, outlineColor: BRAND }}
+            >
+              {settable === undefined ? <option value="">{translateAdmin(language, 'admin.gesture.audience.placeholder')}</option> : null}
+              {audiences.map((visibility: AdminSettableVisibility) => (
+                <option key={visibility} value={visibility}>
+                  {audienceLabel(visibility)}
+                </option>
+              ))}
+            </select>
+          </span>
+        ) : null}
+      </div>
       {pending === null ? null : (
         <AdminConfirmSheet
           language={language}
@@ -157,6 +161,6 @@ export function AdminPostGestureBar({
           onCancel={close}
         />
       )}
-    </div>
+    </>
   );
 }

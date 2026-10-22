@@ -16,6 +16,7 @@ import { isNewlyResolvedReportTransition, notifyReportResolved } from '../../ser
 import { logError, logWarn } from '../../utils/logger';
 import { sendBadRequest, sendConflict, sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { adminPostModerationViewJsonSchema, applyPostGesture, type GestureRefusal } from './post-gestures';
+import { refusedAsSelfModeration } from './report-self-moderation';
 import { actorOf, type ModerationActor } from './publication-moderation-writer';
 
 /**
@@ -32,7 +33,8 @@ import { actorOf, type ModerationActor } from './publication-moderation-writer';
  *   signalement (depuis la fiche de sa publication).
  *
  * `canModerateContent` ; motif exigé hors du rang souverain ; jamais sur soi
- * (`SELF_MODERATION`) ; hiérarchie sur l'auteur. Journal : `MODERATE_POST` par
+ * (`SELF_MODERATION` — l'auteur du contenu signalé, quel qu'en soit le type,
+ * `report-self-moderation.ts`, #10458) ; hiérarchie sur l'auteur. Journal : `MODERATE_POST` par
  * publication (avec `reportId`), `REMOVE_CONTENT` pour un commentaire,
  * `ADMIN_REPORT_UPDATED` pour le signalement.
  */
@@ -203,7 +205,7 @@ export async function adminModerationActRoutes(fastify: FastifyInstance): Promis
         const actor = actorOf(request);
         const report = await fastify.prisma.report.findUnique({ where: { id: request.params.reportId }, select: reportSelect });
         if (report === null) return sendNotFound(reply, 'Signalement non trouvé', { code: 'REPORT_NOT_FOUND' });
-        if (report.reportedType === 'user' && report.reportedEntityId === actor.id) return sendForbidden(reply, 'Un signalement qui vous vise ne se traite pas par vous', { code: 'SELF_MODERATION' });
+        if (await refusedAsSelfModeration(fastify, request, reply, report, { gesture: 'act', act: action })) return;
         const onPost = POST_REPORT_TYPES.has(report.reportedType);
         const applicable = action === 'dismiss' || (action === 'remove-comment' ? report.reportedType === 'comment' : onPost);
         if (!applicable) return sendBadRequest(reply, "Cette action ne vaut pas pour le contenu signalé", { code: 'ACTION_NOT_APPLICABLE' });

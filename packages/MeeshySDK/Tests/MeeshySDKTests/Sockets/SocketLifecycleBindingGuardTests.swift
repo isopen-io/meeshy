@@ -25,6 +25,17 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    private func toastManagerUnit() throws -> String {
+        let directory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Notifications")
+        return try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix("NotificationToastManager") && $0.hasSuffix(".swift") }
+            .sorted()
+            .map { try sdkSource("Sources/MeeshySDK/Notifications/\($0)") }
+            .joined(separator: "\n")
+    }
+
     private func messageSocketSource() throws -> String {
         let directory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -239,7 +250,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
     }
 
     func test_notificationToastManager_subscribesToBothBulkPublishers() throws {
-        let source = try sdkSource("Sources/MeeshySDK/Notifications/NotificationToastManager.swift")
+        let source = try toastManagerUnit()
 
         XCTAssertTrue(
             source.contains("socket.notificationReadBulk")
@@ -257,7 +268,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
     /// canal que la liste montée écoute déjà. Patcher le seul cache laisserait
     /// les lignes purgées à l'écran jusqu'au prochain chargement.
     func test_deletedBulkHandler_removesReadRowsFromCacheAndFromTheMountedList() throws {
-        let source = try sdkSource("Sources/MeeshySDK/Notifications/NotificationToastManager.swift")
+        let source = try toastManagerUnit()
         let block = try XCTUnwrap(declarationBlock(after: "func handleNotificationDeletedBulk", in: source))
 
         XCTAssertTrue(
@@ -279,7 +290,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
         // des notifications a pris son site unique ; sa jumelle est restée chez
         // le manager. Une garde indexée par FICHIER rougit sur une extraction
         // qui ne change aucun comportement — elle doit lire l'unité entière.
-        let source = try sdkSource("Sources/MeeshySDK/Notifications/NotificationToastManager.swift")
+        let source = try toastManagerUnit()
             + "\n"
             + ((try? sdkSource("Sources/MeeshySDK/Notifications/NotificationConsumption.swift")) ?? "")
         let readBulk = try XCTUnwrap(declarationBlock(after: "func handleNotificationReadBulk", in: source))

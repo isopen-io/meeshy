@@ -87,12 +87,11 @@ class NewConversationViewModel @Inject constructor(
         val current = _state.value
         if (!current.canCreate) return
         val participants = selectedById.keys.toList()
-        val type = NewConversationLogic.conversationType(participants.size)
-        val title = NewConversationLogic.resolvedTitle(current.groupTitle, participants.size)
+        val request = NewConversationLogic.request(participants, current.groupTitle)
         _state.update { it.copy(isCreating = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                when (val result = conversationRepository.create(type, title, participants)) {
+                when (val result = conversationRepository.create(request.type, request.title, request.participantIds)) {
                     is NetworkResult.Success ->
                         _state.update { it.copy(isCreating = false, createdConversationId = result.data.id) }
                     is NetworkResult.Failure ->
