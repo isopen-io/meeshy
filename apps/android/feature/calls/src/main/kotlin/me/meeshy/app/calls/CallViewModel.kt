@@ -119,7 +119,7 @@ class CallViewModel @Inject constructor(
         waiting.attach(host)
         watchdogs.attach(host)
         analytics.attach(host)
-        ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute)
+        ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute, onAnswer = ::accept, onDecline = ::decline)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
         }
@@ -180,7 +180,10 @@ class CallViewModel @Inject constructor(
     }
 
     /** WebRTC reports the media path is up → advance the FSM to Connected. */
-    private fun onMediaConnected() = dispatch(CallEvent.MediaConnected)
+    private fun onMediaConnected() {
+        telecomReporter.onMediaConnected()
+        dispatch(CallEvent.MediaConnected)
+    }
 
     /** WebRTC reports a mid-call ICE stall → FSM Reconnecting (« Reconnexion… »). */
     private fun onMediaStalled() = dispatch(CallEvent.ConnectionStalled)
@@ -200,6 +203,7 @@ class CallViewModel @Inject constructor(
         this.elapsedSeconds = 0L
         this.mediaEstablished = false
         this.connectionQuality = null
+        telecomReporter.begin(TelecomCallInfo(config.peerId, config.peerName, config.isVideo, config.isOutgoing))
         waiting.reset()
         analytics.begin()
         stopTicker()

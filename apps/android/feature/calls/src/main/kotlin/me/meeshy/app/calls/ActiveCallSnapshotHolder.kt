@@ -11,6 +11,12 @@ import javax.inject.Singleton
 interface ActiveCallCommands {
     fun hangUp()
     fun toggleMute()
+
+    /** Décrocher l'appel entrant qui sonne (demande de l'interface téléphonique du système). */
+    fun answer() {}
+
+    /** Refuser l'appel entrant qui sonne (demande de l'interface téléphonique du système). */
+    fun decline() {}
 }
 
 /**
@@ -48,5 +54,13 @@ class ActiveCallSnapshotHolder @Inject constructor() {
 
     fun toggleMute() {
         commands?.toggleMute()
+    }
+
+    fun answer() {
+        commands?.answer()
+    }
+
+    fun decline() {
+        commands?.decline()
     }
 }
