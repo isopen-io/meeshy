@@ -11,7 +11,13 @@ data class ApiAuthor(
     val username: String? = null,
     val displayName: String? = null,
     val avatar: String? = null,
-)
+    /** Le décor servi avec la personne (#10945) ; absent sans contour ou sur un ancien serveur. */
+    @Serializable(with = TolerantPostAuthorDecorSerializer::class)
+    val profileDecor: PostAuthorDecor? = null,
+) {
+    /** Le contour d'avatar équipé, ou `null`. */
+    val avatarRing: PostServedRing? get() = profileDecor?.avatarRing
+}
 
 /** A media item on a post — port of APIPostMedia (PostModels.swift). */
 @Serializable
@@ -46,6 +52,10 @@ data class ApiPostMedia(
     val captionTranslations: Map<String, ApiMediaCaptionTranslationEntry>? = null,
     val transcription: ApiAttachmentTranscription? = null,
     val translations: Map<String, ApiAttachmentTranslation>? = null,
+    /** Langue du média (`PostMedia.language`) — pistes d'une même œuvre. */
+    val language: String? = null,
+    /** Identifiant du média dont celui-ci est une variante (`PostMedia.variantOf`). */
+    val variantOf: String? = null,
 )
 
 /**
@@ -116,6 +126,11 @@ data class ApiRepostOf(
      * Rendered as a tappable sticker inside the quote embed.
      */
     val location: SharedPlace? = null,
+    /** Les personnes que le post SOURCE nomme ; `null` = pas d'avis (différent de `[]`). */
+    @Serializable(with = TolerantPostReferencesSerializer::class)
+    val mentions: List<PostReference>? = null,
+    @Serializable(with = TolerantPostServedRingSerializer::class)
+    val authorRing: PostServedRing? = null,
 )
 
 /** A comment on a post — port of APIPostComment (PostModels.swift). */
@@ -132,7 +147,35 @@ data class ApiPostComment(
     val createdAt: String? = null,
     val author: ApiAuthor? = null,
     val currentUserReactions: List<String>? = null,
+    /** Média attaché au commentaire (un seul, tableau par parité avec les posts). */
+    val media: List<ApiPostMedia>? = null,
+    /** Lieu partagé, hissé par la passerelle depuis `metadata.location`. */
+    val location: SharedPlace? = null,
+    /** L'ancre figée du média cité (#6578), hissée depuis `metadata.quotedPostMedia`. */
+    @Serializable(with = TolerantQuotedRefSerializer::class)
+    val quotedPostMedia: ApiQuotedPostMediaRef? = null,
+    /** Le média cité, relu à chaque service ; absent quand il n'existe plus. */
+    val quotedMedia: ApiPostMedia? = null,
+    /** Liens suivis hissés en tête (écho socket) — le REST les range sous [metadata]. */
+    @Serializable(with = TolerantTrackedLinksSerializer::class)
+    val trackingLinks: List<TrackedLink>? = null,
+    @Serializable(with = TolerantTrackingMetadataSerializer::class)
+    val metadata: TrackingLinksMetadata? = null,
 )
+
+/** `[urlBrute: jeton]` d'un commentaire : la carte hissée d'abord, celle de `metadata` sinon. */
+val ApiPostComment.trackedLinkMap: Map<String, String>
+    get() = (trackingLinks?.takeIf { it.isNotEmpty() } ?: metadata?.trackingLinks).orEmpty().trackedLinkMap()
+
+/** `[urlBrute: jeton]` d'un post. */
+val ApiPost.trackedLinkMap: Map<String, String>
+    get() = servedTrackingLinks.orEmpty().trackedLinkMap()
+
+/** Le genre typé du post ; `null` pour un genre inconnu (la chaîne brute reste dans [ApiPost.type]). */
+val ApiPost.postType: PostType? get() = PostType.fromWire(type)
+
+/** Le contour d'avatar de l'auteur, hissé comme `FeedPost.authorRing`. */
+val ApiPost.authorRing: PostServedRing? get() = author?.avatarRing
 
 /** A post — port of APIPost (PostModels.swift). */
 @Serializable
@@ -176,7 +219,37 @@ data class ApiPost(
     val location: SharedPlace? = null,
     /** Distance in meters from the viewer — only carried by `GET /social/posts?scope=nearby`. */
     val distanceMeters: Double? = null,
+    val visibilityUserIds: List<String>? = null,
+    val contentEditedAt: String? = null,
+    /** Ouvertures du post (distinctes des impressions). */
+    val postOpenCount: Int? = null,
+    val qualifiedViewCount: Int? = null,
+    val playCount: Int? = null,
+    val anonymousViewCount: Int? = null,
+    val anonymousImpressionCount: Int? = null,
+    val uniqueViewCount: Int? = null,
+    val anonymousUniqueViewCount: Int? = null,
+    val isRepostedByMe: Boolean? = null,
+    /** Personnes référencées (INLINE/PINNED/NOTE/SILENT), profil résolu au chargement. */
+    @Serializable(with = TolerantPostReferencesSerializer::class)
+    val mentions: List<PostReference>? = null,
+    /** Droit d'ouvrir un contenu expiré parce qu'on y est référencé — déclaré par le serveur. */
+    val referenceAccess: ReferenceAccess? = null,
+    /** Liens suivis hissés en tête (socket) ; le REST les range sous `metadata.trackingLinks`, voir [servedTrackingLinks]. */
+    @Serializable(with = TolerantTrackedLinksSerializer::class)
+    val trackingLinks: List<TrackedLink>? = null,
+    @Serializable(with = TolerantTrackingMetadataSerializer::class)
+    val metadata: TrackingLinksMetadata? = null,
+    /** Points que CE post a rapportés au lecteur (#9569) ; `null` = garde ce que tu sais, jamais zéro. */
+    @Serializable(with = NonNegativeIntSerializer::class)
+    val viewerPoints: Int? = null,
+    /** Source de classement de cet élément dans la page qui l'a servi (#10501). */
+    val rankingSource: String? = null,
 )
+
+/** Les liens suivis servis : la carte hissée si non vide, sinon celle de `metadata`. */
+val ApiPost.servedTrackingLinks: List<TrackedLink>?
+    get() = trackingLinks?.takeIf { it.isNotEmpty() } ?: metadata?.trackingLinks
 
 /**
  * Prisme Linguistique resolution for posts. Post translations are a
