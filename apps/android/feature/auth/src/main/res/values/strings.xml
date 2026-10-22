@@ -1,103 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="login_welcome_back">Welcome back</string>
-    <string name="login_username_label">Username</string>
-    <string name="login_password_label">Password</string>
-    <string name="login_button">Log in</string>
     <string name="login_error_required">Username and password are required</string>
-    <string name="login_signup_prompt">Don\'t have an account?</string>
-    <string name="login_signup_link">Sign up</string>
-    <string name="login_other_account">Other account</string>
-    <string name="login_remove_account">Remove this account</string>
-    <string name="login_saved_accounts">Saved accounts</string>
     <string name="login_custom_host_label">Custom host</string>
     <string name="login_apply_custom_host">Apply custom host</string>
-    <string name="login_server_origin">Connected to: %1$s</string>
 
-    <string name="registration_back">Back</string>
 
-    <string name="guest_join_title">Join the conversation</string>
     <string name="guest_join_subtitle">Create a temporary identity to join</string>
-    <string name="guest_join_first_name">First name</string>
-    <string name="guest_join_last_name">Last name</string>
-    <string name="guest_join_username">Username</string>
-    <string name="guest_join_username_optional">Username (optional)</string>
-    <string name="guest_join_email">Email</string>
-    <string name="guest_join_birthday">Birthday</string>
     <string name="guest_join_language">Spoken language</string>
-    <string name="guest_join_submit">Join</string>
     <string name="guest_join_joining">Joining…</string>
-    <string name="guest_join_back">Back</string>
-    <string name="guest_join_retry">Retry</string>
     <string name="guest_join_preview_error">This link could not be opened</string>
     <string name="guest_join_requires_account">This link requires an account.</string>
-    <string name="guest_join_sign_in">Sign in</string>
     <string name="share_link_entry_resolving">Opening link…</string>
     <string name="share_link_choose_title">How do you want to join?</string>
     <string name="share_link_choose_subtitle">Join %1$s with your account, or as a guest.</string>
     <string name="share_link_choose_subtitle_generic">Join with your account, or as a guest.</string>
     <string name="share_link_continue_with_account">Continue with my account</string>
-    <string name="share_link_join_anonymously">Join anonymously</string>
-    <string name="share_link_resume_anonymously">Resume anonymously</string>
 
     <!-- Account recovery -->
-    <string name="login_forgot_password">Forgot password?</string>
-    <string name="login_magic_link">Sign in with email</string>
-    <string name="auth_back">Back</string>
     <string name="auth_back_to_login">Back to login</string>
-    <string name="auth_email_label">Email</string>
-    <string name="auth_forgot_title">Forgot password</string>
-    <string name="auth_forgot_subtitle">Get a link by email to choose a new password.</string>
-    <string name="auth_forgot_never_had_label">Never had a password?</string>
-    <string name="auth_forgot_never_had_text">The same link lets you create one.</string>
-    <string name="auth_magic_title">Email sign-in</string>
-    <string name="auth_magic_header">Your email address</string>
-    <string name="auth_magic_how_label">How it works</string>
-    <string name="auth_magic_subtitle">No password to remember: we email you a link. Open it and you\'re signed in.</string>
-    <string name="auth_magic_send">Get the link</string>
-    <string name="auth_magic_sent_title">Email sent</string>
     <string name="auth_magic_sent">Open the link sent to %1$s</string>
-    <string name="auth_magic_nothing_label">Nothing received?</string>
-    <string name="auth_magic_nothing_text">Check your spam folder: the message may have landed there.</string>
     <string name="auth_magic_countdown">Link valid for %1$s</string>
-    <string name="auth_magic_expired">The link expired. Send a new one.</string>
-    <string name="auth_magic_resend">Resend the link</string>
     <string name="auth_magic_validating">Signing you in…</string>
-    <string name="auth_magic_success">Login successful!</string>
-    <string name="auth_magic_invalid">Invalid or expired link</string>
 
     <!-- Account creation (one screen, no wizard) -->
-    <string name="signup_back">Back</string>
-    <string name="signup_title">Create your account</string>
-    <string name="signup_subtitle">You will read everyone in your own language.</string>
-    <string name="signup_display_name_label">What should we call you?</string>
     <string name="signup_display_name_required">Enter at least one letter.</string>
     <string name="signup_display_name_too_long">This name is too long.</string>
     <string name="signup_display_name_taken">This name is already taken. Try another one.</string>
-    <string name="signup_email_label">Email</string>
     <string name="signup_email_invalid">This email address looks incomplete.</string>
-    <string name="signup_email_taken">An account already uses this address.</string>
-    <string name="signup_phone_label">Phone</string>
     <string name="signup_phone_invalid">This number cannot be dialled.</string>
     <string name="signup_phone_conflict">This number is already linked to an account. Leave it empty to continue.</string>
     <string name="signup_choose_country">Choose country</string>
     <string name="signup_country_picker_title">Choose a country</string>
-    <string name="signup_country_search_hint">Search country or code</string>
-    <string name="signup_password_label">Password</string>
     <string name="signup_password_too_short">At least 6 characters.</string>
-    <string name="signup_password_show">Show password</string>
-    <string name="signup_password_hide">Hide password</string>
-    <string name="signup_language_pill">You will read Meeshy in %1$s</string>
-    <string name="signup_language_change">Change</string>
-    <string name="signup_language_picker_title">Your reading language</string>
-    <string name="signup_language_search_hint">Search a language…</string>
     <string name="signup_submit">Create my account</string>
-    <string name="signup_legal">By continuing, you accept the terms of use and the privacy policy.</string>
-    <string name="signup_legal_terms">Terms of use</string>
-    <string name="signup_legal_privacy">Privacy policy</string>
-    <string name="signup_have_account">Already have an account?</string>
-    <string name="signup_sign_in">Log in</string>
-    <string name="signup_error_network">Connection unavailable. Check your network and try again.</string>
-    <string name="signup_error_generic">Account creation failed. Please try again.</string>
     <string name="signup_error_invalid_field">This value was refused.</string>
 </resources>

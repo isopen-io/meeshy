@@ -66,6 +66,7 @@ internal class ChatComposerController(
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val clock: CacheClock,
+    private val pendingTray: () -> ComposerTrayController? = { null },
 ) {
 
     private var mentionRoster: List<MentionCandidate> = emptyList()
@@ -304,13 +305,16 @@ internal class ChatComposerController(
     fun send() {
         val text = state.value.draft.trim()
         val clipboard = state.value.clipboardContent
-        if (text.isEmpty() && clipboard == null) return
+        val tray = pendingTray()
+        val hasStaged = tray?.state?.value?.isEmpty == false
+        if (text.isEmpty() && clipboard == null && !hasStaged) return
         stopTypingEmission()
         val editingId = state.value.editingMessageId
         if (editingId != null) {
-            applyEdit(editingId, text)
+            if (text.isNotEmpty() || clipboard != null) applyEdit(editingId, text)
             return
         }
+        if (hasStaged && tray?.state?.value?.hasPreparing == true) return
         // Unified send gate: refuse a new send while a slow-mode cooldown is running
         // or the viewer is read-only (edits above are exempt — they are not new
         // messages). The draft is kept so the countdown's tick simply re-enables the
@@ -322,9 +326,11 @@ internal class ChatComposerController(
             state.value.slowModeState(sentAtMillis),
         )
         if (!gate.allowed) return
+        if (!stagedKindsAllowed(tray, sentAtMillis)) return
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = state.value.replyingToMessageId
         val effects = state.value.pendingEffects
+        val batch = tray?.takeForSend()
         // The composer pill is the authoritative source language: its live detection
         // or the viewer's manual override, resolved against the user's content language.
         val languageCode = state.value.composerLanguage.display(
@@ -346,7 +352,13 @@ internal class ChatComposerController(
         persistDraft("", replyToId = null)
         scope.launch {
             try {
-                if (clipboard != null) {
+                if (batch != null) {
+                    if (clipboard != null) sendClipboardContent(text, clipboard, user, replyToId, effects)
+                    sendStagedBatch(
+                        tray, batch, if (clipboard != null) "" else text, languageCode, user,
+                        if (clipboard != null) null else replyToId, effects,
+                    )
+                } else if (clipboard != null) {
                     sendClipboardContent(text, clipboard, user, replyToId, effects)
                 } else {
                     messageRepository.sendOptimistic(
@@ -411,6 +423,73 @@ internal class ChatComposerController(
                     fileSize = bytes.size,
                 ),
             ),
+        )
+    }
+
+    /** Chaque famille de pièce en attente doit être permise par la porte d'envoi unique. */
+    private fun stagedKindsAllowed(tray: ComposerTrayController?, sentAtMillis: Long): Boolean {
+        val items = tray?.state?.value?.items.orEmpty()
+        return items.map { AttachmentMessageType.forMime(it.mimeType) }.distinct().all { type ->
+            ComposerSendGate.evaluate(
+                ComposerSendKind.fromMessageType(type),
+                state.value.composerAffordances,
+                state.value.slowModeState(sentAtMillis),
+            ).allowed
+        }
+    }
+
+    /**
+     * Envoie le plateau en UN message : chaque fichier de travail est lu, mis en file
+     * d'envoi durable (même chaîne que le presse-papiers), puis le message part avec tous
+     * ses cmids. Un fichier de travail disparu est signalé et ne fait pas partir de pièce vide.
+     */
+    private suspend fun sendStagedBatch(
+        tray: ComposerTrayController?,
+        batch: StagedBatch,
+        text: String,
+        languageCode: String,
+        user: MeeshyUser,
+        replyToId: String?,
+        effects: MessageEffects,
+    ) {
+        if (tray == null) return
+        val uploaded = batch.items.mapNotNull { item ->
+            val bytes = tray.readBytes(item) ?: return@mapNotNull null
+            val name = item.fileName?.trim()?.ifBlank { null } ?: DEFAULT_ATTACHMENT_NAME
+            val mime = MimeTypeResolver.resolve(item.mimeType, name)
+            val cmid = mediaUploadQueue.enqueue(MediaUploadItem(bytes = bytes, fileName = name, mimeType = mime))
+            cmid to ApiMessageAttachment(
+                id = cmid,
+                fileName = name,
+                originalName = name,
+                mimeType = mime,
+                fileSize = bytes.size,
+            )
+        }
+        tray.release(batch)
+        if (uploaded.isEmpty()) {
+            check(text.isNotBlank()) { "attachment unavailable" }
+            messageRepository.sendOptimistic(
+                conversationId = conversationId,
+                content = text,
+                originalLanguage = languageCode,
+                sender = user,
+                replyToId = replyToId,
+                effects = effects,
+            )
+            return
+        }
+        val types = uploaded.map { AttachmentMessageType.forMime(it.second.mimeType) }.distinct()
+        messageRepository.sendOptimistic(
+            conversationId = conversationId,
+            content = text,
+            originalLanguage = languageCode,
+            sender = user,
+            replyToId = replyToId,
+            effects = effects,
+            messageType = types.singleOrNull() ?: AttachmentMessageType.FILE,
+            attachmentUploadCmids = uploaded.map { it.first },
+            attachments = uploaded.map { it.second },
         )
     }
 

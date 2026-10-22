@@ -470,6 +470,47 @@ final class MediaCompressorTests: XCTestCase {
         return data
     }
 
+    // MARK: - Une vidéo envoyée en message est en HD (#11915)
+
+    func test_videoSendBudget_unMessage_partEn1080p_auPlafondDesPublications() {
+        let budget = MediaContext.message.videoSendBudget(compresses: false)
+        XCTAssertEqual(budget.maxResolution, CGSize(width: 1080, height: 1920), "le verdict HD : 1080p, jamais 720p par défaut")
+        XCTAssertEqual(budget, MediaContext.story.videoSendBudget(compresses: false),
+                       "un rendu du composer se remuxe aussi pour un message")
+    }
+
+    func test_videoSendBudget_laCompressionForte_resteUnChoixExplicite() {
+        let forte = MediaContext.message.videoSendBudget(compresses: true)
+        XCTAssertEqual(forte.maxResolution, CGSize(width: 720, height: 1280))
+        XCTAssertLessThan(forte.bitRate, MediaContext.message.videoSendBudget(compresses: false).bitRate)
+        XCTAssertEqual(MediaContext.avatar.videoSendBudget(compresses: false), MediaContext.avatar.videoSendBudget(compresses: true),
+                       "un avatar se réduit toujours")
+    }
+
+    func test_videoSendBudget_poidsAuPlafond_30et60secondes() {
+        let budget = MediaContext.message.videoSendBudget(compresses: false)
+        XCTAssertEqual(budget.maximumBytes(seconds: 30), 15_480_000, "≈ 15,5 Mo au plafond pour 30 s, image et son")
+        XCTAssertEqual(budget.maximumBytes(seconds: 60), 30_960_000, "≈ 31 Mo au plafond pour 60 s")
+    }
+
+    func test_fitSize_uneVideoPaysage_garde1080p() {
+        let boite = MediaContext.message.videoSendBudget(compresses: false).maxResolution
+        XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 1920, height: 1080), within: boite), CGSize(width: 1920, height: 1080),
+                       "un paysage 1080p n'est pas ramené à 1080 de large")
+        XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 3840, height: 2160), within: boite), CGSize(width: 1920, height: 1080))
+        XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 1280, height: 720), within: boite), CGSize(width: 1280, height: 720),
+                       "une source plus basse garde sa définition")
+    }
+
+    func test_envoiDUnePiece_litLaCompressionForteDeLUtilisateur() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let code = try String(contentsOf: racine.appendingPathComponent(
+            "Meeshy/Features/Main/Services/AttachmentPreparationService.swift"), encoding: .utf8)
+        XCTAssertTrue(code.contains("budget: context.storedVideoSendBudget()"))
+    }
+
     // MARK: - L'étiquette couleur suit la vidéo (#9332)
 
     func test_etiquetteCouleur_reporteCelleDeLaSource() throws {
