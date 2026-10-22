@@ -2845,6 +2845,20 @@
           "hidden": false
         },
         {
+          "id": "succes.mythic",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "mythic"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "mythic"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
           "id": "succes.neutre",
           "usage": {
             "kind": "achievement"
@@ -2856,20 +2870,6 @@
           },
           "option": null,
           "hidden": false
-        },
-        {
-          "id": "succes.ancien-epic",
-          "usage": {
-            "kind": "achievement",
-            "rarity": "epic"
-          },
-          "collection": "succes",
-          "appliesTo": {
-            "family": "achievement",
-            "rarity": "epic"
-          },
-          "option": null,
-          "hidden": true
         }
       ]
     },
@@ -2939,7 +2939,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -3167,7 +3168,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -3331,7 +3333,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -3559,7 +3562,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -3788,6 +3792,7 @@
           "afrique",
           "moments",
           "tresor",
+          "succes",
           "olympe"
         ],
         "rarity": null
@@ -3953,6 +3958,7 @@
           "afrique",
           "moments",
           "tresor",
+          "succes",
           "neon"
         ],
         "rarity": null
@@ -4117,7 +4123,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -4281,7 +4288,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -4446,6 +4454,7 @@
           "afrique",
           "moments",
           "tresor",
+          "succes",
           "nord"
         ],
         "rarity": null
@@ -4856,7 +4865,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5085,6 +5095,7 @@
           "afrique",
           "moments",
           "tresor",
+          "succes",
           "olympe"
         ],
         "rarity": null
@@ -5313,7 +5324,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5342,7 +5354,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5371,7 +5384,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5400,7 +5414,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5429,7 +5444,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5458,7 +5474,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5487,7 +5504,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5516,7 +5534,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5553,7 +5572,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5590,7 +5610,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5619,7 +5640,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5644,7 +5666,7 @@
       }
     },
     {
-      "name": "succès rare ⇒ succes.rare",
+      "name": "haut fait rare ⇒ succes.rare",
       "input": {
         "stepId": "achievement:messages.3",
         "atmosphere": null,
@@ -5653,6 +5675,7 @@
           "afrique",
           "moments",
           "tresor",
+          "succes",
           "succes",
           "mythologies"
         ],
@@ -5675,7 +5698,7 @@
       }
     },
     {
-      "name": "succès sans rareté servie ⇒ le cadre neutre, jamais une rareté",
+      "name": "haut fait mythique ⇒ succes.mythic",
       "input": {
         "stepId": "achievement:messages.3",
         "atmosphere": null,
@@ -5684,6 +5707,39 @@
           "afrique",
           "moments",
           "tresor",
+          "succes",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": "mythic"
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "succes",
+            "frameId": "succes.mythic"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "succes",
+          "frameId": "succes.mythic"
+        }
+      }
+    },
+    {
+      "name": "haut fait sans rareté servie ⇒ le cadre neutre, jamais une rareté",
+      "input": {
+        "stepId": "achievement:messages.3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
           "succes",
           "mythologies"
         ],
@@ -5706,7 +5762,7 @@
       }
     },
     {
-      "name": "succès composé, rareté servie (un cadre masqué ne se propose pas)",
+      "name": "haut fait composé, rareté servie ⇒ le cadre de cette rareté",
       "input": {
         "stepId": "achievement:defi.streak-3",
         "atmosphere": null,
@@ -5715,6 +5771,7 @@
           "afrique",
           "moments",
           "tresor",
+          "succes",
           "succes",
           "mythologies"
         ],
@@ -5737,7 +5794,7 @@
       }
     },
     {
-      "name": "succès composé, rareté non servie ⇒ le neutre",
+      "name": "haut fait composé, rareté non servie ⇒ le neutre",
       "input": {
         "stepId": "achievement:defi.streak-3",
         "atmosphere": null,
@@ -5746,6 +5803,7 @@
           "afrique",
           "moments",
           "tresor",
+          "succes",
           "succes",
           "mythologies"
         ],
@@ -5768,7 +5826,7 @@
       }
     },
     {
-      "name": "pack des succès absent ⇒ carte simple",
+      "name": "pack des hauts faits absent (ancien client) ⇒ carte simple",
       "input": {
         "stepId": "achievement:messages.3",
         "atmosphere": null,
@@ -5789,37 +5847,6 @@
       }
     },
     {
-      "name": "succès d’une rareté sans cadre ⇒ le neutre, jamais une autre rareté",
-      "input": {
-        "stepId": "achievement:messages.3",
-        "atmosphere": null,
-        "lastChosen": null,
-        "installed": [
-          "afrique",
-          "moments",
-          "tresor",
-          "succes",
-          "mythologies"
-        ],
-        "rarity": "mythic"
-      },
-      "expected": {
-        "needsAtmosphere": false,
-        "suggested": [
-          {
-            "pack": "succes",
-            "frameId": "succes.neutre"
-          }
-        ],
-        "others": [],
-        "reinstall": null,
-        "preselected": {
-          "pack": "succes",
-          "frameId": "succes.neutre"
-        }
-      }
-    },
-    {
       "name": "Murmure → les cadres de sa mythologie",
       "input": {
         "stepId": "rank:murmure:3",
@@ -5829,6 +5856,7 @@
           "afrique",
           "moments",
           "tresor",
+          "succes",
           "succes",
           "mythologies"
         ],
@@ -5865,6 +5893,7 @@
           "moments",
           "tresor",
           "succes",
+          "succes",
           "mythologies"
         ],
         "rarity": null
@@ -5896,6 +5925,7 @@
           "moments",
           "tresor",
           "succes",
+          "succes",
           "mythologies"
         ],
         "rarity": null
@@ -5919,6 +5949,7 @@
           "moments",
           "tresor",
           "succes",
+          "succes",
           "mythologies"
         ],
         "rarity": null
@@ -5940,7 +5971,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5961,7 +5993,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -5982,7 +6015,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -6003,7 +6037,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -6024,7 +6059,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -6045,7 +6081,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -6066,7 +6103,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -6087,7 +6125,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },
@@ -6108,7 +6147,8 @@
         "installed": [
           "afrique",
           "moments",
-          "tresor"
+          "tresor",
+          "succes"
         ],
         "rarity": null
       },

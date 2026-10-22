@@ -62,3 +62,16 @@ export const photoDayMomentId = (dayKey: string): string | null => (DAY_KEY.test
 /** La journée d'une identité `day:<AAAA-MM-JJ>`, `null` pour toute autre identité. */
 export const photoDayOfMomentId = (momentId: string): string | null =>
   momentId.startsWith('day:') && DAY_KEY.test(momentId.slice(4)) ? momentId.slice(4) : null;
+
+/**
+ * LE HAUT FAIT (LS, #10168) — l'identité commune du web (`achievementMoment`) et d'iOS (`GamePhotoMoments.achievement`),
+ * simples et composés : `achievement:<clé du catalogue>`. La rareté n'y entre jamais : elle est SERVIE à part à la loi
+ * des cadres (`gloryFramesFor({ rarity })`), et une photo gardée avant que la rareté ne soit connue reste la même photo.
+ */
+const ACHIEVEMENT_KEY = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
+
+export const photoAchievementMomentId = (key: string): string | null => (ACHIEVEMENT_KEY.test(key) ? `achievement:${key}` : null);
+
+/** La clé du haut fait d'une identité `achievement:<clé>`, `null` pour toute autre identité. */
+export const photoAchievementKeyOfMomentId = (momentId: string): string | null =>
+  momentId.startsWith('achievement:') && ACHIEVEMENT_KEY.test(momentId.slice(12)) ? momentId.slice(12) : null;

@@ -11,7 +11,7 @@ export const VARIANTS = ['plain', 'message'];
 // (lib/reference.mjs). Pour les trois autres, un cadre dont Chromium rend deux fois les mêmes octets — un titre en
 // dégradé sur chemin courbe (poses-ruban, moments-meesh-100, tresor-reserve-a) ne le fait pas, et une cible doit se
 // prouver stable (`stable` dans l'index).
-export const SAMPLE_FRAMES = { moments: 'moments-flamme-30', tresor: 'tresor-coffre-a', poses: 'poses-pied' };
+export const SAMPLE_FRAMES = { moments: 'moments-flamme-30', tresor: 'tresor-coffre-a', succes: 'succes-rare', poses: 'poses-pied' };
 
 export const RENDERED = [1080, 1920];
 export const SIZE = [540, 960];

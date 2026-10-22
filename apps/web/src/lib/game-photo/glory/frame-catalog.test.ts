@@ -122,6 +122,14 @@ describe('le cadre d’une étape, par la loi partagée', () => {
     expect(pick?.frame.collection).not.toBe('egypte');
   });
 
+  test('un haut fait se photographie dans SA rareté (LS, #10168) : la rareté servie élit son cadre ; sans rareté, le neutre ; sans le pack, la carte simple', async () => {
+    const catalog = await loadGloryCatalog(ports({ afrique: ['savane'], succes: ['succes'] }));
+    expect(pickGloryFrame(catalog, { stepId: 'achievement:messages.3', atmosphere: null, lastChosen: null, rarity: 'rare' })?.frame.id).toBe('succes.rare');
+    expect(pickGloryFrame(catalog, { stepId: 'achievement:messages.3', atmosphere: null, lastChosen: null })?.frame.id).toBe('succes.neutre');
+    expect(offerGloryFrames(catalog, { stepId: 'achievement:messages.3', atmosphere: null, lastChosen: null, rarity: 'epic' }).suggested.map((pick) => pick.frame.id)).toEqual(['succes.epic']);
+    expect(pickGloryFrame(await loadGloryCatalog(ports({ afrique: ['savane'] })), { stepId: 'achievement:messages.3', atmosphere: null, lastChosen: null, rarity: 'rare' })).toBeNull();
+  });
+
   test('un catalogue vide ⇒ null', () => {
     expect(pickGloryFrame(EMPTY_CATALOG, { stepId: 'rank:ambassadeur:1', atmosphere: null, lastChosen: null })).toBeNull();
   });

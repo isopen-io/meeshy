@@ -4,9 +4,9 @@
  * (`utils/game/glory-frames.ts`) et rejoué par iOS (`GloryFrameOfferVectorTests.swift`,
  * sur le miroir `GameGloryFrames.swift`). Sur divergence, le TS a raison.
  *
- * Le catalogue des vecteurs est le registre RÉEL (L3) projeté sur ce que la loi lit, plus deux packs
- * SYNTHÉTIQUES qui n'existent pas encore — `succes` (LS) et `mythologies` (L15) — pour que leurs lignes du
- * tableau du § 5.4 soient tenues des deux côtés avant leur lot.
+ * Le catalogue des vecteurs est le registre RÉEL (L3) projeté sur ce que la loi lit — le pack `succes` des
+ * hauts faits en fait partie depuis LS (#10168) — plus un pack SYNTHÉTIQUE qui n'existe pas encore,
+ * `mythologies` (L15), pour que sa ligne du tableau du § 5.4 soit tenue des deux côtés avant son lot.
  *
  * Régénération voulue : `UPDATE_FRAME_OFFER_VECTORS=1 npx vitest run __tests__/vectors/frame-offer.vectors.test.ts`.
  */
@@ -32,20 +32,7 @@ const real: readonly GloryFrameOfferPack[] = parsePackIndex(readJson(join(REPO, 
   frames: (parseGloryFrameContract(readJson(join(REPO, 'services/gateway/assets/packs', entry.contract.src)))?.contract.frames ?? []).map(project),
 }));
 
-/** Le pack synthétique n'a pas de cadre `mythic` : la ligne « rareté sans cadre ⇒ le neutre » se tient. */
-const RARITIES: readonly AchievementRarity[] = ['common', 'rare', 'epic', 'legendary'];
-
 const synthetic: readonly GloryFrameOfferPack[] = [
-  {
-    slug: 'succes',
-    atmosphere: null,
-    collections: ['succes'],
-    frames: [
-      ...RARITIES.map((rarity) => ({ id: `succes.${rarity}`, usage: { kind: 'achievement', rarity } as const, collection: 'succes', appliesTo: { family: 'achievement', rarity } as const, option: null, hidden: false })),
-      { id: 'succes.neutre', usage: { kind: 'achievement' }, collection: 'succes', appliesTo: { family: 'achievement', rarity: null }, option: null, hidden: false },
-      { id: 'succes.ancien-epic', usage: { kind: 'achievement', rarity: 'epic' }, collection: 'succes', appliesTo: { family: 'achievement', rarity: 'epic' }, option: null, hidden: true },
-    ],
-  },
   {
     slug: 'mythologies',
     atmosphere: null,
@@ -82,8 +69,9 @@ type CaseInput = {
   readonly rarity: AchievementRarity | null;
 };
 
-const DEFAULTS = ['afrique', 'moments', 'tresor'];
+const DEFAULTS = ['afrique', 'moments', 'tresor', 'succes'];
 const WITH_SUCCES = [...DEFAULTS, 'succes', 'mythologies'];
+const WITHOUT_SUCCES = ['afrique', 'moments', 'tresor'];
 
 const at = (name: string, stepId: string, over: Partial<CaseInput> = {}) => ({
   name,
@@ -114,12 +102,12 @@ const PLAN = [
   at('treasury:coffre, dernier choix b', 'treasury:coffre', { lastChosen: 'tresor.coffre-b' }),
   at('flame:30 → le cadre du seuil', 'flame:30'),
   at('day → jour a et b', 'day:2026-10-12'),
-  at('succès rare ⇒ succes.rare', 'achievement:messages.3', { rarity: 'rare', installed: WITH_SUCCES }),
-  at('succès sans rareté servie ⇒ le cadre neutre, jamais une rareté', 'achievement:messages.3', { installed: WITH_SUCCES }),
-  at('succès composé, rareté servie (un cadre masqué ne se propose pas)', 'achievement:defi.streak-3', { rarity: 'epic', installed: WITH_SUCCES }),
-  at('succès composé, rareté non servie ⇒ le neutre', 'achievement:defi.streak-3', { installed: WITH_SUCCES }),
-  at('pack des succès absent ⇒ carte simple', 'achievement:messages.3', { rarity: 'rare' }),
-  at('succès d’une rareté sans cadre ⇒ le neutre, jamais une autre rareté', 'achievement:messages.3', { rarity: 'mythic', installed: WITH_SUCCES }),
+  at('haut fait rare ⇒ succes.rare', 'achievement:messages.3', { rarity: 'rare', installed: WITH_SUCCES }),
+  at('haut fait mythique ⇒ succes.mythic', 'achievement:messages.3', { rarity: 'mythic', installed: WITH_SUCCES }),
+  at('haut fait sans rareté servie ⇒ le cadre neutre, jamais une rareté', 'achievement:messages.3', { installed: WITH_SUCCES }),
+  at('haut fait composé, rareté servie ⇒ le cadre de cette rareté', 'achievement:defi.streak-3', { rarity: 'epic', installed: WITH_SUCCES }),
+  at('haut fait composé, rareté non servie ⇒ le neutre', 'achievement:defi.streak-3', { installed: WITH_SUCCES }),
+  at('pack des hauts faits absent (ancien client) ⇒ carte simple', 'achievement:messages.3', { rarity: 'rare', installed: WITHOUT_SUCCES }),
   at('Murmure → les cadres de sa mythologie', 'rank:murmure:3', { installed: WITH_SUCCES }),
   at('cadre limité à une division : proposé à sa seule division', 'rank:echo:3', { installed: WITH_SUCCES }),
   at('cadre limité à une division : jamais à une autre division du rang', 'rank:echo:1', { installed: WITH_SUCCES }),

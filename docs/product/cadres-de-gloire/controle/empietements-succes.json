@@ -1,0 +1,62 @@
+[
+ {
+  "file": "succes-common",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 164974,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "succes-epic",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 159790,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "succes-legendary",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 138767,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "succes-mythic",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 129851,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "succes-neutre",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 167553,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "succes-rare",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 145280,
+  "layout": "perchés",
+  "verdict": "ok"
+ }
+]

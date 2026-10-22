@@ -5,7 +5,7 @@ import { dayDiff } from '@meeshy/shared/utils/game/day-prng';
 import { flameForm, type FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import { MYTHE_SIZE, type AchievementRarity, type GloryDivision5, type GloryRankOrMythic, type MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { GuideMomentKey } from '@meeshy/shared/utils/game/guide';
-import { photoDayMomentId, photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
+import { photoAchievementMomentId, photoDayMomentId, photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
 import { catchUpStandingOf, levelReachCount, photoTierStepId, type PhotoCatchUpEntry, type PhotoStepEmblem, type PhotoTrack } from '@meeshy/shared/utils/game/photo-catch-up';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import { LEVEL_TIER_KEYS, levelTierStart, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
@@ -209,7 +209,7 @@ export const meeshMoment = (params: { readonly number: number }): PhotoMoment =>
  * `rarity` n'est posée que si l'écran a le DROIT de la montrer : l'identité du moment n'en dépend pas.
  */
 export const achievementMoment = (key: EngagementAchievementKey, rarity?: AchievementRarity | null): PhotoMoment =>
-  moment(`achievement:${key}`, { kind: 'achievement', key, ...(rarity == null ? {} : { rarity }) });
+  moment(photoAchievementMomentId(key) ?? `achievement:${key}`, { kind: 'achievement', key, ...(rarity == null ? {} : { rarity }) });
 
 /** Le moment photo que la loi de la vague 2 nomme (`photoMomentOfGuideEvent`) : son identité est celle de la loi. */
 export const photoMomentOfEmblemV2 = (emblem: PhotoMomentEmblemV2): PhotoMoment => {

@@ -4,7 +4,7 @@
 //                                            (lib/cible-plan.mjs : un cadre par collection × plain/message × 9:16)
 //                                            sous docs/product/cadres-de-gloire/cible/ (--cible <dossier>)
 //   node lib/cible.mjs --check               rend l'échantillon à part et le compare à l'octet aux cibles versionnées
-//   node lib/cible.mjs --full                le jeu COMPLET (191 cadres × 2 variantes) sous generateur/cible-complete/,
+//   node lib/cible.mjs --full                le jeu COMPLET (197 cadres × 2 variantes) sous generateur/cible-complete/,
 //                                            jamais versionné : c'est l'artefact du job du générateur
 // Options : --only savane,poses · --jobs 3 · --final (garde le 1080×1920, sans descente à l'échelle de design)
 //           --out out · --plates out-plate (les SVG des deux variantes, CADRES_PLATE)

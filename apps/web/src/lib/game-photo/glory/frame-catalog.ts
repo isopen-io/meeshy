@@ -2,6 +2,7 @@ import type { PackAssetRef, PackLanguage } from '@meeshy/shared/types/content-pa
 import { parsePackStrings, type PackStrings } from '@meeshy/shared/types/glory-frame-pack';
 import { gloryFramesFor, type FrameRef, type GloryFrameOfferPack } from '@meeshy/shared/utils/game/glory-frames';
 import { isGloryAtmosphere, type GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
+import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
 
 import type { FramePackDetail, FramePackSummary } from '@/lib/api/packs-glory-frame';
 import type { ApiResult } from '@/lib/api/http';
@@ -98,7 +99,13 @@ export async function loadGloryCatalog(ports: GloryCatalogPorts): Promise<GloryC
 
 export type GloryFramePick = { readonly pack: GloryCatalogPack; readonly frame: GloryFrame };
 
-export type GloryStepInput = { readonly stepId: string; readonly atmosphere: GloryAtmosphere | null; readonly lastChosen: string | null };
+export type GloryStepInput = {
+  readonly stepId: string;
+  readonly atmosphere: GloryAtmosphere | null;
+  readonly lastChosen: string | null;
+  /** La rareté SERVIE d'un haut fait (LS, #10168) ; absente ou `null` : la loi sert le cadre neutre, jamais une rareté supposée. */
+  readonly rarity?: AchievementRarity | null;
+};
 
 /** Un cadre du catalogue par sa référence ; `null` quand le pack ou le cadre n'y est pas. */
 export function findGloryFrame(catalog: GloryCatalog, ref: FrameRef): GloryFramePick | null {

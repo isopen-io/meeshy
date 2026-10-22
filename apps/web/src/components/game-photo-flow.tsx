@@ -236,7 +236,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const catalogEpoch = useSyncExternalStore(subscribeGloryCatalogEpoch, gloryCatalogEpoch, gloryCatalogEpoch);
   const accountAtmosphere = atmosphere?.current ?? null;
   const keptFrameId = retake?.recipe.frameId ?? null;
-  const gloryStep = useMemo(() => ({ stepId: moment.id, atmosphere: accountAtmosphere, lastChosen: keptFrameId }), [moment.id, accountAtmosphere, keptFrameId]);
+  /* Un haut fait se photographie dans SA rareté (LS, #10168) : la rareté servie entre dans l'étape que la loi lit ; sans elle, le neutre. */
+  const servedRarity = moment.emblem.kind === 'achievement' ? (moment.emblem.rarity ?? null) : null;
+  const gloryStep = useMemo(() => ({ stepId: moment.id, atmosphere: accountAtmosphere, lastChosen: keptFrameId, rarity: servedRarity }), [moment.id, accountAtmosphere, keptFrameId, servedRarity]);
   const gloryTexts = useMemo(() => gloryTextsOf(moment, dateLabel), [moment, dateLabel]);
   const gloryChoice = useGloryChoice({ env, step: gloryStep, texts: gloryTexts, epoch: catalogEpoch, initialPose: birdLayoutOf(retake?.recipe.pose) });
   const glory = gloryChoice.scene;

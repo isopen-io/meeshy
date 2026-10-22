@@ -18,6 +18,8 @@ import type { GloryOffer, GloryOfferTile } from '../glory-choice';
 import { gloryCatalogEpoch } from '../glory-catalog-epoch';
 import { bannerWithin, type BannerLayout, type Rect } from '../layout';
 import { loadGloryFrameImages, missingGloryFrameAssets, type ClosableImage, type GloryAssetDeps, type GloryFrameImages } from './frame-assets';
+import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
+
 import { findGloryFrame, offerGloryFrames, pickGloryFrame, loadGloryCatalog, type GloryCatalog, type GloryFramePick } from './frame-catalog';
 import { rectOf, type GloryFrame, type GloryRecipe, type GloryTexts } from './frame-spec';
 import { paintGloryFrame, type PaintSurface } from './paint-glory-frame';
@@ -65,6 +67,8 @@ export type GloryStep = {
   readonly stepId: string;
   readonly atmosphere: GloryAtmosphere | null;
   readonly lastChosen: string | null;
+  /** La rareté SERVIE d'un haut fait (LS, #10168), que la loi lit pour élire le cadre de SA rareté ; absente : le neutre. */
+  readonly rarity?: AchievementRarity | null;
 };
 
 /**

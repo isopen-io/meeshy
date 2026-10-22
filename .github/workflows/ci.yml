@@ -1505,7 +1505,7 @@ jobs:
             exit 1
           fi
 
-      - name: Garde d'empiètement (191 cadres)
+      - name: Garde d'empiètement (197 cadres)
         run: node lib/overlap.mjs --check --jobs 2
 
       # Les cibles de fidélité (lot L21a, #10177, prompt § 8.3) : l'échantillon
@@ -1513,7 +1513,7 @@ jobs:
       # chaque cible rendue deux fois (une cible instable rougit). Un écart
       # d'OCTETS avec les cibles versionnées n'est que signalé : la fraîcheur
       # se juge sur l'export normalisé, jamais sur les octets de Chromium
-      # (version, hinting, GPU). Le jeu complet (191 × 2) n'est produit, en
+      # (version, hinting, GPU). Le jeu complet (197 × 2) n'est produit, en
       # artefact, que sur workflow_dispatch : il coûte une demi-heure.
       - name: Cibles de fidélité — l'échantillon se régénère (L21a)
         env:

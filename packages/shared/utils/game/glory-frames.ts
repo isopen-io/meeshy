@@ -30,8 +30,10 @@
  * elle) et D4 (le palier dessiné le plus proche en dessous, le titre vivant
  * disant le vrai palier) sont confirmées par la même décision ; détail dans
  * `packages/shared/decisions/2026-10-21-un-palier-sans-cadre-prend-le-palier-dessine-en-dessous-et-les-moments-sans-cadre-la-carte-simple-10180.md`.
- * Un succès se photographie dans SA rareté ; sans cadre de cette rareté, ou
- * sans rareté servie, le cadre NEUTRE — jamais celui d'une autre rareté.
+ * Un haut fait se photographie dans SA rareté (pack `succes`, unique, installé
+ * par défaut et non retirable — PP9, #10184, livré par LS #10168) ; sans cadre
+ * de cette rareté, ou sans rareté servie, le cadre NEUTRE — jamais celui d'une
+ * autre rareté ; sans le pack (ancien client), la carte simple.
  *
  * Miroir Swift : `packages/MeeshySDK/Sources/MeeshySDK/Game/GameGloryFrames.swift`,
  * rejoué sur `packages/shared/design/packs/frame-offer-vectors.json`.
@@ -87,8 +89,9 @@ const ATMOSPHERE_RANKS: readonly GloryRankOrMythic[] = ['ambassadeur', 'orateur'
 /**
  * Les familles d'étapes qui n'ont, AUJOURD'HUI, aucun cadre à proposer — chacune nommée par la décision ou le lot
  * qui la comble : les rangs de Murmure à Polyglotte (mythologies, D16 / L15), le départ, le niveau 100, le Prestige
- * et les trophées (D5 tranchée en (b) sur #10180 : carte simple jusqu'aux cadres dédiés du milestone suivant), les
- * succès (pack `succes`, LS). Cliquet de la matrice de couverture : il ne fait que se vider.
+ * et les trophées (D5 tranchée en (b) sur #10180 : carte simple jusqu'aux cadres dédiés du milestone suivant). Les
+ * hauts faits en sont sortis au lot LS (#10168, PP9) : le pack `succes` sert chaque rareté et le neutre. Cliquet de
+ * la matrice de couverture : il ne fait que se vider.
  */
 export const GLORY_FRAME_OFFER_EXEMPT_FAMILIES: readonly string[] = [
   'rank:murmure',
@@ -101,7 +104,6 @@ export const GLORY_FRAME_OFFER_EXEMPT_FAMILIES: readonly string[] = [
   'level-100',
   'prestige',
   'trophy',
-  'achievement',
 ];
 
 const RANK_KEYS: readonly string[] = [...GLORY_RANKS.map((rank) => rank.key), 'mythe'];

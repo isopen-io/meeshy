@@ -234,10 +234,10 @@ describe('le registre RÉEL des cadres de gloire (#10154, L3) — servi partout,
       return typeof value === 'object' && value !== null ? (Object.values(value) as StoredRef[]) : [];
     });
 
-  it('neuf packs, dans l’ordre éditorial, l’Afrique éternelle d’abord ; sans exemple hors PACK_SAMPLES=1', () => {
+  it('dix packs, dans l’ordre éditorial, l’Afrique éternelle d’abord, les hauts faits en dernier ; sans exemple hors PACK_SAMPLES=1', () => {
     const index = realIndex();
     expect(index.rejected).toBe(0);
-    expect(index.entries('glory-frame').map((entry) => entry.slug)).toEqual(['afrique', 'egypte', 'olympe', 'celeste', 'nord', 'abysses', 'neon', 'moments', 'tresor']);
+    expect(index.entries('glory-frame').map((entry) => entry.slug)).toEqual(['afrique', 'egypte', 'olympe', 'celeste', 'nord', 'abysses', 'neon', 'moments', 'tresor', 'succes']);
   });
 
   it('les vignettes, masques, décors, passes, avant-plans et plaques de chaque contrat sont dans la liste blanche', () => {

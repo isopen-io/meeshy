@@ -13,7 +13,7 @@ import {
   type PhotoAlertPolicy,
 } from '../../utils/game/photo-alerts.js';
 import { photoCatchUp, photoStepsReached, type PhotoCatchUpStanding } from '../../utils/game/photo-catch-up.js';
-import { photoDayMomentId } from '../../utils/game/photo-moments.js';
+import { photoAchievementKeyOfMomentId, photoAchievementMomentId, photoDayMomentId } from '../../utils/game/photo-moments.js';
 
 const standing = (over: Partial<PhotoCatchUpStanding> = {}): PhotoCatchUpStanding => ({
   rank: 'murmure',
@@ -184,6 +184,21 @@ describe('la réalisation du jour', () => {
 
   it('passe après une étape de piste', () => {
     expect(photoAlertFor({ reached: ['day:2026-10-11', 'meesh:1'], standing: standing({ minted: 1 }), kept: [], presented: [], baseline: NEW_ACCOUNT })?.announce).toBe('meesh:1');
+  });
+});
+
+describe('le haut fait (LS, #10168)', () => {
+  it('son identité est achievement:<clé du catalogue>, simple ou composé, la même que le web et iOS gravent — sans la rareté', () => {
+    expect(photoAchievementMomentId('messages.3')).toBe('achievement:messages.3');
+    expect(photoAchievementMomentId('defi.streak-3')).toBe('achievement:defi.streak-3');
+    expect(photoAchievementMomentId('')).toBeNull();
+    expect(photoAchievementMomentId('Messages:3')).toBeNull();
+  });
+
+  it('la clé se relit depuis l’identité, et seulement depuis une identité de haut fait', () => {
+    expect(photoAchievementKeyOfMomentId('achievement:defi.streak-3')).toBe('defi.streak-3');
+    expect(photoAchievementKeyOfMomentId('day:2026-10-11')).toBeNull();
+    expect(photoAchievementKeyOfMomentId('achievement:')).toBeNull();
   });
 });
 

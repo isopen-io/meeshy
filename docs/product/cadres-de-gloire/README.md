@@ -48,12 +48,14 @@ messagers entre les deux mondes, l'immortalisent avec lui dans une photo qui rej
 | `neon` | Néon | 19 | 13 | 18 → 0 |
 | `moments` | Autres signes des aïeux | 16 | 10 | 10 → 0 |
 | `tresor` | L'Héritage | 14 | 6 | 7 → 0 |
+| `succes` | Les hauts faits | 6 | 4 | 0 → 0 |
 | `poses` | Poses et messages | 9 | 5 | 6 → 0 |
 
 Chaque manifeste (`manifests/<collection>.json`) liste, par cadre : `file`, `rank`, `division` (la marche, 5→1, ou null), `option` (V…I, A/B/C, ou le palier), `name` et `story` (le nom et la courte histoire du cadre, en français), `layout` (la pose de Mee et Meo), `message` (exemple de message de l'auteur, ou null). Les planches-contacts sont dans `planches/`.
 
 - `moments` : états de ta lumière (Lueur 10, Aurore 50, Galaxie 90, Nébuleuse 101, Supernova 400, Singularité 1000), formes de la Flamme (7, 30, 100, 365 jours), Meesh frappée (n° 1, 10, 100, 1000), rêve réalisé (A, B).
 - `tresor` : les contenants de l'Héritage — Bourse (a, b), Escarcelle (a, b), Coffret (a, b), Coffre (a, b, c — chambre forte moderne), Trésor (a, b), Réserve (a, b, c — bâtiment de banque).
+- `succes` : les hauts faits (lot LS, #10168, PP9 #10184) — un cadre par rareté (commun, rare, épique, légendaire, mythique) et un cadre NEUTRE sans marque de rareté, pour un haut fait dont la rareté n'est pas servie. Pack `succes` UNIQUE, installé par défaut et non retirable ; la plaque porte le TITRE VIVANT du haut fait (emplacement `title`) et son sur-titre « Haut fait accompli · <Rareté> » ; aucun cadre de rang ni libre ne sert un haut fait. L'atelier emprunte le kit de `moments` (fenêtres, reliefs, inscription) plutôt que d'en recopier un.
 - `poses` : un même cadre (Ambassadeur I · Olympe) décliné en cinq poses de Mee et Meo et trois supports de message (cartouche, ruban, parchemin), plus une photo à trois.
 
 ## Anatomie d'un cadre
@@ -85,8 +87,8 @@ node lib/overlap.mjs [--only <collection>] [--png <dossier>]   # → ../controle
 L'app ne peint pas ces SVG : elle compose des **couches raster** et peint elle-même le texte, Mee et Meo, le blason et le bandeau (prompt § 5.1, § 5.3). Une commande, depuis `generateur/` :
 
 ```bash
-node lib/export.mjs --generate      # régénère les 11 ateliers (et leurs plaques dans les deux variantes, out-plate/)
-                                    # puis exporte les 191 cadres → generateur/export/ (ignorés par git)
+node lib/export.mjs --generate      # régénère les 12 ateliers (et leurs plaques dans les deux variantes, out-plate/)
+                                    # puis exporte les 197 cadres → generateur/export/ (ignorés par git)
 node lib/export-check.mjs           # ROUGE tant qu'une couche porte un texte ou un oiseau, qu'une fenêtre est voilée,
                                     # que la bande du bandeau est trouée, qu'un emplacement n'a pas de contraste mesuré ou
                                     # qu'une plaque dessinée n'a pas ses deux variantes
@@ -122,9 +124,9 @@ Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--
 **Ce contre quoi les peintres web et iOS se jugent (prompt § 8.3, lot L21a, #10177), rendu par le générateur AVANT que l'app ne peigne.** L'échantillon versionné sous `cible/` : **un cadre par collection** (l'Ambassadeur I des sept atmosphères, comme la référence L0 ; `moments-flamme-30`, `tresor-coffre-a`, `poses-pied` pour les trois autres), dans la mise en page que le contrat lui connaît (chaque cadre en déclare exactement une, `birds.default`), **avec et sans message** (`<cadre>.plain.webp`, `<cadre>.message.webp` — les deux variantes de plaque, `CADRES_PLATE`), en **9:16**. Vingt-deux fichiers et `cible/index.json` (versions de Chromium, de sharp et de libwebp, boîte de la fenêtre, sha256, poids et verdict de stabilité de chaque cible). Une commande, depuis `generateur/` :
 
 ```bash
-node lib/cible.mjs --generate        # régénère les 11 ateliers dans les deux variantes, puis rend l'échantillon → ../cible/
+node lib/cible.mjs --generate        # régénère les 12 ateliers dans les deux variantes, puis rend l'échantillon → ../cible/
 node lib/cible.mjs --generate --check  # le rend à part et exige l'identité à l'octet avec les cibles versionnées
-node lib/cible.mjs --full            # le jeu COMPLET (191 cadres × 2 variantes) → generateur/cible-complete/, jamais versionné
+node lib/cible.mjs --full            # le jeu COMPLET (197 cadres × 2 variantes) → generateur/cible-complete/, jamais versionné
 ```
 
 Options : `--jobs 3` ; `--only savane,poses` et `--final` (garde le 1080×1920) **exigent `--cible <dossier>`** (hors `--check`) : le dossier versionné `cible/` ne reçoit que l'échantillon complet, et un plan vide (collection inconnue, `out/` vide) est rouge. Chromium par `lib/launch.mjs` — en CI, `playwright@1.56.1`, dont le Chromium 141.0.7390.37 est celui de `cible/index.json` ; les témoins du générateur (`node --test lib/*.test.mjs`, lancés par le job) tiennent l'épingle et l'index ensemble, et se lancent localement après `npm install --prefix . --no-save --no-package-lock playwright@1.56.1` depuis `generateur/`. sharp par `lib/sharp.mjs`.

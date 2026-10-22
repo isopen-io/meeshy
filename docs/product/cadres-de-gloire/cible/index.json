@@ -27,7 +27,7 @@
     "square": null,
     "squareNote": "D1 (#10180) : le carré d'un cadre décoré est la carte simple, `formats.square` est nul ; le médaillon et sa cible viennent en lot additif."
   },
-  "count": 22,
+  "count": 24,
   "targets": [
     {
       "file": "abysses-ambassadeur-1.plain.webp",
@@ -367,6 +367,40 @@
       ],
       "bytes": 269764,
       "sha256": "b4f183d0375718b3a15c666c845aef46332ce7073a31e060749431525bfa62d9",
+      "stable": true
+    },
+    {
+      "file": "succes-rare.plain.webp",
+      "collection": "succes",
+      "frame": "succes-rare",
+      "variant": "plain",
+      "layout": "perchés (Mee sourire, Meo cool)",
+      "format": "story",
+      "window": [
+        168,
+        528,
+        744,
+        892
+      ],
+      "bytes": 190284,
+      "sha256": "079b8bc4d94f9fbdf1296b8d98b85cc05f791e4163a1809624d756120cdde931",
+      "stable": true
+    },
+    {
+      "file": "succes-rare.message.webp",
+      "collection": "succes",
+      "frame": "succes-rare",
+      "variant": "message",
+      "layout": "perchés (Mee sourire, Meo cool)",
+      "format": "story",
+      "window": [
+        168,
+        528,
+        744,
+        892
+      ],
+      "bytes": 189626,
+      "sha256": "7c270735d3a8e2e9bd9e501ca5a7b9cbf483baf60b27dcd79b2521958e28d949",
       "stable": true
     },
     {
