@@ -179,7 +179,7 @@ class FriendshipCache @Inject constructor(
         block()
     } catch (cancelled: CancellationException) {
         throw cancelled
-    } catch (_: Exception) {
+    } catch (ignored: Exception) {
         null
     }
 
