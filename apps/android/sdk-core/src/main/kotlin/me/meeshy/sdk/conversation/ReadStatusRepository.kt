@@ -5,7 +5,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -73,14 +72,14 @@ class ReadStatusRepository(
         val current = state.value
         val age = current.syncedAtMillis?.let { clock.nowMillis() - it }
         val needsRevalidation = current.data == null || age == null || age > freshForMillis
-        launch { state.distinctUntilChanged().collect { send(it) } }
+        launch { state.collect { send(it) } }
         launch {
             try {
                 events.updates().filter { it.conversationId == conversationId }
                     .collect { refresh(messageId, force = true) }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Throwable) {
+            } catch (ignored: Throwable) {
             }
         }
         if (needsRevalidation) launch { refresh(messageId, force = current.data != null) }
