@@ -40,14 +40,14 @@ class AuthEmailSignInVocabularyTest {
 
     private val formatSpecifier = Regex("%(\\d+\\\$)?[sdf]")
 
-    /** Every `strings*.xml` of the locale, as Android merges them — the generated catalogue included. */
     private fun strings(locale: String?): Map<String, String> {
-        val dir = File(resDir(), if (locale == null) "values" else "values-$locale")
-        val files = dir.listFiles { file -> file.name.startsWith("strings") && file.name.endsWith(".xml") }
+        val dir = if (locale == null) "values" else "values-$locale"
+        // Écrites à la main (strings.xml) OU adoptées depuis le catalogue iOS (strings_generated.xml) :
+        // le vocabulaire se juge sur ce que le module livre, pas sur le fichier qui le porte.
+        val files = File(resDir(), dir).listFiles { file -> file.name.startsWith("strings") && file.extension == "xml" }
             .orEmpty()
-            .sortedBy { it.name }
-        check(files.isNotEmpty()) { "missing strings files in: ${dir.path}" }
-        return files.flatMap { file -> stringPattern.findAll(file.readText()).toList() }
+        check(files.isNotEmpty()) { "missing strings files in: $dir" }
+        return files.flatMap { stringPattern.findAll(it.readText()).toList() }
             .associate { it.groupValues[1] to it.groupValues[2].replace("\\'", "'") }
     }
 

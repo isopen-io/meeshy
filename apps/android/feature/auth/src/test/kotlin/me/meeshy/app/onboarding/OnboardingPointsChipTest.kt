@@ -75,6 +75,7 @@ class OnboardingPointsChipTest {
         compose.onNodeWithTag(ONBOARDING_REWARD_FLIGHT_TAG, useUnmergedTree = true).assertDoesNotExist()
 
         reward = OnboardingReward(id = 1, points = 5)
+        Snapshot.sendApplyNotifications()
         compose.mainClock.advanceTimeBy(100)
         compose.onNodeWithTag(ONBOARDING_REWARD_FLIGHT_TAG, useUnmergedTree = true).assertExists()
 

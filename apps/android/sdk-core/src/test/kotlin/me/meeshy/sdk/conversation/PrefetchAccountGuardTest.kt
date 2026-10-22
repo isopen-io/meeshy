@@ -41,14 +41,14 @@ class PrefetchAccountGuardTest {
     @Test
     fun `un changement de compte en cours de passe n ecrit rien`() = runTest {
         var active = true
-        val gate = CompletableDeferred<Unit>()
-        val source = FakePrefetchSource(gate = gate)
+        val network = CompletableDeferred<Unit>()
+        val source = FakePrefetchSource(gate = network)
         val store = FakePrefetchStore()
         store.onPersist = { active = false }
         val prefetcher = prefetcher(source, store)
         prefetcher.schedule(request((1..8).map { "c$it" }, stillOwner = { active }))
         runCurrent()
-        gate.complete(Unit)
+        network.complete(Unit)
         prefetcher.waitUntilIdle()
         // The first batch of four was already in flight; the second batch never starts.
         assertThat(source.requested).hasSize(4)

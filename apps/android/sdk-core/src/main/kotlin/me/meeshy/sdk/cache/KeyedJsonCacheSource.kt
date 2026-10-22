@@ -29,5 +29,11 @@ class KeyedJsonCacheSource<T>(
         policy: CachePolicy,
         clock: CacheClock = SystemCacheClock,
         onRevalidateError: (Throwable) -> Unit = {},
-    ): Flow<CacheResult<T>> = cacheFirstFlow(policy, this, clock, onRevalidateError)
+    ): Flow<CacheResult<T>> = cacheFirstFlowOf(
+        policy = policy,
+        snapshots = cache.observeSnapshot(namespace, key, serializer),
+        revalidate = ::revalidate,
+        clock = clock,
+        onRevalidateError = onRevalidateError,
+    )
 }

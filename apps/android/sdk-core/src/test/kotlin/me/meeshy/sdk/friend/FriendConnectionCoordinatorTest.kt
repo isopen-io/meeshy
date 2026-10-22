@@ -39,7 +39,7 @@ class FriendConnectionCoordinatorTest {
             val controller = ConnectionActionController(cache, friends, outbox, flush, scope)
             coordinator = FriendConnectionCoordinator(cache, friends, roster, requests, outbox, flush, controller, scope)
             cache.didReceiveRequest("alice", "req-1")
-            coEvery { friends.enqueueRespondFriendRequest("req-1", "alice", any(), any()) } answers { arg(3) }
+            coEvery { friends.enqueueRespondFriendRequest("req-1", "alice", any(), any()) } answers { arg<String>(3) }
         }
     }
 
@@ -92,7 +92,7 @@ class FriendConnectionCoordinatorTest {
         val rig = Rig(backgroundScope)
         var cmid = ""
         coEvery { rig.friends.enqueueRespondFriendRequest("req-1", "alice", true, any()) } answers {
-            cmid = arg(3)
+            cmid = arg<String>(3)
             cmid
         }
 
@@ -113,7 +113,7 @@ class FriendConnectionCoordinatorTest {
         val rig = Rig(backgroundScope)
         var cmid = ""
         coEvery { rig.friends.enqueueRespondFriendRequest("req-1", "alice", false, any()) } answers {
-            cmid = arg(3)
+            cmid = arg<String>(3)
             cmid
         }
 
@@ -134,7 +134,7 @@ class FriendConnectionCoordinatorTest {
             val rig = Rig(backgroundScope)
             var cmid = ""
             coEvery { rig.friends.enqueueRespondFriendRequest("req-1", "alice", true, any()) } answers {
-                cmid = arg(3)
+                cmid = arg<String>(3)
                 cmid
             }
 

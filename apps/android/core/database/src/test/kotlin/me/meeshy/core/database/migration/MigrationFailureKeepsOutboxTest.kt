@@ -27,12 +27,12 @@ class MigrationFailureKeepsOutboxTest {
 
     @Test
     fun `une migration en echec ne detruit aucune table durable`() {
-        val before = helper.createDatabase(TEST_DB, 16).use { db ->
+        val before = helper.createDatabase(TEST_DB, 17).use { db ->
             db.seedV16()
             DURABLE_QUERIES.map(db::rows)
         }
 
-        helper.runMigrationsAndValidate(TEST_DB, 18, true, Migration_16_17, GuardedMigration(failingMigration)).use { db ->
+        helper.runMigrationsAndValidate(TEST_DB, 18, true, GuardedMigration(failingMigration)).use { db ->
             assertThat(DURABLE_QUERIES.map(db::rows)).isEqualTo(before)
             assertThat(db.rows("SELECT name FROM sqlite_master WHERE name = 'half_done'")).isEmpty()
         }
@@ -40,9 +40,9 @@ class MigrationFailureKeepsOutboxTest {
 
     @Test
     fun `une migration en echec ne vide que les tables de cache`() {
-        helper.createDatabase(TEST_DB, 16).use { it.seedV16() }
+        helper.createDatabase(TEST_DB, 17).use { it.seedV16() }
 
-        helper.runMigrationsAndValidate(TEST_DB, 18, true, Migration_16_17, GuardedMigration(failingMigration)).use { db ->
+        helper.runMigrationsAndValidate(TEST_DB, 18, true, GuardedMigration(failingMigration)).use { db ->
             assertThat(db.rows("SELECT COUNT(*) FROM messages")).containsExactly(listOf("0"))
             assertThat(db.rows("SELECT COUNT(*) FROM conversations")).containsExactly(listOf("0"))
         }

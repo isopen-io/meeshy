@@ -228,7 +228,6 @@ class ComposerTrayControllerTest {
 
         assertThat(r.tray.takeForSend()).isNull()
         assertThat(r.tray.state.value.items).hasSize(1)
-
         gate.complete(Unit)
         advanceUntilIdle()
     }

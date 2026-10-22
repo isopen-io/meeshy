@@ -6,9 +6,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.Route
 
-/** Le préfixe que les gardiens de session retirent pour ramener un chemin à la forme de la politique. */
-internal const val API_PATH_PREFIX: String = "/api/v1"
-
 /**
  * L'`Authenticator` d'OkHttp qui transforme les décisions pures de
  * [TokenRefreshPolicy] en rejeu réel (iOS `APIClient.resolveUnauthorized`).
@@ -26,6 +23,9 @@ internal const val API_PATH_PREFIX: String = "/api/v1"
  *
  * L'endpoint est ramené à la forme de la politique en retirant [apiPathPrefix].
  */
+/** Le préfixe d'API que les intercepteurs de session retirent pour lire la politique d'un endpoint. */
+internal const val API_PATH_PREFIX: String = "/api/v1"
+
 class RefreshAuthenticator(
     private val tokenStore: TokenStore,
     private val refresher: SessionRefresher,

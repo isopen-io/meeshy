@@ -11,10 +11,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ChangeEmailResponse
@@ -62,9 +62,9 @@ class AccountContactViewModelTest {
         },
     ) = AccountContactViewModel(userRepository, sessionRepository)
 
-    /** La vérification exige un code ENVOYÉ ([PhoneChangeFlow.canVerify]) : le numéro part d'abord. */
-    private fun TestScope.sendPhoneCode(sut: AccountContactViewModel, userRepository: UserRepository) {
-        coEvery { userRepository.changePhone(any()) } returns
+    /** Le code ne se vérifie qu'une fois envoyé (PhoneChangeFlow) : amène l'écran à cette étape. */
+    private fun TestScope.sendPhoneCode(sut: AccountContactViewModel, userRepo: UserRepository) {
+        coEvery { userRepo.changePhone(any()) } returns
             NetworkResult.Success(ChangePhoneResponse(pendingPhoneNumber = "+33612345678"))
         sut.onNewPhoneChange("+33612345678")
         sut.submitPhoneChange()
@@ -430,7 +430,7 @@ class AccountContactViewModelTest {
 
     @Test
     fun canVerifyPhoneCode_falseUntilExactlySixDigits() = runTest(dispatcher) {
-        val userRepo = mockk<UserRepository>(relaxed = true)
+        val userRepo = mockk<UserRepository>()
         val sut = vm(userRepository = userRepo)
         sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("12345")

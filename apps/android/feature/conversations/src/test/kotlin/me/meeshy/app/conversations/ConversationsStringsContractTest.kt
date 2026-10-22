@@ -121,6 +121,9 @@ class ConversationsStringsContractTest {
 @Config(sdk = [34])
 class ConversationsPluralsRobolectricTest {
 
+    /** Le nombre tel que l'arabe l'écrit (chiffres de la locale), comme `getQuantityString` le formate. */
+    private fun arabicDigits(n: Int): String = String.format(Locale.forLanguageTag("ar"), "%d", n)
+
     private fun members(tag: String, quantity: Int): String {
         val configuration = Configuration(RuntimeEnvironment.getApplication().resources.configuration)
         configuration.setLocale(Locale.forLanguageTag(tag))
@@ -141,13 +144,10 @@ class ConversationsPluralsRobolectricTest {
         assertThat(forms[0]).isEqualTo("لا أعضاء")
         assertThat(forms[1]).isEqualTo("عضو واحد")
         assertThat(forms[2]).isEqualTo("عضوان")
-        assertThat(forms[3]).isEqualTo("${arabic(3)} أعضاء")
-        assertThat(forms[4]).isEqualTo("${arabic(11)} عضوًا")
-        assertThat(forms[5]).isEqualTo("${arabic(100)} عضو")
+        assertThat(forms[3]).isEqualTo("${arabicDigits(3)} أعضاء")
+        assertThat(forms[4]).isEqualTo("${arabicDigits(11)} عضوًا")
+        assertThat(forms[5]).isEqualTo("${arabicDigits(100)} عضو")
     }
-
-    /** The count as `%d` writes it under the Arabic locale — its digits belong to the platform, not to the plural. */
-    private fun arabic(count: Int): String = String.format(Locale.forLanguageTag("ar"), "%d", count)
 
     @Test
     fun `english distinguishes one from many`() {
