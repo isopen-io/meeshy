@@ -51,6 +51,7 @@ import me.meeshy.sdk.lock.EncryptedConversationLockStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.DataStoreAnonymousSessionStore
 import me.meeshy.sdk.session.DefaultSessionTeardown
+import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.theme.DataStoreThemeStore
 import me.meeshy.sdk.theme.ThemeStore
@@ -273,6 +274,7 @@ object SdkModule {
         friendshipCache: FriendshipCache,
         notificationRepository: NotificationRepository,
         blockCache: BlockCache,
+        perAccountCaches: Set<@JvmSuppressWildcards PerAccountCache>,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -283,6 +285,7 @@ object SdkModule {
             friendshipCache,
             notificationRepository,
             blockCache,
+            perAccountCaches,
         )
 
     @Provides

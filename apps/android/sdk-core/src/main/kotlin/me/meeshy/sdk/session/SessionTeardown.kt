@@ -1,5 +1,6 @@
 package me.meeshy.sdk.session
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.core.database.MeeshyDatabase
@@ -10,6 +11,7 @@ import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.story.StoryComposerDraftStore
+import timber.log.Timber
 
 /**
  * Wipes every disk-persisted, per-account cache on logout/account-switch — parity
@@ -46,6 +48,7 @@ public class DefaultSessionTeardown(
     private val friendshipCache: FriendshipCache,
     private val notificationRepository: NotificationRepository,
     private val blockCache: BlockCache,
+    private val perAccountCaches: Set<PerAccountCache> = emptySet(),
 ) : SessionTeardown {
 
     override suspend fun wipe() {
@@ -58,5 +61,14 @@ public class DefaultSessionTeardown(
         friendshipCache.clear()
         notificationRepository.clear()
         blockCache.clear()
+        perAccountCaches.forEach { cache ->
+            try {
+                cache.clear()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Timber.e(failure, "PerAccountCache %s : echec du vidage", cache.javaClass.name)
+            }
+        }
     }
 }
