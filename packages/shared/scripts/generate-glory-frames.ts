@@ -14,8 +14,13 @@
  * (contrat, chaînes de chaque langue, couverture, atlas) : elle monte de un
  * quand cette empreinte change, et ne descend jamais. Les fichiers de la
  * version quittée entrent dans `retained.json`, pour qu'une photo gardée les
- * relise. Le témoin de fraîcheur (`__tests__/glory-frames-generated.test.ts`)
- * rejoue `buildGloryFramePacks` en mémoire et exige l'égalité avec le dépôt.
+ * relise — et une version déjà retenue ne se réémet jamais : si deux branches
+ * ont chacune monté v1 en v2, la fusion saute au-dessus de ce que `retained.json`
+ * tient, et une clé déjà retenue garde les fichiers des DEUX contenus (#10278).
+ * Le témoin de fraîcheur (`__tests__/glory-frames-generated.test.ts`) rejoue
+ * `buildGloryFramePacks` en mémoire et exige l'égalité avec le dépôt ; le
+ * cliquet `glory-frames:check-versions` (`glory-frame-version-ratchet.ts`)
+ * refuse une version qui redescend sous `origin/dev` ou qui sert deux contenus.
  *
  * Le socle iOS (`apps/ios/Meeshy/Resources/Packs/`) et la fixture de
  * géométrie suivent au lot qui les branche : rien ne s'écrit qu'un lecteur ne lit.
@@ -93,12 +98,21 @@ const stringsOf = (entry: RegistryEntry, strings: GloryFrameSources['strings']):
 const uniqueBytes = (refs: readonly PackAssetRef[]): number => [...new Map(refs.map((ref) => [ref.src, ref.bytes])).values()].reduce((sum, bytes) => sum + bytes, 0);
 
 /** Tous les fichiers qu'une entrée publiée engage : ceux du registre et ceux de son contrat relu. */
-function servedFilesOf(entry: RegistryEntry, readStoredJson: GloryFrameSources['readStoredJson']): readonly string[] {
+export function servedFilesOf(entry: RegistryEntry, readStoredJson: GloryFrameSources['readStoredJson']): readonly string[] {
   const own = [entry.contract, entry.cover, ...Object.values(entry.strings ?? {})].filter((ref): ref is PackAssetRef => ref !== undefined);
   const contract = entry.contract === undefined ? null : parseGloryFrameContract(readStoredJson(entry.contract.src));
   const frames = contract?.contract.frames.flatMap(gloryFrameAssets) ?? [];
   return [...new Set([...own, ...frames].map((ref) => ref.src))].sort();
 }
+
+const RETAINED_KEY = /^glory-frame\/([a-z0-9-]+)@(\d+)$/;
+
+/** La plus haute version qu'une entrée a déjà QUITTÉE, lue dans les clés de `retained.json` ; 0 si aucune. */
+const highestRetainedVersion = (retained: Readonly<Record<string, readonly string[]>>, slug: string): number =>
+  Object.keys(retained).reduce((highest, key) => {
+    const match = RETAINED_KEY.exec(key);
+    return match !== null && match[1] === slug ? Math.max(highest, Number(match[2])) : highest;
+  }, 0);
 
 const computedKeys = new Set(['version', 'cover', 'preview', 'contract', 'strings', 'downloadBytes', 'fingerprint']);
 
@@ -118,12 +132,14 @@ export function buildGloryFramePacks(sources: GloryFrameSources): GeneratedPacks
     const fingerprint = sha256(JSON.stringify({ contract: contract.ref.sha256, strings: strings.map(([language, file]) => [language, file.ref.sha256]), cover: cover.sha256, preview: null }));
     const previous = entry.version ?? 1;
     const changed = entry.fingerprint !== undefined && entry.fingerprint !== fingerprint;
-    if (changed) retained[`glory-frame/${entry.slug}@${previous}`] = servedFilesOf(entry, sources.readStoredJson);
+    const quittedKey = `glory-frame/${entry.slug}@${previous}`;
+    if (changed) retained[quittedKey] = [...new Set([...(retained[quittedKey] ?? []), ...servedFilesOf(entry, sources.readStoredJson)])].sort();
+    const version = Math.max(changed ? previous + 1 : previous, highestRetainedVersion(retained, entry.slug) + 1);
     const downloadBytes = uniqueBytes([contract.ref, cover, ...strings.map(([, file]) => file.ref), ...frames.flatMap(gloryFrameAssets)]);
     const editorial = Object.fromEntries(Object.entries(entry).filter(([key]) => !computedKeys.has(key)));
     return {
       ...editorial,
-      version: changed ? previous + 1 : previous,
+      version,
       cover,
       preview: null,
       contract: contract.ref,

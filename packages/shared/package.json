@@ -105,6 +105,7 @@
     "generate:lens-format": "bun scripts/generate-lens-format-swift.ts",
     "import:glory-frames": "bun scripts/import-glory-frames.ts",
     "generate:glory-frames": "bun scripts/generate-glory-frames.ts",
+    "glory-frames:check-versions": "tsx scripts/glory-frame-version-ratchet.ts",
     "translator-languages:generate": "tsx scripts/generate-translator-languages.ts",
     "translator-languages:check": "tsx scripts/generate-translator-languages.ts --check",
     "generate": "prisma generate --schema=./prisma/schema.prisma --generator client",

@@ -25,7 +25,11 @@
  * contre son empreinte — un contrat illisible ou altéré n'ouvre rien.
  *
  * Fail-closed PAR ENTRÉE (`parsePackIndex`) : une entrée illisible tombe seule
- * et se compte, un fichier illisible tombe entier et se compte.
+ * et se compte, un fichier illisible tombe entier et se compte. Une entrée qui
+ * reprend une version QUITTÉE — une clé `<domaine>/<slug>@<version>` de
+ * `retained.json` — tombe aussi (#10278) : des clients tiennent déjà ce numéro
+ * avec un autre contenu, et la servir sous le même ne les mettrait jamais à
+ * jour. Ses fichiers retenus restent servis au magasin.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -79,12 +83,27 @@ const retainedSources = (retained: unknown): readonly unknown[] => {
   return Object.values(retained).flatMap((list) => (Array.isArray(list) ? list : []));
 };
 
+const QUITTED_VERSION_KEY = /^([a-z-]+)\/([a-z0-9-]+)@(\d+)$/;
+
+/** Les versions QUITTÉES que `retained.json` nomme (`<domaine>/<slug>@<version>`), par domaine et slug ; la forme liste n'en nomme aucune. */
+const quittedVersions = (retained: unknown): ReadonlyMap<string, number> => {
+  if (Array.isArray(retained) || typeof retained !== 'object' || retained === null) return new Map();
+  return Object.keys(retained).reduce((highest, key) => {
+    const match = QUITTED_VERSION_KEY.exec(key);
+    if (match === null) return highest;
+    const packKey = `${match[1]}.${match[2]}`;
+    return highest.set(packKey, Math.max(highest.get(packKey) ?? 0, Number(match[3])));
+  }, new Map<string, number>());
+};
+
 export function buildPackIndex(sources: PackIndexSources): PackIndex {
   const parsed = sources.registries.map((registry) => parsePackIndex(registry));
+  const quitted = quittedVersions(sources.retained);
   const all = parsed.flatMap(({ entries }) => entries);
   const seen = new Set<string>();
   const entries = all.filter((entry) => {
     const key = `${entry.domain}.${entry.slug}`;
+    if (entry.version <= (quitted.get(key) ?? 0)) return false;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

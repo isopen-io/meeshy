@@ -226,6 +226,25 @@ jobs:
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} translator-languages:check
 
+      # #10278 — la version d'un pack de cadres de gloire ne redescend jamais
+      # et ne sert jamais deux contenus. `generate:glory-frames` la dérive de la
+      # valeur COMMITÉE : le témoin de fraîcheur ne voit ni une version abaissée
+      # à la main, ni deux branches qui montent chacune v1 en v2 avec deux
+      # contenus (la fusion garde un v2, l'autre a été publié en staging sous le
+      # même numéro). Le cliquet confronte le registre à `retained.json` ET au
+      # registre de `origin/dev` ; la seconde commande prouve qu'il rougit
+      # (chaque version abaissée de 1 ⇒ sortie 1). La base se lit par `git show`,
+      # d'où le fetch : le checkout de ce job est à profondeur 1.
+      - name: Versions des packs de cadres de gloire (cliquet #10278)
+        run: |
+          git fetch --no-tags --depth=1 origin dev
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline origin/dev
+          if ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline origin/dev --mutate lower-version; then
+            echo "::error::le cliquet des versions ne rougit pas sous mutation (version abaissée de 1)"
+            exit 1
+          fi
+
       # #5442 : cette étape passe par le cache Turborepo (`bun run lint` sans
       # filtre), donc son verdict dépend de la température du cache — un run à
       # cache chaud rejoue d'anciens logs sans jamais relinter. Elle reste
