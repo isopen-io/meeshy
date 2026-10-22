@@ -53,8 +53,18 @@ class RouteManifestRatchetTest {
     private fun unserved(declared: List<DeclaredRoute>, served: List<ServedRoute>): List<DeclaredRoute> =
         declared.filter { route ->
             val wanted = RetrofitRouteSources.canonical("api/v1/${route.path}")
-            served.none { it.verb == route.verb && RetrofitRouteSources.sameRoute(it.segments, wanted) }
+            served.none { it.verb == route.verb && serves(it.segments, wanted) }
         }
+
+    /**
+     * Une route servie répond à la route déclarée quand elles sont IDENTIQUES, ou quand la
+     * déclarée porte une variable là où la passerelle sert un littéral par valeur
+     * (`packs/{domain}/installed` face à `packs/wallpaper/installed`). Jamais l'inverse : une
+     * variable servie ne répond pas à un littéral déclaré (voir [RetrofitRouteSources.sameRoute]).
+     */
+    private fun serves(served: List<String>, declared: List<String>): Boolean =
+        served.size == declared.size &&
+            served.indices.all { declared[it] == "*" || declared[it] == served[it] }
 
     @Test
     fun `the scan sees the declared routes — a guard that reads nothing protects nothing`() {
