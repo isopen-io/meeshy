@@ -19,13 +19,13 @@ import org.junit.Test
 class ChatUiStateDefaultsTest {
 
     @Test
-    fun `the state keeps exactly its fifty-two stored fields`() {
+    fun `the state keeps exactly its fifty-one stored fields`() {
         val stored = ChatUiState::class.java.declaredFields
             .filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }
             .map { it.name }
 
         assertThat(stored).containsExactlyElementsIn(STORED_FIELDS)
-        assertThat(stored).hasSize(52)
+        assertThat(stored).hasSize(51)
     }
 
     @Test
