@@ -8,6 +8,7 @@
 > - **La référence est `apps/ios` + `packages/MeeshySDK`**, pour la disposition, la hiérarchie, les états, les gestes et la sémantique. Une feature iOS absente ici est un écart à combler, par une issue.
 > - **Les lois à miroirs se lisent de nouveau « touche les TROIS ».** Les miroirs Kotlin de `core/model/` suivent `packages/shared/` et le SDK Swift.
 > - **Le seul gate est la CI `android.yml`** (`assembleDebug` + `testDebugUnitTest`). Les conteneurs n'atteignent pas `dl.google.com`, donc aucun lot ne se déclare vert sans run vert sur sa PR.
+> - **`:core:model` se vérifie en local, en deux minutes : `./apps/android/meeshy.sh jvm-check`.** Le module est du Kotlin pur (aucun import `android.*`) et se compile sur une JVM nue, avec les dépendances de Maven Central. Une loi, un résolveur ou une réduction d'état placés là se prouvent en TDD local. Le reste (Compose, Hilt, Room) n'est prouvé que par la CI : on pousse donc la logique dans `:core:model`, et l'écran reste mince.
 > - La coque Capacitor `apps/web/android` est une autre application, sous une autre directive. Ne pas confondre.
 >
 > *(Historique : le bandeau « CE CHANTIER EST GELÉ » a couvert la période du 2026-09-16 au 2026-10-22.)*

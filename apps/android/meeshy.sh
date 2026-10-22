@@ -55,6 +55,8 @@ case "$CMD" in
   lint)     ./gradlew :app:lintDebug "$@" ;;
   check)    ./gradlew assembleDebug testDebugUnitTest "$@" ;;
   clean)    ./gradlew clean "$@" ;;
+  jvm-check) GRADLE_BIN="$(command -v gradle || echo ./gradlew)"
+            LANG=C.utf8 LC_ALL=C.utf8 "$GRADLE_BIN" -p scripts/jvm-check test --console=plain "$@" ;;
   emulator) boot_emulator ;;
   devices)  "$ADB" devices -l ;;
   install)  boot_emulator; ./gradlew :app:installDebug "$@" ;;
