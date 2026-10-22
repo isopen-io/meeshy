@@ -9,7 +9,6 @@ import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 import type { AchievementRarity, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 
 import type { PackShopAdapter } from './pack-shop';
-import { apiConfig } from '@/lib/api/config';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { packQueryKeys } from '@/lib/api/pack-query-keys';
@@ -25,6 +24,7 @@ import { frameUsageText, loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-ca
 import { loadGameCatalogParts, translateGame, type GameCatalogKey } from '@/lib/i18n-game-catalog';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { apiOrigin } from '@/lib/api/api-origin';
 import type { PackAssetStoreDeps } from '@/lib/packs/pack-asset-store';
 
 /**
@@ -102,13 +102,6 @@ export const usageText = (language: InterfaceLanguage, usage: FrameUsage): strin
  * `webOriginOf`) ; `onOrigin`/`urlOf` dégradent déjà proprement sur une
  * origine vide.
  */
-const apiOrigin = (): string => {
-  try {
-    return new URL(apiConfig.base === '' ? location.href : apiConfig.base, location.href).origin;
-  } catch {
-    return '';
-  }
-};
 
 /** Une adresse relative de la passerelle (`coverUrl`), posée sur son origine ; telle quelle si l'origine ne se lit pas. */
 const onOrigin = (path: string, origin: string): string => {

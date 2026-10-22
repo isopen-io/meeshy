@@ -93,3 +93,40 @@ describe('le magasin des fichiers de packs', () => {
     expect(isAppOwnedCache(PACK_ASSETS_CACHE)).toBe(false);
   });
 });
+
+describe('le magasin sans réseau et la demande (#10159)', () => {
+  test('bucketOnly ne touche jamais le réseau : un fichier absent du seau rend null, sans requête', async () => {
+    const { bucketOnly, readPackAssetBlob: read } = await import('./pack-asset-store');
+    const bytes = new TextEncoder().encode('couche') as Uint8Array<ArrayBuffer>;
+    const ref = await refOf(bytes, 'webp');
+    const net = fetcherServing(new Map([[packAssetUrl(ref.src, ORIGIN), bytes]]));
+    const { storage } = memoryCaches();
+    expect(await read(ref, bucketOnly({ origin: ORIGIN, fetcher: net.fetcher, cacheStorage: storage }))).toBeNull();
+    expect(net.calls).toEqual([]);
+  });
+
+  test('warmPackAssets range les fichiers dans le seau, un à la fois, et la lecture sans réseau les retrouve', async () => {
+    const { bucketOnly, warmPackAssets, readPackAssetBlob: read } = await import('./pack-asset-store');
+    const a = new TextEncoder().encode('a') as Uint8Array<ArrayBuffer>;
+    const b = new TextEncoder().encode('bb') as Uint8Array<ArrayBuffer>;
+    const [refA, refB] = [await refOf(a, 'webp'), await refOf(b, 'webp')];
+    const net = fetcherServing(new Map([[packAssetUrl(refA.src, ORIGIN), a], [packAssetUrl(refB.src, ORIGIN), b]]));
+    const { storage } = memoryCaches();
+    const deps = { origin: ORIGIN, fetcher: net.fetcher, cacheStorage: storage };
+    await warmPackAssets([refA, refB, refA], deps);
+    expect(net.calls.map((call) => call.url)).toEqual([packAssetUrl(refA.src, ORIGIN), packAssetUrl(refB.src, ORIGIN)]);
+    expect(await (await read(refA, bucketOnly(deps)))?.text()).toBe('a');
+    expect(await (await read(refB, bucketOnly(deps)))?.text()).toBe('bb');
+  });
+
+  test('un fichier qui ne se vérifie pas n’entre pas dans le seau, et la demande ne lève pas', async () => {
+    const { bucketOnly, warmPackAssets, readPackAssetBlob: read } = await import('./pack-asset-store');
+    const bytes = new TextEncoder().encode('vrai') as Uint8Array<ArrayBuffer>;
+    const ref = await refOf(bytes, 'webp');
+    const net = fetcherServing(new Map([[packAssetUrl(ref.src, ORIGIN), new TextEncoder().encode('faux') as Uint8Array<ArrayBuffer>]]));
+    const { storage } = memoryCaches();
+    const deps = { origin: ORIGIN, fetcher: net.fetcher, cacheStorage: storage };
+    await warmPackAssets([ref], deps);
+    expect(await read(ref, bucketOnly(deps))).toBeNull();
+  });
+});
