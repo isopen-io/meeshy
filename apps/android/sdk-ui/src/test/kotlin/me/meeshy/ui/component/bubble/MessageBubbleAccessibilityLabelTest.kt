@@ -18,16 +18,24 @@ class MessageBubbleAccessibilityLabelTest {
         deleted = "message deleted",
         replyToAuthor = "reply to %s",
         replyToExcerpt = "reply to %1\$s: %2\$s",
+        replyToYou = "yourself",
         images = "%d images",
+        videos = "%d videos",
         audios = "%d audios",
         location = "shared location",
         file = "file %s",
+        contactCard = "contact %s",
+        contactCardAccount = "on Meeshy %s",
+        viewOnceSealed = "view-once, tap to open",
+        viewOnce = "view once",
+        blurred = "blurred",
         edited = "edited",
         pinned = "pinned",
         ephemeral = "ephemeral",
         reactions = "reactions: %s",
         delivery = BubbleDeliveryA11yStrings(
             sending = "sending",
+            slow = "slow sending",
             queued = "queued",
             sent = "sent",
             delivered = "delivered",
@@ -54,6 +62,13 @@ class MessageBubbleAccessibilityLabelTest {
         audios: List<BubbleAudio> = emptyList(),
         expiresAtIso: String? = null,
         pinnedAtIso: String? = null,
+        videoCount: Int = 0,
+        contactCards: List<BubbleContactCard> = emptyList(),
+        isBlurred: Boolean = false,
+        isViewOnce: Boolean = false,
+        viewOnceCount: Int = 0,
+        replyToIsMe: Boolean = false,
+        isSlowSend: Boolean = false,
     ) = BubbleContent(
         messageId = "m1",
         text = text,
@@ -77,6 +92,13 @@ class MessageBubbleAccessibilityLabelTest {
         audios = audios,
         expiresAtIso = expiresAtIso,
         pinnedAtIso = pinnedAtIso,
+        videoCount = videoCount,
+        contactCards = contactCards,
+        isBlurred = isBlurred,
+        isViewOnce = isViewOnce,
+        viewOnceCount = viewOnceCount,
+        replyToIsMe = replyToIsMe,
+        isSlowSend = isSlowSend,
     )
 
     private fun compose(content: BubbleContent, timeText: String? = null) =
@@ -280,5 +302,98 @@ class MessageBubbleAccessibilityLabelTest {
     fun `a bare outgoing text message reads text then sent status only`() {
         val label = compose(content(text = "hey", isOutgoing = true))
         assertThat(label).isEqualTo("hey, sent")
+    }
+
+    @Test
+    fun `images and videos are counted separately in that order`() {
+        val label = compose(
+            content(senderName = "A", images = listOf(image("a"), image("b")), videoCount = 1, audios = listOf(audio("x"))),
+        )
+        assertThat(label).isEqualTo("A, 2 images, 1 videos, 1 audios")
+    }
+
+    @Test
+    fun `a blurred message never reads its text but keeps its media and says blurred`() {
+        val label = compose(content(text = "secret", senderName = "A", isBlurred = true, images = listOf(image("a"))))
+        assertThat(label).isEqualTo("A, 1 images, blurred")
+        assertThat(label).doesNotContain("secret")
+    }
+
+    @Test
+    fun `a sealed view-once message says only its chip then the time`() {
+        val label = compose(
+            content(text = "secret", senderName = "A", isViewOnce = true, images = listOf(image("a"))),
+            timeText = "10:00",
+        )
+        assertThat(label).isEqualTo("A, view-once, tap to open, 10:00")
+    }
+
+    @Test
+    fun `a sealed view-once message still announces its ephemeral countdown`() {
+        val label = compose(content(senderName = "A", isViewOnce = true, expiresAtIso = "2026-08-21T11:00:00Z"))
+        assertThat(label).isEqualTo("A, view-once, tap to open, ephemeral")
+    }
+
+    @Test
+    fun `an opened view-once message reads normally then says view once`() {
+        val label = compose(content(text = "hi", senderName = "A", isViewOnce = true, viewOnceCount = 1))
+        assertThat(label).isEqualTo("A, hi, view once")
+    }
+
+    @Test
+    fun `a contact card is read by its name and account and never as a file`() {
+        val card = BubbleContactCard(attachmentId = "c", name = "Bob", accountUsername = "bob")
+        val vcf = BubbleFile(attachmentId = "c", name = "Bob.vcf", isContactCard = true)
+        val label = compose(content(senderName = "A", contactCards = listOf(card), files = listOf(vcf)))
+        assertThat(label).isEqualTo("A, contact Bob, on Meeshy @bob")
+    }
+
+    @Test
+    fun `a contact card without an account reads only its name`() {
+        val card = BubbleContactCard(attachmentId = "c", name = "Bob")
+        assertThat(compose(content(senderName = "A", contactCards = listOf(card)))).isEqualTo("A, contact Bob")
+    }
+
+    @Test
+    fun `video files are not read as files`() {
+        val video = BubbleFile(attachmentId = "v", name = "clip.mp4", isVideo = true)
+        val doc = BubbleFile(attachmentId = "d", name = "a.pdf")
+        val label = compose(content(senderName = "A", videoCount = 1, files = listOf(video, doc)))
+        assertThat(label).isEqualTo("A, 1 videos, file a.pdf")
+    }
+
+    @Test
+    fun `a reply to your own message names yourself`() {
+        val label = compose(content(senderName = "A", replyToId = "r", replyToText = "yo", replyToIsMe = true))
+        assertThat(label).isEqualTo("A, reply to yourself: yo")
+    }
+
+    @Test
+    fun `a slow pending outgoing message says slow sending`() {
+        val label = compose(content(isOutgoing = true, deliveryStatus = DeliveryStatus.Pending, isSlowSend = true))
+        assertThat(label).isEqualTo("slow sending")
+    }
+
+    @Test
+    fun `a pending outgoing message that is not slow says sending`() {
+        val label = compose(content(isOutgoing = true, deliveryStatus = DeliveryStatus.Pending))
+        assertThat(label).isEqualTo("sending")
+    }
+
+    @Test
+    fun `the whole frozen order holds from sender to reactions`() {
+        val label = compose(
+            content(
+                text = "t", senderName = "A", replyToId = "r", replyToText = "q",
+                images = listOf(image("a")), videoCount = 1, audios = listOf(audio("x")),
+                locations = listOf(BubbleLocation(attachmentId = "l")),
+                isEdited = true, pinnedAtIso = "x", expiresAtIso = "y",
+                reactions = listOf(ReactionEntry("\uD83D\uDC4D", 2)),
+            ),
+            timeText = "10:00",
+        )
+        assertThat(label).isEqualTo(
+            "A, reply to unknown sender: q, t, 1 images, 1 videos, 1 audios, shared location, 10:00, edited, pinned, ephemeral, reactions: \uD83D\uDC4D 2",
+        )
     }
 }

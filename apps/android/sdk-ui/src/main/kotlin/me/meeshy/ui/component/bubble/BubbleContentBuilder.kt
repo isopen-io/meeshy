@@ -48,6 +48,7 @@ public object BubbleContentBuilder {
         showReadReceipts: Boolean = true,
         isOffline: Boolean = false,
         displayDensity: Float = DEFAULT_DISPLAY_DENSITY,
+        isSlowSend: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -166,6 +167,17 @@ public object BubbleContentBuilder {
                     name = attachment.originalName ?: attachment.fileName,
                     sizeBytes = attachment.fileSize,
                     url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    isVideo = attachment.isVideo,
+                    isContactCard = attachment.isContactCard,
+                )
+            }
+        val contactCards = visibleAttachments
+            .filter { it.isContactCard }
+            .map { attachment ->
+                BubbleContactCard(
+                    attachmentId = attachment.id,
+                    name = (attachment.originalName ?: attachment.fileName)
+                        ?.trim()?.removeSuffix(".vcf")?.ifBlank { null },
                 )
             }
         val text = when {
@@ -257,6 +269,12 @@ public object BubbleContentBuilder {
             // A conversation notice (join/leave/legacy summary) renders as a centered
             // notice, never a signed bubble — resolved FIRST in `BubbleRenderKind`.
             isSystem = message.isSystemMessage,
+            videoCount = files.count { it.isVideo },
+            contactCards = contactCards,
+            isBlurred = !isDeleted && message.effects.has(MessageEffectFlags.BLURRED),
+            replyToIsMe = !replyToDeleted && currentUserId != null &&
+                message.replyTo?.senderId == currentUserId,
+            isSlowSend = isOutgoing && isSlowSend,
         )
     }
 
@@ -453,6 +471,15 @@ public object BubbleContentBuilder {
 
     private val ApiMessageAttachment.isLocation: Boolean
         get() = mimeType == LOCATION_MIME
+
+    private val ApiMessageAttachment.isVideo: Boolean
+        get() = mimeType?.startsWith("video/") == true
+
+    private val ApiMessageAttachment.isContactCard: Boolean
+        get() = mimeType?.lowercase() in VCARD_MIMES ||
+            (originalName ?: fileName)?.lowercase()?.endsWith(".vcf") == true
+
+    private val VCARD_MIMES = setOf("text/vcard", "text/x-vcard", "text/directory")
 
     private val ApiMessageAttachment.isAudio: Boolean
         get() = mimeType?.startsWith("audio/") == true
