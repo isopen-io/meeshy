@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import me.meeshy.sdk.model.call.CallRules
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,7 +44,10 @@ class RealCallConnectingWatchdog @Inject constructor() : CallConnectingWatchdog 
          * la fenêtre Android démarre à l'entrée en Connecting (avant le join),
          * pas après lui — l'intention est identique : borner, jamais optimiser.
          */
-        const val CONNECT_BUDGET_MS = 45_000L
+        const val CONNECT_BUDGET_MS = CallRules.OFFER_TIMEOUT_MS + ICE_MARGIN_MS
+
+        /** Marge d'établissement ICE (~10 s) + ACK join (5 s). */
+        const val ICE_MARGIN_MS = 15_000L
     }
 }
 
