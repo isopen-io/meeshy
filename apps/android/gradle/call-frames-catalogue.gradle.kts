@@ -12,35 +12,41 @@ val callFramesSourceDir: File = generateSequence(projectDir) { it.parentFile }
     .map { File(it, "packages/shared/design/call-capture-frames") }
     .first { it.isDirectory }
 
-val callFramesOutputDir = layout.buildDirectory.dir("generated/callframes")
 
-fun kotlinLiteral(text: String): String = buildString {
-    append('"')
-    for (c in text) {
-        when {
-            c == '\\' -> append("\\\\")
-            c == '"' -> append("\\\"")
-            c == '$' -> append("\\$")
-            c == '\n' -> append("\\n")
-            c == '\r' -> append("\\r")
-            c == '\t' -> append("\\t")
-            c.code < 0x20 || c.code > 0x7e -> append("\\u").append(c.code.toString(16).padStart(4, '0'))
-            else -> append(c)
+abstract class GenerateCallFrameCatalogue : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceDir: DirectoryProperty
+
+    @get:Input
+    abstract val moods: ListProperty<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    private fun kotlinLiteral(text: String): String = buildString {
+        append('"')
+        for (c in text) {
+            when {
+                c == '\\' -> append("\\\\")
+                c == '"' -> append("\\\"")
+                c == '$' -> append("\\$")
+                c == '\n' -> append("\\n")
+                c == '\r' -> append("\\r")
+                c == '\t' -> append("\\t")
+                c.code < 0x20 || c.code > 0x7e -> append("\\u").append(c.code.toString(16).padStart(4, '0'))
+                else -> append(c)
+            }
         }
+        append('"')
     }
-    append('"')
-}
 
-val generateCallFrameCatalogue = tasks.register("generateCallFrameCatalogue") {
-    group = "build"
-    description = "Génère CallFrameCatalogueGenerated.kt depuis les JSON partagés des cadres d'appel."
-    inputs.dir(callFramesSourceDir)
-    outputs.dir(callFramesOutputDir)
-    doLast {
-        val out = File(callFramesOutputDir.get().asFile, "me/meeshy/sdk/model/call/frames/CallFrameCatalogueGenerated.kt")
+    @TaskAction
+    fun generate() {
+        val out = File(outputDir.get().asFile, "me/meeshy/sdk/model/call/frames/CallFrameCatalogueGenerated.kt")
         out.parentFile.mkdirs()
-        val entries = callFrameMoods.joinToString(",\n") { mood ->
-            val file = File(callFramesSourceDir, "$mood.json")
+        val entries = moods.get().joinToString(",\n") { mood ->
+            val file = File(sourceDir.get().asFile, "$mood.json")
             require(file.isFile) { "ambiance sans fichier : $file" }
             "        ${kotlinLiteral(mood)} to ${kotlinLiteral(file.readText(Charsets.UTF_8))}"
         }
@@ -54,4 +60,12 @@ val generateCallFrameCatalogue = tasks.register("generateCallFrameCatalogue") {
             Charsets.UTF_8,
         )
     }
+}
+
+val generateCallFrameCatalogue = tasks.register<GenerateCallFrameCatalogue>("generateCallFrameCatalogue") {
+    group = "build"
+    description = "Génère CallFrameCatalogueGenerated.kt depuis les JSON partagés des cadres d'appel."
+    sourceDir.set(callFramesSourceDir)
+    moods.set(callFrameMoods)
+    outputDir.set(layout.buildDirectory.dir("generated/callframes"))
 }

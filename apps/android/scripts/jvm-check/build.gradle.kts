@@ -19,7 +19,7 @@ apply(from = rootDir.resolve("../../gradle/call-frames-catalogue.gradle.kts"))
 sourceSets {
     main {
         kotlin.srcDirs(module.resolve("src/main/kotlin"))
-        kotlin.srcDir(files(layout.buildDirectory.dir("generated/callframes")).builtBy("generateCallFrameCatalogue"))
+        kotlin.srcDir(tasks.named("generateCallFrameCatalogue").flatMap { it.property("outputDir") as org.gradle.api.file.DirectoryProperty })
     }
     test { kotlin.srcDirs(module.resolve("src/test/kotlin")) }
 }

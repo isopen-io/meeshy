@@ -33,9 +33,14 @@ android {
     }
 }
 
-android.sourceSets.getByName("main").java.srcDir(
-    files(layout.buildDirectory.dir("generated/callframes")).builtBy("generateCallFrameCatalogue"),
-)
+androidComponents {
+    onVariants { variant ->
+        variant.sources.kotlin?.addGeneratedSourceDirectory(
+            tasks.named<Task>("generateCallFrameCatalogue"),
+            { task: Task -> task.property("outputDir") as org.gradle.api.file.DirectoryProperty },
+        )
+    }
+}
 
 dependencies {
     api(libs.kotlinx.serialization.json)
