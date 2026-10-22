@@ -286,6 +286,7 @@ final class ConversationLinkCardViewModelTests: XCTestCase {
         NotificationCenter.default.post(name: ConversationCardChange.notification,
                                         object: ConversationCardChange(conversationId: "c1", origin: .shareLink(identifier: "abc")))
         await waitUntil { service.refreshCount == 1 }
+        withExtendedLifetime(sut) {}
     }
 
     // MARK: - « Rejoindre ? Anonyme / Mon compte » (#8726)

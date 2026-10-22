@@ -170,10 +170,22 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** The extension points with nothing registered — the core call, as it was before they existed. */
+    private val extensions = CallExtensionPoints(
+        controllers = CallFeatureControllerRegistry(emptySet()),
+        overlays = CallOverlayRegistry(emptySet()),
+        actions = CallActionDispatcher(emptyMap()),
+        toasts = CallToastBus(clock),
+        videoHealth = NoopCallVideoHealth(),
+    )
+
     private fun vm() = CallViewModel(
-        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock, reconnectBudget,
-        connectingWatchdog,
+        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, appStatePresence,
+        CallPeerIndicatorsController(signalManager, qualityResetTimer, screenRecordingDetector),
+        CallWaitingController(signalManager, waitingTimer),
+        CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
+        CallAnalyticsController(signalManager, clock),
+        extensions,
     )
 
     @Test
@@ -1026,7 +1038,7 @@ class CallViewModelTest {
     fun `the timer reads 0 00 the instant the call connects`() {
         val vm = vm().connect()
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:00")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:00")
     }
 
     @Test
@@ -1035,20 +1047,20 @@ class CallViewModelTest {
 
         tick(3)
 
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:03")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:03")
     }
 
     @Test
     fun `the timer keeps counting through a reconnect`() = runTest {
         val vm = vm().connect()
         tick(2)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:02")
 
         vm.onSignal(CallEvent.ConnectionStalled)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
 
         tick(2)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:04")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:04")
     }
 
     @Test
@@ -1058,10 +1070,10 @@ class CallViewModelTest {
 
         vm.onSignal(CallEvent.RemoteHangUp)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:02")
 
         tick(5)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:02")
     }
 
     @Test
@@ -1083,7 +1095,7 @@ class CallViewModelTest {
         assertThat(first.state.value.status).isEqualTo(CallStatus.IDLE)
 
         first.connect()
-        assertThat(first.state.value.durationLabel).isEqualTo("0:00")
+        assertThat(first.state.value.durationLabel).isEqualTo("00:00")
     }
 
     // --- live connection-quality indicator ---------------------------------
