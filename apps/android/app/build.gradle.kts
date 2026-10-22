@@ -11,7 +11,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "me.meeshy.app"
+        applicationId = "me.meeshy.android"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

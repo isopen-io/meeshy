@@ -20,7 +20,7 @@ fi
 ADB="$ANDROID_HOME/platform-tools/adb"
 EMULATOR_BIN="$ANDROID_HOME/emulator/emulator"
 AVD="${MEESHY_AVD:-meeshy_pixel8}"
-APP_ID="me.meeshy.app.debug"
+APP_ID="me.meeshy.android.debug"
 LAUNCH_COMPONENT="$APP_ID/me.meeshy.app.MainActivity"
 
 device_ready() {
@@ -55,6 +55,8 @@ case "$CMD" in
   lint)     ./gradlew :app:lintDebug "$@" ;;
   check)    ./gradlew assembleDebug testDebugUnitTest "$@" ;;
   clean)    ./gradlew clean "$@" ;;
+  jvm-check) GRADLE_BIN="$(command -v gradle || echo ./gradlew)"
+            LANG=C.utf8 LC_ALL=C.utf8 "$GRADLE_BIN" -p scripts/jvm-check test --console=plain "$@" ;;
   emulator) boot_emulator ;;
   devices)  "$ADB" devices -l ;;
   install)  boot_emulator; ./gradlew :app:installDebug "$@" ;;
