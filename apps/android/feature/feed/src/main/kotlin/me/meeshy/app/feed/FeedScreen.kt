@@ -57,6 +57,7 @@ fun FeedScreen(
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    FeedMediaPrefetchEffect(listState = listState, posts = state.posts)
     var composerDraft by remember { mutableStateOf<FeedComposerDraft?>(null) }
 
     LaunchedEffect(state.errorMessage) {
