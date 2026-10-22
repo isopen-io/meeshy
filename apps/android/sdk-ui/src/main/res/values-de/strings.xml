@@ -38,7 +38,7 @@
     <string name="bubble_file_size_kb">%1$s KB</string>
     <string name="bubble_file_size_mb">%1$s MB</string>
     <string name="image_viewer_close">Schließen</string>
-    <string name="image_viewer_save">In Galerie speichern</string>
+    <string name="image_viewer_save">In der Galerie sichern</string>
     <string name="bubble_blur_tap_to_reveal">Zum Anzeigen tippen</string>
     <string name="bubble_blur_view_once">Einmal ansehen</string>
     <string name="bubble_blur_reveal_action">Verborgene Nachricht anzeigen</string>

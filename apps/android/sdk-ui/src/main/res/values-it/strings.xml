@@ -6,7 +6,7 @@
     <string name="bubble_forwarded_from">Inoltrato da %1$s</string>
     <string name="bubble_starred">Preferito</string>
     <string name="bubble_translated">Tradotto</string>
-    <string name="bubble_status_pending">In sospeso</string>
+    <string name="bubble_status_pending">In attesa</string>
     <string name="bubble_status_queued">In coda</string>
     <string name="bubble_status_sent">Inviato</string>
     <string name="bubble_status_delivered">Consegnato</string>
@@ -23,7 +23,7 @@
     <string name="bubble_attachment_file_fallback">File</string>
     <string name="bubble_file_open">Apri file</string>
     <string name="bubble_location_shared">Posizione condivisa</string>
-    <string name="bubble_location_open">Apri nelle mappe</string>
+    <string name="bubble_location_open">Apri in Mappe</string>
     <string name="live_location_sharing_by">%1$s sta condividendo la posizione</string>
     <string name="live_location_remaining">%1$s rimanenti</string>
     <string name="live_location_stop">Interrompi</string>
@@ -49,7 +49,7 @@
     <string name="emoji_picker_expand">Altre emoji</string>
     <string name="emoji_react_with">Reagisci con %1$s</string>
     <string name="emoji_category_reactions">Reazioni</string>
-    <string name="emoji_category_faces">Facce</string>
+    <string name="emoji_category_faces">Volti</string>
     <string name="emoji_category_gestures">Gesti</string>
     <string name="emoji_category_hearts">Cuori</string>
     <string name="emoji_category_animals">Animali</string>
@@ -78,6 +78,6 @@
     <string name="bubble_a11y_location">Posizione condivisa</string>
     <string name="bubble_a11y_file">File %1$s</string>
     <string name="bubble_a11y_pinned">Fissato</string>
-    <string name="bubble_a11y_ephemeral">Messaggio a distruzione automatica</string>
+    <string name="bubble_a11y_ephemeral">Messaggio a autodistruzione</string>
     <string name="bubble_a11y_reactions">Reazioni: %1$s</string>
 </resources>
