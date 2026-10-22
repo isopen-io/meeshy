@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Source unique des libellés de média (lot media-vocabulaire-partage). -->
+    <string name="media_label_photo">صورة</string>
+    <string name="media_label_video">فيديو</string>
+    <string name="media_label_audio">صوت</string>
+    <string name="media_label_file">ملف</string>
+    <string name="media_label_location">الموقع</string>
+    <string name="media_summary_photo">📷 صورة</string>
+    <string name="media_summary_video">🎥 فيديو</string>
+    <string name="media_summary_voice">🎙️ رسالة صوتية</string>
+    <string name="media_summary_file">📎 ملف</string>
+    <string name="media_summary_location">📍 الموقع</string>
+    <string name="media_voice_message">رسالة صوتية</string>
+    <string name="media_voice_recording">رسالة صوتية (%1$s)</string>
+    <plurals name="media_duration_minutes">
+        <item quantity="zero">%d دقيقة</item>
+        <item quantity="one">دقيقة واحدة</item>
+        <item quantity="two">دقيقتان</item>
+        <item quantity="few">%d دقائق</item>
+        <item quantity="many">%d دقيقة</item>
+        <item quantity="other">%d دقيقة</item>
+    </plurals>
+    <plurals name="media_duration_seconds">
+        <item quantity="zero">%d ثانية</item>
+        <item quantity="one">ثانية واحدة</item>
+        <item quantity="two">ثانيتان</item>
+        <item quantity="few">%d ثوانٍ</item>
+        <item quantity="many">%d ثانية</item>
+        <item quantity="other">%d ثانية</item>
+    </plurals>
+    <string name="media_composer_placeholder_message">رسالة...</string>
+    <string name="media_composer_placeholder_post">ما الجديد؟</string>
+    <string name="media_composer_placeholder_status">حالتك...</string>
+    <string name="media_composer_placeholder_story">رد...</string>
+    <string name="media_composer_placeholder_comment">تعليق...</string>
+    <string name="media_composer_placeholder_caption">أضف تعليقًا...</string>
+</resources>
