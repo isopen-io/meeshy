@@ -3,7 +3,7 @@ package me.meeshy.sdk.model.composer.capture
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.composer.capture.CaptureAction.*
 import me.meeshy.sdk.model.composer.capture.CaptureGestureKind.*
-import me.meeshy.sdk.model.composer.capture.CaptureZone.*
+import me.meeshy.sdk.model.composer.capture.CaptureGestureZone.*
 import org.junit.Test
 
 class CaptureGestureTest {
@@ -18,7 +18,7 @@ class CaptureGestureTest {
         frame: Boolean = true,
     ) = CaptureGestureContext(stage, editing, holding, locked, pending, photo, video, frame)
 
-    private fun act(z: CaptureZone, g: CaptureGestureKind, c: CaptureGestureContext = ctx()) = CaptureGesture.action(z, g, c)
+    private fun act(z: CaptureGestureZone, g: CaptureGestureKind, c: CaptureGestureContext = ctx()) = CaptureGesture.action(z, g, c)
 
     @Test
     fun `scene table armed`() {
@@ -88,7 +88,7 @@ class CaptureGestureTest {
 
     @Test
     fun `stage off answers nothing`() {
-        CaptureZone.values().forEach { z ->
+        CaptureGestureZone.values().forEach { z ->
             CaptureGestureKind.values().forEach { g -> assertThat(act(z, g, ctx(stage = CaptureStage.OFF))).isEqualTo(NONE) }
         }
     }

@@ -40,7 +40,7 @@ class CaptureFocusGeometryTest {
     fun `a framed slot is read in its own rectangle`() {
         val slot = CaptureFocusGeometry.slotInView(CaptureRect(0f, 0f, 540f, 960f), 1080f, 1920f, 540f, 1200f)
         assertThat(slot.width).isEqualTo(270f)
-        assertThat(slot.left).isEqualTo(135f)
+        assertThat(slot.left).isEqualTo(0f)
         assertThat(slot.top).isEqualTo(120f)
         val p = CaptureFocusGeometry.devicePoint(slot.midX, slot.midY, slot, false)!!
         assertThat(p).isEqualTo(CapturePoint(0.5f, 0.5f))

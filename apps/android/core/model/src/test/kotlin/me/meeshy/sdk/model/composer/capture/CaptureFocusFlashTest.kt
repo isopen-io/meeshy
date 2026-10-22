@@ -78,7 +78,7 @@ class CaptureFocusFlashTest {
         assertThat(CaptureFlash.clamped(5.0)).isEqualTo(1.0)
         assertThat(CaptureFlash.clamped(Double.NaN)).isEqualTo(1.0)
         assertThat(CaptureFlash.level(0f, 100f)).isEqualTo(1.0)
-        assertThat(CaptureFlash.level(100f, 100f)).isEqualTo(0.3)
+        assertThat(CaptureFlash.level(100f, 100f)).isWithin(1e-9).of(0.3)
         assertThat(CaptureFlash.level(10f, 0f)).isEqualTo(1.0)
         assertThat(CaptureFlash.thumbPosition(1.0)).isEqualTo(0f)
         assertThat(CaptureFlash.thumbPosition(0.3)).isEqualTo(1f)

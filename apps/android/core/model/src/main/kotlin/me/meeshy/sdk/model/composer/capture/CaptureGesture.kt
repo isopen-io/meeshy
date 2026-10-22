@@ -1,6 +1,6 @@
 package me.meeshy.sdk.model.composer.capture
 
-enum class CaptureZone { SCENE, CHOSEN_THUMBNAIL, SHUTTER, OTHER_THUMBNAIL, RAIL }
+enum class CaptureGestureZone { SCENE, CHOSEN_THUMBNAIL, SHUTTER, OTHER_THUMBNAIL, RAIL }
 
 enum class CaptureGestureKind { TAP, DOUBLE_TAP, LONG_PRESS, PINCH, DRAG }
 
@@ -25,7 +25,7 @@ data class CaptureGestureContext(
     val frameChosen: Boolean = true,
 )
 
-data class CaptureLastTap(val zone: CaptureZone, val atMs: Long)
+data class CaptureLastTap(val zone: CaptureGestureZone, val atMs: Long)
 
 /** [memory] est nul quand le toucher a fini un double : un troisième en ouvre un nouveau. */
 data class CaptureTapOutcome(val action: CaptureAction, val consumedDouble: Boolean, val memory: CaptureLastTap?)
@@ -33,30 +33,30 @@ data class CaptureTapOutcome(val action: CaptureAction, val consumedDouble: Bool
 /** La table des gestes de la capture : zone x geste x phase x verrou -> action (miroir de `ComposerCaptureGesture`). */
 object CaptureGesture {
 
-    fun action(zone: CaptureZone, gesture: CaptureGestureKind, context: CaptureGestureContext): CaptureAction {
+    fun action(zone: CaptureGestureZone, gesture: CaptureGestureKind, context: CaptureGestureContext): CaptureAction {
         if (context.editing) return editing(zone, gesture)
         if (context.stage == CaptureStage.OFF) return CaptureAction.NONE
         return when (zone) {
-            CaptureZone.SCENE -> scene(gesture, context)
-            CaptureZone.CHOSEN_THUMBNAIL -> chosen(gesture, context)
-            CaptureZone.SHUTTER -> shutter(gesture, context)
-            CaptureZone.OTHER_THUMBNAIL ->
+            CaptureGestureZone.SCENE -> scene(gesture, context)
+            CaptureGestureZone.CHOSEN_THUMBNAIL -> chosen(gesture, context)
+            CaptureGestureZone.SHUTTER -> shutter(gesture, context)
+            CaptureGestureZone.OTHER_THUMBNAIL ->
                 if (gesture == CaptureGestureKind.TAP && !lookIsLocked(context)) CaptureAction.SELECT else CaptureAction.NONE
-            CaptureZone.RAIL ->
+            CaptureGestureZone.RAIL ->
                 if (gesture == CaptureGestureKind.TAP && !lookIsLocked(context)) CaptureAction.OPEN_FAMILY else CaptureAction.NONE
         }
     }
 
     /** Un rail qu'on ne peut pas ouvrir n'est pas montré. */
     fun offersRail(context: CaptureGestureContext): Boolean =
-        action(CaptureZone.RAIL, CaptureGestureKind.TAP, context) == CaptureAction.OPEN_FAMILY
+        action(CaptureGestureZone.RAIL, CaptureGestureKind.TAP, context) == CaptureAction.OPEN_FAMILY
 
     /**
      * Un toucher lu par la règle du porteur. Le second toucher d'un double sur un DÉCLENCHEUR est
      * absorbé (le premier a déjà photographié) : jamais deux photos d'un double.
      */
     fun tap(
-        zone: CaptureZone,
+        zone: CaptureGestureZone,
         context: CaptureGestureContext,
         nowMs: Long,
         lastTap: CaptureLastTap?,
@@ -74,24 +74,24 @@ object CaptureGesture {
     }
 
     /** Les équivalents TalkBack : chaque zone offre ses prises en actions nommées, projetées de la table. */
-    fun accessibilityActions(zone: CaptureZone, context: CaptureGestureContext): List<CaptureAction> {
+    fun accessibilityActions(zone: CaptureGestureZone, context: CaptureGestureContext): List<CaptureAction> {
         if (context.editing || context.stage == CaptureStage.OFF) return emptyList()
         val armed = context.stage == CaptureStage.ARMED
         return when (zone) {
-            CaptureZone.SCENE ->
+            CaptureGestureZone.SCENE ->
                 if (!armed) listOf(CaptureAction.STOP_TAKE, CaptureAction.FOCUS)
                 else listOf(
                     action(zone, CaptureGestureKind.DOUBLE_TAP, context),
                     action(zone, CaptureGestureKind.LONG_PRESS, context),
                     CaptureAction.FOCUS,
                 ).filter { it != CaptureAction.NONE }
-            CaptureZone.CHOSEN_THUMBNAIL, CaptureZone.SHUTTER ->
+            CaptureGestureZone.CHOSEN_THUMBNAIL, CaptureGestureZone.SHUTTER ->
                 if (!armed) listOf(CaptureAction.STOP_TAKE)
                 else listOf(
                     action(zone, CaptureGestureKind.TAP, context),
                     action(zone, CaptureGestureKind.LONG_PRESS, context),
                 ).filter { it != CaptureAction.NONE }
-            CaptureZone.OTHER_THUMBNAIL, CaptureZone.RAIL -> emptyList()
+            CaptureGestureZone.OTHER_THUMBNAIL, CaptureGestureZone.RAIL -> emptyList()
         }
     }
 
@@ -146,11 +146,11 @@ object CaptureGesture {
         CaptureGestureKind.DRAG -> if (c.holding) CaptureAction.STEER_TAKE else CaptureAction.NONE
     }
 
-    private fun editing(zone: CaptureZone, gesture: CaptureGestureKind): CaptureAction = when {
-        zone == CaptureZone.SCENE && (gesture == CaptureGestureKind.DRAG || gesture == CaptureGestureKind.PINCH) -> CaptureAction.REFRAME
-        zone == CaptureZone.SCENE && gesture == CaptureGestureKind.TAP -> CaptureAction.TOGGLE_EDIT_CHROME
-        zone == CaptureZone.OTHER_THUMBNAIL && gesture == CaptureGestureKind.TAP -> CaptureAction.SELECT
-        zone == CaptureZone.RAIL && gesture == CaptureGestureKind.TAP -> CaptureAction.OPEN_FAMILY
+    private fun editing(zone: CaptureGestureZone, gesture: CaptureGestureKind): CaptureAction = when {
+        zone == CaptureGestureZone.SCENE && (gesture == CaptureGestureKind.DRAG || gesture == CaptureGestureKind.PINCH) -> CaptureAction.REFRAME
+        zone == CaptureGestureZone.SCENE && gesture == CaptureGestureKind.TAP -> CaptureAction.TOGGLE_EDIT_CHROME
+        zone == CaptureGestureZone.OTHER_THUMBNAIL && gesture == CaptureGestureKind.TAP -> CaptureAction.SELECT
+        zone == CaptureGestureZone.RAIL && gesture == CaptureGestureKind.TAP -> CaptureAction.OPEN_FAMILY
         else -> CaptureAction.NONE
     }
 }
