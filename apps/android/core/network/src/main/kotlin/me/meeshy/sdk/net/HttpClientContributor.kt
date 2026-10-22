@@ -39,6 +39,7 @@ object HttpPriority {
     const val ENDPOINT_POLICY = 200
     const val RETRY = 300
     const val AUTH = 1_000
+    const val CLIENT_INFO = 1_050
     const val CLIENT_CAPABILITIES = 1_100
     const val DEVICE_LOCALE = 1_200
     const val AUTH_EXPIRY = 1_300
