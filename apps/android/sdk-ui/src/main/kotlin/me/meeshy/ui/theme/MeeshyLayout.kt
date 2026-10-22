@@ -14,6 +14,9 @@ import androidx.compose.ui.unit.dp
 public object MeeshyLayout {
     /** The column of a form: sign-in, sign-up, password, two-factor. */
     public val formMaxWidth: Dp = 600.dp
+
+    /** The column of reading content: feeds, profiles, detail screens on a tablet. */
+    public val contentMaxWidth: Dp = 700.dp
 }
 
 /**
@@ -29,6 +32,18 @@ public object MeeshyLayout {
  * own gutters.
  */
 public fun Modifier.formColumnWidth(maxWidth: Dp = MeeshyLayout.formMaxWidth): Modifier =
+    centeredColumn(maxWidth)
+
+/**
+ * Lays reading content out in a centered column of at most [maxWidth] (700dp, iOS
+ * `MeeshyLayout.contentMaxWidth`) — the same mechanism as [formColumnWidth], for
+ * screens that read rather than ask: wider than a form, still bounded on a tablet,
+ * a no-op on a phone.
+ */
+public fun Modifier.contentColumnWidth(maxWidth: Dp = MeeshyLayout.contentMaxWidth): Modifier =
+    centeredColumn(maxWidth)
+
+private fun Modifier.centeredColumn(maxWidth: Dp): Modifier =
     this
         .fillMaxWidth()
         .wrapContentWidth(Alignment.CenterHorizontally)
