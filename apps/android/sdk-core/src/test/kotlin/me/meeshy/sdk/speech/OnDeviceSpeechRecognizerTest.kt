@@ -44,6 +44,8 @@ class OnDeviceSpeechRecognizerTest {
         }
     }
 
+    private var now = 0L
+
     private fun recognizer(
         factory: FakeFactory,
         permitted: Boolean = true,
@@ -55,7 +57,7 @@ class OnDeviceSpeechRecognizerTest {
         microphonePermitted = { permitted },
         microphoneClaim = MicrophoneClaim { callHoldsMic },
         sdkInt = sdkInt,
-        clock = { 2_000L },
+        clock = { now.also { now += 3_000L } },
     )
 
     private fun results(text: String, confidence: Float): Bundle = Bundle().apply {
