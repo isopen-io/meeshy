@@ -131,7 +131,7 @@ object LanguageData {
      * The codes shipped as interface (UI-chrome) languages, in display order. Derived
      * view over [allLanguages] so every language's metadata lives in exactly one place.
      */
-    val interfaceLanguageCodes: List<String> = listOf("fr", "en", "es", "ar")
+    val interfaceLanguageCodes: List<String> = listOf("fr", "en", "es", "de", "it", "ar")
 
     /** UI-only interface languages, derived from [allLanguages] (no hand-copied drift). */
     val interfaceLanguages: List<LanguageInfo> =

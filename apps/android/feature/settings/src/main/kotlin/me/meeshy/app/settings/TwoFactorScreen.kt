@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -151,7 +152,11 @@ private fun StatusContent(state: TwoFactorUiState, viewModel: TwoFactorViewModel
                 )
                 if (state.isEnabled) {
                     Text(
-                        text = stringResource(R.string.twofactor_backup_codes_remaining, state.backupCodesCount),
+                        text = pluralStringResource(
+                            R.plurals.twofactor_backup_codes_remaining,
+                            state.backupCodesCount,
+                            state.backupCodesCount,
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MeeshyTheme.tokens.textMuted,
                     )

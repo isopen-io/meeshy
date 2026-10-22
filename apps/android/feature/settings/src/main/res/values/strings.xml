@@ -38,7 +38,6 @@
     <string name="settings_version">Version 1.0.0</string>
     <!-- Two-factor authentication (§L) -->
     <string name="twofactor_status_enabled">Enabled</string>
-    <string name="twofactor_backup_codes_remaining">%1$d backup codes remaining</string>
     <string name="twofactor_enable_button">Set up two-factor authentication</string>
     <string name="twofactor_regenerate_button">Regenerate backup codes</string>
     <string name="twofactor_setup_title">Scan the QR code</string>
@@ -90,8 +89,6 @@
     <string name="data_export_format_csv">CSV</string>
     <string name="data_export_content_profile">Profile (always included)</string>
     <string name="data_export_ready_title">Export ready</string>
-    <string name="data_export_ready_messages">%1$d messages included</string>
-    <string name="data_export_ready_contacts">%1$d contacts included</string>
 
     <!-- Media cache management -->
     <string name="media_cache_info_title">Cached media</string>

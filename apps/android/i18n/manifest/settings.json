@@ -671,12 +671,6 @@
           "status": "candidate"
         },
         {
-          "catalog": "app",
-          "iosKey": "legal.privacy.lastUpdated.en",
-          "androidName": "legal_privacy_last_updated",
-          "status": "candidate"
-        },
-        {
           "androidName": "legal_privacy_retention_body",
           "status": "android-only"
         },
@@ -715,7 +709,7 @@
           "status": "android-only"
         },
         {
-          "androidName": "legal_terms_last_updated",
+          "androidName": "legal_last_updated",
           "status": "android-only"
         },
         {
