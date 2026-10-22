@@ -87,7 +87,7 @@ private fun stringResourceTitle() =
 
 @Composable
 private fun countLabel(count: Int) =
-    androidx.compose.ui.res.stringResource(R.string.stories_viewers_count, count)
+    androidx.compose.ui.res.pluralStringResource(R.plurals.stories_viewers_count, count, count)
 
 @Composable
 private fun loadingLabel() =
