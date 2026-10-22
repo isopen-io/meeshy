@@ -113,6 +113,6 @@ describe('vite/pwa.ts — le service worker généré importe la purge', () => {
 
   test('`importScripts` et le retrait de la coque lisent cette liste, pas une copie', () => {
     expect(config).toContain('importScripts: [...SERVICE_WORKER_SCRIPTS]');
-    expect(config).toMatch(/for \(const name of SERVICE_WORKER_SCRIPTS\)/);
+    expect(config).toMatch(/for \(const name of SERVICE_WORKER_SCRIPTS\b/);
   });
 });

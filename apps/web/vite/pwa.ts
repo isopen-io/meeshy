@@ -36,13 +36,23 @@ import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from '../src/lib/sw-cac
  *    déjà toute la charge web (`PushNotificationService`, branche
  *    `platform === 'web'`). Une SEULE ligne l'accroche aux deux régimes :
  *    l'`importScripts` de la variante A, et son retrait de la coque ;
+ *  - `sw-recent-media.js` resert, plages comprises, l'audio et la vidéo vus
+ *    récemment que la page a rangés ENTIERS (#11326) ;
  *  - `sw-share-target.js` reçoit le `POST /share` du système (#8884) : une
  *    image, une vidéo ou un lien partagé depuis une autre application arrive
  *    sur la feuille d'envoi. Le `share_target` du manifeste (plus bas) l'y
  *    adresse ; la coque Android reçoit le même partage par un intent, pas par
  *    ce worker.
  */
-export const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js', 'sw-share-target.js'] as const;
+export const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js', 'sw-share-target.js', 'sw-recent-media.js'] as const;
+
+/**
+ * LE SEUL SCRIPT QUE LA COQUE GARDE (#11326) : `sw-recent-media.js` resert
+ * l'audio et la vidéo vus récemment, plages comprises. La coque l'inscrit SEUL
+ * (`lib/shell/recent-media-worker.ts`) — il ne précache rien du bundle, donc
+ * ne concurrence pas la coque sur son cycle de vie.
+ */
+export const SHELL_SERVICE_WORKER_SCRIPTS: readonly string[] = ['sw-recent-media.js'];
 
 /**
  * LES SCRIPTS DU SERVICE WORKER N'ENTRENT PAS DANS LA COQUE (#5604,
@@ -63,7 +73,9 @@ export const dropServiceWorkerScripts = (): Plugin => ({
   apply: 'build',
   writeBundle(options) {
     if (options.dir === undefined) return;
-    for (const name of SERVICE_WORKER_SCRIPTS) rmSync(join(options.dir, name), { force: true });
+    for (const name of SERVICE_WORKER_SCRIPTS.filter((script) => !SHELL_SERVICE_WORKER_SCRIPTS.includes(script))) {
+      rmSync(join(options.dir, name), { force: true });
+    }
   },
 });
 
@@ -229,6 +241,7 @@ export function meeshyPwa(): PluginOption {
         'sw-legacy-purge.js',
         'sw-push.js',
         'sw-share-target.js',
+        'sw-recent-media.js',
         'assets/*.woff2',
         /* Le flou d'arrière-plan par segmentation (#8471) : MediaPipe
            et son chargeur WebAssembly ne se téléchargent qu'au premier
@@ -420,7 +433,12 @@ export function meeshyPwa(): PluginOption {
            videraient par éviction le seau qu'on vient de réserver aux
            avatars et aux scènes. Le jour où un vocal doit s'écouter
            hors ligne, il lui faudra son PROPRE seau, avec son propre
-           plafond et son `rangeRequests` — pas une ligne de plus ici. */
+           plafond et son `rangeRequests` — pas une ligne de plus ici.
+           CE SEAU EXISTE (#11326) : `recent-media`, HORS de cette liste.
+           La page y range le fichier ENTIER d'un média vu, sur le Wi-Fi,
+           après coup — jamais avant la première image ; le script importé
+           `sw-recent-media.js` y découpe les plages, et ne sert que ce qui
+           s'y trouve. */
       ],
     },
   });

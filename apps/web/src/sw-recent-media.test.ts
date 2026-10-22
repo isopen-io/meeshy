@@ -135,3 +135,21 @@ describe('sw-recent-media.js — les plages servies depuis le seau « récents �
     expect(await worker.dispatch(media('image'))).toBeUndefined();
   });
 });
+
+describe('vite/pwa.ts — un script, deux régimes (#11326)', () => {
+  test('le worker du web l’importe', async () => {
+    const { SERVICE_WORKER_SCRIPTS } = await import('../vite/pwa');
+    expect(SERVICE_WORKER_SCRIPTS).toContain('sw-recent-media.js');
+  });
+
+  test('la coque le GARDE quand elle retire les autres scripts du worker', async () => {
+    const { mkdtempSync, writeFileSync, readdirSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { SERVICE_WORKER_SCRIPTS, dropServiceWorkerScripts } = await import('../vite/pwa');
+    const dir = mkdtempSync(join(tmpdir(), 'shell-dist-'));
+    for (const name of SERVICE_WORKER_SCRIPTS) writeFileSync(join(dir, name), '');
+    const plugin = dropServiceWorkerScripts() as { writeBundle(options: { readonly dir?: string }): void };
+    plugin.writeBundle({ dir });
+    expect(readdirSync(dir)).toEqual(['sw-recent-media.js']);
+  });
+});
