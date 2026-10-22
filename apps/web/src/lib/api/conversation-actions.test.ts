@@ -296,3 +296,44 @@ describe("performRowAction('read') 2xx — le fil rouvert ne remet pas de sépar
     });
   });
 });
+
+describe('performRowAction — le geste dit son issue (notify)', () => {
+  const run = async (action: 'pin' | 'mute' | 'archive' | 'read', c: Conversation, status: number) => {
+    const events: unknown[] = [];
+    const transport = createHttpTransport({ base: '', fetchImpl: fakeFetch({ status, body: { success: status < 300, data: {} } }) });
+    await performRowAction({
+      conversationId: c.id,
+      action,
+      deps: { source: 'gateway', transport, store: freshStore(), queryClient: seededClient([c]), notify: (event) => events.push(event) },
+    });
+    return events;
+  };
+
+  test('épingler : l’état NOUVEAU est annoncé tout de suite, puis rien si le serveur confirme', async () => {
+    const events = await run('pin', conversation({ id: 'c1', userPreferences: [{ isPinned: false }] }), 200);
+    expect(events).toEqual([{ kind: 'applied', action: 'pin', on: true }]);
+  });
+
+  test('désactiver la sourdine : on vaut false', async () => {
+    const events = await run('mute', conversation({ id: 'c1', userPreferences: [{ isMuted: true }] }), 200);
+    expect(events).toEqual([{ kind: 'applied', action: 'mute', on: false }]);
+  });
+
+  test('un refus 4xx défait l’override ET le dit, au lieu de rendre la rangée muette', async () => {
+    const events = await run('archive', conversation({ id: 'c1', userPreferences: [{ isArchived: false }] }), 403);
+    expect(events).toEqual([
+      { kind: 'applied', action: 'archive', on: true },
+      { kind: 'refused', action: 'archive' },
+    ]);
+  });
+
+  test('une panne réseau garde l’override : rien n’est annoncé en échec', async () => {
+    const events = await run('pin', conversation({ id: 'c1', userPreferences: [{ isPinned: false }] }), 503);
+    expect(events).toEqual([{ kind: 'applied', action: 'pin', on: true }]);
+  });
+
+  test('lu / non lu : on vaut true quand la rangée devient lue', async () => {
+    const events = await run('read', conversation({ id: 'c1', unreadCount: 2 }), 200);
+    expect(events).toEqual([{ kind: 'applied', action: 'read', on: true }]);
+  });
+});

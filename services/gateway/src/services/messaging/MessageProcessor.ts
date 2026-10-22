@@ -9,6 +9,7 @@ import { copiedAttachmentFields } from './copiedAttachmentFields';
 import { exitProtectedCopy } from './copyExitProtection';
 import type { ForwardImposition } from './forwardAdmission';
 import { declaredReplyProtection } from './replyProtectionContagion';
+import { assertPlaintextAdmitted, type EncryptionRegime } from './e2eePlaintextAdmission';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
@@ -165,7 +166,8 @@ export class MessageProcessor {
   async getEncryptionContext(
     conversationId: string,
     content: string,
-    messageType: string
+    messageType: string,
+    knownRegime?: EncryptionRegime | null
   ): Promise<MessageEncryptionContext> {
     // System messages are NEVER encrypted
     if (messageType === 'system') {
@@ -177,15 +179,7 @@ export class MessageProcessor {
       };
     }
 
-    // Check if conversation has encryption enabled
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: {
-        encryptionMode: true,
-        encryptionEnabledAt: true,
-        serverEncryptionKeyId: true
-      }
-    });
+    const conversation = knownRegime === undefined ? await this.readEncryptionRegime(conversationId) : knownRegime;
 
     // No encryption enabled
     if (!conversation?.encryptionEnabledAt || !conversation.encryptionMode) {
@@ -199,9 +193,9 @@ export class MessageProcessor {
 
     const mode = conversation.encryptionMode as EncryptionMode;
 
-    // E2EE mode: encryption happens client-side
+    // E2EE : l'appareil chiffre ; un texte en clair est REFUSÉ, jamais écrit (#9224, #11216).
     if (mode === 'e2ee') {
-      logger.warn('[MessageProcessor] E2EE message received as plaintext - client should encrypt');
+      assertPlaintextAdmitted({ encryptionMode: mode, plaintext: content });
       return {
         isEncrypted: false,
         mode: 'e2ee',
@@ -269,6 +263,13 @@ export class MessageProcessor {
     }
   }
 
+  private readEncryptionRegime(conversationId: string): Promise<EncryptionRegime | null> {
+    return this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { encryptionMode: true, encryptionEnabledAt: true, serverEncryptionKeyId: true }
+    });
+  }
+
   /**
    * Sauvegarde du message en base avec toutes les relations
    * Handles encryption based on conversation settings.
@@ -328,6 +329,12 @@ export class MessageProcessor {
       senderId: data.senderId
     };
 
+    // #11216 — le régime est lu AVANT les liens : un clair refusé en e2ee ne
+    // laisse rien derrière lui, pas même un `TrackingLink` minté sur son URL.
+    const carriesCiphertext = Boolean(data.encryptedContent && data.encryptionMetadata);
+    const regime = carriesCiphertext ? null : await this.readEncryptionRegime(data.conversationId);
+    assertPlaintextAdmitted({ encryptionMode: regime?.encryptionMode, plaintext: data.content });
+
     // À qui appartiendront les liens de ce message : le `User.id` DERRIÈRE le
     // participant expéditeur, résolu UNE fois pour les deux chemins de tracking
     // (syntaxe explicite ci-dessous, URLs brutes plus bas). `Message.senderId`
@@ -357,7 +364,7 @@ export class MessageProcessor {
     // ÉTAPE 2: Get encryption context for this message
     let encryptionContext: MessageEncryptionContext;
 
-    if (data.encryptedContent && data.encryptionMetadata) {
+    if (carriesCiphertext) {
       const metadata = data.encryptionMetadata as Record<string, unknown>;
       encryptionContext = {
         isEncrypted: true,
@@ -371,7 +378,8 @@ export class MessageProcessor {
         () => this.getEncryptionContext(
           data.conversationId,
           processedContent.trim(),
-          data.messageType || 'text'
+          data.messageType || 'text',
+          regime
         ),
         corr
       );

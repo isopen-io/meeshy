@@ -16,11 +16,16 @@
  * Un bonus se paie UNE fois par seau, jamais multiplié, au compteur
  * `streak.bonus` et au score. Les séries d'acte et la fidélité sont un bonus :
  * une panne n'y fait jamais échouer le crédit qui les a déclenchées.
+ *
+ * Un palier qui atteint `abuse.heavyPoints` vaut au plus `abuse.unverifiedMaxPoints`
+ * pour un compte sans e-mail ni téléphone vérifié (#10422) — la borne des gros
+ * actes, portée aux trois horloges par `bonusPointsForAccount`. Le seau se
+ * consomme au montant payé : vérifier son contact plus tard ne rattrape rien.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { STREAK_THRESHOLDS, streakMilestoneKey } from '@meeshy/shared/types/engagement';
-import type { EngagementScale } from '@meeshy/shared/types/engagement-scale';
+import { bonusPointsForAccount, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import {
   crossedStreakTiers,
@@ -58,9 +63,14 @@ export type StreakCredit = {
   /** Le jour civil du compte (`YYYY-MM-DD`). */
   readonly today: string;
   readonly timezone: string | null;
+  /** Un e-mail ou un téléphone vérifié — ce qui ouvre un palier de gros poids en entier (#10422). */
+  readonly verified: boolean;
   readonly postType?: EngagementStreakPostType;
   readonly conversationId?: string;
 };
+
+/** Ce que le paiement d'un palier doit savoir du compte qu'il paie. */
+type BonusAccount = Pick<StreakCredit, 'scale' | 'userId' | 'verified'>;
 
 export class EngagementStreaks {
   private readonly acts: ActStreakRecorder;
@@ -77,7 +87,7 @@ export class EngagementStreaks {
 
   /** Les séries que ce crédit fait avancer, et les bonus qu'elles paient. */
   async afterCredit(credit: StreakCredit): Promise<void> {
-    const firstOfDay = await this.updateGlobal(credit.scale, credit.userId);
+    const firstOfDay = await this.updateGlobal(credit);
     await this.bestEffort('act streak', credit.userId, () => this.advanceAct(credit));
     if (firstOfDay) await this.bestEffort('loyalty', credit.userId, () => this.payLoyalty(credit));
   }
@@ -106,7 +116,8 @@ export class EngagementStreaks {
    *
    * Rend `true` quand la série vient d'être écrite — le premier crédit du jour.
    */
-  private async updateGlobal(scale: EngagementScale, userId: string): Promise<boolean> {
+  private async updateGlobal(credit: BonusAccount): Promise<boolean> {
+    const { scale, userId } = credit;
     // La transition est la LOI de la Flamme (`advanceFlame`, #9376) : un jour
     // manqué consomme un gel quand les gels les couvrent TOUS, sinon la Flamme
     // s'éteint — la série perdue est gardée pour le rallumage de 48 h.
@@ -124,7 +135,7 @@ export class EngagementStreaks {
     }
     const global = scale.streaks?.global ?? scale.streakBonuses;
     for (const tier of crossedStreakTiers(global, previousStreak, plan.streak)) {
-      await this.payBonus(userId, `streak:${tier.days}`, tier.points);
+      await this.payBonus(credit, `streak:${tier.days}`, tier.points);
     }
     await this.game.onStreak(userId, plan);
     return true;
@@ -142,7 +153,7 @@ export class EngagementStreaks {
     if (advance === null) return;
     const tiers = credit.scale.streaks?.acts[act] ?? [];
     for (const tier of crossedStreakTiers(tiers, advance.previousDays, advance.currentDays)) {
-      await this.payBonus(credit.userId, `streak:${act}:${tier.days}`, tier.points);
+      await this.payBonus(credit, `streak:${act}:${tier.days}`, tier.points);
     }
   }
 
@@ -156,15 +167,18 @@ export class EngagementStreaks {
       timezone: credit.timezone,
     });
     for (const tier of tiers) {
-      await this.payBonus(credit.userId, loyaltyBucket(tier.days), tier.points);
+      await this.payBonus(credit, loyaltyBucket(tier.days), tier.points);
     }
   }
 
   /**
    * La CONSTANCE paie (#8959) : un bonus de palier, une fois par seau, jamais
-   * multiplié, au compteur `streak.bonus` et au score.
+   * multiplié, au compteur `streak.bonus` et au score — au montant que le
+   * compte peut toucher (#10422), le seau consommé sur ce montant.
    */
-  private async payBonus(userId: string, bucket: string, points: number): Promise<void> {
+  private async payBonus(account: BonusAccount, bucket: string, tierPoints: number): Promise<void> {
+    const { userId } = account;
+    const points = bonusPointsForAccount({ points: tierPoints, verified: account.verified, abuse: account.scale.abuse });
     if (points <= 0) return;
     if (!(await this.quotas.claim(userId, STREAK_BONUS, bucket, 1))) return;
     await creditEngagementCounter(this.prisma, { userId, axisKey: STREAK_BONUS, points, count: 1 });

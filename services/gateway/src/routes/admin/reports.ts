@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { getReportService } from '../../services/admin/report.service';
 import { isNewlyResolvedReportTransition, notifyReportResolved } from '../../services/reports/reportResolvedNotification';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
@@ -24,6 +24,7 @@ import {
 } from './reports-schemas';
 import { reponsesEnErreur } from './oversight-schemas';
 import { adminViewer } from './oversight-viewer';
+import { refusedAsSelfModeration } from './report-self-moderation';
 
 const DEPUIS_REPORTS = '2026-08-29';
 
@@ -297,6 +298,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       if (!existingReport) {
         return sendNotFound(reply, 'Signalement non trouve');
       }
+      if (await refusedAsSelfModeration(fastify, request, reply, existingReport, { gesture: 'update' })) return;
 
       const report = await reportService.updateReport(id, moderatorId, body as UpdateReportDTO);
 
@@ -341,7 +343,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * reste le seuil juste, `canModerateContent`) mais « quel rapport entre
    * l'appelant et la CIBLE du signalement ? ». Sans garde, un modérateur
    * SIGNALÉ (reportedType === 'user', reportedEntityId === lui-même) pouvait
-   * effacer la preuve avant qu'un rang supérieur ne l'examine — `deleteReport`
+   * effacer la preuve avant qu'un rang supérieur ne l'examine — et, jusqu'à
+   * #10458, celui de SA publication ou de SON commentaire aussi : la garde lit
+   * désormais l'auteur du contenu signalé (`report-self-moderation.ts`), et
+   * vaut pour PATCH, DELETE et la prise en charge — `deleteReport`
    * est un DELETE Mongo définitif, pas une corbeille. Deux gestes séparés :
    * REFUSER l'auto-suppression, et laisser une trace `AdminAuditLog` pour
    * toute suppression qui a réellement lieu — la seule chose qui survit à la
@@ -352,16 +357,12 @@ export async function reportRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      const moderatorId = authContext.registeredUser.id;
 
       const report = await reportService.getReportById(id);
       if (!report) {
         return sendNotFound(reply, 'Signalement non trouve');
       }
-      if (report.reportedType === 'user' && report.reportedEntityId === moderatorId) {
-        return sendForbidden(reply, 'Un modérateur ne peut pas supprimer un signalement qui le vise');
-      }
+      if (await refusedAsSelfModeration(fastify, request, reply, report, { gesture: 'delete' })) return;
 
       await reportService.deleteReport(id);
 
@@ -431,6 +432,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       if (!existingReport) {
         return sendNotFound(reply, 'Signalement non trouve');
       }
+      if (await refusedAsSelfModeration(fastify, request, reply, existingReport, { gesture: 'assign' })) return;
 
       const report = await reportService.assignModerator(id, moderatorId);
 

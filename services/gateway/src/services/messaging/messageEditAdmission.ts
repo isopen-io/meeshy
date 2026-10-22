@@ -51,6 +51,11 @@ import {
   MINOR_GLOBAL_REFUSAL_MESSAGE,
   type ConversationTerminalStateRow,
 } from './conversationWriteAdmission.js';
+import {
+  E2EE_PLAINTEXT_REFUSAL_MESSAGE,
+  E2EE_PLAINTEXT_REFUSED,
+  isEndToEndMode,
+} from './e2eePlaintextAdmission.js';
 
 /**
  * L'état du conteneur que l'édition lit : son état TERMINAL, et son TYPE — la
@@ -61,6 +66,12 @@ import {
  */
 export type ConversationEditStateRow = ConversationTerminalStateRow & {
   readonly type: string | null | undefined;
+  /**
+   * #11216 — le régime de chiffrement, EXIGÉ pour la même raison que `type` :
+   * aucun transport d'édition ne porte de chiffré, donc une édition dans une
+   * conversation `e2ee` écrirait du clair à la place d'un message chiffré.
+   */
+  readonly encryptionMode: string | null | undefined;
 };
 
 /**
@@ -83,7 +94,9 @@ export type MessageEditRefusal =
   /** Le conteneur porte son état terminal — son contenu est gelé pour tous. */
   | 'conversation-closed'
   /** #9927 — l'éditeur est un mineur déclaré (13-17 ans) et le conteneur est Meeshy Global. */
-  | 'minor-global';
+  | 'minor-global'
+  /** #11216 — la conversation est chiffrée de bout en bout : le serveur n'écrit aucun clair. */
+  | 'end-to-end-encrypted';
 
 export type MessageEditAdmission =
   | {
@@ -259,6 +272,7 @@ export async function admitMessageEdit(
 
   if (!decision.admitted) return decision;
   if (isConversationClosed(params.message.conversation)) return REFUSE('conversation-closed');
+  if (isEndToEndMode(params.message.conversation?.encryptionMode)) return REFUSE('end-to-end-encrypted');
   if (await editorIsMinorInGlobal(params)) return REFUSE('minor-global');
 
   return decision;
@@ -293,9 +307,16 @@ export function describeEditRefusalForSocket(reason: MessageEditRefusal): string
       return 'You can no longer edit this message (24-hour limit exceeded)';
     case 'minor-global':
       return MINOR_GLOBAL_REFUSAL_MESSAGE;
+    case 'end-to-end-encrypted':
+      return E2EE_PLAINTEXT_REFUSAL_MESSAGE;
     default:
       return 'Message not found or you are not authorized to edit it';
   }
+}
+
+/** Le code STABLE d'un refus d'édition, quand il en a un — les transports le servent à côté de la phrase. */
+export function editRefusalCode(reason: MessageEditRefusal): string | undefined {
+  return reason === 'end-to-end-encrypted' ? E2EE_PLAINTEXT_REFUSED : undefined;
 }
 
 async function decideMessageEdit(

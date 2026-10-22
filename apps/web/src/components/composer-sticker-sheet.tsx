@@ -4,6 +4,7 @@ import type { ClipboardEvent as ReactClipboardEvent, DragEvent as ReactDragEvent
 
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import type { StickerDefinition, StickerOrigin } from '@meeshy/shared/types/sticker-definition';
+import { stickerPackText } from '@meeshy/shared/types/sticker-pack';
 import type { StickerPackDetail } from '@meeshy/shared/types/sticker-pack';
 
 import { GlyphSvg } from './glyph';
@@ -335,12 +336,13 @@ export function ComposerStickerSheet({
   );
 }
 
-/** Un pack porte son NOM, le même dans toutes les langues ; les onglets fixes se traduisent. */
+/** Un pack porte son nom dans la langue de l'interface (`stickerPackText`, #10189) ; les onglets fixes se traduisent. */
 const tabLabel = (tab: StickerTab, packs: readonly StickerPackDetail[], language: ReturnType<typeof currentInterfaceLanguage>): string => {
   if (tab === 'favorites') return translate(language, 'composer.sticker.tab.favorites');
   if (tab === 'mine') return translate(language, 'composer.sticker.tab.custom');
   if (tab === 'shop') return translateStickerPacks(language, 'stickerPacks.tab.shop');
-  return packs.find((pack) => pack.slug === tab)?.name ?? tab;
+  const pack = packs.find((candidate) => candidate.slug === tab);
+  return pack === undefined ? tab : stickerPackText(pack, language).name;
 };
 
 /** Les stickers de « Mes stickers » épinglés, dans l'ordre des favoris ; un sticker effacé est ignoré, jamais purgé. */

@@ -35,6 +35,17 @@ describe('la proposition', () => {
   });
 });
 
+describe('la reprise d’une photo gardée (#10166)', () => {
+  test('« la même photo » va droit à la frappe, dans le mode de la photo gardée, hors cadre', () => {
+    expect(run([{ type: 'same-photo', mode: 'selfie' }])).toEqual({ step: 'striking', mode: 'selfie', zone: 'outside' });
+    expect(run([{ type: 'same-photo', mode: 'gallery' }])).toEqual({ step: 'striking', mode: 'gallery', zone: 'outside' });
+  });
+  test('hors de la proposition, l’événement est ignoré', () => {
+    const opening: FlowState = { step: 'camera', camera: 'opening' };
+    expect(run([{ type: 'same-photo', mode: 'gallery' }], opening)).toEqual(opening);
+  });
+});
+
 describe('la caméra', () => {
   const opening: FlowState = { step: 'camera', camera: 'opening' };
 

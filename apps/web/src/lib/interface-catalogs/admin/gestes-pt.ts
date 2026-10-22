@@ -37,6 +37,7 @@ const f = {
   'admin.gesture.report.body': 'A ação e o encerramento da denúncia vão juntos; quem denunciou recebe uma resposta.',
   'admin.gesture.report.dismiss.body': 'O conteúdo continua no ar; quem denunciou recebe uma resposta.',
   'admin.gesture.report.done': 'Denúncia tratada.',
+  'admin.gesture.report.self': 'Esta denúncia visa o seu próprio conteúdo: outro moderador vai tratá-la.',
   'admin.gesture.preview.open': 'Pré-visualizar',
   'admin.gesture.preview.title': 'Pré-visualização da publicação',
   'admin.gesture.preview.previous': 'Publicação anterior',

@@ -5,7 +5,9 @@ import type { FrameAreas, FrameSlotBox } from './frame-layout';
 import { enterSlot, footprint, intersects, luminance, mix, photoRect, roundedRectPath, tint, type Surface2D } from './frame-paint-kit';
 import { shapeInnerRect, slotPath } from './frame-paint-shapes';
 import type { FrameBrand, FrameFont, FrameLook, FrameNames, FrameTitle } from './frame-spec';
-import { BRAND_WORD, fitText, listEntry, personLines, titleText, type FittedText, type FramePerson, type FrameTexts, type MeasureText } from './frame-text';
+import { fitText, type FittedText, type MeasureText } from '@/lib/canvas/text-fit';
+
+import { BRAND_WORD, listEntry, personLines, titleText, type FramePerson, type FrameTexts } from './frame-text';
 
 /**
  * **LES TEXTES D'UN CADRE** (#8743, spec § 4.5, § 5.2) — la signature

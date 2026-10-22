@@ -175,7 +175,7 @@ const f = {
   'admin.scale.loyalty.presetLabel': 'One year of loyalty',
   'admin.scale.big.warning': 'Tiers above 10,000 points: {count}. Check them before saving — nothing is blocked.',
   'admin.scale.abuse.title': 'Heavy-weight safeguards',
-  'admin.scale.abuse.intro': 'An operation worth at least the threshold credits only once per piece of content, gives its points back if the content is deleted within 30 days, and stays capped for an account with no verified email or phone. Interacting with your own content never earns anything.',
+  'admin.scale.abuse.intro': 'An operation worth at least the threshold credits only once per piece of content, gives its points back if the content is deleted within 30 days, and stays capped for an account with no verified email or phone. A streak or loyalty tier that reaches this threshold follows the same cap. Interacting with your own content never earns anything.',
   'admin.scale.abuse.heavyPoints': 'Heavy-weight threshold (points)',
   'admin.scale.abuse.clawbackHours': 'Clawback if deleted within (hours)',
   'admin.scale.abuse.unverifiedMaxPoints': 'Max points per action, unverified account',

@@ -12,10 +12,10 @@
 //   - le décor est rendu sans photo, sans texte, sans oiseaux, sans blason, sans plaque, puis COUPÉ à la fenêtre :
 //     dans la fenêtre son alpha est nul, et ce qu'il y peignait part dans `grade` (normal, ou `screen` séparément) ;
 //   - chaque couche est rognée à sa boîte, encodée par sharp, adressée par son empreinte dans export.json.
-import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { generateAteliers, PLATE_VARIANTS as VARIANTS } from './ateliers.mjs';
 import { launch } from './launch.mjs';
 import { classify, isFront, read, show } from './layers.mjs';
 import { H, openPage, pool, SCALE, shoot, showSvg, W } from './page.mjs';
@@ -28,7 +28,6 @@ const arg = (name, fallback) => {
 };
 const OUT = path.resolve(arg('--out', path.join(HERE, '../out')));
 const PLATES = path.resolve(arg('--plates', path.join(HERE, '../out-plate')));
-const VARIANTS = ['plain', 'message'];
 const EXPORT = path.resolve(arg('--export', path.join(HERE, '../export')));
 const ONLY = arg('--only') ? new Set(arg('--only').split(',')) : null;
 const JOBS = Number(arg('--jobs', '3'));
@@ -351,26 +350,7 @@ const bytesOf = (frame) => {
   return files.reduce((acc, f) => acc + f.bytes, 0);
 };
 
-if (process.argv.includes('--generate')) {
-  const ateliers = path.join(HERE, '../ateliers');
-  const run = (atelier, variant) => {
-    fs.rmSync(path.join(OUT, atelier), { recursive: true, force: true });
-    const env = { ...process.env };
-    if (variant) env.CADRES_PLATE = variant;
-    else delete env.CADRES_PLATE;
-    execFileSync(process.env.PYTHON ?? 'python3', ['-B', 'gen.py'], { cwd: path.join(ateliers, atelier), env, stdio: ['ignore', 'ignore', 'inherit'] });
-  };
-  for (const atelier of fs.readdirSync(ateliers).filter((d) => fs.existsSync(path.join(ateliers, d, 'gen.py'))).sort()) {
-    for (const variant of VARIANTS) {
-      run(atelier, variant);
-      const target = path.join(PLATES, variant, atelier);
-      fs.rmSync(target, { recursive: true, force: true });
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.renameSync(path.join(OUT, atelier), target);
-    }
-    run(atelier, null);
-  }
-}
+if (process.argv.includes('--generate')) generateAteliers({ out: OUT, plates: PLATES });
 const collections = fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory() && (!ONLY || ONLY.has(d) || [...ONLY].some((o) => o.startsWith(d + '-')))).sort();
 const jobs = collections.flatMap((collection) => {
   const manifest = JSON.parse(fs.readFileSync(path.join(OUT, collection, 'manifest.json'), 'utf8'));

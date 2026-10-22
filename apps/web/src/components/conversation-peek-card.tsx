@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
@@ -7,7 +7,9 @@ import { conversationIsEndToEnd } from '@meeshy/shared/utils/message-action-poli
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
 import { accentOf, withAccent } from '@/lib/accent';
-import { messagesQueryKey } from '@/lib/api/messages';
+import { apiDeps } from '@/lib/api/deps';
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { messagesInfiniteOptions, messagesQueryKey } from '@/lib/api/messages';
 import { flattenMessagePages, type MessagesInfiniteData } from '@/lib/api/messages-pages';
 import { appQueryClient } from '@/lib/api/query-client';
 import type { Conversation, Message } from '@/lib/api/types';
@@ -39,6 +41,11 @@ import '@/styles/conversation-peek.css';
  * (`getQueryData`), jamais observé — une conversation jamais ouverte montre son
  * squelette, et c'est le seul cas où il paraît.
  *
+ * STALE-WHILE-REVALIDATE : le cache est rendu tel quel, immédiatement, puis
+ * une revalidation silencieuse part quand il est vide ou plus vieux que
+ * `PEEK_STALE_MS` — la première page seule, sans spinner ; les rangées
+ * paraissent à son arrivée. Un cache frais ne déclenche aucune requête.
+ *
  * Les rangées sont celles du fil (`FocalRow`, `Bubble`) : le Prisme, la
  * protection et la mise en forme sont les leurs. Elles sont INERTES ici — la
  * carte entière est un geste, ouvrir la conversation.
@@ -48,6 +55,8 @@ import '@/styles/conversation-peek.css';
 export type PeekReadingMode = FlatRowMode | 'bubbles';
 
 export const PEEK_MESSAGE_COUNT = 5;
+/** Un cache plus jeune que ça est servi sans revalidation. */
+export const PEEK_STALE_MS = 30_000;
 
 /**
  * LA MÊME DÉCISION QUE LE FIL — `resolveThreadMode`, avec ce que
@@ -107,6 +116,7 @@ export type ConversationPeekCardProps = {
    */
   readonly idBase?: string;
   readonly client?: QueryClient;
+  readonly deps?: ConversationsDeps;
   readonly store?: ReadingModeStore;
   readonly readingModesEnabled?: boolean;
   readonly now?: () => number;
@@ -122,6 +132,7 @@ export function ConversationPeekCard({
   onOpen,
   idBase,
   client = appQueryClient,
+  deps = apiDeps,
   store = readingModeStore,
   readingModesEnabled,
   now = Date.now,
@@ -134,7 +145,29 @@ export function ConversationPeekCard({
   const presence = usePresence(peer, { now });
   const peerRing = useRingDesign(servedRingOf(peer));
   const [openedAt] = useState(now);
-  const messages = useMemo(() => cachedMessages(client, conversation.id), [client, conversation.id]);
+  const [revision, setRevision] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const messages = useMemo(() => cachedMessages(client, conversation.id), [client, conversation.id, revision]);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const updatedAtOf = () => client.getQueryState(messagesQueryKey(conversation.id))?.dataUpdatedAt ?? 0;
+    const before = updatedAtOf();
+    setFailed(false);
+    client
+      .fetchInfiniteQuery({ ...messagesInfiniteOptions(deps, conversation.id), staleTime: PEEK_STALE_MS, pages: 1 })
+      .then(() => {
+        if (alive && updatedAtOf() !== before) setRevision((current) => current + 1);
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [client, deps, conversation.id]);
   const mode = useMemo(() => {
     const scope = readingModeScopeOf({ id: viewerId === '' ? null : viewerId });
     return peekReadingMode({
@@ -147,6 +180,11 @@ export function ConversationPeekCard({
     });
   }, [conversation, viewerId, store, openedAt, isAnonymous, readingModesEnabled]);
   const placed = useMemo(() => (messages === null ? null : place(messages, { locale: interfaceLanguage })), [messages, interfaceLanguage]);
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (body === null) return;
+    setOverflowing(body.scrollHeight > body.clientHeight);
+  }, [placed, maxHeight, mode]);
   const label = rowMenuText(interfaceLanguage, 'rowMenu.peek');
   const e2ee = conversationIsEndToEnd({ type: conversation.type, encryptionMode: conversation.encryptionMode ?? null });
   const memberCount = conversation.memberCount ?? 0;
@@ -187,8 +225,13 @@ export function ConversationPeekCard({
           ) : null}
         </div>
       </div>
-      <div className="conversation-peek-body" inert {...(idBase === undefined ? {} : { id: `${idBase}-body` })}>
-        {placed === null ? <PeekSkeleton /> : null}
+      <div ref={bodyRef} className="conversation-peek-body" inert {...(overflowing ? { 'data-peek-overflowing': '' } : {})} {...(idBase === undefined ? {} : { id: `${idBase}-body` })}>
+        {placed === null && !failed ? <PeekSkeleton /> : null}
+        {placed === null && failed ? (
+          <span data-peek-failed role="status" className="text-title" style={{ color: 'var(--color-ios-ink-3)' }}>
+            {rowMenuText(interfaceLanguage, 'rowMenu.peek.failed')}
+          </span>
+        ) : null}
         {placed !== null && placed.length === 0 ? (
           <span className="text-title" style={{ color: 'var(--color-ios-ink-3)' }}>
             {rowMenuText(interfaceLanguage, 'rowMenu.peek.empty')}

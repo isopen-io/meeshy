@@ -4,6 +4,7 @@ import { logError, logWarn } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
 import type { UnifiedAuthRequest } from '../middleware/auth';
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 
 // Schémas de validation
@@ -274,8 +275,14 @@ export async function translationRoutes(fastify: FastifyInstance) {
           return sendNotFound(reply, 'Message not found');
         }
 
-        // SECURITY: E2EE messages cannot be translated by the server
-        if (existingMessage.encryptionMode === 'e2ee') {
+        // SECURITY: le serveur ne traduit que ce qu'il lit — régime de la
+        // conversation ET du message, régime inconnu ⇒ chiffré (fail-closed).
+        const serverReadsMessage = sharedTranslationServerReadsMessage({
+          conversationEncryptionMode: existingMessage.conversation.encryptionMode,
+          messageIsEncrypted: existingMessage.isEncrypted,
+          messageEncryptionMode: existingMessage.encryptionMode,
+        });
+        if (!serverReadsMessage) {
           return sendBadRequest(reply, 'E2EE_NOT_TRANSLATABLE', { message: 'End-to-end encrypted messages cannot be translated by the server' });
         }
 

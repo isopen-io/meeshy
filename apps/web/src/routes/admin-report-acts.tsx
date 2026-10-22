@@ -1,16 +1,20 @@
 import type { QueryKey } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { useStore } from 'zustand';
 
 import type { AdminReportAction } from '@meeshy/shared/types/admin-publication-states';
 
 import { AdminButton } from '@/components/admin/button';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
-import { reportActsFor } from '@/lib/admin/report-acts';
+import { INK2 } from '@/components/admin/tone';
+import { reportActsFor, reportTargetsViewer, type ReportTarget } from '@/lib/admin/report-acts';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';
 import { actOnAdminReport, type AdminReportActResult } from '@/lib/api/admin-post-gestures';
 import { ADMIN_REPORTS_LISTS_KEY, ADMIN_REPORTS_SIBLINGS_KEY, ADMIN_REPORTS_STATS_KEY } from '@/lib/api/admin-reports';
 import { apiDeps } from '@/lib/api/deps';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
@@ -22,6 +26,10 @@ import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
  * appui, puis la confirmation (motif sauf au rang souverain) : l'action sur le contenu et
  * la clôture du dossier partent ensemble. La ligne se dit traitée tout de suite ; un refus
  * la rend.
+ *
+ * Un signalement qui vise le LECTEUR (son compte, sa publication, son commentaire) ne se
+ * traite pas par lui (#10458) : les boutons restent, désactivés, et le motif se lit à
+ * côté — la passerelle refuse de toute façon (`SELF_MODERATION`).
  */
 const MOTIVE_MIN = 3;
 
@@ -36,17 +44,20 @@ export function AdminReportActBar({
   deps = apiDeps,
 }: {
   readonly language: AdminLanguage;
-  readonly report: { readonly id: string; readonly reportedType: string | null; readonly status: string | null };
+  readonly report: { readonly id: string; readonly status: string | null } & ({ readonly reportedType: string | null } | ReportTarget);
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;
   readonly optimistic?: { readonly key: QueryKey; readonly apply: (before: unknown, action: AdminReportAction) => unknown };
   readonly extraInvalidate?: readonly QueryKey[];
   readonly deps?: AdminDeps;
 }) {
   const online = useOnline();
+  const session = useStore(sessionStore, (state) => state.session);
+  const selfId = useId();
   const [pending, setPending] = useState<AdminReportAction | null>(null);
   const action = useAdminAction<AdminReportActResult>({ language, onAnnounce });
   const acts = reportActsFor(report);
   if (acts.length === 0) return null;
+  const mine = 'reportedEntityId' in report && reportTargetsViewer(report, resolveViewer({ source: deps.source, session }).id);
 
   const close = () => {
     setPending(null);
@@ -64,18 +75,29 @@ export function AdminReportActBar({
   };
 
   return (
-    <div role="group" aria-label={translateAdmin(language, 'admin.gesture.report.group')} data-admin-report-acts={report.id} className="flex flex-wrap items-center gap-1.5">
+    <div
+      role="group"
+      aria-label={translateAdmin(language, 'admin.gesture.report.group')}
+      {...(mine ? { 'aria-describedby': selfId } : {})}
+      data-admin-report-acts={report.id}
+      className="flex flex-wrap items-center gap-1.5"
+    >
       {acts.map((act) => (
         <AdminButton
           key={act}
           tone={act === 'dismiss' ? 'secondary' : act === 'make-private' ? 'secondary' : 'danger'}
-          disabled={!online}
+          disabled={!online || mine}
           onClick={() => setPending(act)}
           data={{ 'data-admin-report-act': act }}
         >
           {translateAdmin(language, `admin.gesture.report.${act}`)}
         </AdminButton>
       ))}
+      {mine ? (
+        <span id={selfId} data-admin-report-self className="basis-full text-caption" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.gesture.report.self')}
+        </span>
+      ) : null}
       {pending === null ? null : (
         <AdminConfirmSheet
           language={language}

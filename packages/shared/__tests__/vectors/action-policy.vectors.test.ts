@@ -5,14 +5,14 @@
  *  - la DIVERGENCE compare le fichier à ce que le plan PRODUIT : tombe si le
  *    fichier est retouché à la main, ou s'il manque un cas du plan.
  *
- * Régénération voulue (depuis `packages/shared`) :
- * `UPDATE_ACTION_POLICY_VECTORS=1 bunx vitest run __tests__/vectors/action-policy.vectors.test.ts`.
+ * Régénération voulue (depuis `packages/shared`) : `bun run action-policy-vectors:generate`.
  *
  * @see packages/shared/fixtures/action-policy/
  * @see packages/shared/__tests__/action-policy/action-policy-vectors-law.ts
+ * @see packages/shared/scripts/generate-action-policy-vectors.ts
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,33 +21,23 @@ import { describe, expect, it } from 'vitest';
 import { conversationActionsFor } from '../../utils/conversation-action-policy.js';
 import { messageActionsFor } from '../../utils/message-action-policy.js';
 import {
-  actionPolicyVectorsFormat,
-  buildConversationActionVectors,
-  buildMessageActionVectors,
+  actionPolicyVectorFiles,
   type ConversationActionVector,
   type MessageActionVector,
 } from '../action-policy/action-policy-vectors-law.js';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures', 'action-policy');
 
-const FILES = {
-  message: { path: join(DIR, 'message-actions.vectors.json'), law: 'messageActionsFor', build: buildMessageActionVectors },
-  conversation: { path: join(DIR, 'conversation-actions.vectors.json'), law: 'conversationActionsFor', build: buildConversationActionVectors },
-} as const;
-
-const render = (file: (typeof FILES)[keyof typeof FILES]): string =>
-  `${JSON.stringify({ $format: actionPolicyVectorsFormat(file.law), vectors: file.build() }, null, 2)}\n`;
-
-if (process.env.UPDATE_ACTION_POLICY_VECTORS === '1') Object.values(FILES).forEach((file) => writeFileSync(file.path, render(file)));
+const pathOf = (name: string): string => join(DIR, `${name}.vectors.json`);
 
 const vectorsOf = <T>(path: string): readonly T[] => JSON.parse(readFileSync(path, 'utf-8')).vectors;
 
-const messageVectors = vectorsOf<MessageActionVector>(FILES.message.path);
-const conversationVectors = vectorsOf<ConversationActionVector>(FILES.conversation.path);
+const messageVectors = vectorsOf<MessageActionVector>(pathOf('message-actions'));
+const conversationVectors = vectorsOf<ConversationActionVector>(pathOf('conversation-actions'));
 
 describe('les fichiers de vecteurs ne divergent pas du plan', () => {
-  it.each(Object.entries(FILES))('%s-actions.vectors.json est exactement ce que le plan produit', (_name, file) => {
-    expect(JSON.parse(readFileSync(file.path, 'utf-8'))).toEqual(JSON.parse(render(file)));
+  it.each(actionPolicyVectorFiles().map((file) => [file.name, file] as const))('%s.vectors.json est exactement ce que le plan produit', (_name, file) => {
+    expect(JSON.parse(readFileSync(pathOf(file.name), 'utf-8'))).toEqual(JSON.parse(file.content));
   });
 
   it('les fichiers portent des cas, jamais zéro (leçon 257)', () => {

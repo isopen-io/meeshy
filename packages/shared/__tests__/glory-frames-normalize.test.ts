@@ -20,10 +20,20 @@ describe('le normaliseur lit la cible d’un cadre dans son identifiant, avec le
     expect(targetOfSlug('savane', 'coffre-c')).toBeNull();
   });
 
+  it('les hauts faits (LS, #10168) : une rareté par slug dans la collection `succes`, le neutre sans rareté, et rien ailleurs', () => {
+    expect(['common', 'rare', 'epic', 'legendary', 'mythic'].map((rarity) => targetOfSlug('succes', rarity))).toEqual(
+      ['common', 'rare', 'epic', 'legendary', 'mythic'].map((rarity) => ({ appliesTo: { family: 'achievement', rarity }, option: null })),
+    );
+    expect(targetOfSlug('succes', 'neutre')).toEqual({ appliesTo: { family: 'achievement', rarity: null }, option: null });
+    expect(targetOfSlug('moments', 'rare')).toBeNull();
+    expect(targetOfSlug('succes', 'unique')).toBeNull();
+  });
+
   it('un cadre de rang sert son RANG, toutes divisions (D3 : les cinq décorations du rang se proposent à chaque division)', () => {
     expect(usageOfTarget({ family: 'rank', rank: 'ambassadeur', division: 3 })).toEqual({ kind: 'rank', rank: 'ambassadeur' });
     expect(usageOfTarget({ family: 'treasury', treasury: 'bourse' })).toEqual({ kind: 'moment', family: 'treasury' });
     expect(usageOfTarget({ family: 'achievement', rarity: null })).toEqual({ kind: 'achievement' });
+    expect(usageOfTarget({ family: 'achievement', rarity: 'epic' })).toEqual({ kind: 'achievement', rarity: 'epic' });
   });
 });
 

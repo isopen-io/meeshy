@@ -20,6 +20,8 @@ import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
 import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
 import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
 import { shellStartHref } from '@/lib/links/shell-start';
+import { installHapticsDriver, shellHapticsDriver } from '@/lib/view/haptics';
+import { coqueCourante } from '@/lib/native-shell';
 import { Router, href, navigate, preload } from '@/routes/route-table';
 
 /**
@@ -135,6 +137,11 @@ if (__SHELL__) {
   });
   if (start !== null) navigate(start, true);
 }
+
+/* DANS LA COQUE, L'APPUI LONG ET LES BALAYAGES VIBRENT PAR LE PLUGIN HAPTICS
+   (#11229) — installé UNE fois, avant le premier rendu ; hors coque le
+   navigateur garde `navigator.vibrate`. */
+if (__SHELL__) installHapticsDriver(shellHapticsDriver(coqueCourante(), navigator));
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root absent du document');

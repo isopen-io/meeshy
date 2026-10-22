@@ -5,6 +5,7 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { atmosphereTilesOf, type AtmosphereGate, type AtmosphereOutcome } from '@/lib/game/atmosphere';
 import type { GameHiddenOutcome } from '@/lib/game/game-hidden';
 import { gamePrefs } from '@/lib/game/preferences';
 import { createActMounter } from '@/test-support/act-mount';
@@ -168,5 +169,46 @@ describe('masquer le jeu : un échec côté serveur rouvre l’interrupteur', ()
     expect(written).toEqual([false]);
     expect(sent).toEqual([]);
     expect(gamePrefs.get().hidden).toBe(false);
+  });
+});
+
+/**
+ * « MON ATMOSPHÈRE » (#10163, L10b) — l'atmosphère du compte se lit sur la carte ; le geste ouvre le MÊME écran
+ * de choix que le déroulé photo, sans « Choisir plus tard » ; choisir appelle la porte et referme l'écran ;
+ * une écriture mise en file hors ligne se dit sous la carte.
+ */
+describe('Mon atmosphère', () => {
+  const gate = (current: 'olympe' | null, outcome: AtmosphereOutcome, chosen: string[]): AtmosphereGate => ({
+    current,
+    tiles: atmosphereTilesOf({ catalogue: [], installed: [], origin: 'https://gate.example' }),
+    offers: () => false,
+    choose: async (atmosphere) => {
+      chosen.push(atmosphere);
+      return outcome;
+    },
+    defer: () => undefined,
+  });
+
+  test('sans atmosphère : la carte le dit et propose de choisir ; avec : le nom et « Changer d’atmosphère »', async () => {
+    const none = await mount(<ReglagesBody progress={progress} actions={actions()} online hide={() => undefined} atmosphere={gate(null, { status: 'saved', packInstalled: true }, [])} />);
+    expect(none.querySelector('[data-game-setting-atmosphere-current]')?.textContent).toContain('Afrique éternelle');
+    expect(none.querySelector('[data-game-setting-atmosphere]')?.textContent).toBe('Choisir mon atmosphère');
+    const some = await mount(<ReglagesBody progress={progress} actions={actions()} online hide={() => undefined} atmosphere={gate('olympe', { status: 'saved', packInstalled: true }, [])} />);
+    expect(some.querySelector('[data-game-setting-atmosphere-current]')?.textContent).toBe('Olympe');
+    expect(some.querySelector('[data-game-setting-atmosphere]')?.textContent).toBe('Changer d’atmosphère');
+  });
+
+  test('le geste ouvre l’écran de choix sans « plus tard » ; choisir appelle la porte, ferme l’écran, et une file hors ligne se dit', async () => {
+    const chosen: string[] = [];
+    const host = await mount(<ReglagesBody progress={progress} actions={actions()} online hide={() => undefined} atmosphere={gate('olympe', { status: 'queued' }, chosen)} />);
+    await click(host.querySelector('[data-game-setting-atmosphere]'));
+    expect(host.querySelector('[data-atmosphere-choice]')).not.toBeNull();
+    expect(host.querySelector('[data-atmosphere-later]')).toBeNull();
+    expect(host.querySelector('[data-atmosphere-option="olympe"]')?.getAttribute('aria-checked')).toBe('true');
+    await click(host.querySelector('[data-atmosphere-option="neon"]'));
+    await click(host.querySelector('[data-atmosphere-continue]'));
+    expect(chosen).toEqual(['neon']);
+    expect(host.querySelector('[data-atmosphere-choice]')).toBeNull();
+    expect(host.querySelector('#game-settings-atmosphere [role="status"]')?.textContent).toContain('Hors ligne');
   });
 });

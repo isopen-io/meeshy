@@ -76,12 +76,15 @@ export const GAME_PHOTO_ROUTES = {
   photoInvitations: '/me/game/photo-moments/invitations',
   /** Accuser la présentation d'étapes (au plus 64), idempotent. POST. */
   photoPresented: '/me/game/photo-moments/presented',
+  /** Signaler des étapes IMMORTALISÉES (D22 b, #10182) : l'identifiant seul, au plus 64, idempotent. POST. */
+  photoKept: '/me/game/photo-moments/kept',
 } as const;
 
 export const GAME_PHOTO_ROUTE_METHODS = {
   frameAtmosphere: 'PUT',
   photoInvitations: 'PUT',
   photoPresented: 'POST',
+  photoKept: 'POST',
 } as const satisfies Record<keyof typeof GAME_PHOTO_ROUTES, 'PUT' | 'POST'>;
 
 export type GameRouteKey = keyof typeof GAME_ROUTES;
