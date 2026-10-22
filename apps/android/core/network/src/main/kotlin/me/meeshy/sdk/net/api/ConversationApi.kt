@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.JoinAuthenticatedResponse
+import me.meeshy.sdk.model.MarkedCountResult
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
@@ -135,6 +136,20 @@ interface ConversationApi {
     // et les badges ne se vidaient jamais durablement.
     @POST("conversations/{id}/mark-as-read")
     suspend fun markRead(@Path("id") id: String): ApiResponse<Unit>
+
+    /**
+     * L'accusé de RÉCEPTION de toute la conversation (le curseur de livraison : la
+     * double coche de l'expéditeur) — gateway `routes/message-read-status.ts`,
+     * `POST /conversations/:conversationId/mark-as-received`. Idempotent côté
+     * serveur ; la charge rend `{ markedCount }`.
+     *
+     * Adresse HISTORIQUE d'une écriture dont le successeur est la collection
+     * `receipts` (le `type` voyage alors dans le corps) : elle reste servie le
+     * temps de la queue des versions installées, et c'est elle qu'utilise iOS
+     * (`PushDeliveryReceiptService`). Elle ne se retire qu'à zéro usage mesuré.
+     */
+    @POST("conversations/{id}/mark-as-received")
+    suspend fun markReceived(@Path("id") id: String): ApiResponse<MarkedCountResult>
 
     // POST /conversations/{id}/mark-unread (gateway routes/conversations/messages.ts):
     // moves the read cursor back before the latest message so the conversation
