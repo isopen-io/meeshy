@@ -26,6 +26,7 @@ import { notebookBytes, notebookSizeLabel, pendingOf, type LegacyState, type Not
 import { referralOf, referralShareText } from '@/lib/game-photo/referral';
 import { dateLabelOf, fileNameOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
+import { useAtmosphereGate } from '@/lib/game/use-atmosphere-gate';
 import type { GameCatalogKey } from '@/lib/i18n-game-catalog';
 import { gameText } from '@/lib/view/game-copy';
 import { ProgressionShell } from '@/routes/progression-shell';
@@ -270,6 +271,7 @@ export function CarnetBody({
 }) {
   const [entries, setEntries] = useState<readonly NotebookEntry[] | null>(null);
   const [taking, setTaking] = useState<PhotoMoment | null>(null);
+  const atmosphere = useAtmosphereGate(game);
 
   const [legacy, setLegacy] = useState<LegacyState>('none');
 
@@ -364,6 +366,7 @@ export function CarnetBody({
           moment={taking}
           env={env}
           flameDays={flameDays}
+          atmosphere={atmosphere}
           onClose={() => {
             setTaking(null);
             load();

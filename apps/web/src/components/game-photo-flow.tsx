@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 
 import { saveButtonVisible, type CaptureZone, type FrameChoice } from '@meeshy/shared/utils/capture/capture-save';
 
@@ -12,6 +12,8 @@ import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
 import { referralOf, referralPlaceholder, referralShareText, type PhotoReferral } from '@/lib/game-photo/referral';
 import { photoBannerOf, type GloryRenderSource, type PhotoFiles } from '@/lib/game-photo/render';
+import { gloryCatalogEpoch, subscribeGloryCatalogEpoch } from '@/lib/game-photo/glory-catalog-epoch';
+import type { AtmosphereGate } from '@/lib/game/atmosphere';
 import type { GloryPreviewKit } from '@/lib/game-photo/env';
 import type { GloryRecipe, GloryScene } from '@/lib/game-photo/glory/glory-scene';
 import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
@@ -24,6 +26,7 @@ import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { gameText } from '@/lib/view/game-copy';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
+import { GameAtmosphereChoice } from './game-atmosphere-choice';
 import { GameAuthorCard } from './game-author-card';
 import { GamePhotoFrame, type GloryFrameOverlay } from './game-photo-frame';
 import { GamePhotoGloryCanvas } from './game-photo-glory-canvas';
@@ -54,6 +57,11 @@ import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-
  * « Enregistrer » ne se montre que si la prise n'est pas déjà enregistrée avec
  * ce cadre (loi partagée `capture-save`, portée par le réducteur). Le cadre
  * choisi est celui du moment tant que la bande de cadres (#10164) n'existe pas.
+ *
+ * L'ATMOSPHÈRE (#10163, L10b) : à la première photo de rang dès Ambassadeur, quand le compte n'a pas encore
+ * choisi, l'écran de choix (E1) précède le déroulé ; « Choisir plus tard » laisse partir la photo dans
+ * l'Afrique éternelle sans rien enregistrer. L'atmosphère du compte entre dans l'étape que la loi des cadres
+ * lit, et le déroulé suit l'époque du catalogue : le pack installé par le choix recompose l'aperçu.
  */
 
 export type PhotoFlowResult = { readonly deferred: boolean };
@@ -66,6 +74,8 @@ type Props = {
   readonly flameDays?: number | null;
   /** L'auteur dont la plaque grave le pseudo (#10816) ; absent : le lecteur ; `null` : aucune plaque. */
   readonly author?: PhotoAuthor | null;
+  /** L'atmosphère du compte et l'écran de choix (#10163) ; absent : la loi sert l'Afrique éternelle, sans écran. */
+  readonly atmosphere?: AtmosphereGate;
 };
 
 const BUTTON = { minHeight: 44 } as const;
@@ -109,8 +119,10 @@ function Button({ attr, primary = false, onClick, children, disabled = false }: 
   );
 }
 
-export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: givenAuthor }: Props) {
+export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: givenAuthor, atmosphere }: Props) {
   const viewerAuthor = usePhotoAuthor();
+  /* L'écran de choix se décide à l'OUVERTURE : un choix fait pendant le déroulé ne le rouvre pas. */
+  const [choosingAtmosphere, setChoosingAtmosphere] = useState(() => atmosphere?.offers(moment.id) === true);
   const author = givenAuthor === undefined ? viewerAuthor : givenAuthor;
   const plate = useMemo(() => authorPlateOf(moment.emblem, author), [moment.emblem, author]);
   const [state, dispatch] = useReducer(flowReducer, { step: 'offer' } as FlowState);
@@ -188,7 +200,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
      laisse la carte simple, sans attendre. La scène se rend en sortant. */
   const [glory, setGlory] = useState<GloryScene | null>(null);
   const [gloryKit, setGloryKit] = useState<GloryPreviewKit | null>(null);
-  const gloryStep = useMemo(() => ({ stepId: moment.id, atmosphere: null, lastChosen: null }), [moment.id]);
+  const catalogEpoch = useSyncExternalStore(subscribeGloryCatalogEpoch, gloryCatalogEpoch, gloryCatalogEpoch);
+  const accountAtmosphere = atmosphere?.current ?? null;
+  const gloryStep = useMemo(() => ({ stepId: moment.id, atmosphere: accountAtmosphere, lastChosen: null }), [moment.id, accountAtmosphere]);
   const gloryTexts = useMemo(() => ({ kicker: moment.kicker, title: moment.title, date: dateLabel, message: null }), [moment.kicker, moment.title, dateLabel]);
   useEffect(() => {
     if (env.glory === undefined) return;
@@ -210,7 +224,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
       opened?.close();
       setGlory(null);
     };
-  }, [env, gloryStep, gloryTexts]);
+    /* L'époque du catalogue rouvre la scène : le pack installé par le choix d'atmosphère se lit sur le catalogue relu. */
+  }, [env, gloryStep, gloryTexts, catalogEpoch]);
   const gloryRecipe = useMemo((): GloryRecipe => ({ pose: null, message: null, crop: { dx: 0, dy: 0, zoom: 1 }, showFlame: withFlame, showLink: withLink }), [withFlame, withLink]);
   const rtl = interfaceDirection(currentInterfaceLanguage()) === 'rtl';
   const gloryBanner = useMemo(() => (glory === null || referral === null ? null : photoBannerOf(referral, glory.bannerLayout(rtl))), [glory, referral, rtl]);
@@ -594,6 +609,25 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     if (stageMode === 'gallery' || striking) return { kind: 'photo', photo: photo.current } as const;
     return { kind: 'video', element: liveVideo } as const;
   }, [stageMode, striking, liveVideo]);
+
+  if (choosingAtmosphere && atmosphere !== undefined) {
+    return (
+      <GameAtmosphereChoice
+        current={atmosphere.current}
+        tiles={atmosphere.tiles}
+        kicker={`${moment.kicker} · ${moment.title}`}
+        onChoose={(picked) => {
+          void atmosphere.choose(picked);
+          setChoosingAtmosphere(false);
+        }}
+        onLater={() => {
+          atmosphere.defer();
+          setChoosingAtmosphere(false);
+        }}
+        onClose={close}
+      />
+    );
+  }
 
   return (
     <div

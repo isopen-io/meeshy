@@ -8,6 +8,7 @@ import { renderMeeSticker } from '@/lib/mee/render';
 import type { PackAssetStoreDeps } from '@/lib/packs/pack-asset-store';
 
 import { rasterizeSvg, type PaintContext, type PhotoArt, type PhotoBanner, type PhotoPalette, type PhotoSource } from '../compose';
+import { gloryCatalogEpoch } from '../glory-catalog-epoch';
 import { bannerWithin, type BannerLayout, type Rect } from '../layout';
 import { loadGloryFrameImages, type ClosableImage, type GloryAssetDeps, type GloryFrameImages } from './frame-assets';
 import { loadGloryCatalog, pickGloryFrame, type GloryCatalog, type GloryFramePick } from './frame-catalog';
@@ -59,9 +60,12 @@ export type GloryStep = {
   readonly lastChosen: string | null;
 };
 
-/** Le catalogue de la session : relu au plus toutes les `CATALOG_TTL_MS`, pour que l'aperçu et l'image finale lisent le même. */
+/**
+ * Le catalogue de la session : relu au plus toutes les `CATALOG_TTL_MS`, pour que l'aperçu et l'image finale
+ * lisent le même — et dès que l'ÉPOQUE a bougé (un pack installé par le choix d'atmosphère, #10163).
+ */
 const CATALOG_TTL_MS = 60_000;
-let cached: { readonly at: number; readonly catalog: Promise<GloryCatalog> } | null = null;
+let cached: { readonly at: number; readonly epoch: number; readonly catalog: Promise<GloryCatalog> } | null = null;
 
 const storeDeps = (): PackAssetStoreDeps => ({ origin: apiOrigin() });
 
@@ -69,14 +73,15 @@ const storeDeps = (): PackAssetStoreDeps => ({ origin: apiOrigin() });
 const packStore = () => import('@/lib/packs/pack-asset-store');
 
 function sessionCatalog(now = Date.now()): Promise<GloryCatalog> {
-  if (cached !== null && now - cached.at < CATALOG_TTL_MS) return cached.catalog;
+  const epoch = gloryCatalogEpoch();
+  if (cached !== null && cached.epoch === epoch && now - cached.at < CATALOG_TTL_MS) return cached.catalog;
   const store = storeDeps();
   const catalog = loadGloryCatalog({
     installed: () => loadInstalledFramePacks(apiDeps),
     detail: (slug) => loadFramePack(apiDeps, slug),
     readJson: async (ref) => (await packStore()).readPackAssetJson(ref, store),
   });
-  cached = { at: now, catalog };
+  cached = { at: now, epoch, catalog };
   return catalog;
 }
 
