@@ -204,6 +204,7 @@ class AppearanceCatalogDecodeTest {
 
         assertThat(decoded.packName("essentiels", "fr")).isEqualTo("Essentiels")
         assertThat(decoded.packName("essentiels", "en")).isEqualTo("Essentiels")
+        assertThat(decoded.packName("essentiels", "de")).isEqualTo("Essentiels")
     }
 
     @Test

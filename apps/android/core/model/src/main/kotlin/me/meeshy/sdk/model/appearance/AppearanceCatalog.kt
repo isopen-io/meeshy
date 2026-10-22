@@ -105,16 +105,28 @@ class AppearanceCatalog private constructor(
     fun packDescription(slug: String, language: String): String? =
         localized(language) { it.packDescriptions[slug] }
 
-    /** Langue demandée (ses deux premières lettres : `pt-BR` ⇒ `pt`), puis français — la source —, puis rien. */
+    /**
+     * Langue demandée (ses deux premières lettres : `pt-BR` ⇒ `pt`), puis anglais, puis français — la
+     * source du catalogue —, puis rien.
+     *
+     * iOS passe directement au français : sa langue de développement est le français, donc une
+     * langue non servie y affiche le français. La langue par défaut d'Android est l'anglais
+     * (`values/`), si bien que le repli du nom d'un pack suit celle de l'interface autour de lui.
+     * Le catalogue embarqué est complet dans ses sept langues : le repli ne joue que pour une langue
+     * hors des sept, ou pour une copie d'un catalogue plus récent.
+     */
     private fun localized(language: String, pick: (AppearanceCatalogStrings) -> String?): String? {
         val code = language.take(LANGUAGE_CODE_LENGTH).lowercase()
-        return strings[code]?.let(pick) ?: strings[SOURCE_LANGUAGE]?.let(pick)
+        return sequenceOf(code, FALLBACK_LANGUAGE, SOURCE_LANGUAGE).firstNotNullOfOrNull { strings[it]?.let(pick) }
     }
 
     // endregion
 
     companion object {
-        /** Le français est la langue source du catalogue : le repli quand la langue demandée n'a pas le nom. */
+        /** L'anglais est la langue par défaut de l'interface Android : le premier repli d'un nom absent. */
+        const val FALLBACK_LANGUAGE = "en"
+
+        /** Le français est la langue source du catalogue : le dernier repli, celui d'iOS. */
         const val SOURCE_LANGUAGE = "fr"
         private const val LANGUAGE_CODE_LENGTH = 2
         private const val DEFAULT_VERSION = 1

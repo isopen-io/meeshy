@@ -153,23 +153,34 @@ class AppearanceCatalogResolversTest {
     }
 
     @Test
-    fun `a language the catalog does not carry falls back to French, the source`() {
+    fun `a language the catalog does not carry falls back to English, the default interface language`() {
         val catalog = embedded()
 
-        assertThat(catalog.packName("essentiels", "ja")).isEqualTo("Essentiels")
-        assertThat(catalog.packName("essentiels", "")).isEqualTo("Essentiels")
-        assertThat(catalog.designName("monogramme", "zh-Hans")).isEqualTo("Monogramme")
+        assertThat(catalog.packName("essentiels", "ja")).isEqualTo("Essentials")
+        assertThat(catalog.packName("essentiels", "")).isEqualTo("Essentials")
+        assertThat(catalog.designName("monogramme", "zh-Hans")).isEqualTo("Monogram")
     }
 
     @Test
-    fun `a name missing in the requested language falls back to French, not to nothing`() {
+    fun `a name missing in the requested language and in English falls back to French, the source`() {
+        val strings = AppearanceFixtures.parse(
+            """{"fr":{"rings":{"filet":"Filet"}},"en":{"rings":{}},"de":{"rings":{}}}""",
+        )
+        val decoded = decode(catalog(strings = strings))
+
+        assertThat(decoded.ringName("filet", "de")).isEqualTo("Filet")
+        assertThat(decoded.ringName("filet", "ja")).isEqualTo("Filet")
+    }
+
+    @Test
+    fun `a name missing in the requested language falls back to English before French`() {
         val strings = AppearanceFixtures.strings().with(
             "de" to AppearanceFixtures.parse("""{"packs":{},"designs":{},"rings":{},"frames":{},"gamut":{}}"""),
         )
         val decoded = decode(catalog(strings = strings))
 
-        assertThat(decoded.packName("essentiels", "de")).isEqualTo("Essentiels")
-        assertThat(decoded.ringName("filet", "de")).isEqualTo("Filet")
+        assertThat(decoded.packName("essentiels", "de")).isEqualTo("Essentials")
+        assertThat(decoded.ringName("filet", "de")).isEqualTo("Hairline")
     }
 
     @Test
