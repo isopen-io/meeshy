@@ -56,6 +56,7 @@ internal object RecentMediaSource {
             .sortedByDescending { it.dateAdded }
             .take(limit)
 
+    @OptIn(FlowPreview::class)
     fun observe(context: Context, limit: Int = HEAD_SAMPLE_COUNT): Flow<List<RecentMediaItem>> {
         val resolver = context.applicationContext.contentResolver
         val changes = callbackFlow {

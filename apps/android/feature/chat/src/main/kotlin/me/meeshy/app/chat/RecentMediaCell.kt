@@ -89,7 +89,7 @@ internal fun RecentMediaCell(
         modifier = modifier
             .clip(shape)
             .alpha(if (isAttached) ATTACHED_ALPHA else 1f)
-            .border(if (selectionPosition != null) 2.dp else 0.dp, accentColor, shape)
+            .then(if (selectionPosition != null) Modifier.border(2.dp, accentColor, shape) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics(mergeDescendants = true) {
                 contentDescription = label
