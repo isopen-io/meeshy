@@ -18,7 +18,6 @@ declared-locale-without-resources - ar -
 # spécificateurs positionnels (%1$d). Comblé quand le lot de la fonctionnalité adopte la clé iOS
 # (ou la réécrit en %1$d).
 bare-specifier :feature:chat en chat_forward_members
-bare-specifier :feature:stories en story_send_members
 # Chaînes GÉNÉRÉES à un seul spécificateur : xcstrings_to_android.py ne numérote un spécificateur
 # que s'il y en a plusieurs ou que la source iOS est déjà positionnelle ; le cliquet les garde
 # jusqu'à ce que le générateur les émette en %1$s / %1$d.
@@ -32,6 +31,16 @@ bare-specifier :sdk-ui en time_lastSeen_seen
 bare-specifier :sdk-ui en time_lastSeen_yesterdayAt
 bare-specifier :feature:chat en composer_recent_addSelected
 bare-specifier :feature:chat en recentMedia_resolveFailed_multiple
+bare-specifier :feature:feed en feed_new_posts
+bare-specifier :feature:feed en feed_repost_likes_count
+bare-specifier :feature:feed en post_comments_replying_to
+bare-specifier :feature:feed en post_comments_view_replies
+bare-specifier :feature:feed en status_bar_via
+bare-specifier :feature:reels en reels_comments_count
+bare-specifier :feature:stories en stories_comments_count
+bare-specifier :feature:stories en stories_composer_slide_duration_value
+bare-specifier :feature:stories en stories_viewers_count
+bare-specifier :feature:stories en story_send_members
 
 # --- Quantité plurielle CLDR « many » absente en fr, es, pt ---------------------------------
 # CLDR exige one, many, other pour le français, l'espagnol et le portugais (« 1 million DE
@@ -41,20 +50,11 @@ bare-specifier :feature:chat en recentMedia_resolveFailed_multiple
 missing-quantity :feature:chat fr chat_reply_count
 missing-quantity :feature:chat es chat_reply_count
 missing-quantity :feature:chat pt chat_reply_count
-missing-quantity :feature:feed fr post_comments_view_replies
-missing-quantity :feature:feed es post_comments_view_replies
-missing-quantity :feature:feed pt post_comments_view_replies
-missing-quantity :feature:feed fr post_comments_view_all_replies
 missing-quantity :feature:feed es post_comments_view_all_replies
+missing-quantity :feature:feed fr post_comments_view_all_replies
 missing-quantity :feature:feed pt post_comments_view_all_replies
-missing-quantity :feature:feed fr feed_new_posts
-missing-quantity :feature:feed es feed_new_posts
-missing-quantity :feature:feed pt feed_new_posts
-missing-quantity :feature:feed fr feed_repost_likes_count
-missing-quantity :feature:feed es feed_repost_likes_count
-missing-quantity :feature:feed pt feed_repost_likes_count
-missing-quantity :feature:stories fr stories_publish_media_summary
 missing-quantity :feature:stories es stories_publish_media_summary
+missing-quantity :feature:stories fr stories_publish_media_summary
 missing-quantity :feature:stories pt stories_publish_media_summary
 
 # --- sdk-ui : atomes d'authentification absents en ar, de, it ---------------------------------

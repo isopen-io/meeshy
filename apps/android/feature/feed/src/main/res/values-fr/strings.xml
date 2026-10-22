@@ -50,7 +50,6 @@
     <string name="feed_composer_add_location">Ajouter ma position</string>
     <string name="feed_composer_remove_location">Supprimer la position</string>
     <string name="feed_composer_location_unavailable">Position indisponible — vérifiez vos paramètres de localisation et réessayez</string>
-    <string name="feed_composer_media_limit">Vous pouvez joindre jusqu\'à %1$d éléments</string>
     <string name="feed_composer_media_unusable">Ce média n\'a pas pu être joint</string>
     <string name="feed_composer_media_alt_label">Décrivez cette photo ou vidéo pour les lecteurs d\'écran (%1$d)</string>
     <string name="feed_composer_media_alt_placeholder">ex. Un vélo rouge appuyé contre un mur en briques</string>
