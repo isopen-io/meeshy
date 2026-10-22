@@ -713,6 +713,11 @@
         {
           "androidName": "story_send_title",
           "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.save.photosDenied",
+          "status": "disabled"
         }
       ]
     }

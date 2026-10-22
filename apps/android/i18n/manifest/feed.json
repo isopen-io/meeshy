@@ -777,6 +777,21 @@
           "iosKey": "bookmarks.filter.posts",
           "androidName": "user_posts_title",
           "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.nearby.empty.denied.action",
+          "status": "disabled"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.nearby.empty.denied.detail",
+          "status": "disabled"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.nearby.empty.denied.title",
+          "status": "disabled"
         }
       ]
     }
