@@ -135,6 +135,11 @@ const pt = {
   'export.card.compose.post': 'Publicação no topo',
   'export.card.compose.replies': 'Respostas no cartão',
   'export.card.compose.folded': '+{count} respostas',
+  'export.card.compose.head': 'Mídia no topo',
+  'export.card.compose.head.image': 'Foto {position}',
+  'export.card.compose.head.video': 'Vídeo {position}',
+  'export.card.compose.head.audio': 'Som {position}',
+  'export.card.compose.withheld': 'Esta publicação não é pública: o conteúdo dela não aparece na imagem.',
 } satisfies ExportCardCatalog;
 
 export default pt;

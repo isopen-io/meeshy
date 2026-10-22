@@ -276,7 +276,10 @@ final class ImagineWorkshopTests: XCTestCase {
                     // #9686 — les compositions d'un commentaire de post.
                     "export.compose.postAndComment", "export.compose.commentAlone", "export.compose.threadToHere",
                     "export.compose.postRootAndReply", "export.compose.chosenReplies", "export.compose.post",
-                    "export.compose.thread", "export.compose.folded"]
+                    "export.compose.thread", "export.compose.folded",
+                    // #11783 — le média de tête choisi, l'audience qui retient le support.
+                    "export.compose.withheld", "export.compose.head", "export.compose.head.image",
+                    "export.compose.head.video", "export.compose.head.audio"]
         keys += MessageCardClipLength.allCases.map { "export.card.clip.\($0.rawValue)" }
         keys += MessageCardAspect.allCases.map { "export.card.aspect.\($0.rawValue)" }
         keys += MessageCardHeaderOrientation.allCases.map { "export.card.header.\($0.rawValue)" }
