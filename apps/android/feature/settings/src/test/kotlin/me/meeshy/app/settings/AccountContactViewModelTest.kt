@@ -11,6 +11,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -60,6 +61,15 @@ class AccountContactViewModelTest {
             every { it.currentUser } returns MutableStateFlow(user())
         },
     ) = AccountContactViewModel(userRepository, sessionRepository)
+
+    /** La vérification exige un code ENVOYÉ ([PhoneChangeFlow.canVerify]) : le numéro part d'abord. */
+    private fun TestScope.sendPhoneCode(sut: AccountContactViewModel, userRepository: UserRepository) {
+        coEvery { userRepository.changePhone(any()) } returns
+            NetworkResult.Success(ChangePhoneResponse(pendingPhoneNumber = "+33612345678"))
+        sut.onNewPhoneChange("+33612345678")
+        sut.submitPhoneChange()
+        advanceUntilIdle()
+    }
 
     private fun sessionWith(flow: MutableStateFlow<MeeshyUser?>): SessionRepository {
         val session = mockk<SessionRepository>(relaxed = true)
@@ -420,7 +430,9 @@ class AccountContactViewModelTest {
 
     @Test
     fun canVerifyPhoneCode_falseUntilExactlySixDigits() = runTest(dispatcher) {
-        val sut = vm()
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        val sut = vm(userRepository = userRepo)
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("12345")
         assertThat(sut.state.value.canVerifyPhoneCode).isFalse()
 
@@ -448,7 +460,7 @@ class AccountContactViewModelTest {
         val session = mockk<SessionRepository>(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(user())
         val sut = vm(userRepository = userRepo, sessionRepository = session)
-        sut.onNewPhoneChange("+33612345678")
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("123456")
 
         sut.verifyPhoneCode()
@@ -468,6 +480,7 @@ class AccountContactViewModelTest {
         coEvery { userRepo.verifyPhoneChange(any()) } returns
             NetworkResult.Failure(ApiError(message = "bad code", httpStatus = 400))
         val sut = vm(userRepository = userRepo)
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("000000")
 
         sut.verifyPhoneCode()
@@ -484,6 +497,7 @@ class AccountContactViewModelTest {
         coEvery { userRepo.verifyPhoneChange(any()) } returns
             NetworkResult.Failure(ApiError(message = "offline", code = "NETWORK"))
         val sut = vm(userRepository = userRepo)
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("000000")
 
         sut.verifyPhoneCode()
@@ -534,6 +548,7 @@ class AccountContactViewModelTest {
         val userRepo = mockk<UserRepository>()
         coEvery { userRepo.verifyPhoneChange(any()) } coAnswers { gate.await() }
         val sut = vm(userRepository = userRepo)
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("123456")
 
         sut.verifyPhoneCode()
