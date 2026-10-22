@@ -28,3 +28,15 @@ class MeeshyGradientsTest {
             .isEqualTo(MeeshyGradients.mainBackground(dark = true))
     }
 }
+
+class MeeshySurfaceGradientTest {
+    private val tint = androidx.compose.ui.graphics.Color(0xFF6366F1)
+
+    @Test
+    fun `surface and border tinted tokens branch on dark`() {
+        assertThat(MeeshyGradients.surfaceGradient(tint, dark = true))
+            .isNotEqualTo(MeeshyGradients.surfaceGradient(tint, dark = false))
+        assertThat(MeeshyGradients.tintedBorder(tint, dark = true))
+            .isNotEqualTo(MeeshyGradients.tintedBorder(tint, dark = false))
+    }
+}

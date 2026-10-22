@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="common_clearSearch">مسح البحث</string>
+    <string name="common_close">إغلاق</string>
     <string name="emoji_category_activities">الأنشطة</string>
     <string name="emoji_category_animals">الحيوانات</string>
     <string name="emoji_category_flags">الأعلام</string>
@@ -11,6 +12,7 @@
     <string name="emoji_category_smileys">الوجوه</string>
     <string name="emoji_category_symbols">الرموز</string>
     <string name="emoji_category_travel">السفر</string>
+    <string name="settings_info_button_label">معرفة المزيد عن %s</string>
     <string name="sticker_sheet_instants_lieu">أماكن</string>
     <string name="sticker_sheet_instants_message">رسائل</string>
     <string name="sticker_sheet_instants_meteo">الطقس</string>
