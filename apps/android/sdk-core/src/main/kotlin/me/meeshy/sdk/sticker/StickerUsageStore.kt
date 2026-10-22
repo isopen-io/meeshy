@@ -63,19 +63,21 @@ public class StickerUsageStore(private val storage: StickerUsageStorage) {
     }
 
     /** Sert les listes du compte [id] (migration des clés globales au premier compte). */
-    public fun adopt(id: String?): Unit = synchronized(lock) {
-        if (id == account) return
-        account = id
-        if (!id.isNullOrEmpty()) {
-            listOf(StickerUsageLaw.RECENTS_BASE, StickerUsageLaw.FAVORITES_BASE).forEach { base ->
-                val scopedKey = StickerUsageLaw.key(base, id)
-                StickerUsageLaw.adoptedValue(storage.read(scopedKey), storage.read(base))
-                    ?.let { storage.write(scopedKey, it) }
-                storage.remove(base)
+    public fun adopt(id: String?) {
+        synchronized(lock) {
+            if (id == account) return@synchronized
+            account = id
+            if (!id.isNullOrEmpty()) {
+                listOf(StickerUsageLaw.RECENTS_BASE, StickerUsageLaw.FAVORITES_BASE).forEach { base ->
+                    val scopedKey = StickerUsageLaw.key(base, id)
+                    StickerUsageLaw.adoptedValue(storage.read(scopedKey), storage.read(base))
+                        ?.let { storage.write(scopedKey, it) }
+                    storage.remove(base)
+                }
             }
+            _recents.value = load(StickerUsageLaw.RECENTS_BASE)
+            _favorites.value = load(StickerUsageLaw.FAVORITES_BASE)
         }
-        _recents.value = load(StickerUsageLaw.RECENTS_BASE)
-        _favorites.value = load(StickerUsageLaw.FAVORITES_BASE)
     }
 
     private fun load(base: String): List<StickerUsageEntry> =

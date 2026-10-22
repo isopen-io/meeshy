@@ -1,6 +1,7 @@
 package me.meeshy.ui.sticker
 
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.sticker.StickerPackItemSummary
 import me.meeshy.sdk.model.sticker.StickerPackSummary
 import me.meeshy.sdk.model.sticker.StickerSheetChoice
 import me.meeshy.sdk.model.sticker.StickerUsageEntry
@@ -36,18 +38,22 @@ class StickerSheetRobolectricTest {
         StickerEmojiCategory("ANIMALS", "Animals", listOf("🐱")),
     )
 
+    private val packRenderer: @Composable (String) -> Unit = { slug -> Text("pack:$slug") }
+
+    private val oneItem = listOf(StickerPackItemSummary(key = "a", kind = "static"))
+
     private fun capabilities(withPacks: Boolean = false) = StickerCapabilities(
         emojiCategories = categories,
         emojiSearch = { query -> if (query.contains("cat")) listOf("🐱") else emptyList() },
         installedPacks = if (withPacks) {
             listOf(
-                StickerPackSummary(slug = "ecole", name = "École", installed = true),
-                StickerPackSummary(slug = "fruits", name = "Fruits", installed = true),
+                StickerPackSummary(slug = "ecole", name = "École", installed = true, items = oneItem),
+                StickerPackSummary(slug = "fruits", name = "Fruits", installed = true, items = oneItem),
             )
         } else {
             null
         },
-        packContent = if (withPacks) ({ slug: String -> Text("pack:$slug") }) else null,
+        packContent = if (withPacks) packRenderer else null,
     )
 
     private fun show(
