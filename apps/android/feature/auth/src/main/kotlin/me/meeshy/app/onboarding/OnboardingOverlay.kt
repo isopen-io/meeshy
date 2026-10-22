@@ -39,7 +39,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.auth.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
-import me.meeshy.ui.component.game.readReduceMotion
+import me.meeshy.ui.accessibility.readSystemReduceMotion
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -152,7 +152,7 @@ private fun cardTransition(reduceMotion: Boolean, direction: LayoutDirection): C
 internal fun rememberOnboardingReduceMotion(): Boolean {
     val context = LocalContext.current
     val provided = LocalReduceMotion.current
-    return provided || remember(context) { readReduceMotion(context) }
+    return provided || remember(context) { readSystemReduceMotion(context) }
 }
 
 /**
