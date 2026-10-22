@@ -25,8 +25,12 @@ class CallFrameOrnamentPainter(
 
     private val animating = ornaments.any { CallFrameOrnamentMotionPlan.animates(it.motion, elapsed, reduceMotion) }
 
+    private val signature: String =
+        ornaments.joinToString(",") { "${it.kind.raw}/${it.color}/${it.density.raw}/${it.layer.raw}/${it.motion.raw}" }
+
     override val cacheKey: String =
-        "orn:${text.hashCode()}:${headline.hashCode()}:" + if (animating) "t${(elapsed * FRAMES_PER_SECOND).toLong()}" else "still"
+        "orn:$signature:${text.hashCode()}:${headline.hashCode()}:" +
+            if (animating) "t${(elapsed * FRAMES_PER_SECOND).toLong()}" else "still"
 
     override fun paintBack(canvas: Canvas, stage: CallFrameStage) = paint(canvas, stage, CallFrameLayer.BACK)
 
