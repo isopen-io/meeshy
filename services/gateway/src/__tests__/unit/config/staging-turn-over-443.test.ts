@@ -77,7 +77,7 @@ describe('le relais TURN de staging (#11278)', () => {
   });
 
   it('ne lit aucun certificat ni aucune clé : rien de la production ne lui est monté', () => {
-    expect(coturn).not.toMatch(/dumped_certs|letsencrypt|\.key|\.crt/);
+    expect(coturn).not.toMatch(/dumped_certs|traefik_certs|\/letsencrypt|\.key\b|\.crt\b|\.pem\b/);
     expect(conf).toMatch(/^no-tls$/m);
     expect(confValue(conf, 'cert')).toBeUndefined();
     expect(confValue(conf, 'pkey')).toBeUndefined();
