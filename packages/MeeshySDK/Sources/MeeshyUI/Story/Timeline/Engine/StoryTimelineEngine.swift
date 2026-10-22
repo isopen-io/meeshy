@@ -177,6 +177,15 @@ public final class StoryTimelineEngine {
         }
     }
 
+    /// L'élément de la composition locale suit la politique média vivante
+    /// (#11984), comme tout lecteur de lecture : la chaleur et l'économie
+    /// d'énergie règlent aussi la timeline, y compris en cours de lecture.
+    static func makeCompositionItem(asset: AVAsset, monitor: MediaPolicyMonitor = .shared) -> AVPlayerItem {
+        let item = AVPlayerItem(asset: asset)
+        monitor.adopt(item, role: .watched)
+        return item
+    }
+
     private func configureCore(
         project: TimelineProject,
         mediaURLs: [String: URL]
@@ -192,7 +201,7 @@ public final class StoryTimelineEngine {
                 project: project,
                 composition: composition
             )
-            let item = AVPlayerItem(asset: composition)
+            let item = Self.makeCompositionItem(asset: composition)
             item.videoComposition = videoComposition
             let player = AVPlayer(playerItem: item)
             // Composition LOCALE : attendre « pour minimiser les stalls »

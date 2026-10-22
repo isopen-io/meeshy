@@ -14,9 +14,6 @@ final class MediaPolicyAdoptionGuardTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/OverlayAudioPlayer.swift": "piste audio seule : ni décodeur vidéo ni images d'avance",
         "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyAudioEditorView.swift": "piste audio seule",
         "packages/MeeshySDK/Sources/MeeshyUI/Media/PlaybackLoopQueue.swift": "le successeur recopie l'élément courant d'un lecteur DÉJÀ adopté, dont la file suit la politique",
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerEditSources.swift": "édition locale du composer (chaîne création) — suivi #11984",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift": "composition locale de la timeline (chaîne création) — suivi #11984",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/TimelineExportFlow.swift": "aperçu d'un export local (chaîne création) — suivi #11984",
     ]
 
     private static var repoRoot: URL {
@@ -80,6 +77,18 @@ final class MediaPolicyAdoptionGuardTests: XCTestCase {
             .map { $0.path }
             .filter { !$0.hasSuffix("MediaPolicyMonitor.swift") && !$0.hasSuffix("PlaybackLoopQueue.swift") }
         XCTAssertEqual(offenders, [], "le tampon d'avance se règle par la politique, jamais par une constante")
+    }
+
+    /// `MeeshyVideoPlayer.PerformanceOptions` portait un tampon d'avance que
+    /// ni le moteur partagé ni ses renderers ne lisaient (#11984) : un réglage
+    /// par surface qui faisait croire à un levier. Le tampon est celui de la
+    /// politique, et de personne d'autre.
+    func test_theDeadPerSurfaceBufferPreset_isGone() throws {
+        let files = try swiftFiles(under: "packages/MeeshySDK/Sources") + swiftFiles(under: "apps/ios/Meeshy")
+        let offenders = files
+            .filter { file in Self.codeLines(file.code).contains { $0.contains("PerformanceOptions") } }
+            .map { $0.path }
+        XCTAssertEqual(offenders, [], "le tampon d'avance se règle par MediaPolicyMonitor, jamais par un préréglage de surface")
     }
 
     func test_thePeakBitRateLever_isGone() throws {
