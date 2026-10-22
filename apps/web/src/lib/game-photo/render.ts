@@ -4,6 +4,8 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { formatCount, gameText } from '@/lib/view/game-copy';
 
 import { paintPhoto, type PaintContext, type PhotoArt, type PhotoBanner, type PhotoPalette, type PhotoSource } from './compose';
+import type { GloryRecipe, GloryScene } from './glory/glory-scene';
+import type { PaintSurface } from './glory/paint-glory-frame';
 import { PHOTO_FORMATS, photoLayout, type BannerLayout, type PhotoFormat } from './layout';
 import type { PhotoMoment } from './moments';
 import type { PhotoReferral } from './referral';
@@ -53,6 +55,25 @@ const toBlob = (canvas: HTMLCanvasElement, mimeType = 'image/png', quality?: num
 export const KEPT_STORY_MIME = 'image/jpeg';
 export const KEPT_STORY_QUALITY = 0.9;
 
+/**
+ * UN CADRE DÉCORÉ (#10159, L7) : la story 9:16 est peinte par la scène du cadre
+ * et sort en JPEG q0,9 directement (comme iOS, § 5.5) — un décor photographique
+ * n'a rien à gagner au PNG, et le carnet le garderait ainsi de toute façon. Le
+ * carré reste la carte simple (D1, #10180). La scène ne se FERME pas ici : son
+ * propriétaire (le déroulé) la garde pour recomposer, et la rend en sortant.
+ */
+export type GloryRenderSource = {
+  readonly scene: GloryScene;
+  readonly recipe: GloryRecipe;
+  readonly language: string;
+};
+
+const scratchOf = (createCanvas: RenderParams['createCanvas']) => (width: number, height: number): PaintSurface | null => {
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  return ctx === null ? null : { ctx: ctx as unknown as PaintContext, image: canvas };
+};
+
 export type KeptStoryDeps = {
   readonly createCanvas: (width: number, height: number) => HTMLCanvasElement;
   readonly decode: (blob: Blob) => Promise<ImageBitmap>;
@@ -77,10 +98,10 @@ export async function keptStoryOf(story: Blob, deps: KeptStoryDeps): Promise<Blo
   }
 }
 
-/** Ce que le bandeau porte, dans la langue de l'interface : la phrase, les jours de Flamme, et le lien en carré QR (#9554). */
-const bannerOf = (referral: PhotoReferral, layout: BannerLayout | undefined): PhotoBanner => ({
+/** Ce que le bandeau porte, dans la langue de l'interface : la phrase, les jours de Flamme, et le lien en carré QR (#9554) à la taille de SA mise en page. */
+export const photoBannerOf = (referral: PhotoReferral, layout: BannerLayout | undefined | null): PhotoBanner => ({
   headline: gameText('game.photo.referral.headline'),
-  qr: layout === undefined ? null : referralQr(referral, layout.qr.w),
+  qr: layout === undefined || layout === null ? null : referralQr(referral, layout.qr.w),
   flameLabel: referral.flameDays === null ? null : gameText('game.photo.referral.flame_days', { days: formatCount(referral.flameDays) }),
   ...(referral.placeholder === true ? { placeholder: true as const } : {}),
 });
@@ -94,10 +115,27 @@ async function renderOne(
   const ctx = canvas.getContext('2d');
   if (ctx === null) return null;
   const referral = params.referral ?? null;
-  const layout = photoLayout(format, { banner: referral !== null, rtl: interfaceDirection(currentInterfaceLanguage()) === 'rtl' });
+  const rtl = interfaceDirection(currentInterfaceLanguage()) === 'rtl';
+  const layout = photoLayout(format, { banner: referral !== null, rtl });
+  const glory = params.glory ?? null;
+  if (glory !== null && format === 'story') {
+    glory.scene.paint(ctx as unknown as PaintContext, {
+      photo: params.photo,
+      art: params.art,
+      ...(referral === null ? {} : { banner: photoBannerOf(referral, glory.scene.bannerLayout(rtl)) }),
+      recipe: glory.recipe,
+      palette: params.palette,
+      fontFamily: params.fontFamily,
+      rtl,
+      language: glory.language,
+      scratch: scratchOf(params.createCanvas),
+    });
+    const jpeg = await toBlob(canvas, KEPT_STORY_MIME, KEPT_STORY_QUALITY);
+    return jpeg === null ? null : new File([jpeg], fileNameOf(params.moment.id, format, KEPT_STORY_MIME), { type: KEPT_STORY_MIME });
+  }
   paintPhoto(ctx as unknown as PaintContext, {
     layout,
-    ...(referral === null ? {} : { banner: bannerOf(referral, layout.banner) }),
+    ...(referral === null ? {} : { banner: photoBannerOf(referral, layout.banner) }),
     moment: params.moment,
     dateLabel: dateLabelOf(params.now, params.timeZone),
     photo: params.photo,
@@ -119,6 +157,8 @@ type RenderParams = {
   readonly timeZone?: string;
   /** Le lien de parrainage de l'utilisateur et sa Flamme (#7742) ; `null` ou absent : la carte part sans bandeau. */
   readonly referral?: PhotoReferral | null;
+  /** La scène d'un cadre décoré (#10159) ; `null` ou absent : la carte simple. */
+  readonly glory?: GloryRenderSource | null;
   readonly createCanvas: (width: number, height: number) => HTMLCanvasElement;
 };
 

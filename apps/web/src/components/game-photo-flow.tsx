@@ -11,7 +11,11 @@ import { flowReducer, type FlowState } from '@/lib/game-photo/flow';
 import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
 import { referralOf, referralPlaceholder, referralShareText, type PhotoReferral } from '@/lib/game-photo/referral';
-import type { PhotoFiles } from '@/lib/game-photo/render';
+import { photoBannerOf, type GloryRenderSource, type PhotoFiles } from '@/lib/game-photo/render';
+import type { GloryPreviewKit } from '@/lib/game-photo/env';
+import type { GloryRecipe, GloryScene } from '@/lib/game-photo/glory/glory-scene';
+import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ShareOutcome } from '@/lib/game-photo/share';
 import { dateLabelOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
@@ -21,7 +25,8 @@ import { gameText } from '@/lib/view/game-copy';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 import { GameAuthorCard } from './game-author-card';
-import { GamePhotoFrame } from './game-photo-frame';
+import { GamePhotoFrame, type GloryFrameOverlay } from './game-photo-frame';
+import { GamePhotoGloryCanvas } from './game-photo-glory-canvas';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-surface';
 
 /**
@@ -177,6 +182,56 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
      la frappe ne la rejoue pas. */
   const referralRef = useRef(referral);
   referralRef.current = referral;
+
+  /* LE CADRE DÉCORÉ (#10159, L7) : la scène de l'étape, demandée dès l'ouverture (couches à
+     demi-résolution pour l'aperçu) ; `null` — pack pas prêt, ancien serveur, étape sans cadre —
+     laisse la carte simple, sans attendre. La scène se rend en sortant. */
+  const [glory, setGlory] = useState<GloryScene | null>(null);
+  const [gloryKit, setGloryKit] = useState<GloryPreviewKit | null>(null);
+  const gloryStep = useMemo(() => ({ stepId: moment.id, atmosphere: null, lastChosen: null }), [moment.id]);
+  const gloryTexts = useMemo(() => ({ kicker: moment.kicker, title: moment.title, date: dateLabel, message: null }), [moment.kicker, moment.title, dateLabel]);
+  useEffect(() => {
+    if (env.glory === undefined) return;
+    let live = true;
+    let opened: GloryScene | null = null;
+    void env
+      .glory({ step: gloryStep, texts: gloryTexts, scale: 0.5 })
+      .then((scene) => {
+        if (!live) {
+          scene?.close();
+          return;
+        }
+        opened = scene;
+        setGlory(scene);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+      opened?.close();
+      setGlory(null);
+    };
+  }, [env, gloryStep, gloryTexts]);
+  const gloryRecipe = useMemo((): GloryRecipe => ({ pose: null, message: null, crop: { dx: 0, dy: 0, zoom: 1 }, showFlame: withFlame, showLink: withLink }), [withFlame, withLink]);
+  const rtl = interfaceDirection(currentInterfaceLanguage()) === 'rtl';
+  const gloryBanner = useMemo(() => (glory === null || referral === null ? null : photoBannerOf(referral, glory.bannerLayout(rtl))), [glory, referral, rtl]);
+  const gloryOverlay = useMemo((): GloryFrameOverlay | null => (glory === null ? null : { crest: glory.crest, qr: glory.bannerLayout(rtl)?.qr ?? null }), [glory, rtl]);
+  /* L'image finale ouvre SA scène (pleine résolution) le temps de composer, puis la rend. */
+  const gloryFinal = useCallback(async (): Promise<{ readonly source: GloryRenderSource; readonly close: () => void } | null> => {
+    if (glory === null || env.glory === undefined) return null;
+    const scene = await env.glory({ step: gloryStep, texts: gloryTexts, scale: 1 }).catch(() => null);
+    return scene === null ? null : { source: { scene, recipe: gloryRecipe, language: currentInterfaceLanguage() }, close: scene.close };
+  }, [env, glory, gloryRecipe, gloryStep, gloryTexts]);
+  const composeWith = useCallback(
+    async (input: { readonly photo: PhotoSource | null; readonly frame: HTMLElement | null; readonly referral: PhotoReferral | null }): Promise<PhotoFiles | null> => {
+      const final = await gloryFinal();
+      try {
+        return await env.render({ moment, ...input, glory: final?.source ?? null });
+      } finally {
+        final?.close();
+      }
+    },
+    [env, gloryFinal, moment],
+  );
   const options =
     !linkOffered ? null : (
       <fieldset className="flex flex-col gap-1" data-photo-options="">
@@ -283,7 +338,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     const source = strikingMode === 'card' ? null : photo.current;
     const handle = play('mint');
     const banner = referralRef.current;
-    void Promise.all([handle?.finished ?? Promise.resolve(), env.render({ moment, photo: source, frame: stage.current, referral: banner })])
+    void Promise.all([handle?.finished ?? Promise.resolve(), composeWith({ photo: source, frame: stage.current, referral: banner })])
       .then(([, rendered]) => {
         if (!live) return;
         if (rendered === null) {
@@ -301,7 +356,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     return () => {
       live = false;
     };
-  }, [strikingMode, strikingZone, frameId, env, moment, play, stage]);
+  }, [strikingMode, strikingZone, frameId, composeWith, play, stage]);
 
   /* La sortie : « plus tard » laisse le moment en attente, tout le reste le laisse tel quel. */
   useEffect(() => {
@@ -381,8 +436,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const artFrame = useRef<HTMLDivElement>(null);
   const resultMode = state.step === 'result' ? state.mode : null;
   const recompose = useCallback(
-    (next: PhotoReferral | null) => env.render({ moment, photo: resultMode === 'card' ? null : photo.current, frame: artFrame.current, referral: next }).catch(() => null),
-    [env, moment, resultMode],
+    (next: PhotoReferral | null) => composeWith({ photo: resultMode === 'card' ? null : photo.current, frame: artFrame.current, referral: next }).catch(() => null),
+    [composeWith, resultMode],
   );
   const outgoingFiles = useCallback(
     async (): Promise<PhotoFiles | null> => (composedReferral?.placeholder === true ? recompose(null) : files),
@@ -514,6 +569,26 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
 
   const showStage = state.step === 'camera' || state.step === 'striking';
   const stageMode = state.step === 'striking' ? state.mode : 'selfie';
+  /* Les dessins du cadre affiché, pour que le canvas peigne l'emblème, Mee, Meo et la Signature de l'écran. */
+  const wantsKit = showStage && glory !== null && env.gloryKit !== undefined;
+  useEffect(() => {
+    if (!wantsKit || stage.current === null || env.gloryKit === undefined) return;
+    let live = true;
+    void env.gloryKit(stage.current).then((kit) => {
+      if (live) setGloryKit(kit);
+    }).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [wantsKit, env, stage, referral]);
+  /* La source de l'aperçu décoré : la vidéo tant qu'elle est vivante, la prise ou la photo importée ensuite, rien pour la carte seule. */
+  const liveVideo = cameraLive ? video.current : null;
+  const striking = state.step === 'striking';
+  const glorySource = useMemo(() => {
+    if (stageMode === 'card') return { kind: 'card' } as const;
+    if (stageMode === 'gallery' || striking) return { kind: 'photo', photo: photo.current } as const;
+    return { kind: 'video', element: liveVideo } as const;
+  }, [stageMode, striking, liveVideo]);
 
   return (
     <div
@@ -588,7 +663,10 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
               <img data-photo-still="" src={stillUrl} alt="" className="absolute inset-0 size-full object-cover" style={{ transform: 'scaleX(-1)' }} />
             ) : null}
             {stageMode === 'gallery' && galleryUrl !== null ? <img src={galleryUrl} alt="" className="absolute inset-0 size-full object-cover" /> : null}
-            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" author={author} referral={referral} />
+            {glory !== null && gloryKit !== null ? (
+              <GamePhotoGloryCanvas scene={glory} kit={gloryKit} source={glorySource} banner={gloryBanner} recipe={gloryRecipe} />
+            ) : null}
+            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" author={author} referral={referral} glory={gloryKit === null ? null : gloryOverlay} />
           </div>
         ) : null}
 
