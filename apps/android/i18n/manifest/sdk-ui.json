@@ -231,12 +231,6 @@
           "status": "candidate"
         },
         {
-          "catalog": "app",
-          "iosKey": "emoji.category.animals",
-          "androidName": "emoji_category_animals",
-          "status": "candidate"
-        },
-        {
           "catalog": "ui",
           "iosKey": "emoji.category.faces",
           "androidName": "emoji_category_faces",
@@ -252,12 +246,6 @@
           "catalog": "ui",
           "iosKey": "emoji.category.hearts",
           "androidName": "emoji_category_hearts",
-          "status": "candidate"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "emoji.category.objects",
-          "androidName": "emoji_category_objects",
           "status": "candidate"
         },
         {
