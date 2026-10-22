@@ -612,19 +612,25 @@ fileprivate struct BubbleGridImageView: View {
     var onFullImageLoaded: (@MainActor () -> Void)? = nil
 
     @Environment(\.displayScale) private var displayScale: CGFloat
+    /// L'original vient d'être posé sur l'appareil par le bouton de la bulle
+    /// (`AttachmentDownloadCenter`) : la source affichée se relit, et le
+    /// chargement retenu par la politique repart.
+    @State private var originalLanded = false
 
-    /// 5.2 — l'URL que la case AFFICHE : la plus petite variante
-    /// `>= largeur d'affichage en px` (atome pur SDK), ou l'original sans
-    /// variante (image chiffrée). Site unique : le badge y lit la MÊME URL
-    /// que celle que la case télécharge (#10370).
+    /// 5.2 — l'URL que la case AFFICHE (`BubbleImageSourceLaw`) : une forme
+    /// déjà sur l'appareil d'abord, sinon la plus petite variante
+    /// `>= largeur d'affichage en px`, ou l'original sans variante (image
+    /// chiffrée). Site unique : le badge y lit la MÊME URL que celle que la
+    /// case charge (#10370).
     static func displayedURL(for attachment: MessageAttachment, cellPointWidth: CGFloat,
-                             displayScale: CGFloat) -> String? {
-        guard !attachment.fileUrl.isEmpty else { return nil }
-        return ImageVariantSelector.bestImageURL(
+                             displayScale: CGFloat,
+                             isOnDevice: (String) -> Bool = BubbleImageSourceLaw.isOnDevice) -> String? {
+        BubbleImageSourceLaw.displayedURL(
             variants: attachment.imageVariants ?? [],
             originalURL: attachment.fileUrl,
             originalWidth: attachment.width,
-            targetWidthPx: Int((cellPointWidth * displayScale).rounded())
+            targetWidthPx: Int((cellPointWidth * displayScale).rounded()),
+            isOnDevice: isOnDevice
         )
     }
 
@@ -646,16 +652,33 @@ fileprivate struct BubbleGridImageView: View {
                 thumbnailUrl: effectiveThumb,
                 fullUrl: selectedFull,
                 targetSize: CGSize(width: cellPointWidth, height: cellPointWidth),
-                onFullImageLoaded: onFullImageLoaded
+                onFullImageLoaded: onFullImageLoaded,
+                reloadToken: originalLanded
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }
             .aspectRatio(contentMode: .fill)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
+            .task(id: attachment.fileUrl) { await watchOriginalLanding() }
         } else {
             Color(hex: attachment.thumbnailColor)
                 .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(MeeshyOpacity.strong)))
+        }
+    }
+}
+
+extension BubbleGridImageView {
+    /// Le bouton « télécharger » de la bulle passe par le centre, que la vue
+    /// d'image n'observait pas : la photo restait floue jusqu'au plein écran.
+    fileprivate func watchOriginalLanding() async {
+        guard !originalLanded, !attachment.fileUrl.isEmpty,
+              !attachment.fileUrl.hasPrefix("file://") else { return }
+        let key = AttachmentDownloadCenter.key(for: attachment.fileUrl)
+        for await event in AttachmentDownloadCenter.shared.events(for: key).values
+        where BubbleImageSourceLaw.marksOriginalLanding(event) {
+            originalLanded = true
+            return
         }
     }
 }

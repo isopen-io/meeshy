@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import Meeshy
 import os
 
@@ -427,4 +428,75 @@ private final class OutcomeBox: Sendable {
     private let results = OSAllocatedUnfairLock(initialState: [Result<ShareStagedMedia, ShareMediaStagingError>]())
     var values: [Result<ShareStagedMedia, ShareMediaStagingError>] { results.withLock { $0 } }
     func append(_ result: Result<ShareStagedMedia, ShareMediaStagingError>) { results.withLock { $0.append(result) } }
+}
+
+/// La vignette d'une VIDÉO copiée (#11528) : une image tirée du fichier,
+/// réduite par le décodeur lui-même — jamais une image pleine résolution sous
+/// le plafond mémoire de l'extension. Un fichier illisible rend `nil`, et la
+/// tuile garde son glyphe.
+final class ShareIncomingVideoPosterTests: XCTestCase {
+
+    private func makeMovie(width: Int, height: Int) async throws -> URL {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-poster-\(UUID().uuidString).mov")
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+        ])
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height,
+        ])
+        writer.add(input)
+        XCTAssertTrue(writer.startWriting())
+        writer.startSession(atSourceTime: .zero)
+        for frame in 0..<2 {
+            while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 1_000_000) }
+            let buffer = try XCTUnwrap(Self.solidBuffer(pool: adaptor.pixelBufferPool, value: frame == 0 ? 0x40 : 0xC0))
+            XCTAssertTrue(adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 10)))
+        }
+        input.markAsFinished()
+        await writer.finishWriting()
+        XCTAssertEqual(writer.status, .completed)
+        return url
+    }
+
+    private static func solidBuffer(pool: CVPixelBufferPool?, value: UInt8) -> CVPixelBuffer? {
+        guard let pool else { return nil }
+        var buffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
+        guard let buffer else { return nil }
+        CVPixelBufferLockBaseAddress(buffer, [])
+        if let base = CVPixelBufferGetBaseAddress(buffer) {
+            memset(base, Int32(value), CVPixelBufferGetDataSize(buffer))
+        }
+        CVPixelBufferUnlockBaseAddress(buffer, [])
+        return buffer
+    }
+
+    func test_videoPoster_movie_returnsAnImageNoLargerThanTheRequestedSide() async throws {
+        let movie = try await makeMovie(width: 640, height: 360)
+        defer { try? FileManager.default.removeItem(at: movie) }
+
+        let poster = await ShareIncomingThumbnail.videoPoster(movie, maxPixel: 160)
+
+        let image = try XCTUnwrap(poster, "une vidéo lisible doit rendre une image, pas le glyphe")
+        let pixels = image.size.applying(CGAffineTransform(scaleX: image.scale, y: image.scale))
+        XCTAssertGreaterThan(pixels.width, 0)
+        XCTAssertLessThanOrEqual(max(pixels.width, pixels.height), 160)
+    }
+
+    func test_videoPoster_fileThatIsNotAMovie_returnsNilSoTheGlyphStays() async throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-poster-\(UUID().uuidString).mov")
+        try Data("pas une vidéo".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let poster = await ShareIncomingThumbnail.videoPoster(url, maxPixel: 160)
+
+        XCTAssertNil(poster)
+    }
 }

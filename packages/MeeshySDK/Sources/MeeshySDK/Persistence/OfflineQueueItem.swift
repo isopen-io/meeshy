@@ -140,16 +140,16 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let ephemeralDuration: Int?
     public let createdAt: Date
 
-    /// La protection que le dispatcher rejoue — l'intention reconstruite
-    /// depuis ce que la ligne a persisté, TELLE QUELLE : la ligne a déjà
-    /// traversé le composeur et la contagion, un flou et une vue unique qui y
-    /// cohabitent viennent d'une citation floue (#8567).
     /// Le nom d'origine du fichier `index` de `localMediaPaths`, s'il est connu.
     public func originalMediaName(at index: Int) -> String? {
         guard let names = localMediaOriginalNames, names.indices.contains(index) else { return nil }
         return names[index]
     }
 
+    /// La protection que le dispatcher rejoue — l'intention reconstruite
+    /// depuis ce que la ligne a persisté, TELLE QUELLE : la ligne a déjà
+    /// traversé le composeur et la contagion, un flou et une vue unique qui y
+    /// cohabitent viennent d'une citation floue (#8567).
     public var replayProtection: MessageProtectionIntent {
         let flags = MessageEffectFlags(rawValue: protectionFlags ?? 0)
         return MessageProtectionIntent(

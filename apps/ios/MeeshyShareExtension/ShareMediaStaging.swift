@@ -166,7 +166,7 @@ nonisolated enum ShareMediaStaging {
     /// premier candidat non vide, réduit à son dernier composant, sans
     /// caractère de contrôle ni de mise en forme bidirectionnelle (un
     /// `U+202E` ferait lire `photo‮gpj.exe` comme `photoexe.jpg`), sans
-    /// séparateur, sans point ni espace de tête, plafonné en gardant son
+    /// séparateur, sans point ni espace en bordure, plafonné en gardant son
     /// extension. Une extension absente ou douteuse cède la place à `ext`.
     /// Rien d'utilisable : `nil`, et l'envoi garde `<index>.<ext>`.
     static func sanitizedOriginalName(candidates: [String?], fallbackExt: String) -> String? {
@@ -189,10 +189,14 @@ nonisolated enum ShareMediaStaging {
         let ext = hasSafeExt ? nameExt : fallbackExt
         let suffix = ext.isEmpty ? "" : "." + ext
         let cappedStem = truncated(stem, toUTF8Bytes: maxOriginalNameBytes - suffix.utf8.count)
-            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: stemEdges)
         guard !cappedStem.isEmpty else { return nil }
         return cappedStem + suffix
     }
+
+    /// Ce qui ne borde pas une racine : un point final doublerait celui de
+    /// l'extension (`photo.` → `photo..jpeg`).
+    private static let stemEdges = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "."))
 
     private static func isInvisibleOrControl(_ scalar: Unicode.Scalar) -> Bool {
         switch scalar.value {
