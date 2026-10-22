@@ -3,56 +3,40 @@ package me.meeshy.app.calls
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import me.meeshy.sdk.model.call.CallAnalytics
-import me.meeshy.sdk.model.call.CallEndReason
-import me.meeshy.sdk.model.call.CallRetryPolicy
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
-import me.meeshy.sdk.model.call.CallMediaTogglePayload
-import me.meeshy.sdk.model.call.CallQualityAlertPayload
-import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
-import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
+import me.meeshy.sdk.model.call.CallRetryPolicy
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallStateMachine
-import me.meeshy.sdk.model.call.CallWaitingEvent
-import me.meeshy.sdk.model.call.CallWaitingReducer
-import me.meeshy.sdk.model.call.CallWaitingState
 import me.meeshy.sdk.model.call.ConnectionQuality
-import me.meeshy.sdk.model.call.TelecomCallPolicy
 import me.meeshy.sdk.model.call.SocketIceServer
-import me.meeshy.sdk.model.call.WaitingCall
+import me.meeshy.sdk.model.call.TelecomCallPolicy
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
 /**
- * UDF ViewModel driving the pure [CallStateMachine], now folded onto the live
- * transport. It owns the current [CallState], the local [CallMedia] intent, and
- * the server [callId] every outbound emit is keyed by, republishing an immutable
- * [CallUiState] via [CallPresenter].
- *
- * Three responsibilities, all thin orchestration over stateless building blocks:
- *  - **Fold in** remote signalling: [CallSignalManager.events] is collected in
- *    [viewModelScope] and each mapped [CallEvent] is reduced through the FSM, so a
- *    peer answer / remote hang-up / stall drives the screen with no manual wiring.
- *  - **Place** an outgoing call: [start] mints the real `callId` via the ACK-based
- *    [CallSignalManager.emitInitiate]; the ring shows instantly (optimistic) and a
- *    rejected / timed-out / malformed ACK settles the call to `Ended(Failed)`.
- *  - **Fan out** local actions: accept/decline/hang-up/mute/camera route to the
- *    matching [CallSignalManager] emit, keyed by the known id (inert until one is).
- *
- * Every *decision* still lives in the FSM, the presenter, and the pure ACK parser
- * behind [CallSignalManager.emitInitiate] — this class only sequences them.
+ * UDF ViewModel driving the pure [CallStateMachine], folded onto the live
+ * transport. It owns the current [CallState], the local [CallMedia] intent and the
+ * server [callId] every outbound emit is keyed by, republishing an immutable
+ * [CallUiState] via [CallPresenter]: it **folds in** remote signalling, **places**
+ * an outgoing call (the ring shows instantly, the ACK mints the real id) and
+ * **fans out** local actions. Every *decision* lives in the FSM and the presenter;
+ * the other slices of the call have an owner this class only sequences
+ * ([CallPeerIndicatorsController], [CallWaitingController],
+ * [CallWatchdogsController], [CallAnalyticsController]), and capabilities beyond
+ * the core call plug into [extensions].
  */
 @HiltViewModel
 class CallViewModel @Inject constructor(
@@ -63,14 +47,13 @@ class CallViewModel @Inject constructor(
     private val toneController: CallToneController,
     private val telecomReporter: TelecomCallReporter,
     private val qualitySampler: CallQualitySampler,
-    private val waitingTimer: CallWaitingTimer,
-    private val heartbeatTicker: CallHeartbeatTicker,
     private val appStatePresence: AppStatePresenceReporter,
-    private val qualityResetTimer: CallQualityResetTimer,
-    private val screenRecordingDetector: ScreenRecordingDetector,
-    private val clock: CallClock,
-    private val reconnectBudget: CallReconnectBudget,
-    private val connectingWatchdog: CallConnectingWatchdog,
+    private val peers: CallPeerIndicatorsController,
+    private val waiting: CallWaitingController,
+    private val watchdogs: CallWatchdogsController,
+    private val analytics: CallAnalyticsController,
+    /** The seams capabilities plug into; the call screen reads the UI ones from here. */
+    val extensions: CallExtensionPoints,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -101,77 +84,39 @@ class CallViewModel @Inject constructor(
     /** Collects [CallQualitySampler.samples]; alive only while media is flowing. */
     private var qualityJob: Job? = null
 
-    /** Emits `call:heartbeat` each [CallHeartbeatTicker] beat; alive only while media is flowing. */
-    private var heartbeatJob: Job? = null
+    /** `true` while the app itself froze the outgoing video ([CallVideoHealth]). */
+    private var videoAutoPaused: Boolean = false
 
-    /** Relays local screen-recording edges to the gateway; alive only while media is flowing. */
-    private var screenCaptureReportJob: Job? = null
-
-    /** The armed per-attempt reconnection window; escalates ReconnectFailed on expiry. */
-    private var reconnectBudgetJob: Job? = null
-
-    /** The exact Reconnecting state the window was armed for — an attempt bump re-arms. */
-    private var reconnectBudgetArmedFor: CallState? = null
-
-    /** One continuous connect window over Offering∪Connecting; fails the call on expiry. */
-    private var connectingWatchdogJob: Job? = null
-
-    /**
-     * The last capture state actually SENT this call, or `null` when none was.
-     * Dedupes the detector's re-emissions AND keeps the initial "not capturing"
-     * silent — the peer assumes no capture by default, only edges are news.
-     */
-    private var lastReportedCapture: Boolean? = null
-
-    /** At most one second incoming call awaiting an accept-swap / reject decision. */
-    private var waiting: CallWaitingState = CallWaitingState.EMPTY
-
-    /** The 15 s auto-dismiss timer for the current banner; cancelled on any resolution. */
-    private var waitingTimerJob: Job? = null
-
-    /** The REMOTE peer's sustained-bad-network flag (`call:quality-alert`). */
-    private var peerQualityDegraded: Boolean = false
-
-    /** The 15 s silence window that auto-clears [peerQualityDegraded]; restarted per alert. */
-    private var qualityResetJob: Job? = null
-
-    /** The remote peer's live screen-capture flag (`call:screen-capture-alert`). */
-    private var peerScreenCapturing: Boolean = false
-
-    /** The latest live caption from the remote speaker (`call:translated-segment`). */
-    private var caption: String? = null
-
-    /** The remote peer's mic state (`call:media-toggled` audio); `true` until told otherwise. */
-    private var peerAudioEnabled: Boolean = true
-
-    /** The remote peer's camera state (`call:media-toggled` video); `true` until told otherwise. */
-    private var peerVideoEnabled: Boolean = true
-
-    /**
-     * The pure once-per-call telemetry accumulator behind `call:analytics`,
-     * created by [start] and folded on FSM edges + quality samples; `null`
-     * after the terminal report so a settle can never re-emit.
-     */
-    private var analytics: CallAnalytics? = null
+    /** What the collaborators may read of this session, and the one door back into it. */
+    private val host = object : CallSessionHost {
+        override val scope: CoroutineScope get() = viewModelScope
+        override val config: CallConfig get() = this@CallViewModel.config
+        override val callId: String get() = this@CallViewModel.callId
+        override val selfId: String get() = this@CallViewModel.selfId
+        override val callState: CallState get() = this@CallViewModel.callState
+        override val elapsedSeconds: Long get() = this@CallViewModel.elapsedSeconds
+        override fun dispatch(event: CallEvent) = this@CallViewModel.dispatch(event)
+        override fun publish() = this@CallViewModel.publish()
+    }
 
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
     /**
-     * The immutable inputs of the call currently in flight. Read by the app shell
-     * ([MeeshyApp]) to rebuild the call route when the floating pill re-opens a
-     * minimised call — the Activity-scoped instance is reused on arrival, so the
-     * screen's re-entrant [start] is inert and the live call is left untouched.
-     * Reflects the last [start] config, or [CallConfig.EMPTY] while idle.
+     * The inputs of the call in flight — read by the app shell to rebuild the call
+     * route when the floating pill re-opens a minimised call (the Activity-scoped
+     * instance is reused, so the screen's re-entrant [start] is inert).
+     * [CallConfig.EMPTY] while idle.
      */
     val activeConfig: CallConfig get() = config
 
     init {
+        peers.attach(host)
+        waiting.attach(host)
+        watchdogs.attach(host)
+        analytics.attach(host)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
-        }
-        viewModelScope.launch {
-            signalManager.incomingOffers.collect(::onIncomingOffer)
         }
         viewModelScope.launch {
             signalManager.endedCalls.collect(::onRemoteEnded)
@@ -183,92 +128,21 @@ class CallViewModel @Inject constructor(
             appStatePresence.foreground.collect(::onAppStateChanged)
         }
         viewModelScope.launch {
-            signalManager.qualityAlerts.collect(::onQualityAlert)
-        }
-        viewModelScope.launch {
-            signalManager.screenCaptureAlerts.collect(::onScreenCaptureAlert)
-        }
-        viewModelScope.launch {
-            signalManager.translatedSegments.collect(::onTranslatedSegment)
-        }
-        viewModelScope.launch {
-            signalManager.mediaToggles.collect(::onMediaToggle)
+            extensions.videoHealth.isVideoAutoPaused.collect(::onVideoHealthChanged)
         }
     }
 
-    // --- Peer indicators: quality / screen-capture / captions (audit #5) ----
-
-    /**
-     * The gateway flags the REMOTE peer's sustained bad network. Gated on the
-     * active call's id (a fan-out for another call is inert); each fresh alert
-     * restarts the 15 s silence window, so the indicator stays up exactly as
-     * long as alerts keep arriving — iOS `isRemoteQualityDegraded` parity.
-     */
-    private fun onQualityAlert(alert: CallQualityAlertPayload) {
-        if (callId.isBlank() || alert.callId != callId) return
-        peerQualityDegraded = true
-        publish()
-        restartQualityResetWindow()
-    }
-
-    /** The remote peer started/stopped capturing the call — flip the privacy banner. */
-    private fun onScreenCaptureAlert(alert: CallScreenCaptureAlertPayload) {
-        if (callId.isBlank() || alert.callId != callId) return
-        peerScreenCapturing = alert.isCapturing
-        publish()
-    }
-
-    /** A live caption landed — prefer the server-side translation over the original. */
-    private fun onTranslatedSegment(segment: CallTranslatedSegmentPayload) {
-        if (callId.isBlank() || segment.callId != callId) return
-        caption = segment.segment.translatedText ?: segment.segment.text
+    /** The app froze (or released) the outgoing video — only the UI state changes. */
+    private fun onVideoHealthChanged(paused: Boolean) {
+        if (paused == videoAutoPaused) return
+        videoAutoPaused = paused
         publish()
     }
 
     /**
-     * The remote peer muted/unmuted the mic or toggled the camera — flip the
-     * matching indicator (iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
-     * parity). Gated on the active call's id; an unknown `mediaType` is inert
-     * (never a blind flip).
-     */
-    private fun onMediaToggle(toggle: CallMediaTogglePayload) {
-        if (callId.isBlank() || toggle.callId != callId) return
-        when (toggle.mediaType) {
-            "audio" -> peerAudioEnabled = toggle.enabled
-            "video" -> peerVideoEnabled = toggle.enabled
-            else -> return
-        }
-        publish()
-    }
-
-    private fun restartQualityResetWindow() {
-        qualityResetJob?.cancel()
-        qualityResetJob = viewModelScope.launch {
-            qualityResetTimer.countdown().collect {
-                qualityResetJob = null
-                peerQualityDegraded = false
-                publish()
-            }
-        }
-    }
-
-    private fun clearPeerIndicators() {
-        qualityResetJob?.cancel()
-        qualityResetJob = null
-        peerQualityDegraded = false
-        peerScreenCapturing = false
-        caption = null
-        peerAudioEnabled = true
-        peerVideoEnabled = true
-    }
-
-    /**
-     * Transition foreground/background du process pendant un appel actif —
-     * relaie `call:backgrounded`/`foregrounded` pour que le gateway étende la
-     * tolérance heartbeat (grâce 5 min) au lieu de couper l'appel quand
-     * l'utilisateur met l'app en arrière-plan (audit appels 2026-07-11 #5).
-     * Inerte hors appel, avant identification, ou sans session (le schéma
-     * gateway exige un participantId non vide ; le serveur résout le vrai).
+     * App foreground/background during an active call: relays `call:backgrounded`
+     * / `foregrounded` so the gateway extends the heartbeat grace (5 min) instead
+     * of cutting the call. Inert off-call, before identification or without a session.
      */
     private fun onAppStateChanged(foreground: Boolean?) {
         if (foreground == null) return
@@ -280,11 +154,12 @@ class CallViewModel @Inject constructor(
     }
 
     /**
-     * Fold a remote FSM event, then drive the WebRTC media: the caller sends its
-     * SDP offer only once the peer has actually joined the room ([CallEvent
-     * .ParticipantJoined]) — offering earlier races the callee's connection.
+     * Capabilities hear a remote event first (the cause), then it is folded into
+     * the FSM. The caller sends its SDP offer only once the peer has joined the
+     * room ([CallEvent.ParticipantJoined]) — offering earlier races the callee.
      */
     private fun onRemoteEvent(event: CallEvent) {
+        extensions.controllers.notifyRemoteEvent(event, session())
         dispatch(event)
         if (event is CallEvent.ParticipantJoined) coordinator.onParticipantJoined(event.peerId)
     }
@@ -307,36 +182,30 @@ class CallViewModel @Inject constructor(
 
     /**
      * Begin a call for [config]. Inert unless the FSM is idle, so a re-entrant
-     * `start` (e.g. a recomposition re-firing the launch effect) never resets a
-     * call already in flight. Resets the local media intent to the call's kind and
-     * adopts the config's [CallConfig.callId] (blank for an outgoing call, which
-     * mints its own via the ACK).
+     * `start` (a recomposition re-firing the launch effect) never resets a call in
+     * flight. Resets the media intent to the call's kind and adopts the config's
+     * [CallConfig.callId] (blank for an outgoing call, which mints its own).
      */
     fun start(config: CallConfig) {
         if (!callState.canStart) return
         this.config = config
-        // Parity iOS `CallManager` (`isSpeaker = isVideo`): a video call defaults to
-        // the loudspeaker, an audio call to the earpiece — [WebRtcCallCoordinator]
-        // applies the same default to AudioManager once media opens.
+        // iOS parity (`isSpeaker = isVideo`): video defaults to the loudspeaker.
         this.media = CallMedia(isCameraOn = config.isVideo, isSpeakerOn = config.isVideo)
         this.callId = config.callId
         this.elapsedSeconds = 0L
         this.connectionQuality = null
-        this.waiting = CallWaitingState.EMPTY
-        this.analytics = CallAnalytics(startedAtMs = clock.nowMs())
+        waiting.reset()
+        analytics.begin()
         stopTicker()
         stopQuality()
-        stopWaitingTimer()
-        stopReconnectBudget()
-        stopConnectingWatchdog()
-        clearPeerIndicators()
+        watchdogs.reset()
+        peers.clear()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
 
     /**
-     * Ring immediately (instant feedback), then place the call over the wire. The
-     * initiate ACK mints the real [callId]; a gateway rejection / timeout / bad ACK
-     * settles the ringing call to `Ended(Failed)` via the FSM's terminal path.
+     * Ring immediately, then place the call over the wire: the initiate ACK mints
+     * the real [callId]; a rejection / timeout / bad ACK settles to `Ended(Failed)`.
      */
     private fun startOutgoing(config: CallConfig) {
         dispatch(CallEvent.StartOutgoing)
@@ -356,19 +225,13 @@ class CallViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Local user accepts an incoming call — answer the FSM, join the room, and
-     * request fresh ICE servers (absent from the `call:initiated` frame); the media
-     * connection opens in [onIceServersRefreshed] once they arrive.
-     */
+    /** Local user accepts an incoming call — answer the FSM, join the room, open the media. */
     fun accept() {
         dispatch(CallEvent.LocalAnswer)
         if (callId.isBlank()) return
-        // Join WITH the ACK (parity with iOS emitCallJoinWithAck): the ACK confirms
-        // this socket is in the call room AND carries the callee's ICE servers, so
-        // media opens straight away. The prior fire-and-forget join + immediate
-        // call:request-ice-servers raced the not-yet-joined room -> NOT_A_PARTICIPANT
-        // ("Not in call room") the instant the user answered.
+        // Join WITH the ACK (iOS emitCallJoinWithAck parity): it confirms this socket
+        // is in the room AND carries the ICE servers, so media opens straight away.
+        // A fire-and-forget join raced the room -> NOT_A_PARTICIPANT on answer.
         viewModelScope.launch {
             when (val result = signalManager.emitJoinAwaitingAck(callId)) {
                 is CallJoinResult.Success -> coordinator.startIncoming(
@@ -383,9 +246,8 @@ class CallViewModel @Inject constructor(
     /** Local user declines an incoming call — reject the FSM and end it on the wire. */
     fun decline() {
         dispatch(CallEvent.Reject)
-        // reason=rejected : sans elle le serveur résout ce end pré-décroché en
-        // missed et le journal de l'appelant dit « manqué » pour un refus.
-        emitIfIdentified { signalManager.emitEnd(it, reason = REASON_REJECTED) }
+        // reason=rejected: else the server resolves this pre-answer end as missed.
+        emitIfIdentified { signalManager.emitEnd(it, reason = END_REASON_REJECTED) }
         coordinator.end()
     }
 
@@ -396,7 +258,7 @@ class CallViewModel @Inject constructor(
         coordinator.end()
     }
 
-    /** Feed a signalling/remote event directly (peer joined, answer, stall, remote end…). */
+    /** Feed a signalling event directly (peer joined, answer, stall, remote end…). */
     fun onSignal(event: CallEvent) = dispatch(event)
 
     /** Toggle the local microphone mute and signal the peer. */
@@ -407,11 +269,7 @@ class CallViewModel @Inject constructor(
         emitIfIdentified { signalManager.emitToggleAudio(it, enabled = !media.isMuted) }
     }
 
-    /**
-     * Toggle the speaker/earpiece audio route. Purely local — unlike mute/camera
-     * there is no `call:media-toggled` counterpart, since the peer's audio path is
-     * unaffected by which of *our* speakers we listen on.
-     */
+    /** Toggle the speaker/earpiece route — purely local, the peer is never told. */
     fun toggleSpeaker() {
         media = media.copy(isSpeakerOn = !media.isSpeakerOn)
         publish()
@@ -435,11 +293,9 @@ class CallViewModel @Inject constructor(
     fun dismiss() = dispatch(CallEvent.Settle)
 
     /**
-     * « Réessayer » a transiently-failed call (Failed/ConnectionLost) — parité
-     * web retry-on-failure. Settles the ended screen back to idle, then
-     * re-initiates a FRESH outgoing call to the same conversation/type (blank
-     * callId → the initiate ACK mints a new one). Inert unless the ended reason
-     * is retryable, so a normal hangup / rejection can never re-dial.
+     * « Réessayer » a transiently-failed call: settle the ended screen, then
+     * re-initiate a FRESH outgoing call (blank callId → the ACK mints a new one).
+     * Inert unless the ended reason is retryable — a hangup never re-dials.
      */
     fun retry() {
         val ended = callState as? CallState.Ended ?: return
@@ -449,44 +305,16 @@ class CallViewModel @Inject constructor(
         start(previous.copy(callId = "", isOutgoing = true))
     }
 
-    // --- Call waiting: a second incoming call while this one is active ------
+    /** Reject the waiting call (also the resolution of the banner's 15 s auto-dismiss). */
+    fun rejectWaiting() = waiting.reject()
 
     /**
-     * A second incoming offer arrived on the socket. It becomes a call-waiting
-     * banner **only** while a call is already active (parity with iOS busy-path)
-     * and only for a *different* call than the one in progress — a redelivery of
-     * the active call's own offer is ignored. A newer offer replaces an older
-     * pending one and restarts the auto-dismiss window.
-     */
-    private fun onIncomingOffer(call: WaitingCall) {
-        if (!callState.isActive) return
-        if (call.callId == callId) return
-        waitingReduce(CallWaitingEvent.Offered(call))
-        startWaitingTimer(call.callId)
-    }
-
-    /**
-     * Reject the waiting call: end it on the wire (keyed by its own id, leaving
-     * the active call untouched) and dismiss the banner. Also the resolution the
-     * 15 s auto-dismiss reuses — an ignored banner must free the caller, not leave
-     * them ringing.
-     */
-    fun rejectWaiting() {
-        val pending = waiting.pending ?: return
-        stopWaitingTimer()
-        endWaiting(pending)
-    }
-
-    /**
-     * End-this-and-answer: dismiss the banner, hang up the active call, settle it,
-     * and re-present the waiting call as a fresh incoming call the user answers
-     * normally (parity with iOS `endCurrentAndAnswerPending`, which re-reports the
-     * pending call after tearing down the active one).
+     * End-this-and-answer (iOS `endCurrentAndAnswerPending`): dismiss the banner,
+     * hang up and settle the active call, then re-present the waiting call as a
+     * fresh incoming call the user answers normally.
      */
     fun acceptWaitingSwap() {
-        val pending = waiting.pending ?: return
-        stopWaitingTimer()
-        waitingReduce(CallWaitingEvent.Accepted)
+        val pending = waiting.accept() ?: return
         hangUp()
         dispatch(CallEvent.Settle)
         start(
@@ -501,58 +329,19 @@ class CallViewModel @Inject constructor(
     }
 
     /**
-     * A call ended remotely (`call:ended` / `call:missed`). This is the **sole**
-     * teardown path, gated on identity so only the *right* call is torn down:
-     *  - the ended id is the **active** call's → reduce the FSM by the carried
-     *    event (`RemoteHangUp` / `RingTimeout`), ending the call the user is on.
-     *  - the ended id is the **waiting** call's → its caller hung up (or the ring
-     *    timed out) before the user chose, so the banner is dismissed and its
-     *    auto-reject timer cancelled **without** an `emitEnd` (nothing is left to
-     *    end once the caller has gone), leaving the active call untouched.
-     *  - neither → inert. Crucially, the gateway fans a `call:ended` out to every
-     *    member room, so a busy user also receives the *waiting* call's teardown;
-     *    because teardown never rides the identity-less [CallSignalManager.events],
-     *    that fan-out can no longer blindly reduce the active call's FSM.
+     * A call ended remotely (`call:ended` / `call:missed`), gated on identity: the
+     * **active** call's id reduces the FSM; the **waiting** call's id is
+     * [waiting]'s to dismiss (the gateway fans every teardown out to every member
+     * room); any other id is inert.
      */
     private fun onRemoteEnded(signal: CallEndedSignal) {
         if (callId.isNotBlank() && signal.callId == callId) {
+            extensions.controllers.notifyRemoteEvent(signal.event, session())
             dispatch(signal.event)
             coordinator.end()
             return
         }
-        val pending = waiting.pending ?: return
-        if (pending.callId != signal.callId) return
-        stopWaitingTimer()
-        waitingReduce(CallWaitingEvent.RemotelyEnded(signal.callId))
-    }
-
-    private fun endWaiting(pending: WaitingCall) {
-        signalManager.emitEnd(pending.callId, reason = REASON_REJECTED)
-        waitingReduce(CallWaitingEvent.Rejected)
-    }
-
-    private fun startWaitingTimer(offeredId: String) {
-        waitingTimerJob?.cancel()
-        waitingTimerJob = viewModelScope.launch {
-            waitingTimer.countdown().collect {
-                val pending = waiting.pending ?: return@collect
-                if (pending.callId != offeredId) return@collect
-                // The single-shot countdown completes right after this — mark the
-                // job done so `endWaiting` never cancels the coroutine it runs in.
-                waitingTimerJob = null
-                endWaiting(pending)
-            }
-        }
-    }
-
-    private fun stopWaitingTimer() {
-        waitingTimerJob?.cancel()
-        waitingTimerJob = null
-    }
-
-    private fun waitingReduce(event: CallWaitingEvent) {
-        waiting = CallWaitingReducer.reduce(waiting, event)
-        publish()
+        waiting.onRemotelyEnded(signal.callId)
     }
 
     /** Runs [emit] with the current [callId] only once one is known — inert otherwise. */
@@ -560,88 +349,28 @@ class CallViewModel @Inject constructor(
         if (callId.isNotBlank()) emit(callId)
     }
 
+    private fun session(): CallSessionInfo = CallSessionInfo(callId, config)
+
     private fun dispatch(event: CallEvent) {
         val previous = callState
         callState = CallStateMachine.reduce(previous, event)
         driveTone(previous, callState)
         driveTelecom(previous, callState)
-        foldAnalytics(previous, callState)
+        analytics.onTransition(previous, callState)
         syncTicker()
         syncQuality()
-        syncHeartbeat()
-        syncScreenCaptureReport()
-        syncReconnectBudget()
-        syncConnectingWatchdog()
-        syncPeerIndicators()
+        watchdogs.onTransition(callState)
+        peers.onTransition(callState)
+        if (callState != previous) extensions.controllers.notifyTransition(previous, callState, session())
         publish()
     }
 
-    /**
-     * Folds the FSM edge into the pure [CallAnalytics] accumulator and fires the
-     * ONE terminal `call:analytics` on entry into Ended (iOS parity:
-     * `emitCallAnalyticsSnapshot` at teardown). A settle (Ended → Idle) can never
-     * re-emit — the accumulator is consumed by the report.
-     */
-    private fun foldAnalytics(previous: CallState, next: CallState) {
-        if (previous !is CallState.Connected && next is CallState.Connected) {
-            analytics = analytics?.connected(clock.nowMs())
-        }
-        if (next is CallState.Reconnecting && previous != next) {
-            analytics = analytics?.reconnecting()
-        }
-        if (previous !is CallState.Ended && next is CallState.Ended) {
-            reportAnalytics(next.reason)
-        }
-    }
-
-    /**
-     * Inert without a minted [callId] (an initiate rejected before the ACK has
-     * nothing the gateway could attach the telemetry to). Fire-and-forget.
-     */
-    private fun reportAnalytics(reason: CallEndReason) {
-        val report = analytics ?: return
-        analytics = null
-        if (callId.isBlank()) return
-        signalManager.emitAnalytics(
-            callId,
-            report.fields(
-                durationSeconds = elapsedSeconds,
-                isVideo = config.isVideo,
-                endReason = reason,
-                deviceModel = deviceModel(),
-            ),
-        )
-    }
-
-    /** `Build.MODEL` is null on plain-JVM unit tests — "unknown" beats a crash. */
-    private fun deviceModel(): String =
-        runCatching { android.os.Build.MODEL }.getOrNull() ?: "unknown"
-
-    /**
-     * Peer indicators (quality/capture/caption) die with the call: a terminal or
-     * idle phase drops them and the pending reset window, so a banner from one
-     * call can never leak onto the ended screen or a subsequent call (parity with
-     * iOS, which resets `isRemoteScreenCapturing` on call end).
-     */
-    private fun syncPeerIndicators() {
-        if (callState is CallState.Ended || callState is CallState.Idle) clearPeerIndicators()
-    }
-
-    /**
-     * Report each genuine FSM edge to the OS telecom layer via the pure
-     * [TelecomCallPolicy]: the policy dedupes inert edges (an already-active call,
-     * a phantom disconnect, a settle back to idle) to `null`, so the reporter only
-     * ever sees a real connection transition.
-     */
+    /** Report each genuine FSM edge to the OS telecom layer; [TelecomCallPolicy] drops inert edges. */
     private fun driveTelecom(previous: CallState, next: CallState) {
         TelecomCallPolicy.plan(previous, next)?.let(telecomReporter::report)
     }
 
-    /**
-     * Turn each FSM edge into call audio via the pure [CallSoundPolicy]: switch the
-     * loop only when it genuinely changes (so an inert event never restarts the
-     * ringback) and fire the one-shot cue the edge carries.
-     */
+    /** Turn each FSM edge into call audio: switch the loop only when it changes, fire the edge's cue. */
     private fun driveTone(previous: CallState, next: CallState) {
         val plan = CallSoundPolicy.plan(previous, next)
         if (plan.loop != activeLoop) {
@@ -654,16 +383,12 @@ class CallViewModel @Inject constructor(
     override fun onCleared() {
         toneController.release()
         telecomReporter.release()
+        extensions.controllers.notifyCleared()
     }
 
-    /**
-     * Runs the 1-Hz timer exactly while media is (or is being re-)established
-     * ([CallState.Connected]/[CallState.Reconnecting]) and stops it on any other
-     * phase — so the elapsed count freezes at the call's final length once ended.
-     */
+    /** The 1-Hz timer runs exactly while media flows, so the count freezes at the final length. */
     private fun syncTicker() {
-        val clockRunning = callState is CallState.Connected || callState is CallState.Reconnecting
-        if (clockRunning) startTickerIfNeeded() else stopTicker()
+        if (callState.carriesMedia) startTickerIfNeeded() else stopTicker()
     }
 
     private fun startTickerIfNeeded() {
@@ -681,15 +406,9 @@ class CallViewModel @Inject constructor(
         tickerJob = null
     }
 
-    /**
-     * Collects live quality samples exactly while media is (or is being
-     * re-)established, mapping each through the pure [ConnectionQuality] SSOT; on
-     * any other phase the collection stops and the last reading is cleared so a
-     * stale bar count never lingers past the connected window.
-     */
+    /** Quality samples are collected while media flows; the last reading is cleared when it stops. */
     private fun syncQuality() {
-        val clockRunning = callState is CallState.Connected || callState is CallState.Reconnecting
-        if (clockRunning) startQualityIfNeeded() else stopQuality()
+        if (callState.carriesMedia) startQualityIfNeeded() else stopQuality()
     }
 
     private fun startQualityIfNeeded() {
@@ -697,7 +416,7 @@ class CallViewModel @Inject constructor(
         qualityJob = viewModelScope.launch {
             qualitySampler.samples.collect { sample ->
                 connectionQuality = ConnectionQuality.from(sample.level())
-                analytics = analytics?.plusSample(sample)
+                analytics.onSample(sample)
                 publish()
             }
         }
@@ -709,164 +428,17 @@ class CallViewModel @Inject constructor(
         connectionQuality = null
     }
 
-    /**
-     * Emits the gateway liveness heartbeat exactly while media is (or is being
-     * re-)established — same window as the ticker/quality jobs. Without it a
-     * dead device is indistinguishable from a live one server-side and zombie
-     * calls linger until the 2 h GC.
-     */
-    private fun syncHeartbeat() {
-        val clockRunning = callState is CallState.Connected || callState is CallState.Reconnecting
-        if (clockRunning) startHeartbeatIfNeeded() else stopHeartbeat()
-    }
-
-    private fun startHeartbeatIfNeeded() {
-        if (heartbeatJob != null) return
-        heartbeatJob = viewModelScope.launch {
-            heartbeatTicker.beats.collect {
-                emitIfIdentified(signalManager::emitHeartbeat)
-            }
-        }
-    }
-
-    private fun stopHeartbeat() {
-        heartbeatJob?.cancel()
-        heartbeatJob = null
-    }
-
-    /**
-     * Relays the OS "this app's screen is being recorded" signal to the gateway
-     * (`call:screen-capture-detected` → privacy alert on the peer) exactly while
-     * media is (or is being re-)established — the same window as the heartbeat.
-     * iOS parity: `UIScreen.capturedDidChangeNotification` relay.
-     */
-    private fun syncScreenCaptureReport() {
-        val clockRunning = callState is CallState.Connected || callState is CallState.Reconnecting
-        if (clockRunning) startScreenCaptureReportIfNeeded() else stopScreenCaptureReport()
-    }
-
-    private fun startScreenCaptureReportIfNeeded() {
-        if (screenCaptureReportJob != null) return
-        screenCaptureReportJob = viewModelScope.launch {
-            screenRecordingDetector.states.collect(::reportScreenCapture)
-        }
-    }
-
-    /**
-     * Edge-only relay: the initial "not capturing" is the peer's default
-     * assumption (nothing to say), a repeat changes nothing, and a stop is only
-     * news after a reported start. Inert before identification or without a
-     * session — the gateway schema requires a non-empty participantId (it
-     * resolves the real one server-side, anti-spoofing).
-     */
-    private fun reportScreenCapture(isCapturing: Boolean) {
-        if (isCapturing == lastReportedCapture) return
-        if (!isCapturing && lastReportedCapture == null) return
-        if (callId.isBlank()) return
-        val self = selfId
-        if (self.isBlank()) return
-        lastReportedCapture = isCapturing
-        signalManager.emitScreenCaptureDetected(callId, self, isCapturing)
-    }
-
-    private fun stopScreenCaptureReport() {
-        screenCaptureReportJob?.cancel()
-        screenCaptureReportJob = null
-        lastReportedCapture = null
-    }
-
-    /**
-     * Arms one [CallReconnectBudget] window per DISTINCT Reconnecting state —
-     * an attempt bump is a fresh window — and tears it down on any other phase.
-     * Without this watchdog nothing ever fired [CallEvent.ReconnectFailed]: a
-     * stall that never recovered left the user on « Reconnexion… » forever,
-     * the server never cleaning up because the socket heartbeats survive the
-     * dead media (iOS parity: the `.reconnecting` watchdog, 10 s × 3 attempts
-     * ≈ 30 s bounded before `connectionLost`).
-     */
-    private fun syncReconnectBudget() {
-        val state = callState
-        if (state !is CallState.Reconnecting) {
-            stopReconnectBudget()
-            return
-        }
-        if (state == reconnectBudgetArmedFor) return
-        reconnectBudgetArmedFor = state
-        reconnectBudgetJob?.cancel()
-        reconnectBudgetJob = viewModelScope.launch {
-            reconnectBudget.countdown().collect {
-                onReconnectBudgetExpired()
-            }
-        }
-    }
-
-    /**
-     * Escalate: the FSM either bumps to the next attempt — nudged by a fresh
-     * ICE restart, covering the DISCONNECTED-forever stall that never turns
-     * FAILED — or ends the call `connectionLost`, which must ALSO reach the
-     * wire and tear the media down (the peer would otherwise stay in a
-     * zombie call; same duty as [hangUp]).
-     */
-    private fun onReconnectBudgetExpired() {
-        dispatch(CallEvent.ReconnectFailed)
-        if (callState is CallState.Ended) {
-            emitIfIdentified { signalManager.emitEnd(it) }
-            coordinator.end()
-        } else {
-            coordinator.retryIceRestart()
-        }
-    }
-
-    private fun stopReconnectBudget() {
-        reconnectBudgetJob?.cancel()
-        reconnectBudgetJob = null
-        reconnectBudgetArmedFor = null
-    }
-
-    /**
-     * One CONTINUOUS window over the whole Offering∪Connecting stretch (an
-     * Offering → Connecting transition never re-arms) — the last unbounded
-     * hole after answering: the server's ring timeout stops applying once
-     * answered and heartbeats only start in Connected, so an answered call
-     * whose ICE never established sat on « Connexion… » forever. Expiry
-     * carries the same terminal duty as [hangUp] — the wire and the media
-     * must learn of the teardown or the peer stays in a zombie call.
-     */
-    private fun syncConnectingWatchdog() {
-        val connecting = callState is CallState.Offering || callState is CallState.Connecting
-        if (!connecting) {
-            stopConnectingWatchdog()
-            return
-        }
-        if (connectingWatchdogJob != null) return
-        connectingWatchdogJob = viewModelScope.launch {
-            connectingWatchdog.countdown().collect {
-                dispatch(CallEvent.ConnectionFailed(CONNECT_TIMED_OUT))
-                emitIfIdentified { signalManager.emitEnd(it) }
-                coordinator.end()
-            }
-        }
-    }
-
-    private fun stopConnectingWatchdog() {
-        connectingWatchdogJob?.cancel()
-        connectingWatchdogJob = null
-    }
-
     private fun publish() {
+        val peer = peers.indicators
         _state.value = CallPresenter.present(
-            callState, config, media, elapsedSeconds, connectionQuality, waiting,
-            peerQualityDegraded, peerScreenCapturing, caption,
-            peerAudioEnabled, peerVideoEnabled,
+            callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
+            peer.qualityDegraded, peer.screenCapturing, peer.caption,
+            peer.audioEnabled, peer.videoEnabled, videoAutoPaused,
         )
     }
 
     private companion object {
         const val INITIATE_TIMED_OUT = "call:initiate timed out"
         const val INITIATE_MALFORMED = "malformed call:initiate ack"
-        const val CONNECT_TIMED_OUT = "connect timed out"
-
-        /** Raison wire d'un refus explicite (schéma gateway socketEndCallSchema). */
-        const val REASON_REJECTED = "rejected"
     }
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Call haptics (CallHaptics): a normal permission, no prompt. Declared here, in the
+         module that uses it, and merged into the app manifest by AGP. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Components of the call capabilities (foreground services, a picture-in-picture
+         activity…) are declared HERE by the lot that adds them, never in :app. -->
+</manifest>
