@@ -208,6 +208,31 @@ final class OutgoingImagePreparerTests: XCTestCase {
         XCTAssertNil(try Self.properties(of: out.data)[kCGImagePropertyGPSDictionary])
     }
 
+    // MARK: - Lieu retiré d'un FICHIER (extension de partage, #11847)
+
+    func test_removeLocation_fileWithGPS_dropsIt_andKeepsThePixels() throws {
+        let data = try Self.photo(width: 800, height: 600, quality: 0.8, gps: true)
+        let url = try Self.written(data)
+        XCTAssertEqual(OutgoingImageLocationRemoval.removeLocation(fromFileAt: url), .removed)
+        let stripped = try Data(contentsOf: url)
+        XCTAssertNil(try Self.properties(of: stripped)[kCGImagePropertyGPSDictionary])
+        XCTAssertEqual(try Self.pixels(of: stripped), try Self.pixels(of: data), "retirer le lieu ne ré-encode pas les pixels")
+    }
+
+    func test_removeLocation_fileWithoutGPS_isUntouched() throws {
+        let data = try Self.photo(width: 400, height: 300, quality: 0.8)
+        let url = try Self.written(data)
+        XCTAssertEqual(OutgoingImageLocationRemoval.removeLocation(fromFileAt: url), .untouched)
+        XCTAssertEqual(try Data(contentsOf: url), data)
+    }
+
+    func test_removeLocation_notAnImage_isUntouched() throws {
+        let data = Data("pas une image".utf8)
+        let url = try Self.written(data)
+        XCTAssertEqual(OutgoingImageLocationRemoval.removeLocation(fromFileAt: url), .untouched)
+        XCTAssertEqual(try Data(contentsOf: url), data)
+    }
+
     // MARK: - HDR (#11847)
 
     /// Une source couchée dont la définition doit descendre : la carte de gain,
@@ -284,6 +309,12 @@ final class OutgoingImagePreparerTests: XCTestCase {
         CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
         return data as Data
+    }
+
+    private static func written(_ data: Data) throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("outgoing-\(UUID().uuidString).jpg")
+        try data.write(to: url)
+        return url
     }
 
     private static func location(_ gps: Bool) -> [CFString: Any] {
