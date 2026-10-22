@@ -3,6 +3,7 @@ package me.meeshy.sdk.model
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -20,12 +21,21 @@ class NotificationPreferenceSyncBodyTest {
 
     private val json = Json { encodeDefaults = true }
 
+    /** The wire config of `MeeshyApi.json` (outbox payload and PATCH body): defaults NOT encoded. */
+    private val wire = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        explicitNulls = false
+        coerceInputValues = true
+    }
+
     /**
      * The field set the gateway `NotificationPreferenceSchema` accepts and this body carries.
      * `callsEnabled` and `friendContentEnabled` are the two per-type toggles that gate
-     * incoming-call and friend-content notifications (iOS `isTypeEnabled` parity). The
-     * gateway's `dndUtcOffsetMinutes` (GW7) is a separate DND concern still absent from the
-     * Android block, so it is deliberately NOT part of this body yet.
+     * incoming-call and friend-content notifications (iOS `isTypeEnabled` parity);
+     * `contactActivityEnabled` (#8285) and `gameEnabled` (#9490) gate `contact_recently_active`
+     * and the `game_*` family; `dndUtcOffsetMinutes` (GW7) is the offset the gateway evaluates
+     * the DND window with.
      */
     private val gatewayFields = setOf(
         "pushEnabled", "emailEnabled", "soundEnabled", "vibrationEnabled",
@@ -34,7 +44,8 @@ class NotificationPreferenceSyncBodyTest {
         "contactRequestEnabled", "groupInviteEnabled", "memberJoinedEnabled", "memberLeftEnabled",
         "postLikeEnabled", "postCommentEnabled", "postRepostEnabled", "storyReactionEnabled",
         "commentReplyEnabled", "commentLikeEnabled", "friendContentEnabled",
-        "dndEnabled", "dndStartTime", "dndEndTime", "dndDays",
+        "contactActivityEnabled", "gameEnabled",
+        "dndEnabled", "dndStartTime", "dndEndTime", "dndDays", "dndUtcOffsetMinutes",
         "showPreview", "showSenderName", "groupNotifications", "notificationBadgeEnabled",
     )
 
@@ -128,5 +139,56 @@ class NotificationPreferenceSyncBodyTest {
         val roundTripped = body.toPreferences(UserNotificationPreferences())
         assertThat(roundTripped.callsEnabled).isFalse()
         assertThat(roundTripped.friendContentEnabled).isFalse()
+    }
+
+    @Test
+    fun `the contact-activity, game and utc-offset fields project and survive the round trip`() {
+        val prefs = UserNotificationPreferences(
+            contactActivityEnabled = false,
+            gameEnabled = false,
+            dndUtcOffsetMinutes = 540,
+        )
+
+        val body = NotificationPreferenceSyncBody.from(prefs)
+
+        assertThat(body.contactActivityEnabled).isFalse()
+        assertThat(body.gameEnabled).isFalse()
+        assertThat(body.dndUtcOffsetMinutes).isEqualTo(540)
+        assertThat(body.toPreferences(UserNotificationPreferences())).isEqualTo(prefs)
+    }
+
+    @Test
+    fun `the three new fields ride the wire whatever their value when defaults are not encoded`() {
+        val obj = wire.encodeToString(NotificationPreferenceSyncBody.from(UserNotificationPreferences())).let {
+            Json.parseToJsonElement(it).jsonObject
+        }
+
+        assertThat(obj.keys).isEqualTo(gatewayFields)
+        assertThat(obj["contactActivityEnabled"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(obj["gameEnabled"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(obj["dndUtcOffsetMinutes"]!!.jsonPrimitive.content).isEqualTo("0")
+    }
+
+    /**
+     * A row queued before these fields existed does not carry them. Replaying it must not stamp
+     * `true / true / 0` over what another device wrote — `0` above all, which would put an iOS
+     * user's DND window back on UTC.
+     */
+    @Test
+    fun `a row queued before the new fields replays without inventing them`() {
+        val legacy = wire.encodeToString(NotificationPreferenceSyncBody.from(UserNotificationPreferences()))
+            .let { Json.parseToJsonElement(it).jsonObject }
+            .filterKeys { it !in setOf("contactActivityEnabled", "gameEnabled", "dndUtcOffsetMinutes") }
+            .let { JsonObject(it).toString() }
+
+        val replayed = wire.decodeFromString<NotificationPreferenceSyncBody>(legacy)
+        val obj = wire.encodeToString(replayed).let { Json.parseToJsonElement(it).jsonObject }
+
+        assertThat(obj.keys).doesNotContain("contactActivityEnabled")
+        assertThat(obj.keys).doesNotContain("gameEnabled")
+        assertThat(obj.keys).doesNotContain("dndUtcOffsetMinutes")
+        val local = UserNotificationPreferences(contactActivityEnabled = false, dndUtcOffsetMinutes = 60)
+        assertThat(replayed.toPreferences(local).contactActivityEnabled).isFalse()
+        assertThat(replayed.toPreferences(local).dndUtcOffsetMinutes).isEqualTo(60)
     }
 }
