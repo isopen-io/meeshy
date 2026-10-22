@@ -23,10 +23,13 @@ import okhttp3.Route
  *
  * L'endpoint est ramené à la forme de la politique en retirant [apiPathPrefix].
  */
+/** Le préfixe d'API que les intercepteurs de session retirent pour lire la politique d'un endpoint. */
+internal const val API_PATH_PREFIX: String = "/api/v1"
+
 class RefreshAuthenticator(
     private val tokenStore: TokenStore,
     private val refresher: SessionRefresher,
-    private val apiPathPrefix: String = "/api/v1",
+    private val apiPathPrefix: String = API_PATH_PREFIX,
 ) : Authenticator {
 
     override fun authenticate(route: Route?, response: Response): Request? {
