@@ -113,6 +113,12 @@ export type PostCommentCardChoice = {
   readonly mode: PostCommentCardMode;
   readonly showsPost: boolean;
   readonly chosen?: ReadonlySet<string>;
+  /**
+   * Le média du support choisi pour la tête (#11783), par sa place dans
+   * `postCommentCardHeadMedia` — absent ou hors des médias : le défaut
+   * (`postCommentCardDefaultHeadMediaIndex`, le premier visuel).
+   */
+  readonly headMediaIndex?: number;
 };
 
 export type PostCommentCardMediaAuthor = { readonly name: string; readonly handle: string | null; readonly quoted: boolean };
@@ -244,15 +250,24 @@ const authorOf = (author: PostCommentCardAuthor, viewer: PostCommentCardViewer):
 
 const handleOf = (author: PostCommentCardAuthor): string | null => nonBlank(author.username)?.replace(/^@+/, '') ?? null;
 
-/** Une story ou un statut disparaît : sans média à montrer, il ne se fige pas en tête d'une image. */
+/** Une story ou un statut disparaît : il ne se fige en tête que par le visuel qui le représente. */
 const disappears = <M extends PostCommentCardMediaLike>(post: PostCommentCardPost<M>): boolean => {
   const type = (post.type ?? '').toUpperCase();
-  return type === 'STORY' || type === 'STATUS' || post.hasStoryCanvas;
+  return type === 'STORY' || type === 'STATUS';
 };
 
-/** La vignette du post : sa première photo ou vidéo. */
+const isVisual = (kind: PostCommentCardMediaKind): boolean => kind === 'image' || kind === 'video';
+
+/**
+ * Les médias que la tête peut montrer (#11783) : chaque photo, vidéo et son d'un
+ * post ou d'un réel, dans leur ordre ; le seul visuel qui représente une story.
+ */
 const postMediaOf = <M extends PostCommentCardMediaLike>(post: PostCommentCardPost<M>): readonly M[] =>
-  post.media.filter((item) => item.kind === 'image' || item.kind === 'video').slice(0, 1);
+  disappears(post) ? post.media.filter((item) => isVisual(item.kind)).slice(0, 1) : post.media;
+
+/** Une scène sans aucun média ne se lit pas en tête ; une story ou un statut, sans son visuel. */
+const withoutHeadMedia = <M extends PostCommentCardMediaLike>(post: PostCommentCardPost<M>): boolean =>
+  (disappears(post) || post.hasStoryCanvas) && postMediaOf(post).length === 0;
 
 /** Le support est-il PUBLIC ? Absente ou restreinte, son audience le retient. */
 const isPublicAudience = <M extends PostCommentCardMediaLike>(post: PostCommentCardPost<M>): boolean => (post.visibility ?? '').toUpperCase() === 'PUBLIC';
@@ -260,7 +275,7 @@ const isPublicAudience = <M extends PostCommentCardMediaLike>(post: PostCommentC
 /** Le post en tête : son auteur et son texte servi, tronqué — `null` quand il ne se met pas en tête. */
 function postHead<M extends PostCommentCardMediaLike>(source: Source<M>): PostCommentCardPart | null {
   const post = source.post;
-  if (post === null || !isPublicAudience(post) || (disappears(post) && postMediaOf(post).length === 0)) return null;
+  if (post === null || !isPublicAudience(post) || withoutHeadMedia(post)) return null;
   const text = nonBlank(post.text);
   if (text === null && postMediaOf(post).length === 0) return null;
   return { author: authorOf(post.author, source.viewer), text: text === null ? '' : postCommentCardExcerpt(text), handle: handleOf(post.author) };
@@ -268,6 +283,38 @@ function postHead<M extends PostCommentCardMediaLike>(source: Source<M>): PostCo
 
 /** Le post peut-il être en tête de cette carte ? */
 export const postCommentCardOffersPost = <M extends PostCommentCardMediaLike>(source: Source<M>): boolean => postHead(source) !== null;
+
+/** Les médias du support que la tête peut montrer (#11783) — vide quand le support ne se met pas en tête. */
+export function postCommentCardHeadMedia<M extends PostCommentCardMediaLike>(source: Source<M>): readonly M[] {
+  return source.post === null || postHead(source) === null ? [] : postMediaOf(source.post);
+}
+
+/** La place du média de tête par défaut : le premier visuel, à défaut le premier — `null` sans média. */
+export function postCommentCardDefaultHeadMediaIndex<M extends PostCommentCardMediaLike>(source: Source<M>): number | null {
+  const media = postCommentCardHeadMedia(source);
+  if (media.length === 0) return null;
+  const visual = media.findIndex((item) => isVisual(item.kind));
+  return visual === -1 ? 0 : visual;
+}
+
+/**
+ * Le support existe mais son AUDIENCE le retient (#11783) : la carte part hors de
+ * Meeshy, seul le commentaire y figure — l'atelier le DIT au lieu de taire le
+ * média. Vrai seulement quand le même support, public, serait en tête.
+ */
+export function postCommentCardWithheldByAudience<M extends PostCommentCardMediaLike>(source: Source<M>): boolean {
+  const post = source.post;
+  if (post === null || isPublicAudience(post)) return false;
+  return postHead({ ...source, post: { ...post, visibility: 'PUBLIC' } }) !== null;
+}
+
+/** Le média choisi pour la tête — hors des médias : le défaut. */
+function chosenHeadMedia<M extends PostCommentCardMediaLike>(source: Source<M>, index: number | undefined): M | null {
+  const media = postCommentCardHeadMedia(source);
+  const fallback = postCommentCardDefaultHeadMediaIndex(source);
+  const picked = index !== undefined && Number.isInteger(index) && index >= 0 && index < media.length ? index : fallback;
+  return picked === null ? null : (media[picked] ?? null);
+}
 
 /** Les modes qui composent une carte, le défaut en tête — vide : rien ne s'image. */
 export function postCommentCardModes<M extends PostCommentCardMediaLike>(source: Source<M>): readonly PostCommentCardMode[] {
@@ -373,13 +420,19 @@ function timeOf<M extends PostCommentCardMediaLike>(block: PostCommentCardBlock,
   return block.id === source.target.id ? source.target.createdAt : (byId(source.thread).get(block.id)?.createdAt ?? null);
 }
 
-/** La vignette du post en tête, puis les médias des commentaires peints — les plus récents. */
-function mediaOf<M extends PostCommentCardMediaLike>(blocks: readonly PostCommentCardBlock[], source: Source<M>): PostCommentCardSubject<M>['media'] {
+/**
+ * Le média CHOISI du support en tête (#11783) — un visuel en HÉROS, un son comme
+ * le son de la carte — puis les médias des commentaires peints, les plus récents.
+ */
+function mediaOf<M extends PostCommentCardMediaLike>(blocks: readonly PostCommentCardBlock[], source: Source<M>, headMediaIndex: number | undefined): PostCommentCardSubject<M>['media'] {
   const known = byId([...source.thread, source.target]);
   const quotes = blocks.length > 1;
   const painted = blocks.map((block, index) => {
     const author = (part: PostCommentCardPart): PostCommentCardMediaAuthor => ({ name: part.author, handle: part.handle, quoted: quotes && index === 0 });
-    if (block.kind === 'post') return (source.post === null ? [] : postMediaOf(source.post)).map((media) => ({ media, author: author(block.part), hero: true }));
+    if (block.kind === 'post') {
+      const chosen = chosenHeadMedia(source, headMediaIndex);
+      return chosen === null ? [] : [{ media: chosen, author: author(block.part), hero: isVisual(chosen.kind) }];
+    }
     if (block.kind === 'folded') return [];
     return (known.get(block.id)?.media ?? []).map((media) => ({ media, author: author(block.part), hero: false }));
   });
@@ -414,10 +467,10 @@ export function postCommentCardSubject<M extends PostCommentCardMediaLike>(
   const first = composed[0];
   const last = composed[composed.length - 1];
   if (first === undefined || last === undefined) return null;
-  const media = mediaOf(composed, source);
-  const hero = media.find((item) => item.hero);
+  const media = mediaOf(composed, source, choice.headMediaIndex);
+  const headMedia = first.kind === 'post' ? chosenHeadMedia(source, choice.headMediaIndex) : null;
   const head = composed.length > 1 ? partOfBlock(first) : null;
-  const quoted = head !== null && first.kind === 'post' && hero !== undefined ? heroLine(head, source, hero.media.kind) : head;
+  const quoted = head !== null && headMedia !== null ? heroLine(head, source, headMedia.kind) : head;
   const rest = composed.length > 1 ? composed.slice(1) : composed;
   const lastPart = partOfBlock(last);
   if (lastPart === null) return null;
