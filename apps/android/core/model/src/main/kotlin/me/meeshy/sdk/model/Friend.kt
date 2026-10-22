@@ -125,8 +125,13 @@ data class EmailInvitationRequest(
     val email: String,
 )
 
+/**
+ * `data` du `201` de `POST /invitations/email`. [invitationUrl] porte un jeton
+ * d'affiliation à usage unique, jamais l'adresse du destinataire.
+ */
 @Serializable
 data class EmailInvitationResponse(
     val email: String = "",
     val sentAt: String? = null,
+    val invitationUrl: String? = null,
 )
