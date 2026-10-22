@@ -1052,6 +1052,23 @@ jobs:
           cd apps/web
           node scripts/check-story-studio.mjs
 
+      # #10159 — LES CADRES DE GLOIRE SE PEIGNENT AVEC LE VRAI PEINTRE (§ 8.3) :
+      # l'échantillon de L21a (20 cibles, poses exclues) composé par
+      # `lib/game-photo/glory/` depuis les contrats versionnés, les couches du
+      # magasin et la photo fixture ; deux peintures identiques à l'octet ; la
+      # composition descendue à 540 × 960 par la même moyenne 2 × 2 que les
+      # cibles et comparée hors boîtes de texte, de blason et d'oiseaux. Un
+      # cadre qui ne se compose pas, une couche absente du magasin ou une
+      # peinture instable est ROUGE ; les mesures de tolérance sont IMPRIMÉES
+      # (`--report`) tant que les contrats ne portent pas la plaque sans
+      # message et que les couches sont servies en q82 (mesuré le 2026-10-22 :
+      # 82 à 98 % des pixels à |Δ| ≤ 6 ; voir #10159).
+      - name: Gate cadres de gloire (peintre, échantillon de L21a, stabilité)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          bun scripts/check-glory-frames.ts --report
+
       # #6943/#6944 — LE PLATEAU : poser DEUX objets texte, en déplacer un au
       # POINTEUR puis le tourner et l'agrandir au CLAVIER, choisir sa langue et
       # son style (et vérifier qu'ils sont PEINTS, pas seulement annoncés),
