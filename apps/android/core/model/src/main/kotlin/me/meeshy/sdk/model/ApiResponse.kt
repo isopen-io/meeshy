@@ -53,7 +53,8 @@ data class Pagination(
     val offset: Int? = null,
     val limit: Int? = null,
     val hasMore: Boolean = false,
-    val nextCursor: String? = null,) {
+    val nextCursor: String? = null,
+) {
     /** Lecture par curseur : l'ancre de la suite (`nextCursor`) et s'il reste des pages. */
     val cursorPage: PaginationCursorView get() = PaginationCursorView(nextCursor, hasMore, limit)
 
