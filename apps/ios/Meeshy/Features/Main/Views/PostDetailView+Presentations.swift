@@ -100,7 +100,7 @@ extension PostDetailView {
                 startMediaId: fullscreenMediaId,
                 startSceneIndex: detailSceneIndex,
                 accentColor: accentColor,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             )
             .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
             .mediaSaveFlow(mediaSaveCoordinator)

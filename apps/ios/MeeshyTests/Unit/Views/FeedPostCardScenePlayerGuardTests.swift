@@ -148,12 +148,18 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
         // La SOURCE des langues vit chez le CONTAINER, pas dans la feuille : une
         // feuille de liste ne lit jamais un singleton global, elle reçoit des
         // valeurs (« Zero Unnecessary Re-render »). Le témoin interroge donc le
-        // fichier, pas le bloc — mais toujours la MÊME source que le voisin.
+        // fichier, pas le bloc. Et cette source est le Prisme STRICT du LECTEUR
+        // (#11832) : `preferredContentLanguages` (repli « fr ») sert les défauts
+        // de COMPOSITION, jamais ce qui s'affiche.
         XCTAssertTrue(
-            text.contains("AuthManager.shared.currentUser?.preferredContentLanguages"),
-            "La source des langues préférées doit être la MÊME que celle du voisin " +
-            "StoryRepostEmbedCell — AuthManager.shared.currentUser?.preferredContentLanguages " +
-            "— jamais une resolution locale divergente ni une liste vide en dur."
+            text.contains("ReaderPrism.resolve(for: AuthManager.shared.currentUser)"),
+            "La scène de carte lit ses langues sur ReaderPrism.resolve(for:) — la descente " +
+            "stricte rangs 1→4, sans repli « fr » — jamais une résolution locale divergente " +
+            "ni une liste vide en dur."
+        )
+        XCTAssertFalse(
+            text.contains("currentUser?.preferredContentLanguages"),
+            "Les défauts de composition ne choisissent pas la langue qu'une carte AFFICHE (#11832)."
         )
     }
 
