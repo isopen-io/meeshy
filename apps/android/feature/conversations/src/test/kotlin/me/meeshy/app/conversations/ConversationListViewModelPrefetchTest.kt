@@ -21,6 +21,9 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocketManager
 import org.junit.Test
 
+private fun row(id: String) =
+    ApiConversation(id = id, lastMessage = ApiConversationLastMessage(id = "m-$id", createdAt = "2026-10-01T10:00:00.000Z"))
+
 /** Les trois déclencheurs de la passe de préchargement : chargement, premier plan, reconnexion. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConversationListViewModelPrefetchTest {
@@ -48,9 +51,6 @@ class ConversationListViewModelPrefetchTest {
         val socket = mockk<SocketManager> { every { connected } returns this@Harness.connected }
         var list = listOf(row("c1"), row("c2"))
     }
-
-    private fun row(id: String) =
-        ApiConversation(id = id, lastMessage = ApiConversationLastMessage(id = "m-$id", createdAt = "2026-10-01T10:00:00.000Z"))
 
     @Test
     fun `le chargement de la liste precharge ses premieres conversations`() = runTest {

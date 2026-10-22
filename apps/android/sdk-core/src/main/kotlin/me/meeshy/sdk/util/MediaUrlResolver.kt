@@ -36,6 +36,9 @@ private const val ATTACHMENT_FILE_ROUTE = "attachments/file/"
  */
 const val STATIC_STORE_SCHEME = "static:"
 
+/** Une adresse à schéma (`ftp://`, `data://`…) qui n'est ni http(s) ni file : jamais une clé de stockage. */
+private val FOREIGN_SCHEME = Regex("^(?!(?i:https?|file)://)[A-Za-z][A-Za-z0-9+.-]*://.*", RegexOption.DOT_MATCHES_ALL)
+
 /**
  * Rend l'adresse chargeable d'un média.
  *
@@ -145,6 +148,7 @@ private fun encodePathSegments(chemin: String): String =
  * l'appelant ne lance alors AUCUNE requête (protection SSRF, miroir de `MeeshyConfig.resolveMediaURL`).
  */
 fun resolveSafeMediaUrl(url: String, apiBaseUrl: String?): String? {
+    if (FOREIGN_SCHEME.matches(url)) return null
     val resolved = if (url.startsWith("file:")) url else resolveMediaUrl(url, apiBaseUrl)
     val local = me.meeshy.sdk.model.net.MediaUrlPolicy.isLocalEnvironment(apiBaseUrl)
     return resolved.takeIf { me.meeshy.sdk.model.net.MediaUrlPolicy.isAllowed(it, local) }

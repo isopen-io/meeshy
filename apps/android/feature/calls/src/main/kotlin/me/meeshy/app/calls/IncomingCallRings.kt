@@ -1,12 +1,11 @@
 package me.meeshy.app.calls
 
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -25,6 +24,7 @@ import androidx.compose.ui.unit.dp
 private const val RING_COUNT = 4
 private const val RING_MILLIS = 1_200
 private const val RING_STAGGER_MILLIS = 200
+private const val BOUNCE_MILLIS = 600
 
 /**
  * Les quatre anneaux qui s'étendent autour de l'appelant et l'avatar qui rebondit (iOS
@@ -44,7 +44,7 @@ internal fun IncomingCallRings(
             initialValue = 1f,
             targetValue = 1.05f,
             animationSpec = infiniteRepeatable(
-                animation = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                animation = tween(BOUNCE_MILLIS, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "avatar-bounce",
