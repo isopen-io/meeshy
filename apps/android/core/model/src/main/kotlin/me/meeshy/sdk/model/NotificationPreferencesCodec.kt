@@ -15,7 +15,9 @@ import kotlinx.serialization.json.Json
  * Unlike the enum-token themes/language codecs, the notification block is a whole record,
  * so it round-trips as JSON. `encodeDefaults` persists every field (a toggled-off field
  * whose value equals a default still survives), and the decode is corruption-proof: a
- * blank, absent, or malformed token degrades to the safe defaults instead of crashing.
+ * blank, absent, or malformed token degrades to the safe defaults instead of crashing, and a field
+ * of an unexpected type falls back to ITS default without emptying the block (see
+ * [notificationPreferencesFromJson]).
  */
 private val notificationPrefsJson = Json {
     ignoreUnknownKeys = true
@@ -31,13 +33,9 @@ public val UserNotificationPreferences.storageValue: String
 /**
  * Decodes a persisted token back into the preference block. A blank, absent, or malformed
  * token degrades to [UserNotificationPreferences] defaults; a partial token fills the
- * missing fields with their defaults and ignores unknown keys — so a corrupt or legacy
- * value can never leave the app without a coherent notification configuration.
+ * missing fields with their defaults, a field of an unexpected type falls back to its own
+ * default, and an unknown key is kept in `extras` — so a corrupt or legacy value can never
+ * leave the app without a coherent notification configuration.
  */
-public fun notificationPreferencesFromStorage(raw: String?): UserNotificationPreferences {
-    val trimmed = raw?.trim()
-    if (trimmed.isNullOrEmpty()) return UserNotificationPreferences()
-    return runCatching {
-        notificationPrefsJson.decodeFromString<UserNotificationPreferences>(trimmed)
-    }.getOrDefault(UserNotificationPreferences())
-}
+public fun notificationPreferencesFromStorage(raw: String?): UserNotificationPreferences =
+    notificationPreferencesFromJson(parseStoredBlock(notificationPrefsJson, raw))

@@ -228,8 +228,13 @@ class OutboxFlushWorker @AssistedInject constructor(
         OutboxKind.PUBLISH_STORY to MutationSender { row ->
             val req = runCatching { json.decodeFromString<CreateStoryRequest>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { postApi.createStory(req) }) {
-                is NetworkResult.Success -> SendResult.Success
+            when (val result = apiCall { postApi.createStory(req) }) {
+                is NetworkResult.Success -> {
+                    // The story now has its server id: every like / bookmark that waited on the
+                    // `pending_` handle is re-addressed to it and leaves the hold.
+                    runCatching { outboxRepository.resolveLocalId(row.targetId, result.data.id) }
+                    SendResult.Success
+                }
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
         },

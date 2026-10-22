@@ -516,3 +516,50 @@ entrées `me.meeshy.android` (empreinte de la clé Play App Signing) et `me.mees
 Firebase doit déclarer une app Android `me.meeshy.android` pour que FCM délivre ses pushes. Les deux
 démarches attendent la console du porteur (`docs/magic-link-app-links.md`).
 
+
+---
+
+## ADR-025 — Jetons : l'échelle d'iOS à l'identique, des ressorts convertis, Nunito pour les deux « designs »
+**Date:** 2026-10-22 · **Status:** accepted (lot F0b de la parité, #11570 / #11600)
+
+**Context.** `DesignTokens.swift` est la source des jetons d'interface. Android n'en portait qu'une partie
+(espacements sur une grille de 4 dp, cinq rayons, deux ressorts à raideur de Material, un délai d'échelonnement de
+45 ms), si bien qu'un écran porté d'iOS retombait sur des littéraux. Côté typographie, iOS écrit le texte courant
+dans la police système (SF Pro) et réserve le design arrondi (SF Pro Rounded) aux grands titres ; SF n'existe pas
+sur Android.
+
+**Decision.**
+1. **L'échelle est celle d'iOS, sans filtre.** Espacements (dont `xxs` 2, `xsPlus` 6, `smPlus` 10, `mdPlus` 14),
+   rayons (dont `xxs` 4, `xs` 8, `smPlus` 12, `lgPlus` 18, `xlPlus` 22), tailles de police 9..34, icônes, contrôles,
+   bordures, opacités, ombres et largeurs de lecture (`formMaxWidth` 600, `contentMaxWidth` 700). La contrainte de
+   grille de 4 dp est retirée : iOS intercale des demi-pas et les écrans portés les utilisent.
+   `MeeshyScalesParityTest` lit `DesignTokens.swift` et exige un jumeau Kotlin de même valeur pour chaque jeton :
+   ajouter un jeton côté iOS sans le porter fait rougir le test.
+2. **Les ressorts se convertissent, ils ne s'approchent pas.** Un ressort SwiftUI `(response, dampingFraction)` est
+   de masse unitaire : `dampingRatio = dampingFraction`, `stiffness = (2π / response)²`. `springFast` (0,25 / 0,7),
+   `springDefault` (0,4 / 0,75) et `springBouncy` (0,5 / 0,6) sont posés ainsi ; `standardSpring()` et `bouncySpring()`
+   restent comme alias de `springDefault()` et `springBouncy()`, pour ne pas toucher les appelants des autres lots.
+   Le délai d'échelonnement passe de 45 à 40 ms (`staggerDelay` 0,04 s).
+3. **Le texte suit la police du système ; l'emoji seul, non.** Les tailles sont en `sp` : `meeshyText(size, weight,
+   rounded)` est l'équivalent de `MeeshyFont.relative` (Dynamic Type). `emojiTextStyle(size)` est celui de
+   `MeeshyFont.emoji` : la taille `sp` est dérivée de la taille en dp et de la densité (`Dp.toSp()`), de sorte que
+   l'emoji s'affiche à la taille EXACTE demandée (90 / 60 / 45) à tout réglage de police.
+4. **Écart assumé : Nunito pour les deux designs.** Android n'a pas SF Pro ; la famille de marque est Nunito
+   (arrondie), appliquée à tout le texte, y compris là où iOS reste sur la police système. `meeshyText(rounded = …)`
+   garde le drapeau d'iOS et deux noms privés de famille (`DefaultDesignFontFamily`, `RoundedDesignFontFamily`),
+   aujourd'hui identiques : si le produit veut un corps de texte neutre à côté des titres arrondis, UNE ligne change,
+   aucun site d'appel. Poids ajoutés à la famille : 300 (Light) et 900 (Black), pour que tout poids iOS retombe sur
+   un poids réel de la police variable.
+5. **Cible tactile : 44 pt d'iOS, plancher de 48 dp d'Android.** `MeeshyControlSize.tapTarget` reste 44 (parité) ;
+   `minTouchTarget` (48 dp, Material et TalkBack) est le plancher qu'un composant interactif ne franchit jamais.
+
+**Rejected.** Garder la grille de 4 dp et arrondir les demi-pas d'iOS (un 14 devient 12 ou 16 : chaque écran porté
+dérive d'un pixel sans que rien ne le dise). Une raideur de Material (`StiffnessMediumLow`) « proche » de celle d'iOS
+(le rebond ne se ressemble pas). Un emoji en `sp` mis à l'échelle (à 2× de police, l'emoji de 90 remplit la bulle).
+Charger une police de corps neutre pour imiter SF Pro (une seconde famille à embarquer, pour une différence que
+l'utilisateur ne compare pas).
+
+**Consequences.** Le premier lot qui consomme un jeton n'invente plus de littéral. Les ressorts de `EmojiPicker`,
+`LanguageQuickStrip` et `StoryActionRail` s'assouplissent (raideur 200 → 158). `EmojiDetector.fontSizeSp` (90 / 60 /
+45) et `MessageBubble` écrivent encore l'emoji en `sp` mis à l'échelle : le branchement de `emojiTextStyle` relève du
+lot qui découpe la bulle (fichier chaud).
