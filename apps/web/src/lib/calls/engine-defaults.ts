@@ -5,6 +5,8 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage } from '@/lib/storage';
 
+import { onConnectionChange } from '../device/capability-tier';
+
 import { fetchActiveCallId } from './active-call';
 import { deviceLabel } from './call-analytics';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
@@ -37,15 +39,14 @@ function defaultCreateStream(tracks: readonly MediaStreamTrack[]): MediaStream {
   return new MediaStream([...tracks]);
 }
 
-/** Un changement de réseau : le retour en ligne, ou le type de connexion qui change (`navigator.connection`, là où il existe). */
+/** Un changement de réseau : le retour en ligne, ou le type de connexion qui change (là où l'API existe). */
 function watchBrowserNetwork(onChange: () => void): () => void {
   if (typeof window === 'undefined') return () => undefined;
-  const connection = (navigator as Navigator & { readonly connection?: EventTarget }).connection;
   window.addEventListener('online', onChange);
-  connection?.addEventListener('change', onChange);
+  const unwatchConnection = onConnectionChange(onChange);
   return () => {
     window.removeEventListener('online', onChange);
-    connection?.removeEventListener('change', onChange);
+    unwatchConnection();
   };
 }
 

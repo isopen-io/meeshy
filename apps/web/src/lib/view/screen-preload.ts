@@ -1,3 +1,5 @@
+import { browserConnection } from '../device/capability-tier';
+
 /**
  * LES ÉCRANS PRINCIPAUX SE PRÉCHARGENT EN TÂCHE DE FOND (#10636) — la liste,
  * le fil, le Flux, les réglages, le profil, la cloche et le jeu : ce qu'on
@@ -49,14 +51,11 @@ export const browserIdle: IdleScheduler = (run) => {
   else setTimeout(run, 200);
 };
 
-/** Les indications réseau de `navigator.connection`, absentes hors Chromium. */
+/** Les indications réseau annoncées par l'appareil (absentes hors Chromium), lues par le lecteur unique. */
 export function browserNetworkHints(): NetworkHints {
-  const connection: unknown = typeof navigator === 'object' ? Reflect.get(navigator, 'connection') : undefined;
-  if (typeof connection !== 'object' || connection === null) return {};
-  const saveData: unknown = Reflect.get(connection, 'saveData');
-  const effectiveType: unknown = Reflect.get(connection, 'effectiveType');
+  const { saveData, effectiveType } = browserConnection() ?? {};
   return {
-    ...(typeof saveData === 'boolean' ? { saveData } : {}),
-    ...(typeof effectiveType === 'string' ? { effectiveType } : {}),
+    ...(saveData !== undefined ? { saveData } : {}),
+    ...(effectiveType !== undefined ? { effectiveType } : {}),
   };
 }
