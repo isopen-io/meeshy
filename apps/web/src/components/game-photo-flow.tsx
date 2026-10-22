@@ -4,6 +4,7 @@ import { saveButtonVisible, type CaptureZone, type FrameChoice } from '@meeshy/s
 
 import { GameBird, useChoreography } from '@/components/game';
 import { authorPlateOf, type PhotoAuthor } from '@/lib/game-photo/author-plate';
+import { gloryTextsOf } from '@/lib/game-photo/glory-texts';
 import type { CameraFailure, CameraSession } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
@@ -236,7 +237,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const accountAtmosphere = atmosphere?.current ?? null;
   const keptFrameId = retake?.recipe.frameId ?? null;
   const gloryStep = useMemo(() => ({ stepId: moment.id, atmosphere: accountAtmosphere, lastChosen: keptFrameId }), [moment.id, accountAtmosphere, keptFrameId]);
-  const gloryTexts = useMemo(() => ({ kicker: moment.kicker, title: moment.title, date: dateLabel, message: null }), [moment.kicker, moment.title, dateLabel]);
+  const gloryTexts = useMemo(() => gloryTextsOf(moment, dateLabel), [moment, dateLabel]);
   const gloryChoice = useGloryChoice({ env, step: gloryStep, texts: gloryTexts, epoch: catalogEpoch, initialPose: birdLayoutOf(retake?.recipe.pose) });
   const glory = gloryChoice.scene;
   const chosenPose = gloryChoice.choice.pose;

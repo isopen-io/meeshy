@@ -2909,6 +2909,22 @@
           },
           "option": "B",
           "hidden": false
+        },
+        {
+          "id": "mythologies.echo-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "echo",
+            "division": 3
+          },
+          "collection": "mythologies",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "echo",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
         }
       ]
     }
@@ -5836,6 +5852,60 @@
           "pack": "mythologies",
           "frameId": "mythologies.murmure-a"
         }
+      }
+    },
+    {
+      "name": "cadre limité à une division : proposé à sa seule division",
+      "input": {
+        "stepId": "rank:echo:3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "mythologies",
+            "frameId": "mythologies.echo-3"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "mythologies",
+          "frameId": "mythologies.echo-3"
+        }
+      }
+    },
+    {
+      "name": "cadre limité à une division : jamais à une autre division du rang",
+      "input": {
+        "stepId": "rank:echo:1",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
       }
     },
     {

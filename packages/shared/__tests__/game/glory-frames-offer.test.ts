@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parsePackIndex } from '../../types/content-pack-index';
 import { canUseFrame } from '../../types/frame-usage';
 import { parseGloryFrameContract } from '../../types/glory-frames';
+import { LEVEL_TIER_KEYS } from '../../utils/game/levels';
 import { PHOTO_STATIC_STEP_IDS } from '../../utils/game/photo-step-ids';
 import {
   GLORY_FRAME_OFFER_EXEMPT_FAMILIES,
@@ -185,3 +186,44 @@ describe('la matrice de couverture (§ 7 L3) — chaque étape a un cadre, ou un
     expect(families).toEqual([...GLORY_FRAME_OFFER_EXEMPT_FAMILIES].sort());
   });
 });
+
+describe('L14 (#10167) — les collections `moments` et `tresor` sont branchées par la loi TELLE QUELLE (#10180)', () => {
+  const everywhere = new Set(catalog.map((pack) => pack.slug));
+  const steps = [...PHOTO_STATIC_STEP_IDS, 'day:2026-10-22'];
+  const momentFrames = catalog.filter((pack) => pack.atmosphere === null).flatMap((pack) => pack.frames);
+  const familyOf = (stepId: string): string => stepId.split(':')[0] ?? '';
+  const proposedAt = (frameId: string): readonly string[] =>
+    steps.filter((stepId) => {
+      const result = offer({ stepId, installed: everywhere });
+      return [...result.suggested, ...result.others.flatMap((other) => other.frames)].some((ref) => ref.frameId === frameId);
+    });
+
+  it('un cadre de moment n’est jamais proposé hors de sa famille : un palier, une Meesh, un trésor, une Flamme, un jour — jamais un rang, jamais une autre famille', () => {
+    expect(momentFrames.length).toBeGreaterThanOrEqual(30);
+    for (const frame of momentFrames) {
+      const outside = proposedAt(frame.id).filter((stepId) => familyOf(stepId) !== frame.appliesTo.family);
+      expect({ id: frame.id, outside }).toEqual({ id: frame.id, outside: [] });
+    }
+  });
+
+  it('chaque cadre des moments et du trésor sert au moins une étape : aucun cadre orphelin dans un pack non retirable', () => {
+    const orphans = momentFrames.filter((frame) => proposedAt(frame.id).length === 0).map((frame) => frame.id);
+    expect(orphans).toEqual([]);
+  });
+
+  it('D4 : le palier sans cadre dessiné prend le palier dessiné en dessous, et l’étape GARDE son identité — le titre vivant dit le vrai palier, le cadre dit le dessin', () => {
+    const drawn = momentFrames.filter((frame) => frame.appliesTo.family === 'tier').map((frame) => (frame.appliesTo.family === 'tier' ? frame.appliesTo.tier : ''));
+    const undrawn = LEVEL_TIER_KEYS.slice(1).filter((tier) => !drawn.includes(tier));
+    expect(undrawn.length).toBeGreaterThan(0);
+    for (const tier of undrawn) {
+      const below = LEVEL_TIER_KEYS.slice(0, LEVEL_TIER_KEYS.indexOf(tier)).reverse().find((candidate) => drawn.includes(candidate));
+      expect({ tier, suggested: ids(offer({ stepId: `tier:${tier}` }).suggested) }).toEqual({ tier, suggested: below === undefined ? [] : [`moments.palier-${below}`] });
+    }
+  });
+
+  it('D5 (#10180) : départ, niveau 100, Prestige et trophée restent des exemptions NOMMÉES du cliquet, à côté des rangs des mythologies et des succès', () => {
+    for (const family of ['start', 'level-100', 'prestige', 'trophy']) expect(GLORY_FRAME_OFFER_EXEMPT_FAMILIES).toContain(family);
+    for (const family of ['tier', 'meesh', 'treasury', 'flame', 'day']) expect(GLORY_FRAME_OFFER_EXEMPT_FAMILIES).not.toContain(family);
+  });
+});
+

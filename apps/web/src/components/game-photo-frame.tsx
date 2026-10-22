@@ -1,4 +1,4 @@
-import { AuthorPlate, Flame, GameBird, LeagueGem, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
+import { AuthorPlate, Chest, Flame, GameBird, LeagueGem, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
 import { flameForm } from '@meeshy/shared/utils/game/flame';
 
 import { useMemo } from 'react';
@@ -78,6 +78,8 @@ export function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem })
       return <Trophy kind="season" size={512} label={gameText('game.trophy.plate.season', { number: formatCount(emblem.season) })} />;
     case 'prestige':
       return <Trophy kind="prestige" size={512} label={gameText('game.trophy.plate.prestige', { number: formatCount(emblem.number) })} />;
+    case 'day':
+      return <Chest state="open" size={512} />;
   }
 }
 

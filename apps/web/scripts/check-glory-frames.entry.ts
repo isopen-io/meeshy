@@ -60,6 +60,7 @@ const samplesOf = (text: Readonly<Record<string, GloryFrameTextSlot>>, variant: 
   title: text.title?.sample ?? null,
   date: text.date?.sample ?? null,
   message: variant === 'message' ? (text.message?.sample ?? null) : null,
+  'plate.1': text['plate.1']?.sample ?? null,
 });
 
 async function compose(input: ComposeInput): Promise<ComposeOutput> {

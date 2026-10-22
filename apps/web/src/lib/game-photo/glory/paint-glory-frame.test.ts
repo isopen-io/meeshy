@@ -130,7 +130,7 @@ const layers: GloryLayerImages = {
 };
 const art: PhotoArt = { emblem: image('emblem', 200, 184), mee: image('art-mee'), meo: image('art-meo'), signature: image('signature'), flame: image('flame') };
 const palette: PhotoPalette = { top: '#0b1020', bottom: '#1e1b4b', ink: '#ffffff', inkSoft: '#c7d2fe', scrim: '#000000' };
-const texts: GloryTexts = { kicker: 'Nouveau rang', title: 'Ambassadeur IV', date: '10 octobre 2026', message: null };
+const texts: GloryTexts = { kicker: 'Nouveau rang', title: 'Ambassadeur IV', date: '10 octobre 2026', message: null, 'plate.1': null };
 const banner: PhotoBanner = { headline: 'Rejoins-moi sur Meeshy', qr: null, flameLabel: '23 j' };
 const selfie = { image: image('photo', 1600, 900), width: 1600, height: 900, mirror: true };
 
@@ -427,6 +427,30 @@ describe('le texte vivant', () => {
     expect(w).toBeGreaterThan(0);
     const titles = written(calls).filter((t) => t.text === 'Ambassadeur IV');
     expect(titles.map((t) => t.y)).toEqual([1721, 1718]);
+  });
+
+  test('la plaque `plate.1` est VIVANTE (L14, #10167) : le compte de Meeshes gardées remplace l’exemple, et sans texte l’emplacement reste vide — jamais « 100 Meeshes gardées » d’exemple sur un autre palier', () => {
+    const base = formatOf();
+    const format = formatOf({ text: { ...base.text, 'plate.1': slot({ x: 540, baseline: 1660, sample: '100 Meeshes gardées', font: { family: 'Manrope', weight: 700, style: 'normal', size: 30, tracking: 0 } }) } });
+    const alive = written(paint({ format, texts: { ...texts, 'plate.1': '50 Meeshes gardées' } }).calls).map((t) => t.text);
+    expect(alive).toContain('50 Meeshes gardées');
+    expect(alive).not.toContain('100 Meeshes gardées');
+    const silent = written(paint({ format }).calls).map((t) => t.text);
+    expect(silent).not.toContain('100 Meeshes gardées');
+  });
+
+  test('un texte de plaque vivant reste DANS sa plaque : il rétrécit à la boîte du contrat, là où la ligne du dessus peut s’étendre jusqu’à la marge', () => {
+    const base = formatOf();
+    const long = 'Mille Meeshes gardées dans la réserve';
+    const plate = slot({ x: 540, baseline: 1660, sample: '100 Meeshes gardées', font: { family: 'Manrope', weight: 700, style: 'normal', size: 30, tracking: 0 } });
+    const format = formatOf({ text: { ...base.text, 'plate.1': plate } });
+    const painted = written(paint({ format, texts: { ...texts, kicker: long, 'plate.1': long } }).calls);
+    const onPlate = painted.find((t) => t.y === 1660);
+    const kicker = painted.find((t) => t.y === 1626);
+    expect(pxOf(onPlate?.font)).toBeLessThan(30);
+    expect(onPlate?.text.replace(/…$/, '').length).toBeGreaterThan(0);
+    expect(pxOf(kicker?.font)).toBe(24);
+    expect(kicker?.text).toBe(long.toUpperCase());
   });
 
   test('sans measureText (vieux moteur), le texte se peint quand même', () => {

@@ -50,14 +50,25 @@ const synthetic: readonly GloryFrameOfferPack[] = [
     slug: 'mythologies',
     atmosphere: null,
     collections: ['mythologies'],
-    frames: (['a', 'b'] as const).map((option) => ({
-      id: `mythologies.murmure-${option}`,
-      usage: { kind: 'rank', rank: 'murmure' } as const,
-      collection: 'mythologies',
-      appliesTo: { family: 'rank', rank: 'murmure', division: null } as const,
-      option: option.toUpperCase(),
-      hidden: false,
-    })),
+    frames: [
+      ...(['a', 'b'] as const).map((option) => ({
+        id: `mythologies.murmure-${option}`,
+        usage: { kind: 'rank', rank: 'murmure' } as const,
+        collection: 'mythologies',
+        appliesTo: { family: 'rank', rank: 'murmure', division: null } as const,
+        option: option.toUpperCase(),
+        hidden: false,
+      })),
+      /* Un cadre dont l'USAGE nomme une division (choix éditorial par cadre, #10180 D3) : la loi d'usage le borne à elle seule. */
+      {
+        id: 'mythologies.echo-3',
+        usage: { kind: 'rank', rank: 'echo', division: 3 } as const,
+        collection: 'mythologies',
+        appliesTo: { family: 'rank', rank: 'echo', division: 3 } as const,
+        option: 'III',
+        hidden: false,
+      },
+    ],
   },
 ];
 
@@ -110,6 +121,8 @@ const PLAN = [
   at('pack des succès absent ⇒ carte simple', 'achievement:messages.3', { rarity: 'rare' }),
   at('succès d’une rareté sans cadre ⇒ le neutre, jamais une autre rareté', 'achievement:messages.3', { rarity: 'mythic', installed: WITH_SUCCES }),
   at('Murmure → les cadres de sa mythologie', 'rank:murmure:3', { installed: WITH_SUCCES }),
+  at('cadre limité à une division : proposé à sa seule division', 'rank:echo:3', { installed: WITH_SUCCES }),
+  at('cadre limité à une division : jamais à une autre division du rang', 'rank:echo:1', { installed: WITH_SUCCES }),
   at('Prestige sans cadre de prestige ⇒ carte simple', 'prestige:2', { atmosphere: 'afrique', installed: WITH_SUCCES }),
   at('niveau 100 sans cadre déclaré ⇒ carte simple', 'level-100:0'),
   at('départ ⇒ carte simple', 'start'),

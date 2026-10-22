@@ -38,9 +38,13 @@ const isLive = (key: string): key is LiveTextSlot => (LIVE_TEXT_SLOTS as readonl
 /** La marge qu'un texte vivant garde au bord de l'image. */
 const EDGE = 0.06;
 
-/** La place d'un texte vivant : symétrique autour de l'ancre `middle`, jusqu'au bord sinon ; un décor garde sa boîte d'exemple. */
-function maxWidthOf(slot: GloryFrameTextSlot, live: boolean, width: number): number {
-  if (!live) return slot.bbox[2] * 1.02;
+/**
+ * La place d'un texte : LIBRE (la ligne du dessus, le titre, la date, le message), symétrique autour de l'ancre `middle`
+ * et jusqu'au bord sinon ; TENUE à la boîte d'exemple pour un décor et pour une plaque (L14, #10167) — un texte de plaque
+ * est posé sur un panneau DESSINÉ de largeur fixe, il rétrécit plutôt que d'en sortir.
+ */
+function maxWidthOf(slot: GloryFrameTextSlot, free: boolean, width: number): number {
+  if (!free) return slot.bbox[2] * 1.02;
   const edge = width * EDGE;
   if (slot.anchor === 'middle') return Math.max(slot.bbox[2], Math.min(slot.x - edge, width - slot.x - edge) * 2);
   return Math.max(slot.bbox[2], slot.anchor === 'start' ? width - slot.x - edge : slot.x - edge);
@@ -90,10 +94,13 @@ const casedLike = (sample: string, text: string, uppercase: boolean, language: s
  */
 const AUTHOR_SLOT: LiveTextSlot = 'message';
 
-function paintSlot(ctx: PaintContext, slot: GloryFrameTextSlot, raw: string, live: boolean, authored: boolean, deps: GloryTextDeps): void {
+/** Un emplacement vivant qui peut s'étendre au-delà de sa boîte d'exemple : tout sauf la plaque. */
+const isFree = (key: string): boolean => isLive(key) && !key.startsWith('plate.');
+
+function paintSlot(ctx: PaintContext, slot: GloryFrameTextSlot, raw: string, free: boolean, authored: boolean, deps: GloryTextDeps): void {
   const face = (px: number): GloryTextFace => deps.face(slot.font, raw, px);
   const cased = authored ? raw : casedLike(slot.sample, raw, face(slot.font.size).uppercase, deps.language);
-  const sized = fitText(measureWith(ctx, slot, (px) => deps.face(slot.font, cased, px)), cased, maxWidthOf(slot, live, deps.width), slot.font.size);
+  const sized = fitText(measureWith(ctx, slot, (px) => deps.face(slot.font, cased, px)), cased, maxWidthOf(slot, free, deps.width), slot.font.size);
   if (sized.text.length === 0) return;
   const fitted = authored ? { ...sized, text: isolatedAuthorMessage(sized.text) } : sized;
   const shape = deps.face(slot.font, sized.text, fitted.px);
@@ -117,9 +124,8 @@ function paintSlot(ctx: PaintContext, slot: GloryFrameTextSlot, raw: string, liv
 export function paintGloryText(ctx: PaintContext, slots: Readonly<Record<string, GloryFrameTextSlot>>, texts: GloryTexts, deps: GloryTextDeps): void {
   Object.entries(slots).forEach(([key, slot]) => {
     if (slot.path !== null) return;
-    const live = isLive(key);
-    const raw = live ? texts[key] : slot.sample;
+    const raw = isLive(key) ? texts[key] : slot.sample;
     if (raw === null || raw.length === 0) return;
-    paintSlot(ctx, slot, raw, live, key === AUTHOR_SLOT, deps);
+    paintSlot(ctx, slot, raw, isFree(key), key === AUTHOR_SLOT, deps);
   });
 }

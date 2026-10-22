@@ -1,10 +1,11 @@
 import type { GameBlock } from '@meeshy/shared/types/game';
 import type { EngagementAchievementKey } from '@meeshy/shared/types/engagement';
 import { engagementAchievementTitle } from '@meeshy/shared/utils/engagement-labels';
+import { dayDiff } from '@meeshy/shared/utils/game/day-prng';
 import { flameForm, type FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { AchievementRarity, GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/shared/utils/game/glory';
+import { MYTHE_SIZE, type AchievementRarity, type GloryDivision5, type GloryRankOrMythic, type MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { GuideMomentKey } from '@meeshy/shared/utils/game/guide';
-import { photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
+import { photoDayMomentId, photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
 import { catchUpStandingOf, levelReachCount, photoTierStepId, type PhotoCatchUpEntry, type PhotoStepEmblem, type PhotoTrack } from '@meeshy/shared/utils/game/photo-catch-up';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import { LEVEL_TIER_KEYS, levelTierStart, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
@@ -15,9 +16,9 @@ import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { transitionGuideEventsV2 } from '@/lib/game-guide/events-v2';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { editionName, formatCount, levelTierName, missionTitle, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
+import { editionName, flameFormName, formatCount, levelTierName, missionTitle, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
 import { leagueName, rarityName, trophyView } from '@/lib/view/game-copy-v2';
-import { translateGame } from '@/lib/i18n-game-catalog';
+import { translateGame, translateGamePlural } from '@/lib/i18n-game-catalog';
 
 /**
  * LES MOMENTS QUI SE PHOTOGRAPHIENT (#9382) — conception, partie VI : « les
@@ -55,7 +56,9 @@ export type PhotoEmblem =
   | { readonly kind: 'season'; readonly season: number }
   | { readonly kind: 'prestige'; readonly number: number }
   /* LA FIN DE MISSION (#10816) : la mission personnelle accomplie se photographie, son pseudo gratté sur la plaque. */
-  | { readonly kind: 'mission'; readonly templateKey: string; readonly target: number };
+  | { readonly kind: 'mission'; readonly templateKey: string; readonly target: number }
+  /* LA RÉALISATION DU JOUR (D6, #10167) : l'Offrande ouverte, une par journée de jeu ; `dayKey` est la journée de l'utilisateur. */
+  | { readonly kind: 'day'; readonly dayKey: string };
 
 export type PhotoMoment = {
   readonly id: string;
@@ -109,8 +112,9 @@ export function momentLines(
     case 'treasury':
       return { kicker: translateGame(language, 'game.photo.kicker.treasury'), title: treasuryName(emblem.tier, language) };
     case 'flame':
+      /* D17 (#10167) : la ligne du dessus est la FORME de la loi (`FLAME_FORMS` : flamme, brasier, astre, soleil), jamais l'étiquette du manifeste. */
       return {
-        kicker: translateGame(language, 'game.photo.kicker.flame'),
+        kicker: flameFormName(emblem.form, language),
         title: translateGame(language, 'game.photo.title.flame_days', { count: formatCount(emblem.days, language) }),
       };
     case 'achievement':
@@ -133,6 +137,37 @@ export function momentLines(
       return { kicker: translateGame(language, 'game.photo.kicker.prestige'), title: translateGame(language, 'game.photo.title.prestige', { count: formatCount(emblem.number, language) }) };
     case 'mission':
       return { kicker: translateGame(language, 'game.photo.kicker.mission'), title: missionTitle(emblem.templateKey, emblem.target, language) };
+    case 'day':
+      return {
+        kicker: translateGame(language, 'game.photo.kicker.day', { day: formatCount(dayOfYear(emblem.dayKey), language) }),
+        title: translateGame(language, 'game.photo.title.day'),
+      };
+  }
+}
+
+/** Le quantième de l'année d'une journée `AAAA-MM-JJ` : « Jour 283 » pour le 10 octobre 2026. */
+export const dayOfYear = (dayKey: string): number => dayDiff(`${dayKey.slice(0, 4)}-01-01`, dayKey) + 1;
+
+/**
+ * CE QUE LA PLAQUE GRAVE (L14, #10167) — quand le contrat d'un cadre réserve l'emplacement `plate.1`
+ * (`LIVE_TEXT_SLOTS`), le moment le remplit : le compte de Meeshes gardées du palier du trésor, le quantième
+ * de la réalisation du jour, la place du Mythe. `null` : rien à graver, l'emplacement reste vide — jamais le
+ * texte d'exemple de l'export, qui dirait « 100 Meeshes gardées » sur une Bourse.
+ */
+export function momentPlate(emblem: PhotoEmblem, language: InterfaceLanguage = currentInterfaceLanguage()): string | null {
+  switch (emblem.kind) {
+    case 'treasury': {
+      const minHeld = TREASURY_TIERS.find((tier) => tier.key === emblem.tier)?.minHeld;
+      return minHeld === undefined ? null : translateGamePlural(language, 'game.photo.plate.meeshes_kept', minHeld);
+    }
+    case 'day':
+      return momentLines(emblem, language).kicker;
+    case 'rank':
+      return emblem.mythic === null
+        ? null
+        : translateGame(language, 'game.photo.plate.mythic_seat', { number: formatCount(emblem.mythic.number, language), seats: formatCount(MYTHE_SIZE, language) });
+    default:
+      return null;
   }
 }
 
@@ -196,6 +231,12 @@ export const missionMoment = (params: { readonly id: string; readonly templateKe
   moment(`mission:${params.id}`, { kind: 'mission', templateKey: params.templateKey, target: params.target });
 
 export const treasuryMoment = (tier: TreasuryTierKey): PhotoMoment => moment(`treasury:${tier}`, { kind: 'treasury', tier });
+
+/** La réalisation du jour (D6) : l'identité porte la journée ; une clé qui n'est pas une date n'a pas de moment. */
+export const dayMoment = (dayKey: string): PhotoMoment | null => {
+  const id = photoDayMomentId(dayKey);
+  return id === null ? null : moment(id, { kind: 'day', dayKey });
+};
 
 const FLAME_THRESHOLDS = [7, 30, 100, 365] as const;
 

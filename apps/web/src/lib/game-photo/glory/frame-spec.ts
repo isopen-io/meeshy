@@ -32,8 +32,13 @@ export type GloryRecipe = {
 
 export const DEFAULT_RECIPE: GloryRecipe = { pose: null, message: null, crop: NO_CROP, showFlame: true, showLink: true };
 
-/** Les emplacements que le moment REMPLIT ; tout autre emplacement du contrat peint son texte d'exemple. */
-export const LIVE_TEXT_SLOTS = ['kicker', 'title', 'date', 'message'] as const;
+/**
+ * Les emplacements que le moment REMPLIT ; tout autre emplacement du contrat peint son texte d'exemple.
+ * `plate.1` (L14, #10167) : la plaque des cadres du trésor (« 100 Meeshes gardées »), du jour (« Réalisation du
+ * jour · Jour 283 ») et du Mythe (« Nº 42 / 100 ») — vivante, donc vide quand le moment n'a rien à y graver,
+ * jamais l'exemple de l'export sur un autre palier.
+ */
+export const LIVE_TEXT_SLOTS = ['kicker', 'title', 'date', 'message', 'plate.1'] as const;
 export type LiveTextSlot = (typeof LIVE_TEXT_SLOTS)[number];
 
 export type GloryTexts = Readonly<Record<LiveTextSlot, string | null>>;
