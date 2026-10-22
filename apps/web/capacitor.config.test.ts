@@ -28,7 +28,7 @@ import { resolveCapacitorConfig } from './capacitor.config';
 describe('resolveCapacitorConfig — le chemin de départ n’est qu’un paramètre de RECETTE', () => {
   test('un environnement vide ne pose PAS server.appStartPath', () => {
     const config = resolveCapacitorConfig({});
-    expect(config.server).toEqual({ androidScheme: 'https' });
+    expect(config.server).toEqual({ androidScheme: 'https', errorPath: 'webview-update.html' });
     expect(config.server?.appStartPath).toBeUndefined();
   });
 
@@ -154,10 +154,10 @@ describe('resolveCapacitorConfig — le chemin de départ n’est qu’un param�
       appId: 'me.meeshy.app',
       appName: 'Meeshy',
       webDir: 'dist',
-      android: { backgroundColor: '#09090b' },
+      android: { backgroundColor: '#09090b', minWebViewVersion: 111 },
       ios: { backgroundColor: '#09090b', contentInset: 'never' },
       plugins: { SystemBars: { insetsHandling: 'css', initialViewportFitValueHint: 'cover' } },
-      server: { androidScheme: 'https' },
+      server: { androidScheme: 'https', errorPath: 'webview-update.html' },
     });
   });
 });
