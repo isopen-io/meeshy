@@ -2,6 +2,7 @@ package me.meeshy.app.calls
 
 import androidx.annotation.StringRes
 import me.meeshy.sdk.model.call.CallRefusalMessage
+import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallRefusalReason
 
 /** Le libellé localisé d'un refus d'appel nommé par un code typé, ou `null` (repli de l'appelant). */
