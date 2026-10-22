@@ -129,6 +129,8 @@ work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 # lot: composer-socle-decoupage-et-dependances
 androidx-media3-muxer = { module = "androidx.media3:media3-muxer", version.ref = "media3" }
 
+# lot: pieces-jointes-compression-image-et-video
+
 [bundles]
 compose = ["compose-ui", "compose-ui-graphics", "compose-ui-tooling-preview", "compose-material3", "compose-material-icons"]
 
