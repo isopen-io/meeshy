@@ -1,5 +1,10 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="common_done">Fine</string>
+    <string name="location_map_style_hybrid">Ibrida</string>
+    <string name="location_map_style_imagery">Satellite</string>
+    <string name="location_map_style_section">Tipo di mappa</string>
+    <string name="location_map_style_standard">Mappa</string>
     <string name="location_precision_around">Dintorni (~100 m)</string>
     <string name="location_precision_city">Città (~10 km)</string>
     <string name="location_precision_exact">Esatta</string>
