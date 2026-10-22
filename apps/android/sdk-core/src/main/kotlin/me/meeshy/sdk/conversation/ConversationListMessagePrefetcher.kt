@@ -101,7 +101,7 @@ class ConversationListMessagePrefetcher @Inject constructor(
                 throw cancelled
             } catch (failure: Exception) {
                 Timber.w(failure, "prefetch pass failed")
-                emptyMap()
+                emptyMap<String, String>()
             }
             finish(completed)
         }
