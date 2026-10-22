@@ -121,7 +121,7 @@ public data class GameMintPreview(
 
 internal fun parseFlame(obj: JsonObject): GameFlame = GameFlame(
     days = obj.reqInt("days"),
-    form = obj.nullableEnum("form"),
+    form = obj.nullableEnum<FlameFormKey>("form"),
     bonusPercent = obj.reqInt("bonusPercent"),
     freezes = obj.reqInt("freezes"),
     maxFreezes = obj.reqInt("maxFreezes"),
@@ -171,7 +171,7 @@ private fun parseAccessList(array: JsonArray): List<TreasuryAccess> = array.mapN
 
 internal fun parseTreasury(obj: JsonObject): TreasuryStanding = TreasuryStanding(
     held = obj.reqInt("held"),
-    tier = obj.nullableEnum("tier"),
+    tier = obj.nullableEnum<TreasuryTierKey>("tier"),
     next = obj.nullableObject("next")?.let(::parseTreasuryNext),
     access = (obj["access"] as? JsonArray)?.let(::parseAccessList),
 )

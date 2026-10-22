@@ -117,7 +117,7 @@ public object GameBlockParser {
         target = obj.reqLong("target"),
         current = obj.reqLong("current"),
         met = obj.reqBool("met"),
-        rank = obj.nullableEnum("rank"),
+        rank = obj.nullableEnum<GloryRank>("rank"),
     )
 
     private fun parseStepCounts(obj: JsonObject): GameLevelStepCounts = GameLevelStepCounts(
