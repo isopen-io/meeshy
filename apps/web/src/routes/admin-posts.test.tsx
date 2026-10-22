@@ -194,6 +194,45 @@ describe('AdminPostsPanel — la liste : de vrais noms, des métadonnées interp
   });
 });
 
+describe('AdminPostsPanel — les gestes se voient sans défiler de côté, et la ligne se replie proprement (#10461)', () => {
+  test('à 1280 px de fenêtre (968 px de contenu, sous @5xl), cinq compteurs se retirent ; État, Gestes et la réaction restent', async () => {
+    const { host } = await ouvrir();
+    const headers = [...host.querySelectorAll('thead th')];
+    const hidden = headers.filter((th) => th.className.includes('hidden @5xl:table-cell')).map((th) => th.textContent?.trim());
+    expect(hidden).toEqual(['Commentaires', 'Vues', 'Repartages', 'Partages', 'Enregistrements']);
+    for (const name of ['État', 'Gestes', 'Réactions']) expect(headers.find((th) => th.textContent?.trim() === name)?.className).not.toContain('hidden');
+  });
+
+  test('la ligne se replie ENTRE les gestes, jamais au milieu d’un libellé ; la feuille de confirmation, elle, replie son texte', async () => {
+    const { host } = await ouvrir();
+    const cell = row(host, 3)?.querySelector('[data-admin-post-gestures]')?.closest('td');
+    const controls = [...(cell?.querySelectorAll('[data-admin-post-preview-open], [data-admin-post-gesture]') ?? [])];
+
+    expect(controls).toHaveLength(3);
+    for (const control of controls) {
+      expect(control.closest('.whitespace-nowrap')).not.toBeNull();
+      expect(control.closest('.flex-wrap')).not.toBeNull();
+    }
+    await click(cell?.querySelector('[data-admin-post-gesture="take-offline"]') ?? null);
+    const sheet = document.querySelector('[data-admin-confirm]');
+    expect(sheet).not.toBeNull();
+    expect(sheet?.closest('.whitespace-nowrap')).toBeNull();
+    expect(sheet?.closest('[data-admin-post-gestures]')).toBeNull();
+  });
+
+  test('dans la carte (375 px), les gestes prennent toute la largeur sous leur en-tête « Gestes »', async () => {
+    const { host } = await ouvrir();
+    const card = host.querySelector(`[data-admin-card="${ID(3)}"]`);
+    const gestures = card?.querySelector('[data-admin-post-gestures]')?.closest('dd');
+
+    expect(gestures?.className).not.toContain('text-end');
+    expect(gestures?.parentElement?.className).toContain('grid');
+    expect(gestures?.parentElement?.className).not.toContain('justify-between');
+    expect(gestures?.previousElementSibling?.textContent).toBe('Gestes');
+    expect(gestures?.querySelectorAll('[data-admin-post-preview-open], [data-admin-post-gesture]')).toHaveLength(3);
+  });
+});
+
 describe('AdminPostsPanel — chaque ligne ouvre sa fiche', () => {
   test('l’auteur est le lien de 44 px vers la fiche de la PUBLICATION, dans l’espace courant', async () => {
     const { host } = await ouvrir();

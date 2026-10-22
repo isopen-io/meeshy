@@ -184,7 +184,7 @@ const f = {
   'admin.scale.loyalty.presetLabel': 'Un an de fidélité',
   'admin.scale.big.warning': 'Paliers au-delà de 10 000 points : {count}. Vérifiez-les avant d’enregistrer — rien n’est bloqué.',
   'admin.scale.abuse.title': 'Garde-fous des gros poids',
-  'admin.scale.abuse.intro': 'Une opération qui vaut au moins le seuil ne crédite qu’une fois par contenu, rend ses points si le contenu est supprimé dans les 30 jours, et reste bornée pour un compte sans e-mail ni téléphone vérifié. Interagir avec son propre contenu ne rapporte jamais rien.',
+  'admin.scale.abuse.intro': 'Une opération qui vaut au moins le seuil ne crédite qu’une fois par contenu, rend ses points si le contenu est supprimé dans les 30 jours, et reste bornée pour un compte sans e-mail ni téléphone vérifié. Un palier de série ou de fidélité qui atteint ce seuil suit la même borne. Interagir avec son propre contenu ne rapporte jamais rien.',
   'admin.scale.abuse.heavyPoints': 'Seuil d’un gros poids (points)',
   'admin.scale.abuse.clawbackHours': 'Reprise si supprimé dans les (heures)',
   'admin.scale.abuse.unverifiedMaxPoints': 'Points au plus par acte, compte non vérifié',

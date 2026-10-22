@@ -40,6 +40,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case gameLeagueWeeksByWeekKey(weekKey: String)
     case gameMissionsByMissionIdReroll(missionId: String)
     case gamePhotoMomentsInvitations
+    case gamePhotoMomentsKept
     case gamePhotoMomentsPresented
     case gamePrestige
     case gamePrivacy
@@ -104,6 +105,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .gameLeagueWeeksByWeekKey(let weekKey): return "/api/v1/me/game/league/weeks/\(weekKey)"
         case .gameMissionsByMissionIdReroll(let missionId): return "/api/v1/me/game/missions/\(missionId)/reroll"
         case .gamePhotoMomentsInvitations: return "/api/v1/me/game/photo-moments/invitations"
+        case .gamePhotoMomentsKept: return "/api/v1/me/game/photo-moments/kept"
         case .gamePhotoMomentsPresented: return "/api/v1/me/game/photo-moments/presented"
         case .gamePrestige: return "/api/v1/me/game/prestige"
         case .gamePrivacy: return "/api/v1/me/game/privacy"

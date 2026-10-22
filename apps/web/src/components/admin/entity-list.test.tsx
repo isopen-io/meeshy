@@ -64,6 +64,7 @@ function ListScreen({ script }: { readonly script: Script }) {
         { id: 'name', header: 'Nom', primary: true, sortKey: 'name', cell: (row) => <AdminEntityIdentity language="fr" entity={{ kind: 'user', id: row.id, label: row.name }} /> },
         { id: 'status', header: 'Statut', cell: (row) => (row.status === 'a' ? 'Actif' : 'Inactif') },
         { id: 'created', header: 'Création', sortKey: 'createdAt', align: 'end', priority: 3, cell: () => 'il y a 3 jours' },
+        { id: 'gestures', header: 'Gestes', stacked: true, cell: (row) => <span data-probe-gestures={row.id}>Retirer</span> },
       ]}
     />
   );
@@ -103,7 +104,7 @@ describe('AdminEntityList — lignes, liens, en-têtes', () => {
   test('le tableau porte sa légende (lecteurs d’écran) et des en-têtes de colonnes', async () => {
     const host = await ouvrir();
     expect(host.querySelector('table caption')?.textContent).toBe('Personnes');
-    expect([...host.querySelectorAll('thead th')].map((th) => th.textContent?.replace(/[▲▼↕\s]/g, ''))).toEqual(['Nom', 'Statut', 'Création']);
+    expect([...host.querySelectorAll('thead th')].map((th) => th.textContent?.replace(/[▲▼↕\s]/g, ''))).toEqual(['Nom', 'Statut', 'Création', 'Gestes']);
   });
 
   test('une colonne triable porte aria-sort ; la colonne du tri courant est annoncée', async () => {
@@ -128,7 +129,7 @@ describe('AdminEntityList — lignes, liens, en-têtes', () => {
     expect(host.querySelectorAll('thead th')[2]?.className).toContain('hidden @5xl:table-cell');
     const carte = host.querySelector('[data-admin-card]');
     expect(carte?.querySelector('a')?.getAttribute('href')).toBe(`/admin/users/${IDS[0]}`);
-    expect([...(carte?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent)).toEqual(['Statut']);
+    expect([...(carte?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent)).toEqual(['Statut', 'Gestes']);
     expect(carte?.textContent).not.toContain('il y a 3 jours');
   });
 });
@@ -153,6 +154,20 @@ describe('AdminEntityList — tableau ou cartes, d’après la largeur du CONTEN
     expect(control).not.toBeNull();
     expect(control?.className).toContain('@3xl:hidden');
     expect(control?.compareDocumentPosition(cards as Node)! & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('une colonne EMPILÉE pose, dans la carte, son en-tête AU-DESSUS d’une cellule pleine largeur — les gestes ne se serrent pas à droite d’une étiquette (#10461)', async () => {
+    const host = await ouvrir();
+    const carte = host.querySelector('[data-admin-card]');
+    const gestures = carte?.querySelector('[data-probe-gestures]')?.closest('dd');
+    const status = [...(carte?.querySelectorAll('dt') ?? [])].find((dt) => dt.textContent === 'Statut')?.parentElement;
+
+    expect(gestures?.className).not.toContain('text-end');
+    expect(gestures?.parentElement?.className).toContain('grid');
+    expect(gestures?.parentElement?.className).not.toContain('justify-between');
+    expect(gestures?.previousElementSibling?.textContent).toBe('Gestes');
+    expect(status?.className).toContain('justify-between');
+    expect(host.querySelector('table [data-probe-gestures]')?.closest('td')).not.toBeNull();
   });
 
   test('les cartes posent le MODE CARTE : un nom long s’y replie sur deux lignes au lieu de se tronquer', async () => {
