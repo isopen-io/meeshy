@@ -125,4 +125,30 @@ class SceneLookMatrixTest {
     fun `un effet seul rend la recette non neutre`() {
         assertThat(SceneLookRecipe.forEdit(ImageEditState(effect = ImageEffect.GRAIN)).isNeutral).isFalse()
     }
+
+    @Test
+    fun `sans reglage la chaine rend exactement la matrice du filtre de story, a toute intensite`() {
+        StoryFilter.entries.forEach { filter ->
+            listOf(0f, 0.4f, 1f).forEach { intensity ->
+                val expected = StoryFilterMatrix.effectiveMatrix(filter, intensity).values
+                val chained = SceneLookMatrix.composed(SceneLookRecipe.forStory(filter, intensity, null)).values
+                expected.indices.forEach { assertThat(chained[it]).isWithin(0.001f).of(expected[it]) }
+            }
+        }
+    }
+
+    @Test
+    fun `le look du fond d une slide lit son filtre de fil et les reglages du media de fond`() {
+        val background = me.meeshy.sdk.model.StoryMediaObject(
+            id = "bg",
+            isBackground = true,
+            adjustments = ImageAdjustments().with(AdjustmentKind.CONTRAST, 1.3f),
+        )
+        val effects = me.meeshy.sdk.model.StoryEffects(filter = "bw", filterIntensity = 0.5, mediaObjects = listOf(background))
+        val recipe = SceneLookRecipe.forEffects(effects)
+        assertThat(recipe.params.contrast).isEqualTo(1.3f)
+        assertThat(recipe.filterMatrix).isEqualTo(StoryFilterMatrix.effectiveMatrix(StoryFilter.BW, 0.5f))
+        assertThat(SceneLookRecipe.forEffects(null).isNeutral).isTrue()
+        assertThat(SceneLookRecipe.forEffects(me.meeshy.sdk.model.StoryEffects(filter = "inconnu")).isNeutral).isTrue()
+    }
 }

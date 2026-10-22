@@ -40,6 +40,7 @@ import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
+import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 import me.meeshy.sdk.model.scene.StoryClipTransitionResolver
 import me.meeshy.sdk.model.scene.StoryElementVisibility
@@ -239,6 +240,8 @@ data class StorySlideView(
      * so the viewer must be able to show what was drawn.
      */
     val strokes: List<StoryDrawingStroke> = emptyList(),
+    /** Le look du fond (filtre de slide puis réglages) — neutre : aucun coût de rendu. */
+    val lookRecipe: SceneLookRecipe = SceneLookRecipe.NEUTRAL,
 )
 
 /**
@@ -841,6 +844,7 @@ class StoryViewerViewModel @Inject constructor(
                 ?.let { StoryBackgroundValue.parse(it) },
             repostAttribution = StoryRepostAttribution.resolve(this),
             strokes = storyEffects?.drawingStrokes.orEmpty(),
+            lookRecipe = SceneLookRecipe.forEffects(storyEffects),
         )
     }
 

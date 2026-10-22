@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.scene
 
 import me.meeshy.sdk.model.ImageAdjustments as WireAdjustments
+import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.imageedit.ImageEditState
 import me.meeshy.sdk.model.imageedit.ImageEffect
@@ -45,6 +46,22 @@ data class SceneLookRecipe(
             return SceneLookRecipe(
                 filterMatrix = StoryFilterMatrix.effectiveMatrix(filter, intensity),
                 params = params,
+            )
+        }
+
+        /** Le filtre de slide, lu depuis son jeton de fil ; `null` si absent ou d'un client plus récent. */
+        fun filterOf(effects: StoryEffects): StoryFilter? =
+            effects.filter?.let { token -> StoryFilter.entries.firstOrNull { it.wireValue() == token } }
+
+        /** Le look du FOND de ces effets : le filtre de slide, puis les réglages du média de fond. */
+        fun forEffects(effects: StoryEffects?): SceneLookRecipe {
+            if (effects == null) return NEUTRAL
+            val background = effects.mediaObjects.orEmpty().firstOrNull { it.isBackground }
+            return forStory(
+                filter = filterOf(effects),
+                intensity = (effects.filterIntensity ?: 1.0).toFloat(),
+                adjustments = background?.adjustments,
+                isVideo = background?.mediaType == "video",
             )
         }
 
