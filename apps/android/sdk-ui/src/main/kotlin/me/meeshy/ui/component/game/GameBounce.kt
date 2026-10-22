@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.game
 
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.animation.core.spring
