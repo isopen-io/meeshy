@@ -95,6 +95,7 @@ class FullscreenChromeAutoHideTest {
         elapse(2_000)
 
         stage.isPlaying.value = false
+        compose.mainClock.advanceTimeByFrame()
         elapse(10_000)
 
         assertThat(stage.chrome.value.showsChrome).isTrue()
