@@ -65,6 +65,63 @@ export interface CallAnalyticsEvent {
   readonly deviceModel: string;
   readonly isVideo: boolean;
   readonly endReason: string;
+  /** Gels vidéo reçus (`inbound-rtp.freezeCount`, #11277). Optionnel : absent des clients d'avant. */
+  readonly freezeCount?: number;
+  /** Durée cumulée de ces gels, en SECONDES (`inbound-rtp.totalFreezesDuration`). */
+  readonly totalFreezesDuration?: number;
+  /** Cause dominante de limitation à l'émission (`outbound-rtp.qualityLimitationReason`) : `none` | `cpu` | `bandwidth` | `other`. */
+  readonly qualityLimitationReason?: string;
+  /** Délai moyen du tampon de gigue, en MILLISECONDES (`jitterBufferDelay / jitterBufferEmittedCount`). */
+  readonly jitterBufferDelay?: number;
+  /** Échantillons audio masqués (`inbound-rtp.concealedSamples`). */
+  readonly concealedSamples?: number;
+  /** NACK et PLI émis pour la vidéo reçue (`inbound-rtp.nackCount`, `pliCount`). */
+  readonly nackCount?: number;
+  readonly pliCount?: number;
+  /** MOS estimé par le client, de 1 à 5. */
+  readonly mos?: number;
+  /** Type du candidat LOCAL de la paire élue : `host` | `srflx` | `prflx` | `relay`. */
+  readonly candidateType?: string;
+  /** Transport vers le relais quand `candidateType = relay` : `udp` | `tcp` | `tls`. */
+  readonly relayProtocol?: string;
+}
+
+/**
+ * La QUALITÉ des appels d'une fenêtre (#11277), servie par
+ * `GET /admin/analytics/calls` sous `quality`. Agrégée sur les seuls appels
+ * CONNECTÉS ; chaque moyenne porte sur les lignes qui portent sa mesure, et
+ * vaut `null` — jamais zéro — quand aucune ne la porte (un ancien client ne
+ * mesure rien). Aucune donnée personnelle : ni appareil, ni appel, ni compte.
+ */
+export interface CallQualitySummary {
+  readonly connectedCalls: number;
+  /** Appels connectés portant au moins une mesure de qualité. */
+  readonly reportingCalls: number;
+  readonly freezes: {
+    readonly reportingVideoCalls: number;
+    /** Part des appels vidéo qui ont gelé au moins une fois. */
+    readonly frozenRate: number | null;
+    readonly avgFreezeCount: number | null;
+    readonly avgFreezeDurationSeconds: number | null;
+  };
+  readonly qualityLimitation: { readonly none: number; readonly cpu: number; readonly bandwidth: number; readonly other: number };
+  readonly mos: {
+    readonly reportingCalls: number;
+    readonly avg: number | null;
+    /** Part des appels sous 3,5. */
+    readonly lowRate: number | null;
+  };
+  readonly avgJitterBufferDelayMs: number | null;
+  readonly avgConcealedSamples: number | null;
+  readonly avgNackCount: number | null;
+  readonly avgPliCount: number | null;
+  readonly relay: {
+    readonly reportingCalls: number;
+    readonly relayedRate: number | null;
+    readonly byProtocol: Readonly<Record<string, number>>;
+  };
+  readonly byCodec: Readonly<Record<string, number>>;
+  readonly byPlatform: Readonly<Record<string, number>>;
 }
 
 /** @deprecated Forme d'avant le cycle 107, lue par aucun site : `CallAnalyticsEvent` fait foi. */
