@@ -121,8 +121,9 @@ private nonisolated struct SendableWriterInput: @unchecked Sendable {
 /// Le ré-encodage ne change pas l'espace des pixels — il les recompresse.
 /// Sans étiquette, l'encodeur laisse le lecteur supposer du BT.709 : une prise
 /// Display P3 ressort délavée. L'étiquette se lit donc sur la description de
-/// format de la piste source et se reporte telle quelle ; une source muette
-/// reste muette, rien n'est inventé.
+/// format de la piste source et se reporte telle quelle. Cette lecture n'invente
+/// rien : une source muette rend `nil`, et c'est `VideoTranscodeRecipe` qui
+/// l'étiquette alors BT.709, ce que tout lecteur supposait déjà (#11290).
 nonisolated enum VideoColorTagging {
     static func properties(of description: CMFormatDescription) -> [String: String]? {
         let tags = [
