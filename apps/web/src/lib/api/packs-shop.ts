@@ -2,11 +2,11 @@ import * as z from 'zod/mini';
 
 import * as packsEndpoints from '@meeshy/shared/api/endpoints/packs';
 import * as stickerPacksEndpoints from '@meeshy/shared/api/endpoints/sticker-packs';
-import { PACK_DOMAINS, PACK_LANGUAGES, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
+import { PACK_DOMAINS, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
 
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
-import { loadCatalogueOf, setInstalledOf, type PackDeps, type PackPort } from './packs';
+import { decodePackNames, loadCatalogueOf, setInstalledOf, type PackDeps, type PackPort } from './packs';
 
 /**
  * **LA VITRINE UNIQUE** (#10632, spec §§ 4.3–4.4) — un seul port pour acheter
@@ -57,18 +57,6 @@ const WirePack = z.object({
   names: z.optional(z.record(z.string(), z.unknown())),
 });
 
-const WireName = z.object({ name: z.string(), description: z.string() });
-
-const isPackLanguage = (value: string): value is PackLanguage => (PACK_LANGUAGES as readonly string[]).includes(value);
-
-const namesOf = (raw: Readonly<Record<string, unknown>> | undefined): PackNames =>
-  Object.fromEntries(
-    Object.entries(raw ?? {}).flatMap(([language, value]) => {
-      const parsed = WireName.safeParse(value);
-      return isPackLanguage(language) && parsed.success ? [[language, parsed.data]] : [];
-    }),
-  );
-
 /** La langue du lecteur, puis le français, puis le nom servi à plat. */
 export const shopPackText = (pack: ShopPack, language: PackLanguage): { readonly name: string; readonly description: string } =>
   pack.names[language] ?? pack.names.fr ?? { name: pack.name, description: pack.description };
@@ -93,7 +81,7 @@ export const decodeShopPack = (domain: PackDomain) => (raw: unknown): ShopPack |
     installed: wire.installed,
     price,
     owned: price === null ? true : (wire.owned ?? false),
-    names: namesOf(wire.names),
+    names: decodePackNames(wire.names),
     removable: wire.removable ?? !(domain === 'sticker' && wire.builtin === true),
     ...(domain === 'sticker' && wire.builtin === true ? { builtin: true as const } : {}),
   };
