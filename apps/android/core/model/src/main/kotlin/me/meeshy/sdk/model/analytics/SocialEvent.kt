@@ -66,7 +66,7 @@ data class StampedSocialEvent(val event: SocialEvent, val stamp: SocialEventStam
         fun stamping(
             event: SocialEvent,
             atMs: Long,
-            newId: () -> String = SocialEventStamp::newEventId,
+            newId: () -> String = { SocialEventStamp.newEventId() },
         ): StampedSocialEvent = StampedSocialEvent(
             event,
             when (event) {
