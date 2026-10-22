@@ -86,7 +86,7 @@ describe('notifyContentRemoved — la notification à l’auteur', () => {
     expect(call).toMatchObject({
       userId: AUTHOR,
       type: 'content_removed',
-      title: 'Votre message dans « Les Amis » a été retiré par un administrateur',
+      title: 'Votre message dans « Les Amis » a été retiré par la modération',
       content: 'Motif : Spam répété',
       context: { conversationId: 'c1', conversationTitle: 'Les Amis' },
       metadata: {
@@ -115,7 +115,7 @@ describe('notifyContentRemoved — la notification à l’auteur', () => {
 
     expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({
       lang: 'en',
-      title: 'Your reel was removed by an administrator',
+      title: 'Your reel was removed by the moderation team',
       content: 'Reason: Contenu violent',
       context: { postId: 'p1' },
       metadata: { contentType: 'reel', contentId: 'p1', postId: 'p1', reason: 'Contenu violent' },
@@ -123,10 +123,10 @@ describe('notifyContentRemoved — la notification à l’auteur', () => {
   });
 
   it.each([
-    ['post', 'Votre publication a été retirée par un administrateur'],
-    ['story', 'Votre story a été retirée par un administrateur'],
-    ['comment', 'Votre commentaire a été retiré par un administrateur'],
-    ['message', 'Votre message a été retiré par un administrateur'],
+    ['post', 'Votre publication a été retirée par la modération'],
+    ['story', 'Votre story a été retirée par la modération'],
+    ['comment', 'Votre commentaire a été retiré par la modération'],
+    ['message', 'Votre message a été retiré par la modération'],
   ] as const)('nomme le contenu retiré : %s', async (contentType, title) => {
     const notifications = buildNotifier();
 
@@ -253,7 +253,7 @@ describe('completeModeratedMessageRemoval — les trois transports de message', 
     expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({
       userId: AUTHOR,
       type: 'content_removed',
-      title: 'Votre message dans « Équipe » a été retiré par un administrateur',
+      title: 'Votre message dans « Équipe » a été retiré par la modération',
       metadata: { contentType: 'message', contentId: 'm1', conversationId: 'c1', conversationTitle: 'Équipe', reason: 'Insulte' },
     }));
   });
@@ -271,7 +271,7 @@ describe('completeModeratedMessageRemoval — les trois transports de message', 
     await flushDetached();
 
     expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Votre message a été retiré par un administrateur',
+      title: 'Votre message a été retiré par la modération',
     }));
   });
 });
