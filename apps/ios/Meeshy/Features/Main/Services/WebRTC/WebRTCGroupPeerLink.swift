@@ -65,6 +65,9 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
     private let localVideoTrack: @MainActor () -> RTCVideoTrack?
     private let onEvent: @MainActor (GroupPeerLinkEvent) -> Void
     private let audioTrack: RTCAudioTrack
+    private let factory: RTCPeerConnectionFactory
+    /// La part du débit montant de ce lien (#11292), réappliquée après chaque négociation.
+    private var videoBudget: CallVideoBudget?
     private var peerConnection: RTCPeerConnection?
     private var sendsVideo: Bool
     private var epoch = 0
@@ -89,6 +92,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
         self.localVideoTrack = localVideoTrack
         self.onEvent = onEvent
         self.sendsVideo = configuration.sendsVideo
+        self.factory = factory
         let source = factory.audioSource(with: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil))
         self.audioTrack = factory.audioTrack(with: source, trackId: "mesh-audio-\(configuration.remoteUserId)")
         self.audioTrack.isEnabled = configuration.sendsAudio
@@ -99,6 +103,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
         rtcConfiguration.continualGatheringPolicy = .gatherContinually
         rtcConfiguration.bundlePolicy = .maxBundle
         rtcConfiguration.rtcpMuxPolicy = .require
+        rtcConfiguration.iceCandidatePoolSize = Int32(QualityThresholds.iceCandidatePoolSize)
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: ["DtlsSrtpKeyAgreement": "true"])
         peerConnection = factory.peerConnection(with: rtcConfiguration, constraints: constraints, delegate: self)
         if peerConnection == nil {
@@ -133,6 +138,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
             return
         }
         transceiver.sender.track = track
+        applyStoredVideoBudget()
         guard transceiver.direction != .sendRecv else { return }
         forceSendRecv(transceiver)
         guard pc.signalingState == .stable, hasRemoteDescription else { return }
@@ -159,6 +165,19 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
             }
         }
         return levels.max()
+    }
+
+    func applyVideoBudget(_ budget: CallVideoBudget) {
+        videoBudget = budget
+        applyStoredVideoBudget()
+    }
+
+    private func applyStoredVideoBudget() {
+        guard let budget = videoBudget,
+              let sender = peerConnection?.transceivers.first(where: { $0.mediaType == .video })?.sender else { return }
+        WebRTCSenderEncoding.applyVideo(to: sender, maxBitrateBps: budget.maxBitrateBps, maxFramerate: budget.maxFramerate,
+                                        scaleResolutionDownBy: budget.scaleResolutionDownBy,
+                                        degradationPreference: budget.degradationPreference)
     }
 
     func sendControl(_ data: Data) {
@@ -261,6 +280,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
 
     private func remoteDescriptionApplied(on pc: RTCPeerConnection) async {
         hasRemoteDescription = true
+        applyStoredVideoBudget()
         let queued = pendingCandidates
         pendingCandidates = []
         for candidate in queued {
@@ -278,7 +298,9 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
         let videoInit = RTCRtpTransceiverInit()
         videoInit.direction = video == nil ? .recvOnly : .sendRecv
         videoInit.streamIds = ["meeshy-mesh"]
-        pc.addTransceiver(of: .video, init: videoInit)?.sender.track = video
+        guard let videoTransceiver = pc.addTransceiver(of: .video, init: videoInit) else { return }
+        videoTransceiver.sender.track = video
+        WebRTCCodecPreferences.applyVideo(to: videoTransceiver, factory: factory)
     }
 
     /// L'appelant ouvre le canal AVANT sa première offre : il doit figurer dans
@@ -311,6 +333,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
                 transceiver.sender.track = audioTrack
                 forceSendRecv(transceiver)
             case .video:
+                WebRTCCodecPreferences.applyVideo(to: transceiver, factory: factory)
                 guard sendsVideo, let video = localVideoTrack() else { continue }
                 transceiver.sender.track = video
                 forceSendRecv(transceiver)

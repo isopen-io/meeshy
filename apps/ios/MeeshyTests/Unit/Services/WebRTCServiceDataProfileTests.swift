@@ -64,6 +64,31 @@ final class WebRTCServiceDataProfileTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(applied?.scaleResolutionDownBy ?? 0, budget.scaleResolutionDownBy)
     }
 
+    /// #11292 — dans un appel de groupe, le pair principal est un encodage parmi
+    /// d'autres : le plafond du maillage le borne aussi.
+    func test_groupVideoCeiling_capsThePrimaryEncoding() {
+        let (sut, client, _) = makeSUT()
+        _ = sut.configure(isVideo: true)
+        let plafond = CallVideoBudget.meshLink(encodes: 5)
+
+        sut.setGroupVideoCeiling(plafond)
+
+        let applied = client.videoEncodings.last
+        XCTAssertLessThanOrEqual(applied?.maxBitrateBps ?? .max, plafond.maxBitrateBps)
+        XCTAssertLessThanOrEqual(applied?.maxFramerate ?? .max, plafond.maxFramerate)
+        XCTAssertGreaterThanOrEqual(applied?.scaleResolutionDownBy ?? 0, plafond.scaleResolutionDownBy)
+    }
+
+    func test_groupVideoCeiling_cleared_givesThePrimaryItsFullLadderBack() {
+        let (sut, client, _) = makeSUT()
+        _ = sut.configure(isVideo: true)
+        sut.setGroupVideoCeiling(CallVideoBudget.meshLink(encodes: 5))
+
+        sut.setGroupVideoCeiling(nil)
+
+        XCTAssertEqual(client.videoEncodings.last?.maxFramerate, CallDataProfile.wifi.budget.video.maxFramerate)
+    }
+
     func test_lowDataModePath_selectsTheDataSaverProfile() {
         let (sut, client, monitor) = makeSUT()
         _ = sut.configure(isVideo: true)

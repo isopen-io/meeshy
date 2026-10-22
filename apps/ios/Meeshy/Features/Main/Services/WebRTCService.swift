@@ -91,6 +91,8 @@ final class WebRTCService {
     /// would thaw without anyone deciding it. `applyVideoQuality` therefore reads
     /// this flag FIRST and substitutes the floor for the computed tier.
     private(set) var survivalFloorActive = false
+    /// #11292 — dans un appel de groupe, le plafond que le maillage pose au principal.
+    private(set) var groupVideoCeiling: CallVideoBudget?
     /// #8697 — how much data the call may spend, from the OS path (Wi-Fi,
     /// cellular, Low Data Mode) and the RTT/loss heuristic. Caps both the
     /// ladder's audio and video targets and shapes the Opus fmtp of the next
@@ -571,12 +573,20 @@ final class WebRTCService {
             scaleResolutionDownBy: thermal.scaleDownBy,
             degradationPreference: .maintainFramerate
         ))
+        let encoding = groupVideoCeiling?.capping(capped) ?? capped
         client.applyVideoEncoding(
-            maxBitrateBps: capped.maxBitrateBps,
-            maxFramerate: capped.maxFramerate,
-            scaleResolutionDownBy: capped.scaleResolutionDownBy,
-            degradationPreference: capped.degradationPreference
+            maxBitrateBps: encoding.maxBitrateBps,
+            maxFramerate: encoding.maxFramerate,
+            scaleResolutionDownBy: encoding.scaleResolutionDownBy,
+            degradationPreference: encoding.degradationPreference
         )
+    }
+
+    /// #11292 — un quatrième plafond, celui du maillage ; `nil` le retire.
+    func setGroupVideoCeiling(_ ceiling: CallVideoBudget?) {
+        guard groupVideoCeiling != ceiling else { return }
+        groupVideoCeiling = ceiling
+        applyVideoQuality(currentQualityLevel)
     }
 
     /// L6-1/L6-6 — the survival floor: the encoder is pinned to the lowest rung
