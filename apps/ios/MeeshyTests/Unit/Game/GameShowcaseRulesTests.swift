@@ -63,7 +63,7 @@ final class GameShowcaseRulesTests: XCTestCase {
     // MARK: - La constellation (#10053)
 
     private var ecran: RenderedScreen?
-    override func tearDown() { ecran?.dismount(); ecran = nil; super.tearDown() }
+    override func tearDown() async throws { ecran?.dismount(); ecran = nil; try await super.tearDown() }
 
     /// La bande de la carte de contact ne monte plus la constellation d'un autre (#10380) : le web l'a retirée avec la
     /// carte visiteur (#10097) ; la bande garde le niveau, le rang, le trésor et trois coupes. La constellation reste

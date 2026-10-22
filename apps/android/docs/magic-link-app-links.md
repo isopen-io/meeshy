@@ -140,10 +140,13 @@ Ne pas toucher l'entrée `me.meeshy.android.debug` (empreinte debug, test local)
      -d "https://meeshy.me/auth/magic-link?token=<token-reel>"
    ```
 
-> Repli garanti : même si la vérification App Link échoue, le magic link reste
-> fonctionnel via le scheme custom `meeshy://auth/magic-link?token=…`
-> (`intent-filter` sans `autoVerify`, toujours dans le manifest). Seule l'ouverture
-> automatique depuis le lien `https` du mail dépend de `assetlinks.json`.
+> Pas de repli par le scheme custom : un lien à jeton d'e-mail n'entre JAMAIS par
+> `meeshy://` (n'importe quelle page ou app ouvre ce scheme et y présenterait le jeton
+> d'un tiers, #10873). Si la vérification App Link échoue, le lien du mail s'ouvre dans
+> le navigateur et c'est le web qui connecte. L'app ne reconnaît que la forme exacte
+> qu'écrivent les e-mails (`EmailLinkSecret.exactForm`, #10875) sur `https://meeshy.me` ;
+> un lien du même genre touché dans un message, un post ou un commentaire part au
+> navigateur, jamais à l'app (`ChatLinkOpener`, #10874).
 
 ---
 

@@ -5,9 +5,9 @@ import me.meeshy.sdk.model.friend.UserRelationshipState
 
 /**
  * Reports whether the current user has blocked a given user. A functional seam
- * (rather than a hard dependency on a block service that Android does not ship
- * yet) so the resolver stays testable and a future `BlockRepository` plugs in
- * without touching this class. Mirrors iOS `BlockServiceProviding.isBlocked`.
+ * so the resolver stays testable without the live [BlockCache]; production
+ * binds it to [BlockCache.isBlocked] through [UserRelationshipResolver.wiredTo].
+ * Mirrors iOS `BlockServiceProviding.isBlocked`.
  */
 fun interface BlockStatusProvider {
     fun isBlocked(userId: String): Boolean
@@ -32,4 +32,22 @@ class UserRelationshipResolver(
             isBlocked = if (userId.isBlank()) false else blockStatus.isBlocked(userId),
             friendship = friendshipCache.status(userId),
         )
+
+    companion object {
+        /**
+         * The production wiring — the live [FriendshipCache] and [BlockCache] — in ONE
+         * place, so Discover, the Contacts list, the profile sheet and mention
+         * suggestions resolve a person to the SAME one of the six states instead of each
+         * assembling its own resolver (and one of them forgetting the block source).
+         */
+        fun wiredTo(
+            friendshipCache: FriendshipCache,
+            blockCache: BlockCache,
+            currentUserId: () -> String?,
+        ): UserRelationshipResolver = UserRelationshipResolver(
+            friendshipCache = friendshipCache,
+            blockStatus = BlockStatusProvider { blockCache.isBlocked(it) },
+            currentUserId = currentUserId,
+        )
+    }
 }

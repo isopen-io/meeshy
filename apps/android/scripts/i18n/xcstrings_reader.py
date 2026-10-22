@@ -97,6 +97,9 @@ class Catalog:
     def has(self, key: str) -> bool:
         return key in self._strings
 
+    def keys(self) -> Tuple[str, ...]:
+        return tuple(self._strings)
+
     def entry(self, key: str) -> CatalogEntry:
         raw = self._strings.get(key)
         if raw is None:

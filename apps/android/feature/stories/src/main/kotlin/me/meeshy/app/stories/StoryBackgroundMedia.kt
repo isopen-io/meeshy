@@ -1,6 +1,8 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.scene.StoryBackgroundFraming
+import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 
 /**
  * The resolved metadata of the media a composer slide has designated as its single
