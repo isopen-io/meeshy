@@ -6,7 +6,7 @@ import VideoToolbox
 import MeeshySDK
 import os
 
-struct CompressedImageResult {
+nonisolated struct CompressedImageResult: Sendable {
     let data: Data
     let mimeType: String
     /// Définition DEBOUT des octets remis, quand ils se décodent (#9885).
