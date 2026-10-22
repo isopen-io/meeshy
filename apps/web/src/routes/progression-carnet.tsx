@@ -22,7 +22,7 @@ import {
   type PhotoMoment,
   type PhotoTrack,
 } from '@/lib/game-photo/moments';
-import { notebookBytes, notebookSizeLabel, pendingOf, type LegacyState, type NotebookEntry } from '@/lib/game-photo/notebook';
+import { notebookBytes, notebookSizeLabel, pendingOf, retakeSessionOf, type LegacyState, type NotebookEntry, type RetakeSession } from '@/lib/game-photo/notebook';
 import { referralOf, referralShareText } from '@/lib/game-photo/referral';
 import { dateLabelOf, fileNameOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
@@ -48,7 +48,15 @@ import { ProgressionShell } from '@/routes/progression-shell';
  * se photographie, DANS L'ORDRE de sa piste (`photo-catch-up.ts`). Les étapes
  * se lisent dans le bloc du jeu DÉJÀ en cache — sans lui, la section se tait.
  * Une étape de piste reportée ne paraît qu'une fois : là (`pendingOf`).
+ *
+ * LA REPRISE (#10166, § 5.13) : « Reprendre » sur une photo gardée rouvre le
+ * déroulé au moment de l'entrée avec sa recette (`retakeSessionOf`) — autre
+ * cadre, autre pose, même photo ou nouveau selfie ; « Garder » remplace la
+ * ligne et garde sa date, et le carnet se relit à la fermeture.
  */
+
+/** Ce que le déroulé ouvre : un moment, et la session de reprise quand c'est une photo gardée qu'on reprend. */
+type Taking = { readonly moment: PhotoMoment; readonly retake: RetakeSession | null };
 
 const CONFIRM_MS = 4000;
 
@@ -74,7 +82,7 @@ const momentOf = (entry: NotebookEntry): PhotoMoment => ({
   ...momentLines(entry.emblem),
 });
 
-function KeptEntry({ entry, env, onRemoved }: { readonly entry: NotebookEntry; readonly env: PhotoEnv; readonly onRemoved: (id: string) => void }) {
+function KeptEntry({ entry, env, onRemoved, onRetake }: { readonly entry: NotebookEntry; readonly env: PhotoEnv; readonly onRemoved: (id: string) => void; readonly onRetake: (taking: Taking) => void }) {
   const { kicker, title } = momentOf(entry);
   const preview = useObjectUrl(entry.story);
   const [confirming, setConfirming] = useState(false);
@@ -128,6 +136,15 @@ function KeptEntry({ entry, env, onRemoved }: { readonly entry: NotebookEntry; r
             style={{ minHeight: 44, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
           >
             {gameText('game.photo.share')}
+          </button>
+          <button
+            type="button"
+            data-carnet-retake=""
+            onClick={() => onRetake({ moment: momentOf(entry), retake: retakeSessionOf(entry) })}
+            className="rounded-chip px-3 text-check font-semibold"
+            style={{ minHeight: 44, color: GAME_BRAND }}
+          >
+            {gameText('game.photo.retake')}
           </button>
           <button
             type="button"
@@ -270,7 +287,8 @@ export function CarnetBody({
   readonly game?: GameBlock | null;
 }) {
   const [entries, setEntries] = useState<readonly NotebookEntry[] | null>(null);
-  const [taking, setTaking] = useState<PhotoMoment | null>(null);
+  const [taking, setTaking] = useState<Taking | null>(null);
+  const take = useCallback((moment: PhotoMoment) => setTaking({ moment, retake: null }), []);
   const atmosphere = useAtmosphereGate(game);
 
   const [legacy, setLegacy] = useState<LegacyState>('none');
@@ -328,7 +346,7 @@ export function CarnetBody({
         </section>
       ) : null}
 
-      {catchUp.length === 0 ? null : <CatchUpSection entries={catchUp} onTake={setTaking} />}
+      {catchUp.length === 0 ? null : <CatchUpSection entries={catchUp} onTake={take} />}
 
       {pending.length === 0 ? null : (
         <section aria-labelledby="carnet-attente" className="flex flex-col gap-2">
@@ -337,7 +355,7 @@ export function CarnetBody({
           </h2>
           <ul className="flex flex-col gap-2">
             {pending.map((entry) => (
-              <PendingEntry key={entry.id} entry={entry} onTake={setTaking} />
+              <PendingEntry key={entry.id} entry={entry} onTake={take} />
             ))}
           </ul>
         </section>
@@ -350,7 +368,7 @@ export function CarnetBody({
           </h2>
           <ul className="flex flex-col gap-2">
             {kept.map((entry) => (
-              <KeptEntry key={entry.id} entry={entry} env={env} onRemoved={removed} />
+              <KeptEntry key={entry.id} entry={entry} env={env} onRemoved={removed} onRetake={setTaking} />
             ))}
           </ul>
         </section>
@@ -363,7 +381,8 @@ export function CarnetBody({
 
       {taking === null ? null : (
         <GamePhotoFlow
-          moment={taking}
+          moment={taking.moment}
+          retake={taking.retake}
           env={env}
           flameDays={flameDays}
           atmosphere={atmosphere}

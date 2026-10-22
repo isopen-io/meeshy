@@ -8,9 +8,10 @@ import type { CameraFailure, CameraSession } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { flowReducer, type FlowState } from '@/lib/game-photo/flow';
-import { composedVersionOf, tileOf } from '@/lib/game-photo/glory-choice';
+import { birdLayoutOf, composedVersionOf, tileOf } from '@/lib/game-photo/glory-choice';
 import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
+import type { RetakeSession } from '@/lib/game-photo/notebook';
 import { referralOf, referralPlaceholder, referralShareText, type PhotoReferral } from '@/lib/game-photo/referral';
 import { photoBannerOf, type GloryRenderSource, type PhotoFiles } from '@/lib/game-photo/render';
 import { gloryCatalogEpoch, subscribeGloryCatalogEpoch } from '@/lib/game-photo/glory-catalog-epoch';
@@ -75,6 +76,13 @@ import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-
  * choisi, l'écran de choix (E1) précède le déroulé ; « Choisir plus tard » laisse partir la photo dans
  * l'Afrique éternelle sans rien enregistrer. L'atmosphère du compte entre dans l'étape que la loi des cadres
  * lit, et le déroulé suit l'époque du catalogue : le pack installé par le choix recompose l'aperçu.
+ *
+ * LA REPRISE (#10166, L13, § 5.13) : depuis le carnet, le déroulé se rouvre au moment d'une photo GARDÉE avec sa
+ * recette (`RetakeSession`) : la même photo si sa source est gardée — relue sans caméra, dans son miroir —, sinon
+ * selfie neuf ou carte seule ; jamais « plus tard ». Le cadre gardé entre dans l'étape comme dernier choix (la loi
+ * le présélectionne s'il est encore proposé, sinon sa présélection : c'est ainsi qu'une nouvelle atmosphère se
+ * propose, D21), la pose et le message repartent de la recette, la plaque garde la date de l'étape, et « Garder »
+ * remplace l'entrée du moment (le carnet garde sa date). L'écran d'atmosphère ne précède jamais une reprise.
  */
 
 export type PhotoFlowResult = { readonly deferred: boolean };
@@ -92,6 +100,8 @@ type Props = {
   readonly author?: PhotoAuthor | null;
   /** L'atmosphère du compte et l'écran de choix (#10163) ; absent : la loi sert l'Afrique éternelle, sans écran. */
   readonly atmosphere?: AtmosphereGate;
+  /** La reprise d'une photo gardée (#10166) ; absent ou `null` : une photo neuve. */
+  readonly retake?: RetakeSession | null;
 };
 
 const BUTTON = { minHeight: 44 } as const;
@@ -135,10 +145,10 @@ function Button({ attr, primary = false, onClick, children, disabled = false }: 
   );
 }
 
-export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: givenAuthor, atmosphere }: Props) {
+export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: givenAuthor, atmosphere, retake = null }: Props) {
   const viewerAuthor = usePhotoAuthor();
-  /* L'écran de choix se décide à l'OUVERTURE : un choix fait pendant le déroulé ne le rouvre pas. */
-  const [choosingAtmosphere, setChoosingAtmosphere] = useState(() => atmosphere?.offers(moment.id) === true);
+  /* L'écran de choix se décide à l'OUVERTURE : un choix fait pendant le déroulé ne le rouvre pas. Une reprise n'en a pas. */
+  const [choosingAtmosphere, setChoosingAtmosphere] = useState(() => retake === null && atmosphere?.offers(moment.id) === true);
   /* Le serveur a refusé le choix d'atmosphère : le retour arrière l'a remis à zéro, la photo partira dans l'Afrique éternelle — on le dit. */
   const [atmosphereNotice, setAtmosphereNotice] = useState<string | null>(null);
   const author = givenAuthor === undefined ? viewerAuthor : givenAuthor;
@@ -177,7 +187,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
      après la frappe ne change ni l'image qui part, ni son texte. */
   const [composedReferral, setComposedReferral] = useState<PhotoReferral | null>(null);
 
-  const dateLabel = useMemo(() => dateLabelOf(env.now()), [env]);
+  /* La date de la plaque : celle de l'étape pour une reprise (#10166), aujourd'hui sinon. */
+  const plateAt = useMemo(() => retake?.at ?? env.now(), [retake, env]);
+  const dateLabel = useMemo(() => dateLabelOf(plateAt), [plateAt]);
 
   /* Le lien de parrainage (#7742) : le lien EXISTANT, lu UNE fois à l'ouverture,
      SANS rien créer (décision porteur : aucun jeton sans geste). Sans jeton, et
@@ -203,8 +215,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   /* CE QUE LA CARTE PORTE SE CHOISIT (conformité H-2) : le lien d'invitation et la
      Flamme sont chacun retirables AVANT la prise, et l'aperçu du cadre montre
      exactement ce qui sera composé. Sans lien, il n'y a rien à retirer. */
-  const [withLink, setWithLink] = useState(true);
-  const [withFlame, setWithFlame] = useState(true);
+  const [withLink, setWithLink] = useState(retake?.recipe.showLink ?? true);
+  const [withFlame, setWithFlame] = useState(retake?.recipe.showFlame ?? true);
   const shownFlame = withFlame ? flameDays : null;
   const referral = useMemo((): PhotoReferral | null => {
     if (!withLink || !linkOffered) return null;
@@ -222,13 +234,14 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const [gloryKit, setGloryKit] = useState<GloryPreviewKit | null>(null);
   const catalogEpoch = useSyncExternalStore(subscribeGloryCatalogEpoch, gloryCatalogEpoch, gloryCatalogEpoch);
   const accountAtmosphere = atmosphere?.current ?? null;
-  const gloryStep = useMemo(() => ({ stepId: moment.id, atmosphere: accountAtmosphere, lastChosen: null }), [moment.id, accountAtmosphere]);
+  const keptFrameId = retake?.recipe.frameId ?? null;
+  const gloryStep = useMemo(() => ({ stepId: moment.id, atmosphere: accountAtmosphere, lastChosen: keptFrameId }), [moment.id, accountAtmosphere, keptFrameId]);
   const gloryTexts = useMemo(() => ({ kicker: moment.kicker, title: moment.title, date: dateLabel, message: null }), [moment.kicker, moment.title, dateLabel]);
-  const gloryChoice = useGloryChoice({ env, step: gloryStep, texts: gloryTexts, epoch: catalogEpoch });
+  const gloryChoice = useGloryChoice({ env, step: gloryStep, texts: gloryTexts, epoch: catalogEpoch, initialPose: birdLayoutOf(retake?.recipe.pose) });
   const glory = gloryChoice.scene;
   const chosenPose = gloryChoice.choice.pose;
   /* Le message de l'auteur (#10165) : écrit une fois, il ne s'applique qu'à un cadre qui a un support. */
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(retake?.recipe.message ?? null);
   const messageSupported = tileOf(gloryChoice.offer, gloryChoice.choice.frame)?.message === true;
   const writtenMessage = messageSupported ? message : null;
   /* La version que l'aperçu ANNONCE : le cadre dont la scène est ouverte (ou la carte simple) et la pose — ce
@@ -252,7 +265,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     async (input: { readonly photo: PhotoSource | null; readonly frame: HTMLElement | null; readonly referral: PhotoReferral | null }): Promise<Composition | null> => {
       const final = await gloryFinal();
       try {
-        const rendered = await env.render({ moment, ...input, glory: final?.source ?? null });
+        const rendered = await env.render({ moment, ...input, glory: final?.source ?? null, at: plateAt });
         if (rendered === null) return null;
         return final === null
           ? { files: rendered, frameId: null, pose: null, message: null }
@@ -261,7 +274,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
         final?.close();
       }
     },
-    [env, gloryFinal, moment],
+    [env, gloryFinal, moment, plateAt],
   );
   const versionOf = useCallback((composed: Composition): string => composedVersionOf({ frameId: composed.frameId, pose: composed.pose, message: composed.message, momentId: moment.id }), [moment.id]);
   /* Lu au moment de composer, jamais une dépendance de la frappe : une scène d'aperçu qui arrive
@@ -468,6 +481,27 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     [env, holdPhoto],
   );
 
+  /* LA MÊME PHOTO (#10166) : la source gardée se relit comme une photo de la galerie, dans le miroir de la
+     recette (elle est gardée sans miroir), et va droit à la frappe dans le mode gardé — sans caméra. */
+  const retakeSamePhoto = useCallback(async () => {
+    if (retake === null || retake.source === null || retake.mode === 'card') return;
+    const file = new File([retake.source], 'meeshy-source.jpg', { type: retake.source.type === '' ? 'image/jpeg' : retake.source.type });
+    const source = await env.readGallery(file);
+    if (!alive.current) {
+      source?.release?.();
+      return;
+    }
+    if (source === null) {
+      setGalleryError(true);
+      return;
+    }
+    setGalleryError(false);
+    holdPhoto({ ...source, mirror: retake.recipe.mirror ?? false });
+    if (retake.mode === 'selfie') setStill(retake.source);
+    else setGalleryFile(file);
+    dispatch({ type: 'same-photo', mode: retake.mode });
+  }, [env, holdPhoto, retake]);
+
   /* L'image qui SORT de l'appareil ne porte jamais l'emplacement du lien : elle est
      recomposée — avec le vrai lien, ou sans bandeau — depuis les dessins du cadre
      gardé (`artFrame`) et la même photo. */
@@ -607,7 +641,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
         ...(composition === null || composition.frameId === null ? {} : { frameId: composition.frameId }),
         ...(composition === null || composition.pose === null ? {} : { pose: composition.pose }),
         ...(composition === null || composition.message === null ? {} : { message: composition.message }),
+        showFlame: withFlame,
         showLink: composedReferral !== null,
+        momentAt: plateAt.toISOString(),
       },
     });
     dispatch({ type: 'kept', ok: outcome === 'kept' });
@@ -618,7 +654,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
           ? { tone: 'error', text: gameText('game.photo.notice.no_space'), action: 'save' }
           : { tone: 'error', text: gameText('game.photo.notice.keep_failed') },
     );
-  }, [composedReferral, composition, env, moment, outgoingFiles, state]);
+  }, [composedReferral, composition, env, moment, outgoingFiles, plateAt, state, withFlame]);
 
   /* Le piège de focus : Tab ne sort jamais du dialogue. */
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -725,7 +761,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
               <GameBird bird="meeGuide" size={72} />
               <div className="min-w-0 flex-1 pb-1">
                 <p className="text-title font-bold" style={{ color: GAME_INK }}>
-                  {gameText('game.photo.offer.title')}
+                  {gameText(retake === null ? 'game.photo.offer.title' : 'game.photo.retake.title')}
                 </p>
                 {/* La carte posée dit déjà le moment : le titre ne se répète pas sous elle. */}
                 {plate !== null ? null : (
@@ -740,15 +776,27 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
               {gameText('game.photo.private')}
             </p>
             {options}
-            <Button attr={{ 'data-photo-choice': 'selfie' }} primary onClick={() => dispatch({ type: 'selfie' })}>
+            {galleryError ? (
+              <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
+                {gameText('game.photo.gallery.unreadable')}
+              </p>
+            ) : null}
+            {retake?.choices.includes('same-photo') === true ? (
+              <Button attr={{ 'data-photo-choice': 'same-photo' }} primary onClick={() => void retakeSamePhoto()}>
+                {gameText('game.photo.retake.same_photo')}
+              </Button>
+            ) : null}
+            <Button attr={{ 'data-photo-choice': 'selfie' }} primary={retake?.choices.includes('same-photo') !== true} onClick={() => dispatch({ type: 'selfie' })}>
               {gameText('game.photo.selfie')}
             </Button>
             <Button attr={{ 'data-photo-choice': 'card' }} onClick={() => dispatch({ type: 'card' })}>
               {gameText('game.photo.card_only')}
             </Button>
-            <Button attr={{ 'data-photo-choice': 'later' }} onClick={() => dispatch({ type: 'later' })}>
-              {gameText('game.photo.later')}
-            </Button>
+            {retake === null ? (
+              <Button attr={{ 'data-photo-choice': 'later' }} onClick={() => dispatch({ type: 'later' })}>
+                {gameText('game.photo.later')}
+              </Button>
+            ) : null}
           </div>
         ) : null}
 

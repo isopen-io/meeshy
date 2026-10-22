@@ -1,5 +1,5 @@
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
-import type { GloryFrameBirdLayout } from '@meeshy/shared/types/glory-frame-format';
+import { GLORY_FRAME_BIRD_LAYOUTS, type GloryFrameBirdLayout } from '@meeshy/shared/types/glory-frame-format';
 import type { FrameRef } from '@meeshy/shared/utils/game/glory-frames';
 
 /**
@@ -58,6 +58,10 @@ export type GloryChoice = {
 };
 
 export const INITIAL_CHOICE: GloryChoice = { frame: null, pose: null, byUser: false };
+
+/** Une pose relue dans la recette du carnet (#10166) : seule une mise en page que le format déclare se relit ; sinon la pose par défaut du cadre. */
+export const birdLayoutOf = (pose: string | undefined): GloryFrameBirdLayout | null =>
+  GLORY_FRAME_BIRD_LAYOUTS.find((layout) => layout === pose) ?? null;
 
 export const sameRef = (a: FrameRef | null, b: FrameRef | null): boolean => a === b || (a !== null && b !== null && a.pack === b.pack && a.frameId === b.frameId);
 

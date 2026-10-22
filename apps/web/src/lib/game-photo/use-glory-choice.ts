@@ -33,13 +33,20 @@ export type GloryChoiceState = {
   readonly openFinal: () => Promise<GloryScene | null>;
 };
 
-type Input = { readonly env: PhotoEnv; readonly step: GloryStep; readonly texts: GloryTexts; readonly epoch: number };
+type Input = {
+  readonly env: PhotoEnv;
+  readonly step: GloryStep;
+  readonly texts: GloryTexts;
+  readonly epoch: number;
+  /** La pose relue dans la recette d'une reprise (#10166) : tenue tant que le cadre présélectionné la déclare. */
+  readonly initialPose?: GloryFrameBirdLayout | null;
+};
 
 type SceneWant = { readonly kind: 'preselected' } | { readonly kind: 'none' } | { readonly kind: 'frame'; readonly frame: FrameRef; readonly pose: GloryFrameBirdLayout | null };
 
-export function useGloryChoice({ env, step, texts, epoch }: Input): GloryChoiceState {
+export function useGloryChoice({ env, step, texts, epoch, initialPose = null }: Input): GloryChoiceState {
   const [offer, setOffer] = useState<GloryOffer | null>(null);
-  const [choice, setChoice] = useState<GloryChoice>(INITIAL_CHOICE);
+  const [choice, setChoice] = useState<GloryChoice>(() => ({ ...INITIAL_CHOICE, pose: initialPose }));
   const [lived, setLived] = useState<ReadonlyMap<string, TilePresence>>(new Map());
   const [scene, setScene] = useState<GloryScene | null>(null);
   /* Un chargement abouti rouvre la scène : la tuile qui vient d'arriver se peint sans autre geste. */

@@ -60,6 +60,8 @@ export type PhotoEnv = {
     readonly referral?: PhotoReferral | null;
     /** Le cadre décoré de l'étape (#10159) ; `null` ou absent : la carte simple. */
     readonly glory?: GloryRenderSource | null;
+    /** La date que la carte porte ; absent : aujourd'hui. Une reprise (#10166) garde la date de l'étape. */
+    readonly at?: Date;
   }) => Promise<PhotoFiles | null>;
   /**
    * LA SCÈNE DU CADRE DÉCORÉ (#10159, L7) : le cadre que la loi retient pour
@@ -265,12 +267,12 @@ export function browserPhotoEnv(): PhotoEnv {
     referral: () => existingReferralLink(currentReader()),
     createReferral: () => shareableReferralLink(currentReader()),
     save: (file) => savePhoto(file, doors()),
-    render: async ({ moment, photo, frame, referral, glory }) => {
+    render: async ({ moment, photo, frame, referral, glory, at }) => {
       if (frame === null) return null;
       const read = documentReader();
       const art = await artOf(frame, read);
       if (art === null) return null;
-      return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: now(), createCanvas, referral: referral ?? null, glory: glory ?? null });
+      return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: at ?? now(), createCanvas, referral: referral ?? null, glory: glory ?? null });
     },
     glory: async ({ step, texts, scale, frame, pose = null }) => {
       try {

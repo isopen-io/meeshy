@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 
-import { INITIAL_CHOICE, chooseFrame, choosePose, composedVersionOf, presenceOf, reconcileChoice, tileOf, type GloryOffer, type GloryOfferTile } from './glory-choice';
+import { INITIAL_CHOICE, birdLayoutOf, chooseFrame, choosePose, composedVersionOf, presenceOf, reconcileChoice, tileOf, type GloryOffer, type GloryOfferTile } from './glory-choice';
 
 /**
  * LE CHOIX DU CADRE ET DE LA POSE (#10164, L11) — une loi PURE entre l'offre que
@@ -102,5 +102,13 @@ describe('ce que la prise emporte', () => {
     expect(presenceOf(offer, offer.tiles[1]!.ref, new Map())).toBe('missing');
     expect(presenceOf(offer, offer.tiles[1]!.ref, new Map([['royaumes.ambassadeur-2', 'loading']]))).toBe('loading');
     expect(tileOf(offer, { pack: 'afrique', frameId: 'nulle-part' })).toBeUndefined();
+  });
+});
+
+describe('la pose relue dans une recette du carnet (#10166)', () => {
+  test('une pose que le format déclare se relit ; une inconnue, ou aucune, rend la pose par défaut du cadre', () => {
+    expect(birdLayoutOf('perches')).toBe('perches');
+    expect(birdLayoutOf('crest')).toBeNull();
+    expect(birdLayoutOf(undefined)).toBeNull();
   });
 });

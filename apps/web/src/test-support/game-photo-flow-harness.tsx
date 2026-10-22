@@ -40,6 +40,8 @@ export type FlowLog = {
   texts: (string | undefined)[];
   /** Le bandeau de parrainage de chaque composition (#7742). */
   referrals: (PhotoReferral | null | undefined)[];
+  /** La date que chaque composition porte sur la carte (#10166) ; `undefined` : aujourd'hui. */
+  dates: (Date | undefined)[];
   saved: File[];
   /** Les fichiers rendus par chaque composition, dans l'ordre. */
   outputs: PhotoFiles[];
@@ -53,7 +55,7 @@ export const files = (): PhotoFiles => ({
 });
 
 export function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pending'; keepOk?: boolean; keepOutcome?: KeepOutcome; shareOutcome?: ShareOutcome; renderOk?: boolean } = {}) {
-  const log: FlowLog = { stops: 0, cameraOpened: 0, kept: [], deferred: [], shared: [], texts: [], referrals: [], saved: [], outputs: [], rendered: [], closed: [] };
+  const log: FlowLog = { stops: 0, cameraOpened: 0, kept: [], deferred: [], shared: [], texts: [], referrals: [], dates: [], saved: [], outputs: [], rendered: [], closed: [] };
   const notebook: Notebook = {
     defer: async (moment) => (log.deferred.push(moment), true),
     keep: async (moment, photo) => (log.kept.push({ moment, photo }), overrides.keepOutcome ?? (overrides.keepOk === false ? 'unavailable' : 'kept')),
@@ -69,9 +71,10 @@ export function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pe
     notebook,
     share: async (file, title, text) => (log.shared.push({ file, title }), log.texts.push(text), overrides.shareOutcome ?? 'shared'),
     save: async (file) => (log.saved.push(file), 'downloaded'),
-    render: async ({ moment, photo, referral }) => {
+    render: async ({ moment, photo, referral, at }) => {
       log.rendered.push({ moment, mirror: photo === null ? null : photo.mirror });
       log.referrals.push(referral);
+      log.dates.push(at);
       if (overrides.renderOk === false) return null;
       const output = files();
       log.outputs.push(output);
