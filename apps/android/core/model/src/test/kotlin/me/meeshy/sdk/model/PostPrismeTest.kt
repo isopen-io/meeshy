@@ -11,6 +11,7 @@ class PostPrismeTest {
         override val systemLanguage: String? = null,
         override val regionalLanguage: String? = null,
         override val customDestinationLanguage: String? = null,
+        override val deviceLocale: String? = null,
     ) : LanguageResolver.ContentLanguagePreferences
 
     private fun post(
@@ -73,5 +74,34 @@ class PostPrismeTest {
         // system 'de' has no translation, regional 'es' does → resolve to Spanish.
         val prefs = Prefs(systemLanguage = "de", regionalLanguage = "es")
         assertThat(p.displayContent(prefs)).isEqualTo("Hola")
+    }
+
+    @Test
+    fun displayContent_postWrittenInThePrimaryLanguageStaysOriginal() {
+        val p = post(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
+        val prefs = Prefs(systemLanguage = "fr", regionalLanguage = "en")
+        assertThat(p.displayContent(prefs)).isEqualTo("Bonjour")
+        assertThat(p.isTranslated(prefs)).isFalse()
+    }
+
+    @Test
+    fun displayContent_originalLanguageOnALaterRankStopsTheDescent() {
+        // Témoin de rang : l'origine (fr) est au rang 2, la traduction (it) au rang 3.
+        val p = post(translations = mapOf("it" to ApiPostTranslationEntry(text = "Ciao")))
+        val prefs = Prefs(systemLanguage = "de", regionalLanguage = "fr", customDestinationLanguage = "it")
+        assertThat(p.displayContent(prefs)).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun displayContent_deviceLocaleRankServesItsTranslation() {
+        val p = post(translations = mapOf("pt-BR" to ApiPostTranslationEntry(text = "Olá")))
+        assertThat(p.displayContent(Prefs(systemLanguage = "de", deviceLocale = "pt_PT"))).isEqualTo("Olá")
+    }
+
+    @Test
+    fun displayContent_noLanguageConfiguredKeepsTheOriginal() {
+        val p = post(translations = mapOf("fr" to ApiPostTranslationEntry(text = "Salut")))
+        assertThat(p.displayContent(Prefs())).isEqualTo("Bonjour")
+        assertThat(p.isTranslated(Prefs())).isFalse()
     }
 }

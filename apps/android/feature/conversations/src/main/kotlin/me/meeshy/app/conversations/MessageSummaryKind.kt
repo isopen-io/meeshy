@@ -2,6 +2,8 @@ package me.meeshy.app.conversations
 
 import me.meeshy.sdk.model.ApiConversationLastMessage
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.media.MediaKindLabel
+import me.meeshy.sdk.model.media.MediaKindStrings
 
 /**
  * Classifies how the row should summarize a conversation's last message —
@@ -51,4 +53,17 @@ enum class MessageSummaryKind {
 data class SummaryLine(
     val text: String,
     val kind: MessageSummaryKind,
+)
+
+/**
+ * Les cinq libellés de média de l'aperçu de liste, tous tirés de la source unique
+ * [MediaKindLabel.summary] — aucune copie locale (« 📷 Photo », « 🎥 Vidéo »,
+ * « 🎙️ Message vocal », « 📎 Fichier », « 📍 Position »).
+ */
+fun LastMessagePreviewLabels.withMediaKinds(strings: MediaKindStrings): LastMessagePreviewLabels = copy(
+    photo = MediaKindLabel.summary(MediaKindLabel.Kind.PHOTO, strings),
+    video = MediaKindLabel.summary(MediaKindLabel.Kind.VIDEO, strings),
+    voice = MediaKindLabel.summary(MediaKindLabel.Kind.AUDIO, strings),
+    file = MediaKindLabel.summary(MediaKindLabel.Kind.FILE, strings),
+    location = MediaKindLabel.summary(MediaKindLabel.Kind.LOCATION, strings),
 )
