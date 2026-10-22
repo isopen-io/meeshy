@@ -68,7 +68,7 @@ class ShareLinkDetailEditStateTest {
     @Test
     fun `annuler une activation garde le brouillon en cours`() {
         val editing = opened().let { it.withDraft(it.draft.copy(name = "New")) }
-        val rolled = editing.toggled().toggleFailed(editing.link!!, origin, now)
+        val rolled = editing.toggled().toggleFailed(editing.link!!, "nope", origin, now)
         assertThat(rolled.link?.isActive).isTrue()
         assertThat(rolled.draft.name).isEqualTo("New")
     }

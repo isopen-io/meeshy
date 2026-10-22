@@ -21,6 +21,7 @@ public data class MyShareLinksState(
     val stats: MyShareLinkStats? = null,
     val phase: MyShareLinksPhase = MyShareLinksPhase.Loading,
     val errorMessage: String? = null,
+    val isRefreshing: Boolean = false,
 ) {
     /** No links to show. */
     public val isEmpty: Boolean get() = links.isEmpty()
@@ -59,11 +60,15 @@ public data class MyShareLinksState(
             stats = stats ?: this.stats,
             phase = MyShareLinksPhase.Loaded,
             errorMessage = null,
+            isRefreshing = false,
         )
 
     /** Settle in an error phase, surfacing [message] while keeping any prior links. */
     public fun failed(message: String?): MyShareLinksState =
-        copy(phase = MyShareLinksPhase.Error, errorMessage = message)
+        copy(phase = MyShareLinksPhase.Error, errorMessage = message, isRefreshing = false)
+
+    /** Un geste de rafraîchissement : l'indicateur de tirage tourne, la liste reste affichée. */
+    public fun refreshing(): MyShareLinksState = copy(isRefreshing = true, errorMessage = null)
 
     /**
      * Optimistically flip one link's active flag (matched by [MyShareLink.linkId],

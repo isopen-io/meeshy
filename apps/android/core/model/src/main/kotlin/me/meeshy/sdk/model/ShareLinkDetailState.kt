@@ -4,7 +4,7 @@ package me.meeshy.sdk.model
 public enum class ShareLinkDetailPhase { Loading, Loaded, NotFound, Error }
 
 /** Le retour d'un enregistrement ou d'une action, dit une fois à l'écran (toast) puis acquitté. */
-public enum class ShareLinkDetailFeedback { Saved, SaveFailed, ActionFailed }
+public enum class ShareLinkDetailFeedback { Saved, SaveFailed }
 
 /**
  * Immutable UDF state for the per-link share-link detail screen (the Android take on
@@ -82,15 +82,22 @@ public data class ShareLinkDetailState(
             feedback = ShareLinkDetailFeedback.SaveFailed,
         )
 
-    /** Annule une activation optimiste : le lien d'avant revient, le brouillon en cours est conservé. */
-    public fun toggleFailed(previous: MyShareLink, webOrigin: String, nowMillis: Long): ShareLinkDetailState =
+    /**
+     * Annule une activation optimiste : le lien d'avant revient et l'erreur du serveur est
+     * dite ; le brouillon en cours est conservé (contrairement à un retour au cliché entier).
+     */
+    public fun toggleFailed(
+        previous: MyShareLink,
+        message: String?,
+        webOrigin: String,
+        nowMillis: Long,
+    ): ShareLinkDetailState =
         copy(
+            phase = ShareLinkDetailPhase.Error,
+            errorMessage = message,
             link = previous,
             presentation = ShareLinkDetailPresentation.from(previous, webOrigin, nowMillis),
-            feedback = ShareLinkDetailFeedback.ActionFailed,
         )
-
-    public fun actionFailed(): ShareLinkDetailState = copy(feedback = ShareLinkDetailFeedback.ActionFailed)
 
     public fun feedbackShown(): ShareLinkDetailState = copy(feedback = null)
 

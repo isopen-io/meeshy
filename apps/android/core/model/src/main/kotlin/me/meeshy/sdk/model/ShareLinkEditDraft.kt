@@ -1,9 +1,16 @@
 package me.meeshy.sdk.model
 
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+
+/** Ce que le formulaire d'arrivée demande à un invité sans compte. */
+public enum class ShareLinkAskedField { FirstName, LastName, Nickname, Email, Birthday }
 
 /**
  * Tout ce que le propriétaire d'un lien peut modifier par `PATCH /links/:linkId`
@@ -33,6 +40,20 @@ public data class ShareLinkEditDraft(
     public val isValid: Boolean
         get() = (maxUses?.let { it >= 1 } ?: true) && (maxConcurrentUsers?.let { it >= 1 } ?: true)
 
+    /** Ce que le formulaire invité demandera : le nom TOUJOURS, puis ce que le lien ajoute. */
+    public val askedFields: List<ShareLinkAskedField>
+        get() = buildList {
+            add(ShareLinkAskedField.FirstName)
+            add(ShareLinkAskedField.LastName)
+            if (requireNickname) add(ShareLinkAskedField.Nickname)
+            if (requireEmail) add(ShareLinkAskedField.Email)
+            if (requireBirthday) add(ShareLinkAskedField.Birthday)
+        }
+
+    /** Les choix du sélecteur de langues : les rapides, puis celles du lien qui n'en font pas partie. */
+    public val languageChoices: List<String>
+        get() = QUICK_LANGUAGES + allowedLanguages.filterNot { it in QUICK_LANGUAGES }
+
     /** « Toutes les langues » = liste vide côté serveur. */
     public val allowsAllLanguages: Boolean get() = allowedLanguages.isEmpty()
 
@@ -51,6 +72,22 @@ public data class ShareLinkEditDraft(
         code !in allowedLanguages -> copy(allowedLanguages = allowedLanguages + code)
         allowedLanguages.size > 1 -> copy(allowedLanguages = allowedLanguages - code)
         else -> this
+    }
+
+    /** Activer l'échéance propose une semaine ; la désactiver la retire (jamais d'expiration). */
+    public fun withExpiryEnabled(enabled: Boolean, nowMillis: Long): ShareLinkEditDraft = copy(
+        expiresAt = if (enabled) expiresAt ?: Instant.ofEpochMilli(nowMillis).plus(DEFAULT_EXPIRY).toString() else null,
+    )
+
+    /**
+     * Change le JOUR de l'échéance en gardant l'heure choisie. [utcDayMillis] est le minuit UTC
+     * que rend un sélecteur de date Material ; inerte sans échéance.
+     */
+    public fun withExpiryDay(utcDayMillis: Long, zone: ZoneId): ShareLinkEditDraft {
+        val current = isoToEpochMillisOrNull(expiresAt) ?: return this
+        val day = Instant.ofEpochMilli(utcDayMillis).atZone(ZoneOffset.UTC).toLocalDate()
+        val time = Instant.ofEpochMilli(current).atZone(zone).toLocalTime()
+        return copy(expiresAt = day.atTime(time).atZone(zone).toInstant().toString())
     }
 
     /** Le champ numérique d'un formulaire : vide = illimité, sinon les seuls chiffres saisis. */
@@ -104,6 +141,11 @@ public data class ShareLinkEditDraft(
     )
 
     public companion object {
+        /** `LanguageData.quickTranslationCodes` (iOS). */
+        public val QUICK_LANGUAGES: List<String> = listOf("fr", "en", "es", "de", "it", "pt", "ja", "zh", "ko", "ar")
+
+        private val DEFAULT_EXPIRY: Duration = Duration.ofDays(7)
+
         /** La configuration servie, chaque champ absent résolu par son défaut de schéma — jamais inventé. */
         public fun from(link: MyShareLink): ShareLinkEditDraft = ShareLinkEditDraft(
             name = link.name.orEmpty(),
