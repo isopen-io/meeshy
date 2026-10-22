@@ -23,10 +23,10 @@ final class TopChromeExitRenderTests: XCTestCase {
 
     private var ecran: RenderedPixels?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// L'aplat du chrome — lu depuis la production, jamais recopié.
