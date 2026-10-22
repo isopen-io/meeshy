@@ -217,6 +217,13 @@ object DynamicColorGenerator {
         return vibrantPalette[index]
     }
 
+    /**
+     * La couleur du PROFIL : l'id de compte quand il existe, le nom à défaut — miroir de
+     * `profileAccentHex` iOS et d'`authorAccentColor` (packages/shared/utils/conversation-colors.ts).
+     */
+    fun profileAccentHex(userId: String?, name: String): String =
+        colorForName(me.meeshy.sdk.model.profile.ProfileAccentRules.seed(userId, name))
+
     /** DJB2 hash — deterministic across launches (overflow wraps via ULong). */
     private fun stableHash(input: String): ULong {
         var hash = 5381UL
