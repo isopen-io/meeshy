@@ -6,6 +6,7 @@
  *   PUT  /me/game/frames/atmosphere          choisir son atmosphère — installe AUSSI son pack
  *   PUT  /me/game/photo-moments/invitations  « Me proposer d'immortaliser »
  *   POST /me/game/photo-moments/presented    accuser la présentation d'étapes (au plus 64), idempotent
+ *   POST /me/game/photo-moments/kept         signaler des étapes IMMORTALISÉES (D22 b, #10182) : l'identifiant seul
  *
  * La LECTURE de ces réglages et du registre passe par l'extension `game.photo` du bloc `game` de
  * `GET /me/engagement` : aucune requête de plus. Aucune route ne prend d'`userId` : l'utilisateur est celui
@@ -18,7 +19,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { GLORY_ATMOSPHERES, type GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
-import { PHOTO_INVITATIONS, PHOTO_PRESENTED_MAX, PHOTO_STEP_ID_PATTERN, type PhotoInvitations } from '@meeshy/shared/types/game-photo';
+import { PHOTO_INVITATIONS, PHOTO_KEPT_MAX, PHOTO_PRESENTED_MAX, PHOTO_STEP_ID_PATTERN, type PhotoInvitations } from '@meeshy/shared/types/game-photo';
 import { isKnownPhotoStepId } from '@meeshy/shared/utils/game/photo-step-ids';
 import { sendError } from '../../utils/response';
 import { GamePhotoService, atmosphereRemovalGuard, type FramePackInstaller } from '../../services/game/GamePhotoService';
@@ -44,6 +45,34 @@ const envelope = (data: object) => ({
 const atmosphereEnum = { type: 'string', enum: [...GLORY_ATMOSPHERES] } as const;
 const invitationsEnum = { type: 'string', enum: [...PHOTO_INVITATIONS] } as const;
 const stepIdSchema = { type: 'string', pattern: PHOTO_STEP_ID_PATTERN } as const;
+
+/** Un lot d'identifiants d'étape, RIEN d'autre : le corps que l'accusé et le signal « immortalisée » partagent. */
+const stepIdsBody = (max: number) => ({
+  type: 'object',
+  required: ['requestId', 'stepIds'],
+  properties: { requestId: requestIdSchema, stepIds: { type: 'array', minItems: 1, maxItems: max, items: stepIdSchema } },
+  additionalProperties: false,
+});
+
+/** `{ <list>: [{ stepId, <stamp> }] }` — la réponse des deux horloges, à la clé près. */
+const stampedResponse = (list: string, stamp: string) =>
+  envelope({
+    required: [list],
+    properties: {
+      [list]: {
+        type: 'array',
+        items: { type: 'object', additionalProperties: false, required: ['stepId', stamp], properties: { stepId: { type: 'string' }, [stamp]: { type: 'string' } } },
+      },
+    },
+  });
+
+/** Les identités du lot hors des familles connues : une seule suffit à refuser tout le lot en 400 `PHOTO_STEP_UNKNOWN`. */
+const unknownPhotoSteps = (stepIds: readonly string[], now: Date): readonly string[] => [...new Set(stepIds.filter((stepId) => !isKnownPhotoStepId(stepId, now)))];
+
+const refuseUnknownSteps = (reply: FastifyReply, unknown: readonly string[]) =>
+  sendError(reply, 400, 'PHOTO_STEP_UNKNOWN', { code: 'PHOTO_STEP_UNKNOWN', details: { stepIds: unknown } });
+
+type StepIdsBody = { requestId: string; stepIds: string[] };
 
 export async function meGamePhotoRoutes(fastify: FastifyInstance, options: GamePhotoRoutesOptions = {}) {
   const photo = new GamePhotoService(fastify.prisma);
@@ -111,38 +140,37 @@ export async function meGamePhotoRoutes(fastify: FastifyInstance, options: GameP
           'Accuse la présentation d’étapes du jeu (#10162) — bannière, carte photo, carnet, déroulé. Au plus 64, toutes connues (sinon 400 `PHOTO_STEP_UNKNOWN`) ; idempotent : une ligne par étape, la date de première présentation ne bouge pas. Au-delà du plafond du compte, une étape neuve est ignorée (absente de la réponse).',
         tags: ['me', 'game'],
         summary: 'Mark photo moments as presented',
-        body: {
-          type: 'object',
-          required: ['requestId', 'stepIds'],
-          properties: { requestId: requestIdSchema, stepIds: { type: 'array', minItems: 1, maxItems: PHOTO_PRESENTED_MAX, items: stepIdSchema } },
-          additionalProperties: false,
-        },
-        response: {
-          200: envelope({
-            required: ['presented'],
-            properties: {
-              presented: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  additionalProperties: false,
-                  required: ['stepId', 'presentedAt'],
-                  properties: { stepId: { type: 'string' }, presentedAt: { type: 'string' } },
-                },
-              },
-            },
-          }),
-          ...reasonedErrors,
-        },
+        body: stepIdsBody(PHOTO_PRESENTED_MAX),
+        response: { 200: stampedResponse('presented', 'presentedAt'), ...reasonedErrors },
       },
     },
-    (request: FastifyRequest<{ Body: { requestId: string; stepIds: string[] } }>, reply: FastifyReply) => {
+    (request: FastifyRequest<{ Body: StepIdsBody }>, reply: FastifyReply) => {
       const now = new Date();
-      const unknown = request.body.stepIds.filter((stepId) => !isKnownPhotoStepId(stepId, now));
-      if (unknown.length > 0) {
-        return sendError(reply, 400, 'PHOTO_STEP_UNKNOWN', { code: 'PHOTO_STEP_UNKNOWN', details: { stepIds: [...new Set(unknown)] } });
-      }
+      const unknown = unknownPhotoSteps(request.body.stepIds, now);
+      if (unknown.length > 0) return refuseUnknownSteps(reply, unknown);
       return runGameWrite(request, reply, (userId) => photo.markPresented(userId, request.body.stepIds, now));
+    },
+  );
+
+  fastify.post(
+    '/game/photo-moments/kept',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: gameRateLimitConfig('photo-kept', 60, false) },
+      schema: {
+        description:
+          'Signale des étapes IMMORTALISÉES sur cet appareil (#10162, D22 b) — l’identifiant d’étape seul, jamais la photo ni sa date de prise. Au plus 64, toutes connues (sinon 400 `PHOTO_STEP_UNKNOWN`) ; idempotent : la date de première immortalisation ne bouge pas, et l’étape vaut présentée. Au-delà du plafond du compte, une étape neuve est ignorée (absente de la réponse).',
+        tags: ['me', 'game'],
+        summary: 'Mark photo moments as kept',
+        body: stepIdsBody(PHOTO_KEPT_MAX),
+        response: { 200: stampedResponse('kept', 'keptAt'), ...reasonedErrors },
+      },
+    },
+    (request: FastifyRequest<{ Body: StepIdsBody }>, reply: FastifyReply) => {
+      const now = new Date();
+      const unknown = unknownPhotoSteps(request.body.stepIds, now);
+      if (unknown.length > 0) return refuseUnknownSteps(reply, unknown);
+      return runGameWrite(request, reply, (userId) => photo.markKept(userId, request.body.stepIds, now));
     },
   );
 }

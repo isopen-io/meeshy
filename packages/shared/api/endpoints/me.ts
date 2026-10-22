@@ -97,6 +97,9 @@ export const gameMissionsByMissionIdReroll = (missionId: string): string => `/ap
 /** PUT /api/v1/me/game/photo-moments/invitations */
 export const gamePhotoMomentsInvitations = '/api/v1/me/game/photo-moments/invitations';
 
+/** POST /api/v1/me/game/photo-moments/kept */
+export const gamePhotoMomentsKept = '/api/v1/me/game/photo-moments/kept';
+
 /** POST /api/v1/me/game/photo-moments/presented */
 export const gamePhotoMomentsPresented = '/api/v1/me/game/photo-moments/presented';
 

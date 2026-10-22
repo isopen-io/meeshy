@@ -36,6 +36,8 @@ private abstract class StubJoinApi : ConversationApi {
     ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
 
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) = ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun directWith(type: String, withUserId: String, limit: Int) =
+        ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun listConditional(
         offset: Int?,
         limit: Int?,
@@ -49,6 +51,8 @@ private abstract class StubJoinApi : ConversationApi {
     override suspend fun analysis(id: String) = ApiResponse<ConversationAnalysis>(success = false)
     override suspend fun create(body: CreateConversationRequest) = ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun markReceived(id: String) =
+        ApiResponse<me.meeshy.sdk.model.MarkedCountResult>(success = false)
     override suspend fun markUnread(id: String) = ApiResponse<Unit>(success = false)
     override suspend fun updatePreferences(id: String, body: ConversationPreferencesUpdate) =
         ApiResponse<Unit>(success = false)

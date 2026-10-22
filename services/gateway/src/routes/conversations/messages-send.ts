@@ -38,6 +38,7 @@ import { admitAttachmentReply } from '../../services/messaging/attachmentReplySn
 import { admitMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
 import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
+import { E2EE_PLAINTEXT_REFUSED } from '../../services/messaging/e2eePlaintextAdmission';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { withQuoteServedToReader } from './ephemeralReaderDeadlines';
@@ -468,7 +469,8 @@ export function registerSendMessageRoute(
         }
         // #9598 — un transfert refusé porte son motif STABLE ; `error` reste
         // la phrase que les anciens clients affichent.
-        if (isForwardRefusalCode(result.code)) {
+        // #11216 — un clair refusé dans une conversation e2ee : 400 et son code stable.
+        if (isForwardRefusalCode(result.code) || result.code === E2EE_PLAINTEXT_REFUSED) {
           return sendBadRequest(reply, result.error || 'Invalid message request', { code: result.code });
         }
         return sendBadRequest(reply, result.error || 'Invalid message request');

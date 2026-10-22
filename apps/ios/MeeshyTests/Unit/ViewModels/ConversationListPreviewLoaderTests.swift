@@ -410,6 +410,26 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         XCTAssertNotEqual(ConversationPreviewFingerprint(state: .unavailable), ConversationPreviewFingerprint(state: .empty))
     }
 
+    // MARK: - Flamme après lecture
+
+    func test_snapshot_receivedAfterReadFlame_neverCarriesItsTextToTheList() {
+        var burning = makeMessage(id: "burn", content: "secret qui brûle")
+        burning.effects = MessageEffects(flags: [.ephemeral, .ephemeralAfterRead])
+        let ordinary = makeMessage(id: "plain", content: "Salut")
+
+        let snapshot = ConversationListPreviewLoader.snapshot(
+            messages: [burning, ordinary],
+            translations: ["burn": [makeTranslation(target: "en", text: "secret", messageId: "burn")]],
+            prism: ["en"]
+        )
+
+        XCTAssertEqual(snapshot.messages.first { $0.id == "burn" }?.content, "",
+                       "l'aperçu n'est pas une lecture : il ne livre pas ce que l'ouverture consomme")
+        XCTAssertNil(snapshot.translations["burn"])
+        XCTAssertEqual(snapshot.messages.first { $0.id == "plain" }?.content, "Salut", "témoin : un message ordinaire se lit")
+        XCTAssertTrue(ConversationPreviewRenderer.isSealed(snapshot.messages.first { $0.id == "burn" }!))
+    }
+
     // MARK: - E2EE
 
     func test_encryptedRest_neverExposesCiphertextAsText() async {

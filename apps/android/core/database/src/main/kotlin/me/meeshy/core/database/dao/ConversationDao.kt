@@ -31,6 +31,17 @@ public interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE id = :id")
     public suspend fun find(id: String): ConversationEntity?
 
+    /**
+     * The cached rows whose serialized payload mentions [needle], most-recently-updated first —
+     * a cheap SQL pre-filter ("which cached conversations name this user?") that spares the
+     * caller from decoding the whole table to look one participant up. It over-matches by
+     * design (any occurrence of the text, e.g. a message preview): the caller re-checks the
+     * decoded row. [needle] is matched literally — escape `\`, `%` and `_` with `\` first
+     * (the clause declares `\` as the escape character).
+     */
+    @Query("SELECT * FROM conversations WHERE payload LIKE '%' || :needle || '%' ESCAPE '\\' ORDER BY updatedAt DESC")
+    public suspend fun payloadsContaining(needle: String): List<ConversationEntity>
+
     @Upsert
     public suspend fun upsertAll(rows: List<ConversationEntity>)
 

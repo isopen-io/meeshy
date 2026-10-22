@@ -182,4 +182,23 @@ describe('useListReorderFlip — mesure avant et après le commit, puis anime', 
     rerender([...IDS]);
     expect(played).toEqual([]);
   });
+
+  test('une id entrante reçoit la classe d’entrée ; les rangées restées n’en reçoivent aucune', () => {
+    const { frame, rerender } = mount(IDS);
+    rerender(['nouvelle', ...IDS]);
+    expect(frame.querySelector('[data-row="nouvelle"]')?.classList.contains('lens-row-entering')).toBe(true);
+    expect(frame.querySelectorAll('.lens-row-entering').length).toBe(1);
+  });
+
+  test('sous prefers-reduced-motion, l’id entrante ne reçoit pas la classe d’entrée', () => {
+    reduced = true;
+    const { frame, rerender } = mount(IDS);
+    rerender(['nouvelle', ...IDS]);
+    expect(frame.querySelector('.lens-row-entering')).toBeNull();
+  });
+
+  test('le premier rendu ne met en scène aucune rangée', () => {
+    const { frame } = mount(IDS);
+    expect(frame.querySelector('.lens-row-entering')).toBeNull();
+  });
 });

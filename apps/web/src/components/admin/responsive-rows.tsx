@@ -19,6 +19,12 @@ export type AdminColumn<Row> = {
   readonly align?: 'start' | 'end';
   /** 1 toujours ; 2 (défaut) dans la carte sous le seuil ; 3 seulement sur un contenu très large. */
   readonly priority?: 1 | 2 | 3;
+  /**
+   * Dans la carte : l'en-tête AU-DESSUS d'une cellule qui prend toute la largeur, au lieu de la
+   * paire en-tête / valeur alignée à droite. Pour un GROUPE DE GESTES (#10461) : trois contrôles de
+   * 44 px ne se serrent pas à droite d'une étiquette à 375 px, ils se replient sur leur propre ligne.
+   */
+  readonly stacked?: true;
 };
 
 export const columnPriority = <Row,>(column: AdminColumn<Row>): 1 | 2 | 3 => column.priority ?? (column.primary === true ? 1 : 2);
@@ -115,11 +121,11 @@ export function AdminResponsiveRows<Row>({
                 {cardColumns
                   .filter((column) => column.primary !== true)
                   .map((column) => (
-                    <div key={column.id} className="flex items-baseline justify-between gap-3">
+                    <div key={column.id} className={column.stacked === true ? 'grid gap-1' : 'flex items-baseline justify-between gap-3'}>
                       <dt className="shrink-0 text-caption" style={{ color: INK2 }}>
                         {column.header}
                       </dt>
-                      <dd className="min-w-0 break-words text-end text-body" style={{ color: INK }}>
+                      <dd className={`min-w-0 break-words text-body${column.stacked === true ? '' : ' text-end'}`} style={{ color: INK }}>
                         {column.cell(row)}
                       </dd>
                     </div>

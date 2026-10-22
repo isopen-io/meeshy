@@ -91,7 +91,7 @@ public object PrivacyCatalog {
         ),
         PrivacyToggleDescriptor(
             PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS, PrivacyCategory.CONTACTS_GROUPS,
-            { it.allowCallsFromNonContacts }, { p, e -> p.copy(allowCallsFromNonContacts = e) },
+            { it.acceptCallsFromNonContacts }, { p, e -> p.copy(acceptCallsFromNonContacts = e) },
         ),
         PrivacyToggleDescriptor(
             PrivacyToggle.SAVE_MEDIA_TO_GALLERY, PrivacyCategory.MEDIA_DATA,

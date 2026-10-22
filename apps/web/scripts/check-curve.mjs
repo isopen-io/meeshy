@@ -556,7 +556,7 @@ const overlaySwift = readFileSync(UPSTREAM_OVERLAY_SWIFT, 'utf8');
 const actionsSwift = readFileSync(UPSTREAM_ACTIONS_SWIFT, 'utf8');
 const menuMetrics = readFileSync(DOWNSTREAM_MENU_METRICS, 'utf8');
 const swiftAssignment = (source, name) => {
-  const m = new RegExp(`\\b${name}\\s*(?::\\s*\\w+\\s*)?=\\s*(-?[0-9.]+)`).exec(source);
+  const m = new RegExp(`\\b${name}\\s*(?::\\s*\\w+\\s*)?=\\s*(?:\\w+\\s*\\?\\s*)?(-?[0-9.]+)`).exec(source);
   return m === null ? null : Number(m[1]);
 };
 const MENU_MAPPINGS = [

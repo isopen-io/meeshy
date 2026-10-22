@@ -82,3 +82,20 @@ describe('le bandeau qui remplace le composeur', () => {
     expect(host.querySelector('[data-write-restriction]')).not.toBeNull();
   });
 });
+
+describe('le composeur d’une conversation chiffrée de bout en bout (#11216)', () => {
+  test('e2ee : aucun champ de saisie, la mention claire à sa place', async () => {
+    const host = await mount(<Probe conversation={conversation('c-e2ee', { type: 'direct', encryptionMode: 'e2ee' })} />);
+    expect(host.querySelector('textarea, input, [contenteditable]')).toBeNull();
+    const band = host.querySelector('[data-write-restriction]');
+    expect(band?.getAttribute('data-write-restriction')).toBe('end-to-end-encrypted');
+    expect(band?.textContent).toBe('Conversation chiffrée de bout en bout : le web ne peut pas encore y écrire');
+  });
+
+  test('modes en clair, server et hybrid : le composeur reste libre (le serveur chiffre lui-même)', async () => {
+    for (const mode of [null, 'server', 'hybrid']) {
+      const host = await mount(<Probe conversation={conversation(`c-${String(mode)}`, { type: 'direct', encryptionMode: mode })} />);
+      expect(host.querySelector('[data-probe-field]')).not.toBeNull();
+    }
+  });
+});

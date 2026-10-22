@@ -52,6 +52,16 @@ struct MessageOverlayMenu: View {
     /// **Sélectionner** (#4005, primaire depuis le 2026-08-27) — entre en mode
     /// sélection multiple, sème le message qui a déclenché le longpress.
     var onSelect: (() -> Void)? = nil
+    /// **Supprimer le message** (`.deleteMessage`) — l'hôte ouvre la confirmation
+    /// qui offre « pour tous », « retirer » ou « pour moi » selon les verdicts
+    /// de la loi. Sans rappel, l'entrée n'est pas offerte (un contrôle existe
+    /// s'il a un effet).
+    var onDelete: (() -> Void)? = nil
+    /// **Traduire sur l'appareil** (E2EE, verdict `.device`) — l'hôte passe par
+    /// `DeviceTranslationCoordinator`. Sans rappel, « Traduire » n'est pas offert
+    /// dans une conversation où le serveur ne lit pas le clair : la vue Langue
+    /// ne sait demander qu'au serveur, qui refuse.
+    var onTranslateOnDevice: (() -> Void)? = nil
 
     // Le contexte de rendu de la cellule : l'aperçu rend la MÊME bulle ou la
     // MÊME rangée que le fil, avec les mêmes entrées.
@@ -173,7 +183,35 @@ struct MessageOverlayMenu: View {
     // MARK: - Primary Actions (liste verticale native-lean)
 
     private var primaryActions: [PrimaryAction] {
-        MessageActionResolver.primaryActions(menuContext)
+        Self.reachable(
+            MessageActionResolver.primaryActions(menuContext), context: menuContext,
+            hasDeleteHandler: onDelete != nil, hasDeviceTranslationHandler: onTranslateOnDevice != nil)
+    }
+
+    /// **Un contrôle existe s'il a un effet** : on retire de la liste ce que
+    /// l'hôte n'a pas câblé, au lieu de montrer une ligne qui ne fait rien.
+    static func reachable(
+        _ actions: [PrimaryAction],
+        context: MessageMenuContext,
+        hasDeleteHandler: Bool,
+        hasDeviceTranslationHandler: Bool
+    ) -> [PrimaryAction] {
+        let translatesOnlyOnDevice = context.translatesOnDevice && !context.canTranslate
+        return actions.filter { action in
+            switch action {
+            case .deleteMessage: return hasDeleteHandler
+            case .translate: return !translatesOnlyOnDevice || hasDeviceTranslationHandler
+            default: return true
+            }
+        }
+    }
+
+    /// **La barre d'emojis suit le verdict `canReact` de la loi** : message
+    /// disparu, conversation fermée, lecteur non membre ou avis système n'ont
+    /// pas de réaction à offrir. Une barre montée pour rien serait un contrôle
+    /// que la passerelle refuse ensuite.
+    static func showsEmojiQuickBar(for context: MessageMenuContext) -> Bool {
+        context.canReact
     }
 
     private func handlePrimaryAction(_ action: PrimaryAction) {
@@ -187,7 +225,11 @@ struct MessageOverlayMenu: View {
         case .edit:
             onEdit?()
         case .translate:
-            onShowTranslate?()
+            if menuContext.translatesOnDevice && !menuContext.canTranslate {
+                onTranslateOnDevice?()
+            } else {
+                onShowTranslate?()
+            }
         case .copy:
             onCopy?()
         case .saveMedia:
@@ -198,6 +240,8 @@ struct MessageOverlayMenu: View {
             onSelect?()
         case .more:
             onShowMore?()
+        case .deleteMessage:
+            onDelete?()
         case .callDetail:
             onShowCallDetail?()
         case .addSticker:
@@ -252,8 +296,9 @@ struct MessageOverlayMenu: View {
                 : CGRect(x: (containerW - previewW) / 2, y: (screenH - previewH) / 2, width: previewW, height: previewH)
 
             // ── Géométrie native-lean : barre réactions (haut) + aperçu + liste verticale (bas) ──
-            let nlEmojiBarHeight: CGFloat = 52
-            let nlGap: CGFloat = 12
+            let showsEmojiBar = Self.showsEmojiQuickBar(for: menuContext)
+            let nlEmojiBarHeight: CGFloat = showsEmojiBar ? 52 : 0
+            let nlGap: CGFloat = showsEmojiBar ? 12 : 0
             // Écart aperçu → liste d'actions RÉDUIT (iMessage-like) : le menu colle
             // presque à l'aperçu, distinct du gap barre-réactions → aperçu.
             let nlMenuGap: CGFloat = 6
@@ -266,12 +311,12 @@ struct MessageOverlayMenu: View {
             let nlAvailable = max(160, nlAvailBottom - nlAvailTop)
             let nlChrome = nlEmojiBarHeight + nlGap + nlMenuGap + nlMenuHeight
             // L'aperçu se rend à l'échelle 1 ; il ne se réduit que s'il ne tient
-            // pas, avec son chrome, dans la fenêtre — jamais sous 40 %.
-            let nlFitScale: CGFloat = previewH + nlChrome > nlAvailable
-                ? max(0.4, min(1, max(60, nlAvailable - nlChrome) / previewH))
-                : 1
+            // pas, avec son chrome, dans la fenêtre — jamais sous 60 %
+            // (`MessageOverlayPreviewFit`) : au-delà, il défile dans son cadre.
+            let fit = MessageOverlayPreviewFit.resolve(naturalHeight: previewH, chromeHeight: nlChrome, available: nlAvailable)
+            let nlFitScale: CGFloat = fit.scale
             let nlBubbleW = previewW * nlFitScale
-            let nlBubbleH = previewH * nlFitScale
+            let nlBubbleH = fit.visibleHeight
             let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlMenuGap + nlMenuHeight
             let nlAnchorX: CGFloat = kind == .flatRow
                 ? containerW / 2
@@ -336,19 +381,9 @@ struct MessageOverlayMenu: View {
                 // tient pas dans la fenêtre. Gate Equatable (H3) + mémoire de
                 // la rangée plate : le drag 60 fps ne reconstruit rien. Une
                 // image de la cellule, pas un lecteur — rien ne s'y lit (#11339).
-                MessageOverlayCellPreview(
-                    face: previewFace(kind: kind, containerWidth: containerW),
-                    message: message,
-                    isDark: isDark,
-                    accentHex: bubbleAccentHex
-                )
-                .equatable()
-                .environment(\.bubbleSkin, previewSkin)
-                .environment(\.bubbleContainerWidth, geometry.size.width > 0 ? geometry.size.width : nil)
-                .frame(width: previewW, alignment: message.isMe ? .trailing : .leading)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
-                .scaleEffect(nlFitScale, anchor: .center)
-                .frame(width: nlBubbleW, height: nlBubbleH)
+                previewViewport(
+                    kind: kind, containerSize: geometry.size, previewSize: CGSize(width: previewW, height: previewH),
+                    fit: fit)
                 // #9043 — transformation de RENDU seule (aucune passe de
                 // layout par image) : le haut et le bord natif restent fixes.
                 .scaleEffect(revealSplit.factor, anchor: message.isMe ? .topTrailing : .topLeading)
@@ -358,18 +393,21 @@ struct MessageOverlayMenu: View {
                 )
                 .offset(y: clusterDragOffset)
                 .opacity(isVisible ? 1 : 0)
-                .allowsHitTesting(false)
+                .allowsHitTesting(fit.scrollsInternally)
 
-                // Barre de réactions AU-DESSUS de l'aperçu (native-lean).
-                emojiQuickBar(width: nlEmojiWidth)
-                    .position(
-                        x: nlEmojiX,
-                        y: settled ? nlEmojiY : sourceRect.minY
-                    )
-                    .offset(y: clusterDragOffset)
-                    .opacity(isVisible ? 1 : 0)
-                    .scaleEffect(settled ? 1.0 : 0.7, anchor: .center)
-                    .allowsHitTesting(true)
+                // Barre de réactions AU-DESSUS de l'aperçu (native-lean) — montée
+                // seulement si la loi ouvre la réaction (`canReact`).
+                if showsEmojiBar {
+                    emojiQuickBar(width: nlEmojiWidth)
+                        .position(
+                            x: nlEmojiX,
+                            y: settled ? nlEmojiY : sourceRect.minY
+                        )
+                        .offset(y: clusterDragOffset)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(settled ? 1.0 : 0.7, anchor: .center)
+                        .allowsHitTesting(true)
+                }
             }
             // #9043 — le glissement vaut sur TOUTE la vue (le voile, l'aperçu,
             // dont les touches traversent), pas seulement sur le menu : c'est
@@ -397,6 +435,37 @@ struct MessageOverlayMenu: View {
                       ? .easeOut(duration: Self.reducedMotionFadeDuration)
                       : .spring(response: 0.42, dampingFraction: 0.74)) {
             isVisible = true
+        }
+    }
+
+    // MARK: - Le cadre de l'aperçu (#11208)
+
+    /// L'aperçu dans son cadre réduit : la cellule du fil, mesurée à sa largeur,
+    /// posée à son bord natif, bornée à la place qui reste (`MessageOverlayPreviewFit`).
+    private func previewViewport(
+        kind: MessageOverlayPreviewKind,
+        containerSize: CGSize,
+        previewSize: CGSize,
+        fit: MessageOverlayPreviewFit.Result
+    ) -> some View {
+        MessageOverlayPreviewViewport(
+            scale: fit.scale,
+            naturalSize: previewSize,
+            visibleHeight: fit.visibleHeight,
+            scrolls: fit.scrollsInternally,
+            isTrailing: message.isMe
+        ) {
+            MessageOverlayCellPreview(
+                face: previewFace(kind: kind, containerWidth: containerSize.width),
+                message: message,
+                isDark: isDark,
+                accentHex: bubbleAccentHex
+            )
+            .equatable()
+            .environment(\.bubbleSkin, previewSkin)
+            .environment(\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)
+            .frame(width: previewSize.width, alignment: message.isMe ? .trailing : .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
         }
     }
 

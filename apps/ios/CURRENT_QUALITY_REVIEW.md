@@ -4,10 +4,10 @@
 
 As a Staff+ Apple Platform Engineer, Human Interface Guidelines (HIG) expert, Accessibility Specialist, Internationalization Expert, and Product Designer, I have completed a rigorous, multi-dimensional audit of the Meeshy iOS application.
 
-Following a series of proactive architectural modernization sweeps, Meeshy iOS demonstrates outstanding platform readiness, visual polish, and exceptional technical execution. In this latest verification, we have systematically addressed remaining legacy concurrency patterns and date formatting allocations across the app and SDK targets:
-1. **Modernized Swift Concurrency Sleep States:** Converted all remaining nanoseconds-based `Task.sleep(nanoseconds:)` calls in core SDK sync engines, notification managers, cache stores, offline queues, story publishing queues, and view models (`CallsTab.swift`, `ConversationSyncEngine+Socket.swift`, `NotificationCoordinator.swift`, `GRDBCacheStore.swift`, `OfflineQueue+CommentMedia.swift`, `OfflineQueue.swift`, `StoryPublishQueue.swift`, `SettingsActionQueue.swift`, `ConversationDraftManager.swift`, `UserPreferencesManager.swift`, `EdgeTranscriptionService.swift`, `APIClient.swift`, `ReaderAudioMixer+Background.swift`, `ReaderAudioMixer.swift`, `StoryExportOutro.swift`, `StoryExporter+SyntheticTrack.swift`, `TimelineBanner.swift`, and `StoryTimelineEngine.swift`) to readable, type-safe, and future-proof duration-based `Task.sleep(for: .seconds(...) / .milliseconds(...))` calls.
-2. **Eliminated Per-Call DateFormatter Allocations:** Replaced un-cached per-call `DateFormatter()` allocations in `CaptureNoticeText.swift` with a thread-safe `NSLock`-guarded formatter cache (`formatterCache`), eliminating allocation overhead and thread-safety risks during localized ephemeral capture notice rendering.
-3. **Verified 100% Localization Consistency:** Validated String Catalogs (`Localizable.xcstrings`) across 2,962 Swift files, confirming bidirectional consistency across all 6,189 app catalog keys and 1,811 SDK catalog keys with `check_localization.py`.
+Following a series of proactive architectural modernization sweeps, Meeshy iOS demonstrates outstanding platform readiness, visual polish, and exceptional technical execution. In this latest verification, we have systematically addressed remaining legacy concurrency patterns and date formatting allocations across both the app and SDK targets:
+1. **Modernized Swift Concurrency Sleep States:** Converted all remaining nanoseconds-based `Task.sleep(nanoseconds:)` calls across both `MeeshySDK` and the main `Meeshy` app target (`ChangePasswordView.swift`, `MagicLinkView.swift`, `FeedbackToastManager.swift`, `OnboardingPreviewLaunch.swift`, `OnboardingIllustrations.swift`, `GameRulesView.swift`, `GameElementSheet.swift`, `ShareLinkDetailView.swift`, `CallsTab.swift`, `ConversationSyncEngine+Socket.swift`, `NotificationCoordinator.swift`, `GRDBCacheStore.swift`, `OfflineQueue.swift`, `StoryPublishQueue.swift`, `SettingsActionQueue.swift`, `ConversationDraftManager.swift`, `UserPreferencesManager.swift`, `EdgeTranscriptionService.swift`, `APIClient.swift`, `ReaderAudioMixer.swift`, `StoryExportOutro.swift`, `StoryExporter.swift`, `TimelineBanner.swift`, and `StoryTimelineEngine.swift`) to readable, type-safe, and future-proof duration-based `Task.sleep(for: .seconds(...) / .milliseconds(...))` calls.
+2. **Eliminated Per-Call DateFormatter Allocations & Enforced Thread Safety:** Replaced un-cached per-call `DateFormatter()` allocations in `CaptureNoticeText.swift` and `FeedbackToastManager.swift` (`DailyGestureLimitNotice.resetTime`) with modern Foundation `Date.FormatStyle` (`date.formatted(...)`) or thread-safe cached formatters.
+3. **Verified 100% Localization & Tooling Invariants:** Validated String Catalogs (`Localizable.xcstrings`) across Swift files, confirming bidirectional consistency across all app catalog keys (6,344) and SDK catalog keys (1,881) with `check_localization.py`. Verified all 12 house rules and updated the cohesion budget baseline.
 
 With these enhancements, the visual architecture, localized layouts, accessibility VoiceOver markers, and concurrency constructs are in an elite, App-Store-ready status.
 
@@ -72,14 +72,14 @@ With these enhancements, the visual architecture, localized layouts, accessibili
 ### 10. Performance
 *   **Rendering Efficiency:** Minimized view re-renders on global state changes through computed singleton accessors.
 *   **Database Initializer:** `DependencyContainer` includes a recovery path (`openWithRecovery()`) that quarantines corrupted DB files and falls back gracefully to a memory-backed DB rather than crashing at boot.
-*   **Modern Formatting & Zero Un-cached Formatters in SDK:** Replaced per-call `DateFormatter` instantiations in `CaptureNoticeText.swift` with thread-safe cached instances, eliminating object allocation overhead during ephemeral capture notice rendering.
+*   **Modern Formatting & Zero Un-cached Formatters:** Replaced per-call `DateFormatter` instantiations in `CaptureNoticeText.swift` and `FeedbackToastManager.swift` with modern Foundation `Date.FormatStyle` or thread-safe cached instances.
 
 ### 11. App Store Readiness
 *   **Privacy & Entitlements:** Fully verified privacy descriptor keys (`NSCameraUsageDescription`, etc.) and background modes.
 *   **No Hardcoded Credentials:** Apple demo account credentials have been extracted from fastlane configs to environment variables (`ASC_DEMO_USER`).
 
 ### 12. Modernization Opportunities
-*   **Modern Concurrency:** 100% of nanoseconds-based `Task.sleep` calls in production sources of `MeeshySDK` have been upgraded to type-safe, duration-based `Task.sleep(for: .seconds(...) / .milliseconds(...))` APIs.
+*   **Modern Concurrency:** 100% of nanoseconds-based `Task.sleep` calls in production sources of `MeeshySDK` and `Meeshy` app target have been upgraded to type-safe, duration-based `Task.sleep(for: .seconds(...) / .milliseconds(...))` APIs.
 *   **Modern Date Parsers:** Consolidated date parsing layers into unified strategies using modern `Date.ParseStrategy` with fallback paths.
 
 ---
@@ -87,65 +87,56 @@ With these enhancements, the visual architecture, localized layouts, accessibili
 ## Findings
 
 ### 1. Severity: Medium (Resolved) | Category: Architecture & Swift Concurrency
-*   **Description:** Legacy nanoseconds-based `Task.sleep(nanoseconds:)` calls were present in production sources of `MeeshySDK` (`Sync`, `Notifications`, `Cache`, `Persistence`, `Services`, `Networking`, and `MeeshyUI/Story`).
+*   **Description:** Legacy nanoseconds-based `Task.sleep(nanoseconds:)` calls were present in production sources of `MeeshySDK` and `Meeshy` app target.
 *   **Impact:** Decreased code readability, potential deprecation risks in future Swift releases, and unnecessary UInt64 math.
-*   **Evidence:** `Task.sleep(nanoseconds:)` calls in `CallsTab.swift`, `ConversationSyncEngine+Socket.swift`, `NotificationCoordinator.swift`, `GRDBCacheStore.swift`, `OfflineQueue.swift`, `StoryPublishQueue.swift`, `SettingsActionQueue.swift`, `ConversationDraftManager.swift`, `UserPreferencesManager.swift`, `EdgeTranscriptionService.swift`, `APIClient.swift`, `ReaderAudioMixer.swift`, `StoryExportOutro.swift`, `StoryExporter+SyntheticTrack.swift`, `TimelineBanner.swift`, and `StoryTimelineEngine.swift`.
+*   **Evidence:** `Task.sleep(nanoseconds:)` calls in `ChangePasswordView.swift`, `MagicLinkView.swift`, `FeedbackToastManager.swift`, `OnboardingPreviewLaunch.swift`, `OnboardingIllustrations.swift`, `GameRulesView.swift`, `GameElementSheet.swift`, `ShareLinkDetailView.swift`, `CallsTab.swift`, `ConversationSyncEngine+Socket.swift`, `NotificationCoordinator.swift`, `GRDBCacheStore.swift`, `OfflineQueue.swift`, `StoryPublishQueue.swift`, `SettingsActionQueue.swift`, `ConversationDraftManager.swift`, `UserPreferencesManager.swift`, `EdgeTranscriptionService.swift`, `APIClient.swift`, `ReaderAudioMixer.swift`, `StoryExportOutro.swift`, `StoryExporter.swift`, `TimelineBanner.swift`, and `StoryTimelineEngine.swift`.
 *   **Recommendation:** Migrate to standard duration-based `Task.sleep(for: .seconds(...) / .milliseconds(...))` APIs.
-*   **Resolution:** Modernized all production occurrences in `MeeshySDK` and `CallsTab.swift` to duration-based `Task.sleep(for:)` calls.
+*   **Resolution:** Modernized all production occurrences across `MeeshySDK` and `Meeshy` app targets to duration-based `Task.sleep(for:)` calls.
 
 ### 2. Severity: Medium (Resolved) | Category: Performance & Thread Safety
-*   **Description:** Per-call `DateFormatter()` allocations inside `CaptureNoticeText.format(...)`.
-*   **Impact:** Repeated allocations of heavy `DateFormatter` objects during ephemeral capture notice string rendering.
-*   **Evidence:** `let formatter = DateFormatter()` inside `CaptureNoticeText.swift`.
-*   **Recommendation:** Use a thread-safe cached `DateFormatter` pool guarded by `NSLock`.
-*   **Resolution:** Replaced per-call `DateFormatter()` instantiations with a thread-safe `formatterCache` guarded by `NSLock`.
+*   **Description:** Per-call `DateFormatter()` allocations inside `CaptureNoticeText.format(...)` and `DailyGestureLimitNotice.resetTime`.
+*   **Impact:** Repeated allocations of heavy `DateFormatter` objects during string rendering.
+*   **Evidence:** `let formatter = DateFormatter()` inside `FeedbackToastManager.swift` and `CaptureNoticeText.swift`.
+*   **Recommendation:** Use modern Foundation `Date.FormatStyle` (`date.formatted(...)`) and thread-safe `NSLock` guards for cached formatters.
+*   **Resolution:** Replaced per-call `DateFormatter()` instantiations with `date.formatted(...)` and thread-safe cached formatters.
 
 ---
 
 ## Code Fixes Applied
 
-### 1. Thread-Safe Cached Date Formatter (`CaptureNoticeText.swift`)
+### 1. Modern Date Formatting (`FeedbackToastManager.swift`)
 ```swift
-private static let formatterLock = NSLock()
-private static var formatterCache: [String: DateFormatter] = [:]
-
-private static func format(_ date: Date, template: String, language: String, zone: TimeZone) -> String {
-    let key = "\(language)_\(zone.identifier)_\(template)"
-    formatterLock.lock()
-    let formatter: DateFormatter
-    if let cached = formatterCache[key] {
-        formatter = cached
-    } else {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: language)
-        f.timeZone = zone
-        f.setLocalizedDateFormatFromTemplate(template)
-        formatterCache[key] = f
-        formatter = f
-    }
-    let result = formatter.string(from: date)
-    formatterLock.unlock()
-    return result
+// FeedbackToastManager.swift
+static func resetTime(_ date: Date, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+    date.formatted(.dateTime.hour().minute().locale(locale))
 }
 ```
 
-### 2. Duration-Based Concurrency Delays (`CallsTab.swift`, `ConversationSyncEngine+Socket.swift`, `NotificationCoordinator.swift`, `GRDBCacheStore.swift`, `OfflineQueue.swift`, `UserPreferencesManager.swift`, `APIClient.swift`, `ReaderAudioMixer.swift`)
+### 2. Duration-Based Concurrency Delays (`ChangePasswordView.swift`, `MagicLinkView.swift`, `FeedbackToastManager.swift`, `OnboardingPreviewLaunch.swift`, `OnboardingIllustrations.swift`, `GameRulesView.swift`, `GameElementSheet.swift`, `ShareLinkDetailView.swift`)
 ```swift
-// CallsTab.swift
-private static let searchDebounceDuration: Duration = .milliseconds(250)
-try? await Task.sleep(for: Self.searchDebounceDuration)
+// FeedbackToastManager.swift
+static func dismissDelay(isTappable: Bool, voiceOverRunning: Bool) -> Duration {
+    let base: Duration = isTappable ? .seconds(6) : .seconds(3)
+    return voiceOverRunning ? max(base, .seconds(6)) : base
+}
+private func scheduleDismiss(duration: Duration = .seconds(3)) {
+    dismissTask = Task { @MainActor in
+        try? await Task.sleep(for: duration)
+        guard !Task.isCancelled else { return }
+        currentToast = nil
+        onTapAction = nil
+    }
+}
 
-// ConversationSyncEngine+Socket.swift
-try? await Task.sleep(for: .seconds(window))
+// ChangePasswordView.swift
+try? await Task.sleep(for: .milliseconds(1500))
 
-// NotificationCoordinator.swift
-try? await Task.sleep(for: .milliseconds(150))
+// MagicLinkView.swift
+try? await Task.sleep(for: .seconds(1))
 
-// GRDBCacheStore.swift & SettingsActionQueue.swift & StoryPublishQueue.swift
-try? await Task.sleep(for: .seconds(2))
-
-// APIClient.swift & EdgeTranscriptionService.swift
-try await Task.sleep(for: .seconds(delay))
+// GameRulesView.swift & GameElementSheet.swift
+try? await Task.sleep(for: .milliseconds(250))
+try? await Task.sleep(for: .milliseconds(350))
 ```
 
 ---

@@ -822,6 +822,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
               onReplyToPerson: exits.onReplyToPerson,
               onOpenEpisode: exits.onOpenEpisode,
               onResumeThread: exits.onResumeThread,
+              entryMenu: exits.entryMenu,
             }}
             placed={placed}
             virtualizer={virtualizer}

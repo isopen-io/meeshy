@@ -8,6 +8,7 @@ import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { achievementMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import { visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
+import { useAtmosphereGate } from '@/lib/game/use-atmosphere-gate';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { ProgressionPage } from '@/routes/progression-page';
@@ -40,10 +41,11 @@ export function SuccesBody({
   readonly rarities?: AchievementRarityMap | undefined;
 }) {
   const [taking, setTaking] = useState<PhotoMoment | null>(null);
+  const atmosphere = useAtmosphereGate((progress as EngagementWithGame).game);
   return (
     <>
       <AchievementsSection progress={progress} rarities={rarities} onPhoto={(key) => setTaking(achievementMoment(key, visibleRarity(rarities?.[key])))} />
-      {taking === null ? null : <GamePhotoFlow moment={taking} env={env} flameDays={flameDays} onClose={() => setTaking(null)} />}
+      {taking === null ? null : <GamePhotoFlow moment={taking} env={env} flameDays={flameDays} atmosphere={atmosphere} onClose={() => setTaking(null)} />}
     </>
   );
 }

@@ -62,7 +62,7 @@ function createMockPrisma(opts: PrismaOpts) {
     conversation: {
       findMany: jest.fn(async () => opts.conversations ?? []),
       count: jest.fn(async () => opts.total ?? (opts.conversations?.length ?? 0)),
-      findUnique: jest.fn(async () => (opts.conversationExists === false ? null : { id: 'conv-1' })),
+      findUnique: jest.fn(async () => (opts.conversationExists === false ? null : { id: '507f1f77bcf86cd799439c01' })),
     },
     postMedia: {
       findMany: jest.fn(async () => opts.postMedia ?? []),
@@ -213,7 +213,7 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
       ],
     });
     const app = await buildApp(prisma, 'ADMIN');
-    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/conv-1/participants', headers: { authorization: 'Bearer x' } });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/participants', headers: { authorization: 'Bearer x' } });
 
     expect(res.statusCode).toBe(200);
     const byId = Object.fromEntries((res.json().data as AnyRecord[]).map((p) => [p.id, p.removedByAdmin]));
@@ -226,7 +226,7 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
       where: {
         action: 'ADMIN_CONVERSATION_MEMBER_REMOVED',
         entity: 'Conversation',
-        entityId: 'conv-1',
+        entityId: '507f1f77bcf86cd799439c01',
         userId: { in: ['u2', 'u3', 'u4'] },
       },
       _max: { createdAt: true },
@@ -239,7 +239,7 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
       participants: [{ id: 'pt1', userId: 'u1', isActive: true, leftAt: null, user: null }],
     });
     const app = await buildApp(prisma, 'ADMIN');
-    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/conv-1/participants', headers: { authorization: 'Bearer x' } });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/participants', headers: { authorization: 'Bearer x' } });
     expect(res.json().data[0].removedByAdmin).toBe(false);
     expect((prisma as unknown as { adminAuditLog: { groupBy: jest.Mock } }).adminAuditLog.groupBy).not.toHaveBeenCalled();
     await app.close();
@@ -252,7 +252,7 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
       ],
     });
     const app = await buildApp(prisma, 'ADMIN');
-    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/conv-1/participants', headers: { authorization: 'Bearer x' } });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/participants', headers: { authorization: 'Bearer x' } });
     const select = ((prisma as unknown as { participant: { findMany: jest.Mock } }).participant.findMany.mock.calls[0][0] as { select: AnyRecord }).select;
     expect(select).toMatchObject({ leftAt: true, bannedAt: true });
     expect(res.json().data[0]).toMatchObject({ leftAt: '2026-02-01T00:00:00.000Z', bannedAt: null });
@@ -263,7 +263,7 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
     const app = await buildApp(createMockPrisma({ conversationExists: false }), 'ADMIN');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/participants',
+      url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/participants',
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(404);
@@ -280,7 +280,7 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
     const app = await buildApp(prisma, 'ADMIN');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/participants?offset=0&limit=30',
+      url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/participants?offset=0&limit=30',
       headers: { authorization: 'Bearer x' },
     });
 
@@ -296,7 +296,7 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
     const app = await buildApp(createMockPrisma({}), 'USER');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/participants',
+      url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/participants',
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(403);
@@ -316,7 +316,7 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
     const app = await buildApp(prisma, 'MODERATOR');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/participants',
+      url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/participants',
       headers: { authorization: 'Bearer x' },
     });
 
@@ -338,7 +338,7 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
     const app = await buildApp(prisma, 'ADMIN');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/participants',
+      url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/participants',
       headers: { authorization: 'Bearer x' },
     });
 
@@ -501,7 +501,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(createMockPrisma({ messages: [], messagesCount: 0 }), 'ADMIN');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(200);
@@ -514,7 +514,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(createMockPrisma({}), 'MODERATOR');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(403);
@@ -525,7 +525,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(createMockPrisma({}), 'AUDIT');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(403);
@@ -536,7 +536,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(createMockPrisma({}), 'USER');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(403);
@@ -550,7 +550,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(prisma, 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/messages',
+      url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages',
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(200);
@@ -562,7 +562,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(createMockPrisma({}), 'ADMIN');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/messages',
+      url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages',
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(400);
@@ -573,7 +573,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(createMockPrisma({}), 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/messages?reason=trop+bref',
+      url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?reason=trop+bref',
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(400);
@@ -584,7 +584,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(createMockPrisma({ conversationExists: false }), 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(404);
@@ -673,7 +673,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(prisma, 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?offset=0&limit=30&reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?offset=0&limit=30&reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
 
@@ -690,7 +690,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(prisma, 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
 
@@ -716,7 +716,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(prisma, 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?offset=0&limit=30&reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?offset=0&limit=30&reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
 
@@ -744,7 +744,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(prisma, 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(200);
@@ -808,7 +808,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(prisma, 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      url: `/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
 
@@ -819,7 +819,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     expect(written.data).toMatchObject({
       adminId: ADMIN_ID,
       entity: 'Conversation',
-      entityId: 'conv-1',
+      entityId: '507f1f77bcf86cd799439c01',
     });
     expect(String(written.data.action)).toContain('CONVERSATION');
     expect(String(written.data.metadata)).toContain(REASON);
@@ -832,7 +832,7 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     const app = await buildApp(prisma, 'ADMIN');
     await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/messages',
+      url: '/api/v1/admin/conversations/507f1f77bcf86cd799439c01/messages',
       headers: { authorization: 'Bearer x' },
     });
     const auditCreate = (prisma as unknown as { adminAuditLog: { create: jest.Mock } }).adminAuditLog.create;

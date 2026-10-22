@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { Suspense, lazy, useState } from 'react';
 
+import { stickerPackText } from '@meeshy/shared/types/sticker-pack';
 import type { StickerPackDetail, StickerPackSummary } from '@meeshy/shared/types/sticker-pack';
 
 import type { PackShopAdapter } from './pack-shop';
@@ -106,8 +107,8 @@ export const stickerShopAdapter = (language: InterfaceLanguage, deps: Conversati
     void queryClient.invalidateQueries({ queryKey: INSTALLED_PACKS_QUERY_KEY });
     void queryClient.invalidateQueries({ queryKey: PACK_CATALOGUE_QUERY_KEY });
   },
-  title: (pack) => pack.name,
-  description: (pack) => pack.description,
+  title: (pack) => stickerPackText(pack, language).name,
+  description: (pack) => stickerPackText(pack, language).description,
   meta: (pack) => [
     translateStickerPacks(language, 'stickerPacks.by', { author: pack.author }),
     translateStickerPacks(language, 'stickerPacks.count', { count: String(countOf(pack)) }),
