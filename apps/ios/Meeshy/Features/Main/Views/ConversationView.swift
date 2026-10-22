@@ -463,6 +463,7 @@ struct ConversationView: View {
     private func conversationDidAppear() {
         if let context = replyContext { applyReplyContext(context, openingConversation: true) }
         if let lang = ConversationViewRules.defaultComposeLanguage(
+            // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             preferredContentLanguage: AuthManager.shared.currentUser?.preferredContentLanguages.first,
             keyboardPrimaryLanguage: UITextInputMode.activeInputModes.first?.primaryLanguage,
             supportedCodes: Set(LanguageOption.defaults.map(\.code))

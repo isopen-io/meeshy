@@ -31,7 +31,7 @@ nonisolated struct StoryCommentsRenderInputs: Equatable {
     var loadingReplies: Set<String>
     var repliesHasMore: [String: Bool]
     var isLoading: Bool
-    var userLang: String
+    var readerLanguages: [String]
     var isStoryExpired: Bool
     var targetCommentId: String?
     var targetParentCommentId: String?
@@ -52,7 +52,7 @@ nonisolated struct StoryCommentsRenderInputs: Equatable {
             && lhs.loadingReplies == rhs.loadingReplies
             && lhs.repliesHasMore == rhs.repliesHasMore
             && lhs.isLoading == rhs.isLoading
-        let sameFrame = lhs.userLang == rhs.userLang
+        let sameFrame = lhs.readerLanguages == rhs.readerLanguages
             && lhs.isStoryExpired == rhs.isStoryExpired
             && lhs.targetCommentId == rhs.targetCommentId
             && lhs.targetParentCommentId == rhs.targetParentCommentId
@@ -126,7 +126,7 @@ extension StoryViewerView {
             loadingReplies: storyCommentLoadingReplies,
             repliesHasMore: storyCommentRepliesHasMore,
             isLoading: isLoadingComments,
-            userLang: ReaderPrism.resolve(for: AuthManager.shared.currentUser).first ?? "fr",
+            readerLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isStoryExpired: currentStory?.isExpired() ?? false,
             targetCommentId: targetCommentId,
             targetParentCommentId: targetParentCommentId,

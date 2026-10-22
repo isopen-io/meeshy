@@ -15,6 +15,7 @@ struct PrivacyPolicyView: View {
 
     @MainActor
     init() {
+        // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
         let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         let deviceLocale = Locale.current.language.languageCode?.identifier
         _selectedLanguage = State(initialValue: Self.resolveInitialLanguage(preferred: preferred, deviceLocale: deviceLocale))
