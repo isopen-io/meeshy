@@ -38,6 +38,7 @@ object HttpPriority {
     const val URL_GUARD = 100
     const val ENDPOINT_POLICY = 200
     const val RETRY = 300
+    const val PROACTIVE_REFRESH = 900
     const val AUTH = 1_000
     const val CLIENT_CAPABILITIES = 1_100
     const val DEVICE_LOCALE = 1_200
@@ -66,14 +67,18 @@ internal fun builtInContributors(
     config: MeeshyConfig,
     tokenStore: TokenStore,
     onSessionExpired: () -> Unit,
-    refresher: TokenRefresher,
+    refresher: SessionRefresher,
+    transition: SessionTransitionFlags = SessionTransitionFlags(),
 ): List<HttpClientContributor> = listOfNotNull(
     HttpClientContributor.of("url-guard", HttpPriority.URL_GUARD) { it.addInterceptor(UrlGuardInterceptor()) },
     HttpClientContributor.of("endpoint-policy", HttpPriority.ENDPOINT_POLICY) {
         it.addInterceptor(EndpointPolicyInterceptor())
     },
     HttpClientContributor.of("retry", HttpPriority.RETRY) { it.addInterceptor(RetryInterceptor()) },
-    HttpClientContributor.of("auth", HttpPriority.AUTH) { it.addInterceptor(AuthInterceptor(tokenStore)) },
+    HttpClientContributor.of("proactive-refresh", HttpPriority.PROACTIVE_REFRESH) {
+        it.addInterceptor(ProactiveRefreshInterceptor(tokenStore, refresher))
+    },
+    HttpClientContributor.of("auth", HttpPriority.AUTH) { it.addInterceptor(AuthInterceptor(tokenStore, transition)) },
     // Annonce ce que ce binaire sait LIRE. Ne se pose qu'apres que la lecture v3 existe :
     // l'inverse echangerait une sentinelle lisible contre un ecran vide.
     HttpClientContributor.of("client-capabilities", HttpPriority.CLIENT_CAPABILITIES) {
@@ -84,7 +89,7 @@ internal fun builtInContributors(
         it.addInterceptor(DeviceLocaleInterceptor())
     },
     HttpClientContributor.of("auth-expiry", HttpPriority.AUTH_EXPIRY) {
-        it.addInterceptor(AuthExpiryInterceptor(onSessionExpired))
+        it.addInterceptor(AuthExpiryInterceptor(signalsExpiry = refresher::signalsExpiry, onSessionExpired = onSessionExpired))
     },
     HttpClientContributor.of("refresh-authenticator", HttpPriority.AUTHENTICATOR) {
         it.authenticator(RefreshAuthenticator(tokenStore, refresher))

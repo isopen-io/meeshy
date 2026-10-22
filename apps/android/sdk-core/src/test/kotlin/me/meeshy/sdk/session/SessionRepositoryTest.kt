@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.RegisterResponse
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
+import app.cash.turbine.test
+import me.meeshy.sdk.model.auth.SessionOrigin
 import org.junit.Test
 
 private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
@@ -201,5 +203,91 @@ class SessionRepositoryTest {
         repo.refresh()
 
         assertThat(tokenStore.userId).isEqualTo("cached")
+    }
+
+    @Test
+    fun `hasResolvedStoredSession passe une seule fois de faux a vrai apres la restauration`() = runTest {
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+
+        repo.hasResolvedStoredSession.test {
+            assertThat(awaitItem()).isFalse()
+            repo.refresh()
+            assertThat(awaitItem()).isTrue()
+            repo.refresh()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `hors ligne avec un jeton detenu la session est resolue sans effacer l identite`() = runTest {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore(jwt = "jwt"))
+        repo.adopt(user("u1"))
+        repo.refresh()
+
+        assertThat(repo.hasResolvedStoredSession.value).isTrue()
+        assertThat(repo.currentUserId).isEqualTo("u1")
+    }
+
+    @Test
+    fun `sans jeton la restauration se termine aussi`() = runTest {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore())
+        repo.refresh()
+        assertThat(repo.hasResolvedStoredSession.value).isTrue()
+    }
+
+    @Test
+    fun `une session restauree porte l origine RESTORED et une connexion LOGIN`() = runTest {
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
+        val restored = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+        restored.refresh()
+        assertThat(restored.sessionOrigin.value).isEqualTo(SessionOrigin.RESTORED)
+
+        val fresh = SessionRepository(api, InMemoryTokenStore())
+        fresh.adopt(user("u2"), SessionOrigin.REGISTRATION)
+        assertThat(fresh.sessionOrigin.value).isEqualTo(SessionOrigin.REGISTRATION)
+        fresh.clear()
+        assertThat(fresh.sessionOrigin.value).isNull()
+    }
+
+    @Test
+    fun `la relecture du profil est limitee a une par minute`() = runTest {
+        var calls = 0
+        val delegate = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
+        val api = object : AuthApi by delegate {
+            override suspend fun me(): ApiResponse<MeEnvelope> {
+                calls++
+                return delegate.me()
+            }
+        }
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+        var now = 1_000_000L
+        repo.nowMillis = { now }
+
+        repo.revalidateIfStale()
+        now += 59_000
+        repo.revalidateIfStale()
+        assertThat(calls).isEqualTo(1)
+        now += 2_000
+        repo.revalidateIfStale()
+        assertThat(calls).isEqualTo(2)
+    }
+
+    @Test
+    fun `une reponse tardive d une session remplacee est ecartee`() = runTest {
+        lateinit var repo: SessionRepository
+        val delegate = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("old"))))
+        val api = object : AuthApi by delegate {
+            override suspend fun me(): ApiResponse<MeEnvelope> {
+                repo.clear()
+                repo.adopt(user("new"))
+                return delegate.me()
+            }
+        }
+        repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+
+        repo.refresh()
+
+        assertThat(repo.currentUserId).isEqualTo("new")
     }
 }
