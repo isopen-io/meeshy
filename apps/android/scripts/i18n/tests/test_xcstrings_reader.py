@@ -140,6 +140,13 @@ class MalformedEntryTests(unittest.TestCase):
         with self.assertRaises(CatalogError):
             catalog.entry("k")
 
+    def test_languages_that_android_does_not_ship_are_not_interpreted(self):
+        catalog = catalog_with({"k": {"localizations": {
+            "en": string_unit("ok"),
+            "zh-Hans": {"variations": {"device": {}}},
+        }}})
+        self.assertEqual(list(catalog.entry("k").localizations), ["en"])
+
     def test_other_entries_stay_readable_when_one_is_malformed(self):
         catalog = catalog_with({
             "bad": {"localizations": {"en": {"substitutions": {}}}},

@@ -108,6 +108,7 @@ class Project:
         self.manifest_path = self.android / "i18n/manifest/mini.json"
         self.catalog_path.parent.mkdir(parents=True)
         self.manifest_path.parent.mkdir(parents=True)
+        (self.android / "feature" / "demo").mkdir(parents=True)
         shutil.copy(FIXTURES / "mini.xcstrings", self.catalog_path)
         document = manifest or json.loads((FIXTURES / "mini-manifest.json").read_text(encoding="utf-8"))
         self.write_manifest(document)

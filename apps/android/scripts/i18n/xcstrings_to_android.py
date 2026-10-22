@@ -27,7 +27,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from android_xml_writer import PluralsResource, Resource, StringResource, WriterError, render_document, render_value
-from manifest_schema import CATALOGS, Manifest, ManifestEntry, ManifestError, ModuleManifest, load_manifest
+from manifest_schema import (
+    CATALOGS,
+    Manifest,
+    ManifestEntry,
+    ManifestError,
+    ModuleManifest,
+    load_manifest,
+    module_directory,
+)
 from plural_emitter import PluralError, resolve_quantities
 from specifier_converter import ConvertedText, SpecifierError, convert_specifiers
 from xcstrings_reader import (
@@ -182,6 +190,8 @@ def _check_collisions(module: ModuleManifest, folder: Path, resources: Sequence[
 def _generate_module(module: ModuleManifest, catalogs: _Catalogs, android_root: Path, generation: Generation) -> None:
     per_locale: Dict[str, List[Resource]] = {locale.code: [] for locale in ANDROID_LOCALES}
     adopted = module.adopted()
+    if adopted and not (android_root / module_directory(module.module)).is_dir():
+        raise GenerationError(f"module {module.module} : dossier {module_directory(module.module)}/ introuvable")
     for entry in adopted:
         try:
             resolved = _resolve_entry(entry, catalogs, generation.warnings)

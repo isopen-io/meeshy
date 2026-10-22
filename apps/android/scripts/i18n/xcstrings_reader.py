@@ -101,9 +101,11 @@ class Catalog:
         raw = self._strings.get(key)
         if raw is None:
             raise CatalogError(f"{self.path.name} : clé introuvable « {key} »")
+        wanted = {code for locale in ANDROID_LOCALES for code in locale.catalog_codes} | {self.source_language}
         localizations = {
             language: _localization(value, f"{self.path.name} « {key} » [{language}]")
             for language, value in (raw.get("localizations") or {}).items()
+            if language in wanted
         }
         return CatalogEntry(key=key, stale=raw.get("extractionState") == "stale", localizations=localizations)
 

@@ -160,6 +160,11 @@ class ValidationTests(unittest.TestCase):
                 with self.assertRaises(ManifestError):
                     parse(manifest(entry(), res_dir=res_dir))
 
+    def test_res_dir_must_belong_to_the_module(self):
+        with self.assertRaises(ManifestError) as raised:
+            parse(manifest(entry(), res_dir="feature/feed/src/main/res"))
+        self.assertIn("feature/chat/", str(raised.exception))
+
     def test_module_must_be_a_gradle_path(self):
         with self.assertRaises(ManifestError):
             parse(manifest(entry(), module="feature/chat"))
@@ -203,7 +208,7 @@ class LoadingTests(unittest.TestCase):
     def test_fragments_must_agree_on_the_res_dir(self):
         directory = make_temp_dir()
         write_json(directory, "a.json", manifest(entry(iosKey="chat.one")))
-        write_json(directory, "b.json", manifest(entry(iosKey="chat.two"), res_dir="elsewhere/res"))
+        write_json(directory, "b.json", manifest(entry(iosKey="chat.two"), res_dir="feature/chat/src/debug/res"))
         with self.assertRaises(ManifestError):
             load_manifest(Path(directory))
 

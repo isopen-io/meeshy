@@ -6,7 +6,7 @@ Un document de manifeste (un fichier JSON, ou un fragment `<module>.d/<lot>.json
     "schemaVersion": 1,
     "modules": {
       ":feature:chat": {
-        "resDir": "feature/chat/src/main/res",            relatif à apps/android
+        "resDir": "feature/chat/src/main/res",            relatif à apps/android, dans le dossier du module
         "entries": [
           {"catalog": "app", "iosKey": "chat.send", "status": "adopted"},
           {"catalog": "app", "iosKey": "Annuler", "androidName": "common_cancel",
@@ -92,6 +92,10 @@ class Manifest:
     modules: Tuple[ModuleManifest, ...]
 
 
+def module_directory(module: str) -> str:
+    return module[1:].replace(":", "/")
+
+
 def derive_android_name(ios_key: str) -> str:
     if not (_IDENTIFIER_KEY.match(ios_key) and ("." in ios_key or "_" in ios_key)):
         raise ManifestError(
@@ -157,9 +161,12 @@ def _parse_module(module: str, raw: Any, source: str) -> ModuleManifest:
     entries = fields.get("entries")
     if not isinstance(entries, list):
         raise ManifestError(f"{where} : « entries » doit être une liste")
+    res_dir = _parse_res_dir(fields.get("resDir"), where)
+    if not res_dir.startswith(module_directory(module) + "/"):
+        raise ManifestError(f"{where} : resDir « {res_dir} » n'est pas dans le dossier du module ({module_directory(module)}/)")
     return ModuleManifest(
         module=module,
-        res_dir=_parse_res_dir(fields.get("resDir"), where),
+        res_dir=res_dir,
         entries=tuple(_parse_entry(item, f"{where} #{index}") for index, item in enumerate(entries)),
     )
 

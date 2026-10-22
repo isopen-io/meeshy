@@ -184,6 +184,13 @@ class GenerationFailureTests(unittest.TestCase):
         self.assertIn("done", err)
         self.assertFalse(project.res("values").exists())
 
+    def test_adopting_into_a_module_that_does_not_exist_fails(self):
+        project = Project()
+        shutil.rmtree(project.android / "feature" / "demo")
+        code, _, err = project.run()
+        self.assertEqual(code, 2)
+        self.assertIn("feature/demo", err)
+
     def test_no_manifest_directory_means_nothing_to_generate(self):
         project = Project()
         shutil.rmtree(project.android / "i18n")
