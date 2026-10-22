@@ -232,7 +232,7 @@ final class MessageMenuContextMakeTests: XCTestCase {
         XCTAssertTrue(ctx.isGone)
         XCTAssertTrue(ctx.canDeleteForMe)
         XCTAssertFalse(ctx.canDeleteForEveryone)
-        XCTAssertEqual(MessageActionResolver.primaryActions(ctx), [.more])
+        XCTAssertEqual(MessageActionResolver.primaryActions(ctx), [.deleteMessage, .more])
         XCTAssertEqual(MessageActionResolver.moreSections(ctx), [.actions([.delete])])
     }
 
@@ -319,15 +319,18 @@ final class MessageMenuContextMakeTests: XCTestCase {
         XCTAssertTrue(actionItems(ctx).contains(.forward))
     }
 
-    /// « Traduire » n'ouvre pas une vue dont chaque langue est refusée : tant
-    /// que la traduction à la demande ne passe pas par l'appareil, elle n'est
-    /// pas offerte en E2EE.
-    func test_make_endToEnd_offersNoServerTranslation() {
+    /// « Traduire » n'ouvre pas une vue dont chaque langue est refusée : en E2EE
+    /// elle est offerte, mais par l'APPAREIL (`DeviceTranslationCoordinator`) —
+    /// jamais par la vue Langue, qui ne sait demander qu'au serveur.
+    func test_make_endToEnd_offersTranslationOnDeviceOnly() {
         let ctx = make(message(mine: false), authority(viewer(), encryptionMode: "e2ee"))
         XCTAssertFalse(ctx.canTranslate)
-        XCTAssertFalse(MessageActionResolver.primaryActions(ctx).contains(.translate))
+        XCTAssertTrue(ctx.translatesOnDevice)
+        XCTAssertTrue(MessageActionResolver.primaryActions(ctx).contains(.translate))
         XCTAssertFalse(infoItems(ctx).contains(.language))
-        XCTAssertTrue(make(message(mine: false), authority(viewer())).canTranslate)
+        let served = make(message(mine: false), authority(viewer()))
+        XCTAssertTrue(served.canTranslate)
+        XCTAssertFalse(served.translatesOnDevice)
     }
 
     /// Une note vocale en E2EE : ni transcription, ni traduction serveur — la

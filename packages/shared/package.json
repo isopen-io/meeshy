@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/shared",
-  "version": "1.39.0",
+  "version": "1.42.0",
   "description": "Shared library for Meeshy - Types, Prisma Schema, Utilities",
   "private": true,
   "type": "module",
@@ -108,6 +108,8 @@
     "glory-frames:check-versions": "tsx scripts/glory-frame-version-ratchet.ts",
     "translator-languages:generate": "tsx scripts/generate-translator-languages.ts",
     "translator-languages:check": "tsx scripts/generate-translator-languages.ts --check",
+    "action-policy-vectors:generate": "bun scripts/generate-action-policy-vectors.ts",
+    "action-policy-vectors:check": "bun scripts/generate-action-policy-vectors.ts --check",
     "generate": "prisma generate --schema=./prisma/schema.prisma --generator client",
     "generate:all": "prisma generate --schema=./prisma/schema.prisma",
     "generate:python": "prisma generate --schema=./prisma/schema.prisma --generator client_py",

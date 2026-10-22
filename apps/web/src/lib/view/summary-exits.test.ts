@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
 
-import { summaryExits } from './summary-exits';
+import { episodeTargetOf, faceTargetOf, summaryExits } from './summary-exits';
 
 function entryOf(evidenceMessageIds: readonly string[]): FaceRampEntry {
   return {
@@ -131,6 +131,58 @@ describe('summaryExits — les trois sorties du Résumé Vivant (#7429, extrait 
 
     exits.onReplyToPerson(entryOf(['m-a', 'm-b']));
 
+    expect(calls).toEqual(['mode:script', 'jump:m-a']);
+  });
+});
+
+describe('LE MENU D’UNE ENTRÉE DU RÉSUMÉ (#11225) — Aller au message · Répondre, Répondre gardé par la loi', () => {
+  const journal = (replyable: (id: string) => boolean) => {
+    const calls: string[] = [];
+    const exits = summaryExits({
+      selectMode: (mode) => calls.push(`mode:${mode}`),
+      requestJump: (id) => calls.push(`jump:${id}`),
+      setReplyTarget: (id) => calls.push(`reply:${id}`),
+      replyable,
+      resumeTarget: () => null,
+    });
+    return { calls, menu: exits.entryMenu };
+  };
+
+  test('une entrée désigne le message où son toucher mène : la PREMIÈRE preuve d’un visage, le PREMIER message d’un épisode', () => {
+    expect(faceTargetOf(entryOf(['m-a', 'm-b']))).toBe('m-a');
+    expect(faceTargetOf(entryOf([]))).toBeNull();
+    expect(episodeTargetOf(episodeOf(['m-x', 'm-y']))).toBe('m-x');
+    expect(episodeTargetOf(episodeOf([]))).toBeNull();
+  });
+
+  test('un message auquel on peut répondre d’ici ⇒ Aller au message · Répondre, dans cet ordre', () => {
+    const { menu } = journal(() => true);
+    expect(menu.actionsOf('m-a')).toEqual(['goToMessage', 'reply']);
+  });
+
+  test('un message auquel on ne peut PAS répondre d’ici (bout en bout, droit d’écrire retiré) ⇒ Aller au message seul', () => {
+    const { menu } = journal((id) => id !== 'm-locked');
+    expect(menu.actionsOf('m-locked')).toEqual(['goToMessage']);
+  });
+
+  test('« Aller au message » ⇒ script + saut, SANS pré-adressage (c’est ce qui le distingue du toucher d’un visage)', () => {
+    const { calls, menu } = journal(() => true);
+    menu.run('goToMessage', 'm-a');
+    expect(calls).toEqual(['mode:script', 'jump:m-a']);
+  });
+
+  test('« Répondre » ⇒ script + saut + pré-adressage du message désigné', () => {
+    const { calls, menu } = journal(() => true);
+    menu.run('reply', 'm-x');
+    expect(calls).toEqual(['mode:script', 'jump:m-x', 'reply:m-x']);
+  });
+
+  test('« Répondre » relit la loi AU MOMENT du geste : un droit retiré entre l’ouverture et le choix ne cite rien', () => {
+    let allowed = true;
+    const { calls, menu } = journal(() => allowed);
+    expect(menu.actionsOf('m-a')).toEqual(['goToMessage', 'reply']);
+    allowed = false;
+    menu.run('reply', 'm-a');
     expect(calls).toEqual(['mode:script', 'jump:m-a']);
   });
 });

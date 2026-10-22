@@ -16,6 +16,8 @@ import {
 import {
   admitMessageEdit,
   isEditRefused,
+  describeEditRefusalForSocket,
+  editRefusalCode,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../services/messaging/messageEditAdmission';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../services/messaging/conversationWriteAdmission';
@@ -158,7 +160,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
               sender: { select: { userId: true } },
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-              conversation: { select: { isActive: true, closedAt: true, type: true } },
+              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
               attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER }
             }
           })
@@ -200,6 +202,9 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         // apprendre autrement. Lui rendre un 404 le ferait réessayer sans fin.
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (admission.reason === 'end-to-end-encrypted') {
+          return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });

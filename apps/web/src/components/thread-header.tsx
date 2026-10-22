@@ -45,6 +45,8 @@ import { ThreadSearchPanel } from './thread-search-panel';
 import { apiDeps } from '@/lib/api/deps';
 import { useThreadSearch } from '@/lib/view/use-thread-search';
 import { searchLandingMode } from '@/lib/view/thread-search';
+import { useThreadSearchDoor } from '@/lib/view/thread-search-door';
+import { useOptionalRoute } from '@/lib/router';
 
 /**
  * L'EN-TÊTE DU FIL — extrait de `routes/thread.tsx` (revue #5814, défaut
@@ -241,6 +243,8 @@ export function ThreadHeader({
      vit ICI parce que la loupe et le panneau sont tous deux dans cette bande ;
      le fil n'en reçoit que le saut final. */
   const search = useThreadSearch({ conversationId: conversation.id, deps: apiDeps });
+  const route = useOptionalRoute();
+  useThreadSearchDoor({ search: route?.search, openSearch: search.openSearch });
   const pickSearchHit = (messageId: string) => {
     search.close();
     const landing = searchLandingMode(readingMenuRows.find((row) => row.isCurrent)?.mode);

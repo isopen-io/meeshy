@@ -7,6 +7,7 @@ import type {
 
 import { patchConversation } from './conversations';
 import { acceptsLastMessage, isListProtected, listSafeLastMessage, withListRank, withNature, withSideband } from './list-preview';
+import { applyEncryptionAnnounced, encryptionAnnounced } from './realtime-encryption-regime';
 import { keepLiveListOverFetch } from './realtime-thread-catch-up';
 import type { Conversation, Message, Participant } from './types';
 
@@ -177,6 +178,8 @@ export function acceptsLastMessageAt(params: {
  * FAIT », doc-comment de `ConversationUpdatedEventData`).
  */
 export function applyConversationUpdated(queryClient: QueryClient, data: ConversationUpdatedEventData): void {
+  /* L'AVIS D'ACTIVATION DU CHIFFREMENT voyage aussi par la ligne (#11373). */
+  applyEncryptionAnnounced(queryClient, data.conversationId, encryptionAnnounced({ messageType: 'system', systemEvent: data.lastMessageSystemEvent }));
   const speaksOfPreview = 'lastMessageId' in data;
   const speaksOfSideband = 'lastReaction' in data || 'activeCall' in data;
   const speaksOfRank = 'listRankAt' in data;
