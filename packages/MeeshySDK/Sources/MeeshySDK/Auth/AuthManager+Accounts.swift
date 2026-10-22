@@ -429,11 +429,11 @@ extension AuthManager {
         persistSavedAccounts()
     }
 
-    /// Update lastActiveAt without resetting the token saved-at date. Rien n'est réécrit quand le
-    /// compte est déjà en tête sous la même identité : l'ordre est acquis (#11558).
+    /// Update lastActiveAt without resetting the token saved-at date. Rien n'est réécrit quand le compte
+    /// est déjà le PLUS RÉCENT sous la même identité (#11558) — pas « en tête » : une mise à jour ne
+    /// retrie pas la liste en mémoire, et A → B → A laissait A derrière B.
     func updateSavedAccountActivity(from user: MeeshyUser) {
-        if let head = savedAccounts.first, head.id == user.id, head.username == user.username,
-           head.displayName == user.displayName, head.avatarURL == user.avatar { return }
+        if savedAccounts.showsAsMostRecent(user) { return }
         upsertSavedAccount(from: user)
     }
 
