@@ -7,6 +7,20 @@ public enum class AttachmentKind {
     IMAGE, VIDEO, AUDIO, PDF, SPREADSHEET, DOCUMENT, PRESENTATION, ARCHIVE, CODE, TEXT, OTHER;
 
     public val isMedia: Boolean get() = this == IMAGE || this == VIDEO || this == AUDIO
+    /** Teinte d'accent en hex 6 chiffres sans `#` (iOS `hexTintColor`) — table unique. */
+    public val hexTintColor: String
+        get() = when (this) {
+            IMAGE -> "4ECDC4"
+            VIDEO -> "FF6B6B"
+            AUDIO -> "9B59B6"
+            PDF -> "F39C12"
+            SPREADSHEET -> "21803D"
+            DOCUMENT -> "2A56B5"
+            PRESENTATION -> "D96921"
+            CODE -> "6366F1"
+            ARCHIVE, TEXT, OTHER -> "808080"
+        }
+
     public val hasTimebasedTrack: Boolean get() = this == AUDIO || this == VIDEO
 
     public companion object {
