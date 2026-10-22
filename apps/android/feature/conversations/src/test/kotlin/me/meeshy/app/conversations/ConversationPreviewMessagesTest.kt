@@ -160,7 +160,8 @@ class ConversationPreviewMessagesTest {
         )
 
         // No system/regional/custom language configured and no device locale supplied →
-        // the Prisme fallback ("fr") still matches this fixture's french translation.
-        assertThat(lines).containsExactly("Bonjour")
+        // the strict descent has no rank to walk: the original is shown. The "fr"
+        // fallback of preferredContentLanguages serves COMPOSITION defaults only.
+        assertThat(lines).containsExactly("Hello")
     }
 }
