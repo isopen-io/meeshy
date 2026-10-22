@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.translation
 
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
 import java.util.Base64
 import kotlinx.serialization.json.Json
@@ -70,16 +71,16 @@ class SharedTranslationSealVectorParityTest {
             val key = keyOf(input)
             val inner = innerOf(input)
 
-            assertThat(SharedTranslationSeal.sourceDigest(binding.sourceContent)).named(label).isEqualTo(expected.str("sourceDigest"))
-            assertThat(Base64.getEncoder().encodeToString(SharedTranslationSeal.derivedKey(binding, key))).named(label).isEqualTo(expected.str("key"))
-            assertThat(SharedTranslationSeal.aad(binding, key.kdf)).named(label).isEqualTo(expected.str("aad"))
-            assertThat(SharedTranslationSeal.canonicalInnerJson(inner)).named(label).isEqualTo(expected.str("innerJson"))
+            assertWithMessage(label).that(SharedTranslationSeal.sourceDigest(binding.sourceContent)).isEqualTo(expected.str("sourceDigest"))
+            assertWithMessage(label).that(Base64.getEncoder().encodeToString(SharedTranslationSeal.derivedKey(binding, key))).isEqualTo(expected.str("key"))
+            assertWithMessage(label).that(SharedTranslationSeal.aad(binding, key.kdf)).isEqualTo(expected.str("aad"))
+            assertWithMessage(label).that(SharedTranslationSeal.canonicalInnerJson(inner)).isEqualTo(expected.str("innerJson"))
 
             val nonce = Base64.getDecoder().decode(input.str("nonce"))
             val envelope = SharedTranslationSeal.seal(binding, key, inner, nonce)
-            assertThat(envelope.payload).named(label).isEqualTo(expected.str("payload"))
+            assertWithMessage(label).that(envelope.payload).isEqualTo(expected.str("payload"))
             assertThat(envelope.kdf).isEqualTo(key.kdf)
-            assertThat(SharedTranslationSeal.open(binding, key, envelope)).named(label).isEqualTo(inner)
+            assertWithMessage(label).that(SharedTranslationSeal.open(binding, key, envelope)).isEqualTo(inner)
         }
     }
 
@@ -89,7 +90,7 @@ class SharedTranslationSealVectorParityTest {
             val open = element.jsonObject.getValue("open").jsonObject
             val envelope = SharedTranslationEnvelope.decodeOrNull(open.getValue("envelope") as JsonElement)
             val opened = envelope?.let { SharedTranslationSeal.open(bindingOf(open), keyOf(open), it) }
-            assertThat(opened).named(element.jsonObject.str("_label")).isNull()
+            assertWithMessage(element.jsonObject.str("_label")).that(opened).isNull()
         }
     }
 }
