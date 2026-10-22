@@ -143,9 +143,17 @@ private fun encodePathSegments(chemin: String): String =
 /**
  * Comme [resolveMediaUrl], mais refuse (`null`) toute adresse que [MediaUrlPolicy] n'accepte pas :
  * l'appelant ne lance alors AUCUNE requête (protection SSRF, miroir de `MeeshyConfig.resolveMediaURL`).
+ * Un schéma que rien ne sert (`ftp:`, `content:`, `javascript:`) est refusé AVANT composition :
+ * recomposé en chemin de passerelle, il passerait la politique sous un déguisement `https`.
  */
 fun resolveSafeMediaUrl(url: String, apiBaseUrl: String?): String? {
+    val scheme = URI_SCHEME.find(url)?.groupValues?.get(1)?.lowercase()
+    if (scheme != null && scheme !in SERVED_MEDIA_SCHEMES) return null
     val resolved = if (url.startsWith("file:")) url else resolveMediaUrl(url, apiBaseUrl)
     val local = me.meeshy.sdk.model.net.MediaUrlPolicy.isLocalEnvironment(apiBaseUrl)
     return resolved.takeIf { me.meeshy.sdk.model.net.MediaUrlPolicy.isAllowed(it, local) }
 }
+
+private val URI_SCHEME = Regex("^([a-zA-Z][a-zA-Z0-9+.-]*):")
+
+private val SERVED_MEDIA_SCHEMES = setOf("http", "https", "file", STATIC_STORE_SCHEME.removeSuffix(":"))
