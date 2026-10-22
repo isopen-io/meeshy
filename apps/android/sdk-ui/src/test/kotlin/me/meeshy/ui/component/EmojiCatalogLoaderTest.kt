@@ -14,15 +14,18 @@ import org.junit.Test
 class EmojiCatalogLoaderTest {
 
     private val builds = AtomicInteger(0)
-    private val buildThreads = mutableListOf<String>()
+    private val buildThreads = mutableListOf<Thread>()
+    private val workerThreads = mutableListOf<Thread>()
 
-    private fun newLoader(threadName: String = "emoji-loader-test"): Pair<EmojiCatalogLoader, () -> Unit> {
-        val executor = Executors.newSingleThreadExecutor { Thread(it, threadName) }
+    private fun newLoader(): Pair<EmojiCatalogLoader, () -> Unit> {
+        val executor = Executors.newSingleThreadExecutor { task ->
+            Thread(task, "emoji-loader-test").also { synchronized(workerThreads) { workerThreads.add(it) } }
+        }
         val loader = EmojiCatalogLoader(
             dispatcher = executor.asCoroutineDispatcher(),
             build = {
                 builds.incrementAndGet()
-                synchronized(buildThreads) { buildThreads.add(Thread.currentThread().name) }
+                synchronized(buildThreads) { buildThreads.add(Thread.currentThread()) }
                 EmojiCatalogSnapshot.build()
             },
         )
@@ -31,14 +34,13 @@ class EmojiCatalogLoaderTest {
 
     @Test
     fun `the catalog is built off the calling thread`() {
-        val (loader, shutdown) = newLoader("emoji-loader-test")
+        val (loader, shutdown) = newLoader()
         try {
-            val callerThread = Thread.currentThread().name
-
             runBlocking { loader.load() }
 
-            assertThat(buildThreads).containsExactly("emoji-loader-test")
-            assertThat(buildThreads.single()).isNotEqualTo(callerThread)
+            assertThat(buildThreads).hasSize(1)
+            assertThat(buildThreads.single()).isSameInstanceAs(workerThreads.single())
+            assertThat(buildThreads.single()).isNotSameInstanceAs(Thread.currentThread())
         } finally {
             shutdown()
         }
