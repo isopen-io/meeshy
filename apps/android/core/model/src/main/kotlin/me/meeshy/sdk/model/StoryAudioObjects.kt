@@ -37,7 +37,7 @@ data class StoryAudioPlayerObject(
     val placement: String = "overlay",
     val x: Double = 0.5,
     val y: Double = 0.8,
-    val volume: Float = 1.0f,
+    override val volume: Float = 1.0f,
     val waveformSamples: List<Float> = emptyList(),
     val isBackground: Boolean? = null,
     val backgroundAudioVariants: List<StoryAudioVariant>? = null,
@@ -56,5 +56,5 @@ data class StoryAudioPlayerObject(
     /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
     val name: String? = null,
     /** Niveau d'avant le mute d'auteur ; invariant `mutedVolumeMemento != null => volume == 0`. */
-    val mutedVolumeMemento: Float? = null,
-)
+    override val mutedVolumeMemento: Float? = null,
+) : me.meeshy.sdk.model.scene.StoryVolumeCarrying

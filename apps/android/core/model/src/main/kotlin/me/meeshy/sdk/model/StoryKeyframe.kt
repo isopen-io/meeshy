@@ -31,5 +31,7 @@ data class StoryKeyframe(
     val y: Double? = null,
     val scale: Double? = null,
     val opacity: Double? = null,
+    /** Canal volume (0...[me.meeshy.sdk.model.scene.StoryVolume.MAX_GAIN]) ; `null` : point sans automation de volume. */
+    val volume: Float? = null,
     val easing: StoryEasing? = null,
 )

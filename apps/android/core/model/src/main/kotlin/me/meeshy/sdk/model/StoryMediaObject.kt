@@ -22,7 +22,7 @@ data class StoryMediaObject(
     val y: Double = 0.5,
     val scale: Double = 1.0,
     val rotation: Double = 0.0,
-    val volume: Float = 1.0f,
+    override val volume: Float = 1.0f,
     val aspectRatio: Double = 1.0,
     val anchor: StoryAnchorPoint = StoryAnchorPoint(),
     val intrinsicDuration: Double? = null,
@@ -61,5 +61,5 @@ data class StoryMediaObject(
     /** Coupe l'atténuation automatique de ce clip vidéo (`null` : ducking actif). */
     val isDuckingDisabled: Boolean? = null,
     /** Niveau d'avant le mute d'auteur ; invariant `mutedVolumeMemento != null => volume == 0`. */
-    val mutedVolumeMemento: Float? = null,
-)
+    override val mutedVolumeMemento: Float? = null,
+) : me.meeshy.sdk.model.scene.StoryVolumeCarrying
