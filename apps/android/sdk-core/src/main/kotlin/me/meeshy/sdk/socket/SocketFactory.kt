@@ -5,6 +5,7 @@ import io.socket.client.Socket
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import java.net.URI
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,6 +40,9 @@ class IoSocketFactory @Inject constructor(
         // en JSON : l'objet `client` imbriqué y passe tel quel.
         @Suppress("UNCHECKED_CAST")
         val handshake = auth as Map<String, String>
+        // Une WebSocket reste muette entre deux pings : le délai de lecture REST la tuerait.
+        // newBuilder() garde pool, répartiteur et intercepteurs du client partagé.
+        val transport = client.newBuilder().readTimeout(0, TimeUnit.MILLISECONDS).build()
         val opts = IO.Options().apply {
             this.auth = handshake
             transports = arrayOf("websocket")
@@ -46,8 +50,8 @@ class IoSocketFactory @Inject constructor(
             reconnectionAttempts = Int.MAX_VALUE
             reconnectionDelay = 1_000L
             reconnectionDelayMax = 30_000L
-            callFactory = client
-            webSocketFactory = client
+            callFactory = transport
+            webSocketFactory = transport
         }
         return IoRealtimeSocket(IO.socket(URI.create(url), opts))
     }
