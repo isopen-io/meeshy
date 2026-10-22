@@ -57,4 +57,5 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)
+    testImplementation(libs.okhttp.mockwebserver)
 }

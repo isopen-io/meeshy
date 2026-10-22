@@ -1,11 +1,15 @@
 package me.meeshy.sdk.net
 
+import me.meeshy.sdk.model.net.EndpointAuthKind
 import okhttp3.Interceptor
 import okhttp3.Response
 
 /**
  * Attaches the auth header to every request:
  * `Authorization: Bearer <jwt>` when a JWT is present, otherwise `X-Session-Token`.
+ *
+ * Les routes qui SERVENT a obtenir un jeton (connexion, inscription, lien magique,
+ * rafraichissement — `EndpointPolicy`) partent sans identite : en presenter une bouclerait.
  *
  * Une requete qui PORTE DEJA son identite (`Authorization` ou `X-Session-Token`
  * pose par l'appelant) part telle quelle : c'est la fermeture d'une session
@@ -20,6 +24,7 @@ class AuthInterceptor(private val tokenStore: TokenStore) : Interceptor {
         if (request.header(AUTHORIZATION) != null || request.header(SESSION_TOKEN) != null) {
             return chain.proceed(request)
         }
+        if (request.routePolicy().authKind != EndpointAuthKind.BEARER) return chain.proceed(request)
         val builder = request.newBuilder()
         val jwt = tokenStore.jwt
         val session = tokenStore.sessionToken
