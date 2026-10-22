@@ -193,6 +193,23 @@ class TwoFactorViewModel @Inject constructor(
         }
     }
 
+    private var startStepConsumed = false
+
+    /**
+     * Ouvre directement l'étape demandée par la page Sécurité (`setup` / `backup` / `disable`) ;
+     * une valeur inconnue ou absente laisse l'écran de statut. Appliquée une seule fois
+     * (la recomposition ou une rotation ne rejoue pas l'étape).
+     */
+    fun openAtStep(step: String?) {
+        if (startStepConsumed || step == null) return
+        startStepConsumed = true
+        when (step) {
+            "setup" -> beginSetup()
+            "backup" -> beginRegenerateCodes()
+            "disable" -> beginDisable()
+        }
+    }
+
     /** Backs out of any sub-stage without a network call, clearing that stage's transient buffers. */
     fun cancel() {
         _state.update {
