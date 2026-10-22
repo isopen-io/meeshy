@@ -113,6 +113,25 @@ final class ReaderAudioSharedEngineTests: XCTestCase {
         XCTAssertTrue(mixer.isPlaying)
     }
 
+    func test_theSystemNotification_reachesTheHost_andReplans() async throws {
+        let fixture = try Self.makeAudioFixture()
+        let host = ReaderAudioEngineHost()
+        let recorder = RecordingAudioScheduler()
+        let mixer = ReaderAudioMixer(engineHost: host, scheduler: recorder)
+        try mixer.configure(audios: [Self.audio(id: "fg")], urls: ["fg": fixture])
+        _ = try mixer.play(originHost: mach_absolute_time(), slideKey: "k#notif")
+        host.engine.stop()
+
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: host.engine)
+        for _ in 0..<200 where recorder.passes.count < 2 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(recorder.passes.count, 2,
+                       "la notification d'AVFoundation, postée sur un fil quelconque, replanifie la passe")
+        XCTAssertTrue(host.engine.isRunning)
+    }
+
     func test_configurationChange_ofAnotherEngine_isIgnored() throws {
         let fixture = try Self.makeAudioFixture()
         let host = ReaderAudioEngineHost()
