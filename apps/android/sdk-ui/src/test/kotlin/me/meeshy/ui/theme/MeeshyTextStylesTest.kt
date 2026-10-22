@@ -58,9 +58,10 @@ class MeeshyTextStylesTest {
     @Test
     fun `emojiTextStyle is not scaled while meeshyText is, for the same size`() {
         val scaled = density(fontScale = 1.5f)
-        val emoji = renderedDp(emojiTextStyle(90.dp, scaled), scaled)
-        val text = renderedDp(meeshyText(90.sp), scaled)
-        assertThat(emoji).isWithin(0.01f).of(90f)
+        val size = MeeshyFontSize.body
+        val emoji = renderedDp(emojiTextStyle(size.value.dp, scaled), scaled)
+        val text = renderedDp(meeshyText(size), scaled)
+        assertThat(emoji).isWithin(0.01f).of(size.value)
         assertThat(text).isGreaterThan(emoji)
     }
 
