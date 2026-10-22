@@ -17,7 +17,7 @@ const RUN = args.run
 const LOTS = args.lotsDir
 const BATCH = args.batch || 4
 const MAX_FIX_ROUNDS = args.maxFixRounds || 4
-const MAX_IDLE = args.maxIdle || 36
+const MAX_IDLE = args.maxIdle || 400
 const MAX_INFLIGHT = args.maxInflight || 8
 const MAX_STALL = args.maxStall || 5
 const ATTR = 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01EP6Bfac7sFfP8RkuHTATHN'
@@ -36,7 +36,7 @@ function clone(key, existing) {
   return 'D=' + LOTS + '/' + key + '\n' +
     'rm -rf "$D" && git clone -q --shared --no-checkout /home/user/meeshy "$D" && cd "$D" \\\n' +
     '  && git remote set-url origin https://github.com/isopen-io/meeshy \\\n' +
-    '  && git sparse-checkout set --cone apps/android packages/shared/fixtures packages/shared/types packages/shared/utils .github \\\n' +
+    '  && git sparse-checkout set --cone apps/android packages/shared/fixtures packages/shared/types packages/shared/utils packages/MeeshySDK/Sources packages/MeeshySDK/Tests .github \\\n' +
     '  && git fetch -q origin dev' + fetchExtra + ' \\\n' +
     '  && git checkout -q -B claude/android-' + key + ' ' + base
 }
@@ -53,7 +53,7 @@ const COMPILE_SAFETY = `Compile-safety checklist (the GitHub CI is the ONLY Andr
 function schedPrompt(blocked) {
   const ex = blocked.length ? ' --exclude ' + blocked.join(',') : ''
   const rec = blocked.length ? ('First record the blocked lots (one per line, no duplicates) in ' + RUN + '/blocked.txt: for k in ' + blocked.join(' ') + '; do grep -qx "$k" ' + RUN + '/blocked.txt || echo "$k" >> ' + RUN + '/blocked.txt; done\n') : ''
-  return rec + 'Run in Bash: python3 ' + RUN + '/ready.py ' + T + ' --gen 2 --max-inflight ' + MAX_INFLIGHT + ' --batch ' + BATCH + ex + '\nIt prints one JSON object. If its "ready" list is empty AND "remaining" > 0, run "sleep 600" in Bash and run the same command again; repeat at most 3 times. Return the LAST JSON exactly as printed (fields ready, remaining, waiting_on_deps, claimed_unmerged, track).'
+  return rec + 'Run in Bash: python3 ' + RUN + '/ready.py ' + T + ' --gen 2 --max-inflight ' + MAX_INFLIGHT + ' --batch ' + BATCH + ex + '\nIt prints one JSON object. If its "ready" list is empty AND "remaining" > 0, run "sleep 600" in Bash and run the same command again; repeat at most 3 times. Never create scheduled tasks or reminders: wait only with sleep. Return the LAST JSON exactly as printed (fields ready, remaining, waiting_on_deps, claimed_unmerged, track).'
 }
 
 function issuePrompt(key) {
@@ -141,7 +141,7 @@ ${COMPILE_SAFETY}
 Validate what you can locally (cd apps/android && ./meeshy.sh jvm-check --no-daemon -q when :core:model is involved). Commit "fix(android/<domaine>): …" ending with:
 ${ATTR}
 then git push origin claude/android-${p.key} (no force). Delete the clone directory afterwards.
-Return {pushed, head_sha, cause, change}.`
+Never subscribe to PR activity and never create scheduled tasks or reminders. Return {pushed, head_sha, cause, change}.`
 }
 
 const blocked = []
@@ -165,7 +165,7 @@ while (true) {
   log(`${T} round ${round}: ${keys.join(', ')} (${sched.remaining} remaining)`)
 
   const built = await pipeline(keys,
-    (key) => agent(issuePrompt(key), { label: `issue:${key}`, phase: 'Issue', schema: ISSUE, model: 'haiku', effort: 'low' }),
+    (key) => agent(issuePrompt(key), { label: `issue:${key}`, phase: 'Issue', schema: ISSUE, model: 'haiku', effort: 'low' }).then((r) => (r && r.issue) ? r : agent(issuePrompt(key), { label: `issue-retry:${key}`, phase: 'Issue', schema: ISSUE, model: 'haiku' })),
     (iss, key) => (iss && iss.issue)
       ? agent(implPrompt(key, iss.issue), { label: `impl:${key}`, phase: 'Implement', schema: IMPL, model: 'sonnet' }).then((r) => (r ? { ...r, issue: iss.issue } : { status: 'failed', summary: 'implementer returned nothing', issue: iss.issue }))
       : { status: 'failed', summary: 'no issue' },
@@ -173,7 +173,7 @@ while (true) {
       ? agent(reviewPrompt(key, impl), { label: `review:${key}`, phase: 'Review', schema: REVIEW, model: 'sonnet' }).then((rv) => ({ impl, review: rv }))
       : { impl, review: null },
     (res, key) => (res && res.impl && res.impl.status === 'pushed' && !(res.review && res.review.verdict === 'blocked'))
-      ? agent(prPrompt(key, res.impl), { label: `pr:${key}`, phase: 'PR', schema: PRS, model: 'haiku', effort: 'low' }).then((pr) => ({ ...res, pr: pr && pr.pr }))
+      ? agent(prPrompt(key, res.impl), { label: `pr:${key}`, phase: 'PR', schema: PRS, model: 'haiku', effort: 'low' }).then((pr) => (pr && pr.pr) ? pr : agent(prPrompt(key, res.impl), { label: `pr-retry:${key}`, phase: 'PR', schema: PRS, model: 'haiku' })).then((pr) => ({ ...res, pr: pr && pr.pr }))
       : res,
   )
 
