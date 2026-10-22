@@ -69,7 +69,27 @@ data class RegisterRequest(
      * pour rien et une passerelle antérieure pourrait la refuser.
      */
     val claimEmail: Boolean? = null,
-)
+) {
+
+    /**
+     * La même charge, portant le code d'invitation [code] s'il a la forme d'un code (sans
+     * espace, 128 caractères au plus — la forme que le web et iOS retiennent). Un code mal
+     * formé ou absent retire les DEUX clés : la clé de visite [sessionKey] ne voyage qu'avec
+     * un code, seule elle n'a rien à rattacher. Miroir de `RegisterRequest.referred(byCode:)`
+     * (`packages/MeeshySDK/.../Auth/AuthModels.swift`).
+     */
+    fun referred(code: String?, sessionKey: String? = null): RegisterRequest {
+        val token = code?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_REFERRAL_CODE_LENGTH && it.none(Char::isWhitespace) }
+        val key = sessionKey?.trim()?.takeIf { it.isNotEmpty() }
+        return copy(affiliateToken = token, affiliateSessionKey = if (token == null) null else key)
+    }
+
+    /** La même charge, qui REVENDIQUE l'adresse (« ce n'est pas moi », #8214). */
+    fun claimingEmail(): RegisterRequest = copy(claimEmail = true)
+}
+
+/** La longueur maximale d'un code d'invitation, comme `ReferralCode.maxLength` côté iOS. */
+private const val MAX_REFERRAL_CODE_LENGTH: Int = 128
 
 /**
  * Charge du `200` de `POST /auth/register` — DEUX branches sous un seul statut.

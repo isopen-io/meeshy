@@ -55,6 +55,46 @@ class AuthWireJsonTest {
     }
 
     @Test
+    fun `un code d'invitation bien forme voyage avec sa cle de visite`() {
+        val request = RegisterRequest(email = "a@b.co", password = "pw").referred("  ABC123 ", sessionKey = " visite-1 ")
+
+        assertThat(request.affiliateToken).isEqualTo("ABC123")
+        assertThat(request.affiliateSessionKey).isEqualTo("visite-1")
+    }
+
+    @Test
+    fun `la cle de visite ne voyage jamais sans code`() {
+        val sansCode = RegisterRequest(email = "a@b.co", password = "pw").referred(null, sessionKey = "visite-1")
+        val malForme = RegisterRequest(email = "a@b.co", password = "pw").referred("deux mots", sessionKey = "visite-1")
+        val vide = RegisterRequest(email = "a@b.co", password = "pw").referred("   ", sessionKey = "visite-1")
+
+        listOf(sansCode, malForme, vide).forEach {
+            assertThat(it.affiliateToken).isNull()
+            assertThat(it.affiliateSessionKey).isNull()
+        }
+    }
+
+    @Test
+    fun `un code trop long n'est pas un code`() {
+        val request = RegisterRequest(email = "a@b.co", password = "pw").referred("x".repeat(129))
+
+        assertThat(request.affiliateToken).isNull()
+    }
+
+    @Test
+    fun `une cle de visite blanche se lit absente`() {
+        val request = RegisterRequest(email = "a@b.co", password = "pw").referred("ABC123", sessionKey = "  ")
+
+        assertThat(request.affiliateToken).isEqualTo("ABC123")
+        assertThat(request.affiliateSessionKey).isNull()
+    }
+
+    @Test
+    fun `claimingEmail pose claimEmail`() {
+        assertThat(RegisterRequest(email = "a@b.co", password = "pw").claimingEmail().claimEmail).isTrue()
+    }
+
+    @Test
     fun `revendiquer une adresse envoie claimEmail vrai`() {
         val raw = json.encodeToString(RegisterRequest.serializer(), RegisterRequest(email = "a@b.co", password = "pw", claimEmail = true))
 

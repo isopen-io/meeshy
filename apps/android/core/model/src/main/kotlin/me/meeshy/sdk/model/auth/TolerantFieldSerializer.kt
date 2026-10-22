@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.auth
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -30,6 +31,7 @@ import me.meeshy.sdk.model.MeeshyUser
  * Réservé aux charges lues de la passerelle : une CLÉ de requête ne se lit
  * jamais « en tolérance ».
  */
+@OptIn(ExperimentalSerializationApi::class)
 abstract class TolerantFieldSerializer<T : Any>(
     private val delegate: KSerializer<T>,
 ) : KSerializer<T?> {
