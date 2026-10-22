@@ -160,10 +160,9 @@ fun CallScreen(
         state.waitingBanner?.let { banner ->
             CallWaitingBanner(
                 banner = banner,
-                accent = accent,
                 onReject = viewModel::rejectWaiting,
                 onAnswer = viewModel::acceptWaitingSwap,
-                modifier = Modifier.align(Alignment.TopCenter),
+                modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),
             )
         }
 

@@ -139,7 +139,7 @@ class CallExtensionPointsWiringTest {
         signalManager, coordinator, sessionRepository, silentSeconds, silentTones, silentTelecom, silentSamples,
         appStatePresence,
         CallPeerIndicatorsController(signalManager, silentTimer, silentRecording),
-        CallWaitingController(signalManager, silentTimer),
+        CallWaitingController(signalManager, silentTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, silentBeats, silentTimer, silentTimer),
         CallAnalyticsController(signalManager, clock),
         CallExtensionPoints(
