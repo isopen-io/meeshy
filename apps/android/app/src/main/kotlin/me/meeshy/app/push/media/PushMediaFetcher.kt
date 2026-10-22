@@ -48,7 +48,7 @@ class PushMediaFetcher(
         if (budgetMillis <= 0) return null
         val target = File(cacheDir, "push-media-${UUID.randomUUID()}")
         val kept = try {
-            withTimeoutOrNull(budgetMillis) { withContext(ioDispatcher) { download(url, target) } } ?: false
+            withContext(ioDispatcher) { withTimeoutOrNull(budgetMillis) { download(url, target) } } ?: false
         } catch (e: CancellationException) {
             target.delete()
             throw e
