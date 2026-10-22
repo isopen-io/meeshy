@@ -260,7 +260,7 @@ public enum LocalImagePresence {
 /// jeton de relance de l'hôte. Un chargement retenu par la politique ne
 /// repartait que si l'URL changeait ; un média arrivé par un autre chemin
 /// sous la MÊME URL laissait la vue sur son aperçu flou.
-struct ProgressiveImageLoadID: Hashable {
+nonisolated struct ProgressiveImageLoadID: Hashable {
     let url: String?
     let reloadToken: AnyHashable?
 }
