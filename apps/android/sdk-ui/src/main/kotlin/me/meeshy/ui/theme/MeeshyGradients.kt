@@ -40,4 +40,27 @@ object MeeshyGradients {
     /** Anneau des story rings. */
     val avatarRing: Brush = Brush.linearGradient(MeeshyPalette.AvatarRingGradient, topLeading, bottomTrailing)
     val accent: Brush = Brush.linearGradient(MeeshyPalette.AccentGradient, topLeading, bottomTrailing)
+
+    /**
+     * Fond d'une carte teintée (iOS `ThemeManager.surfaceGradient(tint:)`) : teinte à 15 % (sombre)
+     * ou 8 % (clair), s'éteignant à 30 % de cette intensité.
+     */
+    public fun surfaceGradient(tint: Color, dark: Boolean): Brush {
+        val intensity = if (dark) 0.15f else 0.08f
+        return Brush.linearGradient(
+            colors = listOf(tint.copy(alpha = intensity), tint.copy(alpha = intensity * 0.3f)),
+            start = topLeading, end = bottomTrailing,
+        )
+    }
+
+    /** Bordure teintée d'une carte (iOS `ThemeManager.border(tint:)`, intensité 0,4). */
+    public fun tintedBorder(tint: Color, dark: Boolean, intensity: Float = 0.4f): Brush =
+        Brush.linearGradient(
+            colors = if (dark) {
+                listOf(tint.copy(alpha = intensity), tint.copy(alpha = intensity * 0.2f))
+            } else {
+                listOf(tint.copy(alpha = intensity * 0.6f), tint.copy(alpha = intensity * 0.1f))
+            },
+            start = topLeading, end = bottomTrailing,
+        )
 }
