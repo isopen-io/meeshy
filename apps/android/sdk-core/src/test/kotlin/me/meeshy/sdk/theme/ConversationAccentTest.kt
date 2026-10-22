@@ -195,4 +195,64 @@ class ConversationAccentTest {
 
         assertThat(direct.otherParticipantUserId(currentUserId = "me")).isNull()
     }
+
+    // #11615 — l'élection se fait CONTRE le lecteur ; un lecteur inconnu n'élit personne.
+
+    private fun directWithReaderServedFirst() = ApiConversation(
+        id = "c14",
+        type = "direct",
+        participants = listOf(
+            ApiParticipant(id = "p1", userId = "me", displayName = "Moi"),
+            ApiParticipant(id = "p2", userId = "other", displayName = "Andre Tabeth"),
+        ),
+    )
+
+    @Test
+    fun `otherParticipantUserId elects nobody for an unknown reader`() {
+        val direct = directWithReaderServedFirst()
+
+        assertThat(direct.otherParticipantUserId(currentUserId = null)).isNull()
+        assertThat(direct.otherParticipantUserId(currentUserId = "")).isNull()
+    }
+
+    @Test
+    fun `displayTitle never shows the reader's own name when the reader is unknown`() {
+        val direct = directWithReaderServedFirst()
+
+        assertThat(direct.displayTitle(currentUserId = null)).isEqualTo("Conversation")
+        assertThat(direct.displayTitle(currentUserId = "")).isEqualTo("Conversation")
+    }
+
+    @Test
+    fun `otherParticipantUserId skips the reader whichever way the roster is ordered`() {
+        val readerLast = directWithReaderServedFirst().let { it.copy(participants = it.participants.reversed()) }
+
+        assertThat(directWithReaderServedFirst().otherParticipantUserId(currentUserId = "me")).isEqualTo("other")
+        assertThat(readerLast.otherParticipantUserId(currentUserId = "me")).isEqualTo("other")
+    }
+
+    @Test
+    fun `otherParticipantUserId picks the first non-reader among several participants`() {
+        val three = directWithReaderServedFirst().let {
+            it.copy(participants = it.participants + ApiParticipant(id = "p3", userId = "third", displayName = "Zoe"))
+        }
+
+        assertThat(three.otherParticipantUserId(currentUserId = "me")).isEqualTo("other")
+    }
+
+    @Test
+    fun `name and peer id come from the same election`() {
+        val direct = directWithReaderServedFirst()
+
+        assertThat(direct.displayTitle(currentUserId = "me")).isEqualTo("Andre Tabeth")
+        assertThat(direct.otherParticipantUserId(currentUserId = "me")).isEqualTo("other")
+    }
+
+    @Test
+    fun `a local rename still wins over the elected peer name`() {
+        val renamed = directWithReaderServedFirst()
+            .copy(preferences = ApiConversationPreferences(customName = "Mon ami"))
+
+        assertThat(renamed.displayTitle(currentUserId = "me")).isEqualTo("Mon ami")
+    }
 }
