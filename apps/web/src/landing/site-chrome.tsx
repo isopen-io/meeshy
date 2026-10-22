@@ -168,7 +168,7 @@ export function LanguageMenu({ language, copy }: { readonly language: LandingLan
   );
 }
 
-const FOOTER_PAGES = ['about', 'help', 'faq', 'contact', 'partners', 'privacy', 'terms', 'download'] as const;
+const FOOTER_PAGES = ['about', 'help', 'faq', 'contact', 'partners', 'privacy', 'terms', 'child-safety', 'download'] as const;
 
 export type SitePage = (typeof FOOTER_PAGES)[number];
 
