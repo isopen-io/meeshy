@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Source unique des libellés de média (lot media-vocabulaire-partage). -->
+    <string name="media_label_photo">Foto</string>
+    <string name="media_label_video">Vídeo</string>
+    <string name="media_label_audio">Áudio</string>
+    <string name="media_label_file">Arquivo</string>
+    <string name="media_label_location">Localização</string>
+    <string name="media_summary_photo">📷 Foto</string>
+    <string name="media_summary_video">🎥 Vídeo</string>
+    <string name="media_summary_voice">🎙️ Mensagem de voz</string>
+    <string name="media_summary_file">📎 Arquivo</string>
+    <string name="media_summary_location">📍 Localização</string>
+    <string name="media_voice_message">Mensagem de voz</string>
+    <string name="media_voice_recording">Mensagem de voz (%1$s)</string>
+    <plurals name="media_duration_minutes">
+        <item quantity="one">%d minuto</item>
+        <item quantity="many">%d minutos</item>
+        <item quantity="other">%d minutos</item>
+    </plurals>
+    <plurals name="media_duration_seconds">
+        <item quantity="one">%d segundo</item>
+        <item quantity="many">%d segundos</item>
+        <item quantity="other">%d segundos</item>
+    </plurals>
+    <string name="media_composer_placeholder_message">Mensagem...</string>
+    <string name="media_composer_placeholder_post">O que há de novo?</string>
+    <string name="media_composer_placeholder_status">Seu status...</string>
+    <string name="media_composer_placeholder_story">Responder...</string>
+    <string name="media_composer_placeholder_comment">Comentar...</string>
+    <string name="media_composer_placeholder_caption">Adicionar uma legenda...</string>
+</resources>
