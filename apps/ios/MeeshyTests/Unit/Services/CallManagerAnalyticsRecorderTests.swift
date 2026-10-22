@@ -130,6 +130,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
         XCTAssertNil(qualite.jitterBufferDelayMs, "aucune émission : pas de délai à moyenner")
     }
 
+    @MainActor
     func test_reduce_carriesTheMediaQuality() {
         let stats = CallStats.reduce(entries: [
             Self.entry("v", "inbound-rtp", kind: "video", values: ["freezeCount": 2]),
