@@ -140,6 +140,7 @@ final class ReaderAudioEngineHost {
 /// Les deux observateurs système de l'hôte, retirés quand l'hôte disparaît.
 /// Les notifications arrivent sur un fil quelconque : seul l'identifiant de
 /// l'émetteur traverse vers le fil principal.
+// unchecked: les jetons sont immuables (`let`), posés à l'init et lus au seul deinit.
 nonisolated final class ReaderAudioEngineObservers: @unchecked Sendable {
     private let tokens: [NSObjectProtocol]
 

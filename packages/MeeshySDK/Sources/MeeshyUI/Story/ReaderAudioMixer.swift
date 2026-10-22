@@ -157,7 +157,7 @@ public final class ReaderAudioMixer {
     public func configure(audios: [StoryAudioPlayerObject],
                           urls: [String: URL],
                           loopsEveryClip: Bool = false) throws {
-        let files = ReaderOpenedAudioFile.openAll(Self.urls(urls, for: audios))
+        let files = Self.readAudioFiles(Self.urls(urls, for: audios))
         configure(audios: audios, files: files, loopsEveryClip: loopsEveryClip)
     }
 
@@ -165,13 +165,13 @@ public final class ReaderAudioMixer {
     /// chemin synchrone ci-dessus, ou hors du fil principal par
     /// `loadAndConfigure` (#9878).
     func configure(audios: [StoryAudioPlayerObject],
-                   files: [String: ReaderOpenedAudioFile],
+                   files: [String: AVAudioFile],
                    loopsEveryClip: Bool) {
         configurationTicket &+= 1
         teardown()
         logger.info("ReaderAudioMixer.configure audios=\(audios.count) files=\(files.count)")
         for audio in audios {
-            guard let file = files[audio.id]?.file else {
+            guard let file = files[audio.id] else {
                 logger.error("ReaderAudioMixer.configure skipping \(audio.id, privacy: .public) — no readable file")
                 continue
             }
