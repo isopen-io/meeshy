@@ -411,7 +411,10 @@ fun ChatScreen(
             val replyTarget = state.replyingToMessageId?.let { id ->
                 state.messages.firstOrNull { it.messageId == id }
             }
+            val pendingTray = viewModel.controllers.find<ComposerTrayController>()
+            val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
             Column {
+                ComposerPendingStrip(pending.items, onRemove = { pendingTray?.remove(it) })
                 MentionSuggestionStrip(
                     mention = state.mention,
                     accentColor = accentColor,
@@ -420,7 +423,9 @@ fun ChatScreen(
                 ChatComposer(
                     draft = state.draft,
                     draftRevision = state.draftRevision,
-                    canSend = state.canSend,
+                    canSend = state.canSend || (!pending.isEmpty && !pending.hasPreparing),
+                    hasPendingAttachments = !pending.isEmpty,
+                    onPickUris = { pendingTray?.stageUris(it) },
                     isEditing = state.isEditing,
                     affordances = state.composerAffordances,
                     slowMode = rememberComposerSlowMode(state),
@@ -437,7 +442,7 @@ fun ChatScreen(
                     onCancelEdit = viewModel::cancelEdit,
                     onCancelReply = viewModel::cancelReply,
                     onRemoveClipboard = viewModel::removeClipboardContent,
-                    onPickFile = viewModel::sendFileAttachment,
+                    onPickFile = viewModel::onPickFile,
                 )
             }
         },

@@ -6,6 +6,7 @@
     <string name="composer_a11y_recentPhoto">صورة حديثة</string>
     <string name="composer_a11y_recentVideo">فيديو حديث</string>
     <string name="composer_a11y_selectedState">محدّد</string>
+    <string name="composer_drop_unnamedItem">عنصر بلا اسم</string>
     <string name="composer_recent_accessDenied">تم رفض الوصول إلى الصور</string>
     <string name="composer_recent_accessDenied_hint">اضغط لفتح الإعدادات</string>
     <string name="composer_recent_add">إضافة</string>

@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import android.Manifest
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -115,15 +116,21 @@ internal fun ChatComposer(
     onCancelReply: () -> Unit,
     onRemoveClipboard: () -> Unit,
     onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
+    hasPendingAttachments: Boolean = false,
+    onPickUris: ((List<Uri>) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val ioScope = rememberCoroutineScope()
     val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        ActivityResultContracts.GetMultipleContents(),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        if (onPickUris != null) {
+            onPickUris(uris)
+            return@rememberLauncherForActivityResult
+        }
         ioScope.launch {
-            val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uri) } ?: return@launch
+            val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uris.first()) } ?: return@launch
             onPickFile(picked.bytes, picked.fileName, picked.mimeType)
         }
     }
@@ -433,7 +440,7 @@ internal fun ChatComposer(
                             null
                         },
                     )
-                    if (!isEditing && draft.isBlank() && clipboardContent == null &&
+                    if (!isEditing && draft.isBlank() && clipboardContent == null && !hasPendingAttachments &&
                         affordances.canSendAudios
                     ) {
                         IconButton(onClick = ::requestVoiceRecording) {
