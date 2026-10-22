@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
+import me.meeshy.sdk.model.scene.StoryDrawingCanvasSpace
 import me.meeshy.ui.theme.hexColor
 
 /**

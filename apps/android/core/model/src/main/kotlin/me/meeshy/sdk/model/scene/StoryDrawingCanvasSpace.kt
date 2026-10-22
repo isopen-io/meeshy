@@ -1,12 +1,12 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 
 /**
  * Pure mapping between the composer's measured on-screen capture surface (pixels)
  * and the canonical `1080×1920` design space [StoryDrawingStroke][me.meeshy.sdk.model.StoryDrawingStroke]
- * points and width live in — the same referential the reader ([StoryViewerScreen])
- * uses for on-canvas text (`TEXT_DESIGN_CANVAS_WIDTH`). Kept pure and Compose-free
+ * points and width live in — the same referential the reader uses for on-canvas
+ * text (`TEXT_DESIGN_CANVAS_WIDTH`). Kept pure and Compose-free
  * so the touch→design conversion the capture Canvas relies on is unit-tested
  * without an Android instrumentation target.
  */

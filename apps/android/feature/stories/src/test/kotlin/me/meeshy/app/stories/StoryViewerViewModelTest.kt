@@ -35,6 +35,7 @@ import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.StoryTransitionKind
+import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult

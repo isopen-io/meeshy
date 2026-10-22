@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 /**
  * Pure play-mode visibility gate for a timed story canvas element — the Android
@@ -14,11 +14,14 @@ package me.meeshy.app.stories
  *
  * **Convention deviation from iOS's literal `duration.map { start + $0 }`.** On the
  * Android wire projection an ABSENT duration collapses to `0.0`
- * ([StoryTextObjectView]/[StoryForegroundMediaView] default it so), so here a
+ * (the text and foreground-media projections default it so), so here a
  * non-positive (or non-finite-negative) [duration] means an OPEN-ENDED element
  * (`end = +∞`, always visible from [startTime] on) rather than a zero-length window
  * that would hide it at every instant. This matches how [StoryMediaFadeResolver] and
- * the foreground clip-transition path already read `duration <= 0` across this module.
+ * the foreground clip-transition path already read `duration <= 0` across the scene laws.
+ *
+ * Shared scene-engine API: the signature takes plain `(startTime, duration)` seconds, never
+ * a feature view, so any renderer (viewer, composer preview, feed, repost) calls it as is.
  */
 object StoryElementVisibility {
 

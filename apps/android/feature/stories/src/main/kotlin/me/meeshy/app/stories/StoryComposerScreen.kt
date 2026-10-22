@@ -148,6 +148,11 @@ import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.scene.StoryCanvasTransform
+import me.meeshy.sdk.model.scene.StoryColorMatrix
+import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextBackgroundPresets
+import me.meeshy.sdk.model.scene.StoryTextDirection
 import me.meeshy.ui.theme.hexColor
 
 /**

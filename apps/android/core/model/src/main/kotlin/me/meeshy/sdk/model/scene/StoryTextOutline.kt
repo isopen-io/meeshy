@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 /**
  * The pure, Compose-agnostic outline (stroke) of an on-canvas text element — parity with

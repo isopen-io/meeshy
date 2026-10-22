@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 import me.meeshy.sdk.model.StoryEasing
 import me.meeshy.sdk.model.StoryKeyframe
