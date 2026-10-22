@@ -95,4 +95,24 @@ class NotificationPreferencesCodecTest {
         assertThat(decoded.pushEnabled).isFalse()
         assertThat(decoded.soundEnabled).isTrue()
     }
+
+    @Test
+    fun fromStorage_blockStoredBeforeTheTypesLot_decodesWithTheNewFieldDefaults() {
+        val legacy = """{"pushEnabled":false,"newMessageEnabled":false,"friendContentEnabled":false,"dndEnabled":true}"""
+
+        val decoded = notificationPreferencesFromStorage(legacy)
+
+        assertThat(decoded.pushEnabled).isFalse()
+        assertThat(decoded.friendContentEnabled).isFalse()
+        assertThat(decoded.contactActivityEnabled).isTrue()
+        assertThat(decoded.gameEnabled).isTrue()
+        assertThat(decoded.dndUtcOffsetMinutes).isEqualTo(0)
+    }
+
+    @Test
+    fun roundTrip_keepsTheNewFieldsWhenToggled() {
+        val prefs = UserNotificationPreferences(contactActivityEnabled = false, gameEnabled = false, dndUtcOffsetMinutes = 540)
+
+        assertThat(notificationPreferencesFromStorage(prefs.storageValue)).isEqualTo(prefs)
+    }
 }

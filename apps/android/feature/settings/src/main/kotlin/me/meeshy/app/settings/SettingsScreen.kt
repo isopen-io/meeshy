@@ -803,6 +803,8 @@ private fun notificationTypeLabelRes(type: NotificationType): Int = when (type) 
     NotificationType.COMMENT_REPLY -> R.string.settings_notif_type_comment_reply
     NotificationType.COMMENT_LIKE -> R.string.settings_notif_type_comment_like
     NotificationType.FRIEND_CONTENT -> R.string.settings_notif_type_friend_content
+    NotificationType.GAME -> R.string.settings_notif_type_game
+    NotificationType.CONTACT_ACTIVITY -> R.string.settings_notif_type_contact_activity
     NotificationType.CONTACT_REQUEST -> R.string.settings_notif_type_contact_request
     NotificationType.GROUP_INVITE -> R.string.settings_notif_type_group_invite
     NotificationType.MEMBER_JOINED -> R.string.settings_notif_type_member_joined

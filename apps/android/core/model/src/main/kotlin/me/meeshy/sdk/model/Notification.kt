@@ -126,89 +126,108 @@ data class NotificationPreferences(
 
 /** Notification type — raw values match backend strings — port of MeeshyNotificationType (NotificationModels.swift). */
 @Serializable
-enum class MeeshyNotificationType {
-    @SerialName("new_message") NEW_MESSAGE,
-    @SerialName("message_reply") MESSAGE_REPLY,
-    @SerialName("message_edited") MESSAGE_EDITED,
-    @SerialName("message_deleted") MESSAGE_DELETED,
-    @SerialName("message_pinned") MESSAGE_PINNED,
-    @SerialName("message_forwarded") MESSAGE_FORWARDED,
-    @SerialName("new_conversation") NEW_CONVERSATION,
-    @SerialName("new_conversation_direct") NEW_CONVERSATION_DIRECT,
-    @SerialName("new_conversation_group") NEW_CONVERSATION_GROUP,
-    @SerialName("added_to_conversation") ADDED_TO_CONVERSATION,
-    @SerialName("removed_from_conversation") REMOVED_FROM_CONVERSATION,
-    @SerialName("contact_request") CONTACT_REQUEST,
-    @SerialName("contact_accepted") CONTACT_ACCEPTED,
-    @SerialName("friend_request") FRIEND_REQUEST,
-    @SerialName("friend_accepted") FRIEND_ACCEPTED,
-    @SerialName("user_mentioned") USER_MENTIONED,
-    @SerialName("mention") MENTION,
-    @SerialName("message_reaction") MESSAGE_REACTION,
-    @SerialName("reaction") REACTION,
-    @SerialName("reply") REPLY,
-    @SerialName("post_like") POST_LIKE,
-    @SerialName("post_comment") POST_COMMENT,
-    @SerialName("post_repost") POST_REPOST,
-    @SerialName("story_reaction") STORY_REACTION,
-    @SerialName("status_reaction") STATUS_REACTION,
-    @SerialName("comment_like") COMMENT_LIKE,
-    @SerialName("comment_reply") COMMENT_REPLY,
-    @SerialName("comment_reaction") COMMENT_REACTION,
-    @SerialName("story_new_comment") STORY_NEW_COMMENT,
-    @SerialName("friend_story_comment") FRIEND_STORY_COMMENT,
-    @SerialName("story_thread_reply") STORY_THREAD_REPLY,
-    @SerialName("friend_new_story") FRIEND_NEW_STORY,
-    @SerialName("friend_new_post") FRIEND_NEW_POST,
-    @SerialName("friend_new_mood") FRIEND_NEW_MOOD,
-    @SerialName("missed_call") MISSED_CALL,
-    @SerialName("incoming_call") INCOMING_CALL,
-    @SerialName("call_ended") CALL_ENDED,
-    @SerialName("call_declined") CALL_DECLINED,
-    @SerialName("translation_completed") TRANSLATION_COMPLETED,
-    @SerialName("translation_ready") TRANSLATION_READY,
-    @SerialName("transcription_completed") TRANSCRIPTION_COMPLETED,
-    @SerialName("voice_clone_ready") VOICE_CLONE_READY,
-    @SerialName("security_alert") SECURITY_ALERT,
-    @SerialName("login_new_device") LOGIN_NEW_DEVICE,
-    @SerialName("password_changed") PASSWORD_CHANGED,
-    @SerialName("two_factor_enabled") TWO_FACTOR_ENABLED,
-    @SerialName("two_factor_disabled") TWO_FACTOR_DISABLED,
-    @SerialName("community_invite") COMMUNITY_INVITE,
-    @SerialName("community_joined") COMMUNITY_JOINED,
-    @SerialName("community_left") COMMUNITY_LEFT,
-    @SerialName("member_joined") MEMBER_JOINED,
-    @SerialName("member_left") MEMBER_LEFT,
-    @SerialName("member_removed") MEMBER_REMOVED,
-    @SerialName("member_promoted") MEMBER_PROMOTED,
-    @SerialName("member_demoted") MEMBER_DEMOTED,
-    @SerialName("member_role_changed") MEMBER_ROLE_CHANGED,
-    @SerialName("system") SYSTEM,
-    @SerialName("maintenance") MAINTENANCE,
-    @SerialName("update_available") UPDATE_AVAILABLE,
-    @SerialName("achievement_unlocked") ACHIEVEMENT_UNLOCKED,
-    @SerialName("streak_milestone") STREAK_MILESTONE,
-    @SerialName("badge_earned") BADGE_EARNED,
+enum class MeeshyNotificationType(val wire: String) {
+    @SerialName("new_message") NEW_MESSAGE("new_message"),
+    @SerialName("message_reply") MESSAGE_REPLY("message_reply"),
+    @SerialName("message_edited") MESSAGE_EDITED("message_edited"),
+    @SerialName("message_deleted") MESSAGE_DELETED("message_deleted"),
+    @SerialName("message_pinned") MESSAGE_PINNED("message_pinned"),
+    @SerialName("message_forwarded") MESSAGE_FORWARDED("message_forwarded"),
+    @SerialName("new_conversation") NEW_CONVERSATION("new_conversation"),
+    @SerialName("new_conversation_direct") NEW_CONVERSATION_DIRECT("new_conversation_direct"),
+    @SerialName("new_conversation_group") NEW_CONVERSATION_GROUP("new_conversation_group"),
+    @SerialName("added_to_conversation") ADDED_TO_CONVERSATION("added_to_conversation"),
+    @SerialName("removed_from_conversation") REMOVED_FROM_CONVERSATION("removed_from_conversation"),
+    @SerialName("contact_request") CONTACT_REQUEST("contact_request"),
+    @SerialName("contact_accepted") CONTACT_ACCEPTED("contact_accepted"),
+    @SerialName("friend_request") FRIEND_REQUEST("friend_request"),
+    @SerialName("friend_accepted") FRIEND_ACCEPTED("friend_accepted"),
+    @SerialName("user_mentioned") USER_MENTIONED("user_mentioned"),
+    @SerialName("mention") MENTION("mention"),
+    @SerialName("message_reaction") MESSAGE_REACTION("message_reaction"),
+    @SerialName("reaction") REACTION("reaction"),
+    @SerialName("reply") REPLY("reply"),
+    @SerialName("post_like") POST_LIKE("post_like"),
+    @SerialName("post_comment") POST_COMMENT("post_comment"),
+    @SerialName("post_repost") POST_REPOST("post_repost"),
+    @SerialName("story_reaction") STORY_REACTION("story_reaction"),
+    @SerialName("status_reaction") STATUS_REACTION("status_reaction"),
+    @SerialName("comment_like") COMMENT_LIKE("comment_like"),
+    @SerialName("comment_reply") COMMENT_REPLY("comment_reply"),
+    @SerialName("comment_reaction") COMMENT_REACTION("comment_reaction"),
+    @SerialName("story_new_comment") STORY_NEW_COMMENT("story_new_comment"),
+    @SerialName("friend_story_comment") FRIEND_STORY_COMMENT("friend_story_comment"),
+    @SerialName("story_thread_reply") STORY_THREAD_REPLY("story_thread_reply"),
+    @SerialName("friend_new_story") FRIEND_NEW_STORY("friend_new_story"),
+    @SerialName("friend_new_post") FRIEND_NEW_POST("friend_new_post"),
+    @SerialName("friend_new_mood") FRIEND_NEW_MOOD("friend_new_mood"),
+    @SerialName("missed_call") MISSED_CALL("missed_call"),
+    @SerialName("incoming_call") INCOMING_CALL("incoming_call"),
+    @SerialName("call_ended") CALL_ENDED("call_ended"),
+    @SerialName("call_declined") CALL_DECLINED("call_declined"),
+    @SerialName("translation_completed") TRANSLATION_COMPLETED("translation_completed"),
+    @SerialName("translation_ready") TRANSLATION_READY("translation_ready"),
+    @SerialName("transcription_completed") TRANSCRIPTION_COMPLETED("transcription_completed"),
+    @SerialName("voice_clone_ready") VOICE_CLONE_READY("voice_clone_ready"),
+    @SerialName("security_alert") SECURITY_ALERT("security_alert"),
+    @SerialName("login_new_device") LOGIN_NEW_DEVICE("login_new_device"),
+    @SerialName("password_changed") PASSWORD_CHANGED("password_changed"),
+    @SerialName("two_factor_enabled") TWO_FACTOR_ENABLED("two_factor_enabled"),
+    @SerialName("two_factor_disabled") TWO_FACTOR_DISABLED("two_factor_disabled"),
+    @SerialName("community_invite") COMMUNITY_INVITE("community_invite"),
+    @SerialName("community_joined") COMMUNITY_JOINED("community_joined"),
+    @SerialName("community_left") COMMUNITY_LEFT("community_left"),
+    @SerialName("member_joined") MEMBER_JOINED("member_joined"),
+    @SerialName("member_left") MEMBER_LEFT("member_left"),
+    @SerialName("member_removed") MEMBER_REMOVED("member_removed"),
+    @SerialName("member_promoted") MEMBER_PROMOTED("member_promoted"),
+    @SerialName("member_demoted") MEMBER_DEMOTED("member_demoted"),
+    @SerialName("member_role_changed") MEMBER_ROLE_CHANGED("member_role_changed"),
+    @SerialName("system") SYSTEM("system"),
+    @SerialName("maintenance") MAINTENANCE("maintenance"),
+    @SerialName("update_available") UPDATE_AVAILABLE("update_available"),
+    @SerialName("achievement_unlocked") ACHIEVEMENT_UNLOCKED("achievement_unlocked"),
+    @SerialName("streak_milestone") STREAK_MILESTONE("streak_milestone"),
+    @SerialName("badge_earned") BADGE_EARNED("badge_earned"),
+    @SerialName("level_up") LEVEL_UP("level_up"),
+    @SerialName("report_resolved") REPORT_RESOLVED("report_resolved"),
+    @SerialName("content_removed") CONTENT_REMOVED("content_removed"),
+    @SerialName("contact_joined") CONTACT_JOINED("contact_joined"),
+    @SerialName("contact_recently_active") CONTACT_RECENTLY_ACTIVE("contact_recently_active"),
+    @SerialName("game_duo_invited") GAME_DUO_INVITED("game_duo_invited"),
+    @SerialName("game_duo_accepted") GAME_DUO_ACCEPTED("game_duo_accepted"),
+    @SerialName("game_league_result") GAME_LEAGUE_RESULT("game_league_result"),
+    @SerialName("game_season_step") GAME_SEASON_STEP("game_season_step"),
+    @SerialName("game_mission_window") GAME_MISSION_WINDOW("game_mission_window"),
+    @SerialName("call") INCOMING_CALL_ALERT("call"),
 
     // Legacy uppercase (backward compat)
-    @SerialName("NEW_MESSAGE") LEGACY_NEW_MESSAGE,
-    @SerialName("MENTION") LEGACY_MENTION,
-    @SerialName("MESSAGE_REACTION") LEGACY_MESSAGE_REACTION,
-    @SerialName("FRIEND_REQUEST") LEGACY_FRIEND_REQUEST,
-    @SerialName("FRIEND_ACCEPTED") LEGACY_FRIEND_ACCEPTED,
-    @SerialName("GROUP_INVITE") LEGACY_GROUP_INVITE,
-    @SerialName("GROUP_JOINED") LEGACY_GROUP_JOINED,
-    @SerialName("GROUP_LEFT") LEGACY_GROUP_LEFT,
-    @SerialName("CALL_MISSED") LEGACY_CALL_MISSED,
-    @SerialName("CALL_INCOMING") LEGACY_CALL_INCOMING,
-    @SerialName("POST_LIKE") LEGACY_POST_LIKE,
-    @SerialName("POST_COMMENT") LEGACY_POST_COMMENT,
-    @SerialName("STORY_REPLY") LEGACY_STORY_REPLY,
-    @SerialName("AFFILIATE_SIGNUP") LEGACY_AFFILIATE_SIGNUP,
-    @SerialName("ACHIEVEMENT_UNLOCKED") LEGACY_ACHIEVEMENT_UNLOCKED,
-    @SerialName("SYSTEM_ALERT") LEGACY_SYSTEM_ALERT,
-    @SerialName("STATUS_UPDATE") LEGACY_STATUS_UPDATE,
-    @SerialName("TRANSLATION_READY") LEGACY_TRANSLATION_READY,
+    @SerialName("NEW_MESSAGE") LEGACY_NEW_MESSAGE("NEW_MESSAGE"),
+    @SerialName("MENTION") LEGACY_MENTION("MENTION"),
+    @SerialName("MESSAGE_REACTION") LEGACY_MESSAGE_REACTION("MESSAGE_REACTION"),
+    @SerialName("FRIEND_REQUEST") LEGACY_FRIEND_REQUEST("FRIEND_REQUEST"),
+    @SerialName("FRIEND_ACCEPTED") LEGACY_FRIEND_ACCEPTED("FRIEND_ACCEPTED"),
+    @SerialName("GROUP_INVITE") LEGACY_GROUP_INVITE("GROUP_INVITE"),
+    @SerialName("GROUP_JOINED") LEGACY_GROUP_JOINED("GROUP_JOINED"),
+    @SerialName("GROUP_LEFT") LEGACY_GROUP_LEFT("GROUP_LEFT"),
+    @SerialName("CALL_MISSED") LEGACY_CALL_MISSED("CALL_MISSED"),
+    @SerialName("CALL_INCOMING") LEGACY_CALL_INCOMING("CALL_INCOMING"),
+    @SerialName("POST_LIKE") LEGACY_POST_LIKE("POST_LIKE"),
+    @SerialName("POST_COMMENT") LEGACY_POST_COMMENT("POST_COMMENT"),
+    @SerialName("STORY_REPLY") LEGACY_STORY_REPLY("STORY_REPLY"),
+    @SerialName("AFFILIATE_SIGNUP") LEGACY_AFFILIATE_SIGNUP("AFFILIATE_SIGNUP"),
+    @SerialName("ACHIEVEMENT_UNLOCKED") LEGACY_ACHIEVEMENT_UNLOCKED("ACHIEVEMENT_UNLOCKED"),
+    @SerialName("SYSTEM_ALERT") LEGACY_SYSTEM_ALERT("SYSTEM_ALERT"),
+    @SerialName("STATUS_UPDATE") LEGACY_STATUS_UPDATE("STATUS_UPDATE"),
+    @SerialName("TRANSLATION_READY") LEGACY_TRANSLATION_READY("TRANSLATION_READY"),
+    ;
+
+    companion object {
+        private val BY_WIRE: Map<String, MeeshyNotificationType> = entries.associateBy { it.wire }
+
+        /** Le type de [raw], ou `null` pour une valeur inconnue (iOS : `rawValue ?? .system`). */
+        fun fromWire(raw: String?): MeeshyNotificationType? = raw?.let(BY_WIRE::get)
+    }
 }
 
 /** Who triggered a notification — port of NotificationActor (NotificationModels.swift). */
@@ -218,7 +237,10 @@ data class NotificationActor(
     val username: String = "",
     val displayName: String? = null,
     val avatar: String? = null,
-)
+) {
+    /** Le nom montré : `displayName`, à défaut le pseudonyme. */
+    val displayedName: String get() = displayName ?: username
+}
 
 /** Where a notification happened — port of NotificationContext (NotificationModels.swift). */
 @Serializable
@@ -245,6 +267,12 @@ data class NotificationContext(
      */
     val firstAttachmentUrl: String? = null,
     val firstAttachmentMimeType: String? = null,
+    /** Durée en ms du 1er attachment audio/vidéo. */
+    val firstAttachmentDurationMs: Int? = null,
+    /** Date ISO de publication de l'entité sociale liée (post/story/réel/mood). */
+    val postCreatedAt: String? = null,
+    /** Date ISO d'expiration de l'entité sociale liée (story/status éphémère). */
+    val postExpiresAt: String? = null,
 )
 
 /** Read/lifecycle state of a notification — port of NotificationState (NotificationModels.swift). */
@@ -296,6 +324,48 @@ data class NotificationMetadata(
     val countryName: String? = null,
     val city: String? = null,
     val location: String? = null,
+    /** Aperçu de l'entité visée (post/story/réel) — réactions, commentaires, partages. */
+    val postPreview: String? = null,
+    /** Aperçu du commentaire parent (réponse à un commentaire). */
+    val parentCommentPreview: String? = null,
+    /** Extrait textuel du contenu publié (`friend_new_*`). */
+    val excerpt: String? = null,
+    /** Détails du 1er attachment d'un message (durée audio, taille, dimensions). */
+    val attachments: NotificationAttachments? = null,
+    // Paliers d'engagement (#5809, #10298)
+    val achievementKey: String? = null,
+    val axisKey: String? = null,
+    val threshold: Int? = null,
+    val level: Int? = null,
+    val tierRank: Int? = null,
+    val value: Int? = null,
+    // Le jeu (#9490)
+    val route: String? = null,
+    val gameSection: String? = null,
+    val duoId: String? = null,
+    val weekKey: String? = null,
+    val league: String? = null,
+    val outcome: String? = null,
+    val cup: String? = null,
+    val season: Int? = null,
+    val step: Int? = null,
+    val completed: Boolean? = null,
+    // Retrait par la modération (#11151)
+    val contentId: String? = null,
+    val reason: String? = null,
+)
+
+/** Résumé léger des pièces jointes d'un message — `NotificationMetadata.Attachments` côté iOS. */
+@Serializable
+data class NotificationAttachments(
+    val count: Int? = null,
+    /** "image" | "video" | "audio" | "document" | "text" | "code". */
+    val firstType: String? = null,
+    val firstFilename: String? = null,
+    val firstDurationMs: Int? = null,
+    val firstFileSize: Int? = null,
+    val firstWidth: Int? = null,
+    val firstHeight: Int? = null,
 )
 
 /** A notification — port of APINotification (NotificationModels.swift). */
@@ -328,7 +398,26 @@ data class ApiNotification(
     val metadata: NotificationMetadata? = null,
     val state: NotificationState = NotificationState(),
     val delivery: NotificationDelivery? = null,
-)
+) {
+    /** Le type résolu ; une valeur inconnue se lit `SYSTEM` (iOS : `rawValue ?? .system`). */
+    val notificationType: MeeshyNotificationType
+        get() = MeeshyNotificationType.fromWire(type) ?: MeeshyNotificationType.SYSTEM
+
+    val senderName: String? get() = actor?.displayedName
+
+    /** Les données de navigation dérivées du contexte ; `null` sans contexte. */
+    val data: NotificationData?
+        get() = context?.let {
+            NotificationData(
+                conversationId = it.conversationId,
+                messageId = it.messageId,
+                postId = it.postId,
+                callId = it.callSessionId,
+                friendRequestId = it.friendRequestId,
+                preview = metadata?.messagePreview,
+            )
+        }
+}
 
 /** Legacy navigation data computed from a notification's context — port of NotificationData (NotificationModels.swift). */
 @Serializable
@@ -356,6 +445,8 @@ data class NotificationPagination(
     val offset: Int = 0,
     val limit: Int = 0,
     val hasMore: Boolean = false,
+    /** Ancre de reprise `(createdAt, id)` ; `null` en fin de liste ou en mode offset. */
+    val nextCursor: String? = null,
 )
 
 @Serializable

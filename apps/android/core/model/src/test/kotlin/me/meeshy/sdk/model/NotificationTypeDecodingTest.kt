@@ -99,4 +99,11 @@ class NotificationTypeDecodingTest {
         assertThat(ApiNotification(id = "n", actor = NotificationActor(id = "a", username = "jo")).senderName)
             .isEqualTo("jo")
     }
+
+    @Test
+    fun `la valeur brute de chaque type est son nom serialise`() {
+        MeeshyNotificationType.entries.forEach {
+            assertThat(json.encodeToString(MeeshyNotificationType.serializer(), it)).isEqualTo("\"${it.wire}\"")
+        }
+    }
 }

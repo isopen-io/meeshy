@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_notif_type_contact_activity">Quand un contact revient sur Meeshy</string>
+    <string name="settings_notif_type_game">Jeu : duo, ligue, saison</string>
+</resources>
