@@ -1,4 +1,4 @@
-import { SW_RECENT_MEDIA_CACHE } from './media/recent-media-policy';
+import { SW_RECENT_MEDIA_CACHE } from './media/recent-media-cache-name';
 
 /**
  * LES NOMS DE CACHE DU SERVICE WORKER, DÉCLARÉS UNE FOIS (#6936).
@@ -70,9 +70,9 @@ export const LEGACY_CACHE_NAMESPACE = 'meeshy-cache-';
  * LE SEAU DES MÉDIAS VUS RÉCEMMENT (#11326) — audio et vidéo ENTIERS, rangés
  * par la page (`lib/media/recent-media-store.ts`), resservis par plages par
  * `public/sw-recent-media.js`, qui en porte le JUMEAU. Trois jours, Wi-Fi,
- * 500 Mo — déclaré dans `recent-media-policy.ts`, que la garde lit SANS tirer
- * ce module (un chunk nommé `sw-caches` passerait pour un worker dans la coque,
- * `check-shell-dist`). Donnée de LECTEUR : la fin d'un compte le
+ * 500 Mo — son nom vit dans `media/recent-media-cache-name.ts`, que la garde
+ * lit SANS tirer ce module (un chunk nommé `sw-caches` passerait pour un
+ * worker dans la coque, `check-shell-dist`). Donnée de LECTEUR : la fin d'un compte le
  * purge ({@link SW_ACCOUNT_CACHE_NAMES}) ; une mise à jour de l'application ne
  * le purge pas — il ne dépend d'aucune version du code.
  */

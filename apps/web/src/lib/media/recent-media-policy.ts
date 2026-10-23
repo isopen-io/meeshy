@@ -13,9 +13,6 @@ export const RECENT_MEDIA_POLICY = {
   budgetBytes: 500 * 1024 * 1024,
 } as const;
 
-/** Le nom du seau — réexporté par `sw-caches.ts`, jumeau de `public/sw-recent-media.js`. */
-export const SW_RECENT_MEDIA_CACHE = 'recent-media';
-
 /** La date d'écriture, posée par la garde sur la réponse rangée — le worker et l'éviction la lisent. */
 export const RECENT_MEDIA_STORED_AT_HEADER = 'X-Meeshy-Stored-At';
 

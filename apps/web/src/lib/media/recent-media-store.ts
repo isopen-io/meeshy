@@ -1,6 +1,6 @@
+import { SW_RECENT_MEDIA_CACHE } from './recent-media-cache-name';
 import {
   RECENT_MEDIA_STORED_AT_HEADER,
-  SW_RECENT_MEDIA_CACHE,
   recentMediaAdmission,
   recentMediaEvictions,
   recentMediaResponseAdmission,
