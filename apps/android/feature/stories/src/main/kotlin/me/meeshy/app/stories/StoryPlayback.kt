@@ -22,7 +22,7 @@ data class StoryGroupSlides(
  * - [jumpToNextGroup] / [jumpToPreviousGroup] model horizontal swipes.
  *
  * Every transition is pure — it returns a new [StoryPlayback] and never touches
- * the clock or performs IO. [startingAt] drops slide-less groups so that
+ * the clock or performs IO. [forAuthor] drops slide-less groups so that
  * [currentGroup] / [currentSlide] are well-defined for any live playback.
  */
 @Immutable
@@ -141,12 +141,21 @@ data class StoryPlayback(
     }
 
     companion object {
-        /** Build a live playback over the non-empty [groups], positioned at [startUserId]'s group. */
-        fun startingAt(groups: List<StoryGroupSlides>, startUserId: String?): StoryPlayback {
+        /**
+         * La lecture sur les groupes non vides, ouverte sur celui de [authorId] à sa
+         * première story non vue — ou `null` quand cet auteur n'a aucune story jouable.
+         * Jamais le groupe d'un AUTRE : toucher l'anneau d'Alice n'ouvre jamais la story
+         * de Bob (iOS `StoryViewerContainer.ensureGroupAvailable` affiche un repli). Le
+         * départ suit `startAtFirstUnviewed` (`StoryViewerView+Lifecycle.swift`) : la
+         * première story non vue, ou la première quand tout est vu.
+         */
+        fun forAuthor(groups: List<StoryGroupSlides>, authorId: String): StoryPlayback? {
+            if (authorId.isBlank()) return null
             val live = groups.filter { it.slides.isNotEmpty() }
-            if (live.isEmpty()) return StoryPlayback(groups = emptyList(), isDismissed = true)
-            val start = live.indexOfFirst { it.userId == startUserId }.let { if (it < 0) 0 else it }
-            return StoryPlayback(groups = live, groupIndex = start, slideIndex = 0)
+            val start = live.indexOfFirst { it.userId == authorId }
+            if (start < 0) return null
+            val firstUnviewed = live[start].slides.indexOfFirst { !it.isViewed }.coerceAtLeast(0)
+            return StoryPlayback(groups = live, groupIndex = start, slideIndex = firstUnviewed)
         }
     }
 }

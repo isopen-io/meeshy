@@ -12,7 +12,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -89,6 +88,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.imageLoader
@@ -133,6 +135,14 @@ fun StoryViewerScreen(
     viewModel: StoryViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    if (state.loadFailed) {
+        StoryViewerNotFound(onRetry = viewModel::retry, onClose = onClose)
+        return
+    }
+    if (state.isLoading && state.slides.isEmpty()) {
+        StoryViewerLoading()
+        return
+    }
     val slide = state.current
     // Per-slide auto-advance timing (author-pinned → content-derived → 6s), resolved
     // by the shared StorySlideDuration rule at projection time. Drives both the
@@ -321,25 +331,39 @@ fun StoryViewerScreen(
         if (state.isDismissed) onClose()
     }
 
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    // Une story joue tant qu'elle n'est ni retenue (appui long) ni cachée : app en
+    // arrière-plan, appel entrant, écran éteint figent l'horloge et le son (#11040).
+    val playing = !state.isPaused && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    var progressSlideKey by remember { mutableStateOf<String?>(null) }
+
     androidx.compose.runtime.LaunchedEffect(
         state.groupIndex,
         state.index,
-        state.slides.size,
+        state.currentStoryId,
         state.canAutoAdvance,
         slideDurationMs,
         showViewers,
         showComments,
         showSendTo,
         railOverlayActive,
+        playing,
     ) {
-        if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments || showSendTo || railOverlayActive) return@LaunchedEffect
-        viewModel.markCurrentViewed()
-        progress.snapTo(0f)
-        // Gate: hold the countdown at empty until the current slide's media has
-        // painted (text-only slides are ready at once). When the gate flips the
-        // effect re-runs and the timer starts.
+        if (state.slides.isEmpty() || state.isDismissed) return@LaunchedEffect
+        val slideKey = "${state.groupIndex}:${state.index}:${state.currentStoryId}"
+        if (progressSlideKey != slideKey) {
+            // Une nouvelle story repart de zéro et compte UNE vue ; une pause, une
+            // feuille ou un retour au premier plan reprennent là où l'horloge s'était figée.
+            progressSlideKey = slideKey
+            progress.snapTo(0f)
+            viewModel.markCurrentViewed()
+        }
+        if (!playing || showViewers || showComments || showSendTo || railOverlayActive) return@LaunchedEffect
+        // Gate: hold the countdown until the current slide's media has painted
+        // (text-only slides are ready at once). When the gate flips the effect re-runs.
         if (!state.canAutoAdvance) return@LaunchedEffect
-        progress.animateTo(1f, tween(durationMillis = slideDurationMs, easing = LinearEasing))
+        val remainingMs = ((1f - progress.value) * slideDurationMs).roundToInt().coerceAtLeast(0)
+        progress.animateTo(1f, tween(durationMillis = remainingMs, easing = LinearEasing))
         viewModel.advance()
     }
 
@@ -351,15 +375,15 @@ fun StoryViewerScreen(
             .background(hexColor(accent))
             .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() }
             .pointerInput(state.groupIndex, state.index, state.slides.size) {
-                detectTapGestures { offset ->
+                // Appui long ≥ 200 ms = pause qui tient au relâchement ; le tap suivant
+                // reprend sans naviguer (iOS `StoryGestureOverlayView`).
+                detectStoryCanvasTaps(
+                    onHold = { if (!overlayActiveState.value) viewModel.pauseByHold() },
+                ) { offset ->
                     if (overlayActiveState.value) {
                         closeRailBars()
-                        return@detectTapGestures
-                    }
-                    if (offset.x < size.width / 2f) {
-                        viewModel.back()
                     } else {
-                        viewModel.advance()
+                        viewModel.onCanvasTap(onLeftHalf = offset.x < size.width / 2f)
                     }
                 }
             }
@@ -394,7 +418,8 @@ fun StoryViewerScreen(
                 val bg = slide.backgroundTransform
                 ReelVideoSurface(
                     mediaUrl = slide.backgroundVideoUrl,
-                    isActive = true,
+                    isActive = playing,
+                    rewindWhenInactive = false,
                     muted = false,
                     // La fenêtre de lecture que l'auteur a posée (#5129) — `null`
                     // quand la source joue en entier.
@@ -463,6 +488,7 @@ fun StoryViewerScreen(
                     StoryForegroundLayer(
                         media = foreground,
                         playheadSeconds = playheadSeconds,
+                        playing = playing,
                     )
                 }
             }
@@ -497,7 +523,8 @@ fun StoryViewerScreen(
             key(url) {
                 AudioTrackSurface(
                     mediaUrl = url,
-                    isActive = true,
+                    isActive = playing,
+                    rewindWhenInactive = false,
                     loop = slide.backgroundLoop,
                     sourceStartMs = slide.backgroundAudioWindow?.startMs,
                     sourceEndMs = slide.backgroundAudioWindow?.endMs,
@@ -508,7 +535,8 @@ fun StoryViewerScreen(
             key(url) {
                 AudioTrackSurface(
                     mediaUrl = url,
-                    isActive = true,
+                    isActive = playing,
+                    rewindWhenInactive = false,
                     loop = false,
                     // Un vocal rogné compte autant qu'une vidéo rognée : iOS
                     // écrit les deux bornes sur les deux familles (#5129).
@@ -531,7 +559,7 @@ fun StoryViewerScreen(
             )
         }
 
-        Column(
+        if (!state.isPaused) Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
@@ -678,7 +706,7 @@ fun StoryViewerScreen(
         }
 
         val languageBadge = slide?.languageCode ?: state.languageOverride
-        if (slide != null && !state.isDismissed) {
+        if (slide != null && !state.isDismissed && !state.isPaused) {
             StoryActionRail(
                 plan = StoryRailPlan.resolve(
                     isOwnStory = state.isOwnStory,
@@ -985,6 +1013,7 @@ private fun ReactionFlightOverlay(
 private fun StoryForegroundLayer(
     media: StoryForegroundMediaView,
     playheadSeconds: Float,
+    playing: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val animated = media.animated(playheadSeconds)
@@ -1002,7 +1031,8 @@ private fun StoryForegroundLayer(
         if (media.isVideo) {
             ReelVideoSurface(
                 mediaUrl = media.url,
-                isActive = true,
+                isActive = playing,
+                rewindWhenInactive = false,
                 muted = false,
                 modifier = layerModifier,
                 sourceStartMs = media.sourceWindow?.startMs,
