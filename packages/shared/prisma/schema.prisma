@@ -1265,6 +1265,12 @@ model MessageAttachment {
   title   String?
   /// Accessibility alt text (for images/media)
   alt     String?
+  /// Langue SOURCE de `alt` (ISO 639-1, détectée à la saisie, #11329) — même
+  /// rôle que `PostMedia.altLanguage`. `null` tant que `alt` est vide. Sans
+  /// saisie, la description par défaut est la transcription, RÉSOLUE par
+  /// `resolveMediaDescription` (`packages/shared/utils/media-description.ts`),
+  /// jamais recopiée ici.
+  altLanguage String?
   /// Caption/legend displayed with the attachment
   caption String?
 

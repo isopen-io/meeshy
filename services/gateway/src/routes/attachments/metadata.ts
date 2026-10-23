@@ -17,7 +17,8 @@ import type {
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { createHash } from 'crypto';
 import { signAttachmentsForReader } from '../../services/attachments/signServedAttachments';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
@@ -335,11 +336,12 @@ export async function registerMetadataRoutes(
           required: ['attachmentId', 'lang'],
           properties: {
             attachmentId: { type: 'string', description: 'Unique attachment identifier' },
-            lang: { type: 'string', pattern: SUBTITLE_LANG_PATTERN, description: '`auto` or a language code' },
+            lang: { type: 'string', description: '`auto` or a language code (validated after authentication)' },
           },
         },
         response: {
           200: { description: 'WebVTT subtitles', type: 'string' },
+          400: { description: 'Malformed language code', ...errorResponseSchema },
           401: { description: 'Authentication required', ...errorResponseSchema },
           404: { description: 'No subtitles for this caller and language', ...errorResponseSchema },
           500: { description: 'Internal server error', ...errorResponseSchema },
@@ -350,9 +352,12 @@ export async function registerMetadataRoutes(
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated) {
-          return sendUnauthorized(reply, 'Authentication required');
+          return sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
         }
         const { attachmentId, lang } = request.params as { attachmentId: string; lang: string };
+        if (!new RegExp(SUBTITLE_LANG_PATTERN).test(lang)) {
+          return sendBadRequest(reply, 'INVALID_LANGUAGE', { message: 'lang must be `auto` or a language code' });
+        }
 
         const source = await prisma.messageAttachment.findUnique({
           where: { id: attachmentId },
