@@ -20,6 +20,7 @@
 
 import { ADMIN_METRICS_CLIENT_EVENTS, ADMIN_METRICS_SERVER_EVENTS } from './admin-metrics-event-names.js';
 import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from './call-recording-event-names.js';
+import { E2EE_SERVER_EVENTS } from './e2ee-event-names.js';
 import { SESSION_SERVER_EVENTS } from './session-event-names.js';
 import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-names.js';
 
@@ -29,6 +30,8 @@ import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-na
 export const ROOMS = {
   conversation: (id: string) => `conversation:${id}`,
   user: (id: string) => `user:${id}`,
+  /** Un appareil E2EE enrôlé (#3706) : seule sa socket, liée à sa session, y entre. */
+  device: (userId: string, deviceId: number) => `device:${userId}:${deviceId}`,
   feed: (id: string) => `feed:${id}`,
   call: (id: string) => `call:${id}`,
   post: (id: string) => `post:${id}`,
@@ -169,6 +172,7 @@ export const SERVER_EVENTS = {
    * cache entries. */
   CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   ...SESSION_SERVER_EVENTS,
+  ...E2EE_SERVER_EVENTS,
   ERROR: 'error',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',

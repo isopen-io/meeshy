@@ -3329,11 +3329,12 @@ model E2EEOneTimePreKey {
   @@index([userId, deviceId, kind, usedAt])
 }
 
-/// Le prochain deviceId d'un compte : incrémenté atomiquement, jamais décrémenté.
+/// Le dernier deviceId attribué à un compte (0 = aucun) : incrémenté
+/// atomiquement (findAndModify + $inc), jamais décrémenté, donc jamais réutilisé.
 model E2EEDeviceCounter {
   id           String @id @default(auto()) @map("_id") @db.ObjectId
   userId       String @unique @db.ObjectId
-  nextDeviceId Int    @default(1)
+  lastDeviceId Int    @default(0)
 }
 
 /// Une enveloppe libsignal opaque adressée à UN appareil destinataire. Effacée à
