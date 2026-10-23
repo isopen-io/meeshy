@@ -321,6 +321,10 @@ services:
       - ZMQ_TRANSLATOR_SUB_PORT=5558
       - NODE_ENV=production
       - DOMAIN=staging.${DOMAIN:-meeshy.me}
+      # #11261 — rendu H.264 de compatibilité d'une vidéo HEVC (HDR mappé en SDR
+      # BT.709), l'original intact. Staging seulement : la production attend la
+      # mesure CPU de S2 (#9232, serveur partagé).
+      - VIDEO_COMPAT_RENDITION=true
       # Les deux origines VIRTUELLES des coques Capacitor de web-v2 (#5815) — iOS
       # `capacitor://localhost` (`CAPInstanceDescriptor.m`), Android `https://localhost`
       # (`CapConfig.java`, `androidScheme: https`). Gardées par `cors-origins.test.ts`.
