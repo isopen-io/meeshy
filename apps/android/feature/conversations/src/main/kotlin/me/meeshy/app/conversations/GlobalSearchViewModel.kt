@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.search.SearchLoadState
 import me.meeshy.sdk.model.search.SearchLoadStates
 import me.meeshy.sdk.model.search.SearchPaneKind
@@ -24,6 +25,7 @@ import me.meeshy.sdk.search.GlobalSearchSnapshot
 import me.meeshy.sdk.search.RecentSearchesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import java.util.Locale
 import javax.inject.Inject
 
 /** Effets ponctuels de l'ecran : retour haptique leger (parite iOS `HapticFeedback.light`) et fiche profil. */
@@ -61,6 +63,8 @@ data class GlobalSearchUiState(
      * retomberait sur le nom generique.
      */
     val currentUserId: String? = null,
+    /** Le prisme du lecteur (descente stricte, sans repli) : sert l'apercu traduit des lignes de conversation. */
+    val readerPrism: List<String> = emptyList(),
 ) {
     val isSearching: Boolean get() = loadState == SearchLoadState.LOADING
 
@@ -128,7 +132,12 @@ class GlobalSearchViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
-                _state.update { it.copy(currentUserId = user?.id) }
+                _state.update {
+                    it.copy(
+                        currentUserId = user?.id,
+                        readerPrism = user?.let { reader -> ReaderPrism.resolve(reader, Locale.getDefault()) }.orEmpty(),
+                    )
+                }
             }
         }
         viewModelScope.launch {

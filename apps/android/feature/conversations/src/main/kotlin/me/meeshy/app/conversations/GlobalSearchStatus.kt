@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -18,13 +17,12 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.search.SearchLoadState
-import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * Bandeau discret au-dessus des resultats : revalidation en cours (jamais un spinner qui
- * remplace la liste), hors ligne (reponse locale seule) ou volet en panne (la liste reste).
+ * Bandeau discret au-dessus des resultats : hors ligne (reponse locale seule) ou volet en
+ * panne (la liste reste). La revalidation n'y est PAS : elle est en surimpression.
  */
 @Composable
 internal fun SearchStateBanner(state: GlobalSearchUiState, onRetry: () -> Unit) {
@@ -34,12 +32,6 @@ internal fun SearchStateBanner(state: GlobalSearchUiState, onRetry: () -> Unit) 
         else -> null
     }
     Column(modifier = Modifier.fillMaxWidth()) {
-        if (state.isRevalidating) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth(),
-                color = MeeshyPalette.Indigo500,
-            )
-        }
         if (message != null) {
             Column(
                 modifier = Modifier

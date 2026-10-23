@@ -599,4 +599,12 @@ class GlobalSearchViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `the reader prism follows the signed-in user language first`() = runTest(dispatcher) {
+        signedInUser.value = MeeshyUser(id = "me", username = "me", systemLanguage = "pt")
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertThat(vm.state.value.readerPrism.first()).isEqualTo("pt")
+    }
 }
