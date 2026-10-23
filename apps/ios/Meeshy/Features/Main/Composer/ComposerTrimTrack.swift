@@ -70,19 +70,10 @@ nonisolated struct ComposerTrimTrackGeometry: Equatable, Sendable {
 nonisolated enum ComposerTrimThumbnails {
     @concurrent
     static func images(url: URL, count: Int) async -> [CGImage] {
-        let asset = AVURLAsset(url: url)
-        guard let duree = try? await asset.load(.duration).seconds, duree > 0, count > 0 else { return [] }
-        let generateur = AVAssetImageGenerator(asset: asset)
-        generateur.appliesPreferredTrackTransform = true
-        generateur.maximumSize = CGSize(width: 120, height: 120)
-        let instants = (0..<count).map {
-            CMTime(seconds: duree * (Double($0) + 0.5) / Double(count), preferredTimescale: 600)
-        }
-        var tirees: [(instant: CMTime, image: CGImage)] = []
-        for await resultat in generateur.images(for: instants) {
-            if let image = try? resultat.image { tirees.append((resultat.requestedTime, image)) }
-        }
-        return tirees.sorted { $0.instant < $1.instant }.map { $0.image }
+        guard count > 0 else { return [] }
+        return await VideoThumbnailGenerator.shared.images(for: VideoThumbnailRequest(
+            url: url, instants: .evenlySpaced(count: count, atMostOnePerSecond: false),
+            maximumSize: CGSize(width: 120, height: 120))).compactMap(\.cgImage)
     }
 }
 

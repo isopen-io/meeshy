@@ -1,18 +1,28 @@
 package me.meeshy.sdk.socket
 
-import io.socket.client.IO
 import io.socket.client.Socket
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import me.meeshy.core.common.IoDispatcher
+import me.meeshy.sdk.model.socket.SocketAuthPayload
+import me.meeshy.sdk.model.socket.SocketConnectDecision
+import me.meeshy.sdk.model.socket.SocketConnectOutcome
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.net.Renewal
+import me.meeshy.sdk.net.SessionRefresher
 import me.meeshy.sdk.net.TokenStore
 import org.json.JSONObject
 import timber.log.Timber
-import java.net.URI
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,106 +39,185 @@ enum class SocketConnectionState {
 
 /**
  * Manages the Socket.IO connection lifecycle (ARCHITECTURE.md §3).
- * All feature socket managers subscribe to [socket] to add their listeners.
+ * All feature socket managers register their listeners through [on].
+ *
+ * Le cycle de connexion est IDEMPOTENT (miroir de `MessageSocketManager.establishTransport`, iOS) :
+ * - [connect] ne crée jamais une seconde socket tant qu'une existe (la reconnexion est celle de
+ *   Socket.IO) ; [disconnect] ferme, retire les écouteurs et oublie le registre ;
+ * - un JWT échu (`exp` moins 30 s) n'ouvre PAS de socket : le renouvellement part en SON nom, puis la
+ *   connexion repart avec le jeton frais ;
+ * - les écouteurs posés par [on] avant l'ouverture sont gardés et rejoués sur la socket, de sorte
+ *   qu'un « connect puis attach » reste valable même quand la connexion attend son renouvellement.
  */
 @Singleton
-class SocketManager @Inject constructor(
+class SocketManager internal constructor(
     private val config: MeeshyConfig,
     private val tokenStore: TokenStore,
+    private val factory: SocketFactory,
+    private val clientIdentity: SocketClientIdentity,
+    private val refresher: SessionRefresher,
+    ioDispatcher: CoroutineDispatcher,
+    private val nowEpochSeconds: () -> Double,
 ) {
-    private var _socket: Socket? = null
+    @Inject
+    constructor(
+        config: MeeshyConfig,
+        tokenStore: TokenStore,
+        factory: SocketFactory,
+        clientIdentity: SocketClientIdentity,
+        refresher: SessionRefresher,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    ) : this(
+        config, tokenStore, factory, clientIdentity, refresher, ioDispatcher,
+        { System.currentTimeMillis() / 1000.0 },
+    )
+
+    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
+    private val lock = Any()
+
+    private var _socket: RealtimeSocket? = null
+    private var refreshJob: Job? = null
+    private val registered = mutableListOf<Pair<String, (Array<Any>) -> Unit>>()
+
+    /** Le jeton de compte présenté au handshake du socket courant (`null` pour un invité). */
+    @Volatile
+    var presentedToken: String? = null
+        private set
 
     private val _connected = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
     private val _disconnected = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+    private val _sessionRevoked = MutableSharedFlow<String?>(replay = 0, extraBufferCapacity = 1)
+    private val _socketErrors = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
 
     val connected: SharedFlow<Unit> = _connected.asSharedFlow()
     val disconnected: SharedFlow<Unit> = _disconnected.asSharedFlow()
 
+    /** `auth:session-revoked` : la passerelle a fermé CETTE session (motif éventuel). */
+    val sessionRevoked: SharedFlow<String?> = _sessionRevoked.asSharedFlow()
+
+    /** Événement `error` du serveur : exposé, jamais cause de déconnexion. */
+    val socketErrors: SharedFlow<String> = _socketErrors.asSharedFlow()
+
     private val _connectionState = MutableStateFlow(SocketConnectionState.DISCONNECTED)
     val connectionState: StateFlow<SocketConnectionState> = _connectionState.asStateFlow()
 
-    val isConnected: Boolean get() = _socket?.connected() == true
+    val isConnected: Boolean get() = _socket?.isConnected == true
 
-    /**
-     * Ce que le handshake transmet — et sous QUELLE clé.
-     *
-     * Deux corrections en une (#4213) :
-     *
-     * 1. **Le jeton de SESSION d'un compte inscrit voyage enfin.** Un socket
-     *    inscrit s'authentifiait au JWT seul, si bien que le serveur n'avait
-     *    aucun moyen de dire quel socket appartient à quelle session : révoquer
-     *    une session passait la ligne à `isValid: false` et l'appareil
-     *    continuait de tout recevoir indéfiniment, un socket n'étant
-     *    authentifié qu'une fois, au connect, et jamais revérifié.
-     *
-     * 2. **Un invité de lien s'annonçait sous la MAUVAISE clé.** Le code
-     *    précédent posait `token` quel que soit le jeton — or la passerelle
-     *    branche sur les clés : `sessionToken` SANS `token` désigne un
-     *    participant anonyme, et un jeton de session présenté en `token` part
-     *    dans la vérification JWT, qui le refuse. Aucun invité de lien Android
-     *    ne pouvait donc ouvrir de socket.
-     */
-    internal fun handshakeAuth(tokenStore: TokenStore): Map<String, String>? {
-        val jwt = tokenStore.jwt
-        val session = tokenStore.sessionToken
-
-        return when {
-            jwt != null && session != null -> mapOf("token" to jwt, "sessionToken" to session)
-            jwt != null -> mapOf("token" to jwt)
-            session != null -> mapOf("sessionToken" to session)
-            else -> null
+    /** Ouvre la connexion UNE fois ; un second appel ne crée ni socket ni écouteurs. */
+    fun connect(): SocketConnectOutcome = synchronized(lock) {
+        if (_socket != null) return SocketConnectOutcome.ARMED
+        val decision = SocketConnectDecision.decide(tokenStore.jwt, tokenStore.sessionToken, nowEpochSeconds())
+        when (decision) {
+            SocketConnectDecision.NoCredentials -> SocketConnectOutcome.NOT_ARMED
+            is SocketConnectDecision.RefreshFirst -> {
+                Timber.w("Socket: JWT expire, renouvellement avant de se connecter")
+                refreshThenConnect(decision.presentedJwt)
+                SocketConnectOutcome.NOT_ARMED
+            }
+            else -> open(decision)
         }
     }
 
-    fun connect() {
-        val auth = handshakeAuth(tokenStore) ?: return
+    private fun open(decision: SocketConnectDecision): SocketConnectOutcome {
+        val auth = SocketAuthPayload.of(decision, clientIdentity.identity()) ?: return SocketConnectOutcome.NOT_ARMED
         _connectionState.value = SocketConnectionState.CONNECTING
-        val opts = IO.Options().apply {
-            this.auth = auth
-            transports = arrayOf("websocket")
-            reconnection = true
-            reconnectionAttempts = Int.MAX_VALUE
-            reconnectionDelay = 1_000L
-            reconnectionDelayMax = 30_000L
-        }
-        val socket = IO.socket(URI.create(config.socketUrl), opts)
+        val socket = factory.create(config.socketUrl, auth)
+        val presented = (decision as? SocketConnectDecision.ConnectRegistered)?.jwt
+        presentedToken = presented
         _socket = socket
+        installLifecycleListeners(socket, presented)
+        registered.forEach { (event, callback) -> socket.on(event, callback) }
+        socket.connect()
+        return SocketConnectOutcome.ARMED
+    }
 
+    private fun refreshThenConnect(presentedJwt: String) {
+        if (refreshJob?.isActive == true) return
+        refreshJob = scope.launch {
+            val renewal = try {
+                refresher.renew(presentedJwt, sentUnderGeneration = null)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (@Suppress("TooGenericExceptionCaught") failure: Exception) {
+                Timber.e(failure, "Socket: renouvellement en echec")
+                return@launch
+            }
+            if (renewal is Renewal.Renewed) connect()
+        }
+    }
+
+    private fun installLifecycleListeners(socket: RealtimeSocket, presented: String?) {
         socket.on(Socket.EVENT_CONNECT) {
             Timber.d("Socket connected")
             _connectionState.value = SocketConnectionState.CONNECTED
             _connected.tryEmit(Unit)
         }
         socket.on(Socket.EVENT_DISCONNECT) { args ->
-            val reason = args.firstOrNull()?.toString() ?: "unknown"
-            Timber.d("Socket disconnected: $reason")
-            if (_socket === socket) {
-                _connectionState.value = SocketConnectionState.CONNECTING
-            }
+            Timber.d("Socket disconnected: %s", args.firstOrNull()?.toString() ?: "unknown")
+            if (_socket === socket) _connectionState.value = SocketConnectionState.CONNECTING
             _disconnected.tryEmit(Unit)
         }
         socket.on(Socket.EVENT_CONNECT_ERROR) { args ->
-            Timber.e("Socket connect error: ${args.firstOrNull()}")
-            if (_socket === socket) {
-                _connectionState.value = SocketConnectionState.CONNECTING
+            Timber.e("Socket connect error: %s", args.firstOrNull())
+            if (_socket === socket) _connectionState.value = SocketConnectionState.CONNECTING
+        }
+        socket.on(EVENT_TOKEN_EXPIRED) { onTokenExpired(presented) }
+        socket.on(EVENT_SESSION_REVOKED) { args ->
+            Timber.w("Socket: session revoked")
+            _sessionRevoked.tryEmit(reasonOf(args))
+        }
+        socket.on(EVENT_ERROR) { args ->
+            Timber.w("Socket error event: %s", args.firstOrNull())
+            _socketErrors.tryEmit(args.firstOrNull()?.toString().orEmpty())
+        }
+    }
+
+    /** Rafraichit AU NOM du jeton présenté à ce handshake, jamais de « le compte du moment ». */
+    internal fun onTokenExpired(presented: String?) {
+        val jwt = presented ?: return
+        scope.launch {
+            try {
+                refresher.renew(jwt, sentUnderGeneration = null)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (@Suppress("TooGenericExceptionCaught") failure: Exception) {
+                Timber.e(failure, "Socket: renouvellement sur auth:token-expired en echec")
             }
         }
-        socket.connect()
     }
 
-    fun disconnect() {
-        _socket?.disconnect()
-        _socket = null
-        _connectionState.value = SocketConnectionState.DISCONNECTED
+    private fun reasonOf(args: Array<Any>): String? =
+        (args.firstOrNull() as? JSONObject)?.optString("reason")?.takeIf { it.isNotBlank() }
+
+    /** Ferme la socket, retire ses écouteurs et OUBLIE le registre : la session est finie. */
+    fun disconnect() = synchronized(lock) {
+        closeTransport()
+        registered.clear()
     }
 
-    fun reconnectWithToken() {
-        disconnect()
+    /** Referme puis rouvre avec le jeton courant, en gardant les écouteurs enregistrés. */
+    fun reconnectWithToken(): SocketConnectOutcome = synchronized(lock) {
+        closeTransport()
         connect()
     }
 
+    private fun closeTransport() {
+        refreshJob?.cancel()
+        refreshJob = null
+        _socket?.let { socket ->
+            socket.removeAllListeners()
+            socket.disconnect()
+        }
+        _socket = null
+        presentedToken = null
+        _connectionState.value = SocketConnectionState.DISCONNECTED
+    }
+
     fun on(event: String, callback: (Array<Any>) -> Unit) {
-        _socket?.on(event) { args -> callback(args) }
+        synchronized(lock) {
+            registered += event to callback
+            _socket?.on(event, callback)
+        }
     }
 
     fun emit(event: String, data: JSONObject) {
@@ -136,10 +225,16 @@ class SocketManager @Inject constructor(
     }
 
     fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit) {
-        _socket?.emit(event, arrayOf(data)) { args -> ack(args) }
+        _socket?.emit(event, data, ack)
     }
 
     fun joinRoom(room: String) {
         Timber.d("Socket joining room: $room")
+    }
+
+    private companion object {
+        const val EVENT_TOKEN_EXPIRED = "auth:token-expired"
+        const val EVENT_SESSION_REVOKED = "auth:session-revoked"
+        const val EVENT_ERROR = "error"
     }
 }

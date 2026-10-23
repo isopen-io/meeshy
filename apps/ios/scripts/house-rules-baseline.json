@@ -12,7 +12,7 @@
     "idiom": 0,
     "logger-subsystem": 0,
     "narrative-comment": 2480,
-    "nonisolated-unsafe": 111,
+    "nonisolated-unsafe": 110,
     "nslock": 39,
     "nslog": 0,
     "observed-theme-singleton": 0,
