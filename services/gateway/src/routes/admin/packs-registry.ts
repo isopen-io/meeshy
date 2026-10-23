@@ -121,9 +121,14 @@ export async function packsRegistryAdminRoutes(fastify: FastifyInstance, options
   const overrides = options.overrides ?? liveRegistryOverrides(prisma);
   const guard = { onRequest: [fastify.authenticate, requirePackAdmin] };
 
+  // Les surcharges se lisent AVANT que le serveur écoute : jusque-là, le registre est servi masqué (fail-closed).
+  fastify.addHook('onReady', async () => {
+    await overrides.refresh().catch((error: unknown) => logError('pack registry overrides initial load failed', error, { source: 'admin-packs-registry' }));
+  });
+
   const rowOf = (domain: PackDomain, entry: PackIndexEntry) => {
     const snapshot = overrides.snapshot();
-    const found = snapshot.get(`${domain}.${entry.slug}`) ?? null;
+    const found = snapshot?.get(`${domain}.${entry.slug}`) ?? null;
     const effective = overlayPackIndex(base, () => snapshot).entries(domain).find((candidate) => candidate.slug === entry.slug) ?? entry;
     return { domain, slug: entry.slug, origin: entry.origin, revision: found?.revision ?? 0, base: editableOf(entry), override: found?.override ?? null, effective: editableOf(effective) };
   };
@@ -174,10 +179,14 @@ export async function packsRegistryAdminRoutes(fastify: FastifyInstance, options
           await journal(request, prisma, { action: 'PACK_REGISTRY_UPDATE_REFUSED', entityId, metadata: { reason: outcome.kind } });
           if (outcome.kind === 'not-found') return fail(reply, 404, 'PACK_NOT_FOUND', 'Aucun pack du dépôt sous ce nom : une surcharge ne crée pas de pack.');
           if (outcome.kind === 'revision-conflict') return fail(reply, 409, 'revision-conflict', 'Le registre a changé depuis votre lecture : rechargez.');
-          return fail(reply, 422, 'PACK_OVERRIDE_UNLAWFUL', 'Cette surcharge viole une loi du registre (prix d’un pack intégré, fenêtre inversée…).');
+          return fail(reply, 422, 'PACK_OVERRIDE_UNLAWFUL', 'Cette surcharge viole une loi du registre (prix d’un pack intégré, pack gratuit rendu payant, fenêtre inversée…).');
         }
         const entry = base.entries(domain).find((candidate) => candidate.slug === slug) as PackIndexEntry;
-        return reply.send({ success: true, data: rowOf(domain, entry) });
+        // Ce qui vient d'être ÉCRIT, pas l'instantané : une relecture qui a échoué ne fait pas mentir la réponse.
+        return reply.send({
+          success: true,
+          data: { domain, slug, origin: entry.origin, revision: outcome.revision, base: editableOf(entry), override: outcome.override, effective: editableOf(outcome.effective) },
+        });
       } catch (error) {
         await journal(request, prisma, { action: 'PACK_REGISTRY_UPDATE_FAILED', entityId, metadata: { error: 'write-failed' } });
         logError('pack registry write failed', error, { source: 'admin-packs-registry' });
@@ -207,13 +216,16 @@ export async function packsRegistryAdminRoutes(fastify: FastifyInstance, options
         const before = await overrides.read(domain, slug);
         const journaled = await journal(request, prisma, { action: 'PACK_REGISTRY_RESET', entityId, changes: { before: before?.override ?? null, expectedRevision } });
         if (!journaled) return fail(reply, 500, 'audit-unavailable', 'Le journal d’audit est indisponible : rien n’a été écrit.');
-        const outcome = await overrides.reset({ domain, slug, expectedRevision });
+        const outcome = await overrides.reset({ base, domain, slug, expectedRevision });
         if (outcome.kind !== 'reset') {
           await journal(request, prisma, { action: 'PACK_REGISTRY_RESET_REFUSED', entityId, metadata: { reason: outcome.kind } });
-          return outcome.kind === 'not-found' ? fail(reply, 404, 'PACK_OVERRIDE_NOT_FOUND') : fail(reply, 409, 'revision-conflict');
+          if (outcome.kind === 'not-found') return fail(reply, 404, 'PACK_OVERRIDE_NOT_FOUND');
+          if (outcome.kind === 'unlawful') return fail(reply, 422, 'PACK_OVERRIDE_UNLAWFUL', 'Revenir au dépôt rendrait payant un pack aujourd’hui gratuit : qui l’a installé le perdrait.');
+          return fail(reply, 409, 'revision-conflict');
         }
         return reply.send({ success: true, data: { domain, slug } });
       } catch (error) {
+        await journal(request, prisma, { action: 'PACK_REGISTRY_RESET_FAILED', entityId, metadata: { error: 'reset-failed' } });
         logError('pack registry reset failed', error, { source: 'admin-packs-registry' });
         return fail(reply, 500, 'PACK_REGISTRY_WRITE_FAILED');
       }

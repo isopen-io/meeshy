@@ -12,7 +12,18 @@
  * Lecture : un instantané en mémoire, relu au plus toutes les `ttlMs` (30 s)
  * par une relecture DÉCLENCHÉE à l'accès — aucune minuterie, aucune lecture
  * synchrone. Chaque passerelle converge seule (sans état partagé) ; celle qui
- * écrit relit aussitôt. Écriture : compare-and-set sur `revision`.
+ * écrit relit aussitôt, au mieux (l'écriture a déjà eu lieu). Écriture :
+ * compare-and-set sur `revision`.
+ *
+ * FAIL-CLOSED (audit de #12293) : tant qu'aucune lecture n'a abouti, l'instantané
+ * est INCONNU (`null`) et chaque pack du registre est servi MASQUÉ — hors rayon,
+ * ni installable ni achetable, rendu chez qui l'a déjà. Sans quoi un pack retiré
+ * réapparaîtrait au redémarrage et redeviendrait achetable au prix du dépôt.
+ * La route d'administration charge les surcharges avant que le serveur écoute.
+ *
+ * Un pack GRATUIT (prix effectif courant : dépôt + surcharge) ne redevient
+ * jamais payant, ni par un prix ni par un retour au dépôt : qui l'a installé
+ * gratuitement le perdrait, le rendu exigeant la possession.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isPackDomain, packChoiceKey, type PackDomain } from '@meeshy/shared/types/content-pack';
@@ -34,16 +45,21 @@ export type PackRegistryOverridesPrisma = Pick<PrismaClient, 'packRegistryEntry'
 
 type Snapshot = ReadonlyMap<string, { readonly override: PackRegistryOverride; readonly revision: number }>;
 
-const EMPTY: Snapshot = new Map();
-
 const keyOf = (domain: PackDomain, slug: string): string => packChoiceKey(domain, slug);
 
-/** Le registre SERVI : celui du dépôt, chaque entrée surchargée quand sa surcharge est légale, dans l'ordre éditorial résultant. */
-export function overlayPackIndex(base: PackIndex, overrides: () => ReadonlyMap<string, { readonly override: PackRegistryOverride }>): PackIndex {
+const MASKED: PackRegistryOverride = { hidden: true };
+
+/**
+ * Le registre SERVI : celui du dépôt, chaque entrée surchargée quand sa surcharge
+ * est légale, dans l'ordre éditorial résultant. Des surcharges INCONNUES (`null`)
+ * servent chaque entrée masquée.
+ */
+export function overlayPackIndex(base: PackIndex, overrides: () => ReadonlyMap<string, { readonly override: PackRegistryOverride }> | null): PackIndex {
   return {
     ...base,
     entries: (domain) => {
       const current = overrides();
+      if (current === null) return base.entries(domain).map((entry) => applyPackOverride(entry, MASKED) ?? { ...entry, hidden: true });
       if (current.size === 0) return base.entries(domain);
       return base
         .entries(domain)
@@ -62,13 +78,19 @@ export type WriteOverrideOutcome =
   | { readonly kind: 'revision-conflict' }
   | { readonly kind: 'unlawful' };
 
-export type ResetOverrideOutcome = { readonly kind: 'reset' } | { readonly kind: 'not-found' } | { readonly kind: 'revision-conflict' };
+export type ResetOverrideOutcome = { readonly kind: 'reset' } | { readonly kind: 'not-found' } | { readonly kind: 'revision-conflict' } | { readonly kind: 'unlawful' };
+
+const isFree = (price: number | null | undefined): boolean => price === undefined || price === null;
+
+/** Un pack gratuit MAINTENANT (dépôt + surcharge courante) qui deviendrait payant : refusé. */
+const turnsFreeIntoPriced = (entry: PackIndexEntry, current: PackRegistryOverride | null, next: PackIndexEntry): boolean =>
+  isFree((current === null ? entry : (applyPackOverride(entry, current) ?? entry)).price) && !isFree(next.price);
 
 export class PackRegistryOverrides {
   private readonly prisma: PackRegistryOverridesPrisma;
   private readonly now: () => Date;
   private readonly ttlMs: number;
-  private current: Snapshot = EMPTY;
+  private current: Snapshot | null = null;
   private loadedAt = Number.NEGATIVE_INFINITY;
   private inflight: Promise<void> | null = null;
 
@@ -78,8 +100,8 @@ export class PackRegistryOverrides {
     this.ttlMs = deps.ttlMs ?? PACK_REGISTRY_TTL_MS;
   }
 
-  /** L'instantané courant, sans attendre ; une relecture part en arrière-plan s'il est périmé. */
-  snapshot(): Snapshot {
+  /** L'instantané courant, sans attendre (`null` tant qu'aucune lecture n'a abouti) ; une relecture part en arrière-plan s'il est périmé. */
+  snapshot(): Snapshot | null {
     if (this.now().getTime() - this.loadedAt >= this.ttlMs && this.inflight === null) {
       void this.refresh().catch((error: unknown) => logger.warn('pack registry overrides refresh failed', { error: error instanceof Error ? error.message : String(error) }));
     }
@@ -133,10 +155,8 @@ export class PackRegistryOverrides {
     const existing = await this.read(params.domain, params.slug);
     if ((existing?.revision ?? 0) !== params.expectedRevision) return { kind: 'revision-conflict' };
     const override = mergePackOverrides(existing?.override ?? {}, params.patch);
-    // Un pack gratuit au dépôt ne devient jamais payant : qui l'a installé gratuitement le perdrait (le rendu exige la possession).
-    if (entry.price === undefined && override.price !== undefined && override.price !== null) return { kind: 'unlawful' };
     const effective = applyPackOverride(entry, override);
-    if (effective === null) return { kind: 'unlawful' };
+    if (effective === null || turnsFreeIntoPriced(entry, existing?.override ?? null, effective)) return { kind: 'unlawful' };
     const data = { override: override as object, updatedBy: params.actorId };
     try {
       if (existing === null) {
@@ -152,18 +172,34 @@ export class PackRegistryOverrides {
       if (typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002') return { kind: 'revision-conflict' };
       throw error;
     }
-    await this.refresh();
+    await this.refreshAfterWrite();
     return { kind: 'written', revision: params.expectedRevision + 1, override, effective };
   }
 
   /** Revient au registre du dépôt (efface la surcharge), en compare-and-set. */
-  async reset(params: { readonly domain: PackDomain; readonly slug: string; readonly expectedRevision: number }): Promise<ResetOverrideOutcome> {
+  async reset(params: { readonly base: PackIndex; readonly domain: PackDomain; readonly slug: string; readonly expectedRevision: number }): Promise<ResetOverrideOutcome> {
     const existing = await this.read(params.domain, params.slug);
     if (existing === null) return { kind: 'not-found' };
     if (existing.revision !== params.expectedRevision) return { kind: 'revision-conflict' };
+    const entry = params.base.entries(params.domain).find((candidate) => candidate.slug === params.slug);
+    if (entry !== undefined && turnsFreeIntoPriced(entry, existing.override, entry)) return { kind: 'unlawful' };
     const removed = await this.prisma.packRegistryEntry.deleteMany({ where: { domain: params.domain, slug: params.slug, revision: existing.revision } });
     if (removed.count !== 1) return { kind: 'revision-conflict' };
-    await this.refresh();
+    await this.refreshAfterWrite();
     return { kind: 'reset' };
+  }
+
+  /**
+   * Après une écriture, AU MIEUX : l'écriture a eu lieu, un échec de relecture ne
+   * la défait pas. Une relecture déjà en vol a pu partir AVANT l'écriture : on
+   * l'attend, puis on relit, pour que la passerelle qui écrit serve sa propre écriture.
+   */
+  private async refreshAfterWrite(): Promise<void> {
+    try {
+      await this.inflight?.catch(() => undefined);
+      await this.refresh();
+    } catch (error) {
+      logger.warn('pack registry overrides refresh after write failed', { error: error instanceof Error ? error.message : String(error) });
+    }
   }
 }

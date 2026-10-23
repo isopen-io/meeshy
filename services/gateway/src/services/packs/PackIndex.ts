@@ -286,7 +286,8 @@ export function startupBasePackIndex(): PackIndex {
 /**
  * Les surcharges d'administration (#11275), une instance par processus, attachée
  * à la base par la première route qui la demande (l'administration du registre,
- * montée au démarrage). Avant, aucune surcharge ne s'applique.
+ * montée au démarrage, qui les charge avant que le serveur écoute). Tant qu'elles
+ * ne sont pas lues, chaque pack du registre est servi masqué (fail-closed).
  */
 export function liveRegistryOverrides(prisma: PackRegistryOverridesPrisma): PackRegistryOverrides {
   liveOverrides ??= new PackRegistryOverrides({ prisma });
@@ -300,5 +301,5 @@ export function liveRegistryOverrides(prisma: PackRegistryOverridesPrisma): Pack
  */
 export function startupPackIndex(): PackIndex {
   const base = startupBasePackIndex();
-  return overlayPackIndex(base, () => liveOverrides?.snapshot() ?? new Map());
+  return overlayPackIndex(base, () => (liveOverrides === undefined ? new Map() : liveOverrides.snapshot()));
 }
