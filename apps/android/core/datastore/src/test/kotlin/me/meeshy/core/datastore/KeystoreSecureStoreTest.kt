@@ -113,6 +113,51 @@ class KeystoreSecureStoreTest {
     }
 
     @Test
+    fun `un fichier recree reste illisible apres redemarrage jusqu'a la reconnaissance du compte`() {
+        var calls = 0
+        val healthy = prefs("vault_restart")
+        val ledger = prefs("vault_restart.recovery")
+        KeystoreSecureStore(
+            open = { if (calls++ == 0) throw GeneralSecurityException("bad tag") else healthy },
+            reset = {},
+            recoveryLedger = { ledger },
+        ).read("k", "A")
+        val restarted = { KeystoreSecureStore(open = { healthy }, recoveryLedger = { ledger }) }
+        assertThat(restarted().read("k", "A")).isEqualTo(SecureRead.Unreadable)
+        restarted().acknowledgeRecovery("A")
+        assertThat(restarted().read("k", "A")).isEqualTo(SecureRead.Absent)
+        assertThat(restarted().read("k", "B")).isEqualTo(SecureRead.Unreadable)
+    }
+
+    @Test
+    fun `une nouvelle recreation annule les reconnaissances precedentes`() {
+        val healthy = prefs("vault_again")
+        val ledger = prefs("vault_again.recovery")
+        fun failingOnce(): KeystoreSecureStore {
+            var calls = 0
+            return KeystoreSecureStore(
+                open = { if (calls++ == 0) throw GeneralSecurityException("bad tag") else healthy },
+                reset = {},
+                recoveryLedger = { ledger },
+            )
+        }
+        failingOnce().acknowledgeRecovery("A")
+        failingOnce().read("k", "A")
+        assertThat(KeystoreSecureStore(open = { healthy }, recoveryLedger = { ledger }).read("k", "A"))
+            .isEqualTo(SecureRead.Unreadable)
+    }
+
+    @Test
+    fun `un registre de reprise illisible laisse le compte illisible`() {
+        val healthy = prefs("vault_ledger_ko")
+        val broken = object : SharedPreferences by prefs("vault_ledger_ko.recovery") {
+            override fun getBoolean(key: String?, defValue: Boolean): Boolean = throw IllegalStateException("disk")
+        }
+        assertThat(KeystoreSecureStore(open = { healthy }, recoveryLedger = { broken }).read("k", "A"))
+            .isEqualTo(SecureRead.Unreadable)
+    }
+
+    @Test
     fun `une lecture qui leve sur une entree isolee est illisible`() {
         val throwing = object : SharedPreferences by prefs("vault_throw") {
             override fun contains(key: String?): Boolean = true

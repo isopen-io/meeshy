@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.core.crypto.keys.E2eeIdentityUnreadableException
+import me.meeshy.core.crypto.primitives.CryptoException
 import me.meeshy.sdk.model.signal.BundlePublicationDecision
 import me.meeshy.sdk.model.signal.BundlePublicationPolicy
 import me.meeshy.sdk.model.signal.BundlePublishRetryPolicy
@@ -99,6 +100,8 @@ class E2eeBundlePublisher @Inject constructor(
             withContext(io) { local.bundleFor(userId) }
         } catch (_: E2eeIdentityUnreadableException) {
             return settle(E2eeBundleState.IDENTITY_UNREADABLE, BundlePublishOutcome.IdentityUnreadable)
+        } catch (_: CryptoException) {
+            return settle(E2eeBundleState.UNAVAILABLE, BundlePublishOutcome.GaveUp)
         }
         val lookup = when (val remote = gateway.fetchBundle(userId)) {
             is NetworkResult.Success -> RemoteBundleLookup.of(remote.data)
@@ -130,6 +133,8 @@ class E2eeBundlePublisher @Inject constructor(
             withContext(io) { local.bundleFor(userId) }
         } catch (_: E2eeIdentityUnreadableException) {
             return settle(E2eeBundleState.IDENTITY_UNREADABLE, BundlePublishOutcome.IdentityUnreadable)
+        } catch (_: CryptoException) {
+            return settle(E2eeBundleState.UNAVAILABLE, BundlePublishOutcome.GaveUp)
         }
         return when (val upload = gateway.uploadBundle(bundle)) {
             is NetworkResult.Success -> settle(E2eeBundleState.PUBLISHED, BundlePublishOutcome.Published)

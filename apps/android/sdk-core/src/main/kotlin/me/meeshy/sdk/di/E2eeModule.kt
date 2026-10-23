@@ -33,7 +33,11 @@ internal class VaultLocalBundleSource @Inject constructor(
     override fun forget(userId: String) = synchronized(lock) { E2eeKeyStore(vault, userId).clearAll() }
 }
 
-/** Publication désactivée par défaut : la passerelle garde UN bundle par utilisateur (E2EE par appareil non tranché). */
+/**
+ * Publication désactivée par défaut : la passerelle garde UN bundle par utilisateur (E2EE par appareil non tranché).
+ * Ne s'active pas avant que l'écriture conditionnelle du bundle (#12505) et la publication de la clé Ed25519
+ * avec vérification de la signature (#12508) soient livrées : garde #12512.
+ */
 internal class DisabledBundlePublicationFlag @Inject constructor() : E2eeBundlePublicationFlag {
     override fun isEnabled(): Boolean = false
 }

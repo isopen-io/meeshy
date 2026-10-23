@@ -33,6 +33,7 @@ class KeystoreSecureStore(
     private val open: () -> SharedPreferences,
     private val reset: () -> Unit = {},
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val recoveryLedger: () -> SharedPreferences? = { null },
 ) : SecureStore {
 
     private val lock = Any()
