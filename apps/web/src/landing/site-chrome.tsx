@@ -24,9 +24,11 @@ import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingDirection, landingPath, ty
  * visent la landing de la langue de la page. Aucune porte « Entrer sans
  * compte » : l'entrée anonyme dans World Wide ne passe plus que par le QR de la
  * landing, flashé vers `/world` (#10784).
- * « Mes conversations » n'existe que sur la landing : c'est son script qui
- * reconnaît un compte avant la première peinture, et les pages statiques n'en
- * portent aucun — un compte y voit « Se connecter », que `/login` résout.
+ * Un seul bouton, le même pour tous et sur chaque page : « Mes conversations »,
+ * vers `/chats` (#12500, demande porteur du 2026-10-23). L'en-tête ne demande
+ * pas qui est là — il n'y a donc rien à basculer avant la première peinture :
+ * c'est la garde de route (`lib/session-guard.ts`) qui envoie vers `/login` un
+ * visiteur sans compte, et la connexion le ramène sur `/chats`.
  */
 export const GlobeIcon = ({ size }: { readonly size: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
@@ -58,14 +60,9 @@ export function SiteHeader({ language, copy, onLanding, languageControl }: SiteH
         </nav>
         <span className="ld-spacer" />
         {languageControl}
-        <a href="/login" className="ld-btn ld-btn--ghost" data-session-visitor>
-          {copy.signIn}
+        <a href="/chats" className="ld-btn ld-btn--primary" data-my-conversations>
+          {copy.myConversations}
         </a>
-        {onLanding ? (
-          <a href="/chats" className="ld-btn ld-btn--primary" data-session-member data-my-conversations>
-            {copy.myConversations}
-          </a>
-        ) : null}
       </div>
     </header>
   );

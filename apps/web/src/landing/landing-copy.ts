@@ -19,7 +19,6 @@ export type LandingCopy = {
   readonly navWorld: string;
   readonly navFaq: string;
   readonly languageLabel: string;
-  readonly signIn: string;
   readonly myConversations: string;
   readonly presence: string;
   readonly headline: string;
@@ -71,7 +70,6 @@ const fr: LandingCopy = {
   navWorld: 'World Wide',
   navFaq: 'FAQ',
   languageLabel: "Langue de l'interface",
-  signIn: 'Se connecter',
   myConversations: 'Mes conversations',
   presence: '{count} personnes dans World Wide',
   headline: 'Parlez au monde entier.',
@@ -129,7 +127,6 @@ const en: LandingCopy = {
   navWorld: 'World Wide',
   navFaq: 'FAQ',
   languageLabel: 'Interface language',
-  signIn: 'Sign in',
   myConversations: 'My conversations',
   presence: '{count} people in World Wide',
   headline: 'Talk to the whole world.',
@@ -187,7 +184,6 @@ const es: LandingCopy = {
   navWorld: 'World Wide',
   navFaq: 'Preguntas frecuentes',
   languageLabel: 'Idioma de la interfaz',
-  signIn: 'Iniciar sesión',
   myConversations: 'Mis conversaciones',
   presence: '{count} personas en World Wide',
   headline: 'Habla con el mundo entero.',
@@ -245,7 +241,6 @@ const pt: LandingCopy = {
   navWorld: 'World Wide',
   navFaq: 'Perguntas frequentes',
   languageLabel: 'Idioma da interface',
-  signIn: 'Entrar',
   myConversations: 'Minhas conversas',
   presence: '{count} pessoas no World Wide',
   headline: 'Fale com o mundo inteiro.',
@@ -303,7 +298,6 @@ const de: LandingCopy = {
   navWorld: 'World Wide',
   navFaq: 'FAQ',
   languageLabel: 'Sprache der Oberfläche',
-  signIn: 'Anmelden',
   myConversations: 'Meine Unterhaltungen',
   presence: '{count} Personen in World Wide',
   headline: 'Sprich mit der ganzen Welt.',
@@ -361,7 +355,6 @@ const it: LandingCopy = {
   navWorld: 'World Wide',
   navFaq: 'FAQ',
   languageLabel: "Lingua dell'interfaccia",
-  signIn: 'Accedi',
   myConversations: 'Le mie conversazioni',
   presence: '{count} persone in World Wide',
   headline: 'Parla con il mondo intero.',
@@ -419,7 +412,6 @@ const ar: LandingCopy = {
   navWorld: 'World Wide',
   navFaq: 'الأسئلة الشائعة',
   languageLabel: 'لغة الواجهة',
-  signIn: 'تسجيل الدخول',
   myConversations: 'محادثاتي',
   presence: '{count} شخصًا في World Wide',
   headline: 'تحدّث إلى العالم كله.',
