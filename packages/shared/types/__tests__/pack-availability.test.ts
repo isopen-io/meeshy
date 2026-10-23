@@ -55,6 +55,15 @@ describe('le registre lit la fenêtre et le ciblage', () => {
     expect(parsePackIndex([entry({ availability })]).rejected).toBe(1);
   });
 
+  it('une borne de fenêtre est un instant ISO en UTC ; une date seule, un décalage ou un texte libre sont refusés', () => {
+    expect(parsePackIndex([entry({ availability: { startsAt: '2026-11-01T00:00:00Z' } })]).rejected).toBe(0);
+    expect(parsePackIndex([entry({ availability: { endsAt: '2026-11-01T08:30:00.125Z' } })]).rejected).toBe(0);
+    expect(parsePackIndex([entry({ availability: { startsAt: '2026-11-01' } })]).rejected).toBe(1);
+    expect(parsePackIndex([entry({ availability: { startsAt: '2026-11-01T00:00:00+01:00' } })]).rejected).toBe(1);
+    expect(parsePackIndex([entry({ availability: { startsAt: 'demain' } })]).rejected).toBe(1);
+    expect(parsePackIndex([entry({ availability: { startsAt: '2026-13-45T00:00:00Z' } })]).rejected).toBe(1);
+  });
+
   it('refuse un pays qui n’est pas un code ISO à deux lettres et une communauté qui n’est pas un identifiant', () => {
     expect(parsePackIndex([entry({ targeting: { countries: ['France'] } })]).rejected).toBe(1);
     expect(parsePackIndex([entry({ targeting: { communities: ['la-team'] } })]).rejected).toBe(1);
