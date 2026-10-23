@@ -38,3 +38,22 @@ describe('la lecture de la qualité de lecture n’existe que dans le catalogue 
     expect(read('apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/routes/ApiRoutesAdmin.kt')).not.toContain('/api/v1/admin/analytics/playback');
   });
 });
+
+describe('le registre des packs (#11275) n’existe que dans le catalogue web', () => {
+  it('le catalogue TS le porte, le Swift et le Kotlin non', () => {
+    expect(read('packages/shared/api/endpoints/admin.ts')).toContain('/api/v1/admin/packs/registry');
+    expect(read('packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints/AdminEndpoint.swift')).not.toContain('/api/v1/admin/packs/registry');
+    expect(read('apps/android/core/network/src/main/kotlin/me/meeshy/sdk/net/routes/ApiRoutesAdmin.kt')).not.toContain('/api/v1/admin/packs/registry');
+  });
+
+  it('ses trois routes sont déclarées lues par la console web', () => {
+    const keys = WEB_CONSOLE_ROUTES.map((route) => `${route.method} ${route.path}`);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/v1/admin/packs/registry',
+        'PUT /api/v1/admin/packs/registry/:domain/:slug',
+        'DELETE /api/v1/admin/packs/registry/:domain/:slug',
+      ]),
+    );
+  });
+});

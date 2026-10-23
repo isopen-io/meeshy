@@ -248,7 +248,9 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 90 : #11271 ajoute `packs-lens` (les lens des partenaires sous
     // `/api/v1/packs/lens` : proposer, modérer, installer). Aucun alias, aucune
     // route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(90);
+    // 91 : #11275 ajoute `admin-packs-registry` (`/api/v1/admin/packs/registry`,
+    // les surcharges du registre des packs sans déploiement). Aucun alias.
+    expect(ROUTE_TABLE.length).toBe(91);
   });
 });
 

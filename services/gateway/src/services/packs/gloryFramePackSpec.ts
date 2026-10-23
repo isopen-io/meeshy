@@ -90,7 +90,10 @@ export type GloryFramePackSpecOptions = {
 export function gloryFramePackSpec(options: GloryFramePackSpecOptions): PackDomainSpec<FramePackSummary, FramePackDetail> {
   return {
     domain: 'glory-frame',
-    registry: registryOf(options.index),
+    // Relu à chaque accès : une surcharge d'administration (#11275) s'applique sans redémarrer.
+    get registry() {
+      return registryOf(options.index);
+    },
     community: null,
     removalGuard: options.removalGuard ?? null,
     toSummary: framePackSummary,

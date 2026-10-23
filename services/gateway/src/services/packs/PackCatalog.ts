@@ -239,12 +239,19 @@ export class PackCatalog<S, D extends S> {
     return [...official, ...(await this.spec.community.installed(chosen, await this.communityOwnedKeys(userId)))];
   }
 
-  /** Un pack — du registre (masqué compris, en lecture), sinon communautaire et visible de ce lecteur. */
+  /**
+   * Un pack — du registre s'il est EN RAYON pour ce lecteur ou s'il l'a installé
+   * (un pack masqué ou dont la fenêtre n'est pas ouverte ne se lit pas par son
+   * slug, audit de #12293), sinon communautaire et visible de ce lecteur.
+   */
   async detail(slug: string, viewer: PackViewer): Promise<D | null> {
     const choices = await this.choices(viewer.userId);
     const installedOf = this.installedOf(choices);
     const pack = this.registryPack(slug);
-    if (pack !== undefined) return pack.project(installedOf(slug), (await this.ownedOf(viewer.userId))(pack));
+    if (pack !== undefined) {
+      const readable = installedOf(slug) || (!pack.hidden && (await this.shelvedOf(viewer.userId, installedOf))(pack));
+      return readable ? pack.project(installedOf(slug), (await this.ownedOf(viewer.userId))(pack)) : null;
+    }
     return this.spec.community === null ? null : this.spec.community.detail(slug, viewer, installedOf, await this.communityOwnedKeys(viewer.userId));
   }
 

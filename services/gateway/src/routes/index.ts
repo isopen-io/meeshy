@@ -124,6 +124,7 @@ import { adminModerationActRoutes } from './admin/moderation-acts';
 import { agentAdminRoutes } from './admin/agent';
 import { agentTopicsRoutes } from './admin/agent-topics';
 import { gameSeasonsAdminRoutes } from './admin/game-seasons';
+import { packsRegistryAdminRoutes } from './admin/packs-registry';
 import { routeUsageAdminRoutes } from './admin/route-usage';
 import { adminOversightRoutes } from './admin/oversight';
 import { adminOpsRoutes } from './admin/ops';
@@ -298,6 +299,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-agent', prefix: `${API_PREFIX}/admin/agent`, module: agentAdminRoutes },
   { name: 'admin-agent-topics', prefix: `${API_PREFIX}/admin/agent`, module: agentTopicsRoutes },
   { name: 'admin-game-seasons', prefix: `${API_PREFIX}/admin/game`, module: gameSeasonsAdminRoutes },
+  // Le registre des packs, surchargé sans déploiement (#11275) : `canManageGame`, journal avant d'agir.
+  { name: 'admin-packs-registry', prefix: `${API_PREFIX}/admin/packs`, module: packsRegistryAdminRoutes },
   { name: 'admin-route-usage', prefix: `${API_PREFIX}/admin`, module: routeUsageAdminRoutes },
   // La « vue de dieu » (#8876) : journal d'audit, liens de suivi, fiche de
   // communauté et supervision, sous le MÊME préfixe que `admin-content` /
