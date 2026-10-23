@@ -58,10 +58,16 @@ describe('planVideoTranscode', () => {
     expect(plan).not.toBeNull();
   });
 
-  it('transcodes a non-h264 codec (e.g. hevc/vp9) to h264', () => {
+  it('never REPLACES an HEVC original — it gets an additional H.264 rendition instead (#11261)', () => {
     expect(
       planVideoTranscode({ sizeBytes: 20 * MB, width: 1280, height: 720, videoCodec: 'hevc', bitrateBps: 1_000_000 })
-    ).not.toBeNull();
+    ).toBeNull();
+    expect(
+      planVideoTranscode({ sizeBytes: 500 * MB, width: 3840, height: 2160, videoCodec: 'hevc', bitrateBps: 50_000_000 })
+    ).toBeNull();
+  });
+
+  it('transcodes another non-h264 codec (vp9) to h264', () => {
     expect(
       planVideoTranscode({ sizeBytes: 20 * MB, width: 640, height: 480, videoCodec: 'vp9', bitrateBps: 400_000 })
     ).not.toBeNull();
@@ -72,7 +78,7 @@ describe('planVideoTranscode', () => {
       sizeBytes: 50 * MB,
       width: 1080,
       height: 1920, // portrait → long side 1920 > cap
-      videoCodec: 'hevc',
+      videoCodec: 'vp9',
     });
     expect(plan!.targetVideoBitrateKbps).toBe(targetVideoBitrateKbps(VIDEO_TRANSCODE_DEFAULTS.maxLongSide));
   });
