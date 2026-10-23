@@ -40,4 +40,10 @@ object CollapsibleHeaderMotion {
 
     /** Bold below the halfway point of the collapse, semi-bold at or beyond it. */
     fun isTitleBold(progress: Float): Boolean = progress.coerceIn(0f, 1f) < 0.5f
+
+    /**
+     * Glissement vertical du slot central revele : sous « Reduire les animations » il n'y en a plus,
+     * seul le fondu reste.
+     */
+    fun revealSlideDp(slideDp: Float, reduceMotion: Boolean): Float = if (reduceMotion) 0f else slideDp
 }
