@@ -35,10 +35,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.auth.R
@@ -60,9 +60,14 @@ fun LoginScreen(
     onMagicLink: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(state.isAuthenticated) {
         if (state.isAuthenticated) onAuthenticated()
+    }
+
+    LaunchedEffect(state.restartToApplyEnvironment) {
+        if (state.restartToApplyEnvironment) restartToApplyServer(context)
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MeeshyTheme.tokens.backgroundPrimary) {
@@ -94,7 +99,27 @@ fun LoginScreen(
             // Parity iOS LoginView: showPicker gates the remembered-account picker
             // (list, or the selected account's password prompt) vs. the plain
             // username/password form — see AuthUiState.showPicker.
-            if (state.showPicker) {
+            val twoFactorPending = state.twoFactorToken != null
+            val verificationPending = state.pendingVerification
+            if (twoFactorPending) {
+                TwoFactorSection(
+                    state = state,
+                    onCodeChange = viewModel::onTwoFactorCodeChange,
+                    onSubmit = viewModel::submitTwoFactor,
+                    onCancel = viewModel::cancelTwoFactor,
+                    modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
+                )
+            } else if (verificationPending != null) {
+                EmailVerificationSection(
+                    state = state,
+                    pending = verificationPending,
+                    onCodeChange = viewModel::onVerificationCodeChange,
+                    onSubmit = viewModel::submitVerification,
+                    onResend = viewModel::resendVerification,
+                    onClose = viewModel::cancelVerification,
+                    modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
+                )
+            } else if (state.showPicker) {
                 val selected = state.selectedAccount
                 if (selected != null) {
                     SelectedAccountForm(
@@ -106,7 +131,7 @@ fun LoginScreen(
                 } else {
                     SavedAccountsPicker(
                         accounts = state.savedAccounts,
-                        errorText = state.errorMessage,
+                        errorText = state.errorRes?.let { stringResource(it) } ?: state.errorMessage,
                         onAccountTap = viewModel::selectAccount,
                         onAccountRemove = viewModel::removeAccount,
                         onOtherAccount = viewModel::useAnotherAccount,
@@ -356,18 +381,15 @@ private fun SelectedAccountForm(
             }
         }
 
-        OutlinedTextField(
+        LoginPasswordField(
             value = state.password,
             onValueChange = viewModel::onPasswordChange,
-            label = { Text(stringResource(R.string.login_password_label)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             enabled = !state.isSubmitting,
+            onGo = viewModel::login,
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.lg),
         )
 
-        state.errorMessage?.let { message ->
+        (state.errorRes?.let { stringResource(it) } ?: state.errorMessage)?.let { message ->
             Text(
                 text = message,
                 color = MeeshyTheme.tokens.error,
@@ -416,20 +438,18 @@ private fun NormalLoginForm(
         onValueChange = viewModel::onUsernameChange,
         label = { Text(stringResource(R.string.login_username_label)) },
         singleLine = true,
+        keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Next),
         enabled = !state.isSubmitting,
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = if (showBackToPicker) MeeshySpacing.md else MeeshySpacing.xl),
     )
 
-    OutlinedTextField(
+    LoginPasswordField(
         value = state.password,
         onValueChange = viewModel::onPasswordChange,
-        label = { Text(stringResource(R.string.login_password_label)) },
-        singleLine = true,
-        visualTransformation = PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         enabled = !state.isSubmitting,
+        onGo = viewModel::login,
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = MeeshySpacing.md),

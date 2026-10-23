@@ -121,6 +121,18 @@
                 <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/join/" />
                 <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/join/" />
             </intent-filter>
+            <!-- App Link : le lien de partage d'un post (me.meeshy.sdk.model.PostShareLink,
+                 /feeds/post/{id}) et la forme /post/{id} des liens suivis de la passerelle
+                 ouvrent le detail du post dans l'app (Routes.POST_SHARE_DEEP_LINKS). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/feeds/post/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/feeds/post/" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/post/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/post/" />
+            </intent-filter>
         </activity>
 
         <!-- "Share to Meeshy" target (feature-parity §O — text/URL lot 1, image/video lot 2,

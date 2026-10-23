@@ -16,8 +16,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -117,14 +119,25 @@ fun NewConversationScreen(
                 onValueChange = viewModel::onQueryChange,
                 singleLine = true,
                 label = { Text(stringResource(R.string.new_conversation_search_hint)) },
+                trailingIcon = {
+                    if (state.query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.onQueryChange("") }) {
+                            Icon(
+                                Icons.Filled.Cancel,
+                                contentDescription = stringResource(R.string.conversations_search_clear),
+                                tint = MeeshyTheme.tokens.textMuted,
+                            )
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
             )
 
-            state.errorMessage?.let { message ->
+            state.error?.let { error ->
                 Text(
-                    text = message,
+                    text = stringResource(error.messageRes()),
                     color = MeeshyPalette.Error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
@@ -145,6 +158,9 @@ fun NewConversationScreen(
                         }
                     }
                 }
+                if (state.showsNoResults) {
+                    NoUserFound(modifier = Modifier.align(Alignment.TopCenter))
+                }
                 if (state.isSearching && state.results.isEmpty()) {
                     CircularProgressIndicator(
                         modifier = Modifier
@@ -154,6 +170,37 @@ fun NewConversationScreen(
                 }
             }
         }
+    }
+}
+
+private fun NewConversationError.messageRes(): Int = when (this) {
+    NewConversationError.BLOCKED -> R.string.new_conversation_error_blocked
+    NewConversationError.CREATE_FAILED -> R.string.new_conversation_error_create
+}
+
+/** « Aucun utilisateur trouvé » (parity iOS `NewConversationView.emptyState`). */
+@Composable
+private fun NoUserFound(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 60.dp)
+            .semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        Icon(
+            Icons.Filled.PersonOff,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textMuted.copy(alpha = 0.5f),
+            modifier = Modifier.size(36.dp),
+        )
+        Text(
+            text = stringResource(R.string.new_conversation_no_user_found),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyTheme.tokens.textMuted,
+        )
     }
 }
 

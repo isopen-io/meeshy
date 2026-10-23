@@ -1,7 +1,6 @@
 package me.meeshy.app.settings
 
-import android.content.Intent
-import android.net.Uri
+import me.meeshy.ui.component.link.openExternalLink
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -139,7 +138,7 @@ private fun LicenseRow(license: OpenSourceLicense, accent: Color) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(license.url)))
+                context.openExternalLink(license.url)
             },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,

@@ -39,8 +39,8 @@ final class TimelineThumbnailScaleTests: XCTestCase {
     func test_videoFilmstrip_keysAndBoundsByScale() {
         let url = URL(fileURLWithPath: "/tmp/clip.mp4")
         XCTAssertNotEqual(
-            VideoFilmstrip.cacheKey(url: url, count: 6, maxHeight: 40, scale: 2),
-            VideoFilmstrip.cacheKey(url: url, count: 6, maxHeight: 40, scale: 3))
+            VideoFilmstrip.request(url: url, count: 6, maxHeight: 40, scale: 2),
+            VideoFilmstrip.request(url: url, count: 6, maxHeight: 40, scale: 3))
         XCTAssertEqual(VideoFilmstrip.maximumSize(maxHeight: 40, scale: 3), CGSize(width: 160, height: 120))
     }
 }

@@ -88,6 +88,7 @@
     <string name="conversations_rename_confirm_button">Salva</string>
     <string name="conversations_retry">Riprova</string>
     <string name="conversations_search">Cerca</string>
+    <string name="conversations_search_clear">Cancella ricerca</string>
     <string name="conversations_search_close">Chiudi la ricerca</string>
     <string name="conversations_search_hint">Cerca conversazioni</string>
     <string name="conversations_section_pinned">fissato</string>
@@ -141,7 +142,9 @@
     <string name="my_share_links_toggle">Attivi</string>
     <string name="new_conversation_back">Indietro</string>
     <string name="new_conversation_create">Crea</string>
+    <string name="new_conversation_error_create">Impossibile creare la conversazione</string>
     <string name="new_conversation_group_title">Nome del gruppo</string>
+    <string name="new_conversation_no_user_found">Nessun utente trovato</string>
     <string name="new_conversation_remove">Rimuovi</string>
     <string name="new_conversation_selected">Selezionato</string>
     <string name="new_conversation_title">Nuova conversazione</string>

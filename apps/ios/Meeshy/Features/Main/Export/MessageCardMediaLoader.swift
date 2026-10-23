@@ -146,10 +146,7 @@ nonisolated enum MessageCardMediaLoader {
             return image
         }
         guard let url = URL(string: resolved(item.fileURL)) else { return nil }
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 1080, height: 1080)
-        return try? await generator.image(at: .zero).image
+        return await VideoThumbnailGenerator.shared.image(for: .firstFrame(of: url, maxDimension: 1080))?.cgImage
     }
 
     /// Le fichier d'un son ou d'une vidéo, copié avec son EXTENSION : AVFoundation

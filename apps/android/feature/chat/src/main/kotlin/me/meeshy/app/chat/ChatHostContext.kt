@@ -1,6 +1,9 @@
 package me.meeshy.app.chat
 
 import android.net.Uri
+import java.io.File
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -141,6 +144,9 @@ internal class ChatHostActions(
     val closeForward: () -> Unit,
     val onForwardQueryChange: (String) -> Unit,
     val forwardTo: (String) -> Unit,
+    val stageFile: (File, String?) -> Unit = { _, _ -> },
+    val stageCapturedUris: suspend (List<Uri>) -> Unit = {},
+    val trayNotices: Flow<String> = emptyFlow(),
 )
 
 internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
@@ -178,6 +184,9 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     pickFile = this::onPickFile,
     removePendingAttachment = { id -> controllers.find<ComposerTrayController>()?.remove(id) },
     stagePendingUris = { uris -> controllers.find<ComposerTrayController>()?.stageUris(uris) },
+    stageFile = { file, mime -> controllers.find<ComposerTrayController>()?.stageFile(file, mime) },
+    stageCapturedUris = { uris -> controllers.find<ComposerTrayController>()?.stageUrisAndWait(uris) },
+    trayNotices = controllers.find<ComposerTrayController>()?.notices ?: emptyFlow(),
     dismissImageViewer = this::dismissImageViewer,
     openEmojiPicker = this::openEmojiPicker,
     startEdit = this::startEdit,
