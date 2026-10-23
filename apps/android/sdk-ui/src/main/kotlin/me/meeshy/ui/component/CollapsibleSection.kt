@@ -26,6 +26,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -39,6 +41,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  * A collapsible list section (parity plan §4.4) — the port of the iOS conversation-list
  * groups (Épingles / dossiers / Mes conversations). The header shows a coloured rounded
  * icon chip, the title, a count pill, and a chevron that rotates as the section opens;
+ * folded, it also shows [foldedUnread] — the unread messages its hidden rows carry (iOS
+ * `SectionFoldedUnread`, #8694) — in the section's colour;
  * the body reveals its child rows with a size animation.
  *
  * SDK-pure: the icon and the rows are opaque slots, the accent is a plain [Color], and
@@ -51,6 +55,8 @@ public fun CollapsibleSection(
     modifier: Modifier = Modifier,
     iconContainerColor: Color = MeeshyPalette.Indigo500,
     count: Int = 0,
+    foldedUnread: Int = 0,
+    foldedUnreadDescription: String? = null,
     initiallyExpanded: Boolean = true,
     icon: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -88,6 +94,22 @@ public fun CollapsibleSection(
                 color = tokens.textPrimary,
                 modifier = Modifier.weight(1f),
             )
+            if (!expanded && foldedUnread > 0) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(MeeshyRadius.pill))
+                        .background(iconContainerColor)
+                        .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp)
+                        .semantics { foldedUnreadDescription?.let { contentDescription = it } },
+                ) {
+                    Text(
+                        text = foldedUnread.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MeeshyPalette.White,
+                    )
+                }
+                Spacer(Modifier.width(MeeshySpacing.sm))
+            }
             if (count > 0) {
                 Box(
                     modifier = Modifier

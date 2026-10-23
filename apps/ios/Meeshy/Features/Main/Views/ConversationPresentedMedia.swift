@@ -50,7 +50,6 @@ struct ComposerQuotedPlaybackFullscreen: View {
                     accentColor: accentColor,
                     frame: .flat,
                     availability: availability,
-                    performance: .fullscreen,
                     reportsConsumption: media.reportsConsumption,
                     poster: media.type == "video" ? VideoPosterResolver.poster(for: attachment) : nil,
                     onDownload: onDownload,

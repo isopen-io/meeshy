@@ -74,4 +74,6 @@ internal data class ConversationRowModel(
     val categories: List<CategoryOption>,
     val previewMessages: List<LocalMessage>?,
     val isLocked: Boolean,
+    /** The list's minute clock: relative time, preview countdowns and heat age with it. */
+    val nowMillis: Long,
 )

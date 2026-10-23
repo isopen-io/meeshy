@@ -50,6 +50,6 @@ internal suspend inline fun <reified P> Json.withPayload(
     deliver: (P) -> SendResult,
 ): SendResult {
     val payload = runCatching { decodeFromString<P>(row.payload) }
-        .getOrElse { return SendResult.PermanentFailure("Bad payload: ${it.message}") }
+        .getOrElse { return SendResult.PermanentFailure("Bad payload: ${it.message}", unreadable = true) }
     return deliver(payload)
 }

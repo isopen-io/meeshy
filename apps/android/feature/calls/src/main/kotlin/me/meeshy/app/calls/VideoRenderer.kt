@@ -14,6 +14,8 @@ import org.webrtc.VideoTrack
  * attaching the new — and [onRelease] always detaches and releases the GL surface.
  *
  * @param overlay put the surface on top (for the small self PiP over the remote feed).
+ * @param fit show the whole picture (letterboxed) instead of filling and cropping it — for a
+ * resizable window or a shared screen, where cropping the peer is undesirable.
  */
 @Composable
 fun VideoRenderer(
@@ -22,19 +24,21 @@ fun VideoRenderer(
     modifier: Modifier = Modifier,
     mirror: Boolean = false,
     overlay: Boolean = false,
+    fit: Boolean = false,
 ) {
     AndroidView(
         modifier = modifier,
         factory = { context ->
             SurfaceViewRenderer(context).apply {
                 init(eglContext, null)
-                setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+                setScalingType(scalingTypeFor(fit))
                 setEnableHardwareScaler(true)
                 setMirror(mirror)
                 if (overlay) setZOrderMediaOverlay(true)
             }
         },
         update = { renderer ->
+            renderer.setScalingType(scalingTypeFor(fit))
             val attached = renderer.tag as? VideoTrack
             if (attached !== track) {
                 attached?.removeSink(renderer)
@@ -49,3 +53,6 @@ fun VideoRenderer(
         },
     )
 }
+
+private fun scalingTypeFor(fit: Boolean): RendererCommon.ScalingType =
+    if (fit) RendererCommon.ScalingType.SCALE_ASPECT_FIT else RendererCommon.ScalingType.SCALE_ASPECT_FILL

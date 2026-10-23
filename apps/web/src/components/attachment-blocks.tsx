@@ -9,6 +9,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { reportAttachmentStatus } from '@/lib/api/attachments';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { useLoudnessLevel } from '@/lib/media/loudness-level';
 import { RecentMediaScopeContext, messagesRecentMediaScope, useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
 import { coqueCourante } from '@/lib/native-shell';
 import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
@@ -231,7 +232,10 @@ function VoiceAttachment({
     },
     [bind],
   );
-  useRememberSeenAttachment({ element: audioElement, attachmentId: attachment.id, src: track.url === '' ? '' : attachmentSrc(track.url), active: true });
+  const trackSrc = track.url === '' ? '' : attachmentSrc(track.url);
+  useRememberSeenAttachment({ element: audioElement, attachmentId: attachment.id, src: trackSrc, active: true });
+  /* #12285 — le vocal se lit au niveau perçu de la cible (−16 LUFS), l'original seulement. */
+  const loudness = useLoudnessLevel({ element: audioElement, lufs: attachment.loudnessLufs, playsOriginal: !track.translated, src: trackSrc });
   const playingElement = carried?.element ?? audioElement;
   const activeSegment = useKaraokeIndex(playingElement, segments, status === 'playing');
 
@@ -319,13 +323,14 @@ function VoiceAttachment({
           coupe le son et revient à `idle` — le bouton redit « Lire l'audio »
           et joue la piste NEUVE. */}
       <audio
-        key={track.url}
+        key={`${track.url}${loudness.remountKey}`}
         ref={bindAudio}
         preload="none"
         data-np-attachment={attachment.id}
         data-track-language={track.language}
         className="hidden"
-        {...(track.url === '' ? {} : { src: attachmentSrc(track.url) })}
+        {...loudness.attributes}
+        {...(trackSrc === '' ? {} : { src: trackSrc })}
       />
       <div className="flex items-center gap-2.5">
         <button
