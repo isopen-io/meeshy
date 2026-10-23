@@ -148,7 +148,7 @@ describe('vite/pwa.ts — un script, deux régimes (#11326)', () => {
     const { SERVICE_WORKER_SCRIPTS, dropServiceWorkerScripts } = await import('../vite/pwa');
     const dir = mkdtempSync(join(tmpdir(), 'shell-dist-'));
     for (const name of SERVICE_WORKER_SCRIPTS) writeFileSync(join(dir, name), '');
-    const plugin = dropServiceWorkerScripts() as { writeBundle(options: { readonly dir?: string }): void };
+    const plugin = dropServiceWorkerScripts() as unknown as { writeBundle(options: { readonly dir?: string }): void };
     plugin.writeBundle({ dir });
     expect(readdirSync(dir)).toEqual(['sw-recent-media.js']);
   });
