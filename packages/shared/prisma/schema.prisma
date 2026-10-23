@@ -5914,6 +5914,8 @@ model GameSeasonDefinition {
   stepPoints Int      @default(100)
   /// Textes en sept langues `{fr,en,es,de,it,pt-BR,ar → {title,tagline,description}}`, ou absent.
   copy       Json?
+  /// Le pack que la saison récompense (#11274), par sa clé `packChoiceKey` ; absent = aucun.
+  rewardPackKey String?
   revision   Int      @unique
   updatedBy  String?  @db.ObjectId
   createdAt  DateTime @default(now())

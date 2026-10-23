@@ -43,6 +43,11 @@ class ConversationOpenerHost internal constructor(
     )
     val events: SharedFlow<ConversationOpenEvent> = mutableEvents.asSharedFlow()
 
+    /** Un echec hors de l'ouverture par id (ex. conversation directe impossible) : meme toast que partout. */
+    fun reportOpenFailure(detail: String? = null) {
+        mutableEvents.tryEmit(ConversationOpenEvent.ShowError(openConversationErrorMessage(errorTitle(), detail)))
+    }
+
     suspend fun open(
         conversationId: String,
         highlightMessageId: String? = null,
