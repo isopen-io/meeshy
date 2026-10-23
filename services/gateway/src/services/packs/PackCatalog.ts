@@ -55,6 +55,7 @@ import { GameRefusal } from '../game/GameRefusal';
 import { MeeshSpend, type SpendTx } from '../game/MeeshSpend';
 import { PackGrants, type PackAward, type PackAwardOutcome } from './PackGrants';
 import { readPackAudience } from './packAudience';
+import { packRequirementPreview, type PackRequirementPreview } from '@meeshy/shared/types/pack-unlock';
 
 export type PackViewer = { readonly userId: string; readonly canModerate: boolean };
 
@@ -203,15 +204,24 @@ export class PackCatalog<S, D extends S> {
     this.registries = { [deps.spec.domain]: deps.spec.registry.map(({ slug, installedByDefault }) => ({ slug, installedByDefault })) };
   }
 
-  /** La boutique : le registre dans l'ordre éditorial (masqués exclus), puis les packs communautaires publiés. */
-  async catalogue(userId: string): Promise<readonly S[]> {
+  /**
+   * La boutique : le registre dans l'ordre éditorial (masqués exclus), puis les
+   * packs communautaires publiés. Un pack du registre NON possédé qui se gagne
+   * ou qui a une fenêtre porte `requirementPreview` (#11276).
+   */
+  async catalogue(userId: string): Promise<readonly (S & { readonly requirementPreview?: PackRequirementPreview })[]> {
     const choices = await this.choices(userId);
     const installedOf = this.installedOf(choices);
     const ownedOf = await this.ownedOf(userId);
     const shelvedOf = await this.shelvedOf(userId, installedOf);
-    const official = this.spec.registry
-      .filter((pack) => !pack.hidden && shelvedOf(pack))
-      .map((pack) => this.spec.toSummary(pack.project(installedOf(pack.slug), ownedOf(pack))));
+    const shelved = this.spec.registry.filter((pack) => !pack.hidden && shelvedOf(pack));
+    const previewOf = await this.requirementPreviews(userId, shelved.filter((pack) => !ownedOf(pack)));
+    const official = shelved.map((pack) => {
+      const owned = ownedOf(pack);
+      const summary = this.spec.toSummary(pack.project(installedOf(pack.slug), owned));
+      const requirementPreview = owned ? null : previewOf(pack);
+      return requirementPreview === null ? summary : { ...summary, requirementPreview };
+    });
     const community = this.spec.community === null ? [] : await this.spec.community.catalogue(installedOf, await this.communityOwnedKeys(userId));
     return [...official, ...community.map(this.spec.toSummary)];
   }
@@ -347,6 +357,15 @@ export class PackCatalog<S, D extends S> {
   private async communityOwned(userId: string, slug: string): Promise<boolean> {
     const row = await this.prisma.userPackOwnership.findUnique({ where: { userId_packKey: { userId, packKey: packChoiceKey(this.domain, slug) } }, select: { id: true } });
     return row !== null;
+  }
+
+  /** Ce qui reste à débloquer de chaque pack passé ; les faits du jeu ne sont lus qu'une fois, et seulement si une récompense les demande. */
+  private async requirementPreviews(userId: string, packs: readonly RegistryPack<D>[]): Promise<(pack: RegistryPack<D>) => PackRequirementPreview | null> {
+    const rules = packs.flatMap((pack) => (pack.reward === undefined ? [] : [pack.reward]));
+    if (packs.length === 0) return () => null;
+    const facts = await this.grants.unlockFacts(userId, rules);
+    const now = this.now();
+    return (pack) => packRequirementPreview(pack, { facts, now });
   }
 
   /** Le moment et le lecteur d'une offre ; le lecteur n'est lu que si l'un des packs passés est ciblé. */
