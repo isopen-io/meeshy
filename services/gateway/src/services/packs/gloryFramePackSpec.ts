@@ -77,6 +77,8 @@ const registryOf = (index: PackIndex): readonly RegistryPack<FramePackDetail>[] 
     installedByDefault: entry.installedByDefault,
     removable: entry.removable,
     hidden: entry.hidden,
+    availability: entry.availability,
+    targeting: entry.targeting,
     project: (installed: boolean) => framePackDetail(entry, installed, index.itemCount(entry)),
   }));
 

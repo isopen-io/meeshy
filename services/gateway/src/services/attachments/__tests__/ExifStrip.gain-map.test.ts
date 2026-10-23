@@ -14,10 +14,13 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync } from 'fs';
+import { spawnSync } from 'child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 import sharp, { type Sharp } from 'sharp';
 import { stripExifFromImageBuffer } from '../ExifStrip';
+import { appleHeadroomTagsOfTiff } from '../metadata-strip/apple-hdr-headroom';
 
 const FIXTURES = join(__dirname, 'fixtures', 'gain-map');
 const fixture = (name: string): Buffer => readFileSync(join(FIXTURES, name));
@@ -306,3 +309,47 @@ const rational = (numerator: number, denominator: number): Buffer => {
 async function sdrRenditionAsJpeg(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer).jpeg({ quality: 100 }).toBuffer();
 }
+
+describe('stripExifFromImageBuffer — un VRAI HEIC HDR d’iPhone (#12268)', () => {
+  const IPHONE = fixture('iphone-hdr-gain-map.heic');
+  const TIFF = Buffer.from('MM\0*', 'latin1');
+
+  function decodedWithGainMap(heic: Buffer): { readonly primary: Buffer; readonly gainMap: Buffer } {
+    const dir = mkdtempSync(join(tmpdir(), 'iphone-hdr-'));
+    try {
+      writeFileSync(join(dir, 'in.heic'), heic);
+      const run = spawnSync('heif-convert', ['--with-aux', '--no-colons', join(dir, 'in.heic'), join(dir, 'out.png')]);
+      if (run.status !== 0) throw new Error(run.stderr.toString());
+      return {
+        primary: readFileSync(join(dir, 'out.png')),
+        gainMap: readFileSync(join(dir, 'out-urn_com_apple_photo_2020_aux_hdrgainmap.png')),
+      };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  const rawPixels = (png: Buffer): Promise<Buffer> => sharp(png).raw().toBuffer();
+  const headroom = (heic: Buffer) => appleHeadroomTagsOfTiff(heic.subarray(heic.indexOf(TIFF)));
+
+  it('garde, au bit près, l’image principale et la carte de gain décodées', async () => {
+    const before = decodedWithGainMap(IPHONE);
+    const after = decodedWithGainMap(await stripExifFromImageBuffer(IPHONE, 'image/heic'));
+
+    expect((await rawPixels(after.primary)).equals(await rawPixels(before.primary))).toBe(true);
+    expect((await rawPixels(after.gainMap)).equals(await rawPixels(before.gainMap))).toBe(true);
+  });
+
+  it('garde la marge HDR du MakerNote et la version de la carte, sans le modèle d’appareil', async () => {
+    expect(headroom(IPHONE).length).toBeGreaterThan(0);
+    expect(IPHONE.toString('latin1')).toContain('iPhone');
+
+    const stripped = await stripExifFromImageBuffer(IPHONE, 'image/heic');
+
+    expect(stripped.length).toBe(IPHONE.length);
+    expect(headroom(stripped)).toEqual(headroom(IPHONE));
+    expect(stripped.toString('utf8')).toContain('<HDRGainMap:HDRGainMapVersion>');
+    expect(stripped.toString('utf8')).toContain('urn:com:apple:photo:2020:aux:hdrgainmap');
+    expect(stripped.toString('latin1')).not.toContain('iPhone');
+  });
+});
