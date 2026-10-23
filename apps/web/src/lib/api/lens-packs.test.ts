@@ -6,6 +6,7 @@ import {
   loadLensDocument,
   loadLensPending,
   loadLensSubmissions,
+  loadWithdrawnLenses,
   reviewLens,
   submitLens,
   restoreLens,
@@ -88,6 +89,13 @@ describe('les routes des lens', () => {
     const { calls, deps } = transportAnswering(() => ({ ok: true, data: [lens()] }));
     await loadLensPending(deps);
     expect(calls[0]).toMatchObject({ method: 'GET', path: '/api/v1/packs/lens/pending' });
+  });
+
+  test('les lens retirées : GET /packs/lens/withdrawn, chacune avec sa note de retrait', async () => {
+    const { calls, deps } = transportAnswering(() => ({ ok: true, data: [lens({ status: 'withdrawn', reviewNote: 'Signalée' })] }));
+    const listed = await loadWithdrawnLenses(deps);
+    expect(calls[0]).toMatchObject({ method: 'GET', path: '/api/v1/packs/lens/withdrawn' });
+    expect(listed.ok && listed.data.map((pack) => [pack.status, pack.reviewNote])).toEqual([['withdrawn', 'Signalée']]);
   });
 
   test('publier en fixant la fenêtre et les communautés ; refuser avec un mot', async () => {
