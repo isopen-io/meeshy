@@ -21,7 +21,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
-import { createReelMediaUnlocker } from '@/lib/reels/media-unlock';
+import { createReelMediaUnlocker, currentReelUnlockScope } from '@/lib/reels/media-unlock';
 import { reelPrimeSourceOf } from '@/lib/reels/scene';
 import { createPagerSettle } from '@/lib/reels/settle';
 import { useReelPreload } from '@/lib/reels/use-reel-preload';
@@ -356,7 +356,7 @@ export default function ReelsScreen() {
   });
   const countRef = useRef(count);
   countRef.current = count;
-  const [unlocker] = useState(createReelMediaUnlocker);
+  const [unlocker] = useState(() => createReelMediaUnlocker({ scope: currentReelUnlockScope() }));
 
   const close = useCallback(() => {
     if (reelsExitOf(currentHistory()) === 'back') window.history.back();

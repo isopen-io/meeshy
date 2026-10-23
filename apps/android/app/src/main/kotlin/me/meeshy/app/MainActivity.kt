@@ -11,6 +11,7 @@ import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -122,6 +123,8 @@ class MainActivity : ComponentActivity() {
  * preference is "System" (`null`) the original context is used unchanged, so a device
  * locale the app has no translation for still falls back through Android's own resource
  * resolution. Works on every supported API level (minSdk 26) with no extra dependency.
+ * The Activity stays the context's base ([localizedContext]) so links, shares and
+ * permission prompts keep working when a language is forced.
  */
 @androidx.compose.runtime.Composable
 private fun LocalizedContent(
@@ -131,22 +134,19 @@ private fun LocalizedContent(
     val tag = AppLanguage.resolveInterfaceLocaleTag(languageCode)
     val baseContext = LocalContext.current
     val baseConfiguration = LocalConfiguration.current
-
-    if (tag == null) {
-        content()
-        return
+    val locale = remember(tag) { tag?.let(Locale::forLanguageTag) }
+    if (locale != null) SideEffect { Locale.setDefault(locale) }
+    val context = remember(tag, baseContext, baseConfiguration) {
+        tag?.let { localizedContext(baseContext, it, baseConfiguration) } ?: baseContext
+    }
+    val localizedConfiguration = remember(locale, baseConfiguration) {
+        locale?.let { Configuration(baseConfiguration).apply { setLocale(it) } } ?: baseConfiguration
     }
 
-    val localizedContext = remember(tag, baseContext, baseConfiguration) {
-        Locale.setDefault(Locale.forLanguageTag(tag))
-        localizedContext(baseContext, tag, baseConfiguration)
-    }
-    val localizedConfiguration = remember(tag, baseConfiguration) {
-        Configuration(baseConfiguration).apply { setLocale(Locale.forLanguageTag(tag)) }
-    }
-
+    // Toujours le même nœud : passer de « Système » à une langue ne recrée pas l'arbre,
+    // donc la navigation reste sur l'écran où la langue a été choisie.
     CompositionLocalProvider(
-        LocalContext provides localizedContext,
+        LocalContext provides context,
         LocalConfiguration provides localizedConfiguration,
     ) {
         content()
