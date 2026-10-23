@@ -28,6 +28,7 @@
     "clean": "rm -rf dist node_modules coverage"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1147.0",
     "@fastify/cors": "^11.3.0",
     "@fastify/helmet": "^13.2.0",
     "@fastify/jwt": "^10.2.2",
@@ -50,6 +51,7 @@
     "axios": "^1.19.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^5.81.5",
     "dompurify": "^3.4.14",
     "dotenv": "^18.0.0",
     "fastify": "^5.12.3",

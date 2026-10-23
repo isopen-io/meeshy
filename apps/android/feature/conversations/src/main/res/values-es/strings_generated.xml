@@ -160,6 +160,20 @@
     <string name="new_conversation_selected">Seleccionado</string>
     <string name="new_conversation_title">Nueva conversación</string>
     <string name="participantProfile_linkExpires">Caduca el</string>
+    <string name="row_a11y_conversation_with">Conversación con %s</string>
+    <string name="row_a11y_last_message">último mensaje: %s</string>
+    <string name="row_a11y_muted">silenciada</string>
+    <string name="row_a11y_pending_sync">sincronización pendiente</string>
+    <string name="row_a11y_pinned">fijada</string>
+    <plurals name="row_a11y_unread_count">
+        <item quantity="one">1 mensaje sin leer</item>
+        <item quantity="many">%d mensajes sin leer</item>
+        <item quantity="other">%d mensajes sin leer</item>
+    </plurals>
+    <string name="row_join_call">Volver a unirse</string>
+    <string name="row_join_call_a11y">Llamada en curso, toca para volver a unirte</string>
+    <string name="row_menu_info">Info de conversación</string>
+    <string name="row_menu_view_profile">Ver perfil</string>
     <string name="shareLink_a11y_copied">Enlace copiado</string>
     <string name="shareLink_detail_allLanguages">Todos los idiomas</string>
     <string name="shareLink_detail_allowedLanguages">Idiomas permitidos</string>

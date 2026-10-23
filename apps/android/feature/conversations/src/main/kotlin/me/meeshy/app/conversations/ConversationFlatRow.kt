@@ -16,7 +16,8 @@ import me.meeshy.ui.theme.MeeshySpacing
  * Le dessin de la rangée plate Lentille — sans fond, sans bordure, sans ombre (la hauteur de 84 dp,
  * la sourdine, la barre de sélection et les gestes sont l'affaire de [ConversationRowContainer]).
  * Avatar de 44 dp dans son anneau d'accent, puis trois lignes: le titre (nom, glyphes, points
- * d'étiquettes, pastille de non-lus), la ligne 2 (frappe > brouillon > aperçu) et la date à droite.
+ * d'étiquettes, pastille de non-lus ou bouton « Rejoindre » l'appel en cours), la ligne 2
+ * (frappe > brouillon > aperçu) et la date à droite.
  * Tout ce qu'elle dessine arrive résolu; l'accent est un paramètre, jamais une couleur codée.
  */
 @Composable
@@ -33,6 +34,7 @@ internal fun ConversationFlatRow(
     line2: RowLine2,
     timeLabel: String?,
     modifier: Modifier = Modifier,
+    onJoinCall: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -65,6 +67,8 @@ internal fun ConversationFlatRow(
                 reaction = reaction,
                 tags = tags,
                 unreadCount = model.conversation.unreadCount,
+                accent = accent,
+                onJoinCall = onJoinCall,
             )
             ConversationRowLine2(line2 = line2, preview = rowPreview, accent = accent)
             ConversationRowDateLine(timeLabel = timeLabel)

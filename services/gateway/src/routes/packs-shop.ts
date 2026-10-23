@@ -24,6 +24,7 @@ import { stickerPackSpec } from '../services/packs/stickerPackSpec';
 import { builtinStickerPackNames } from '../services/packs/stickerPackNames';
 import { sendSuccess } from '../utils/response.js';
 import { packEnvelope, packRouteGuard } from './pack-routes';
+import { lensPackCatalog } from './packs-lens';
 
 export type ShopCatalog = { catalogue(userId: string): Promise<readonly object[]> };
 
@@ -74,6 +75,7 @@ export async function packsShopRoutes(fastify: FastifyInstance, options: PacksSh
         new PackCatalog({ prisma: fastify.prisma, spec: appearancePackSpec({ index, domain, ...(isCommunityAppearanceDomain(domain) ? { community: prismaCommunityAppearanceStore(fastify.prisma, domain) } : {}) }) }),
       ]),
     ),
+    lens: lensPackCatalog(fastify).catalog,
   });
   const catalogs = options.catalogs ?? defaults();
   const balance = options.balance ?? ((userId: string) => new MeeshSpend(fastify.prisma).balance(userId));

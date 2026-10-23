@@ -1,10 +1,12 @@
+import { Suspense, lazy } from 'react';
+
 import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
 import { AdminListToolbar, type AdminToolbarFilter } from '@/components/admin/list-toolbar';
 import { AdminMomentText } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminInlineNotice, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminInlineNotice, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { interpretReportStatus, interpretReportType, interpretReportedEntity } from '@/lib/admin/interpret/enums';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -29,12 +31,15 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import type { AdminOption } from '@/components/admin/list-toolbar';
 
 import { withReportClosed } from '@/lib/admin/report-acts';
+
 import type { AdminPage } from '@/lib/api/admin-page';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { AdminReportActBar } from './admin-report-acts';
 import { ReportPerson, ReportReasonBadge, ReportStatusBadge, ReportedElement } from './admin-report-parts';
 import { AdminReportsStats } from './admin-reports-stats';
+
+const LensModerationBlock = lazy(() => import('@/routes/admin-lens-moderation-block'));
 
 /**
  * **LES SIGNALEMENTS** (#8876, #6726) — la file de modération : ce que la
@@ -191,7 +196,17 @@ export default function AdminReportsScreen() {
 
   return (
     <AdminSectionScreen section="reports" language={language} title={translateAdmin(language, 'admin.nav.reports')}>
-      {() => <AdminReportsPanel language={language} />}
+      {(reach) => (
+        <div className="grid gap-6">
+          <AdminReportsPanel language={language} />
+          {/* W16 — la modération des lens, chargée à la demande, pour `canModerateContent` seulement. */}
+          {reach.can('canModerateContent') ? (
+            <Suspense fallback={<AdminSkeleton rows={3} />}>
+              <LensModerationBlock language={language} />
+            </Suspense>
+          ) : null}
+        </div>
+      )}
     </AdminSectionScreen>
   );
 }

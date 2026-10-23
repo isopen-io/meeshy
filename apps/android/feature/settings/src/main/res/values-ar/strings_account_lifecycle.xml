@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="account_lifecycle_deletion_pending">طلب حذف ينتظر تأكيدك. افتح الرابط الذي وصلك عبر البريد الإلكتروني.</string>
+    <string name="account_lifecycle_deletion_pending_expires">ينتهي الرابط في %1$s.</string>
+    <string name="account_lifecycle_deletion_grace">سيُحذف حسابك في %1$s. للإلغاء، افتح الرابط في البريد الإلكتروني قبل هذا التاريخ.</string>
+    <string name="account_lifecycle_deletion_grace_no_date">حسابك قيد الحذف. للإلغاء، افتح الرابط في البريد الإلكتروني.</string>
+    <string name="activation_invite_banner_title">فعّل حسابك</string>
+    <string name="activation_invite_banner_days">الأيام المتبقية: %1$d</string>
+    <string name="activation_invite_banner_no_days">أثبت بريدك الإلكتروني وأضف رقم هاتف.</string>
+    <string name="activation_invite_banner_later">لاحقًا</string>
+    <string name="birth_date_title">تاريخ الميلاد</string>
+    <string name="birth_date_message">أدخل تاريخ ميلادك. يمكن تحديده مرة واحدة فقط.</string>
+    <string name="birth_date_pick">اختيار تاريخي</string>
+    <string name="birth_date_confirm">تأكيد</string>
+    <string name="birth_date_done">شكرًا، تم تسجيل تاريخ ميلادك.</string>
+    <string name="birth_date_done_restricted">شكرًا. يمكنك قراءة Meeshy لكن الكتابة مغلقة لعمرك.</string>
+    <string name="birth_date_error_already_set">تاريخ ميلادك محدد بالفعل.</string>
+    <string name="birth_date_error_below_minimum">Meeshy غير متاح لمن هم دون 13 عامًا.</string>
+    <string name="birth_date_error_invalid">هذا التاريخ غير صالح.</string>
+    <string name="birth_date_error_unsupported">هذا الخادم لا يدعم هذه الخطوة بعد.</string>
+    <string name="birth_date_error_unavailable">تعذّر حفظ تاريخ ميلادك. حاول مرة أخرى.</string>
+</resources>

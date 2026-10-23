@@ -79,7 +79,13 @@
     <string name="post_comments_delete_error">Couldn\'t delete the comment</string>
     <string name="post_comments_deleted">Comment deleted</string>
     <string name="post_comments_load_error">Error loading comments</string>
+    <plurals name="post_comments_load_more_replies">
+        <item quantity="one">View %d more reply</item>
+        <item quantity="other">View %d more replies</item>
+    </plurals>
+    <string name="post_comments_load_more_replies_hint">Shows the remaining replies in this thread</string>
     <string name="post_comments_more_options">More options</string>
+    <string name="post_comments_reply_a11y_label">%1$s, reply. %2$s. %3$s</string>
     <string name="post_comments_reply_action">Reply</string>
     <string name="post_comments_reply_badge">Reply</string>
     <string name="post_comments_reply_error">Error sending reply</string>

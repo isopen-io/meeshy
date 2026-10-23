@@ -48,8 +48,33 @@
     <string name="presence_away">بعيد</string>
     <string name="presence_here">في المحادثة</string>
     <string name="presence_idle">غير نشط</string>
+    <plurals name="presence_lastSeen_days">
+        <item quantity="zero">شوهد قبل %d يوم</item>
+        <item quantity="one">شوهد قبل %d يوم</item>
+        <item quantity="two">شوهد قبل %d يوم</item>
+        <item quantity="few">شوهد قبل %d يوم</item>
+        <item quantity="many">شوهد قبل %d يوم</item>
+        <item quantity="other">شوهد قبل %d يوم</item>
+    </plurals>
+    <plurals name="presence_lastSeen_hours">
+        <item quantity="zero">شوهد قبل %d ساعة</item>
+        <item quantity="one">شوهد قبل %d ساعة</item>
+        <item quantity="two">شوهد قبل %d ساعة</item>
+        <item quantity="few">شوهد قبل %d ساعة</item>
+        <item quantity="many">شوهد قبل %d ساعة</item>
+        <item quantity="other">شوهد قبل %d ساعة</item>
+    </plurals>
+    <plurals name="presence_lastSeen_minutes">
+        <item quantity="zero">شوهد قبل %d دقيقة</item>
+        <item quantity="one">شوهد قبل %d دقيقة</item>
+        <item quantity="two">شوهد قبل %d دقيقة</item>
+        <item quantity="few">شوهد قبل %d دقيقة</item>
+        <item quantity="many">شوهد قبل %d دقيقة</item>
+        <item quantity="other">شوهد قبل %d دقيقة</item>
+    </plurals>
     <string name="presence_offline">غير متصل</string>
     <string name="presence_online">متصل</string>
+    <string name="reactions_more">مزيد من التفاعلات</string>
     <string name="settings_info_button_label">معرفة المزيد عن %s</string>
     <string name="sticker_sheet_close">إغلاق</string>
     <string name="sticker_sheet_favorites_empty">اضغط مطولاً على زخرفة لتثبيتها هنا.</string>

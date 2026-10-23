@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -29,8 +30,9 @@ private const val LOCK_GLYPH = "🔒"
 
 /**
  * Première ligne: 📌 avant le nom, le nom, puis 🔕, 🔒, l'émoji favori et les points d'étiquettes (6 dp,
- * trois au plus), et à droite la pastille de non-lus (« 99+ » au-delà de 99). Les glyphes sont décoratifs:
- * le libellé unique du conteneur les annonce.
+ * trois au plus), et à droite la pastille de non-lus (« 99+ » au-delà de 99) — ou, quand un appel est en
+ * cours, le bouton « Rejoindre » qui remplace toute autre info à droite (parité iOS
+ * `joinLiveCallButton`, contrat §3.3). Les glyphes sont décoratifs: le libellé unique du conteneur les annonce.
  */
 @Composable
 internal fun ConversationRowTitleLine(
@@ -41,6 +43,8 @@ internal fun ConversationRowTitleLine(
     reaction: String?,
     tags: List<String>,
     unreadCount: Int,
+    accent: Color,
+    onJoinCall: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -63,7 +67,11 @@ internal fun ConversationRowTitleLine(
         reaction?.let { Glyph(it) }
         ConversationRowTagDots(tags)
         Spacer(Modifier.weight(1f))
-        MeeshyUnreadBadge(count = unreadCount, isDark = MeeshyTheme.isDark)
+        if (onJoinCall != null) {
+            ConversationRowJoinButton(accent = accent, onClick = onJoinCall)
+        } else {
+            MeeshyUnreadBadge(count = unreadCount, isDark = MeeshyTheme.isDark)
+        }
     }
 }
 

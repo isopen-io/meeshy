@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.avatar.ConversationHere
+import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.StoryRingState
 
 /**
@@ -35,7 +36,27 @@ internal data class ConversationRowActions(
     val onCreateCategory: (String) -> Unit = {},
     val onLoadPreview: () -> Unit = {},
     val onLockToggle: () -> Unit = {},
+    /** « Rejoindre » l'appel en cours ; la ligne ne montre le bouton que si un appel est servi. */
+    val onJoinCall: () -> Unit = {},
+    /** Entrées de menu dont la destination dépend de l'hôte de navigation : `null` = entrée masquée. */
+    val onViewInfo: (() -> Unit)? = null,
+    val onViewProfile: (() -> Unit)? = null,
+    val onCreateShareLink: (() -> Unit)? = null,
 ) {
+    /** Ajoute les destinations de navigation de [conversation] (profil du pair pour une directe). */
+    fun withNavigation(
+        navigation: ConversationRowNavigation,
+        conversation: ApiConversation,
+        currentUserId: String?,
+    ): ConversationRowActions {
+        val peerId = if (conversation.type == "direct") conversation.otherParticipantUserId(currentUserId) else null
+        return copy(
+            onViewInfo = navigation.onViewInfo?.let { open -> { open(conversation.id) } },
+            onViewProfile = peerId?.let { id -> navigation.onViewProfile?.let { open -> { open(id) } } },
+            onCreateShareLink = navigation.onCreateShareLink?.let { open -> { open(conversation.id) } },
+        )
+    }
+
     companion object {
         /** The actions of [conversationId] routed to the list ViewModel. */
         fun forConversation(viewModel: ConversationListViewModel, conversationId: String) = ConversationRowActions(
@@ -81,8 +102,12 @@ internal data class ConversationRowModel(
     val isSelected: Boolean = false,
     /** Rangée tenue à la main pour un glisser-déposer. */
     val isDragging: Boolean = false,
-    /** Le pair a l'écran de CETTE conversation ouvert (point « ici »). */
+    /** Le pair d'une directe a l'écran de CETTE conversation ouvert (annonce serveur `viewing:*`, point « ici »). */
     val here: ConversationHere = ConversationHere.ABSENT,
     /** La phrase des points d'engagement, déjà localisée, lue par TalkBack. */
     val spokenPoints: String? = null,
+    /** Une mutation de la conversation (épingle, muet, archive, section) n'est pas encore livrée. */
+    val hasPendingSync: Boolean = false,
+    /** Un appel est en cours et rejoignable dans cette conversation. */
+    val callInProgress: Boolean = false,
 )

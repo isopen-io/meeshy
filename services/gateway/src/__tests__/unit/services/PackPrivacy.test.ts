@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
+import { createHash } from 'node:crypto';
 import {
   DELETED_ACCOUNT_PACK_AUTHOR,
   exportPackData,
@@ -273,5 +274,60 @@ describe('les propositions d’apparence d’un tiers suivent le compte (#10709)
     const measured = await measurePackData(db as never, PARTI, { files: fakeFileStore([]).store });
     expect(measured).toMatchObject({ submissionsDeleted: 2, publishedAnonymized: 1 });
     expect(db.tables.communityAppearancePack.rows).toHaveLength(4);
+  });
+});
+
+describe('les lens proposées suivent le compte (#11271)', () => {
+  const lens = (id: string, submitterId: string, status: string, author = 'Studio Nord'): Row => ({
+    id, slug: `lens-${id}`, name: 'Aurore', author, submitterId, status, reviewNote: null, reviewedAt: null, installCount: 2, cost: 'standard', createdAt: AT, documentJson: '{"schema":1}',
+  });
+  const publishedDocument = JSON.stringify({ schema: 1, id: 'lens-l3', credits: { author: 'Studio Nord', createdAt: '2026-10-01' } });
+  const packs = (): Row[] => [
+    lens('l1', PARTI, 'pending'),
+    lens('l2', PARTI, 'rejected'),
+    { ...lens('l3', PARTI, 'approved'), documentJson: publishedDocument, documentSha256: 'old', documentSrc: 'old0000000000000.json' },
+    lens('l4', VOISIN, 'pending', 'Voisin'),
+  ];
+  const assets = (): Row[] => ['l1', 'l2', 'l3', 'l4'].map((packId) => ({ id: `f-${packId}`, packId, src: `${packId.padEnd(16, '0')}.png` }));
+
+  it('les exporte, document compris, sans rien du voisin', async () => {
+    const db = fakePackDb({ lensPack: packs(), lensPackAsset: assets() });
+    const data = await exportPackData(db as never, PARTI, PAGE);
+    expect(data.lensSubmissions.total).toBe(3);
+    expect(data.lensSubmissions.items.map((row) => row.slug).sort()).toEqual(['lens-l1', 'lens-l2', 'lens-l3']);
+    expect(data.lensSubmissions.items[0]).toHaveProperty('documentJson');
+    expect(JSON.stringify(data)).not.toContain('Voisin');
+  });
+
+  it('efface les non publiées et leurs fichiers, anonymise la publiée, laisse le voisin', async () => {
+    const db = fakePackDb({ lensPack: packs(), lensPackAsset: assets() });
+    const summary = await purgePackData(db as never, PARTI, { files: fakeFileStore([]).store });
+    expect(db.tables.lensPack.rows.map((row) => [row.id, row.author])).toEqual([
+      ['l3', DELETED_ACCOUNT_PACK_AUTHOR],
+      ['l4', 'Voisin'],
+    ]);
+    expect(db.tables.lensPackAsset.rows.map((row) => row.packId).sort()).toEqual(['l3', 'l4']);
+    expect(summary).toMatchObject({ submissionsDeleted: 2, publishedAnonymized: 1 });
+    expect(await measurePackData(db as never, PARTI, { files: fakeFileStore([]).store })).toMatchObject({ submissionsDeleted: 0, publishedAnonymized: 0 });
+  });
+
+  it('réécrit le document publié sans le nom de l’auteur, ré-adressé par sa nouvelle empreinte', async () => {
+    const db = fakePackDb({ lensPack: packs(), lensPackAsset: assets() });
+    await purgePackData(db as never, PARTI, { files: fakeFileStore([]).store });
+
+    const published = db.tables.lensPack.rows.find((row) => row.id === 'l3')!;
+    const json = String(published.documentJson);
+    const sha = createHash('sha256').update(json, 'utf8').digest('hex');
+    expect(json).not.toContain('Studio Nord');
+    expect(JSON.parse(json).credits).toEqual({ author: DELETED_ACCOUNT_PACK_AUTHOR, createdAt: '2026-10-01' });
+    expect(published).toMatchObject({ documentSha256: sha, documentSrc: `${sha.slice(0, 16)}.json`, documentBytes: Buffer.byteLength(json, 'utf8') });
+  });
+
+  it('une lens retirée par la modération part avec le compte, fichiers compris', async () => {
+    const db = fakePackDb({ lensPack: [lens('l5', PARTI, 'withdrawn')], lensPackAsset: [{ id: 'f-l5', packId: 'l5', src: 'l500000000000000.png' }] });
+    const summary = await purgePackData(db as never, PARTI, { files: fakeFileStore([]).store });
+    expect(db.tables.lensPack.rows).toEqual([]);
+    expect(db.tables.lensPackAsset.rows).toEqual([]);
+    expect(summary).toMatchObject({ submissionsDeleted: 1 });
   });
 });

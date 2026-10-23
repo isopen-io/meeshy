@@ -158,6 +158,19 @@
     <string name="new_conversation_selected">Ausgewählt</string>
     <string name="new_conversation_title">Neue Unterhaltung</string>
     <string name="participantProfile_linkExpires">Läuft ab am</string>
+    <string name="row_a11y_conversation_with">Unterhaltung mit %s</string>
+    <string name="row_a11y_last_message">letzte Nachricht: %s</string>
+    <string name="row_a11y_muted">stummgeschaltet</string>
+    <string name="row_a11y_pending_sync">Synchronisierung ausstehend</string>
+    <string name="row_a11y_pinned">angeheftet</string>
+    <plurals name="row_a11y_unread_count">
+        <item quantity="one">1 ungelesene Nachricht</item>
+        <item quantity="other">%d ungelesene Nachrichten</item>
+    </plurals>
+    <string name="row_join_call">Beitreten</string>
+    <string name="row_join_call_a11y">Anruf läuft, zum Beitreten tippen</string>
+    <string name="row_menu_info">Unterhaltungsinfo</string>
+    <string name="row_menu_view_profile">Profil ansehen</string>
     <string name="shareLink_a11y_copied">Link kopiert</string>
     <string name="shareLink_detail_allLanguages">Alle Sprachen</string>
     <string name="shareLink_detail_allowedLanguages">Zugelassene Sprachen</string>

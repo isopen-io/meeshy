@@ -76,7 +76,7 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
         KeyedJsonCacheEntity::class,
         PendingIdEntity::class,
     ],
-    version = 20,
+    version = 21,
     exportSchema = true,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {

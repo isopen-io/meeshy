@@ -25,8 +25,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -50,7 +52,8 @@ internal const val ROW_SELECTION_BAR_TEST_TAG = "conversation-row-selection-bar"
 /**
  * Le conteneur de gestes de la rangée plate: toucher ouvre, appui long ouvre le menu contextuel,
  * sourdine et glisser-déposer modulent opacité et échelle, la sélection (tablette) pose une barre
- * d'accent de 3 dp — jamais un fond. Pour TalkBack c'est UN seul bouton au libellé complet.
+ * d'accent de 3 dp — jamais un fond. Pour TalkBack c'est UN seul bouton au libellé complet (synchro
+ * en attente comprise), qui porte « Rejoindre l'appel » en action personnalisée quand un appel est en cours.
  * Le contenu dessiné vit dans [ConversationFlatRow].
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -94,6 +97,12 @@ internal fun ConversationRowContainer(
 
     val label = rowAccessibilityLabel(model, title, rowPreview, timeLabel, isPinned, isMuted)
     val opensHint = stringResource(R.string.conversations_row_opens_conversation)
+    val joinCallDescription = stringResource(R.string.row_join_call_a11y)
+    val showsJoin = ConversationRowJoinCall.isVisible(
+        callInProgress = model.callInProgress,
+        isLocked = model.isLocked,
+        isTyping = line2 == RowLine2.TYPING,
+    )
     val scale by animateFloatAsState(
         targetValue = ConversationRowAppearance.dragScale(model.isDragging),
         animationSpec = tween(durationMillis = 150),
@@ -126,6 +135,14 @@ internal fun ConversationRowContainer(
                     contentDescription = label
                     role = Role.Button
                     selected = model.isSelected
+                    if (showsJoin) {
+                        customActions = listOf(
+                            CustomAccessibilityAction(joinCallDescription) {
+                                actions.onJoinCall()
+                                true
+                            },
+                        )
+                    }
                 },
         ) {
             ConversationFlatRow(
@@ -140,6 +157,7 @@ internal fun ConversationRowContainer(
                 rowPreview = rowPreview,
                 line2 = line2,
                 timeLabel = timeLabel,
+                onJoinCall = actions.onJoinCall.takeIf { showsJoin },
             )
             if (model.isSelected) {
                 Box(
@@ -193,6 +211,9 @@ internal fun ConversationRowContainer(
             onCreateCategory = actions.onCreateCategory,
             isLocked = model.isLocked,
             onLockToggle = actions.onLockToggle,
+            onViewInfo = actions.onViewInfo,
+            onViewProfile = actions.onViewProfile,
+            onCreateShareLink = actions.onCreateShareLink,
         )
     }
 }
@@ -207,7 +228,7 @@ private fun rowAccessibilityLabel(
     isMuted: Boolean,
 ): String {
     val unread = model.conversation.unreadCount
-    val spokenPreview = listOfNotNull(rowPreview.draftLabel, rowPreview.text).joinToString(" ")
+    val spokenPreview = ConversationRowAccessibility.spokenPreview(rowPreview)
     return ConversationRowAccessibility.label(
         title = stringResource(R.string.accessibility_conversation_with, title),
         preview = spokenPreview.takeIf { it.isNotBlank() }
@@ -218,5 +239,6 @@ private fun rowAccessibilityLabel(
         pinned = stringResource(R.string.accessibility_pinned).takeIf { isPinned },
         locked = stringResource(R.string.conversations_badge_locked).takeIf { model.isLocked },
         points = model.spokenPoints,
+        pendingSync = stringResource(R.string.row_a11y_pending_sync).takeIf { model.hasPendingSync },
     )
 }

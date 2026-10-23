@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertDoesNotExist
@@ -41,7 +42,14 @@ class ConversationFlatRowTest {
         userPreferences = listOfNotNull(prefs),
     )
 
-    private fun show(conversation: ApiConversation, isSelected: Boolean = false, typing: String? = null) {
+    private fun show(
+        conversation: ApiConversation,
+        isSelected: Boolean = false,
+        typing: String? = null,
+        callInProgress: Boolean = false,
+        hasPendingSync: Boolean = false,
+        actions: ConversationRowActions = ConversationRowActions(),
+    ) {
         compose.setContent {
             // Sans animation infinie (points de frappe): l'horloge de test doit pouvoir s'immobiliser.
             CompositionLocalProvider(LocalReduceMotion provides true) {
@@ -61,8 +69,10 @@ class ConversationFlatRowTest {
                         isLocked = false,
                         nowMillis = 0L,
                         isSelected = isSelected,
+                        callInProgress = callInProgress,
+                        hasPendingSync = hasPendingSync,
                     ),
-                    actions = ConversationRowActions(),
+                    actions = actions,
                 )
               }
             }
@@ -115,5 +125,37 @@ class ConversationFlatRowTest {
         show(conversation(), typing = "Ana")
         compose.onNodeWithText("Ana is typing", useUnmergedTree = true).assertIsDisplayed()
     }
-}
 
+    @Test
+    fun `a call in progress offers Rejoin in place of the unread badge`() {
+        show(conversation(unreadCount = 250), callInProgress = true)
+        compose.onNodeWithText("Rejoin", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("99+", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `no call in progress shows no Rejoin button`() {
+        show(conversation(unreadCount = 2))
+        compose.onNodeWithText("Rejoin", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `joining the call is a custom accessibility action of the row`() {
+        var joined = 0
+        show(conversation(), callInProgress = true, actions = ConversationRowActions(onJoinCall = { joined++ }))
+        val config = compose.onNodeWithTag(ROW_TEST_TAG, useUnmergedTree = false).fetchSemanticsNode().config
+        val join = config[SemanticsActions.CustomActions].single()
+        assertThat(join.label).isEqualTo("Call in progress, tap to rejoin")
+
+        compose.runOnIdle { join.action() }
+
+        assertThat(joined).isEqualTo(1)
+    }
+
+    @Test
+    fun `a pending sync is spoken in the row label`() {
+        show(conversation(), hasPendingSync = true)
+        val node = compose.onNodeWithTag(ROW_TEST_TAG, useUnmergedTree = false).fetchSemanticsNode()
+        assertThat(node.config[SemanticsProperties.ContentDescription].joinToString()).contains("sync pending")
+    }
+}
