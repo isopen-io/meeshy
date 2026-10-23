@@ -248,9 +248,7 @@ extension CallView {
                 CachedAsyncImage(
                     url: avatar,
                     targetSize: CGSize(width: size, height: size),
-                    thumbHash: remoteProfile?.avatarThumbHash,
-                    showsStatusOverlays: false,
-                    autoLoad: true
+                    thumbHash: remoteProfile?.avatarThumbHash, showsStatusOverlays: false, autoLoad: true
                 ) {
                     Color.clear
                 }
@@ -298,9 +296,7 @@ extension CallView {
                 CachedAsyncImage(
                     url: avatar,
                     targetSize: CGSize(width: size, height: size),
-                    thumbHash: user?.avatarThumbHash,
-                    showsStatusOverlays: false,
-                    autoLoad: true
+                    thumbHash: user?.avatarThumbHash, showsStatusOverlays: false, autoLoad: true
                 ) {
                     Color.clear
                 }
