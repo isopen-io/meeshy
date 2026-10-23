@@ -9,9 +9,11 @@ import { apiDeps } from '@/lib/api/deps';
 import {
   LENS_PENDING_QUERY_KEY,
   LENS_PUBLISHED_QUERY_KEY,
+  LENS_WITHDRAWN_QUERY_KEY,
   loadLensDocument,
   loadLensPending,
   loadPublishedLenses,
+  loadWithdrawnLenses,
   restoreLens,
   reviewLens,
   withdrawLens,
@@ -30,8 +32,8 @@ import { lensReviewRefusalOf, reviewOfApproval, type ApprovalForm, type LensRevi
  * la fenêtre et les communautés ou refuser avec un mot
  * (`POST /packs/lens/:slug/review`), et retirer une lens publiée
  * (`POST /packs/lens/:slug/withdraw`), puis la rétablir (`POST
- * /packs/lens/:slug/restore`, #12321) : retirée pendant la visite, ou par son
- * nom — la passerelle ne liste pas les lens retirées. Ses installations
+ * /packs/lens/:slug/restore`, #12321) depuis la liste des retirées (`GET
+ * /packs/lens/withdrawn`, la plus récente d'abord, avec sa note). Ses installations
  * retirées ne reviennent pas, et l'écran le dit. Chaque geste est journalisé par la
  * passerelle avant d'agir (famille « Packs » du journal). Le géo-créneau, le
  * prix et le crédit n'existent pas ici (#11251).
@@ -185,12 +187,20 @@ export function AdminLensModerationPanel({ language, deps }: { readonly language
   const [busy, setBusy] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [notes, setNotes] = useState<Readonly<Record<string, string>>>({});
-  const [withdrawn, setWithdrawn] = useState<readonly LensPack[]>([]);
-  const [restoreSlug, setRestoreSlug] = useState('');
+  const withdrawn = useQuery({
+    queryKey: LENS_WITHDRAWN_QUERY_KEY,
+    queryFn: async () => {
+      const result = await loadWithdrawnLenses(deps);
+      if (!result.ok) throw new Error(result.error);
+      return result.data;
+    },
+    retry: false,
+  });
 
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: LENS_PENDING_QUERY_KEY });
     void queryClient.invalidateQueries({ queryKey: LENS_PUBLISHED_QUERY_KEY });
+    void queryClient.invalidateQueries({ queryKey: LENS_WITHDRAWN_QUERY_KEY });
   };
 
   const review = async (slug: string, decision: LensReview | null): Promise<void> => {
@@ -218,13 +228,10 @@ export function AdminLensModerationPanel({ language, deps }: { readonly language
       return;
     }
     setOutcome({ slug, done: 'withdrawn' });
-    setWithdrawn([result.data, ...withdrawn.filter((pack) => pack.slug !== slug)]);
     refresh();
   };
 
-  const restore = async (rawSlug: string): Promise<void> => {
-    const slug = rawSlug.trim();
-    if (slug === '') return;
+  const restore = async (slug: string): Promise<void> => {
     setBusy(slug);
     const result = await restoreLens(deps, slug, notes[slug]);
     setBusy(null);
@@ -233,8 +240,6 @@ export function AdminLensModerationPanel({ language, deps }: { readonly language
       return;
     }
     setOutcome({ slug, done: 'restored' });
-    setWithdrawn(withdrawn.filter((pack) => pack.slug !== slug));
-    setRestoreSlug('');
     refresh();
   };
 
@@ -322,22 +327,37 @@ export function AdminLensModerationPanel({ language, deps }: { readonly language
         <p data-lens-withdrawn-hint className="text-caption" style={{ color: INK2 }}>
           {lensModerationText(language, 'withdrawnHint')}
         </p>
-        {outcome?.restoring === true && outcome.refusal !== undefined && outcome.refusal !== 'invalid' ? (
-          <p role="alert" data-lens-refusal={outcome.refusal} className="text-caption" style={{ color: 'var(--color-error)' }}>
-            {lensModerationText(language, `refusal.${outcome.refusal}`)}
+        {withdrawn.isError ? (
+          <p role="alert" data-lens-withdrawn-error>
+            {lensModerationText(language, 'load.failed')}
           </p>
-        ) : null}
-        {withdrawn.length === 0 ? null : (
+        ) : (withdrawn.data ?? []).length === 0 ? (
+          withdrawn.isPending ? null : (
+            <p data-lens-withdrawn-empty style={{ color: INK2 }}>
+              {lensModerationText(language, 'withdrawnEmpty')}
+            </p>
+          )
+        ) : (
           <ul className="grid gap-2">
-            {withdrawn.map((pack) => (
-              <li key={pack.slug} data-lens-withdrawn={pack.slug} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl p-3" style={{ backgroundColor: 'var(--color-ios-card)' }}>
+            {(withdrawn.data ?? []).map((pack) => (
+              <li key={pack.slug} data-lens-withdrawn={pack.slug} className="grid gap-2 rounded-2xl p-3" style={{ backgroundColor: 'var(--color-ios-card)' }}>
                 <span className="font-semibold">{pack.name}</span>
+                {pack.reviewNote === null ? null : (
+                  <span className="text-caption" style={{ color: INK2 }}>
+                    {lensModerationText(language, 'withdrawnNote', { note: pack.reviewNote })}
+                  </span>
+                )}
+                {outcome?.slug === pack.slug && outcome.restoring === true && outcome.refusal !== undefined && outcome.refusal !== 'invalid' ? (
+                  <p role="alert" data-lens-refusal={outcome.refusal} className="text-caption" style={{ color: 'var(--color-error)' }}>
+                    {lensModerationText(language, `refusal.${outcome.refusal}`)}
+                  </p>
+                ) : null}
                 <button
                   type="button"
                   data-lens-restore={pack.slug}
                   disabled={busy === pack.slug}
                   onClick={() => void restore(pack.slug)}
-                  className="min-h-11 rounded-full px-4"
+                  className="min-h-11 justify-self-start rounded-full px-4"
                   style={{ backgroundColor: 'var(--color-ios-fill)' }}
                 >
                   {lensModerationText(language, 'restore')}
@@ -346,29 +366,6 @@ export function AdminLensModerationPanel({ language, deps }: { readonly language
             ))}
           </ul>
         )}
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="grid flex-1 gap-1 text-caption">
-            <span style={{ color: INK2 }}>{lensModerationText(language, 'field.restoreSlug')}</span>
-            <input
-              name="restoreSlug"
-              data-lens-restore-slug
-              value={restoreSlug}
-              onInput={(event) => setRestoreSlug(event.currentTarget.value)}
-              className="min-h-11 rounded-lg px-3"
-              style={{ backgroundColor: 'var(--color-ios-fill)' }}
-            />
-          </label>
-          <button
-            type="button"
-            data-lens-restore-by-slug
-            disabled={restoreSlug.trim() === '' || busy === restoreSlug.trim()}
-            onClick={() => void restore(restoreSlug)}
-            className="min-h-11 rounded-full px-4"
-            style={{ backgroundColor: 'var(--color-ios-fill)' }}
-          >
-            {lensModerationText(language, 'restore')}
-          </button>
-        </div>
       </section>
     </div>
   );

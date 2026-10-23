@@ -78,6 +78,7 @@ const oneOf = (result: ApiResult<unknown>): ApiResult<LensPack> => {
 export const LENS_SUBMISSIONS_QUERY_KEY = ['packs', 'lens', 'submissions'] as const;
 export const LENS_PENDING_QUERY_KEY = ['admin', 'lens', 'pending'] as const;
 export const LENS_PUBLISHED_QUERY_KEY = ['admin', 'lens', 'published'] as const;
+export const LENS_WITHDRAWN_QUERY_KEY = ['admin', 'lens', 'withdrawn'] as const;
 
 export const loadLensSubmissions = async (deps: ConversationsDeps): Promise<ApiResult<readonly LensPack[]>> =>
   listOf(await deps.transport.request<unknown>({ method: 'GET', path: packsEndpoints.lensSubmissions }));
@@ -98,6 +99,10 @@ export const loadLensPending = async (deps: ConversationsDeps): Promise<ApiResul
 /** Les lens publiées, offertes maintenant : la boutique du domaine, que la modération relit pour retirer. */
 export const loadPublishedLenses = async (deps: ConversationsDeps): Promise<ApiResult<readonly LensPack[]>> =>
   listOf(await deps.transport.request<unknown>({ method: 'GET', path: packsEndpoints.lens }));
+
+/** Les lens RETIRÉES (#12321, `canModerateContent`), la plus récente d'abord, 200 au plus, chacune avec sa note de retrait. */
+export const loadWithdrawnLenses = async (deps: ConversationsDeps): Promise<ApiResult<readonly LensPack[]>> =>
+  listOf(await deps.transport.request<unknown>({ method: 'GET', path: packsEndpoints.lensWithdrawn }));
 
 export type LensReview =
   | {
