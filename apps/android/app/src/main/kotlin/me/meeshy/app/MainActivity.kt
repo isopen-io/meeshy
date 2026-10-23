@@ -11,6 +11,7 @@ import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +28,7 @@ import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.push.MeeshyFcmService
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
+import me.meeshy.app.theme.LocalizedActivityContext
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
@@ -122,6 +124,8 @@ class MainActivity : ComponentActivity() {
  * preference is "System" (`null`) the original context is used unchanged, so a device
  * locale the app has no translation for still falls back through Android's own resource
  * resolution. Works on every supported API level (minSdk 26) with no extra dependency.
+ * The Activity stays the context's base ([LocalizedActivityContext]) so links, shares and
+ * permission prompts keep working when a language is forced.
  */
 @androidx.compose.runtime.Composable
 private fun LocalizedContent(
@@ -137,14 +141,13 @@ private fun LocalizedContent(
         return
     }
 
-    val localizedContext = remember(tag, baseContext, baseConfiguration) {
-        val locale = Locale.forLanguageTag(tag)
-        Locale.setDefault(locale)
-        val configuration = Configuration(baseConfiguration).apply { setLocale(locale) }
-        baseContext.createConfigurationContext(configuration)
+    val locale = remember(tag) { Locale.forLanguageTag(tag) }
+    SideEffect { Locale.setDefault(locale) }
+    val localizedContext = remember(locale, baseContext, baseConfiguration) {
+        LocalizedActivityContext.wrap(baseContext, locale)
     }
-    val localizedConfiguration = remember(tag, baseConfiguration) {
-        Configuration(baseConfiguration).apply { setLocale(Locale.forLanguageTag(tag)) }
+    val localizedConfiguration = remember(locale, baseConfiguration) {
+        Configuration(baseConfiguration).apply { setLocale(locale) }
     }
 
     CompositionLocalProvider(
