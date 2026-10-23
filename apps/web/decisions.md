@@ -5787,3 +5787,20 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 5. Pour une trace scriptée sans écran, comme dans `targets/story.scene-sound.md`, utiliser `adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>`. Le protocole CDP s'y parle par WebSocket (`Tracing.start` / `Tracing.end`, catégories `devtools.timeline`, `loading`).
 
 **Gardes.** `lib/telemetry/page-vitals.test.ts` et `lib/telemetry/playback-qoe.test.ts` (séance ouverte puis fermée une fois, aucun champ réécrit, résumé inchangé sans sonde).
+
+## D-225 — Le catalogue d'administration a un plafond de 500 Ko, parce qu'il ne se charge que dans l'administration (décision porteur 2026-10-23)
+
+**Le contexte.** Le chunk `interface_catalogs_admin` regroupe les libellés `admin.*` en fr, en, es et pt (`catalog-admin-<langue>`). Son plafond suivait la mesure au Ko près : 231 Ko pour 229,17 Ko mesurés le 2026-10-22. Chaque écran ou code d'audit ajouté à la console le faisait dépasser. Le 2026-10-23, les trois libellés d'audit `LENS_PACK_RESTORE*` l'ont porté à 231,34 Ko, et le job Quality de dev est passé au rouge.
+
+**La décision.** Le plafond passe à **500 Ko** (gzip -9, quatre catalogues). La valeur est dans `budgets.json › on_demand_chunks.interface_catalogs_admin`, et son commentaire renvoie ici. Aucun autre plafond ne change.
+
+**Ce qui rend ce plafond acceptable : le chargement est réservé à l'administration.** Un lecteur qui n'ouvre pas `/adm` ne télécharge jamais ces catalogues.
+- Ils ne s'atteignent que par un `import()` de `lib/i18n-admin-catalog.ts`. Aucune importation statique depuis la coque, le routeur ou les catalogues communs. Un `import type` n'émet rien et reste permis.
+- Ce chargement n'est déclenché que par les chargeurs des routes `/adm…` (et du pont `/admin…`) dans `routes/route-table.tsx`, et par les écrans `routes/admin*.tsx` (`suspendForAdminInterfaceCatalog`).
+
+**Les gardes.**
+- `src/lib/admin-catalog-reach.test.ts` lit les sources. Il rougit si un fichier autre que `i18n-admin-catalog.ts` désigne un `catalog-admin-*`, si ce fichier le fait autrement que par `import()`, si un fichier hors de la table des routes et des écrans d'administration déclenche le chargement, ou si un chargeur qui l'attend sert une adresse non admin.
+- `admin-catalog-loading.test.ts` garde le sens inverse : toute route `/adm…` charge le catalogue.
+- `measure-weight.mjs` (`dynamic_only: true`) rougit sur le graphe construit si un fichier produit importe le chunk statiquement.
+
+**La limite connue.** Un compte sans rôle d'administration ne voit aucune entrée vers `/adm`, car le barreau Administration du menu flottant lui est caché. Mais s'il tape l'adresse lui-même, la route charge le catalogue, parce que l'écran « Espace réservé » lit `admin.denied.*` dans ce catalogue. La passerelle reste seule juge du droit (`/admin/permissions`). Pour qu'un tel compte ne charge rien, il faudrait vérifier le rôle avant le chargement et sortir les deux libellés du refus vers le catalogue commun, qui a sept langues et un plafond serré. Ce travail se suit dans #12481.
