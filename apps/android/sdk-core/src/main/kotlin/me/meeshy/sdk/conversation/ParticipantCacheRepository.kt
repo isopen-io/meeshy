@@ -15,6 +15,9 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.classifyCache
 import me.meeshy.sdk.model.MemberRoster
 import me.meeshy.sdk.model.MemberRosterPage
+import me.meeshy.sdk.model.UserUpdatedEvent
+import me.meeshy.sdk.model.repainted
+import me.meeshy.sdk.model.repaintedElements
 import me.meeshy.sdk.net.NetworkResult
 
 /** One network page of a conversation's roster: (conversationId, cursor, limit). */
@@ -91,6 +94,13 @@ class ParticipantCacheRepository(
 
     suspend fun removeParticipant(conversationId: String, userIdOrParticipantId: String) =
         mutate(conversationId) { it.withoutUser(userIdOrParticipantId) }
+
+    /** `user:updated` : repeint, dans chaque roster en cache, la ligne de ce pair (par userId) ; sans réseau. */
+    suspend fun repaint(event: UserUpdatedEvent): Int = writeLock.withLock {
+        cache.updateAll(NAMESPACE, MemberRoster.serializer()) { roster ->
+            roster.members.repaintedElements { event.repainted(it) }?.let { roster.copy(members = it) }
+        }
+    }
 
     suspend fun invalidate(conversationId: String) = cache.clear(NAMESPACE, conversationId)
 

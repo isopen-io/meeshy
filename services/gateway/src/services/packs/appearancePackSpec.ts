@@ -95,5 +95,14 @@ export function appearancePackSpec(options: {
   /** Les packs de vendeurs tiers publiés (#10709) ; absent = catalogue officiel seul. */
   readonly community?: CommunityPackStore<AppearancePackDetail>;
 }): PackDomainSpec<AppearancePackSummary, AppearancePackDetail> {
-  return { domain: options.domain, registry: registryOf(options.index, options.domain), community: options.community ?? null, removalGuard: null, toSummary: appearancePackSummary };
+  // Le registre se RELIT à chaque accès : une surcharge d'administration (#11275) s'applique sans redémarrer.
+  return {
+    domain: options.domain,
+    get registry() {
+      return registryOf(options.index, options.domain);
+    },
+    community: options.community ?? null,
+    removalGuard: null,
+    toSummary: appearancePackSummary,
+  };
 }

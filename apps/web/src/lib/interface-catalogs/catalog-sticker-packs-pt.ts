@@ -73,6 +73,7 @@ const ptStickerPacks = {
   'packs.domain.avatar-ring': "Contornos de avatar",
   'packs.domain.banner': "Banners",
   'packs.domain.banner-frame': "Molduras de banner",
+  'packs.domain.lens': "Lentes",
   'packs.domain.capture-frame': "Molduras de captura",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Adquirido",
@@ -85,6 +86,14 @@ const ptStickerPacks = {
   'packs.shop.domains': "Categoria da loja",
   'packs.shop.hint': "Todos os pacotes: stickers, molduras, fundos, contornos e banners. O que você possui aparece nas telas que o usam.",
   'packs.retry': "Tentar novamente",
+  'packs.locked': "A desbloquear",
+  'packs.unlock.rank': "Nível {rank} — Glória em falta: {missing}",
+  'packs.unlock.glory': "Glória em falta: {missing}",
+  'packs.unlock.trophy': "Ganha-se com um troféu",
+  'packs.unlock.season': "Recompensa da temporada {number}",
+  'packs.unlock.upcoming': "Disponível a partir de {date}",
+  'packs.unlock.until': "Disponível até {date}",
+  'packs.unlock.closed': "Já não está disponível",
 } satisfies StickerPacksCatalog;
 
 export default ptStickerPacks;

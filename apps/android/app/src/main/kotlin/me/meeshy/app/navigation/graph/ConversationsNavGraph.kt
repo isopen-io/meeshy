@@ -14,6 +14,7 @@ import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.conversations.ConversationListScreen
+import me.meeshy.app.conversations.ConversationRowNavigation
 import me.meeshy.app.conversations.CreateShareLinkScreen
 import me.meeshy.app.conversations.CreateShareLinkViewModel
 import me.meeshy.app.conversations.DashboardScreen
@@ -62,6 +63,10 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 )
             },
             onRefresh = storiesViewModel::refresh,
+            rowNavigation = ConversationRowNavigation(
+                onViewProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+                onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
+            ),
         )
     }
     composable(Routes.SHARE_LINK_PICKER) {

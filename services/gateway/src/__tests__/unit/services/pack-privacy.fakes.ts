@@ -93,7 +93,7 @@ function model(name: string, tables: Tables, writes: string[], relations: Relati
 }
 
 /** La base des packs : choix, bibliothèque, packs proposés et leurs éléments, possessions achetées, comptes. */
-export function fakePackDb(seed: Partial<Record<'userStickerPack' | 'userSticker' | 'stickerPack' | 'stickerPackItem' | 'userPackOwnership' | 'communityAppearancePack' | 'user', Row[]>>): FakeDb {
+export function fakePackDb(seed: Partial<Record<'userStickerPack' | 'userSticker' | 'stickerPack' | 'stickerPackItem' | 'userPackOwnership' | 'communityAppearancePack' | 'lensPack' | 'lensPackAsset' | 'user', Row[]>>): FakeDb {
   const tables: Tables = {
     userStickerPack: { rows: [...(seed.userStickerPack ?? [])] },
     userSticker: { rows: [...(seed.userSticker ?? [])] },
@@ -101,6 +101,8 @@ export function fakePackDb(seed: Partial<Record<'userStickerPack' | 'userSticker
     stickerPackItem: { rows: [...(seed.stickerPackItem ?? [])] },
     userPackOwnership: { rows: [...(seed.userPackOwnership ?? [])] },
     communityAppearancePack: { rows: [...(seed.communityAppearancePack ?? [])] },
+    lensPack: { rows: [...(seed.lensPack ?? [])] },
+    lensPackAsset: { rows: [...(seed.lensPackAsset ?? [])] },
     user: { rows: [...(seed.user ?? [])] },
   };
   const writes: string[] = [];
@@ -113,6 +115,8 @@ export function fakePackDb(seed: Partial<Record<'userStickerPack' | 'userSticker
     stickerPackItem: model('stickerPackItem', tables, writes),
     userPackOwnership: model('userPackOwnership', tables, writes),
     communityAppearancePack: model('communityAppearancePack', tables, writes),
+    lensPack: model('lensPack', tables, writes),
+    lensPackAsset: model('lensPackAsset', tables, writes),
     user: model('user', tables, writes),
   };
 }

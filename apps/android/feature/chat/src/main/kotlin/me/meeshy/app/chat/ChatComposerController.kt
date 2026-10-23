@@ -15,6 +15,7 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.ComposeLanguageDetector
+import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
@@ -71,6 +72,7 @@ internal class ChatComposerController(
     private val pendingTray: () -> ComposerTrayController? = { null },
     private val composerText: ComposerTextHolder = ComposerTextHolder(),
     private val recentEmojis: RecentEmojiStore? = null,
+    private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
 ) {
 
     private var mentionRoster: List<MentionCandidate> = emptyList()
@@ -357,12 +359,14 @@ internal class ChatComposerController(
         }
         persistDraft("", replyToId = null)
         recordTypedEmojis(text)
+        val manualLanguage = state.value.composerLanguage.manualOverride
         scope.launch {
             try {
+                val sentLanguage = originalLanguageAtSend(text, manualLanguage, languageCode)
                 if (batch != null) {
                     if (clipboard != null) sendClipboardContent(text, clipboard, user, replyToId, effects)
                     sendStagedBatch(
-                        tray, batch, if (clipboard != null) "" else text, languageCode, user,
+                        tray, batch, if (clipboard != null) "" else text, sentLanguage, user,
                         if (clipboard != null) null else replyToId, effects,
                     )
                 } else if (clipboard != null) {
@@ -371,7 +375,7 @@ internal class ChatComposerController(
                     messageRepository.sendOptimistic(
                         conversationId = conversationId,
                         content = text,
-                        originalLanguage = languageCode,
+                        originalLanguage = sentLanguage,
                         sender = user,
                         replyToId = replyToId,
                         effects = effects,
@@ -415,6 +419,7 @@ internal class ChatComposerController(
             originalLanguage = ComposeLanguageDetector.detect(
                 text.ifBlank { clipboard.text },
                 fallback = LanguageResolver.resolveUserLanguage(user),
+                identifier = languageIdentifier,
             ),
             sender = user,
             replyToId = replyToId,
@@ -432,6 +437,13 @@ internal class ChatComposerController(
             ),
         )
     }
+
+    /**
+     * La langue d'origine gravée à l'envoi : le choix manuel prime ; sinon l'identification ML Kit
+     * (4 lettres, confiance 0,65, URL retirées), dont l'échec laisse l'heuristique puis [fallback].
+     */
+    private suspend fun originalLanguageAtSend(text: String, manual: String?, fallback: String): String =
+        manual ?: ComposeLanguageDetector.detect(text, fallback, languageIdentifier)
 
     /** Les emojis tapés dans le message rejoignent les récents (iOS `RecentEmojiStore.record`). */
     private fun recordTypedEmojis(text: String) {
