@@ -56,7 +56,7 @@ export async function signAttachmentsForReader<T extends SignableAttachment & { 
       readerParticipantId,
       signer,
     });
-    return signed === relued ? attachment : { ...attachment, fileUrl: signed.fileUrl, thumbnailUrl: signed.thumbnailUrl, imageVariants: signed.imageVariants, avifVariants: signed.avifVariants, translations: signed.translations };
+    return signed === relued ? attachment : { ...attachment, fileUrl: signed.fileUrl, thumbnailUrl: signed.thumbnailUrl, imageVariants: signed.imageVariants, avifVariants: signed.avifVariants, renditions: signed.renditions, translations: signed.translations };
   });
 }
 
@@ -97,7 +97,7 @@ export async function signMessagesAttachmentsForReader<M extends { readonly id: 
         const id = typeof entry === 'object' && entry !== null ? (entry as AttachmentRecord).id : undefined;
         const urls = typeof id === 'string' ? urlsByPiece.get(id) : undefined;
         return urls
-          ? { ...(entry as object), fileUrl: urls.fileUrl, thumbnailUrl: urls.thumbnailUrl, imageVariants: urls.imageVariants, avifVariants: urls.avifVariants, translations: urls.translations }
+          ? { ...(entry as object), fileUrl: urls.fileUrl, thumbnailUrl: urls.thumbnailUrl, imageVariants: urls.imageVariants, avifVariants: urls.avifVariants, renditions: urls.renditions, translations: urls.translations }
           : entry;
       }),
     };

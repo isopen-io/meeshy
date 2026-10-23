@@ -119,6 +119,21 @@ export const messageAttachmentSchema = {
         },
       },
     },
+    renditions: {
+      type: 'array',
+      nullable: true,
+      description: 'Additional video renditions (#11261): H.264 compatibility rendition of an HEVC video, HDR tone-mapped to SDR BT.709 — the original fileUrl is untouched',
+      items: {
+        type: 'object',
+        properties: {
+          codec: { type: 'string', description: 'Video codec of the rendition (h264)' },
+          url: { type: 'string', description: 'Rendition file URL' },
+          width: { type: 'number', description: 'Rendition width in pixels' },
+          height: { type: 'number', description: 'Rendition height in pixels' },
+          size: { type: 'number', description: 'Rendition byte size' },
+        },
+      },
+    },
 
     // Audio/Video metadata
     duration: { type: 'number', nullable: true, description: 'Duration in milliseconds' },

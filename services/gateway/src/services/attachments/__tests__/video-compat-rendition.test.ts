@@ -27,15 +27,21 @@ import {
   produceCompatibilityRendition,
 } from '../video-compat-rendition';
 import { runFfmpeg } from '../ffmpeg-run';
+import { produceMediaRenditions } from '../media-renditions';
+import { derivedFileCandidates } from '../derivedAttachmentFiles';
+import { resolveFileRouteVerdict, type FileRouteVerdictPrisma } from '../fileRouteVerdict';
+import { signReaderAttachmentUrls } from '../signedAttachmentUrls';
+import { readSigningKeys, readerFileUrlSigner } from '../readerFileSignature';
+import { copiedAttachmentFields } from '../../messaging/copiedAttachmentFields';
 
 const dirs: string[] = [];
-const ORIGINAL_FLAG = process.env.VIDEO_TRANSCODE;
+const ORIGINAL_FLAG = process.env.VIDEO_COMPAT_RENDITION;
 beforeEach(() => {
-  process.env.VIDEO_TRANSCODE = 'true';
+  process.env.VIDEO_COMPAT_RENDITION = 'true';
 });
 afterEach(async () => {
-  if (ORIGINAL_FLAG === undefined) delete process.env.VIDEO_TRANSCODE;
-  else process.env.VIDEO_TRANSCODE = ORIGINAL_FLAG;
+  if (ORIGINAL_FLAG === undefined) delete process.env.VIDEO_COMPAT_RENDITION;
+  else process.env.VIDEO_COMPAT_RENDITION = ORIGINAL_FLAG;
   await Promise.all(dirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
 });
 
@@ -146,7 +152,7 @@ describe('produceCompatibilityRendition — ffmpeg réel (#11261)', () => {
 
   it('drapeau éteint (production tant que S2 n’a pas chiffré le CPU) ⇒ aucun rendu', async () => {
     const { base, relPath } = await video({ codec: 'hevc' });
-    process.env.VIDEO_TRANSCODE = 'false';
+    process.env.VIDEO_COMPAT_RENDITION = 'false';
 
     expect(await produceCompatibilityRendition(deps(base), { relPath, fileSize: 1 })).toBeNull();
   }, 60_000);
@@ -158,4 +164,59 @@ describe('produceCompatibilityRendition — ffmpeg réel (#11261)', () => {
 
     expect(rendition).toBeNull();
   }, 60_000);
+});
+
+describe('la fabrique des rendus porte le rendu H.264 à côté de l’original (#11261)', () => {
+  it('une vidéo HEVC garde son original servi, et gagne `renditions`', async () => {
+    const { base, relPath } = await video({ codec: 'hevc', colour: 'hlg' });
+    const metadataManager = {
+      generateThumbnail: async () => null,
+      generateImageVariants: async () => [],
+      generateAvifVariants: async () => [],
+      generateVideoThumbnail: async () => null,
+      extractMetadata: async () => ({}),
+    };
+
+    const out = await produceMediaRenditions(
+      { uploadBasePath: base, metadataManager, runFfmpeg: (args: string[]) => runFfmpeg(args) },
+      { relPath, mimeType: 'video/quicktime', attachmentType: 'video', fileSize: 1, metadata: { videoCodec: 'hevc', width: 640, height: 360 } },
+    );
+
+    expect(out.storedPath).toBe(relPath);
+    expect(out.storedMimeType).toBe('video/quicktime');
+    expect(out.renditions).toEqual([{ codec: 'h264', url: 'clip_1_h264.mp4', width: 640, height: 360, size: expect.any(Number) }]);
+  }, 120_000);
+});
+
+describe('ce qui voyage AVEC une pièce porte aussi son rendu H.264 (#11261)', () => {
+  const renditions = [{ codec: 'h264', url: '2026/10/u/clip_h264.mp4', width: 1920, height: 1080, size: 10 }];
+
+  it('la suppression efface le rendu, le transfert le recopie', () => {
+    expect(derivedFileCandidates({ renditions })).toEqual(['2026/10/u/clip_h264.mp4']);
+    const copy = copiedAttachmentFields({ fileName: 'c.mov', originalName: 'c.mov', mimeType: 'video/quicktime', fileSize: 1, filePath: '2026/10/u/clip.mov', fileUrl: '2026/10/u/clip.mov', renditions } as never);
+    expect(copy.renditions).toEqual(renditions);
+  });
+
+  it('une vue unique signe l’adresse de son rendu pour CE lecteur', () => {
+    const signer = readerFileUrlSigner({ keys: readSigningKeys({ ATTACHMENT_URL_SIGNING_KEY: Buffer.alloc(32, 3).toString('base64') }), now: new Date('2026-10-23') });
+    const out = signReaderAttachmentUrls(
+      { id: 'aaaaaaaaaaaaaaaaaaaaaaa1', fileUrl: '2026/10/u/clip.mov', renditions, isViewOnce: true, isBlurred: false, effectFlags: 0 },
+      { message: { isViewOnce: true, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null }, readerParticipantId: 'cccccccccccccccccccccc01', signer },
+    );
+    expect((out.renditions as Array<{ url: string }>)[0]?.url).toMatch(/^\/api\/v1\/attachments\/signed\//);
+  });
+
+  it('la route de fichier rattache `<base>_h264.mp4` à sa pièce : refusé quand le porteur est rappelé', async () => {
+    const owner = { messageId: 'bbbbbbbbbbbbbbbbbbbbbbb1', isViewOnce: false, isBlurred: false, effectFlags: 0 };
+    const prisma = {
+      messageAttachment: {
+        findMany: async ({ where }: { where: { OR?: Array<{ filePath?: unknown }> } }) =>
+          (where.OR ?? []).some((branch) => branch.filePath === '2026/10/u/clip') ? [owner] : [],
+        findUnique: async () => null,
+      },
+      message: { findMany: async () => [{ id: owner.messageId, deletedAt: new Date('2026-10-01'), expiresAt: null, viewOnceBurnAt: null, isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null }] },
+    } as unknown as FileRouteVerdictPrisma;
+
+    expect(await resolveFileRouteVerdict('2026/10/u/clip_h264.mp4', prisma, new Date('2026-10-23'))).toEqual({ kind: 'gone' });
+  });
 });

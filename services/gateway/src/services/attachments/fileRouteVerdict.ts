@@ -19,7 +19,8 @@
  * Quatre formes de clé atteignent une pièce jointe, et chacune remonte à ses
  * lignes par un index :
  *  - l'original et la miniature : `filePath` / `thumbnailPath`, égalité ;
- *  - la variante `<base>_<largeur>w.webp` ou `.avif` (#11262) : `filePath` égal à `<base>`
+ *  - la variante `<base>_<largeur>w.webp` ou `.avif` (#11262), et le rendu
+ *    vidéo `<base>_h264.mp4` (#11261) : `filePath` égal à `<base>`
  *    (original sans extension) ou qui commence par `<base>.` (préfixe ancré,
  *    servi par le même index) ;
  *  - la piste traduite `translated/<attachmentId>_<langue>.<ext>` : la ligne
@@ -101,7 +102,7 @@ export function immutableWhenWriteOnce(storageKey: string, cacheControl: string)
 }
 
 const TRANSLATED_TRACK = /^translated\/([0-9a-f]{24})_[^/]+$/;
-const RESPONSIVE_VARIANT = /^(.+)_\d+w\.(?:webp|avif)$/;
+const RESPONSIVE_VARIANT = /^(.+)_(?:\d+w\.(?:webp|avif)|h264\.mp4)$/;
 
 type OwnerRow = {
   readonly messageId: string | null;
