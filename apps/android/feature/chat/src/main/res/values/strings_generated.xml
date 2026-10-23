@@ -38,4 +38,8 @@
     <string name="message_detail_report_confirm_title">Report this message?</string>
     <string name="recentMedia_resolveFailed">This media couldn\'t be prepared — use the full photo library</string>
     <string name="recentMedia_resolveFailed_multiple">%d media items couldn\'t be prepared — use the full photo library</string>
+    <string name="starred_more_options">More options</string>
+    <string name="starred_remove">Remove from favourites</string>
+    <string name="starred_remove_all">Remove all</string>
+    <string name="starred_row_hint">Opens the conversation</string>
 </resources>

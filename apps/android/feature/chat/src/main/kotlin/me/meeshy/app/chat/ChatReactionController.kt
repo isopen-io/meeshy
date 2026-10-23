@@ -216,7 +216,7 @@ internal class ChatReactionController(
     }
 
     private companion object {
-        const val QUICK_REACTION_COUNT = 8
+        val QUICK_REACTION_COUNT: Int = EmojiCatalog.defaultQuickReactions.size
         const val DETAIL_QUICK_REACTION_COUNT = 12
     }
 }

@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
 import me.meeshy.ui.R
 import me.meeshy.ui.component.EmojiQuickStrip
+import me.meeshy.ui.component.ReactionStripChrome
 import me.meeshy.ui.theme.DarkMeeshyTokens
 import me.meeshy.ui.theme.LocalMeeshyTokens
 import me.meeshy.ui.theme.MeeshyPalette
@@ -34,6 +35,7 @@ public fun FullscreenReactionStrip(
     onExpandFullPicker: (() -> Unit)? = null,
     highlightedIndex: Int? = null,
     onTileBounds: ((Int, Rect) -> Unit)? = null,
+    chrome: ReactionStripChrome = ReactionStripChrome.None,
 ) {
     CompositionLocalProvider(LocalMeeshyTokens provides DarkMeeshyTokens) {
         EmojiQuickStrip(
@@ -45,6 +47,7 @@ public fun FullscreenReactionStrip(
             onExpand = onExpandFullPicker,
             highlightedIndex = highlightedIndex,
             onTileBounds = onTileBounds,
+            chrome = chrome,
         )
     }
 }

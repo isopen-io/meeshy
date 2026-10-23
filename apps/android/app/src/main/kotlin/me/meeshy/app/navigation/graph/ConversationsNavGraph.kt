@@ -183,8 +183,8 @@ internal fun NavGraphBuilder.conversationsNavGraph(
     composable(Routes.STARRED) {
         StarredMessagesScreen(
             onBack = { navController.popBackStack() },
-            onOpenConversation = { conversationId ->
-                navController.navigate(Routes.chat(conversationId))
+            onOpenMessage = { conversationId, messageId ->
+                navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
             },
         )
     }

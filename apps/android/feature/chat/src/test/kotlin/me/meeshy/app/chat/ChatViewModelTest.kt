@@ -3179,7 +3179,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.quickReactions)
-            .containsExactly("❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "👍").inOrder()
+            .containsExactlyElementsIn(me.meeshy.sdk.model.EmojiCatalog.defaultQuickReactions).inOrder()
     }
 
     @Test

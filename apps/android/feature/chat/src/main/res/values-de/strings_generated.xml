@@ -38,4 +38,8 @@
     <string name="message_detail_report_confirm_title">Diese Nachricht melden?</string>
     <string name="recentMedia_resolveFailed">Dieses Medium konnte nicht vorbereitet werden — nutze die vollständige Mediathek</string>
     <string name="recentMedia_resolveFailed_multiple">%d Medien konnten nicht vorbereitet werden – nutze die gesamte Fotomediathek</string>
+    <string name="starred_more_options">Weitere Optionen</string>
+    <string name="starred_remove">Aus Favoriten entfernen</string>
+    <string name="starred_remove_all">Alle entfernen</string>
+    <string name="starred_row_hint">Öffnet die Unterhaltung</string>
 </resources>

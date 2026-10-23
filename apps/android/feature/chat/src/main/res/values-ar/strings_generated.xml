@@ -38,4 +38,8 @@
     <string name="message_detail_report_confirm_title">الإبلاغ عن هذه الرسالة؟</string>
     <string name="recentMedia_resolveFailed">تعذّر تحضير هذه الوسائط — استخدم مكتبة الصور الكاملة</string>
     <string name="recentMedia_resolveFailed_multiple">تعذّر تجهيز %d من الوسائط — استخدم مكتبة الصور كاملة</string>
+    <string name="starred_more_options">المزيد من الخيارات</string>
+    <string name="starred_remove">إزالة من المفضّلة</string>
+    <string name="starred_remove_all">إزالة الكل</string>
+    <string name="starred_row_hint">يفتح المحادثة</string>
 </resources>

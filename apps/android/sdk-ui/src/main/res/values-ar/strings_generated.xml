@@ -8,10 +8,14 @@
     <string name="common_done">تم</string>
     <string name="emoji_category_activities">الأنشطة</string>
     <string name="emoji_category_animals">الحيوانات</string>
+    <string name="emoji_category_faces">الوجوه</string>
     <string name="emoji_category_flags">الأعلام</string>
     <string name="emoji_category_food">الطعام</string>
+    <string name="emoji_category_gestures">الإيماءات</string>
+    <string name="emoji_category_hearts">القلوب</string>
     <string name="emoji_category_objects">الأشياء</string>
     <string name="emoji_category_people">الأشخاص</string>
+    <string name="emoji_category_reactions">التفاعلات</string>
     <string name="emoji_category_recent">الأخيرة</string>
     <string name="emoji_category_smileys">الوجوه</string>
     <string name="emoji_category_symbols">الرموز</string>
