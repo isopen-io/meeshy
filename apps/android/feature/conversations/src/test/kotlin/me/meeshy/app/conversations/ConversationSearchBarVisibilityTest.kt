@@ -86,13 +86,31 @@ class ConversationSearchBarVisibilityTest {
 
     @Test
     fun `isVisible hides only while scrolling down with no active search`() {
-        assertThat(ConversationSearchBarVisibility.isVisible(isSearchActive = false, isScrollingDown = true)).isFalse()
-        assertThat(ConversationSearchBarVisibility.isVisible(isSearchActive = false, isScrollingDown = false)).isTrue()
+        assertThat(ConversationSearchBarVisibility.isVisible(hasQuery = false, isFocused = false, isScrollingDown = true)).isFalse()
+        assertThat(ConversationSearchBarVisibility.isVisible(hasQuery = false, isFocused = false, isScrollingDown = false)).isTrue()
     }
 
     @Test
     fun `an active search query always keeps the bar visible, even while scrolling down`() {
-        assertThat(ConversationSearchBarVisibility.isVisible(isSearchActive = true, isScrollingDown = true)).isTrue()
-        assertThat(ConversationSearchBarVisibility.isVisible(isSearchActive = true, isScrollingDown = false)).isTrue()
+        assertThat(ConversationSearchBarVisibility.isVisible(hasQuery = true, isFocused = false, isScrollingDown = true)).isTrue()
+        assertThat(ConversationSearchBarVisibility.isVisible(hasQuery = true, isFocused = false, isScrollingDown = false)).isTrue()
+    }
+
+    @Test
+    fun `a focused search field stays on screen while the list scrolls down, even empty`() {
+        assertThat(ConversationSearchBarVisibility.isVisible(hasQuery = false, isFocused = true, isScrollingDown = true))
+            .isTrue()
+    }
+
+    @Test
+    fun `an idle empty search bar hides while scrolling down`() {
+        assertThat(ConversationSearchBarVisibility.isVisible(hasQuery = false, isFocused = false, isScrollingDown = true))
+            .isFalse()
+    }
+
+    @Test
+    fun `a typed query keeps the bar on screen`() {
+        assertThat(ConversationSearchBarVisibility.isVisible(hasQuery = true, isFocused = false, isScrollingDown = true))
+            .isTrue()
     }
 }
