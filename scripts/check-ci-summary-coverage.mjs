@@ -163,6 +163,18 @@ export const violations = (workflow) => {
     );
   }
 
+  // Règle 4 — SON SCRIPT EST LÀ : un agrégateur qui lance un script du dépôt récupère le dépôt.
+  // Sans `actions/checkout`, `node scripts/ci/needs-verdict.mjs` rend MODULE_NOT_FOUND et le verdict
+  // est rouge sur un run dont tous les jobs sont verts (constaté sur la PR 1 du 2026-10-23).
+  const lanceUnScript = /\bnode\s+scripts\//.test(scriptOf(agregateur));
+  const recupereLeDepot = stepsOf(agregateur).some((etape) => (etape.uses ?? '').startsWith('actions/checkout@'));
+  if (lanceUnScript && !recupereLeDepot) {
+    faits.push(
+      `« ${agregateur.name} » lance un script du dépôt sans étape actions/checkout : ` +
+        `il ne le trouvera pas (MODULE_NOT_FOUND) et rougira sur un run vert`,
+    );
+  }
+
   return faits;
 };
 
@@ -185,6 +197,15 @@ const MUTATIONS = [
         .filter((ligne) => !ligne.includes('| Sécurité · Trivy du dépôt | ${{ needs.security.result }} |'))
         .join('\n'),
     attendu: /aucune ligne du tableau ne rend needs\.security\.result/,
+  },
+  {
+    nom: 'règle 4 — le script du verdict sans checkout',
+    muter: (texte) =>
+      texte.replace(
+        'name: Checkout (le script du verdict seul)\n        uses: actions/checkout@v7',
+        'name: Checkout (le script du verdict seul)\n        uses: actions/setup-node@v7',
+      ),
+    attendu: /sans étape actions\/checkout/,
   },
   {
     nom: 'règle 3 — un statut écrit à la main',
