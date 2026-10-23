@@ -99,18 +99,8 @@ public object BubbleContentBuilder {
                 ReactionEntry(emoji = emoji, count = count, includesMe = emoji in ownReactions)
             }
             ?: emptyList()
-        val replyToDeleted = message.replyTo?.deletedAt != null
-        val replyToText = message.replyTo?.content?.takeUnless { replyToDeleted }
-        val replyAttachments = if (replyToDeleted) emptyList() else message.replyTo?.attachments.orEmpty()
-        val replyImage = replyAttachments.firstOrNull { it.isImage }
-        val replyToMediaKind = when {
-            replyImage != null -> ReplyMediaKind.Image
-            replyAttachments.isNotEmpty() -> ReplyMediaKind.File
-            else -> ReplyMediaKind.None
-        }
-        val replyToThumbnailUrl = replyImage
-            ?.let { it.thumbnailUrl ?: it.fileUrl }
-            ?.let { resolveMediaUrl(it, mediaBaseUrl) }
+        val quoted = BubbleQuotedReplyBuilder.build(message.replyTo, preferences, mediaBaseUrl)
+        val replyToDeleted = quoted?.isDeleted == true
         // Story/mood-reply preview. A message reply (`replyTo`) takes precedence,
         // and a deleted tombstone carries no metadata (mirrors the pinnedAtIso /
         // isForwarded suppress rules) — so it only surfaces on a live message
@@ -220,12 +210,12 @@ public object BubbleContentBuilder {
             deliveryStatus = deliveryStatus,
             reactions = reactions,
             replyToId = message.replyTo?.id,
-            replyToText = replyToText,
+            replyToText = quoted?.text,
             replyToDeleted = replyToDeleted,
-            replyToMediaKind = replyToMediaKind,
-            replyToThumbnailUrl = replyToThumbnailUrl,
+            replyToMediaKind = quoted?.mediaKind ?: ReplyMediaKind.None,
+            replyToThumbnailUrl = quoted?.thumbnailUrl,
             storyReply = storyReply,
-            replyToSenderName = message.replyTo?.senderDisplayName,
+            replyToSenderName = quoted?.senderName,
             isPending = isPending,
             clientMessageId = message.clientMessageId,
             images = images,
