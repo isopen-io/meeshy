@@ -22,3 +22,4 @@
 - [2026-09: Plafond de duree audio - 10 minutes, refus avant acquisition (#3668)](decisions/2026-09-plafond-de-duree-audio-10-minutes-refus-avant-acquisition-3668.md)
 - [2026-09: Whisper — Settings devient la seule source du modele/device/compute_type (#3666)](decisions/2026-09-whisper-settings-devient-la-seule-source-du-modele-device-compute-type.md)
 - [2026-09-08: gRPC — code mort retire (#3664), dependances gardees pour l'instant (#5710)](decisions/2026-09-08-grpc-code-mort-retire-3664-dependances-gardees-pour-l-instant-5710.md)
+- [2026-10-23: L'audio d'un message a son histogramme `audio_pipeline_seconds{stage}` — whisper, nllb, tts — servi sur `GET /metrics`, port non routé (#11257)](decisions/2026-10-23-l-audio-d-un-message-a-son-histogramme-11257.md)
