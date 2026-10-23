@@ -208,6 +208,7 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         let boucle = AVPlayerLooper(player: player, templateItem: AVPlayerItem(asset: asset), timeRange: plage)
         outputs = boucle.loopingPlayerItems.reduce(into: [:]) { sorties, element in
             let sortie = AVPlayerItemVideoOutput(pixelBufferAttributes: Self.attributes)
+            MediaPolicyMonitor.shared.adopt(element, role: .watched)
             element.add(sortie)
             attachBoost(to: element)
             sorties[ObjectIdentifier(element)] = sortie
@@ -257,6 +258,7 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         player.pause()
         player.removeAllItems()
         let element = AVPlayerItem(asset: asset)
+        MediaPolicyMonitor.shared.adopt(element, role: .watched)
         let sortie = AVPlayerItemVideoOutput(pixelBufferAttributes: Self.attributes)
         element.add(sortie)
         attachBoost(to: element)

@@ -5670,3 +5670,19 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Complément (2026-10-23, #12052) — la vidéo et le vocal d'un message.** La protection est déclarée par la surface qui connaît le MESSAGE, par un contexte (`lib/media/recent-media-scope.ts`, `RecentMediaScopeContext`) plutôt que par une propriété relayée à travers la grille et la visionneuse : la bulle du fil (`Attachments`, avec `ThreadMediaContext`) et la visionneuse du fil (`ThreadMediaViewer`, page par page sur SON message) le posent ; la tuile vidéo, le vocal et les pages plein écran (`ViewerVideoPage`, `ViewerAudioPage`) le lisent par l'identifiant de leur pièce, et ne sollicitent la garde qu'au premier `playing` visible. La loi (`recentMediaProtectionOf`) ne rend `none` qu'à un message standard selon `protectionOf` ET selon `resolveLastMessageSummaryKind` (la première dit « standard » un éphémère tant que son échéance n'est pas passée), en clair (ni `isEncrypted`, ni `encryptionMode`, ni conversation sous un régime de chiffrement), sur une pièce SERVIE sans masque (`maskedAttachment`, jamais la copie révélée de la visionneuse). Le défaut, hors de ces deux surfaces (écran des médias, notices système, citations), est de ne rien garder.
 
 **Gardes.** `lib/media/recent-media-policy.test.ts`, `lib/media/recent-media-store.test.ts`, `lib/media/use-remember-seen-media.test.tsx`, `src/sw-recent-media.test.ts` (plages, 416, expiré, `no-store`, jumeaux, import et retrait de la coque), `lib/shell/recent-media-worker.test.ts`, `scripts/check-shell-dist.test.ts`, `lib/api/query-client.test.ts` (purge de fin de compte).
+
+## D-220 — Un vocal se lit au niveau perçu de −16 LUFS : atténué par le volume de l'élément, amplifié par un graphe Web Audio limité, l'original seulement (2026-10-23, #12285 côté web ; consomme S4 #11259)
+
+**Contexte.** La passerelle ne réencode plus un vocal AAC : il garde son niveau d'origine, et sa sonie intégrée EBU R128 est mesurée et servie (`Attachment.loudnessLufs`). Sans correction à la lecture, un vocal d'iPhone faible se lit plus bas qu'un vocal web normalisé.
+
+**Décision.**
+- **La loi** (`lib/media/loudness.ts`) : gain `−16 − loudnessLufs` dB, plafonné à +12 dB ; champ absent, `null` ou non fini ⇒ 0. Une piste TRADUITE (TTS) n'est pas le fichier mesuré : aucun gain.
+- **Atténuer** passe par `HTMLMediaElement.volume`, sans graphe ni CORS.
+- **Amplifier** passe par un graphe Web Audio partagé (source → gain → limiteur à −1 dBFS, ratio 20 → sortie), qui retient les crêtes que le gain ferait écrêter. **Sûr par défaut (tour 5)** : un élément branché sur un graphe alors que sa réponse n'est pas lisible en CORS sort du SILENCE. Le graphe n'est donc branché qu'après deux preuves : une sonde `HEAD` en mode `cors`, une fois par origine (la route de flux rend `Access-Control-Allow-Origin: *`, `download.ts`), puis les métadonnées lues par un élément PARTI en `crossOrigin="anonymous"`. Un élément parti sans le mode CORS le garde, sans gain ; un élément en CORS qui échoue est remonté en lecture directe et l'origine perd sa preuve. Sans preuve : lecture directe, volume d'origine, jamais muette.
+- **Sites** : la bulle (`attachment-blocks.tsx`), la page plein écran (`viewer-audio-page.tsx`) et le mini-lecteur (`mini-audio-player.tsx`), par `useLoudnessLevel` (`lib/media/loudness-level.ts`).
+
+**Repli navigateur.** Safari iOS ignore `volume` : l'atténuation n'y a pas lieu, l'amplification y passe par le graphe. Sans `AudioContext`, rien ne change.
+
+**Ce que ce lot ne fait pas.** iOS (`packages/MeeshySDK`) et Android restent à faire (#12285 reste ouverte). Les citations et la bannière de notification jouent encore sans gain. Rien n'est mesuré ici.
+
+**Gardes.** `lib/media/loudness.test.ts`, `lib/media/loudness-level.test.ts`, `lib/media/loudness-cors.test.tsx` (une source sans CORS joue sans gain), `components/voice-loudness.test.tsx`.

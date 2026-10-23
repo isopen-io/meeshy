@@ -174,6 +174,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'sampleRate',
         'codec',
         'channels',
+        'loudnessLufs',
         'fps',
         'videoCodec',
         'pageCount',

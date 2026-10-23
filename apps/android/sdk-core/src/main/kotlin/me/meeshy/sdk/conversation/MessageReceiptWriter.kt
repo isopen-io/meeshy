@@ -1,7 +1,6 @@
 package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
-import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.model.ApiMessage
@@ -41,11 +40,10 @@ internal class MessageReceiptWriter(
                 if (deliveryRank(message.deliveredCount, message.readCount, message.readByAllAt) >= incomingRank) {
                     return@mapNotNull null
                 }
-                row.copy(
-                    payload = MeeshyApi.json.encodeToString(
-                        message.copy(deliveredCount = deliveredCount, readCount = readCount),
-                    ),
-                )
+                MessageEntityFactory.refreshed(
+                    row,
+                    message.copy(deliveredCount = deliveredCount, readCount = readCount),
+                ).bumped()
             }
             if (upgraded.isNotEmpty()) messageDao.upsertAll(upgraded)
         }

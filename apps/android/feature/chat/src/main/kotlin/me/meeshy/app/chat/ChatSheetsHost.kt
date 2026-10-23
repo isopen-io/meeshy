@@ -6,7 +6,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
@@ -36,6 +39,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     val accentColor = host.accentColor
     val bubbleFrames = host.bubbleFrames
     val gallery = state.imageViewer
+    val localRoute = rememberLocalDetailRoute()
     if (gallery != null) {
         val relativeStrings = rememberRelativeTimeStrings()
         val galleryNow = remember(gallery) { System.currentTimeMillis() }
@@ -121,6 +125,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onOpenFile = { actions.onFileAttachmentOpen(actionTarget.messageId, null) },
             onShareFile = { actions.onFileAttachmentShare(actionTarget.messageId, null) },
             onDismiss = actions.dismissMessageActions,
+            hostedEntries = HOSTED_DETAIL_ENTRIES,
+            onViews = { localRoute.open(MessageDetailRoute.Views(actionTarget.messageId)) },
+            onHistory = { localRoute.open(MessageDetailRoute.History(actionTarget.messageId)) },
+            onSentiment = { localRoute.open(MessageDetailRoute.Sentiment(actionTarget.messageId)) },
         )
     }
 
@@ -171,55 +179,81 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         )
     }
 
-    state.reportForm?.let { form ->
-        ReportMessageSheet(
-            form = form,
-            accentColor = accentColor,
-            onSelectReason = actions.selectReportReason,
-            onDetailsChange = actions.onReportDetailsChange,
-            onSubmit = actions.submitReport,
-            onDismiss = actions.dismissReport,
-        )
-    }
-
-    val explorerModel = state.languageExplorer
-    val explorerMessageId = state.explorerMessageId
-    if (explorerModel != null && explorerMessageId != null) {
-        MessageLanguageExplorerSheet(
-            explorer = explorerModel,
-            accentColor = accentColor,
-            onSelectLanguage = { code -> actions.onFlagTap(explorerMessageId, code) },
-            onRetranslate = { code -> actions.onExplorerRetranslate(explorerMessageId, code) },
-            onDismiss = actions.dismissLanguageExplorer,
-        )
-    }
+    val detailRoute = MessageDetailRoutes.fromChatState(
+        reportMessageId = state.reportForm?.messageId,
+        languagesMessageId = state.explorerMessageId.takeIf { state.languageExplorer != null },
+        reactionsMessageId = state.reactionDetails?.messageId,
+    ) ?: localRoute.current
+    MessageDetailHost(
+        route = detailRoute,
+        onDismiss = { route ->
+            when (route) {
+                is MessageDetailRoute.Report -> actions.dismissReport()
+                is MessageDetailRoute.Languages -> actions.dismissLanguageExplorer()
+                is MessageDetailRoute.Reactions -> actions.closeReactionDetails()
+                else -> localRoute.close(route)
+            }
+        },
+        reactions = {
+            state.reactionDetails?.let { details ->
+                ReactionDetailsSheet(
+                    details = details,
+                    accentColor = accentColor,
+                    onSelectTab = actions.selectReactionTab,
+                    onReact = { emoji -> actions.addReactionFromDetails(details.messageId, emoji) },
+                    onOpenFullPicker = { actions.openEmojiPicker(details.messageId) },
+                    modifier = Modifier.navigationBarsPadding(),
+                )
+            }
+        },
+        languages = { route ->
+            state.languageExplorer?.let { explorer ->
+                MessageLanguageExplorerSheet(
+                    explorer = explorer,
+                    accentColor = accentColor,
+                    onSelectLanguage = { code -> actions.onFlagTap(route.messageId, code) },
+                    onRetranslate = { code -> actions.onExplorerRetranslate(route.messageId, code) },
+                    onDismiss = actions.dismissLanguageExplorer,
+                )
+            }
+        },
+        report = {
+            state.reportForm?.let { form ->
+                ReportMessageSheet(
+                    form = form,
+                    accentColor = accentColor,
+                    onSelectReason = actions.selectReportReason,
+                    onDetailsChange = actions.onReportDetailsChange,
+                    onSubmit = actions.submitReport,
+                    onConfirmSubmit = actions.confirmReportSubmit,
+                    onCancelConfirm = actions.cancelReportConfirmation,
+                    onDismiss = actions.dismissReport,
+                )
+            }
+        },
+    )
 
     val pickerMessageId = state.emojiPickerMessageId
     if (pickerMessageId != null) {
-        ModalBottomSheet(
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = actions.dismissEmojiPicker,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            EmojiFullPicker(
-                onSelect = { emoji -> actions.toggleReaction(pickerMessageId, emoji) },
-                accentColor = accentColor,
-                modifier = Modifier.navigationBarsPadding(),
-            )
-        }
-    }
-
-    val reactionDetails = state.reactionDetails
-    if (reactionDetails != null) {
-        ModalBottomSheet(
-            onDismissRequest = actions.closeReactionDetails,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        ) {
-            ReactionDetailsSheet(
-                details = reactionDetails,
-                accentColor = accentColor,
-                onSelectTab = actions.selectReactionTab,
-                modifier = Modifier.navigationBarsPadding(),
-            )
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures { actions.dismissEmojiPicker() } },
+            ) {
+                me.meeshy.ui.component.ReactionCategorySheet(
+                    onReact = { emoji ->
+                        actions.toggleReaction(pickerMessageId, emoji)
+                        actions.dismissEmojiPicker()
+                    },
+                    onDismiss = actions.dismissEmojiPicker,
+                    accentColor = accentColor,
+                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                )
+            }
         }
     }
 
@@ -285,3 +319,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         }
     }
 }
+
+/** Detail/selection entries the chat host can serve today; each joins once its fiche renderer exists. */
+private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> = emptySet()

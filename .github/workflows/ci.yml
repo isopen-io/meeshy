@@ -1686,14 +1686,16 @@ jobs:
       # #11258 — le retrait des métadonnées vidéo se prouve par ffmpeg/ffprobe
       # RÉELS (GPS absent, paquets identiques) : la passerelle les embarque en
       # production (Dockerfile), sa suite les exige ici. #11263 — un HEIC se
-      # convertit par heif-convert RÉEL (libheif + libde265).
-      - name: Install ffmpeg and heif-convert (gateway)
+      # convertit par heif-convert RÉEL (libheif + libde265). #12290 — l'AVIF
+      # HDR d'une photo à carte de gain s'écrit par avifenc RÉEL (libavif-bin).
+      - name: Install ffmpeg, heif-convert and avifenc (gateway)
         if: matrix.package.name == 'gateway'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg libheif-examples libheif-plugin-libde265
+          sudo apt-get install -y --no-install-recommends ffmpeg libheif-examples libheif-plugin-libde265 libavif-bin
           ffprobe -version | head -1
           command -v heif-convert
+          avifenc --version | head -1
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'

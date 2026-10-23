@@ -1,14 +1,18 @@
 package me.meeshy.app.stories
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,11 +99,10 @@ fun StoryTray(
             ) {
                 tray.self?.let { self ->
                     item(key = "self") {
-                        StoryRingItem(
+                        SelfStoryRingItem(
                             ring = self,
-                            label = stringResource(R.string.stories_my_story),
-                            showAddBadge = true,
-                            onClick = { onOpenStory(self.userId) },
+                            onOpen = { onOpenStory(self.userId) },
+                            onAdd = onAddStory,
                         )
                     }
                 }
@@ -107,7 +115,6 @@ fun StoryTray(
                     StoryRingItem(
                         ring = ring,
                         label = ring.displayName,
-                        showAddBadge = false,
                         onClick = { onOpenStory(ring.userId) },
                     )
                 }
@@ -236,55 +243,94 @@ private fun StoryTraySkeleton(modifier: Modifier = Modifier) {
 
 private const val SKELETON_PLACEHOLDER_COUNT = 4
 
+/**
+ * L'anneau « Ma story » : le toucher lit sa story, le badge « + » est une VRAIE cible qui
+ * ouvre le composer, et l'appui long propose « Voir ma story » / « Ajouter une story »
+ * (iOS `StoryTrayView` : badge 44 pt permanent + menu contextuel de l'avatar).
+ */
+@Composable
+private fun SelfStoryRingItem(ring: StoryRing, onOpen: () -> Unit, onAdd: () -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val addLabel = stringResource(R.string.stories_tray_add_story)
+    Box {
+        StoryRingItem(
+            ring = ring,
+            label = stringResource(R.string.stories_my_story),
+            onClick = onOpen,
+            onLongClick = { menuOpen = true },
+            badge = {
+                // La cible déborde du disque vers le bas et la droite, jamais vers son
+                // centre : toucher l'avatar lit la story, toucher le « + » compose.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = ADD_BADGE_OUTSET_X, y = ADD_BADGE_OUTSET_Y)
+                        .size(ADD_BADGE_TARGET)
+                        .clickable(onClick = onAdd)
+                        .semantics { role = Role.Button; contentDescription = addLabel },
+                    contentAlignment = Alignment.TopStart,
+                ) {
+                    Box(Modifier.padding(start = ADD_BADGE_TARGET - ADD_BADGE_OUTSET_X - ADD_BADGE_SIZE, top = ADD_BADGE_TARGET - ADD_BADGE_OUTSET_Y - ADD_BADGE_SIZE)) {
+                        AddBadge()
+                    }
+                }
+            },
+        )
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            StoryTraySelfMenu.actions(ring).forEach { action ->
+                val (text, run) = when (action) {
+                    StoryTraySelfAction.ViewMyStory -> stringResource(R.string.stories_tray_view_my_story) to onOpen
+                    StoryTraySelfAction.AddStory -> addLabel to onAdd
+                }
+                DropdownMenuItem(text = { Text(text) }, onClick = { menuOpen = false; run() })
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddBadge() {
+    Box(
+        modifier = Modifier
+            .size(ADD_BADGE_SIZE)
+            .clip(CircleShape)
+            .background(MeeshyPalette.Indigo500),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Filled.Add,
+            contentDescription = null,
+            tint = MeeshyPalette.White,
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
+
+private val ADD_BADGE_SIZE = 20.dp
+private val ADD_BADGE_TARGET = 32.dp
+private val ADD_BADGE_OUTSET_X = 8.dp
+private val ADD_BADGE_OUTSET_Y = 8.dp
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StoryRingItem(
     ring: StoryRing,
     label: String,
-    showAddBadge: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    badge: @Composable BoxScope.() -> Unit = {},
 ) {
     val openDescription = stringResource(R.string.stories_open, label)
     Column(
         modifier = Modifier
             .width(ITEM_WIDTH)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics { role = Role.Button; contentDescription = openDescription },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        StoryRingFrame(accentHex = ring.accentHex, active = ring.hasUnviewed) {
-            if (ring.avatarUrl != null) {
-                AsyncImage(
-                    model = ring.avatarUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(AVATAR_SIZE)
-                        .clip(CircleShape),
-                )
-            } else {
-                MeeshyAvatar(
-                    name = ring.displayName,
-                    size = AVATAR_SIZE,
-                    containerColor = hexColor(ring.accentHex),
-                )
-            }
-            if (showAddBadge) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(20.dp)
-                        .clip(CircleShape)
-                        .background(MeeshyPalette.Indigo500),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Filled.Add,
-                        contentDescription = null,
-                        tint = MeeshyPalette.White,
-                        modifier = Modifier.size(14.dp),
-                    )
-                }
-            }
+        Box(modifier = Modifier.size(RING_SIZE)) {
+            StoryRingAvatar(ring)
+            badge()
         }
         StoryCountDotsRow(
             dots = StoryCountDots.from(ring.storyCount, ring.unviewedCount),
@@ -293,6 +339,28 @@ private fun StoryRingItem(
             storyCount = ring.storyCount,
         )
         StoryLabel(label)
+    }
+}
+
+@Composable
+private fun StoryRingAvatar(ring: StoryRing) {
+    StoryRingFrame(accentHex = ring.accentHex, active = ring.hasUnviewed) {
+        if (ring.avatarUrl != null) {
+            AsyncImage(
+                model = ring.avatarUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(AVATAR_SIZE)
+                    .clip(CircleShape),
+            )
+        } else {
+            MeeshyAvatar(
+                name = ring.displayName,
+                size = AVATAR_SIZE,
+                containerColor = hexColor(ring.accentHex),
+            )
+        }
     }
 }
 

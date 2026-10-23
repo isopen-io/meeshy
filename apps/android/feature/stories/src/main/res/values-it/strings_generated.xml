@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="composer_object_editor_adjust_blur">Sfocatura</string>
+    <string name="composer_object_editor_adjust_brightness">Luminosità</string>
+    <string name="composer_object_editor_adjust_contrast">Contrasto</string>
+    <string name="composer_object_editor_adjust_exposure">Esposizione</string>
+    <string name="composer_object_editor_adjust_reset">Ripristina</string>
+    <string name="composer_object_editor_adjust_saturation">Saturazione</string>
+    <string name="composer_object_editor_adjust_sharpness">Nitidezza</string>
+    <string name="composer_object_editor_adjust_temperature">Temperatura</string>
+    <string name="composer_object_editor_adjust_vibrance">Vividezza</string>
+    <string name="composer_object_editor_adjust_vignette">Vignettatura</string>
+    <string name="composer_object_editor_effects_bloom">Bagliore</string>
+    <string name="composer_object_editor_effects_grain">Grana</string>
     <string name="stories_action_delete">Elimina</string>
     <string name="stories_action_react">Reagisci</string>
     <string name="stories_action_report">Segnala</string>
@@ -51,6 +63,8 @@
     <string name="stories_composer_style_neon">Neon</string>
     <string name="stories_composer_style_typewriter">Macchina</string>
     <string name="stories_composer_text_caption">Didascalia</string>
+    <string name="stories_composer_text_finish">Fatto</string>
+    <string name="stories_composer_text_finish_a11y">Termina la modifica del testo</string>
     <string name="stories_delete_confirm_title">Eliminare la storia?</string>
     <string name="stories_publish_retry">Riprova</string>
     <string name="stories_report_reason_harassment">Molestie</string>
@@ -62,6 +76,8 @@
     <string name="stories_report_reason_violence">Violenza</string>
     <string name="stories_reposted">Ricondiviso</string>
     <string name="stories_translated">Traduzione disponibile</string>
+    <string name="stories_tray_add_story">Aggiungi una storia</string>
+    <string name="stories_tray_view_my_story">Vedi la mia storia</string>
     <string name="stories_viewer_close">Chiudi</string>
     <string name="stories_viewer_mute">Disattiva audio di sottofondo</string>
     <string name="stories_viewer_next">Storia successiva</string>
