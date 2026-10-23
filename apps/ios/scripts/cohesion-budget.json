@@ -402,7 +402,7 @@
     "Meeshy::OutboxDispatcher": 1591,
     "Meeshy::PostDetailView": 2964,
     "Meeshy::StoryCardView": 2038,
-    "Meeshy::StoryViewModel": 3664,
+    "Meeshy::StoryViewModel": 3523,
     "Meeshy::StoryViewerView": 3545,
     "Meeshy::UniversalComposerBar": 3173,
     "Meeshy::View": 1673,
