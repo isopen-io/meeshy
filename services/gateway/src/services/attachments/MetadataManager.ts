@@ -741,7 +741,7 @@ export class MetadataManager {
     filePath: string,
     attachmentType: string,
     mimeType: string,
-    providedMetadata?: any,
+    providedMetadata?: unknown,
     fileSize?: number
   ): Promise<AttachmentMetadata> {
     return timeMediaStage('probe', mediaKindOf(mimeType), () => this.extractMetadataUntimed(filePath, attachmentType, mimeType, providedMetadata, fileSize));
