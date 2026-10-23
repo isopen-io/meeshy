@@ -55,7 +55,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.reels.R
+import me.meeshy.sdk.model.PostReactionPaletteState
+import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.ui.component.reaction.PostReactionPalette
+import me.meeshy.ui.modifier.reactionPaletteTrigger
+import androidx.compose.runtime.remember
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
@@ -85,6 +90,7 @@ fun ReelsScreen(
     viewModel: ReelsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     // Muet par defaut (autoplay poli) ; le toggle vaut pour toute la session Reels.
     var muted by rememberSaveable { mutableStateOf(true) }
     val shareContext = LocalContext.current
@@ -141,6 +147,8 @@ fun ReelsScreen(
                         ReelOverlay(
                             reel = reel,
                             onLike = { viewModel.toggleLike(reel.id) },
+                            quickEmojis = quickEmojis,
+                            onReact = { pick -> viewModel.react(reel.id, pick) },
                             onComments = { commentsReelId = reel.id },
                             onRepost = { viewModel.repost(reel.id) },
                             onBookmark = { viewModel.toggleBookmark(reel.id) },
@@ -209,6 +217,8 @@ fun ReelsScreen(
 private fun ReelOverlay(
     reel: ReelPresentation,
     onLike: () -> Unit,
+    quickEmojis: List<String>,
+    onReact: (PostReactionPick) -> Unit,
     onComments: () -> Unit,
     onRepost: () -> Unit,
     onBookmark: () -> Unit,
@@ -267,13 +277,27 @@ private fun ReelOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
-            ReelAction(
-                icon = if (reel.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                tint = if (reel.isLiked) MeeshyPalette.Error else MeeshyPalette.White,
-                count = reel.likeCount,
-                contentDescription = stringResource(R.string.reels_like),
-                onClick = onLike,
-            )
+            var palette by remember(reel.id) { mutableStateOf(PostReactionPaletteState()) }
+            Box {
+                ReelAction(
+                    icon = if (reel.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    tint = if (reel.isLiked) MeeshyPalette.Error else MeeshyPalette.White,
+                    count = reel.likeCount,
+                    contentDescription = stringResource(R.string.reels_like),
+                    onClick = onLike,
+                    buttonModifier = Modifier.reactionPaletteTrigger(onOpen = { palette = palette.opened() }),
+                )
+                PostReactionPalette(
+                    isOpen = palette.isOpen,
+                    onDismiss = { palette = palette.dismissed() },
+                    onPick = { emoji ->
+                        val (next, pick) = palette.picked(emoji)
+                        palette = next
+                        pick?.let(onReact)
+                    },
+                    emojis = quickEmojis,
+                )
+            }
             ReelAction(
                 icon = Icons.AutoMirrored.Filled.Comment,
                 tint = MeeshyPalette.White,
@@ -315,9 +339,10 @@ private fun ReelAction(
     count: Int?,
     contentDescription: String? = null,
     onClick: () -> Unit = {},
+    buttonModifier: Modifier = Modifier,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(onClick = onClick) {
+        IconButton(onClick = onClick, modifier = buttonModifier) {
             Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(30.dp))
         }
         if (count != null) {

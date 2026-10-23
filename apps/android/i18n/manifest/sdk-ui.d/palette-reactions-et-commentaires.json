@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "reactions.more",
+          "androidName": "reactions_more",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

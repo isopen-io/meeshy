@@ -125,6 +125,7 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   imageVariants: true,
   avifVariants: true,
   renditions: true,
+  processingState: true,
   duration: true,
   order: true,
   caption: true,

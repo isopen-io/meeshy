@@ -152,7 +152,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       });
     });
 
-    it('selects exactly 32 documented fields — guards against silent omission', () => {
+    it('selects exactly 33 documented fields — guards against silent omission', () => {
       const expectedKeys = [
         'id',
         'messageId',
@@ -166,6 +166,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'imageVariants',
         'avifVariants',
         'renditions',
+        'processingState',
         'width',
         'height',
         'duration',
@@ -188,7 +189,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'reactions',
       ];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(32);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(33);
     });
   });
 
