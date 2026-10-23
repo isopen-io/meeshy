@@ -22,6 +22,8 @@ export type StoredObjectHead = {
   readonly etag: string;
   readonly lastModified: Date | null;
   readonly contentType: string | null;
+  /** La date du fichier SOURCE dont cette copie est faite (métadonnée `source-mtime`), `null` si inconnue. */
+  readonly sourceModified?: Date | null;
 };
 
 export type ByteRange = { readonly start: number; readonly end: number };
@@ -31,6 +33,8 @@ export type ObjectBody = {
   /** La taille exacte : S3 l'exige pour un flux. */
   readonly size: number;
   readonly contentType?: string;
+  /** La date du fichier source, gardée avec la copie : une réécriture à taille égale se reconnaît (audit D6). */
+  readonly sourceModified?: Date;
 };
 
 export interface MediaObjectStore {

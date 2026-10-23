@@ -107,7 +107,7 @@ describe('S3ObjectStore', () => {
     const store = new S3ObjectStore({ client: s3.client, bucket: 'meeshy-media' });
 
     await store.write('2026/10/a.txt', { body: Buffer.from('bonjour'), size: 7, contentType: 'text/plain' });
-    expect(await store.head('2026/10/a.txt')).toEqual({ size: 7, etag: '"abc123"', lastModified: new Date('2026-10-01T00:00:00Z'), contentType: 'text/plain' });
+    expect(await store.head('2026/10/a.txt')).toEqual({ size: 7, etag: '"abc123"', lastModified: new Date('2026-10-01T00:00:00Z'), contentType: 'text/plain', sourceModified: null });
     expect(await text(await store.read('2026/10/a.txt', { start: 3, end: 5 }))).toBe('jou');
     await store.remove('2026/10/a.txt');
 

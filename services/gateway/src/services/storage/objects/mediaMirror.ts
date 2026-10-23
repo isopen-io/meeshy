@@ -6,15 +6,15 @@
  * - le MIROIR CONTINU (`--follow`), qui recopie ce que les écrivains d'avant
  *   l'interface `MediaObjectStore` posent encore sur le disque.
  *
- * Une clé n'est recopiée que si le seau ne l'a pas déjà À LA MÊME TAILLE : on
- * peut rejouer un lot autant de fois qu'on veut. Le disque reste la référence ;
+ * Une clé n'est recopiée que si le seau ne l'a pas déjà, à la même taille et de
+ * la même date de source : on peut rejouer un lot autant de fois qu'on veut. Le disque reste la référence ;
  * rien n'est effacé du disque ici.
  */
 import path from 'node:path';
 import { imageVariantKeys, derivedFileCandidates } from '../../attachments/derivedAttachmentFiles';
 import { storageKeyFromMediaUrl } from '../../attachments/mediaStorageKey';
 import type { LocalObjectStore } from './LocalObjectStore';
-import { isSafeStorageKey, type MediaObjectStore } from './MediaObjectStore';
+import { isSafeStorageKey, type MediaObjectStore, type StoredObjectHead } from './MediaObjectStore';
 
 export type MediaRow = {
   readonly id?: string;
@@ -64,6 +64,16 @@ export function mediaRowStorageKeys(row: MediaRow, uploadRoot: string): readonly
 
 export type MirrorOutcome = 'copied' | 'already' | 'would-copy' | 'missing-local' | 'failed';
 
+/**
+ * Une copie est « déjà là » quand elle a la taille ET la date du fichier
+ * source : un fichier réécrit sur place à taille égale (métadonnées retirées,
+ * filigrane) garderait sinon une copie qui porte encore ce qu'on a retiré
+ * (audit D6). Une copie sans date de source est refaite une fois.
+ */
+function sameSource(copy: StoredObjectHead, source: StoredObjectHead): boolean {
+  return copy.size === source.size && source.lastModified !== null && copy.sourceModified?.getTime() === source.lastModified.getTime();
+}
+
 export async function mirrorKey(params: {
   readonly local: LocalObjectStore;
   readonly mirror: MediaObjectStore;
@@ -75,11 +85,11 @@ export async function mirrorKey(params: {
   if (source === null) return 'missing-local';
   try {
     const existing = await mirror.head(key);
-    if (existing !== null && existing.size === source.size) return 'already';
+    if (existing !== null && sameSource(existing, source)) return 'already';
     if (!apply) return 'would-copy';
     const body = await local.read(key);
     if (body === null) return 'missing-local';
-    await mirror.write(key, { body, size: source.size });
+    await mirror.write(key, { body, size: source.size, ...(source.lastModified === null ? {} : { sourceModified: source.lastModified }) });
     return 'copied';
   } catch {
     return 'failed';

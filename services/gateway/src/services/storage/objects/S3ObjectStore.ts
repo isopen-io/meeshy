@@ -6,7 +6,14 @@ import { assertSafeStorageKey, isSafeStorageKey, type ByteRange, type MediaObjec
 /** Ce que ce magasin demande d'un client S3 : `send`. Le vrai `S3Client` le satisfait, un double aussi. */
 export type S3Like = { send(command: unknown): Promise<unknown> };
 
-type HeadOutput = { ContentLength?: number; ETag?: string; LastModified?: Date; ContentType?: string };
+type HeadOutput = { ContentLength?: number; ETag?: string; LastModified?: Date; ContentType?: string; Metadata?: Record<string, string> };
+
+const SOURCE_MTIME = 'source-mtime';
+
+function sourceModifiedOf(metadata: Record<string, string> | undefined): Date | null {
+  const millis = Number(metadata?.[SOURCE_MTIME]);
+  return Number.isFinite(millis) && millis > 0 ? new Date(millis) : null;
+}
 type GetOutput = { Body?: unknown };
 type ListOutput = { Contents?: ReadonlyArray<{ Key?: string; LastModified?: Date }>; IsTruncated?: boolean; NextContinuationToken?: string };
 
@@ -38,6 +45,7 @@ export class S3ObjectStore implements MediaObjectStore {
         etag: output.ETag ?? '""',
         lastModified: output.LastModified ?? null,
         contentType: output.ContentType ?? null,
+        sourceModified: sourceModifiedOf(output.Metadata),
       };
     } catch (error) {
       if (isNotFound(error)) return null;
@@ -67,6 +75,7 @@ export class S3ObjectStore implements MediaObjectStore {
         Body: object.body,
         ContentLength: object.size,
         ...(object.contentType === undefined ? {} : { ContentType: object.contentType }),
+        ...(object.sourceModified === undefined ? {} : { Metadata: { [SOURCE_MTIME]: String(object.sourceModified.getTime()) } }),
       }),
     );
   }
