@@ -7,7 +7,8 @@
  * l'image HDR en flottants. Le rendu HDR d'après le retrait doit être
  * identique, au bit près, à celui de l'original — et le GPS, l'EXIF et le XMP
  * hors carte de gain doivent être partis, de l'image principale comme de la
- * carte.
+ * carte. (Les typages de sharp 0.35.5 omettent `withGainMap`, que la
+ * bibliothèque expose : d'où `GainMapAware`.)
  *
  * @jest-environment node
  */
@@ -15,7 +16,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import sharp from 'sharp';
+import sharp, { type Sharp } from 'sharp';
 import { stripExifFromImageBuffer } from '../ExifStrip';
 
 const FIXTURES = join(__dirname, 'fixtures', 'gain-map');
@@ -83,8 +84,10 @@ async function withSecretsInEveryImage(buffer: Buffer): Promise<Buffer> {
   return Buffer.concat([...parts.parts, buffer.subarray(parts.from)]);
 }
 
+type GainMapAware = Sharp & { readonly withGainMap: () => Sharp };
+
 async function hdrRendition(buffer: Buffer): Promise<Buffer> {
-  return sharp(buffer).withGainMap().raw({ depth: 'float' }).toBuffer();
+  return (sharp(buffer) as GainMapAware).withGainMap().raw({ depth: 'float' }).toBuffer();
 }
 
 async function sdrRendition(buffer: Buffer): Promise<Buffer> {
@@ -148,6 +151,29 @@ describe('stripExifFromImageBuffer — carte de gain HDR d’un JPEG (#11840)', 
 
     expect(stripped.toString('latin1')).not.toContain(`${SECRET}-annexe`);
     expect((await hdrRendition(stripped)).equals(await hdrRendition(fixture('iso-21496-gain-map.jpg')))).toBe(true);
+  });
+});
+
+describe('stripExifFromImageBuffer — carte de gain HDR d’une photo orientée (#11840)', () => {
+  it('une photo HDR d’orientation 6 est redressée SANS perdre sa carte de gain', async () => {
+    const original = fixture('iso-21496-gain-map.jpg');
+    const before = await sharp(original).metadata();
+    const carrier = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#000' } })
+      .withExif({ IFD0: { Copyright: SECRET } })
+      .withMetadata({ orientation: 6 })
+      .jpeg()
+      .toBuffer();
+    const exif = headerSegments(carrier, 0).find((s) => s.marker === APP1);
+    if (!exif) throw new Error('fixture: no EXIF');
+    const oriented = Buffer.concat([original.subarray(0, 2), carrier.subarray(exif.start, exif.end), original.subarray(2)]);
+    expect((await sharp(oriented).metadata()).orientation).toBe(6);
+
+    const stripped = await stripExifFromImageBuffer(oriented, 'image/jpeg');
+    const after = await sharp(stripped).metadata();
+
+    expect(after.gainMap).toBeDefined();
+    expect([after.width, after.height]).toEqual([before.height, before.width]);
+    expect(stripped.toString('latin1')).not.toContain(SECRET);
   });
 });
 
