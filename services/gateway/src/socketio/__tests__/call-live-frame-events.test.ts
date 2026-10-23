@@ -3,6 +3,7 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 import type { CallControlAck } from '@meeshy/shared/types/call-controls';
 import { SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter';
 import {
+  callRoomRecipients,
   registerCallLiveFrameEvents,
   type CallLiveFrameRecipient,
   type CallLiveFrameSender,
@@ -214,5 +215,45 @@ describe('call:frame-select — le cadre en direct part vers les autres particip
 
     expect(await h.send({ callId: CALL, frameId: null })).toEqual({ success: false, code: 'NOT_AUTHENTICATED' });
     expect(h.checkLimit).not.toHaveBeenCalled();
+  });
+});
+
+describe('les destinataires d’un cadre en groupe se lisent dans la room de l’appel (#11279)', () => {
+  it('chaque socket de la room porte les capacités annoncées à son ouverture, et reçoit `call:frame-selected`', async () => {
+    const emitted: Array<{ socketId: string; event: string; payload: unknown }> = [];
+    const member = (id: string, auth: unknown) => ({
+      id,
+      handshake: { auth },
+      emit: (event: string, payload: unknown) => {
+        emitted.push({ socketId: id, event, payload });
+        return true;
+      },
+    });
+    const rooms: string[] = [];
+    const io = {
+      in: (room: string) => {
+        rooms.push(room);
+        return {
+          fetchSockets: async () => [
+            member('sock-new', { token: 'jwt', capabilities: ['call-live-frame-group'] }),
+            member('sock-old', { token: 'jwt' }),
+          ],
+        };
+      },
+    };
+
+    const recipients = await callRoomRecipients(io as never)(CALL);
+    const payload = { callId: CALL, userId: 'alice', frameId: null, at: AT.toISOString() };
+    recipients.forEach((recipient) => recipient.emit(payload));
+
+    expect(rooms).toEqual([`call:${CALL}`]);
+    expect(recipients.map((r) => [r.socketId, [...r.capabilities]])).toEqual([
+      ['sock-new', ['call-live-frame-group']],
+      ['sock-old', []],
+    ]);
+    expect(emitted).toEqual([
+      { socketId: 'sock-new', event: SERVER_EVENTS.CALL_FRAME_SELECTED, payload },
+      { socketId: 'sock-old', event: SERVER_EVENTS.CALL_FRAME_SELECTED, payload },
+    ]);
   });
 });
