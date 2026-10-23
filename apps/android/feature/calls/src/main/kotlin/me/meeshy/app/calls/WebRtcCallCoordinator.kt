@@ -9,6 +9,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.plus
 import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -42,6 +43,17 @@ class WebRtcCallCoordinator @Inject constructor(
     private var interrupted = false
 
     private var callScope: CoroutineScope? = null
+
+    private val dataChannel = CallDataChannelController(engine)
+
+    /** Le pair a raccroché in-band (`bye`) : coupure immédiate, le `call:ended` qui suit est dédupliqué. */
+    var onRemoteBye: ((reason: String?) -> Unit)? = null
+
+    /** L'installation du pair a échoué (fabrique sans pair) : message précis, l'appel est abandonné. */
+    var onSetupFailed: ((message: String) -> Unit)? = null
+
+    /** Les entrées de sous-titres reçues du pair sur le canal de données. */
+    val peerCaptions get() = dataChannel.captions
 
     /** The EGL context every [org.webrtc.SurfaceViewRenderer] must init with. */
     val eglBaseContext get() = engine.eglBase.eglBaseContext
@@ -107,10 +119,23 @@ class WebRtcCallCoordinator @Inject constructor(
         // it is already known (e.g. the user toggled the speaker button while
         // `accept()` was still awaiting the join ACK, before this ran).
         audio.route(speakerOn = speakerOn, isVideo = isVideo)
-        engine.createConnection(iceServers, enableVideo = isVideo)
+        try {
+            engine.createConnection(iceServers, enableVideo = isVideo)
+        } catch (error: WebRtcError) {
+            end()
+            onSetupFailed?.invoke(error.message ?: "WebRTC setup failed")
+            return
+        }
         negotiator.observe(cs)
         iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
+        dataChannel.observe(cs) { reason -> onRemoteBye?.invoke(reason) }
     }
+
+    /** Raccroche in-band : le pair passe à Ended immédiatement. `false` si le canal n'est pas ouvert. */
+    fun sendHangupBye(reason: String? = null): Boolean = dataChannel.sendHangupBye(reason)
+
+    /** Rafraîchissement TURN en cours d'appel : appliqué par `setConfiguration`, sans reconnexion. */
+    fun updateIceServers(iceServers: List<SocketIceServer>): Boolean = engine.updateIceServers(iceServers)
 
     /** Caller only: the peer joined the room → create and send the SDP offer. */
     fun onParticipantJoined(joinerId: String? = null) {
