@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallControlRefusal
@@ -52,20 +53,20 @@ internal fun CallAck.controlRefusal(): CallControlRefusal? = when (this) {
 internal class CallControlsSocket(private val socketManager: SocketManager) {
 
     suspend fun invite(callId: String, userId: String): Result<Unit> =
-        verb("call:invite-participant", JSONObject().put("callId", callId).put("userId", userId))
+        verb(SocketEventNames.CALL_INVITE_PARTICIPANT, JSONObject().put("callId", callId).put("userId", userId))
 
     suspend fun mute(callId: String, targetUserId: String): Result<Unit> =
-        verb("call:mute-participant", JSONObject().put("callId", callId).put("targetUserId", targetUserId))
+        verb(SocketEventNames.CALL_MUTE_PARTICIPANT, JSONObject().put("callId", callId).put("targetUserId", targetUserId))
 
     suspend fun react(callId: String, emoji: CallReactionEmoji): Result<Unit> =
-        verb("call:reaction", JSONObject().put("callId", callId).put("emoji", emoji.glyph))
+        verb(SocketEventNames.CALL_REACTION, JSONObject().put("callId", callId).put("emoji", emoji.glyph))
 
     suspend fun selectFrame(
         callId: String,
         frameId: String?,
         texts: CallLiveFrameTexts?,
         reply: CallLiveFrameReply?,
-    ): Result<Unit> = verb("call:frame-select", framePayload(callId, frameId, texts, reply))
+    ): Result<Unit> = verb(SocketEventNames.CALL_FRAME_SELECT, framePayload(callId, frameId, texts, reply))
 
     private suspend fun verb(event: String, payload: JSONObject): Result<Unit> =
         socketManager.emitForAck(event, payload).controlRefusal()

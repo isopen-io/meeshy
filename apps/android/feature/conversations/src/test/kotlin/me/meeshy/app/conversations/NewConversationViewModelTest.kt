@@ -49,7 +49,7 @@ class NewConversationViewModelTest {
         users: UserRepository = mockk(relaxed = true),
         conversations: ConversationRepository = mockk(relaxed = true),
         session: SessionRepository = session(),
-    ) = NewConversationViewModel(users, conversations, session, mockk(relaxed = true), mockk(relaxed = true))
+    ) = NewConversationViewModel(users, conversations, session, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
 
     private fun results(vararg ids: String) =
         ids.map { UserSearchResult(id = it, username = it, displayName = it.uppercase()) }

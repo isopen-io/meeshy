@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.friend.BlockRepository
+import me.meeshy.sdk.friend.BlockedListRepository
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.model.FriendRequestUser
@@ -73,6 +75,8 @@ class NewConversationViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val friendListRepository: FriendListRepository,
     private val friendRepository: FriendRepository,
+    private val blockedListRepository: BlockedListRepository,
+    private val blockRepository: BlockRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NewConversationUiState())
@@ -83,9 +87,11 @@ class NewConversationViewModel @Inject constructor(
     private var rawResults: List<me.meeshy.sdk.net.api.UserSearchResult> = emptyList()
     private var currentQuery: String = ""
     private var nextOffset: Int = 0
+    private var blockedIds: Set<String> = emptySet()
 
     init {
         viewModelScope.launch { loadContacts() }
+        viewModelScope.launch { loadBlocked() }
         viewModelScope.launch {
             queryFlow
                 .debounce(SEARCH_DEBOUNCE_MS)
@@ -108,6 +114,7 @@ class NewConversationViewModel @Inject constructor(
         if (existing == null) {
             val current = _state.value
             val row = (current.results + current.contacts).firstOrNull { it.id == userId } ?: return
+            if (row.isBlocked) return
             selectedById[userId] = row.copy(isSelected = true)
         }
         publishSelection()
@@ -234,10 +241,41 @@ class NewConversationViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The users I blocked, cache first then the gateway (iOS `BlockService.blockedUserIds`):
+     * their rows say « Blocked » and cannot be picked — creating with them would only fail.
+     */
+    private suspend fun loadBlocked() {
+        runCatching { blockedListRepository.cachedSnapshot() }.getOrNull()?.let { publishBlocked(it.map { u -> u.id }) }
+        val fresh = try {
+            blockRepository.listBlocked()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        if (fresh is NetworkResult.Success) publishBlocked(fresh.data.map { it.id })
+    }
+
+    private fun publishBlocked(ids: List<String>) {
+        blockedIds = ids.filter { it.isNotBlank() }.toSet()
+        blockedIds.forEach { selectedById.remove(it) }
+        _state.update {
+            it.copy(
+                results = NewConversationLogic.withBlocked(it.results, blockedIds),
+                contacts = NewConversationLogic.withBlocked(it.contacts, blockedIds),
+                selected = selectedById.values.toList(),
+            )
+        }
+    }
+
     private fun publishContacts(roster: List<FriendRequestUser>) {
         _state.update {
             it.copy(
-                contacts = NewConversationLogic.contactRows(roster, selectedById.keys.toSet(), sessionRepository.currentUserId),
+                contacts = NewConversationLogic.withBlocked(
+                    NewConversationLogic.contactRows(roster, selectedById.keys.toSet(), sessionRepository.currentUserId),
+                    blockedIds,
+                ),
                 isLoadingContacts = false,
             )
         }
@@ -252,7 +290,10 @@ class NewConversationViewModel @Inject constructor(
         if (code == USER_BLOCKED_CODE) NewConversationError.BLOCKED else NewConversationError.CREATE_FAILED
 
     private fun projectedRows(results: List<me.meeshy.sdk.net.api.UserSearchResult>) =
-        NewConversationLogic.rows(results, selectedById.keys.toSet(), sessionRepository.currentUserId)
+        NewConversationLogic.withBlocked(
+            NewConversationLogic.rows(results, selectedById.keys.toSet(), sessionRepository.currentUserId),
+            blockedIds,
+        )
 
     private fun publishSelection() {
         val selectedIds = selectedById.keys.toSet()

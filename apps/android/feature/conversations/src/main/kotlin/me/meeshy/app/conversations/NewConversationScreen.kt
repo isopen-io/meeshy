@@ -42,6 +42,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import me.meeshy.ui.R as UiR
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -319,11 +323,16 @@ private fun UserRow(
     user: SelectableUser,
     onClick: () -> Unit,
 ) {
+    val blockedLabel = stringResource(UiR.string.connection_badge_blocked)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .semantics { role = Role.Button }
+            .alpha(if (user.isBlocked) 0.5f else 1f)
+            .clickable(enabled = !user.isBlocked, onClick = onClick)
+            .semantics {
+                role = Role.Button
+                if (user.isBlocked) stateDescription = blockedLabel
+            }
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -358,7 +367,20 @@ private fun UserRow(
                 color = MeeshyTheme.tokens.textSecondary,
             )
         }
-        if (user.isSelected) {
+        if (user.isBlocked) {
+            Text(
+                text = blockedLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyPalette.Error.copy(alpha = 0.8f),
+            )
+            Icon(
+                Icons.Filled.Block,
+                contentDescription = null,
+                tint = MeeshyPalette.Error.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp),
+            )
+        } else if (user.isSelected) {
             Box(
                 modifier = Modifier
                     .size(24.dp)

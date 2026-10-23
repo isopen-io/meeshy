@@ -1,7 +1,6 @@
 package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
-import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.model.ApiMessage
@@ -20,7 +19,7 @@ internal class CachedMessageUpdater(
 
     /** The cached message [messageId], or `null` when no row exists. */
     suspend fun find(messageId: String): ApiMessage? {
-        val row = messageDao.find(messageId) ?: return null
+        val row = MessageIdReconciliation.locate(database, messageId) ?: return null
         return MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
     }
 
@@ -34,14 +33,14 @@ internal class CachedMessageUpdater(
         requireSynced: Boolean,
         transform: (ApiMessage) -> ApiMessage,
     ): ApiMessage? = database.withTransaction {
-        val row = messageDao.find(messageId) ?: return@withTransaction null
+        val row = MessageIdReconciliation.locate(database, messageId) ?: return@withTransaction null
         if (requireSynced && row.sendState != null) return@withTransaction null
         val current = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
         val updated = transform(current)
         // A transform that returns its input unchanged (an inert socket update, e.g.
         // a duplicate translation) skips the redundant Room write + re-encode.
         if (updated !== current) {
-            messageDao.upsertAll(listOf(row.copy(payload = MeeshyApi.json.encodeToString(updated))))
+            messageDao.upsertAll(listOf(MessageEntityFactory.refreshed(row, updated).bumped()))
         }
         updated
     }

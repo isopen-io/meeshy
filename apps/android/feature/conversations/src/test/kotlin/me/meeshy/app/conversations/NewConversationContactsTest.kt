@@ -47,7 +47,7 @@ class NewConversationContactsTest {
     private fun session() = mockk<SessionRepository>(relaxed = true) { every { currentUserId } returns "me" }
 
     private fun viewModel(cache: FriendListRepository, network: FriendRepository) =
-        NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session(), cache, network)
+        NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session(), cache, network, mockk(relaxed = true), mockk(relaxed = true))
 
     @Test
     fun `the cached roster paints at once, then the network refreshes it`() = runTest(dispatcher) {
