@@ -112,6 +112,8 @@ fun ApiConversationPreferences?.applyRemote(
             mentionsOnly = payload.mentionsOnly,
             reaction = payload.reaction,
             tags = payload.tags,
+            orderInCategory = payload.orderInCategory,
+            clearHistoryBefore = payload.clearHistoryBefore,
             version = event.version,
         )
     }

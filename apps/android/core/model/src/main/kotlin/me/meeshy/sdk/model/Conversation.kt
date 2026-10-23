@@ -106,6 +106,15 @@ data class ApiConversation(
     /** Pont ✦ précalculé serveur ; absent quand il n'y a rien de non lu. */
     @Serializable(with = TolerantConversationBridgeSerializer::class)
     val bridge: ConversationBridge? = null,
+    /**
+     * Le curseur de lecture SERVEUR du lecteur (#7198/#7222), à la racine de la ligne. Absent
+     * sans curseur connu, jamais fabriqué : c'est l'entrée de la loi du premier non lu
+     * (`first-unread.ts`), qui exclut [lastReadMessageId] des candidats.
+     */
+    val lastReadMessageId: String? = null,
+    val lastReadAt: String? = null,
+    val lastReadMessageCreatedAt: String? = null,
+    val lastDeliveredAt: String? = null,
 ) {
     /** La conversation « World » : le salon global, reconnu à son identifiant. */
     val isWorldWide: Boolean get() = identifier == "world"
@@ -261,6 +270,8 @@ data class ApiConversationPreferences(
      * upsert at version 1 rather than the schema default 0.
      */
     val version: Int = 0,
+    /** Masque les messages antérieurs à cet instant (effacement d'historique) ; `null` = rien de masqué. */
+    val clearHistoryBefore: String? = null,
 )
 
 @Serializable
