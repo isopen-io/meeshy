@@ -52,6 +52,7 @@ class OnboardingIllustrationsTest {
     )
 
     private fun composeAll(dark: Boolean, fontScale: Float, reduce: Boolean) {
+        compose.mainClock.autoAdvance = false
         compose.setContent {
             val base = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
