@@ -30,10 +30,9 @@ object BubbleRenderKind {
         Deleted,
 
         /**
-         * A view-once message whose server view-count has been consumed: it renders
-         * the persistent "Seen and deleted" burned tombstone (iOS `BubbleBurnedView`,
-         * gated on `message.isViewOnce && message.viewOnceCount > 0`). Like deletion this
-         * is server-authoritative, so it wins over the client-side ephemeral collapse.
+         * A view-once message THIS reader has opened: it renders the persistent "Seen and
+         * deleted" burned tombstone (iOS `isViewOnceOpened`, #7579 — consumed per person,
+         * never by the global view count). It wins over the client-side ephemeral collapse.
          */
         Burned,
 
@@ -63,11 +62,11 @@ object BubbleRenderKind {
      * - a deleted message is [Kind.Deleted] regardless of anything else — server
      *   authority wins, mirroring iOS checking `.deleted` BEFORE the burned/ephemeral
      *   arms, so a deleted-and-expired message still shows the deletion tombstone.
-     * - an un-deleted view-once message whose count has been consumed
-     *   ([isViewOnce] && [viewOnceCount] > 0) is [Kind.Burned] — the persistent
+     * - an un-deleted view-once message this reader opened
+     *   ([isViewOnce] && [isViewOnceOpenedByMe]) is [Kind.Burned] — the persistent
      *   "Seen and deleted" tombstone, checked BEFORE the ephemeral arm so a consumed
-     *   view-once message shows the tombstone instead of silently collapsing. A
-     *   positive [viewOnceCount] on a non-view-once message never burns.
+     *   view-once message shows the tombstone instead of silently collapsing. What other
+     *   members open never burns it for this reader.
      * - otherwise, once the countdown reaches [EphemeralLifecycle.State.Expired] the
      *   bubble is [Kind.EphemeralExpired] (collapses).
      * - [EphemeralLifecycle.State.Running] / [EphemeralLifecycle.State.None] leave a
@@ -77,12 +76,12 @@ object BubbleRenderKind {
         isDeleted: Boolean,
         ephemeral: EphemeralLifecycle.State,
         isViewOnce: Boolean = false,
-        viewOnceCount: Int = 0,
+        isViewOnceOpenedByMe: Boolean = false,
         isSystem: Boolean = false,
     ): Kind = when {
         isSystem -> Kind.System
         isDeleted -> Kind.Deleted
-        isViewOnce && viewOnceCount > 0 -> Kind.Burned
+        isViewOnce && isViewOnceOpenedByMe -> Kind.Burned
         ephemeral is EphemeralLifecycle.State.Expired -> Kind.EphemeralExpired
         else -> Kind.Standard
     }

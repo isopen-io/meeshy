@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -63,7 +64,8 @@ class StoriesViewModel @Inject constructor(
                 ),
                 storyRepository.publishQueue(),
             ) { result, queue -> result to queue }
-                .collect { (result, queue) ->
+                .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false) } }
+                .collectEachSafely { (result, queue) ->
                     val pending = queue.pending
                     val failed = queue.failed
                     reconcileDeliveredPublishes(pending, failed)
@@ -105,7 +107,7 @@ class StoriesViewModel @Inject constructor(
      */
     private fun observeStoryDeletions() {
         viewModelScope.launch {
-            socialSocket.storyDeleted.collect { payload ->
+            socialSocket.storyDeleted.collectEachSafely { payload ->
                 storyRepository.removeCachedStory(payload.storyId)
             }
         }
@@ -121,7 +123,7 @@ class StoriesViewModel @Inject constructor(
      */
     private fun observeStoryUpdates() {
         viewModelScope.launch {
-            socialSocket.storyUpdated.collect { payload ->
+            socialSocket.storyUpdated.collectEachSafely { payload ->
                 storyRepository.applyStoryUpdate(
                     updated = payload.story,
                     engagementReset = payload.engagementReset ?: false,

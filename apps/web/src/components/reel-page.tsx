@@ -29,6 +29,8 @@ import { readingTelemetry, useReadingSession } from '@/lib/view/reading-telemetr
 import { interactionOf } from '@/lib/telemetry/card-context';
 import { contentTapOf } from '@/lib/telemetry/content-taps';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
+import { reelUnderSheet, type SceneYield } from '@/lib/view/scene-yields';
+import { ReelVeil } from './reel-veil';
 
 /** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
  * images) ne paie jamais le moteur de scène. */
@@ -98,6 +100,10 @@ export type ReelPageProps = {
   /** La feuille de commentaires est ouverte (`chromeYields`, #8601) : le
    * chrome du réel s'efface, inerte ; le média reste. */
   readonly chromeHidden?: boolean;
+  /** Ce que la scène cède à la feuille de commentaires (`sceneYieldOf`,
+   * #11307) — posé par l'écran sur le SEUL réel visible : il se met en pause,
+   * sous son affiche floutée le temps qu'on lit. */
+  readonly sceneYield?: SceneYield;
 };
 
 function ReelPlayable({
@@ -109,6 +115,7 @@ function ReelPlayable({
   accent,
   language,
   onSoundBlocked,
+  held,
 }: {
   readonly postId: string;
   readonly media: FeedCardMedia;
@@ -118,9 +125,11 @@ function ReelPlayable({
   readonly accent: string;
   readonly language: InterfaceLanguage;
   readonly onSoundBlocked: () => void;
+  /** Retenu sous la feuille (#11307) : en pause, la séance de lecture continue. */
+  readonly held: boolean;
 }) {
   const active = mode === 'active';
-  const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn, onSoundBlocked });
+  const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active: active && !held, soundOn, onSoundBlocked });
   const poster = media.thumbnailSrc ?? media.placeholder;
   const preload = mode === 'warm' ? 'metadata' : 'auto';
   /* L'ATTENTE SE DIT (#9277) : l'élément lié est aussi écouté pour son buffer. */
@@ -173,7 +182,7 @@ function ReelPlayable({
         {/* Le disque ▶ ne se pose que sur le réel VISIBLE : un voisin en pause
             ne l'a pas été par le lecteur, et il glisserait dans le champ à
             chaque balayage. */}
-        {active && status === 'paused' ? (
+        {active && !held && status === 'paused' ? (
           <span aria-hidden="true" className={`${VIEWER_GLASS} grid size-18 place-items-center rounded-full`}>
             <Glyph name="fillPlay" size={34} className="text-on-media" />
           </span>
@@ -225,6 +234,15 @@ function scenePosterOf(scene: FeedCardScene): string | undefined {
   return poster ?? sceneWaitingImage(first);
 }
 
+/** L'AFFICHE de la page, quelle que soit sa nature — celle que porte le voile
+ * flouté sous la feuille (#11307). */
+function stagePosterOf(stage: ReturnType<typeof reelStageOf>): string | undefined {
+  if (stage.kind === 'scene') return scenePosterOf(stage.scene);
+  if (stage.kind === 'video' || stage.kind === 'audio') return stage.media.thumbnailSrc ?? stage.media.placeholder;
+  if (stage.kind === 'images') return stage.images[0]?.thumbnailSrc ?? stage.images[0]?.src;
+  return undefined;
+}
+
 function ReelStage({
   model,
   mode,
@@ -234,8 +252,10 @@ function ReelStage({
   onSoundBlocked,
   onSoundUnavailable,
   mediaDeps,
+  held,
 }: Pick<ReelPageProps, 'model' | 'mode' | 'soundOn' | 'language' | 'preferredLanguages' | 'onSoundBlocked' | 'mediaDeps'> & {
   readonly onSoundUnavailable: (reason: ProtectedMediaUnavailableReason) => void;
+  readonly held: boolean;
 }) {
   const stage = reelStageOf(model);
   const accent = model.author.accentColor;
@@ -258,6 +278,7 @@ function ReelStage({
           {...(poster !== undefined ? { poster } : {})}
           onSoundBlocked={onSoundBlocked}
           onSoundUnavailable={onSoundUnavailable}
+          held={held}
           {...(mediaDeps !== undefined ? { mediaDeps } : {})}
         />
       </Suspense>
@@ -267,7 +288,7 @@ function ReelStage({
     return mode === 'far' ? (
       <ReelPoster src={stage.media.thumbnailSrc ?? stage.media.placeholder} />
     ) : (
-      <ReelPlayable postId={model.id} media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} onSoundBlocked={onSoundBlocked} />
+      <ReelPlayable postId={model.id} media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} onSoundBlocked={onSoundBlocked} held={held} />
     );
   }
   if (stage.kind === 'images') {
@@ -440,6 +461,7 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
     [noteMutes, soundOn, onToggleSound],
   );
   const chromeHidden = props.chromeHidden === true;
+  const underSheet = reelUnderSheet({ yieldTo: props.sceneYield ?? 'full', active: mode === 'active' });
   /* LES TAPS D'IDENTITÉ (#10502) — le même écouteur que la carte du fil. */
   const postId = model.id;
   const onTapCapture = useCallback(
@@ -472,8 +494,10 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
         preferredLanguages={props.preferredLanguages}
         onSoundBlocked={props.onSoundBlocked}
         onSoundUnavailable={setSoundUnavailable}
+        held={underSheet.held}
         {...(props.mediaDeps !== undefined ? { mediaDeps: props.mediaDeps } : {})}
       />
+      {underSheet.veiled ? <ReelVeil src={stagePosterOf(stage)} /> : null}
       {/* LE CHROME CÈDE À LA FEUILLE (#8601, `lib/view/chrome-yields.ts`) — voile,
           identité, légende et rail s'effacent ENSEMBLE, inertes, quand on
           commente ; le média reste. C'est `ViewerBottomBar` qui cède (`hidden`),

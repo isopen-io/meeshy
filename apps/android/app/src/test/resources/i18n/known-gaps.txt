@@ -24,6 +24,7 @@ bare-specifier :feature:chat en chat_forward_members
 # Chaînes GÉNÉRÉES à un seul spécificateur : xcstrings_to_android.py ne numérote un spécificateur
 # que s'il y en a plusieurs ou que la source iOS est déjà positionnelle ; le cliquet les garde
 # jusqu'à ce que le générateur les émette en %1$s / %1$d.
+bare-specifier :sdk-ui en avatar_a11y_mood
 bare-specifier :sdk-ui en notification_date_ago
 bare-specifier :sdk-ui en notification_date_hours
 bare-specifier :sdk-ui en notification_date_minutes

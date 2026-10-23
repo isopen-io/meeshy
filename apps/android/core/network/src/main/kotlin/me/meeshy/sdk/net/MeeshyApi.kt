@@ -119,7 +119,8 @@ class MeeshyApi private constructor(private val retrofit: Retrofit) {
             transition: SessionTransitionFlags,
             api: () -> MeeshyApi,
         ): SessionRefresher = SessionRefresher(tokenStore, transition) { session ->
-            api().auth.refresh(RefreshTokenRequest(session)).takeIf { it.success }?.data?.token
+            api().auth.refresh(RefreshTokenRequest(token = tokenStore.jwt ?: session, sessionToken = session))
+                .takeIf { it.success }?.data?.token
         }
     }
 }
