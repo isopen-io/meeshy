@@ -96,13 +96,12 @@ describe('tus-handler — la file de médias (#11264)', () => {
     else process.env.UPLOAD_PATH = ORIGINAL_UPLOAD_PATH;
   });
 
-  it('PostMedia : vignette différée, ligne `pending`, une tâche « thumb » en file, réponse `pending`', async () => {
+  async function finishBigPhotoUpload(mediaQueue: unknown) {
     process.env.UPLOAD_PATH = uploadDir;
     jest.resetModules();
-    const jobs: unknown[] = [];
     const prisma = buildFakePrisma();
     const { registerTusRoutes } = await import('../tus-handler');
-    await registerTusRoutes({ prisma, addContentTypeParser: jest.fn(), route: jest.fn() } as any, { mediaQueue: { schedule: async (job) => { jobs.push(job); } } });
+    await registerTusRoutes({ prisma, addContentTypeParser: jest.fn(), route: jest.fn() } as any, { mediaQueue: mediaQueue as never });
     if (!captured) throw new Error('options TUS non capturées');
     const bytes = await bigPhoto();
     const created = await captured.onUploadCreate(
@@ -112,14 +111,28 @@ describe('tus-handler — la file de médias (#11264)', () => {
     const tusTempPath = path.join(uploadDir, '.tus-resumable');
     await fs.mkdir(tusTempPath, { recursive: true });
     await fs.writeFile(path.join(tusTempPath, 'upload-queue'), bytes);
-
     const result = await captured.onUploadFinish({}, { id: 'upload-queue', metadata: created.metadata, size: bytes.length, storage: undefined });
+    return { prisma, result, data: (prisma.postMedia.create as jest.Mock<any>).mock.calls[0][0].data };
+  }
 
-    const data = (prisma.postMedia.create as jest.Mock<any>).mock.calls[0][0].data;
+  it('PostMedia, worker vivant : vignette différée, ligne `pending`, une tâche en file, réponse `pending`', async () => {
+    const jobs: unknown[] = [];
+    const { data, result } = await finishBigPhotoUpload({ workerAlive: async () => true, schedule: async (job: unknown) => { jobs.push(job); } });
+
     expect(data.processingState).toBe('pending');
     expect(data.thumbnailPath).toBeNull();
     expect(data.imageVariants).toBeUndefined();
-    expect(jobs).toEqual([{ kind: 'thumb', target: 'postMedia', recordId: 'created-post-media', final: true }]);
+    expect(jobs).toEqual([{ target: 'postMedia', recordId: 'created-post-media', kinds: ['thumb'] }]);
     expect(JSON.parse(result.body ?? '{}').data.attachment.processingState).toBe('pending');
+  }, 120_000);
+
+  it('PostMedia, AUCUN worker ne bat : tout reste dans la requête, comme avant la file (audit S9, défaut 2)', async () => {
+    const schedule = jest.fn(async () => undefined);
+    const { data, result } = await finishBigPhotoUpload({ workerAlive: async () => false, schedule });
+
+    expect(data.processingState).toBeUndefined();
+    expect(data.thumbnailPath).toMatch(/_thumb\.webp$/);
+    expect(schedule).not.toHaveBeenCalled();
+    expect(JSON.parse(result.body ?? '{}').data.attachment.processingState).toBeUndefined();
   }, 120_000);
 });

@@ -25,8 +25,8 @@ import {
 import { MetadataManager } from './MetadataManager';
 import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson, renditionsJson } from './media-renditions.js';
 import { UnconvertibleImageError, convertHeifBuffer, isServerConvertedImage } from './heif-conversion.js';
-import { deferredMediaKinds, mediaJobsFor, type MediaJobKind } from './media-processing/jobs.js';
 import { mediaJobQueueFromEnv, type MediaJobQueue } from './media-processing/queue.js';
+import { deferrableKinds, scheduleOrRender } from './media-processing/dispatch.js';
 import { isMediaMetadataStrippable, stripMediaMetadataBuffer } from './media-metadata-strip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
@@ -275,18 +275,6 @@ export class UploadProcessor {
   }
 
   /**
-   * #11264 — confie les rendus différés au worker. Une file injoignable ne fait
-   * pas échouer l'envoi : la ligne reste `pending`, le média est servi tel quel.
-   */
-  private async scheduleDeferred(target: 'messageAttachment', recordId: string, kinds: readonly MediaJobKind[]): Promise<void> {
-    if (this.mediaQueue === null || kinds.length === 0) return;
-    for (const job of mediaJobsFor(target, recordId, kinds)) {
-      await this.mediaQueue.schedule(job).catch((error: unknown) =>
-        logger.error('Rendu différé non mis en file', { recordId, kind: job.kind, error }));
-    }
-  }
-
-  /**
    * Sauvegarde physiquement un fichier avec permissions sécurisées.
    * Un audio est normalisé en M4A : le fichier écrit peut alors changer
    * d'extension et de type — ce que rend `relativePath`/`mimeType`, et ce que
@@ -435,10 +423,10 @@ export class UploadProcessor {
     // tout ce qui est persisté plus bas (URL, taille, type, dimensions) lit
     // `renditions`, pas l'upload brut.
     // #11264 — ce qui est différé au worker de médias (file allumée seulement).
-    const deferred = deferredMediaKinds({
+    // Différé seulement quand un worker bat : sinon tout reste dans la requête.
+    const deferred = await deferrableKinds(this.mediaQueue, {
       attachmentType,
       fileSize: saved.size,
-      queueEnabled: this.mediaQueue !== null,
       compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
     });
     const renditions = await produceMediaRenditions(
@@ -475,7 +463,7 @@ export class UploadProcessor {
       ? { audioEffectsTimeline: metadata.audioEffectsTimeline } as any
       : undefined;
 
-    const attachment = await this.prisma.messageAttachment.create({
+    const created = await this.prisma.messageAttachment.create({
       data: {
         messageId: finalMessageId,
         fileName: path.basename(storedFilePath),
@@ -508,7 +496,17 @@ export class UploadProcessor {
         ...(deferred.length > 0 ? { processingState: 'pending' } : {}),
       },
     });
-    await this.scheduleDeferred('messageAttachment', attachment.id, deferred);
+    // File muette : le rendu se fait ici, et la réponse sert la ligne rendue.
+    const dispatched = await scheduleOrRender({
+      queue: this.mediaQueue,
+      deps: { prisma: this.prisma as never, uploadBasePath: this.uploadBasePath, metadataManager: this.metadataManager, runFfmpeg },
+      target: 'messageAttachment',
+      recordId: created.id,
+      kinds: deferred,
+    });
+    const attachment = dispatched === 'rendered' || dispatched === 'failed'
+      ? (await this.prisma.messageAttachment.findUnique({ where: { id: created.id } })) ?? created
+      : created;
 
     return {
       id: attachment.id,

@@ -42,6 +42,12 @@ export interface AttachmentStatusUpdatedEventData {
 export interface AttachmentUpdatedEventData {
   readonly conversationId: string;
   readonly messageId: string;
+  /**
+   * L'identifiant de la pièce, au premier niveau (#11264, audit S9) : le
+   * décodeur Android natif (`AttachmentUpdatedEvent`) l'exige et rejetait
+   * l'événement entier sans lui. Ajout pur : il redit `attachment.id`.
+   */
+  readonly attachmentId?: string;
   readonly attachment: unknown;
 }
 
