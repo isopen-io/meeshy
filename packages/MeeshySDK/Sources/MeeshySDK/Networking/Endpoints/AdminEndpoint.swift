@@ -44,7 +44,6 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case analyticsKpis
     case analyticsLanguageDistribution
     case analyticsMessageTypes
-    case analyticsPlayback
     case analyticsRealtime
     case analyticsUserDistribution
     case analyticsVolumeTimeline
@@ -189,7 +188,6 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .analyticsKpis: return "/api/v1/admin/analytics/kpis"
         case .analyticsLanguageDistribution: return "/api/v1/admin/analytics/language-distribution"
         case .analyticsMessageTypes: return "/api/v1/admin/analytics/message-types"
-        case .analyticsPlayback: return "/api/v1/admin/analytics/playback"
         case .analyticsRealtime: return "/api/v1/admin/analytics/realtime"
         case .analyticsUserDistribution: return "/api/v1/admin/analytics/user-distribution"
         case .analyticsVolumeTimeline: return "/api/v1/admin/analytics/volume-timeline"
