@@ -85,9 +85,6 @@ class E2eeBundlePublisher @Inject constructor(
         scheduler.schedule()
     }
 
-    /** Réinitialisation CONSENTIE : efface l'identité locale et reconnaît le coffre (aucune lecture distante). */
-    fun resetIdentity(userId: String)
-
     /** Déconnexion : efface les clés du compte et l'état. */
     suspend fun onSignedOut(userId: String) {
         withContext(io) { local.forget(userId) }
