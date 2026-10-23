@@ -12,12 +12,12 @@ const ID = 'aaaaaaaaaaaaaaaaaaaaaaa1';
 const OPEN = { isViewOnce: false, isBlurred: false, isEncrypted: false, encryptionMode: null };
 
 function harness(row: Record<string, unknown> | null) {
-  const update = jest.fn(async () => ({}));
+  const update = jest.fn(async (_query: unknown) => ({}));
   const runCommandRaw = jest.fn(async () => ({ n: 1 }));
   const prisma = { messageAttachment: { findUnique: jest.fn(async () => row), update }, $runCommandRaw: runCommandRaw };
-  const translate = jest.fn(async () => undefined);
+  const translate = jest.fn(async (..._request: unknown[]) => undefined);
   const zmq = { translateToMultipleLanguages: translate, on: jest.fn() };
-  const onTranslated = jest.fn(async () => undefined);
+  const onTranslated = jest.fn(async (_attachmentId: string) => undefined);
   const service = new MessageAttachmentAltTranslationService(prisma as never, zmq as never, onTranslated);
   return { service, update, runCommandRaw, translate, onTranslated };
 }
