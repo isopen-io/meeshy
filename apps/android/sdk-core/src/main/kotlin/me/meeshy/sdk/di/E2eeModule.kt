@@ -23,10 +23,12 @@ import javax.inject.Inject
 internal class VaultLocalBundleSource @Inject constructor(
     @SecretVault private val vault: SecureStore,
 ) : LocalBundleSource {
-    override fun bundleFor(userId: String): SignalPreKeyBundle =
-        PreKeyBundleFactory(E2eeKeyStore(vault, userId)).create()
+    private val lock = Any()
 
-    override fun forget(userId: String) = E2eeKeyStore(vault, userId).clearAll()
+    override fun bundleFor(userId: String): SignalPreKeyBundle =
+        synchronized(lock) { PreKeyBundleFactory(E2eeKeyStore(vault, userId)).create() }
+
+    override fun forget(userId: String) = synchronized(lock) { E2eeKeyStore(vault, userId).clearAll() }
 }
 
 /** Publication désactivée par défaut : la passerelle garde UN bundle par utilisateur (E2EE par appareil non tranché). */
