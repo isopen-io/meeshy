@@ -119,3 +119,21 @@ describe('--sweep — l’effacement des copies que plus rien ne nomme, sous le 
     expect(parseMirrorArgs(['--sweep', '--apply', '--allow-mass-removal'], { MEESHY_ENV: 'staging' })).toMatchObject({ kind: 'run', sweep: true, allowMassRemoval: true });
   });
 });
+
+describe('#11267, audit D5 — le fichier d’état s’écrit sous un nom temporaire UNIQUE', () => {
+  it('deux passages qui écrivent le même état en même temps aboutissent tous deux', async () => {
+    const { mkdtemp, mkdir, writeFile } = await import('node:fs/promises');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { LocalObjectStore } = await import('../LocalObjectStore');
+    const root = await mkdtemp(path.join(os.tmpdir(), 'meeshy-state-'));
+    await mkdir(path.join(root, '2026'), { recursive: true });
+    await writeFile(path.join(root, '2026', 'a.jpg'), 'a');
+    const rows = [{ id: '000000000000000000000001', filePath: '2026/a.jpg' }];
+    const source = { name: 'messageAttachment', page: async (after: string | null, take: number) => (after === null ? rows.slice(0, take) : []) };
+    const mirror = { head: async () => null, read: async () => null, write: async () => undefined, remove: async () => undefined };
+    const run = () =>
+      runMediaMirror({ sources: [source], local: new LocalObjectStore(root), mirror, uploadRoot: root, stateFile: path.join(root, '.media-mirror', 'state.json'), options: { apply: true, batchSize: 1, limit: null, reset: true }, log: () => undefined });
+    await expect(Promise.all(Array.from({ length: 8 }, run))).resolves.toHaveLength(8);
+  });
+});
