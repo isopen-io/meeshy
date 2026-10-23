@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Folder
@@ -40,6 +41,14 @@ internal fun ConversationListBody(
         // compose eagerly (few items on a real account).
         val sections = ConversationSections.of(state.conversations, state.categories)
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            if (!ConversationSections.showsHeaders(sections)) {
+                sections.forEach { section ->
+                    items(section.items, key = { "row-${it.id}" }) { conversation ->
+                        ConversationListRow(state, conversation, viewModel)
+                    }
+                }
+                return@LazyColumn
+            }
             sections.forEach { section ->
                 val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
                 item(key = key) {
