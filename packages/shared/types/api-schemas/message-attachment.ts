@@ -104,6 +104,36 @@ export const messageAttachmentSchema = {
         },
       },
     },
+    avifVariants: {
+      type: 'array',
+      nullable: true,
+      description: 'Responsive AVIF variants (#11262), same widths as imageVariants, kept SEPARATE so older clients never receive AVIF — non-encrypted images only',
+      items: {
+        type: 'object',
+        properties: {
+          width: { type: 'number', description: 'Variant width in pixels' },
+          height: { type: 'number', description: 'Variant height in pixels' },
+          url: { type: 'string', description: 'Variant file URL' },
+          size: { type: 'number', description: 'Variant byte size' },
+          format: { type: 'string', description: 'Encoded format (avif)' },
+        },
+      },
+    },
+    renditions: {
+      type: 'array',
+      nullable: true,
+      description: 'Additional video renditions (#11261): H.264 compatibility rendition of an HEVC video, HDR tone-mapped to SDR BT.709 — the original fileUrl is untouched',
+      items: {
+        type: 'object',
+        properties: {
+          codec: { type: 'string', description: 'Video codec of the rendition (h264)' },
+          url: { type: 'string', description: 'Rendition file URL' },
+          width: { type: 'number', description: 'Rendition width in pixels' },
+          height: { type: 'number', description: 'Rendition height in pixels' },
+          size: { type: 'number', description: 'Rendition byte size' },
+        },
+      },
+    },
 
     // Audio/Video metadata
     duration: { type: 'number', nullable: true, description: 'Duration in milliseconds' },
@@ -111,6 +141,7 @@ export const messageAttachmentSchema = {
     sampleRate: { type: 'number', nullable: true, description: 'Sample rate in Hz' },
     codec: { type: 'string', nullable: true, description: 'Audio codec (opus, aac, mp3)' },
     channels: { type: 'number', nullable: true, description: 'Audio channels (1=mono, 2=stereo)' },
+    loudnessLufs: { type: 'number', nullable: true, description: 'Integrated loudness (EBU R128, LUFS) of the stored audio, measured at ingestion (#11259)' },
 
     // Video-specific
     fps: { type: 'number', nullable: true, description: 'Frames per second' },

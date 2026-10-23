@@ -152,7 +152,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       });
     });
 
-    it('selects exactly 29 documented fields — guards against silent omission', () => {
+    it('selects exactly 32 documented fields — guards against silent omission', () => {
       const expectedKeys = [
         'id',
         'messageId',
@@ -164,6 +164,8 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'thumbnailUrl',
         'thumbHash',
         'imageVariants',
+        'avifVariants',
+        'renditions',
         'width',
         'height',
         'duration',
@@ -171,6 +173,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'sampleRate',
         'codec',
         'channels',
+        'loudnessLufs',
         'fps',
         'videoCodec',
         'pageCount',
@@ -185,7 +188,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'reactions',
       ];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(29);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(32);
     });
   });
 

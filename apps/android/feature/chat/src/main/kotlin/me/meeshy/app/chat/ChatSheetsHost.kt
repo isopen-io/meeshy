@@ -6,7 +6,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
@@ -197,6 +200,8 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     details = details,
                     accentColor = accentColor,
                     onSelectTab = actions.selectReactionTab,
+                    onReact = { emoji -> actions.addReactionFromDetails(details.messageId, emoji) },
+                    onOpenFullPicker = { actions.openEmojiPicker(details.messageId) },
                     modifier = Modifier.navigationBarsPadding(),
                 )
             }
@@ -220,6 +225,8 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     onSelectReason = actions.selectReportReason,
                     onDetailsChange = actions.onReportDetailsChange,
                     onSubmit = actions.submitReport,
+                    onConfirmSubmit = actions.confirmReportSubmit,
+                    onCancelConfirm = actions.cancelReportConfirmation,
                     onDismiss = actions.dismissReport,
                 )
             }
@@ -228,15 +235,25 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 
     val pickerMessageId = state.emojiPickerMessageId
     if (pickerMessageId != null) {
-        ModalBottomSheet(
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = actions.dismissEmojiPicker,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            EmojiFullPicker(
-                onSelect = { emoji -> actions.toggleReaction(pickerMessageId, emoji) },
-                accentColor = accentColor,
-                modifier = Modifier.navigationBarsPadding(),
-            )
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures { actions.dismissEmojiPicker() } },
+            ) {
+                me.meeshy.ui.component.ReactionCategorySheet(
+                    onReact = { emoji ->
+                        actions.toggleReaction(pickerMessageId, emoji)
+                        actions.dismissEmojiPicker()
+                    },
+                    onDismiss = actions.dismissEmojiPicker,
+                    accentColor = accentColor,
+                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                )
+            }
         }
     }
 

@@ -702,6 +702,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// start. No-op if there is no capturer (audio-only call).
     private func restartCapturerIfStopped() async {
         guard let capturer = videoCapturer else { return }
+        // disconnect() during the 0.5–3 s warm-up bumps the generation: the
+        // orphan capturer is stopped (same guard as the initial start).
+        let generation = sessionGeneration
         let position: AVCaptureDevice.Position = usingFrontCamera ? .front : .back
         guard let camera = Self.pickCaptureDevice(preferring: position),
               let format = camera.callCaptureFormat(within: captureCeiling) else {
@@ -709,13 +712,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
         let fps = format.callFrameRate(within: captureCeiling)
-        // Capture the session generation before the async suspension point.
-        // If disconnect() is called while startCapture is in flight (0.5–3 s
-        // warm-up window), `sessionGeneration` is incremented and the post-await
-        // check detects the stale context — stopping the orphan capturer via
-        // the local reference before returning, mirroring the identical guard
-        // in buildLocalVideoTrackAndStartCapture.
-        let generation = sessionGeneration
         do {
             try await capturer.startCapture(with: camera, format: format, fps: fps)
             let isStale = await MainActor.run { generation != sessionGeneration }

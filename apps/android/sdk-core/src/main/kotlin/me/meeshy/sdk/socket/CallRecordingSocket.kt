@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import me.meeshy.sdk.model.call.CallControlRefusal
 import me.meeshy.sdk.model.call.CallRecordingKind
 import me.meeshy.sdk.model.call.CallRecordingRefusal
@@ -12,16 +13,16 @@ import org.json.JSONObject
 internal class CallRecordingSocket(private val socketManager: SocketManager) {
 
     suspend fun request(callId: String, kind: CallRecordingKind): Result<String> =
-        emit("call:recording-request", requestPayload(callId, kind))
+        emit(SocketEventNames.CALL_RECORDING_REQUEST, requestPayload(callId, kind))
 
     suspend fun answer(callId: String, recordingId: String, accepted: Boolean): Result<Unit> =
         emit(
-            "call:recording-consent",
+            SocketEventNames.CALL_RECORDING_CONSENT,
             JSONObject().put("callId", callId).put("recordingId", recordingId).put("accepted", accepted),
         ).map { }
 
     suspend fun stop(callId: String, recordingId: String): Result<Unit> =
-        emit("call:recording-stop", JSONObject().put("callId", callId).put("recordingId", recordingId)).map { }
+        emit(SocketEventNames.CALL_RECORDING_STOP, JSONObject().put("callId", callId).put("recordingId", recordingId)).map { }
 
     private suspend fun emit(event: String, payload: JSONObject): Result<String> =
         ackResult(socketManager.emitForAck(event, payload))

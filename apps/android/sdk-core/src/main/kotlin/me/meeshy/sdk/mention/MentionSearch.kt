@@ -25,11 +25,13 @@ interface MentionSearch {
 @Singleton
 class DirectoryMentionSearch @Inject constructor(
     private val userRepository: UserRepository,
+    private val displayNames: UserDisplayNameCache = UserDisplayNameCache(),
 ) : MentionSearch {
 
     override suspend fun search(query: String): List<MentionCandidate> =
         when (val result = userRepository.searchUsers(query, limit = REMOTE_LIMIT)) {
             is NetworkResult.Success -> result.data.mapNotNull { it.toMentionCandidate() }
+                .also { candidates -> candidates.forEach { displayNames.track(it.username, it.displayName) } }
             is NetworkResult.Failure -> emptyList()
         }
 

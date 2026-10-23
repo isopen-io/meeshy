@@ -191,7 +191,7 @@ const f = {
   'admin.people.pref.document.storageQuota': 'Quota de stockage',
   'admin.people.pref.document.autoDeleteOldFiles': 'Suppression automatique des anciens fichiers',
   'admin.people.pref.document.fileRetentionDays': 'Durée de conservation des fichiers',
-  'admin.people.pref.document.compressImagesOnUpload': 'Compresser les images à l’envoi',
+  'admin.people.pref.document.compressImagesOnUpload': 'Compression forte des photos et vidéos',
   'admin.people.pref.document.imageCompressionQuality': 'Qualité de compression des images',
   'admin.people.pref.document.allowedFileTypes': 'Types de fichiers autorisés',
   'admin.people.pref.document.scanFilesForMalware': 'Analyse antivirus des fichiers',

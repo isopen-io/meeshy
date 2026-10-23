@@ -283,12 +283,23 @@ public final class SharedAVPlayerManager: ObservableObject {
             return
         }
 
-        // 3. Streaming fallback removed (spec §4.10).
-        // Callers MUST gate on `availability == .ready` before calling
-        // `.load(urlString:)`. Reaching this branch means the caller didn't
-        // gate — log defensively and leave `player` nil so the surrounding
-        // UI (VideoMediaView / InlineVideoPlayerView / VideoFullscreenPlayerView)
-        // shows the download overlay instead of a silent network stream.
+        // 3. Un téléchargement AUTORISÉ de cette vidéo est en cours (#9881) :
+        // la bulle joue dès la tête du fichier qu'il écrit, sans attendre la
+        // fin et sans seconde requête. Rien ne s'ouvre d'ici — la politique
+        // réseau reste celle de la surface qui a lancé le téléchargement.
+        if CacheCoordinator.videoHasReadableTransfer(for: resolved) {
+            let asset = CacheCoordinator.videoPlaybackAsset(for: url, startsTransfer: false)
+            let newPlayer = AVQueuePlayer(playerItem: AVPlayerItem(asset: asset))
+            player = newPlayer
+            setupObservers(for: newPlayer)
+            return
+        }
+
+        // 4. Streaming fallback removed (spec §4.10).
+        // Sans fichier ni téléchargement autorisé en cours, le caller n'a pas
+        // appliqué la politique réseau — `player` reste nil et la surface
+        // (VideoMediaView / InlineVideoPlayerView / VideoFullscreenPlayerView)
+        // montre l'overlay de téléchargement au lieu d'un flux silencieux.
         // Stories don't pass through this manager (their pipeline is
         // StoryReaderPrefetcher + StoryMediaLoader), so removing the
         // fallback only affects conversation/feed video.

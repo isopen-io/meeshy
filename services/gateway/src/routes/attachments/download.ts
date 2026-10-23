@@ -515,6 +515,7 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
   '.png': 'image/png',
   '.gif': 'image/gif',
   '.webp': 'image/webp',
+  '.avif': 'image/avif',
   '.svg': 'image/svg+xml',
   '.pdf': 'application/pdf',
   '.txt': 'text/plain',

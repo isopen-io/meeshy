@@ -157,6 +157,8 @@ export const sovereignAttachmentSelect = {
   thumbnailUrl: true,
   thumbHash: true,
   imageVariants: true,
+  avifVariants: true,
+  renditions: true,
   width: true,
   height: true,
   duration: true,
@@ -164,6 +166,7 @@ export const sovereignAttachmentSelect = {
   sampleRate: true,
   codec: true,
   channels: true,
+  loudnessLufs: true,
   fps: true,
   videoCodec: true,
   pageCount: true,
@@ -400,6 +403,7 @@ export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: 
     sampleRate: piece.sampleRate,
     codec: piece.codec,
     channels: piece.channels,
+    loudnessLufs: piece.loudnessLufs,
     fps: piece.fps,
     videoCodec: piece.videoCodec,
     pageCount: piece.pageCount,
@@ -420,6 +424,8 @@ export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: 
     thumbnailUrl: protegee ? null : piece.thumbnailUrl,
     thumbHash: protegee ? null : piece.thumbHash,
     imageVariants: protegee ? [] : piece.imageVariants,
+    avifVariants: protegee ? [] : piece.avifVariants,
+    renditions: protegee ? [] : piece.renditions,
     // ABSENTS plutôt que `null` : ces trois-là sont OPTIONNELS au contrat des
     // clients — leur absence dit « rien à restituer », là où le tableau vide
     // des traductions de MESSAGE dit « résolu, rien à servir » sur un champ que
@@ -557,6 +563,7 @@ export const sovereignAttachmentSchema = {
     sampleRate: { type: 'number', nullable: true },
     codec: { type: 'string', nullable: true },
     channels: { type: 'number', nullable: true },
+    loudnessLufs: { type: 'number', nullable: true },
     fps: { type: 'number', nullable: true },
     videoCodec: { type: 'string', nullable: true },
     pageCount: { type: 'number', nullable: true },
@@ -576,6 +583,8 @@ export const sovereignAttachmentSchema = {
     // sans `properties` efface. Les variantes ont deux producteurs dont les
     // formes divergent : ne rien déclarer est plus honnête que d'en choisir un.
     imageVariants: { type: 'array' },
+    avifVariants: { type: 'array' },
+    renditions: { type: 'array' },
     transcription: objetLibre,
     translations: objetLibre,
     metadata: objetLibre,

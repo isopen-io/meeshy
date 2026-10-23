@@ -29,9 +29,10 @@ import Foundation
 ///
 /// Ce que iOS ajoute à la jumelle, sans rien en retrancher : `thermalState`
 /// dans le contexte (le web ne le lit pas), `Network(snapshot:)` (le web lit
-/// `navigator.connection`, iOS le chemin `NWPath`), `gigabytes(physicalMemory:)`
-/// et `plan(count:activeIndex:window:)`, qui énumère les paliers dans l'ordre
-/// de `primeTargets` en y gardant le palier « décode ».
+/// `navigator.connection`, iOS le chemin `NWPath`), `gigabytes(physicalMemory:)`,
+/// `plan(count:activeIndex:window:)`, qui énumère les paliers dans l'ordre
+/// de `primeTargets` en y gardant le palier « décode », et `headBytes`
+/// (`ReelPreloadWindow+Head.swift`, #11288), la tête bornée par le tier.
 public enum ReelPreloadWindow {
 
     public static let minRadius = 2
@@ -187,10 +188,9 @@ public enum ReelPreloadWindow {
     static let nearPrimeBytes = 768 * 1_024
     static let farPrimeBytes = 256 * 1_024
 
-    /// Les octets de TÊTE à amorcer (jumelle de `primeBytesOf`). iOS télécharge
-    /// aujourd'hui le fichier entier par le registre partagé ; la fonction est
-    /// tenue ici pour que la loi reste UNE, et pour l'amorce par plage le jour
-    /// où le registre la saura servir.
+    /// Les octets de TÊTE à amorcer (jumelle de `primeBytesOf`). iOS en tire la
+    /// tête du palier « amorcé », bornée par le tier de l'appareil
+    /// (`headBytes`, #11288) ; le palier monté prend le fichier entier.
     public static func primeBytes(tier: Tier, distance: Int, network: Network) -> Int {
         guard tier == .mount || tier == .prime else { return 0 }
         let base = tier == .mount ? mountPrimeBytes : (distance <= 3 ? nearPrimeBytes : farPrimeBytes)

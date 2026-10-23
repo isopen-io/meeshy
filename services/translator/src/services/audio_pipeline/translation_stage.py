@@ -27,6 +27,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.audio_format import mime_type_for
+from utils.audio_pipeline_metrics import timed_audio_stage
 
 # Import services
 from ..tts_service import (
@@ -769,6 +770,7 @@ class TranslationStage:
 
         return translated
 
+    @timed_audio_stage("nllb")
     async def _translate_text(
         self,
         text: str,
