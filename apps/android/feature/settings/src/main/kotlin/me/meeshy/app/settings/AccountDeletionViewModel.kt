@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.AccountDeletionConfirmation
+import me.meeshy.sdk.model.AccountDeletionPhase
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AccountDeletionApi
@@ -28,6 +29,10 @@ data class AccountDeletionUiState(
     val error: AccountDeletionError? = null,
     /** The iOS "Confirmation finale" alert is up — the network call waits for its answer. */
     val showFinalConfirmation: Boolean = false,
+    /** L'etat de la demande lu sur la passerelle ; `null` tant qu'il n'a pas ete lu (rien n'est affirme). */
+    val deletion: AccountDeletionPhase? = null,
+    /** ISO-8601 : « le lien expire le … », connu juste apres l'ouverture d'une demande. */
+    val tokenExpiresAt: String? = null,
 ) {
     /** Whether the typed phrase matches the gateway literal verbatim. */
     val isConfirmed: Boolean
@@ -71,6 +76,20 @@ class AccountDeletionViewModel @Inject constructor(
 
     private val _effects = Channel<AccountDeletionEffect>(Channel.BUFFERED)
     val effects: Flow<AccountDeletionEffect> = _effects.receiveAsFlow()
+
+    init {
+        refreshStatus()
+    }
+
+    /** Relit `GET me/account/deletion` ; un echec garde l'etat precedent (jamais d'ecran d'erreur). */
+    fun refreshStatus() {
+        viewModelScope.launch {
+            val result = accountDeletionApi.status()
+            if (result is NetworkResult.Success) {
+                _state.update { it.copy(deletion = AccountDeletionPhase.from(result.data)) }
+            }
+        }
+    }
 
     fun onConfirmationTextChange(value: String) {
         _state.update { it.copy(confirmationText = value, error = null) }
@@ -126,6 +145,8 @@ class AccountDeletionViewModel @Inject constructor(
                             isEmailSent = true,
                             error = null,
                             currentPassword = "",
+                            tokenExpiresAt = result.data.tokenExpiresAt,
+                            deletion = AccountDeletionPhase.PendingConfirmation,
                         )
                     is NetworkResult.Failure -> {
                         val error = result.error.toAccountDeletionError()
@@ -138,6 +159,10 @@ class AccountDeletionViewModel @Inject constructor(
                         )
                     }
                 }
+            }
+            // A 409 "already pending" is a state, not a dead end: re-read where the request stands.
+            if (result is NetworkResult.Failure && result.error.toAccountDeletionError() == AccountDeletionError.ALREADY_PENDING) {
+                refreshStatus()
             }
         }
     }
