@@ -194,12 +194,16 @@ ENV NODE_ENV=production \
 # libjpeg-turbo-progs : `jpegtran`, la rotation JPEG SANS PERTE d'une photo
 # orientée (#11841, `services/attachments/metadata-strip/jpegtran.ts`) — sans
 # lui, la photo est réencodée une fois, droite et sans GPS quand même.
+# libavif-bin : `avifenc`, qui écrit la variante AVIF HDR (10 bits, BT.2100 PQ)
+# d'une photo à carte de gain (#12290, `services/attachments/hdr-avif.ts`) —
+# sharp n'écrit pas l'étiquette CICP. Sans lui, une photo HDR n'a aucun AVIF.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     curl \
     ffmpeg \
     fonts-dejavu-core \
     libjpeg-turbo-progs \
+    libavif-bin \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 1001 nodejs \
     && useradd -u 1001 -g nodejs -m gateway \

@@ -58,4 +58,7 @@
     <string name="report_reason_spam">Spam</string>
     <string name="report_submit">Enviar el informe</string>
     <string name="report_title_generic">Reportar</string>
+    <string name="report_user_details_a11y">Detalles de la denuncia</string>
+    <string name="report_user_submit_hint">Enviar denuncia por</string>
+    <string name="report_user_success">Denuncia enviada</string>
 </resources>

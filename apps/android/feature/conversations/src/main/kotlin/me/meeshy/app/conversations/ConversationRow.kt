@@ -26,11 +26,8 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +60,8 @@ import me.meeshy.sdk.theme.accentColorPalette
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyUnreadBadge
+import me.meeshy.ui.component.swipe.SwipeAction
+import me.meeshy.ui.component.swipe.SwipeableRow
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -75,7 +74,6 @@ import me.meeshy.ui.theme.hexColor
 import java.time.ZoneId
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ConversationRow(
     model: ConversationRowModel,
@@ -85,29 +83,20 @@ internal fun ConversationRow(
     val isPinned = prefs?.isPinned == true
     val isArchived = prefs?.isArchived == true
 
-    // Swipe snaps back after firing the action (non-destructive) — the visual
-    // outcome is the row re-sorting/re-filtering itself once the cache mutates.
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> actions.onTogglePin()
-                SwipeToDismissBoxValue.EndToStart -> actions.onToggleArchive()
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-            false
-        },
+    val pinLabel = stringResource(
+        if (isPinned) R.string.conversations_action_unpin else R.string.conversations_action_pin,
     )
+    val archiveLabel = stringResource(
+        if (isArchived) R.string.conversations_action_unarchive else R.string.conversations_action_archive,
+    )
+    val leadingActions = remember(pinLabel, actions.onTogglePin) {
+        listOf(SwipeAction(Icons.Filled.PushPin, pinLabel, MeeshyPalette.Warning, actions.onTogglePin))
+    }
+    val trailingActions = remember(archiveLabel, actions.onToggleArchive) {
+        listOf(SwipeAction(Icons.Filled.Archive, archiveLabel, MeeshyPalette.Indigo500, actions.onToggleArchive))
+    }
 
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = {
-            SwipeActionBackground(
-                direction = dismissState.dismissDirection,
-                isPinned = isPinned,
-                isArchived = isArchived,
-            )
-        },
-    ) {
+    SwipeableRow(leadingActions = leadingActions, trailingActions = trailingActions) {
         ConversationRowContent(model = model, actions = actions)
     }
 }
@@ -121,12 +110,12 @@ internal fun ConversationRow(
  * to keep the composable-call graph unconditional.
  */
 @Composable
-private fun conversationRowRelativeTime(conversation: ApiConversation): String? {
+private fun conversationRowRelativeTime(conversation: ApiConversation, nowMillis: Long): String? {
     val strings = rememberRelativeTimeStrings()
     val millis = ConversationRowTime.epochMillis(conversation) ?: return null
     return RelativeTimeFormat.short(
         epochMillis = millis,
-        referenceMillis = System.currentTimeMillis(),
+        referenceMillis = nowMillis,
         zone = ZoneId.systemDefault(),
         locale = Locale.getDefault(),
         strings = strings,
@@ -161,13 +150,13 @@ private fun ConversationRowContent(
     )
     val rowPreview = conversationRowPreview(
         typingLine = typingLine,
-        draftLine = draftLine,
+        draft = draftLine,
         summary = messageSummaryLine(
             message = conversation.lastMessage,
             currentUserId = currentUserId,
             showSender = conversation.type != "direct",
             labels = previewLabels,
-            nowMillis = System.currentTimeMillis(),
+            nowMillis = model.nowMillis,
             // Prisme Linguistique on the row itself. The hard-press preview card two
             // hundred lines below already resolved it per message from this very
             // `currentUserPrefs`; the row behind it rendered the sender's language.
@@ -186,7 +175,7 @@ private fun ConversationRowContent(
     val palette = remember(conversation) { conversation.accentColorPalette() }
     val primaryAccent = hexColor(palette.primary)
     val secondaryAccent = hexColor(palette.secondary)
-    val heat = ConversationActivityHeat.of(conversation, System.currentTimeMillis())
+    val heat = ConversationActivityHeat.of(conversation, model.nowMillis)
     val gradient = ConversationActivityHeat.gradient(heat, isDark = MeeshyTheme.isDark)
     val heatBrush = Brush.linearGradient(
         colors = listOf(
@@ -292,7 +281,7 @@ private fun ConversationRowContent(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             ) {
-                conversationRowRelativeTime(conversation)?.let { relativeTime ->
+                conversationRowRelativeTime(conversation, model.nowMillis)?.let { relativeTime ->
                     Text(
                         text = relativeTime,
                         style = MaterialTheme.typography.labelSmall,

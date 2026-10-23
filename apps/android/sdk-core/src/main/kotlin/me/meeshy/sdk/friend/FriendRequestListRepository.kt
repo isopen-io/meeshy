@@ -53,6 +53,12 @@ class FriendRequestListRepository @Inject constructor(
     suspend fun persistSent(requests: List<FriendRequest>) =
         persist(DIRECTION_SENT, RESOURCE_KEY_SENT, requests)
 
+    /** Expires both rosters' freshness (the rows stay for the cold-start paint). */
+    suspend fun invalidate() {
+        syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY_RECEIVED, 0L))
+        syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY_SENT, 0L))
+    }
+
     private suspend fun cachedSnapshot(direction: String, resourceKey: String): List<FriendRequest>? {
         val rows = friendRequestDao.observeAll(direction).first()
         val syncedAt = syncMetaDao.observe(resourceKey).first()

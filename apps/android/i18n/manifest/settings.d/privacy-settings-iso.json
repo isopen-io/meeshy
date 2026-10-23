@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.notify_contacts_on_return",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.notify_contacts_on_return.info",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.hide_from_contact_search",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.hide_from_contact_search.info",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.online_status.info",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.read_receipts.info",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.calls_non_contacts.info",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.analytics.info",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.coming_soon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.coming_soon.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.encryption.coming_soon.a11y",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
