@@ -89,8 +89,9 @@ data class CallRecord(
     val answeredAt: String? = null,
     val endedAt: String? = null,
     val durationSec: Int,
-    val bytesSent: Int? = null,
-    val bytesReceived: Int? = null,
+    /** Long: one direction of a long video or group call passes 2 GiB. */
+    val bytesSent: Long? = null,
+    val bytesReceived: Long? = null,
     val peer: CallHistoryPeer? = null,
 ) {
     /** The classified direction, degrading an unknown wire value to incoming. */
@@ -138,7 +139,7 @@ data class CallRecord(
 private const val FALLBACK_NAME = "Inconnu"
 private val BYTE_UNITS = listOf("KB", "MB", "GB", "TB")
 
-private fun formatBytes(total: Int): String {
+private fun formatBytes(total: Long): String {
     if (total < 1024) return "$total B"
     var value = total.toDouble() / 1024.0
     var unitIndex = 0
