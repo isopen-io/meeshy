@@ -2,7 +2,11 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { CallControlAck } from '@meeshy/shared/types/call-controls';
 import { SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter';
-import { registerCallLiveFrameEvents, type CallLiveFrameSender } from '../call-live-frame-events';
+import {
+  registerCallLiveFrameEvents,
+  type CallLiveFrameRecipient,
+  type CallLiveFrameSender,
+} from '../call-live-frame-events';
 
 const CALL = '64b7f0c2a1b2c3d4e5f60718';
 const AT = new Date('2026-10-03T10:00:00.000Z');
@@ -11,7 +15,10 @@ type Harness = {
   readonly userId?: string;
   readonly allowed?: boolean;
   readonly sender?: CallLiveFrameSender | null;
+  readonly room?: ReadonlyArray<{ readonly socketId: string; readonly capabilities: readonly string[] }>;
 };
+
+type GroupDelivery = { readonly socketId: string; readonly payload: unknown };
 
 const harness = (overrides: Harness = {}) => {
   const handlers = new Map<string, (raw: unknown, ack?: (r: CallControlAck) => void) => Promise<void>>();
@@ -19,6 +26,16 @@ const harness = (overrides: Harness = {}) => {
   const checkLimit = jest.fn(async (_userId: string, _config: unknown) => overrides.allowed ?? true);
   const resolveSender = jest.fn(async (_userId: string, _callId: string): Promise<CallLiveFrameSender | null> =>
     'sender' in overrides ? overrides.sender ?? null : { userId: 'alice', activeParticipants: 2 }
+  );
+  const delivered: GroupDelivery[] = [];
+  const groupRecipients = jest.fn(async (_callId: string): Promise<readonly CallLiveFrameRecipient[]> =>
+    (overrides.room ?? []).map(({ socketId, capabilities }) => ({
+      socketId,
+      capabilities: new Set(capabilities) as CallLiveFrameRecipient['capabilities'],
+      emit: (payload) => {
+        delivered.push({ socketId, payload });
+      },
+    }))
   );
   const socket = {
     id: 'sock-1',
@@ -33,7 +50,7 @@ const harness = (overrides: Harness = {}) => {
     }),
   };
   registerCallLiveFrameEvents(
-    { rateLimiter: { checkLimit }, resolveSender, now: () => AT },
+    { rateLimiter: { checkLimit }, resolveSender, groupRecipients, now: () => AT },
     socket as never,
     () => ('userId' in overrides ? overrides.userId : 'alice')
   );
@@ -42,10 +59,10 @@ const harness = (overrides: Harness = {}) => {
     await handlers.get(CLIENT_EVENTS.CALL_FRAME_SELECT)?.(raw, (r) => acks.push(r));
     return acks[0];
   };
-  return { send, relayed, checkLimit, resolveSender };
+  return { send, relayed, delivered, checkLimit, resolveSender, groupRecipients };
 };
 
-describe('call:frame-select — le cadre en direct part vers l’autre participant d’un appel à deux (#9214)', () => {
+describe('call:frame-select — le cadre en direct part vers les autres participants de l’appel (#9214, #11279)', () => {
   it('relaie le cadre et les textes partagés dans la room de l’appel, au nom de l’émetteur résolu', async () => {
     const h = harness();
 
@@ -94,11 +111,69 @@ describe('call:frame-select — le cadre en direct part vers l’autre participa
     expect(h.relayed).toEqual([]);
   });
 
-  it('un appel à plus de deux ne reçoit aucun cadre en direct', async () => {
-    const h = harness({ sender: { userId: 'alice', activeParticipants: 3 } });
+  it('à deux, le choix part toujours à la room de l’appel, sans relire qui l’écoute', async () => {
+    const h = harness();
 
-    expect(await h.send({ callId: CALL, frameId: 'jovial.fete.duo' })).toEqual({ success: false, code: 'PERMISSION_DENIED' });
-    expect(h.relayed).toEqual([]);
+    await h.send({ callId: CALL, frameId: 'jovial.fete.duo' });
+
+    expect(h.groupRecipients).not.toHaveBeenCalled();
+    expect(h.relayed).toHaveLength(1);
+  });
+
+  describe('en groupe (3 à 6, #11279)', () => {
+    const GROUP_ROOM = [
+      { socketId: 'sock-1', capabilities: ['call-live-frame-group'] },
+      { socketId: 'sock-bob', capabilities: ['call-live-frame-group'] },
+      { socketId: 'sock-carol-old-ios', capabilities: [] },
+      { socketId: 'sock-dan', capabilities: ['call-live-frame-group'] },
+    ];
+
+    it.each([3, 4, 5, 6])('à %i, le choix part à chaque membre qui sait l’afficher, jamais à l’émetteur', async (n) => {
+      const h = harness({ sender: { userId: 'alice', activeParticipants: n }, room: GROUP_ROOM });
+
+      expect(await h.send({ callId: CALL, frameId: 'jovial.fete.trio', texts: { name: 'Alice' } })).toEqual({ success: true });
+
+      const payload = { callId: CALL, userId: 'alice', frameId: 'jovial.fete.trio', texts: { name: 'Alice' }, at: AT.toISOString() };
+      expect(h.groupRecipients).toHaveBeenCalledWith(CALL);
+      expect(h.delivered).toEqual([
+        { socketId: 'sock-bob', payload },
+        { socketId: 'sock-dan', payload },
+      ]);
+      expect(h.relayed).toEqual([]);
+    });
+
+    it('un ancien client qui n’annonce pas la capacité ne reçoit rien : il afficherait une proposition qu’il ne sait pas tenir', async () => {
+      const h = harness({
+        sender: { userId: 'alice', activeParticipants: 3 },
+        room: [{ socketId: 'sock-carol-old-ios', capabilities: [] }],
+      });
+
+      expect(await h.send({ callId: CALL, frameId: 'jovial.fete.trio' })).toEqual({ success: true });
+      expect(h.delivered).toEqual([]);
+      expect(h.relayed).toEqual([]);
+    });
+
+    it('une réponse et un retrait voyagent aussi à tout le groupe capable', async () => {
+      const h = harness({ sender: { userId: 'alice', activeParticipants: 4 }, room: GROUP_ROOM });
+
+      await h.send({ callId: CALL, frameId: 'jovial.fete.trio', reply: 'accepted' });
+      await h.send({ callId: CALL, frameId: null });
+
+      expect(h.delivered.map((d) => d.payload)).toEqual([
+        { callId: CALL, userId: 'alice', frameId: 'jovial.fete.trio', reply: 'accepted', at: AT.toISOString() },
+        { callId: CALL, userId: 'alice', frameId: 'jovial.fete.trio', reply: 'accepted', at: AT.toISOString() },
+        { callId: CALL, userId: 'alice', frameId: null, at: AT.toISOString() },
+        { callId: CALL, userId: 'alice', frameId: null, at: AT.toISOString() },
+      ]);
+    });
+
+    it('au-delà du plafond d’un appel, aucun cadre en direct ne part', async () => {
+      const h = harness({ sender: { userId: 'alice', activeParticipants: 7 }, room: GROUP_ROOM });
+
+      expect(await h.send({ callId: CALL, frameId: 'jovial.fete.trio' })).toEqual({ success: false, code: 'PERMISSION_DENIED' });
+      expect(h.groupRecipients).not.toHaveBeenCalled();
+      expect(h.delivered).toEqual([]);
+    });
   });
 
   it('un appel où l’émetteur est seul ne relaie rien', async () => {
