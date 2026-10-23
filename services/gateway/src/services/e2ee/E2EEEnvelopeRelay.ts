@@ -58,13 +58,19 @@ const served = (row: EnvelopeRow): E2EEServedEnvelope => ({
   createdAt: row.createdAt.toISOString(),
 });
 
-export function createE2EEEnvelopeRelay(deps: { readonly prisma: RelayPrisma; readonly now?: () => Date }) {
-  const { prisma } = deps;
-  const now = deps.now ?? (() => new Date());
+export class E2EEEnvelopeRelay {
+  private readonly prisma: RelayPrisma;
+  private readonly now: () => Date;
 
-  async function deviceOfSession(userId: string, sessionId: string | null, deviceId?: number) {
+  constructor(deps: { readonly prisma: RelayPrisma; readonly now?: () => Date }) {
+    this.prisma = deps.prisma;
+    this.now = deps.now ?? (() => new Date());
+  }
+
+  /** L'appareil ACTIF lié à cette session (et, s'il est nommé, portant ce numéro). */
+  async deviceOfSession(userId: string, sessionId: string | null, deviceId?: number): Promise<{ deviceId: number }> {
     if (!sessionId) throw notBound();
-    const device = await prisma.e2EEDevice.findFirst({
+    const device = await this.prisma.e2EEDevice.findFirst({
       where: { userId, sessionId, retiredAt: null, ...(deviceId === undefined ? {} : { deviceId }) },
       select: { deviceId: true },
     });
@@ -72,34 +78,12 @@ export function createE2EEEnvelopeRelay(deps: { readonly prisma: RelayPrisma; re
     return device;
   }
 
-  async function assertOwnExclusions(senderUserId: string, request: E2EERelayRequest): Promise<void> {
-    if (request.unapprovedOwnDevices.length === 0) return;
-    const own = await prisma.e2EEDevice.findMany({
-      where: { userId: senderUserId, retiredAt: null, deviceId: { in: [...request.unapprovedOwnDevices] } },
-      select: { deviceId: true },
-    });
-    const known = new Set(own.map((device) => device.deviceId));
-    const invalid = request.unapprovedOwnDevices.some((deviceId) => !known.has(deviceId) || deviceId === request.senderDeviceId);
-    if (invalid) {
-      throw new E2eeRelayRefusedError(E2EE_ERROR_CODES.ENVELOPES_INVALID, 400, 'Seuls vos propres appareils peuvent être exclus d’un envoi chiffré');
-    }
-  }
-
-  async function admit(params: { conversationId: string; senderUserId: string; relay: E2EERelayRequest }): Promise<AdmittedRelay> {
+  async admit(params: { conversationId: string; senderUserId: string; relay: E2EERelayRequest }): Promise<AdmittedRelay> {
     const { conversationId, senderUserId, relay } = params;
-    await deviceOfSession(senderUserId, relay.sessionId, relay.senderDeviceId);
-    await assertOwnExclusions(senderUserId, relay);
-    const participants = await prisma.participant.findMany({
-      where: { conversationId, isActive: true, userId: { not: null } },
-      select: { userId: true },
-    });
-    const userIds = [...new Set(participants.map((participant) => participant.userId).filter((id): id is string => Boolean(id)))];
-    const directory = await prisma.e2EEDevice.findMany({
-      where: { userId: { in: userIds }, retiredAt: null },
-      select: { userId: true, deviceId: true, registrationId: true },
-    });
+    await this.deviceOfSession(senderUserId, relay.sessionId, relay.senderDeviceId);
+    await this.assertOwnExclusions(senderUserId, relay);
     const mismatch = compareDeviceSets({
-      directory,
+      directory: await this.directoryOf(conversationId),
       sender: { userId: senderUserId, deviceId: relay.senderDeviceId },
       addressed: relay.envelopes,
       excludedOwnDevices: relay.unapprovedOwnDevices,
@@ -115,9 +99,9 @@ export function createE2EEEnvelopeRelay(deps: { readonly prisma: RelayPrisma; re
     return { senderUserId, senderDeviceId: relay.senderDeviceId, envelopes: relay.envelopes };
   }
 
-  async function persist(params: { messageId: string; conversationId: string; admitted: AdmittedRelay }): Promise<EnvelopeDelivery[]> {
+  async persist(params: { messageId: string; conversationId: string; admitted: AdmittedRelay }): Promise<EnvelopeDelivery[]> {
     const { messageId, conversationId, admitted } = params;
-    await prisma.messageEnvelope.createMany({
+    await this.prisma.messageEnvelope.createMany({
       data: admitted.envelopes.map((envelope) => ({
         messageId,
         conversationId,
@@ -129,16 +113,16 @@ export function createE2EEEnvelopeRelay(deps: { readonly prisma: RelayPrisma; re
         body: envelope.body,
       })),
     });
-    const rows = await prisma.messageEnvelope.findMany({ where: { messageId } });
+    const rows = await this.prisma.messageEnvelope.findMany({ where: { messageId } });
     return rows.map((row) => ({
       recipient: { userId: row.recipientUserId, deviceId: row.recipientDeviceId },
       envelope: served(row),
     }));
   }
 
-  async function listFor(params: { userId: string; sessionId: string | null; after?: string; limit?: number }): Promise<E2EEServedEnvelope[]> {
-    const device = await deviceOfSession(params.userId, params.sessionId);
-    const rows = await prisma.messageEnvelope.findMany({
+  async listFor(params: { userId: string; sessionId: string | null; after?: string; limit?: number }): Promise<E2EEServedEnvelope[]> {
+    const device = await this.deviceOfSession(params.userId, params.sessionId);
+    const rows = await this.prisma.messageEnvelope.findMany({
       where: { recipientUserId: params.userId, recipientDeviceId: device.deviceId, ...(params.after ? { id: { gt: params.after } } : {}) },
       orderBy: { id: 'asc' },
       take: Math.min(Math.max(params.limit ?? 100, 1), LIST_LIMIT_MAX),
@@ -146,21 +130,46 @@ export function createE2EEEnvelopeRelay(deps: { readonly prisma: RelayPrisma; re
     return rows.map(served);
   }
 
-  async function ack(params: { userId: string; sessionId: string | null; ids: readonly string[] }): Promise<number> {
-    const device = await deviceOfSession(params.userId, params.sessionId);
-    const { count } = await prisma.messageEnvelope.deleteMany({
+  async ack(params: { userId: string; sessionId: string | null; ids: readonly string[] }): Promise<number> {
+    const device = await this.deviceOfSession(params.userId, params.sessionId);
+    const { count } = await this.prisma.messageEnvelope.deleteMany({
       where: { id: { in: [...params.ids] }, recipientUserId: params.userId, recipientDeviceId: device.deviceId },
     });
     return count;
   }
 
-  async function sweep(): Promise<number> {
-    const cutoff = new Date(now().getTime() - E2EE_ENVELOPE_RETENTION_DAYS * DAY_MS);
-    const { count } = await prisma.messageEnvelope.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  async sweep(): Promise<number> {
+    const cutoff = new Date(this.now().getTime() - E2EE_ENVELOPE_RETENTION_DAYS * DAY_MS);
+    const { count } = await this.prisma.messageEnvelope.deleteMany({ where: { createdAt: { lt: cutoff } } });
     return count;
   }
 
-  return { admit, persist, listFor, ack, sweep, deviceOfSession };
+  /** Chaque appareil actif de chaque participant inscrit et actif de la conversation. */
+  private async directoryOf(conversationId: string) {
+    const participants = await this.prisma.participant.findMany({
+      where: { conversationId, isActive: true, userId: { not: null } },
+      select: { userId: true },
+    });
+    const userIds = [...new Set(participants.map((participant) => participant.userId).filter((id): id is string => Boolean(id)))];
+    return this.prisma.e2EEDevice.findMany({
+      where: { userId: { in: userIds }, retiredAt: null },
+      select: { userId: true, deviceId: true, registrationId: true },
+    });
+  }
+
+  private async assertOwnExclusions(senderUserId: string, request: E2EERelayRequest): Promise<void> {
+    if (request.unapprovedOwnDevices.length === 0) return;
+    const own = await this.prisma.e2EEDevice.findMany({
+      where: { userId: senderUserId, retiredAt: null, deviceId: { in: [...request.unapprovedOwnDevices] } },
+      select: { deviceId: true },
+    });
+    const known = new Set(own.map((device) => device.deviceId));
+    const invalid = request.unapprovedOwnDevices.some((deviceId) => !known.has(deviceId) || deviceId === request.senderDeviceId);
+    if (invalid) {
+      throw new E2eeRelayRefusedError(E2EE_ERROR_CODES.ENVELOPES_INVALID, 400, 'Seuls vos propres appareils peuvent être exclus d’un envoi chiffré');
+    }
+  }
 }
 
-export type E2EEEnvelopeRelay = ReturnType<typeof createE2EEEnvelopeRelay>;
+export const createE2EEEnvelopeRelay = (deps: { readonly prisma: RelayPrisma; readonly now?: () => Date }): E2EEEnvelopeRelay =>
+  new E2EEEnvelopeRelay(deps);

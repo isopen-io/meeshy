@@ -22,6 +22,7 @@ import {
 import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middleware/auth';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendSuccess, sendUnauthorized } from '../utils/response.js';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { AUTH_ERROR_CODES } from '../utils/auth-error-codes';
 import { createE2EEDirectory, E2EEDirectoryError, type E2EEDirectory } from '../services/e2ee/E2EEDirectory';
 import { createE2EEEnvelopeRelay, type E2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
 import { E2eeRelayRefusedError } from '../services/e2ee/e2ee-relay-errors';
@@ -42,6 +43,29 @@ const deviceIdsQuery = z
 const envelopeListQuery = z.object({ after: objectIdParam.optional(), limit: z.coerce.number().int().min(1).max(200).optional() });
 const ackBody = z.object({ ids: z.array(objectIdParam).min(1).max(200) });
 
+/** Lecture de bundles : 30 par minute et par couple (demandeur, cible). */
+const bundleRateLimit = {
+  max: 30,
+  timeWindow: '1 minute',
+  hook: 'preHandler' as const,
+  skipOnError: false,
+  keyGenerator: (request: FastifyRequest) => {
+    const requester = (request as UnifiedAuthRequest).authContext?.userId ?? `ip:${request.ip}`;
+    return `e2ee:keys:${requester}:${(request.params as { userId?: string }).userId ?? '-'}`;
+  },
+  errorResponseBuilder: () => ({ success: false, error: 'Trop de demandes de clés. Patientez avant de réessayer.', statusCode: 429 }),
+};
+
+/** Écritures de l'annuaire : 10 par minute et par compte (un appareil publie rarement). */
+const directoryWriteRateLimit = {
+  max: 10,
+  timeWindow: '1 minute',
+  hook: 'preHandler' as const,
+  skipOnError: false,
+  keyGenerator: (request: FastifyRequest) => `e2ee:write:${(request as UnifiedAuthRequest).authContext?.userId ?? `ip:${request.ip}`}`,
+  errorResponseBuilder: () => ({ success: false, error: 'Trop de publications de clés. Patientez avant de réessayer.', statusCode: 429 }),
+};
+
 type Caller = { readonly userId: string; readonly sessionId: string };
 
 export type E2EERouteDeps = {
@@ -49,8 +73,6 @@ export type E2EERouteDeps = {
   readonly directory: E2EEDirectory;
   readonly relay: E2EEEnvelopeRelay;
   readonly mayReadKeysOf: (requesterUserId: string, targetUserId: string) => Promise<boolean>;
-  /** Limite de débit de la lecture des bundles, par demandeur ET par cible (épuisement des pré-clés). */
-  readonly rateLimit?: object;
   /** Après un enrôlement : les sockets déjà ouvertes de la session rejoignent la room de l'appareil. */
   readonly onEnrolled?: (enrolled: Caller & { readonly deviceId: number }) => Promise<void>;
 };
@@ -73,7 +95,8 @@ type Handler = (request: FastifyRequest, reply: FastifyReply, caller: Caller) =>
 
 const guarded = (handler: Handler) => async (request: FastifyRequest, reply: FastifyReply) => {
   const caller = callerOf(request);
-  if (!caller) return sendUnauthorized(reply, 'Un compte inscrit et une session d’appareil sont requis');
+  // Le middleware a déjà refusé tout appelant sans compte : il ne reste ici qu'un jeton sans session nommée (`sid`).
+  if (!caller) return sendUnauthorized(reply, 'Un compte inscrit et une session d’appareil sont requis', { code: AUTH_ERROR_CODES.SESSION_INVALID });
   try {
     return await handler(request, reply, caller);
   } catch (error) {
@@ -95,8 +118,9 @@ const withoutPrivateKeys = (reply: FastifyReply, body: unknown): boolean => {
 
 function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): void {
   const preValidation = [deps.auth];
+  const writes = { preValidation, config: { rateLimit: directoryWriteRateLimit } };
 
-  fastify.post('/e2ee/devices', { preValidation }, guarded(async (request, reply, caller) => {
+  fastify.post('/e2ee/devices', writes, guarded(async (request, reply, caller) => {
     if (!withoutPrivateKeys(reply, request.body)) return;
     const body = parsedOr400(reply, e2eeEnrollDeviceRequestSchema.safeParse(request.body));
     if (!body) return;
@@ -107,7 +131,7 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
     return sendSuccess(reply, enrolled, { statusCode: enrolled.created ? 201 : 200 });
   }));
 
-  fastify.put('/e2ee/devices/:deviceId/keys', { preValidation }, guarded(async (request, reply, caller) => {
+  fastify.put('/e2ee/devices/:deviceId/keys', writes, guarded(async (request, reply, caller) => {
     if (!withoutPrivateKeys(reply, request.body)) return;
     const deviceId = parsedOr400(reply, deviceIdParam.safeParse((request.params as { deviceId?: string }).deviceId));
     const body = deviceId === null ? null : parsedOr400(reply, e2eePublishKeysRequestSchema.safeParse(request.body));
@@ -128,7 +152,7 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
 }
 
 function registerKeyRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): void {
-  const options = { preValidation: [deps.auth], ...(deps.rateLimit ? { config: { rateLimit: deps.rateLimit } } : {}) };
+  const options = { preValidation: [deps.auth], config: { rateLimit: bundleRateLimit } };
 
   const authorizedTarget = async (request: FastifyRequest, reply: FastifyReply, caller: Caller): Promise<string | null> => {
     const target = parsedOr400(reply, objectIdParam.safeParse((request.params as { userId?: string }).userId));
@@ -179,19 +203,6 @@ export function registerE2EERoutes(fastify: FastifyInstance, deps: E2EERouteDeps
   registerEnvelopeRoutes(fastify, deps);
 }
 
-/** Lecture de bundles : 30 par minute et par couple (demandeur, cible). */
-const bundleRateLimit = {
-  max: 30,
-  timeWindow: '1 minute',
-  hook: 'preHandler' as const,
-  skipOnError: false,
-  keyGenerator: (request: FastifyRequest) => {
-    const requester = (request as UnifiedAuthRequest).authContext?.userId ?? `ip:${request.ip}`;
-    return `e2ee:keys:${requester}:${(request.params as { userId?: string }).userId ?? '-'}`;
-  },
-  errorResponseBuilder: () => ({ success: false, error: 'Trop de demandes de clés. Patientez avant de réessayer.', statusCode: 429 }),
-};
-
 export default async function e2eeRoutes(fastify: FastifyInstance): Promise<void> {
   const prisma = fastify.prisma;
   registerE2EERoutes(fastify, {
@@ -199,7 +210,6 @@ export default async function e2eeRoutes(fastify: FastifyInstance): Promise<void
     directory: createE2EEDirectory({ prisma, verifier: libsignalSignatureVerifier(loadLibsignal) }),
     relay: createE2EEEnvelopeRelay({ prisma }),
     mayReadKeysOf: (requester, target) => mayReadKeysOf(prisma, requester, target),
-    rateLimit: bundleRateLimit,
     onEnrolled: (enrolled) => joinSessionSocketsToDeviceRoom(currentE2EEIO(), enrolled),
   });
 }

@@ -20,7 +20,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import type { MessageRequest } from '@meeshy/shared/types';
 
 const mockHandleNewMessage = jest.fn();
@@ -95,12 +95,6 @@ jest.mock('../../../utils/logger', () => ({
   }
 }));
 
-import { MessagingService } from '../../../services/MessagingService';
-import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
-import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
-
-import { E2EE_PLAINTEXT_REFUSED } from '../../../services/messaging/e2eePlaintextAdmission';
-import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
 
 
 
@@ -112,7 +106,6 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { LIBSIGNAL_PROTOCOL, type E2EEDeviceBundle } from '@meeshy/shared/types/e2ee-directory';
 import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
-import type { MessageRequest } from '@meeshy/shared/types';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
 import { registerE2EERoutes } from '../../../routes/e2ee';
 import { createE2EEDirectory } from '../../../services/e2ee/E2EEDirectory';
@@ -226,8 +219,8 @@ describe('E2EE de bout en bout à deux appareils, libsignal réel (#3706)', () =
     await app.ready();
 
     // 1. Chaque appareil publie ses clés publiques ; la passerelle vérifie leurs signatures avec libsignal.
-    const aliceKeys = await devices.request<Record<string, unknown>>('create', { name: 'alice', oneTime: 2 });
-    const bobKeys = await devices.request<Record<string, unknown>>('create', { name: 'bob', oneTime: 2 });
+    const aliceKeys = await devices.request<Record<string, unknown>>('create', { name: 'alice', userId: ALICE, oneTime: 2 });
+    const bobKeys = await devices.request<Record<string, unknown>>('create', { name: 'bob', userId: BOB, oneTime: 2 });
     const aliceEnrolled = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: aliceKeys });
     const bobEnrolled = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: bobKeys });
     expect([aliceEnrolled.statusCode, bobEnrolled.statusCode]).toEqual([201, 201]);
@@ -236,6 +229,10 @@ describe('E2EE de bout en bout à deux appareils, libsignal réel (#3706)', () =
     const forged = { ...bobKeys, signedPreKey: { ...(bobKeys.signedPreKey as object), signature: b64(randomBytes(64)) } };
     const refused = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: forged });
     expect(refused.statusCode).toBe(400);
+
+    // Rejouer l'identité PUBLIQUE de Bob depuis la session d'Alice : la preuve de possession manque.
+    const hijack = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: { ...bobKeys } });
+    expect(hijack.json().code).toBe('E2EE_DEVICE_BINDING_INVALID');
 
     // 2. Alice réserve le bundle de Bob et chiffre (PQXDH + Double Ratchet) dans SON processus.
     const served = await app.inject({ method: 'GET', url: `/e2ee/keys/${BOB}`, headers: { 'x-test-user': 'alice' } });

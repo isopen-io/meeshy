@@ -33,13 +33,13 @@ async function buildApp() {
     directory: createE2EEDirectory({ prisma: store.prisma as never, verifier: fakeVerifier }),
     relay: createE2EEEnvelopeRelay({ prisma: store.prisma as never }),
     mayReadKeysOf: async (requester, target) => requester === target || target !== STRANGER,
-    rateLimit: undefined,
   });
   await app.ready();
   return { app, store };
 }
 
-const enrollment = (keys = fakeDeviceKeys({ oneTime: 2, kyber: 2 })) => ({
+const enrollment = (userId: string, keys = fakeDeviceKeys({ oneTime: 2, kyber: 2 })) => ({
+  binding: keys.binding(userId),
   registrationId: keys.registrationId,
   identityKey: keys.identityKey,
   signedPreKey: keys.signedPreKey,
@@ -53,8 +53,8 @@ describe('routes /e2ee', () => {
   it("enrôle l'appareil de la session et refuse un appelant sans compte", async () => {
     const { app } = await buildApp();
 
-    const enrolled = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment() });
-    const anonymous = await app.inject({ method: 'POST', url: '/e2ee/devices', payload: enrollment() });
+    const enrolled = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+    const anonymous = await app.inject({ method: 'POST', url: '/e2ee/devices', payload: enrollment(ALICE) });
 
     expect(enrolled.statusCode).toBe(201);
     expect(enrolled.json()).toMatchObject({ success: true, data: { deviceId: 1, created: true } });
@@ -66,7 +66,7 @@ describe('routes /e2ee', () => {
 
     const res = await app.inject({
       method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' },
-      payload: { ...enrollment(), identityKeyPrivate: 'c2VjcmV0' },
+      payload: { ...enrollment(ALICE), identityKeyPrivate: 'c2VjcmV0' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -75,7 +75,7 @@ describe('routes /e2ee', () => {
 
   it('sert les bundles réservés à un contact autorisé, et 403 à un inconnu', async () => {
     const { app } = await buildApp();
-    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: enrollment() });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: enrollment(BOB) });
 
     const served = await app.inject({ method: 'GET', url: `/e2ee/keys/${BOB}`, headers: { 'x-test-user': 'alice' } });
     const forbidden = await app.inject({ method: 'GET', url: `/e2ee/keys/${STRANGER}`, headers: { 'x-test-user': 'alice' } });
@@ -88,7 +88,7 @@ describe('routes /e2ee', () => {
 
   it('liste les appareils sans consommer de pré-clé, puis filtre les bundles par deviceIds', async () => {
     const { app, store } = await buildApp();
-    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: enrollment() });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: enrollment(BOB) });
 
     const listed = await app.inject({ method: 'GET', url: `/e2ee/keys/${BOB}/devices`, headers: { 'x-test-user': 'alice' } });
     const none = await app.inject({ method: 'GET', url: `/e2ee/keys/${BOB}?deviceIds=7`, headers: { 'x-test-user': 'alice' } });
@@ -100,7 +100,7 @@ describe('routes /e2ee', () => {
 
   it("publie des clés et rend le stock à la seule session de l'appareil", async () => {
     const { app } = await buildApp();
-    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment() });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
 
     const count = await app.inject({ method: 'GET', url: '/e2ee/devices/self/prekey-count', headers: { 'x-test-user': 'alice' } });
     const foreign = await app.inject({ method: 'PUT', url: '/e2ee/devices/1/keys', headers: { 'x-test-user': 'bob' }, payload: { oneTimePreKeys: [] } });
@@ -111,7 +111,7 @@ describe('routes /e2ee', () => {
 
   it("sert à un appareil ses enveloppes, puis les efface à l'accusé", async () => {
     const { app, store } = await buildApp();
-    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: enrollment() });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: enrollment(BOB) });
     store.collections.MessageEnvelope.insert({
       messageId: '0a'.repeat(12), conversationId: '0b'.repeat(12), recipientUserId: BOB, recipientDeviceId: 1,
       senderUserId: ALICE, senderDeviceId: 1, type: 3, body: 'Y2lwaGVy',
@@ -128,7 +128,7 @@ describe('routes /e2ee', () => {
 
   it("retire un appareil du compte", async () => {
     const { app } = await buildApp();
-    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment() });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
 
     const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'alice' } });
     const again = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'alice' } });

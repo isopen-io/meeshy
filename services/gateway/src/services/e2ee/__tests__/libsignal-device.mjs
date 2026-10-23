@@ -67,7 +67,7 @@ class Stores {
 
 const devices = new Map();
 
-function createDevice({ name, oneTime = 3 }) {
+function createDevice({ name, userId, oneTime = 3 }) {
   const identity = signal.IdentityKeyPair.generate();
   const registrationId = 1 + Math.floor(Math.random() * 16000);
   const stores = new Stores(identity, registrationId);
@@ -93,9 +93,14 @@ function createDevice({ name, oneTime = 3 }) {
   };
 
   devices.set(name, stores);
+  const identityKey = b64(identity.publicKey.serialize());
+  // Même message, à l'octet près, que `deviceBindingMessage` (@meeshy/shared/types/e2ee-directory).
+  const timestamp = Date.now();
+  const bindingMessage = `meeshy-e2ee-device-binding:v1:${userId}:${registrationId}:${identityKey}:${timestamp}`;
   return {
     registrationId,
-    identityKey: b64(identity.publicKey.serialize()),
+    identityKey,
+    binding: { timestamp, signature: b64(sign(new TextEncoder().encode(bindingMessage))) },
     signedPreKey: { keyId: 1, publicKey: b64(spkPublic), signature: b64(spkSignature) },
     kyberLastResort: kyber(1000),
     oneTimePreKeys: Array.from({ length: oneTime }, (_, index) => ec(index + 1)),

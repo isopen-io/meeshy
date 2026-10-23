@@ -30,6 +30,28 @@ export const E2EE_ENVELOPE_BOUNDS = {
 /** Un lot de pré-clés uniques (§ 3.2) : 100 au plus par publication. */
 export const E2EE_ONE_TIME_PREKEY_BATCH_MAX = 100;
 
+/** Le stock de pré-clés uniques NON consommées d'un appareil, par nature (EC, Kyber). */
+export const E2EE_ONE_TIME_PREKEY_STOCK_MAX = 200;
+
+/** L'écart toléré entre l'horloge de l'appareil et celle de la passerelle pour la preuve de liaison. */
+export const E2EE_DEVICE_BINDING_MAX_SKEW_MS = 10 * 60 * 1000;
+
+/**
+ * Le message que l'appareil signe (XEdDSA, sa clé d'identité) pour PROUVER
+ * qu'il détient la clé privée de l'identité qu'il enrôle, au nom de CE compte.
+ * Sans cette preuve, quiconque tient un jeton du compte pourrait réenrôler une
+ * identité PUBLIQUE (servie dans chaque bundle, avec ses signatures) et lier
+ * l'appareil à sa propre session : il lirait puis effacerait ses enveloppes.
+ * Les clients construisent ce message par cette fonction, à l'octet près.
+ */
+export const deviceBindingMessage = (binding: {
+  readonly userId: string;
+  readonly registrationId: number;
+  readonly identityKey: string;
+  readonly timestamp: number;
+}): string =>
+  `meeshy-e2ee-device-binding:v1:${binding.userId}:${binding.registrationId}:${binding.identityKey}:${binding.timestamp}`;
+
 /** Une enveloppe vit au plus 30 jours sans accusé de réception (§ 4.3). */
 export const E2EE_ENVELOPE_RETENTION_DAYS = 30;
 
@@ -44,6 +66,8 @@ export const E2EE_ERROR_CODES = {
   ENVELOPES_INVALID: 'E2EE_ENVELOPES_INVALID',
   KEYS_FORBIDDEN: 'E2EE_KEYS_FORBIDDEN',
   REGIME_CHANGED: 'E2EE_REGIME_CHANGED',
+  BINDING_INVALID: 'E2EE_DEVICE_BINDING_INVALID',
+  PREKEY_STOCK_FULL: 'E2EE_PREKEY_STOCK_FULL',
 } as const;
 
 export type E2EEErrorCode = (typeof E2EE_ERROR_CODES)[keyof typeof E2EE_ERROR_CODES];
@@ -103,6 +127,11 @@ export const e2eeEnrollDeviceRequestSchema = z.object({
   kyberLastResort: e2eeSignedPreKeySchema,
   platform: e2eePlatformSchema,
   label: z.string().max(64).optional(),
+  /** Preuve de possession de la clé d'identité : signature de `deviceBindingMessage`. */
+  binding: z.object({
+    timestamp: z.number().int().positive(),
+    signature: base64(SIGNATURE_MAX_CHARS),
+  }),
   ...oneTimeBatches,
 });
 

@@ -78,8 +78,6 @@ import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
 
-import { E2EE_PLAINTEXT_REFUSED } from '../../../services/messaging/e2eePlaintextAdmission';
-import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
 
 
 import { E2EE_ERROR_CODES, LIBSIGNAL_PROTOCOL } from '@meeshy/shared/types/e2ee-directory';

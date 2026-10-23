@@ -18,12 +18,15 @@ function directoryWith(options: { store?: FakeE2EEStore; verifier?: SignatureVer
   const directory = createE2EEDirectory({
     prisma: store.prisma as never,
     verifier: options.verifier ?? fakeVerifier,
-    now: () => new Date('2026-10-23T12:00:00Z'),
+    now: () => NOW,
   });
   return { store, directory };
 }
 
-const enrollmentOf = (keys: ReturnType<typeof fakeDeviceKeys>) => ({
+const NOW = new Date('2026-10-23T12:00:00Z');
+
+const enrollmentOf = (keys: ReturnType<typeof fakeDeviceKeys>, userId: string) => ({
+  binding: keys.binding(userId, NOW.getTime()),
   registrationId: keys.registrationId,
   identityKey: keys.identityKey,
   signedPreKey: keys.signedPreKey,
@@ -34,7 +37,7 @@ const enrollmentOf = (keys: ReturnType<typeof fakeDeviceKeys>) => ({
 });
 
 async function enroll(directory: E2EEDirectory, userId: string, sessionId: string, keys = fakeDeviceKeys({ oneTime: 10, kyber: 10 })) {
-  const result = await directory.enrollDevice({ userId, sessionId, request: enrollmentOf(keys) });
+  const result = await directory.enrollDevice({ userId, sessionId, request: enrollmentOf(keys, userId) });
   return { ...result, keys };
 }
 
@@ -62,7 +65,7 @@ describe("l'annuaire E2EE par appareil", () => {
     it("refuse un lot dont une signature XEdDSA est fausse, sans rien écrire ni consommer de numéro d'appareil", async () => {
       const { directory, store } = directoryWith();
       const keys = fakeDeviceKeys({ kyber: 3 });
-      const forged = { ...enrollmentOf(keys), kyberPreKeys: [...keys.kyberPreKeys.slice(1), { ...keys.kyberPreKeys[0], signature: fakeSign(randomKey(), 'x') }] };
+      const forged = { ...enrollmentOf(keys, ALICE), kyberPreKeys: [...keys.kyberPreKeys.slice(1), { ...keys.kyberPreKeys[0], signature: fakeSign(randomKey(), 'x') }] };
 
       const error = await refusal(directory.enrollDevice({ userId: ALICE, sessionId: SESSION_1, request: forged }));
 
@@ -85,11 +88,32 @@ describe("l'annuaire E2EE par appareil", () => {
     it("est idempotent pour la même identité : même deviceId, session rattachée à la nouvelle connexion", async () => {
       const { directory, store } = directoryWith();
       const first = await enroll(directory, ALICE, SESSION_1);
-      const again = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_2, request: enrollmentOf(first.keys) });
+      const again = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_2, request: enrollmentOf(first.keys, ALICE) });
 
       expect(again).toEqual({ deviceId: first.deviceId, created: false });
       expect(store.collections.E2EEDevice.rows).toHaveLength(1);
       expect(store.collections.E2EEDevice.rows[0].sessionId).toBe(SESSION_2);
+    });
+
+    it("refuse de lier une identité PUBLIQUE à une autre session sans la preuve de sa clé privée", async () => {
+      const { directory, store } = directoryWith();
+      const victim = await enroll(directory, ALICE, SESSION_1);
+      const replayed = { ...enrollmentOf(victim.keys, ALICE), binding: { timestamp: NOW.getTime(), signature: fakeSign(randomKey(), 'x') } };
+
+      const error = await refusal(directory.enrollDevice({ userId: ALICE, sessionId: SESSION_2, request: replayed }));
+
+      expect(error.code).toBe(E2EE_ERROR_CODES.BINDING_INVALID);
+      expect(store.collections.E2EEDevice.rows[0].sessionId).toBe(SESSION_1);
+    });
+
+    it('refuse une preuve signée pour un autre compte ou trop ancienne', async () => {
+      const { directory } = directoryWith();
+      const keys = fakeDeviceKeys();
+      const otherAccount = { ...enrollmentOf(keys, ALICE), binding: keys.binding(BOB, NOW.getTime()) };
+      const stale = { ...enrollmentOf(keys, ALICE), binding: keys.binding(ALICE, NOW.getTime() - 11 * 60 * 1000) };
+
+      await expect(refusal(directory.enrollDevice({ userId: ALICE, sessionId: SESSION_1, request: otherAccount }))).resolves.toMatchObject({ code: E2EE_ERROR_CODES.BINDING_INVALID });
+      await expect(refusal(directory.enrollDevice({ userId: ALICE, sessionId: SESSION_1, request: stale }))).resolves.toMatchObject({ code: E2EE_ERROR_CODES.BINDING_INVALID });
     });
 
     it("retire l'appareil précédent de la MÊME session et ne réutilise jamais son numéro", async () => {
@@ -135,6 +159,16 @@ describe("l'annuaire E2EE par appareil", () => {
 
       expect(stock).toEqual({ deviceId, oneTimePreKeys: 13, kyberPreKeys: 10 });
       expect(keys.oneTimePreKeys).toHaveLength(10);
+    });
+
+    it('refuse un stock de pré-clés uniques au-delà de 200 par nature', async () => {
+      const { directory } = directoryWith();
+      const { deviceId } = await enroll(directory, ALICE, SESSION_1, fakeDeviceKeys({ oneTime: 100 }));
+      await directory.publishKeys({ userId: ALICE, sessionId: SESSION_1, deviceId, request: { oneTimePreKeys: fakeDeviceKeys({ oneTime: 100, firstKeyId: 101 }).oneTimePreKeys } });
+
+      const error = await refusal(directory.publishKeys({ userId: ALICE, sessionId: SESSION_1, deviceId, request: { oneTimePreKeys: fakeDeviceKeys({ oneTime: 1, firstKeyId: 201 }).oneTimePreKeys } }));
+
+      expect(error.code).toBe(E2EE_ERROR_CODES.PREKEY_STOCK_FULL);
     });
 
     it('remplace la pré-clé signée seulement si sa signature est celle de l’identité enrôlée', async () => {
@@ -216,6 +250,21 @@ describe("l'annuaire E2EE par appareil", () => {
       expect(store.collections.E2EEDevice.rows[0].retiredAt).toBeInstanceOf(Date);
       expect(store.collections.E2EEOneTimePreKey.rows).toHaveLength(0);
       await expect(directory.listDevices(ALICE)).resolves.toEqual([]);
+    });
+
+    it("efface les enveloppes encore en attente de l'appareil retiré, et seulement les siennes", async () => {
+      const { directory, store } = directoryWith();
+      const { deviceId } = await enroll(directory, ALICE, SESSION_1);
+      const envelope = (recipientDeviceId: number) => store.collections.MessageEnvelope.insert({
+        messageId: `${recipientDeviceId}`.repeat(24).slice(0, 24), conversationId: 'f'.repeat(24), recipientUserId: ALICE, recipientDeviceId,
+        senderUserId: BOB, senderDeviceId: 1, type: 3, body: 'Y2lwaGVy',
+      });
+      envelope(deviceId);
+      envelope(9);
+
+      await directory.retireDevice({ userId: ALICE, deviceId });
+
+      expect(store.collections.MessageEnvelope.rows.map((row) => row.recipientDeviceId)).toEqual([9]);
     });
 
     it("ne retire pas l'appareil d'un autre compte", async () => {
