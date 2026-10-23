@@ -1,0 +1,217 @@
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
+/**
+ * **LES TEXTES DE « PROPOSER UNE LENS »** (W16, #11322) — dans le module de la
+ * surface, chargée à la demande avec la boutique des lens, et non dans un
+ * catalogue que chaque écran télécharge. Les sept langues du Prisme ; le
+ * français est la source, les autres portent exactement ses clés (`satisfies`).
+ */
+const fr = {
+  'title': "Proposer une lens",
+  'hint': "Choisissez le document MeeshyLens (.json) et les fichiers que ses couches nomment. La lens part en modération ; elle est gratuite.",
+  'document': "Document de la lens (.json)",
+  'assets': "Fichiers (PNG, WebP, JSON)",
+  'submit': "Proposer",
+  'submitting': "Envoi…",
+  'submitted': "Proposée : elle attend la modération.",
+  'mine': "Mes propositions",
+  'empty': "Aucune proposition pour le moment.",
+  'status.pending': "En attente",
+  'status.approved': "Publiée",
+  'status.rejected': "Refusée",
+  'status.withdrawn': "Retirée",
+  'note': "Mot de la modération : {note}",
+  'refusal.invalid': "Ce document n’est pas une lens lisible.",
+  'refusal.update-required': "Ce document demande une version plus récente de Meeshy.",
+  'refusal.forbidden': "Ce document porte ce qu’une lens ne peut pas porter : {detail}.",
+  'refusal.missing-asset': "Il manque le fichier {detail}.",
+  'refusal.cost-understated': "Le coût déclaré est trop bas : la lens mesure « {detail} ».",
+  'refusal.too-large': "Trop lourd : {detail}.",
+  'refusal.too-many': "Trop de fichiers.",
+  'refusal.slug-taken': "Ce nom de lens est déjà pris.",
+  'refusal.too-many-pending': "Trois propositions attendent déjà la modération.",
+  'refusal.asset-refused': "Un fichier a été refusé.",
+  'refusal.failed': "La proposition n’a pas pu partir. Réessayez.",
+} as const;
+
+export type LensSubmitTextKey = keyof typeof fr;
+
+type Texts = Readonly<Record<LensSubmitTextKey, string>>;
+
+const en = {
+  'title': "Submit a lens",
+  'hint': "Choose the MeeshyLens document (.json) and the files its layers name. The lens goes to moderation; it is free.",
+  'document': "Lens document (.json)",
+  'assets': "Files (PNG, WebP, JSON)",
+  'submit': "Submit",
+  'submitting': "Sending…",
+  'submitted': "Submitted: it is waiting for moderation.",
+  'mine': "My submissions",
+  'empty': "No submission yet.",
+  'status.pending': "Pending",
+  'status.approved': "Published",
+  'status.rejected': "Rejected",
+  'status.withdrawn': "Withdrawn",
+  'note': "Moderator’s note: {note}",
+  'refusal.invalid': "This document is not a readable lens.",
+  'refusal.update-required': "This document needs a newer version of Meeshy.",
+  'refusal.forbidden': "This document carries what a lens cannot carry: {detail}.",
+  'refusal.missing-asset': "The file {detail} is missing.",
+  'refusal.cost-understated': "The declared cost is too low: the lens measures “{detail}”.",
+  'refusal.too-large': "Too large: {detail}.",
+  'refusal.too-many': "Too many files.",
+  'refusal.slug-taken': "This lens name is taken.",
+  'refusal.too-many-pending': "Three submissions are already waiting for moderation.",
+  'refusal.asset-refused': "A file was refused.",
+  'refusal.failed': "The submission could not be sent. Try again.",
+} satisfies Texts;
+
+const es = {
+  'title': "Proponer una lente",
+  'hint': "Elija el documento MeeshyLens (.json) y los archivos que nombran sus capas. La lente pasa a moderación; es gratuita.",
+  'document': "Documento de la lente (.json)",
+  'assets': "Archivos (PNG, WebP, JSON)",
+  'submit': "Proponer",
+  'submitting': "Enviando…",
+  'submitted': "Propuesta: espera la moderación.",
+  'mine': "Mis propuestas",
+  'empty': "Ninguna propuesta por ahora.",
+  'status.pending': "Pendiente",
+  'status.approved': "Publicada",
+  'status.rejected': "Rechazada",
+  'status.withdrawn': "Retirada",
+  'note': "Nota de la moderación: {note}",
+  'refusal.invalid': "Este documento no es una lente legible.",
+  'refusal.update-required': "Este documento requiere una versión más reciente de Meeshy.",
+  'refusal.forbidden': "Este documento lleva lo que una lente no puede llevar: {detail}.",
+  'refusal.missing-asset': "Falta el archivo {detail}.",
+  'refusal.cost-understated': "El coste declarado es demasiado bajo: la lente mide «{detail}».",
+  'refusal.too-large': "Demasiado pesado: {detail}.",
+  'refusal.too-many': "Demasiados archivos.",
+  'refusal.slug-taken': "Este nombre de lente ya está ocupado.",
+  'refusal.too-many-pending': "Ya hay tres propuestas esperando la moderación.",
+  'refusal.asset-refused': "Se rechazó un archivo.",
+  'refusal.failed': "No se pudo enviar la propuesta. Inténtelo de nuevo.",
+} satisfies Texts;
+
+const pt = {
+  'title': "Propor uma lente",
+  'hint': "Escolha o documento MeeshyLens (.json) e os arquivos que suas camadas nomeiam. A lente vai para a moderação; é gratuita.",
+  'document': "Documento da lente (.json)",
+  'assets': "Arquivos (PNG, WebP, JSON)",
+  'submit': "Propor",
+  'submitting': "Enviando…",
+  'submitted': "Proposta: aguarda a moderação.",
+  'mine': "Minhas propostas",
+  'empty': "Nenhuma proposta por enquanto.",
+  'status.pending': "Pendente",
+  'status.approved': "Publicada",
+  'status.rejected': "Recusada",
+  'status.withdrawn': "Retirada",
+  'note': "Nota da moderação: {note}",
+  'refusal.invalid': "Este documento não é uma lente legível.",
+  'refusal.update-required': "Este documento exige uma versão mais recente do Meeshy.",
+  'refusal.forbidden': "Este documento traz o que uma lente não pode trazer: {detail}.",
+  'refusal.missing-asset': "Falta o arquivo {detail}.",
+  'refusal.cost-understated': "O custo declarado é baixo demais: a lente mede “{detail}”.",
+  'refusal.too-large': "Pesado demais: {detail}.",
+  'refusal.too-many': "Arquivos demais.",
+  'refusal.slug-taken': "Este nome de lente já está em uso.",
+  'refusal.too-many-pending': "Três propostas já aguardam a moderação.",
+  'refusal.asset-refused': "Um arquivo foi recusado.",
+  'refusal.failed': "Não foi possível enviar a proposta. Tente novamente.",
+} satisfies Texts;
+
+const it = {
+  'title': "Proponi una lente",
+  'hint': "Scegli il documento MeeshyLens (.json) e i file che i suoi livelli nominano. La lente va in moderazione; è gratuita.",
+  'document': "Documento della lente (.json)",
+  'assets': "File (PNG, WebP, JSON)",
+  'submit': "Proponi",
+  'submitting': "Invio…",
+  'submitted': "Proposta: attende la moderazione.",
+  'mine': "Le mie proposte",
+  'empty': "Nessuna proposta per ora.",
+  'status.pending': "In attesa",
+  'status.approved': "Pubblicata",
+  'status.rejected': "Rifiutata",
+  'status.withdrawn': "Ritirata",
+  'note': "Nota della moderazione: {note}",
+  'refusal.invalid': "Questo documento non è una lente leggibile.",
+  'refusal.update-required': "Questo documento richiede una versione più recente di Meeshy.",
+  'refusal.forbidden': "Questo documento contiene ciò che una lente non può contenere: {detail}.",
+  'refusal.missing-asset': "Manca il file {detail}.",
+  'refusal.cost-understated': "Il costo dichiarato è troppo basso: la lente misura «{detail}».",
+  'refusal.too-large': "Troppo pesante: {detail}.",
+  'refusal.too-many': "Troppi file.",
+  'refusal.slug-taken': "Questo nome di lente è già preso.",
+  'refusal.too-many-pending': "Tre proposte attendono già la moderazione.",
+  'refusal.asset-refused': "Un file è stato rifiutato.",
+  'refusal.failed': "Non è stato possibile inviare la proposta. Riprova.",
+} satisfies Texts;
+
+const de = {
+  'title': "Eine Lens vorschlagen",
+  'hint': "Wähle das MeeshyLens-Dokument (.json) und die Dateien, die seine Ebenen nennen. Die Lens geht in die Moderation; sie ist kostenlos.",
+  'document': "Lens-Dokument (.json)",
+  'assets': "Dateien (PNG, WebP, JSON)",
+  'submit': "Vorschlagen",
+  'submitting': "Wird gesendet…",
+  'submitted': "Vorgeschlagen: sie wartet auf die Moderation.",
+  'mine': "Meine Vorschläge",
+  'empty': "Noch kein Vorschlag.",
+  'status.pending': "Ausstehend",
+  'status.approved': "Veröffentlicht",
+  'status.rejected': "Abgelehnt",
+  'status.withdrawn': "Zurückgezogen",
+  'note': "Notiz der Moderation: {note}",
+  'refusal.invalid': "Dieses Dokument ist keine lesbare Lens.",
+  'refusal.update-required': "Dieses Dokument braucht eine neuere Version von Meeshy.",
+  'refusal.forbidden': "Dieses Dokument enthält, was eine Lens nicht enthalten darf: {detail}.",
+  'refusal.missing-asset': "Die Datei {detail} fehlt.",
+  'refusal.cost-understated': "Die angegebenen Kosten sind zu niedrig: die Lens misst „{detail}“.",
+  'refusal.too-large': "Zu groß: {detail}.",
+  'refusal.too-many': "Zu viele Dateien.",
+  'refusal.slug-taken': "Dieser Lens-Name ist vergeben.",
+  'refusal.too-many-pending': "Drei Vorschläge warten bereits auf die Moderation.",
+  'refusal.asset-refused': "Eine Datei wurde abgelehnt.",
+  'refusal.failed': "Der Vorschlag konnte nicht gesendet werden. Versuche es erneut.",
+} satisfies Texts;
+
+const ar = {
+  'title': "اقتراح عدسة",
+  'hint': "اختر مستند MeeshyLens ‏(.json) والملفات التي تسمّيها طبقاته. تذهب العدسة إلى الإشراف، وهي مجانية.",
+  'document': "مستند العدسة (.json)",
+  'assets': "الملفات (PNG وWebP وJSON)",
+  'submit': "اقتراح",
+  'submitting': "جارٍ الإرسال…",
+  'submitted': "اقتُرحت: تنتظر الإشراف.",
+  'mine': "اقتراحاتي",
+  'empty': "لا اقتراحات حتى الآن.",
+  'status.pending': "قيد الانتظار",
+  'status.approved': "منشورة",
+  'status.rejected': "مرفوضة",
+  'status.withdrawn': "مسحوبة",
+  'note': "ملاحظة الإشراف: {note}",
+  'refusal.invalid': "هذا المستند ليس عدسة قابلة للقراءة.",
+  'refusal.update-required': "يتطلب هذا المستند إصدارًا أحدث من Meeshy.",
+  'refusal.forbidden': "يحمل هذا المستند ما لا يمكن للعدسة حمله: {detail}.",
+  'refusal.missing-asset': "الملف {detail} مفقود.",
+  'refusal.cost-understated': "التكلفة المعلنة منخفضة جدًا: تقيس العدسة «{detail}».",
+  'refusal.too-large': "كبير جدًا: {detail}.",
+  'refusal.too-many': "ملفات كثيرة جدًا.",
+  'refusal.slug-taken': "اسم العدسة هذا مستخدم.",
+  'refusal.too-many-pending': "ثلاثة اقتراحات تنتظر الإشراف بالفعل.",
+  'refusal.asset-refused': "رُفض ملف.",
+  'refusal.failed': "تعذّر إرسال الاقتراح. حاول مرة أخرى.",
+} satisfies Texts;
+
+const TEXTS: Readonly<Record<InterfaceLanguage, Texts>> = { fr, en, es, pt, it, de, ar };
+
+const PLACEHOLDER = /\{(\w+)\}/g;
+
+export const lensSubmitText = (language: InterfaceLanguage, key: LensSubmitTextKey, params?: Readonly<Record<string, string>>): string =>
+  params === undefined ? TEXTS[language][key] : TEXTS[language][key].replace(PLACEHOLDER, (whole, name: string) => params[name] ?? whole);
+
+/** Témoins seulement : chaque langue porte les clés du français. */
+export const lensSubmitTextKeysOf = (language: InterfaceLanguage): readonly string[] => Object.keys(TEXTS[language]);

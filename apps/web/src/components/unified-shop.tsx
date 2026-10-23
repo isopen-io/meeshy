@@ -32,6 +32,8 @@ function MeePackCover({ slug }: { readonly slug: MeeBuiltinPack }) {
 
 /** Chargée à la demande, comme dans `frame-pack-shop.tsx` : `pack_shop` est `dynamic_only` (budgets.json). */
 const PackShop = lazy(() => import('./pack-shop').then((m) => ({ default: m.PackShop })));
+/* W16 — proposer une lens, chargé seulement quand le domaine « Lens » est choisi. */
+const LensSubmit = lazy(() => import('./lens-submit'));
 
 /**
  * **LA VITRINE UNIQUE** (#10632, spec § 9) — stickers, cadres, fonds,
@@ -191,6 +193,11 @@ export function UnifiedShop({
           empty={translateStickerPacks(language, 'packs.shop.empty')}
         />
       </Suspense>
+      {filter === 'lens' ? (
+        <Suspense fallback={null}>
+          <LensSubmit language={language} deps={deps} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

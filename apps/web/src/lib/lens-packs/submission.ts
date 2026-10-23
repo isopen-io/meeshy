@@ -89,3 +89,18 @@ export async function prepareLensSubmission(params: {
     submission: { document, assets: Object.fromEntries(sent.map((file) => [file.address, base64Of(file.bytes)])) },
   };
 }
+
+export type ServerRefusal = SubmissionRefusal | 'slug-taken' | 'too-many-pending' | 'asset-refused' | 'failed';
+
+const SERVER_CODES: Readonly<Record<string, ServerRefusal>> = {
+  LENS_INVALID: 'invalid',
+  LENS_FORBIDDEN: 'forbidden',
+  LENS_UPDATE_REQUIRED: 'update-required',
+  LENS_COST_UNDERSTATED: 'cost-understated',
+  LENS_ASSET_REFUSED: 'asset-refused',
+  LENS_SLUG_TAKEN: 'slug-taken',
+  LENS_TOO_MANY_PENDING: 'too-many-pending',
+};
+
+/** Le refus de la passerelle (`packs-lens.ts`, `LENS_PACK_ERROR_CODES`), dit par sa cause ; tout autre échec est générique. */
+export const serverRefusalOf = (code: string | undefined): ServerRefusal => (code === undefined ? 'failed' : (SERVER_CODES[code] ?? 'failed'));
