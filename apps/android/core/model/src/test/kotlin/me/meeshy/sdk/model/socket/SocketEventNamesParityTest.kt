@@ -6,7 +6,7 @@ import org.junit.Test
 
 /**
  * Le catalogue Android des noms d'événements est tenu contre le contrat TypeScript
- * (`packages/shared/types/socketio-events/*event-names.ts`) : un nom épelé ici qui n'y figure pas
+ * (`packages/shared/types/socketio-events/ (fichiers event-names.ts)`) : un nom épelé ici qui n'y figure pas
  * est un canal que personne ne parle (Socket.IO ne lève rien, il n'appelle simplement jamais).
  */
 class SocketEventNamesParityTest {

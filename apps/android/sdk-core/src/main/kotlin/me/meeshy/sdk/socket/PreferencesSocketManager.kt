@@ -1,13 +1,12 @@
 package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
 import org.json.JSONObject
-import timber.log.Timber
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -61,16 +60,25 @@ import javax.inject.Singleton
 class PreferencesSocketManager @Inject constructor(
     private val socketManager: SocketManager,
     private val json: Json,
+    private val router: SocketEventRouter,
 ) {
+    internal constructor(
+        socketManager: SocketManager,
+        json: Json,
+    ) : this(
+        socketManager, json,
+        SocketEventRouter(SocketEventRegistrar { event, callback -> socketManager.on(event, callback) }, Dispatchers.Default),
+    )
+
     private val _conversationPreferencesUpdated =
-        MutableSharedFlow<UserPreferencesConversationUpdatedSocketData>(replay = 0, extraBufferCapacity = 64)
+        SocketInboundRoute.subject<UserPreferencesConversationUpdatedSocketData>()
 
     /** Conversation-scope preference snapshots, versioned, in broadcast order. */
     val conversationPreferencesUpdated: SharedFlow<UserPreferencesConversationUpdatedSocketData> =
         _conversationPreferencesUpdated.asSharedFlow()
 
     private val _categoryPreferencesUpdated =
-        MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 64)
+        SocketInboundRoute.subject<String>()
 
     /**
      * User-level preference categories that changed elsewhere — the NAME only
@@ -79,22 +87,21 @@ class PreferencesSocketManager @Inject constructor(
     val categoryPreferencesUpdated: SharedFlow<String> = _categoryPreferencesUpdated.asSharedFlow()
 
     fun attach() {
-        socketManager.on(EVENT) { args ->
-            val raw = args.firstOrNull() as? JSONObject ?: return@on
-            if (raw.optString(CONVERSATION_SCOPE_KEY).isNotEmpty()) {
-                runCatching {
-                    json.decodeFromString<UserPreferencesConversationUpdatedSocketData>(raw.toString())
-                }
-                    .onSuccess { _conversationPreferencesUpdated.tryEmit(it) }
-                    .onFailure { Timber.e(it, "Socket decode error [$EVENT]") }
-                return@on
-            }
-            // The category arm carries no object worth decoding — just the name. Reading
-            // it straight off the payload keeps the community arm (which has neither key)
-            // silently ignored, as it has no Android reader to go stale.
-            val category = raw.optString(CATEGORY_SCOPE_KEY)
-            if (category.isNotEmpty()) _categoryPreferencesUpdated.tryEmit(category)
+        router.install(listOf(SocketInboundRoute.raw(EVENT, handle = ::route)))
+    }
+
+    private fun route(raw: JSONObject) {
+        if (raw.optString(CONVERSATION_SCOPE_KEY).isNotEmpty()) {
+            _conversationPreferencesUpdated.tryEmit(
+                json.decodeFromString<UserPreferencesConversationUpdatedSocketData>(raw.toString()),
+            )
+            return
         }
+        // The category arm carries no object worth decoding — just the name. Reading
+        // it straight off the payload keeps the community arm (which has neither key)
+        // silently ignored, as it has no Android reader to go stale.
+        val category = raw.optString(CATEGORY_SCOPE_KEY)
+        if (category.isNotEmpty()) _categoryPreferencesUpdated.tryEmit(category)
     }
 
     private companion object {

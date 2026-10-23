@@ -3,7 +3,7 @@ package me.meeshy.sdk.model.socket
 /**
  * Catalogue central des noms d'événements Socket.IO que le client Android parle.
  *
- * Source de vérité : `packages/shared/types/socketio-events/*event-names.ts` (miroir iOS :
+ * Source de vérité : `packages/shared/types/socketio-events/ (fichiers event-names.ts)` (miroir iOS :
  * `SocketEvent.swift`). Format `entité:action-mot`, traits d'union, jamais d'underscore.
  * `SocketEventNamesParityTest` relit le fichier TypeScript : un nom absent du contrat échoue.
  * Aucune autre classe ne doit épeler un nom en clair — une famille ajoute ici sa ligne, puis
