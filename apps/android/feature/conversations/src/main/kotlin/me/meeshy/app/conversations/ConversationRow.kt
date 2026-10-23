@@ -121,12 +121,12 @@ internal fun ConversationRow(
  * to keep the composable-call graph unconditional.
  */
 @Composable
-private fun conversationRowRelativeTime(conversation: ApiConversation): String? {
+private fun conversationRowRelativeTime(conversation: ApiConversation, nowMillis: Long): String? {
     val strings = rememberRelativeTimeStrings()
     val millis = ConversationRowTime.epochMillis(conversation) ?: return null
     return RelativeTimeFormat.short(
         epochMillis = millis,
-        referenceMillis = System.currentTimeMillis(),
+        referenceMillis = nowMillis,
         zone = ZoneId.systemDefault(),
         locale = Locale.getDefault(),
         strings = strings,
@@ -167,7 +167,7 @@ private fun ConversationRowContent(
             currentUserId = currentUserId,
             showSender = conversation.type != "direct",
             labels = previewLabels,
-            nowMillis = System.currentTimeMillis(),
+            nowMillis = model.nowMillis,
             // Prisme Linguistique on the row itself. The hard-press preview card two
             // hundred lines below already resolved it per message from this very
             // `currentUserPrefs`; the row behind it rendered the sender's language.
@@ -186,7 +186,7 @@ private fun ConversationRowContent(
     val palette = remember(conversation) { conversation.accentColorPalette() }
     val primaryAccent = hexColor(palette.primary)
     val secondaryAccent = hexColor(palette.secondary)
-    val heat = ConversationActivityHeat.of(conversation, System.currentTimeMillis())
+    val heat = ConversationActivityHeat.of(conversation, model.nowMillis)
     val gradient = ConversationActivityHeat.gradient(heat, isDark = MeeshyTheme.isDark)
     val heatBrush = Brush.linearGradient(
         colors = listOf(
@@ -292,7 +292,7 @@ private fun ConversationRowContent(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             ) {
-                conversationRowRelativeTime(conversation)?.let { relativeTime ->
+                conversationRowRelativeTime(conversation, model.nowMillis)?.let { relativeTime ->
                     Text(
                         text = relativeTime,
                         style = MaterialTheme.typography.labelSmall,

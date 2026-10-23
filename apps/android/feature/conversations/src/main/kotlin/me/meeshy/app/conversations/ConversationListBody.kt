@@ -13,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.conversationlist.SectionFoldedUnread
 import me.meeshy.ui.component.CollapsibleSection
 import me.meeshy.ui.theme.MeeshyPalette
 
@@ -40,11 +42,12 @@ internal fun ConversationListBody(
         // pure ConversationSections SSOT, which also omits an empty section. Section bodies
         // compose eagerly (few items on a real account).
         val sections = ConversationSections.of(state.conversations, state.categories)
+        val nowMillis by rememberMinuteClock()
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             if (!ConversationSections.showsHeaders(sections)) {
                 sections.forEach { section ->
                     items(section.items, key = { "row-${it.id}" }) { conversation ->
-                        ConversationListRow(state, conversation, viewModel)
+                        ConversationListRow(state, conversation, viewModel, nowMillis)
                     }
                 }
                 return@LazyColumn
@@ -55,6 +58,7 @@ internal fun ConversationListBody(
                     CollapsibleSection(
                         title = section.title ?: stringResource(section.kind.titleRes()),
                         count = section.items.size,
+                        foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false),
                         iconContainerColor = section.kind.containerColor(),
                         icon = {
                             Icon(
@@ -66,7 +70,7 @@ internal fun ConversationListBody(
                         },
                     ) {
                         section.items.forEach { conversation ->
-                            ConversationListRow(state, conversation, viewModel)
+                            ConversationListRow(state, conversation, viewModel, nowMillis)
                         }
                     }
                 }
@@ -80,11 +84,11 @@ private fun ConversationListRow(
     state: ConversationListUiState,
     conversation: ApiConversation,
     viewModel: ConversationListViewModel,
+    now: Long,
 ) {
     val actions = remember(viewModel, conversation.id) {
         ConversationRowActions.forConversation(viewModel, conversation.id)
     }
-    val now = System.currentTimeMillis()
     ConversationRow(
         model = ConversationRowModel(
             conversation = conversation,
@@ -98,6 +102,7 @@ private fun ConversationListRow(
             categories = state.categories,
             previewMessages = state.previewFor(conversation.id),
             isLocked = state.isLocked(conversation.id),
+            nowMillis = now,
         ),
         actions = actions,
     )
