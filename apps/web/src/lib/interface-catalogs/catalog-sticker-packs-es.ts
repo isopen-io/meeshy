@@ -73,6 +73,7 @@ const esStickerPacks = {
   'packs.domain.avatar-ring': "Contornos de avatar",
   'packs.domain.banner': "Banners",
   'packs.domain.banner-frame': "Marcos de banner",
+  'packs.domain.lens': "Lentes",
   'packs.domain.capture-frame': "Marcos de captura",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Adquirido",

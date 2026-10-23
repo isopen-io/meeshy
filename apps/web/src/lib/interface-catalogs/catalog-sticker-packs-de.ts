@@ -73,6 +73,7 @@ const deStickerPacks = {
   'packs.domain.avatar-ring': "Avatar-Ringe",
   'packs.domain.banner': "Banner",
   'packs.domain.banner-frame': "Bannerrahmen",
+  'packs.domain.lens': "Lenses",
   'packs.domain.capture-frame': "Aufnahmerahmen",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Im Besitz",

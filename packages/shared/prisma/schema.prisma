@@ -6128,6 +6128,63 @@ model CommunityAppearancePack {
   @@index([contractSrc])
 }
 
+/// Une lens proposée par un partenaire (#11271, MeeshyLens v1) : le document
+/// re-sérialisé par `parseLens`, ses fichiers ré-encodés, et la fenêtre et les
+/// communautés FIXÉES par la modération. Gratuite (prix 0) ; l'identité
+/// partenaire, le crédit et le comptage d'usage attendent #11251 (S26).
+model LensPack {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  slug           String    @unique
+  name           String
+  author         String
+  submitterId    String    @db.ObjectId
+  /// pending · approved · rejected · withdrawn (retirée par la modération après publication)
+  status         String    @default("pending")
+  reviewNote     String?
+  reviewerId     String?   @db.ObjectId
+  reviewedAt     DateTime?
+  installCount   Int       @default(0)
+  /// light · standard · rich — le coût MESURÉ par la passerelle, jamais celui déclaré.
+  cost           String
+  /// capture · live
+  surfaces       String[]
+  /// La fenêtre fixée par la modération (proposée par le document, retenue ou corrigée à la revue).
+  startsAt       DateTime
+  endsAt         DateTime
+  /// Les communautés visées, fixées à la revue ; vide = tout le monde.
+  communities    String[]  @db.ObjectId
+  /// Le document re-sérialisé, tel que servi (adressé par `documentSha256`).
+  documentJson   String
+  documentSha256 String
+  /// `<sha16>.json` — l'adresse sous laquelle le magasin des packs sert le document.
+  documentSrc    String
+  documentBytes  Int
+  /// Les adresses `<sha16>.<ext>` des fichiers du document (`LensPackAsset.src`).
+  assetSrcs      String[]
+  createdAt      DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([submitterId, status])
+  @@index([documentSrc])
+}
+
+/// Un fichier d'une lens (#11271) : ré-encodé à la proposition, adressé par son
+/// empreinte, servi par `/pack-assets` seulement quand sa lens est publiée.
+model LensPackAsset {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  packId    String   @db.ObjectId
+  /// `<sha16>.webp|png` — les 16 premiers hexadécimaux du SHA-256 des octets.
+  src       String
+  sha256    String
+  mimeType  String
+  bytes     Bytes
+  sizeBytes Int
+  createdAt DateTime @default(now())
+
+  @@unique([packId, src])
+  @@index([src])
+}
+
 /// LA POSSESSION d'un pack payant (#10632). Quatre voies (#11272, `PACK_OWNERSHIP_SOURCES`) :
 /// l'ACHAT en Meeshes, écrit dans la MÊME transaction que la ligne `spend` du registre
 /// `MeeshLedger` (MeeshSpend.apply) — ni achat sans possession, ni possession sans achat —,
