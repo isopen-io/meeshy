@@ -2,6 +2,7 @@ package me.meeshy.app.conversations
 
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
+import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.directConversationRequest
 import me.meeshy.sdk.net.api.UserSearchResult
 
@@ -31,6 +32,9 @@ object NewConversationLogic {
 
     /** Min selected participants before a conversation can be created. */
     const val MIN_PARTICIPANTS: Int = 1
+
+    /** A query shorter than this is not searched: the picker shows the contacts instead. */
+    const val MIN_QUERY_LENGTH: Int = 2
 
     /** A single peer is a direct chat; two or more is a group. */
     fun conversationType(selectedCount: Int): String =
@@ -80,6 +84,30 @@ object NewConversationLogic {
                 avatarUrl = result.avatar,
                 isOnline = result.isOnline == true,
                 isSelected = result.id in selectedIds,
+            )
+        }
+
+    /**
+     * The « Your contacts » rows the picker opens on (iOS `NewConversationView.contactsSection`):
+     * the accepted friends, in the roster's order, the signed-in user never offered.
+     */
+    fun contactRows(
+        friends: List<FriendRequestUser>,
+        selectedIds: Set<String>,
+        signedInUserId: String? = null,
+    ): List<SelectableUser> = friends
+        .distinctBy { it.id }
+        .filterNot { it.id == signedInUserId }
+        .map { friend ->
+            SelectableUser(
+                id = friend.id,
+                displayName = friend.displayName?.takeIf { it.isNotBlank() }
+                    ?: listOfNotNull(friend.firstName, friend.lastName).joinToString(" ").takeIf { it.isNotBlank() }
+                    ?: friend.username,
+                username = friend.username,
+                avatarUrl = friend.avatar,
+                isOnline = friend.isOnline == true,
+                isSelected = friend.id in selectedIds,
             )
         }
 }

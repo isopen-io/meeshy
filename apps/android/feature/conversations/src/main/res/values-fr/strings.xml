@@ -60,6 +60,7 @@
     <string name="conversations_no_results">Aucune conversation ne correspond</string>
     <string name="conversations_open_global_search">Recherche globale</string>
     <string name="conversations_section_all">Mes conversations</string>
+    <string name="conversations_section_pinned">Épinglées</string>
     <string name="dashboard_action_search">Recherche globale</string>
     <string name="global_search_empty_subtitle">Messages, conversations, utilisateurs</string>
     <string name="global_search_hint">Rechercher partout…</string>

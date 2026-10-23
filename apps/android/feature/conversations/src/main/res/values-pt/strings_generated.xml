@@ -26,7 +26,9 @@
     <string name="conversations_badge_locked">bloqueado</string>
     <string name="conversations_badge_muted">Silenciado</string>
     <string name="conversations_badge_pinned">fixado</string>
+    <string name="conversations_banner_connecting">Conectando</string>
     <string name="conversations_banner_offline">Offline</string>
+    <string name="conversations_banner_online">Online</string>
     <string name="conversations_banner_reconnecting">Reconectando…</string>
     <string name="conversations_banner_syncing">Sincronização</string>
     <string name="conversations_contacts">Contatos</string>
@@ -75,6 +77,7 @@
     <string name="conversations_logout">Sair</string>
     <string name="conversations_new">Nova conversa</string>
     <string name="conversations_open_dashboard">Painel</string>
+    <string name="conversations_preview_draft_label">Rascunho</string>
     <string name="conversations_preview_draft_prefix">Rascunho:</string>
     <string name="conversations_preview_ephemeral_content_description">Mensagem efêmera</string>
     <string name="conversations_preview_expired">Mensagem expirada</string>
@@ -91,7 +94,6 @@
     <string name="conversations_search_clear">Limpar busca</string>
     <string name="conversations_search_close">Fechar a busca</string>
     <string name="conversations_search_hint">Buscar conversas</string>
-    <string name="conversations_section_pinned">fixado</string>
     <string name="conversations_tags_dialog_title">Tags</string>
     <string name="conversations_tags_field_hint">Adicionar uma tag…</string>
     <string name="conversations_tags_remove_content_description">Remover a tag %s</string>
@@ -141,6 +143,10 @@
     <string name="my_share_links_title">Links de compartilhamento</string>
     <string name="my_share_links_toggle">Ativos</string>
     <string name="new_conversation_back">Voltar</string>
+    <string name="new_conversation_contacts_empty_subtitle">Busque um usuário para iniciar uma conversa.</string>
+    <string name="new_conversation_contacts_empty_title">Nenhum contato</string>
+    <string name="new_conversation_contacts_loading">Carregando os contatos</string>
+    <string name="new_conversation_contacts_section">Seus contatos</string>
     <string name="new_conversation_create">Criar</string>
     <string name="new_conversation_error_create">Não foi possível criar a conversa</string>
     <string name="new_conversation_group_title">Nome do grupo</string>
