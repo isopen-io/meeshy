@@ -88,6 +88,7 @@
     <string name="conversations_rename_confirm_button">حفظ</string>
     <string name="conversations_retry">إعادة المحاولة</string>
     <string name="conversations_search">بحث</string>
+    <string name="conversations_search_clear">مسح البحث</string>
     <string name="conversations_search_close">إغلاق البحث</string>
     <string name="conversations_search_hint">البحث عن محادثات</string>
     <string name="conversations_section_pinned">مثبَّتة</string>
@@ -147,7 +148,9 @@
     <string name="my_share_links_toggle">النشطون</string>
     <string name="new_conversation_back">رجوع</string>
     <string name="new_conversation_create">إنشاء</string>
+    <string name="new_conversation_error_create">تعذّر إنشاء المحادثة</string>
     <string name="new_conversation_group_title">اسم المجموعة</string>
+    <string name="new_conversation_no_user_found">لم يتم العثور على مستخدم</string>
     <string name="new_conversation_remove">احذف</string>
     <string name="new_conversation_selected">محدَّد</string>
     <string name="new_conversation_title">محادثة جديدة</string>

@@ -63,46 +63,11 @@ public actor VideoFrameExtractor {
     // MARK: - Extraction
 
     private static func doExtract(url: URL, maxFrames: Int) async -> [UIImage] {
-        let asset = AVURLAsset(url: url)
-
-        let duration: CMTime
-        do {
-            duration = try await asset.load(.duration)
-        } catch {
-            // Aucune vignette ne sera produite pour cette vidéo.
-            Logger.media.error("Video duration unreadable, no frames extracted: \(error.localizedDescription, privacy: .public)")
-            return []
-        }
-        let totalSeconds = CMTimeGetSeconds(duration)
-        guard totalSeconds > 0 else { return [] }
-
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.maximumSize = CGSize(width: 80, height: 80)
-        generator.appliesPreferredTrackTransform = true
-        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
-        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
-
-        let frameCount = min(maxFrames, max(1, Int(totalSeconds)))
-        let interval = totalSeconds / Double(frameCount)
-        var frames: [UIImage] = []
-
-        for i in 0..<frameCount {
-            guard !Task.isCancelled else { break }
-
-            let time = CMTime(seconds: interval * Double(i) + interval / 2.0, preferredTimescale: 600)
-            // Une frame manquante dégrade la bande sans l'invalider : on
-            // continue, mais l'échec reste traçable.
-            do {
-                let cgImage = try await generator.image(at: time).image
-                frames.append(UIImage(cgImage: cgImage))
-            } catch is CancellationError {
-                break
-            } catch {
-                Logger.media.error("Frame extraction failed at index \(i, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
-        return frames
+        await VideoThumbnailGenerator.shared.images(for: VideoThumbnailRequest(
+            url: url,
+            instants: .evenlySpaced(count: maxFrames, atMostOnePerSecond: true),
+            maximumSize: CGSize(width: 80, height: 80),
+            tolerance: .seconds(0.5)))
     }
 
     // MARK: - Cache Management

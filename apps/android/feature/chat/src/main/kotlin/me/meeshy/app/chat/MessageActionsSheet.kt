@@ -104,6 +104,7 @@ internal fun MessageActionsSheet(
     onDismiss: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
+    var confirmingDelete by remember { mutableStateOf(false) }
     val ctx = MessageActionContext(
         isDeleted = bubble.isDeleted,
         isPending = bubble.isPending,
@@ -258,13 +259,13 @@ internal fun MessageActionsSheet(
                         icon = Icons.Filled.Delete,
                         label = stringResource(R.string.chat_action_delete_for_everyone),
                         tint = MeeshyPalette.Error,
-                        onClick = onDeleteForEveryone,
+                        onClick = { confirmingDelete = true },
                     )
                     MessageAction.DeleteForMe -> SheetAction(
                         icon = Icons.Filled.Delete,
                         label = stringResource(R.string.chat_action_delete_for_me),
                         tint = MeeshyPalette.Error,
-                        onClick = onDeleteForMe,
+                        onClick = { confirmingDelete = true },
                     )
                     MessageAction.Report -> SheetAction(
                         icon = Icons.Outlined.Flag,
@@ -275,6 +276,14 @@ internal fun MessageActionsSheet(
                 }
             }
         }
+    }
+    if (confirmingDelete) {
+        MessageDeleteConfirmationDialog(
+            scopes = MessageDeleteConfirmation.scopes(MessageActionMenu.actions(ctx)),
+            onDeleteForEveryone = onDeleteForEveryone,
+            onDeleteForMe = onDeleteForMe,
+            onDismiss = { confirmingDelete = false },
+        )
     }
 }
 

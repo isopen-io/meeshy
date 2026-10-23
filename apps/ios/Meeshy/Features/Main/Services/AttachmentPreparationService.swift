@@ -418,20 +418,7 @@ final class AttachmentPreparationService {
     /// budget used by the message and feed composers so the tray thumbnail
     /// keeps the same on-disk footprint after the unification.
     static func generateVideoThumbnail(url: URL) async -> UIImage? {
-        // Modern async AVFoundation API (iOS 16+): `image(at:)` decodes the frame
-        // on AVFoundation's own queue, so it neither blocks the caller nor needs a
-        // manually-detached thread, and replaces the deprecated synchronous
-        // `copyCGImage` and `AVAsset(url:)`.
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        do {
-            let cgImage = try await generator.image(at: .zero).image
-            return UIImage(cgImage: cgImage)
-        } catch {
-            return nil
-        }
+        await VideoThumbnailGenerator.shared.image(for: .firstFrame(of: url, maxDimension: 200))
     }
 
     /// Feeds `ReelComposition`'s 3-second qualification floor (règle produit

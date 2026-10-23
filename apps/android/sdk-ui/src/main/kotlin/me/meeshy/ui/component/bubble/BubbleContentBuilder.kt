@@ -99,18 +99,8 @@ public object BubbleContentBuilder {
                 ReactionEntry(emoji = emoji, count = count, includesMe = emoji in ownReactions)
             }
             ?: emptyList()
-        val replyToDeleted = message.replyTo?.deletedAt != null
-        val replyToText = message.replyTo?.content?.takeUnless { replyToDeleted }
-        val replyAttachments = if (replyToDeleted) emptyList() else message.replyTo?.attachments.orEmpty()
-        val replyImage = replyAttachments.firstOrNull { it.isImage }
-        val replyToMediaKind = when {
-            replyImage != null -> ReplyMediaKind.Image
-            replyAttachments.isNotEmpty() -> ReplyMediaKind.File
-            else -> ReplyMediaKind.None
-        }
-        val replyToThumbnailUrl = replyImage
-            ?.let { it.thumbnailUrl ?: it.fileUrl }
-            ?.let { resolveMediaUrl(it, mediaBaseUrl) }
+        val quoted = BubbleQuotedReplyBuilder.build(message.replyTo, preferences, mediaBaseUrl)
+        val replyToDeleted = quoted?.isDeleted == true
         // Story/mood-reply preview. A message reply (`replyTo`) takes precedence,
         // and a deleted tombstone carries no metadata (mirrors the pinnedAtIso /
         // isForwarded suppress rules) — so it only surfaces on a live message
@@ -220,12 +210,12 @@ public object BubbleContentBuilder {
             deliveryStatus = deliveryStatus,
             reactions = reactions,
             replyToId = message.replyTo?.id,
-            replyToText = replyToText,
+            replyToText = quoted?.text,
             replyToDeleted = replyToDeleted,
-            replyToMediaKind = replyToMediaKind,
-            replyToThumbnailUrl = replyToThumbnailUrl,
+            replyToMediaKind = quoted?.mediaKind ?: ReplyMediaKind.None,
+            replyToThumbnailUrl = quoted?.thumbnailUrl,
             storyReply = storyReply,
-            replyToSenderName = message.replyTo?.senderDisplayName,
+            replyToSenderName = quoted?.senderName,
             isPending = isPending,
             clientMessageId = message.clientMessageId,
             images = images,
@@ -262,11 +252,11 @@ public object BubbleContentBuilder {
             // deleted (a tombstone never glows). The played-appearance gate is resolved
             // later at render time by `MessageEffectRenderPlanner.plan`.
             effects = MessageEffectRenderPlanner.renderEffects(message.effects, isDeleted),
-            // View-once burned tombstone inputs — mirror iOS gating burned on
-            // `message.isViewOnce && message.viewOnceCount > 0`. A deleted tombstone
-            // takes precedence (its own path), so zero these out when deleted.
+            // View-once burned tombstone inputs — consumed PER READER, like iOS
+            // `isViewOnceOpened` (#7579): never the global `viewOnceCount`, which another
+            // member's opening raises. A deleted tombstone takes precedence (its own path).
             isViewOnce = !isDeleted && message.effects.has(MessageEffectFlags.VIEW_ONCE),
-            viewOnceCount = if (isDeleted) 0 else message.viewOnceCount,
+            isViewOnceOpenedByMe = !isDeleted && message.isViewOnceOpenedByMe,
             // A conversation notice (join/leave/legacy summary) renders as a centered
             // notice, never a signed bubble — resolved FIRST in `BubbleRenderKind`.
             isSystem = message.isSystemMessage,

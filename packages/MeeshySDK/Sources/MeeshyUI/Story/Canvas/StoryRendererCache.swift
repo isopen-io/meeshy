@@ -143,9 +143,60 @@ public final class StoryRendererCache: @unchecked Sendable {
     /// Number of cache misses (layer rebuilt) since the last `invalidate()`.
     public private(set) var cacheMissCount: Int = 0
 
+    /// **Le canevas vivant laisse Core Animation jouer les keyframes** (#9865).
+    /// En `.play`, un texte dont la description est exprimable
+    /// (`StoryKeyframeAnimationPlan`) garde sa BASE dans la signature : son
+    /// calque se bâtit une fois, et `StoryRenderer.render` y pose les
+    /// animations et l'horloge. `false` pour l'export : `layer.render(in:)` ne
+    /// joue aucune `CAAnimation`, il garde l'évaluation image par image.
+    public let keyframesPlayedByCoreAnimation: Bool
+
+    /// La description de chaque texte, relue seulement quand ses keyframes changent.
+    private var keyframePlans: [String: (fingerprint: Int, plan: StoryKeyframeAnimationPlan?)] = [:]
+
     /// Only entry point usable from nonisolated context — every other member
     /// is MainActor by MeeshyUI's default isolation.
-    public nonisolated init() {}
+    public nonisolated init(keyframesPlayedByCoreAnimation: Bool = false) {
+        self.keyframesPlayedByCoreAnimation = keyframesPlayedByCoreAnimation
+    }
+
+    /// La description que Core Animation joue pour `item`, `nil` quand l'item
+    /// garde l'évaluation image par image : export, édition, média (sa vidéo
+    /// ne se pose pas sous une horloge figée sans mesure), texte vitré (le verre
+    /// découpe au cadre du MODÈLE), keyframes non exprimables.
+    public func coreAnimationPlan(for item: any RenderableItem) -> StoryKeyframeAnimationPlan? {
+        coreAnimationEntry(for: item)?.plan
+    }
+
+    private func coreAnimationEntry(for item: any RenderableItem) -> (fingerprint: Int, plan: StoryKeyframeAnimationPlan)? {
+        guard keyframesPlayedByCoreAnimation, lastMode == .play,
+              let text = item as? StoryTextObject, let keyframes = text.keyframes, !keyframes.isEmpty else { return nil }
+        if case .glass = text.resolvedBackgroundStyle { return nil }
+        let startTime = text.startTime ?? 0
+        let fingerprint = Self.fingerprint(of: keyframes, startTime: startTime)
+        let plan: StoryKeyframeAnimationPlan?
+        if let memo = keyframePlans[text.id], memo.fingerprint == fingerprint {
+            plan = memo.plan
+        } else {
+            plan = StoryKeyframeAnimationPlan.make(keyframes: keyframes, startTime: startTime)
+            keyframePlans[text.id] = (fingerprint: fingerprint, plan: plan)
+        }
+        return plan.map { (fingerprint: fingerprint, plan: $0) }
+    }
+
+    private static func fingerprint(of keyframes: [StoryKeyframe], startTime: Double) -> Int {
+        var hasher = Hasher()
+        hasher.combine(startTime)
+        keyframes.forEach { keyframe in
+            hasher.combine(keyframe.time)
+            hasher.combine(keyframe.x)
+            hasher.combine(keyframe.y)
+            hasher.combine(keyframe.scale)
+            hasher.combine(keyframe.opacity)
+            hasher.combine(keyframe.easing?.rawValue)
+        }
+        return hasher.finalize()
+    }
 
     // MARK: Public API
 
@@ -176,8 +227,10 @@ public final class StoryRendererCache: @unchecked Sendable {
                       contentHash: Int? = nil,
                       reconfigure: ((any RenderableItem, CALayer) -> CALayer?)? = nil,
                       build: (any RenderableItem) -> CALayer) -> CALayer {
+        let animated = coreAnimationEntry(for: item)
         let sig = Self.makeSignature(for: item, at: time, languages: languages,
-                                     contentHash: contentHash)
+                                     contentHash: contentHash ?? animated?.fingerprint,
+                                     keyframesPlayedByCoreAnimation: animated != nil)
         if let cached = layerCache[item.id], cached.signature == sig {
             cacheHitCount += 1
             return cached.layer
@@ -223,6 +276,7 @@ public final class StoryRendererCache: @unchecked Sendable {
             }
         }
         layerCache.removeAll()
+        keyframePlans.removeAll()
         lastSlideId = nil
         lastLanguages = []
         lastMode = nil
@@ -287,9 +341,10 @@ public final class StoryRendererCache: @unchecked Sendable {
     static func makeSignature(for item: any RenderableItem,
                               at time: Double,
                               languages: [String],
-                              contentHash: Int? = nil) -> ItemSignature {
+                              contentHash: Int? = nil,
+                              keyframesPlayedByCoreAnimation: Bool = false) -> ItemSignature {
         let overrides = StoryRenderer.applyKeyframes(
-            keyframes: keyframes(of: item),
+            keyframes: keyframesPlayedByCoreAnimation ? [] : keyframes(of: item),
             at: time,
             startTime: item.startTime ?? 0
         )
