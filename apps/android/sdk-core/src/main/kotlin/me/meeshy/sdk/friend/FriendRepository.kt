@@ -122,6 +122,36 @@ class FriendRepository @Inject constructor(
         }
 
     /**
+     * The whole friend graph of [currentUserId], shaped for [FriendshipCache.hydrate]: the
+     * accepted relations of [acceptedFriendRequests] split by who sent them, plus every
+     * pending request received and sent. The friend list and the friendship cache read
+     * this ONE graph, so an accepted relation the user received is a friend in both. Any
+     * read that fails fails the graph — a partial graph would erase relations on hydrate.
+     */
+    suspend fun friendshipGraph(currentUserId: String): NetworkResult<FriendshipPages> {
+        val accepted = when (val read = acceptedFriendRequests()) {
+            is NetworkResult.Success -> read.data
+            is NetworkResult.Failure -> return read
+        }
+        val received = when (val read = allPending(FriendRequestDirection.Received)) {
+            is NetworkResult.Success -> read.data
+            is NetworkResult.Failure -> return read
+        }
+        val sent = when (val read = allPending(FriendRequestDirection.Sent)) {
+            is NetworkResult.Success -> read.data
+            is NetworkResult.Failure -> return read
+        }
+        val (acceptedSent, acceptedReceived) = accepted.partition { it.senderId == currentUserId }
+        return NetworkResult.Success(FriendshipPages(sent = acceptedSent + sent, received = acceptedReceived + received))
+    }
+
+    private suspend fun allPending(direction: FriendRequestDirection): NetworkResult<List<FriendRequest>> =
+        drainByCursor(cap = FRIENDS_FETCH_CAP) { cursor ->
+            readPage(direction, STATUS_PENDING, cursor, FRIENDS_PAGE_SIZE)
+                .map { DrainedPage(it.requests, it.nextCursor, it.hasMore) }
+        }
+
+    /**
      * One page of PENDING requests, received or sent, by cursor — the replacement for
      * the offset pagination, whose `offset` skipped rows whenever a request was born
      * during the read (the list is ordered by date DESCENDING, so every insertion shifts

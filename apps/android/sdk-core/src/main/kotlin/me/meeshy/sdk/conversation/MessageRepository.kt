@@ -140,6 +140,9 @@ class MessageRepository internal constructor(
     suspend fun toggleReactionOptimistic(messageId: String, emoji: String, isAdding: Boolean): Boolean =
         mutations.toggleReactionOptimistic(messageId, emoji, isAdding)
 
+    /** Applies a `message:edited` frame (the full server message) to the cached row. */
+    suspend fun applyServerEdit(message: ApiMessage): Boolean = mutations.applyServerEdit(message)
+
     /** Applies a socket-driven reaction delta to the cache — no outbox involved. */
     suspend fun applyReactionDelta(messageId: String, emoji: String, delta: Int) =
         mutations.applyReactionDelta(messageId, emoji, delta)
