@@ -40,10 +40,22 @@ import {
   type PackRegistries,
 } from '@meeshy/shared/types/content-pack';
 import { ownedPackKeys, packEligibilityReference, type PackEligibilityRule } from '@meeshy/shared/types/pack-ownership';
+import {
+  UNKNOWN_PACK_AUDIENCE,
+  isPackOffered,
+  isPackShelved,
+  needsAudience,
+  type PackAudience,
+  type PackAvailability,
+  type PackOfferContext,
+  type PackTargeting,
+} from '@meeshy/shared/types/pack-availability';
 import type { PackInstallationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { GameRefusal } from '../game/GameRefusal';
 import { MeeshSpend, type SpendTx } from '../game/MeeshSpend';
 import { PackGrants, type PackAward, type PackAwardOutcome } from './PackGrants';
+import { readPackAudience } from './packAudience';
+import { packRequirementPreview, type PackRequirementPreview } from '@meeshy/shared/types/pack-unlock';
 
 export type PackViewer = { readonly userId: string; readonly canModerate: boolean };
 
@@ -60,6 +72,10 @@ export type RegistryPack<D> = {
   readonly reward?: PackEligibilityRule;
   /** La version du pack au registre, consignée sur la ligne de dépense. */
   readonly version?: number;
+  /** Quand il est OFFERT (#11274) ; la possession n'en dépend jamais. */
+  readonly availability?: PackAvailability;
+  /** À qui il est offert (#11274) ; jamais servi au client. */
+  readonly targeting?: PackTargeting;
   /** `owned` : la loi de possession (`isPackOwned`) pour ce lecteur ; les domaines sans prix l'ignorent. */
   readonly project: (installed: boolean, owned: boolean) => D;
 };
@@ -149,6 +165,8 @@ export type PackCatalogDeps<S, D extends S> = {
   readonly now?: () => Date;
   readonly broadcast?: PackInstallationBroadcast;
   readonly spend?: MeeshSpend;
+  /** Ce que le serveur sait du lecteur pour un ciblage (#11274) ; lu seulement si un pack du registre est ciblé. */
+  readonly audience?: (userId: string) => Promise<PackAudience>;
 };
 
 type Choices = ReadonlyMap<string, { readonly installed: boolean }>;
@@ -172,6 +190,7 @@ export class PackCatalog<S, D extends S> {
   private readonly registries: PackRegistries;
   private readonly spend: MeeshSpend;
   private readonly grants: PackGrants;
+  private readonly audience: (userId: string) => Promise<PackAudience>;
 
   constructor(deps: PackCatalogDeps<S, D>) {
     this.prisma = deps.prisma;
@@ -181,15 +200,28 @@ export class PackCatalog<S, D extends S> {
     this.broadcast = deps.broadcast;
     this.spend = deps.spend ?? new MeeshSpend(deps.prisma);
     this.grants = new PackGrants({ prisma: deps.prisma, now: this.now });
+    this.audience = deps.audience ?? ((userId) => readPackAudience(deps.prisma, userId));
     this.registries = { [deps.spec.domain]: deps.spec.registry.map(({ slug, installedByDefault }) => ({ slug, installedByDefault })) };
   }
 
-  /** La boutique : le registre dans l'ordre éditorial (masqués exclus), puis les packs communautaires publiés. */
-  async catalogue(userId: string): Promise<readonly S[]> {
+  /**
+   * La boutique : le registre dans l'ordre éditorial (masqués exclus), puis les
+   * packs communautaires publiés. Un pack du registre NON possédé qui se gagne
+   * ou qui a une fenêtre porte `requirementPreview` (#11276).
+   */
+  async catalogue(userId: string): Promise<readonly (S & { readonly requirementPreview?: PackRequirementPreview })[]> {
     const choices = await this.choices(userId);
     const installedOf = this.installedOf(choices);
     const ownedOf = await this.ownedOf(userId);
-    const official = this.spec.registry.filter((pack) => !pack.hidden).map((pack) => this.spec.toSummary(pack.project(installedOf(pack.slug), ownedOf(pack))));
+    const shelvedOf = await this.shelvedOf(userId, installedOf);
+    const shelved = this.spec.registry.filter((pack) => !pack.hidden && shelvedOf(pack));
+    const previewOf = await this.requirementPreviews(userId, shelved.filter((pack) => !ownedOf(pack)));
+    const official = shelved.map((pack) => {
+      const owned = ownedOf(pack);
+      const summary = this.spec.toSummary(pack.project(installedOf(pack.slug), owned));
+      const requirementPreview = owned ? null : previewOf(pack);
+      return requirementPreview === null ? summary : { ...summary, requirementPreview };
+    });
     const community = this.spec.community === null ? [] : await this.spec.community.catalogue(installedOf, await this.communityOwnedKeys(userId));
     return [...official, ...community.map(this.spec.toSummary)];
   }
@@ -224,6 +256,7 @@ export class PackCatalog<S, D extends S> {
     const target = pack === undefined && this.spec.community !== null ? await this.spec.community.installable(slug) : null;
     if (pack === undefined && target === null) return { kind: 'not-found' };
     if (pack?.hidden === true && installed && !(await this.isInstalledNow(userId, pack))) return { kind: 'not-found' };
+    if (installed && pack !== undefined && !(await this.shelvedOf(userId, () => false))(pack) && !(await this.isInstalledNow(userId, pack))) return { kind: 'not-found' };
     if (installed && pack !== undefined && !(await this.ownedOf(userId))(pack)) return { kind: 'not-owned' };
     if (installed && target !== null && target.price !== undefined && !(await this.communityOwned(userId, slug))) return { kind: 'not-owned' };
     if (!installed && pack !== undefined && !pack.removable) return { kind: 'not-removable' };
@@ -254,6 +287,7 @@ export class PackCatalog<S, D extends S> {
     if (price === undefined) return { kind: 'free' };
     const version = registry?.version ?? target?.version ?? 1;
     const hidden = registry?.hidden ?? false;
+    const offered = registry === undefined || isPackOffered(registry, await this.offerContext(userId, registry));
     const project = (installed: boolean): S =>
       this.spec.toSummary(registry !== undefined ? registry.project(installed, true) : (target as CommunityInstallTarget<D>).project(installed, (target as CommunityInstallTarget<D>).installCount, true));
     const key = packChoiceKey(this.domain, slug);
@@ -266,7 +300,7 @@ export class PackCatalog<S, D extends S> {
         kind: 'pack-purchase',
         meta: { domain: this.domain, slug, version },
         guard: async () => {
-          if (hidden) throw new PurchaseRefusal('not-found');
+          if (hidden || !offered) throw new PurchaseRefusal('not-found');
           const owned = await this.prisma.userPackOwnership.findUnique({ where: { userId_packKey: { userId, packKey: key } }, select: { id: true } });
           if (owned !== null) throw new PurchaseRefusal('already-owned');
         },
@@ -323,6 +357,36 @@ export class PackCatalog<S, D extends S> {
   private async communityOwned(userId: string, slug: string): Promise<boolean> {
     const row = await this.prisma.userPackOwnership.findUnique({ where: { userId_packKey: { userId, packKey: packChoiceKey(this.domain, slug) } }, select: { id: true } });
     return row !== null;
+  }
+
+  /** Ce qui reste à débloquer de chaque pack passé ; les faits du jeu ne sont lus qu'une fois, et seulement si une récompense les demande. */
+  private async requirementPreviews(userId: string, packs: readonly RegistryPack<D>[]): Promise<(pack: RegistryPack<D>) => PackRequirementPreview | null> {
+    const rules = packs.flatMap((pack) => (pack.reward === undefined ? [] : [pack.reward]));
+    if (packs.length === 0) return () => null;
+    const facts = await this.grants.unlockFacts(userId, rules);
+    const now = this.now();
+    return (pack) => packRequirementPreview(pack, { facts, now });
+  }
+
+  /** Le moment et le lecteur d'une offre ; le lecteur n'est lu que si l'un des packs passés est ciblé. */
+  private async offerContext(userId: string, ...packs: readonly RegistryPack<D>[]): Promise<PackOfferContext> {
+    const audience = packs.some(needsAudience) ? await this.audience(userId) : UNKNOWN_PACK_AUDIENCE;
+    return { now: this.now(), audience };
+  }
+
+  /**
+   * En rayon pour ce lecteur (#11274) : offert maintenant, ou déjà TENU — une
+   * ligne de possession ou une installation. Un registre sans fenêtre ni
+   * ciblage ne lit rien de plus.
+   */
+  private async shelvedOf(userId: string, installedOf: (slug: string) => boolean): Promise<(pack: RegistryPack<D>) => boolean> {
+    const restricted = this.spec.registry.filter((pack) => pack.availability !== undefined || pack.targeting !== undefined);
+    if (restricted.length === 0) return () => true;
+    const [context, keys] = await Promise.all([
+      this.offerContext(userId, ...restricted),
+      this.prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } }).then(ownedPackKeys),
+    ]);
+    return (pack) => isPackShelved(pack, context, { ownedByRow: keys.has(packChoiceKey(this.domain, pack.slug)), installed: installedOf(pack.slug) });
   }
 
   /** La loi de possession pour ce lecteur ; sans pack payant dans le domaine, aucune lecture. */
