@@ -12,7 +12,7 @@
  *   caché. L'éphémère est refusé dès que l'échéance est POSÉE, pas seulement
  *   échue : c'est la règle de l'aperçu de notification (`protectedPreview`).
  */
-import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
+import { mediaSideContentMayTravel, type SideContentCarrier } from './mediaSideContent';
 import { prismSubtitleLanguage, subtitleCuesFor, webVtt } from '@meeshy/shared/utils/subtitles';
 
 export const SUBTITLE_AUTO = 'auto';
@@ -40,23 +40,14 @@ type Protection = {
   readonly encryptionMode?: string | null;
 };
 
-export type SubtitleCarrier = Protection & {
-  readonly expiresAt?: Date | string | null;
-  readonly deletedAt?: Date | string | null;
-};
+export type SubtitleCarrier = SideContentCarrier;
 
 export type SubtitleSource = Protection & {
   readonly transcription: unknown;
   readonly translations: unknown;
 };
 
-const encrypted = (p: Protection): boolean => p.isEncrypted === true || Boolean(p.encryptionMode);
-
-export function subtitlesMayTravel(attachment: Protection, carrier: SubtitleCarrier | null): boolean {
-  if (maskedAttachment(attachment) || encrypted(attachment)) return false;
-  if (!carrier) return true;
-  return !maskedAttachment(carrier) && !encrypted(carrier) && !carrier.expiresAt && !carrier.deletedAt;
-}
+export const subtitlesMayTravel = mediaSideContentMayTravel;
 
 export type ServedSubtitles = { readonly language: string; readonly vtt: string };
 

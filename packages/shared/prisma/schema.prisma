@@ -1271,6 +1271,12 @@ model MessageAttachment {
   /// `resolveMediaDescription` (`packages/shared/utils/media-description.ts`),
   /// jamais recopiée ici.
   altLanguage String?
+  /// Traductions de `alt` (#12333), MÊME forme que `PostMedia.altTranslations`
+  /// (`{ [lang]: { text, translationModel, confidenceScore, createdAt } }`).
+  /// Seul écrivain : `MessageAttachmentAltTranslationService`, garde fail-closed
+  /// (vue unique, floutée, chiffrée ⇒ jamais traduite). DISTINCTE de
+  /// `translations` (pistes audio) et de `captionTranslations`.
+  altTranslations Json?
   /// Caption/legend displayed with the attachment
   caption String?
 
