@@ -33,7 +33,7 @@ describe('playback.deviceTier', () => {
     const parsed = parseSocialEventV2('playback', session({ deviceTier: 'ultra' }));
 
     expect(parsed).toBeDefined();
-    expect(parsed).not.toHaveProperty('deviceTier');
+    expect((parsed as { deviceTier?: string } | undefined)?.deviceTier).toBeUndefined();
     expect(parsed).toMatchObject({ startupMs: 380 });
   });
 

@@ -82,6 +82,7 @@
     "GET /api/v1/admin/analytics/kpis",
     "GET /api/v1/admin/analytics/language-distribution",
     "GET /api/v1/admin/analytics/message-types",
+    "GET /api/v1/admin/analytics/playback",
     "GET /api/v1/admin/analytics/realtime",
     "GET /api/v1/admin/analytics/user-distribution",
     "GET /api/v1/admin/analytics/volume-timeline",

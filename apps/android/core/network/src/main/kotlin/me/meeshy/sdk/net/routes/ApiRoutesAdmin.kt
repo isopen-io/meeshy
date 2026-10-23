@@ -44,6 +44,7 @@ public object ApiRoutesAdmin {
     public const val ANALYTICS_KPIS: String = "admin/analytics/kpis"
     public const val ANALYTICS_LANGUAGE_DISTRIBUTION: String = "admin/analytics/language-distribution"
     public const val ANALYTICS_MESSAGE_TYPES: String = "admin/analytics/message-types"
+    public const val ANALYTICS_PLAYBACK: String = "admin/analytics/playback"
     public const val ANALYTICS_REALTIME: String = "admin/analytics/realtime"
     public const val ANALYTICS_USER_DISTRIBUTION: String = "admin/analytics/user-distribution"
     public const val ANALYTICS_VOLUME_TIMELINE: String = "admin/analytics/volume-timeline"
