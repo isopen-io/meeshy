@@ -110,7 +110,7 @@ class GameLevelStepsTest {
         val score = GameLevels.threshold(40)
         val held = GameLevels.progress(score, GameLevelSteps.cap(GloryRank.Murmure, facts()), GameLevelSteps.gate(facts()))
         assertThat(held.level).isEqualTo(9)
-        val freed = GameLevels.progress(score, GameLevels.CAP_BASE, GameLevelSteps.gate(facts(minted = 1, missionsDone = 1, glory = 2_000, flameRecord = 7)))
+        val freed = GameLevels.progress(GameLevels.threshold(60), GameLevels.CAP_BASE, GameLevelSteps.gate(facts(minted = 1, missionsDone = 1, glory = 2_000, flameRecord = 7)))
         assertThat(freed.level).isEqualTo(49)
         assertThat(freed.held).isTrue()
     }

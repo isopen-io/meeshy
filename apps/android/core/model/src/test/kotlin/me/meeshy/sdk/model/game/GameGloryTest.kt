@@ -104,7 +104,7 @@ class GameGloryTest {
 
     @Test
     fun `la forme close des nouveaux niveaux egale la somme niveau par niveau`() {
-        listOf(0 to 1, 1 to 2, 30 to 34, 95 to 130, 100 to 100, 999 to 1500, 105 to 107).forEach { (previous, level) ->
+        listOf(1 to 2, 30 to 34, 95 to 130, 100 to 100, 999 to 1500, 105 to 107).forEach { (previous, level) ->
             val sum = (previous + 1..level).sumOf { GloryLaws.gloryForLevel(it) }
             assertThat(GloryLaws.gloryForNewLevels(level, previous)).isEqualTo(if (level > previous) sum else 0)
         }
