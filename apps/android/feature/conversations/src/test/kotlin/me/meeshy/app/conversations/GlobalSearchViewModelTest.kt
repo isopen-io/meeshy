@@ -1,7 +1,6 @@
 package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
-import io.mockk.every
 import io.mockk.verify
 import io.mockk.every
 import io.mockk.mockk
