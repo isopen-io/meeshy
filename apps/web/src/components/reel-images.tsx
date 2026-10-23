@@ -5,6 +5,8 @@ import type { FeedCardMedia } from '@/lib/feed/card-model';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
+import { ServedPicture } from './served-picture';
+
 /**
  * LA GALERIE D'UN RÉEL D'IMAGES (#6457) — chargée À LA DEMANDE par
  * `components/reel-page.tsx` (revue-correction #6484, motif D-54, comme
@@ -26,14 +28,16 @@ export default function ReelImages({ images, language }: { readonly images: read
     <>
       <div data-reel-images onScroll={onScroll} className="scrollbar-none absolute inset-0 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain">
         {images.map((image, i) => (
-          <img
-            key={image.id}
-            src={image.src}
-            alt={image.altText ?? translate(language, 'reels.image', { index: String(i + 1), count: String(images.length) })}
-            draggable={false}
-            decoding="async"
-            className="h-full w-full shrink-0 snap-start object-contain"
-          />
+          <ServedPicture key={image.id} avifSrcSet={image.avifSrcSet} sizes="100vw" className="contents">
+            <img
+              src={image.src}
+              {...(image.srcSet !== undefined ? { srcSet: image.srcSet, sizes: '100vw' } : {})}
+              alt={image.altText ?? translate(language, 'reels.image', { index: String(i + 1), count: String(images.length) })}
+              draggable={false}
+              decoding="async"
+              className="h-full w-full shrink-0 snap-start object-contain"
+            />
+          </ServedPicture>
         ))}
       </div>
       {images.length > 1 ? (

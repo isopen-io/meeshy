@@ -18,6 +18,8 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lang.LanguageIdentification
+import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.mention.MentionSearch
@@ -57,6 +59,7 @@ class ChatComposerControllerTest {
         loaded: List<LocalMessage> = emptyList(),
         user: MeeshyUser? = me,
         drafts: Map<String, ConversationDraft> = emptyMap(),
+        identifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     ): Rig {
         val flow = MutableStateFlow(initial)
         val messages = MutableStateFlow(loaded)
@@ -93,6 +96,7 @@ class ChatComposerControllerTest {
             clock = clock,
             composerText = holder,
             recentEmojis = recents,
+            languageIdentifier = identifier,
         )
         return Rig(controller, flow, messages, repo, socket, workManager, draftStore, uploads, holder, recents)
     }
@@ -112,6 +116,40 @@ class ChatComposerControllerTest {
         assertThat(r.text.revision).isEqualTo(1)
         assertThat(r.state.lastSelfSentAtMillis).isEqualTo(NOW)
         verify(exactly = 1) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `a send stamps the language the identifier recognised with enough confidence`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("en", 0.9) })
+        r.controller.onDraftChange("Hello there my dear friend")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "Hello there my dear friend", "en", me, null) }
+    }
+
+    @Test
+    fun `a doubtful identification falls back to the sender language`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("en", 0.4) })
+        r.controller.onDraftChange("Hello there my dear friend")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "Hello there my dear friend", "fr", me, null) }
+    }
+
+    @Test
+    fun `a manual language pick wins over identification`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("en", 0.99) })
+        r.controller.onDraftChange("Hello there my dear friend")
+        r.controller.onComposerLanguagePicked("es")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "Hello there my dear friend", "es", me, null) }
     }
 
     @Test

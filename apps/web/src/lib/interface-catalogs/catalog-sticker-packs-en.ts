@@ -73,6 +73,7 @@ const enStickerPacks = {
   'packs.domain.avatar-ring': "Avatar rings",
   'packs.domain.banner': "Banners",
   'packs.domain.banner-frame': "Banner frames",
+  'packs.domain.lens': "Lenses",
   'packs.domain.capture-frame': "Capture frames",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Owned",
@@ -85,6 +86,14 @@ const enStickerPacks = {
   'packs.shop.domains': "Shop category",
   'packs.shop.hint': "Every pack: stickers, frames, backgrounds, rings and banners. What you own shows up in the screens that use it.",
   'packs.retry': "Try again",
+  'packs.locked': "Locked",
+  'packs.unlock.rank': "Rank {rank} — Glory needed: {missing}",
+  'packs.unlock.glory': "Glory needed: {missing}",
+  'packs.unlock.trophy': "Earned with a trophy",
+  'packs.unlock.season': "Season {number} reward",
+  'packs.unlock.upcoming': "Available from {date}",
+  'packs.unlock.until': "Available until {date}",
+  'packs.unlock.closed': "No longer offered",
 } satisfies StickerPacksCatalog;
 
 export default enStickerPacks;

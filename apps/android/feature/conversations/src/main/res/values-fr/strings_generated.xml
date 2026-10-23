@@ -156,6 +156,20 @@
     <string name="new_conversation_selected">Sélectionné</string>
     <string name="new_conversation_title">Nouvelle conversation</string>
     <string name="participantProfile_linkExpires">Expire le</string>
+    <string name="row_a11y_conversation_with">Conversation avec %s</string>
+    <string name="row_a11y_last_message">dernier message : %s</string>
+    <string name="row_a11y_muted">en silence</string>
+    <string name="row_a11y_pending_sync">synchronisation en attente</string>
+    <string name="row_a11y_pinned">épinglée</string>
+    <plurals name="row_a11y_unread_count">
+        <item quantity="one">1 message non lu</item>
+        <item quantity="many">%d messages non lus</item>
+        <item quantity="other">%d messages non lus</item>
+    </plurals>
+    <string name="row_join_call">Rejoindre</string>
+    <string name="row_join_call_a11y">Appel en cours, toucher pour rejoindre</string>
+    <string name="row_menu_info">Infos conversation</string>
+    <string name="row_menu_view_profile">Voir le profil</string>
     <string name="shareLink_a11y_copied">Lien copié</string>
     <string name="shareLink_detail_allLanguages">Toutes les langues</string>
     <string name="shareLink_detail_allowedLanguages">Langues autorisées</string>

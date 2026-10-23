@@ -423,6 +423,11 @@ export const SERVER_EVENTS = {
    */
   MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
   /**
+   * #11264 — un rendu différé (vignette, variantes, rendu vidéo) est prêt,
+   * à l'adresse de l'auteur de l'envoi. Voir `AttachmentReadyEventData`.
+   */
+  ATTACHMENT_READY: 'attachment:ready',
+  /**
    * UNE seule traduction quand une seule langue est demandée
    */
   AUDIO_TRANSLATION_READY: 'audio:translation-ready',

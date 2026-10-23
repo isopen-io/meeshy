@@ -103,8 +103,8 @@ describe('GET /export?types=packs', () => {
       { domain: 'avatar-ring', slug: 'echantillon', source: 'purchase', reference: null, priceMeeshes: 30, acquiredAt: AT.toISOString() },
       { domain: 'banner', slug: 'fete', source: 'event', reference: 'fete-2026', priceMeeshes: 0, acquiredAt: AT.toISOString() },
     ]);
-    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1, ownerships: 2, appearanceSubmissions: 0 });
-    expect(packs.hasMore).toEqual({ choices: false, library: false, submissions: false, ownerships: false, appearanceSubmissions: false });
+    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1, ownerships: 2, appearanceSubmissions: 0, lensSubmissions: 0 });
+    expect(packs.hasMore).toEqual({ choices: false, library: false, submissions: false, ownerships: false, appearanceSubmissions: false, lensSubmissions: false });
     expect(JSON.stringify(packs)).not.toContain(OTHER);
     await app.close();
   });
@@ -117,6 +117,23 @@ describe('GET /export?types=packs', () => {
     expect(Object.keys(requested.csv)).toEqual(expect.arrayContaining(['packs.choices', 'packs.library', 'packs.submissions', 'packs.ownerships']));
     expect(requested.csv['packs.ownerships']).toContain('echantillon');
     expect(requested.csv['packs.library']).toContain('Rire');
+    await app.close();
+  });
+
+  it('les lens proposées (#11271) sortent avec leur document, et en CSV', async () => {
+    const db = seeded();
+    db.tables.lensPack.rows.push({
+      id: 'l1', slug: 'aurore', name: 'Aurore', author: 'Studio Nord', submitterId: USER, status: 'pending', reviewNote: null, reviewedAt: null,
+      installCount: 0, cost: 'standard', surfaces: ['capture'], startsAt: AT, endsAt: AT, communities: [], createdAt: AT, documentJson: '{"schema":1}',
+    });
+    const app = await build(db);
+
+    const packs = (await app.inject({ method: 'GET', url: '/export?types=packs' })).json().data.packs;
+    expect(packs.lensSubmissions).toEqual([expect.objectContaining({ slug: 'aurore', author: 'Studio Nord', status: 'pending', surfaces: ['capture'], documentJson: '{"schema":1}' })]);
+    expect(packs.counts.lensSubmissions).toBe(1);
+
+    const csv = (await app.inject({ method: 'GET', url: '/export?types=packs&format=csv' })).json().data.csv;
+    expect(csv['packs.lensSubmissions']).toContain('aurore');
     await app.close();
   });
 });

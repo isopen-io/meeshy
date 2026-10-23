@@ -103,6 +103,8 @@ const enComposerAttach = {
   'composer.guest.refused.size': '“{name}” is too large: {max} at most.',
   'send.failure.guestKind': 'this file isn’t accepted here',
   'send.failure.guestTooLarge': 'this file is too large here ({max} at most)',
+  'send.failure.formatRefused': 'this photo format (HEIC) isn’t accepted yet',
+  'profile.image.formatRefused': 'This photo format (HEIC) isn’t accepted yet. Choose a JPEG or PNG photo.',
 } satisfies ComposerAttachCatalogSlice;
 
 export default enComposerAttach;

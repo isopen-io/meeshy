@@ -45,6 +45,13 @@ public interface OutboxDao {
     )
     public suspend fun hasDeliverableOfKind(lane: String, kind: String): Boolean
 
+    /**
+     * Distinct anchors (`targetId`) of the rows of [kinds] still on their way — queued or in flight,
+     * an exhausted row going nowhere. Live: re-emits whenever a row of the queue is written or deleted.
+     */
+    @Query("SELECT DISTINCT targetId FROM outbox WHERE kind IN (:kinds) AND state != 'EXHAUSTED'")
+    public fun observePendingTargets(kinds: List<String>): Flow<List<String>>
+
     @Query("SELECT * FROM outbox WHERE state = :state ORDER BY createdAt ASC")
     public suspend fun byState(state: String): List<OutboxEntity>
 
