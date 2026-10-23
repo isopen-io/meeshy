@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import me.meeshy.sdk.model.call.CallPreviewSignal
 import org.json.JSONObject
 
@@ -10,10 +11,10 @@ import org.json.JSONObject
 internal class CallPreviewSocket(private val socketManager: SocketManager) {
 
     fun request(callId: String) =
-        socketManager.emit("call:preview-request", JSONObject().put("callId", callId))
+        socketManager.emit(SocketEventNames.CALL_PREVIEW_REQUEST, JSONObject().put("callId", callId))
 
     fun signal(signal: CallPreviewSignal) =
-        socketManager.emit("call:preview-signal", signalPayload(signal))
+        socketManager.emit(SocketEventNames.CALL_PREVIEW_SIGNAL, signalPayload(signal))
 
     companion object {
         fun signalPayload(signal: CallPreviewSignal): JSONObject {

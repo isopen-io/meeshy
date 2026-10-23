@@ -1,6 +1,6 @@
 package me.meeshy.sdk.socket
 
-import kotlinx.coroutines.flow.MutableSharedFlow
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
@@ -9,8 +9,8 @@ import me.meeshy.sdk.model.CategoryDeletedSocketData
 import me.meeshy.sdk.model.CategoryEvent
 import me.meeshy.sdk.model.CategoryUpsertedSocketData
 import me.meeshy.sdk.model.toEvent
-import org.json.JSONObject
-import timber.log.Timber
+import kotlinx.serialization.serializer
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,25 +31,38 @@ import javax.inject.Singleton
 class CategorySocketManager @Inject constructor(
     private val socketManager: SocketManager,
     private val json: Json,
+    private val router: SocketEventRouter,
 ) {
-    private val _categoryEvents = MutableSharedFlow<CategoryEvent>(replay = 0, extraBufferCapacity = 64)
+    internal constructor(
+        socketManager: SocketManager,
+        json: Json,
+    ) : this(
+        socketManager, json,
+        SocketEventRouter(SocketEventRegistrar { event, callback -> socketManager.on(event, callback) }, Dispatchers.Default),
+    )
+
+    private val _categoryEvents = SocketInboundRoute.subject<CategoryEvent>()
 
     /** The unified real-time category-change stream (created/updated/deleted/reordered). */
     val categoryEvents: SharedFlow<CategoryEvent> = _categoryEvents.asSharedFlow()
 
     fun attach() {
-        listen<CategoryUpsertedSocketData>("category:created") { it.toEvent() }
-        listen<CategoryUpsertedSocketData>("category:updated") { it.toEvent() }
-        listen<CategoryDeletedSocketData>("category:deleted") { it.toEvent() }
-        listen<CategoriesReorderedSocketData>("categories:reordered") { it.toEvent() }
+        router.install(
+            listOf(
+                upsert(SocketEventNames.CATEGORY_CREATED),
+                upsert(SocketEventNames.CATEGORY_UPDATED),
+                SocketInboundRoute.decoding<CategoryDeletedSocketData>(SocketEventNames.CATEGORY_DELETED, json, serializer()) {
+                    _categoryEvents.tryEmit(it.toEvent())
+                },
+                SocketInboundRoute.decoding<CategoriesReorderedSocketData>(SocketEventNames.CATEGORIES_REORDERED, json, serializer()) {
+                    _categoryEvents.tryEmit(it.toEvent())
+                },
+            ),
+        )
     }
 
-    private inline fun <reified T> listen(event: String, crossinline toEvent: (T) -> CategoryEvent) {
-        socketManager.on(event) { args ->
-            runCatching {
-                val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
-                _categoryEvents.tryEmit(toEvent(json.decodeFromString<T>(raw)))
-            }.onFailure { Timber.e(it, "Socket decode error [$event]: ${T::class.simpleName}") }
+    private fun upsert(event: String): SocketInboundRoute =
+        SocketInboundRoute.decoding<CategoryUpsertedSocketData>(event, json, serializer()) {
+            _categoryEvents.tryEmit(it.toEvent())
         }
-    }
 }
