@@ -1,9 +1,6 @@
 package me.meeshy.app.calls
 
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
@@ -23,6 +20,7 @@ import me.meeshy.sdk.model.call.CallState
 import me.meeshy.ui.theme.MeeshySpacing
 import javax.inject.Inject
 import javax.inject.Singleton
+import me.meeshy.ui.icons.MeeshyIcons
 
 /** L'appel en cours tel que le contrôleur d'enregistrement le lit ; mis à jour à chaque transition. */
 @Singleton
@@ -90,7 +88,7 @@ class CallRecordingActionHandler @Inject constructor(
         val active = recording.state.value.phase.isActive
         if (!active && !recording.mayRequest()) return null
         return CallActionPresentation(
-            icon = if (active) Icons.Filled.StopCircle else Icons.Filled.FiberManualRecord,
+            icon = if (active) MeeshyIcons.StopCircle else MeeshyIcons.Record,
             labelRes = if (active) R.string.call_recording_stop else R.string.call_recording_start,
             isActive = active,
         )

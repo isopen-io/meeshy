@@ -1387,6 +1387,12 @@
    "reason": "Icons.Filled.FormatQuote"
   },
   {
+   "symbol": "record.circle",
+   "status": "mapped",
+   "role": "Record",
+   "reason": "Icons.Filled.FiberManualRecord ; passé par un paramètre symbol: (CallView+Recording), que l'extracteur de littéraux ne voit pas"
+  },
+  {
    "symbol": "rectangle.2.swap",
    "status": "mapped",
    "role": "SwapHorizontal",
@@ -1637,6 +1643,12 @@
    "status": "custom",
    "role": "StarSlash",
    "reason": "aucun équivalent Material fidèle : vecteur maison MeeshyVectorIcons.StarSlash (24 dp)"
+  },
+  {
+   "symbol": "stop.circle.fill",
+   "status": "mapped",
+   "role": "StopCircle",
+   "reason": "Icons.Filled.StopCircle ; passé par un paramètre symbol: (CallView+Recording), que l'extracteur de littéraux ne voit pas"
   },
   {
    "symbol": "stop.fill",
@@ -2572,6 +2584,10 @@
    "origin": "material",
    "directional": false
   },
+  "Record": {
+   "origin": "material",
+   "directional": false
+  },
   "RecordVoice": {
    "origin": "material",
    "directional": false
@@ -2721,6 +2737,10 @@
    "directional": false
   },
   "Stop": {
+   "origin": "material",
+   "directional": false
+  },
+  "StopCircle": {
    "origin": "material",
    "directional": false
   },

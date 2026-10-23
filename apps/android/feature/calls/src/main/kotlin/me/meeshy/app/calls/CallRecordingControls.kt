@@ -9,11 +9,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,6 +35,7 @@ import me.meeshy.sdk.model.call.CallRecordingPhase
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.icons.MeeshyIcons
 
 private val PILL_TARGET = 48.dp
 private const val NOTICE_MILLIS = 4_000L
@@ -112,7 +108,7 @@ internal fun CallRecordingStatusPill(
                     .semantics { contentDescription = stopLabel },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Stop, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(MeeshyIcons.Stop, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -157,7 +153,7 @@ internal fun CallRecordingNoticePill(
                     .semantics { contentDescription = close },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Close, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaSecondary, modifier = Modifier.size(16.dp))
+                Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaSecondary, modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -174,8 +170,8 @@ internal fun CallRecordingKindPanel(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
     ) {
         listOf(
-            CallRecordingKind.AUDIO to Icons.Filled.GraphicEq,
-            CallRecordingKind.VIDEO to Icons.Filled.Videocam,
+            CallRecordingKind.AUDIO to MeeshyIcons.Waveform,
+            CallRecordingKind.VIDEO to MeeshyIcons.Video,
         ).forEach { (kind, icon) ->
             val label = stringResource(if (kind == CallRecordingKind.VIDEO) R.string.call_recording_kind_video else R.string.call_recording_kind_audio)
             CallPillButton(
