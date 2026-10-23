@@ -4,7 +4,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHeightIsEqualTo
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -22,10 +21,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 /** La rangée plate Lentille, rendue pour de vrai: 84 dp, sourdine, barre de sélection, pastille 99+. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
+// Métriques de texte réelles : le rendu hérité de Robolectric gonfle chaque ligne (~36 px) et fausse la hauteur.
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ConversationFlatRowTest {
 
     @get:Rule
