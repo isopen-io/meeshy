@@ -93,8 +93,9 @@ internal struct _FullscreenRenderer: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            switch player.availability {
-            case .ready:
+            // #12027 : un téléchargement LISIBLE se joue dès sa tête, comme
+            // un fichier sur le disque — le lecteur prend la place de l'attente.
+            if player.availability.playsNow(fileUrl: player.attachment.fileUrl) {
                 // L'overlay est toujours rendu pour .ready, même si
                 // `manager.player` n'est pas encore chargé. Sans ça, le user
                 // voit un écran noir + ProgressView sans aucun contrôle
@@ -112,7 +113,7 @@ internal struct _FullscreenRenderer: View {
                 } else {
                     playerContent
                 }
-            case .needsDownload, .downloading:
+            } else {
                 downloadOverlay
             }
         }
