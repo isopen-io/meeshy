@@ -48,6 +48,21 @@
     <string name="presence_away">Ausente</string>
     <string name="presence_here">En la conversación</string>
     <string name="presence_idle">Inactivo</string>
+    <plurals name="presence_lastSeen_days">
+        <item quantity="one">Visto hace %dd</item>
+        <item quantity="many">Visto hace %dd</item>
+        <item quantity="other">Visto hace %dd</item>
+    </plurals>
+    <plurals name="presence_lastSeen_hours">
+        <item quantity="one">Visto hace %dh</item>
+        <item quantity="many">Visto hace %dh</item>
+        <item quantity="other">Visto hace %dh</item>
+    </plurals>
+    <plurals name="presence_lastSeen_minutes">
+        <item quantity="one">Visto hace %dmin</item>
+        <item quantity="many">Visto hace %dmin</item>
+        <item quantity="other">Visto hace %dmin</item>
+    </plurals>
     <string name="presence_offline">Desconectado</string>
     <string name="presence_online">En línea</string>
     <string name="settings_info_button_label">Más información sobre %s</string>

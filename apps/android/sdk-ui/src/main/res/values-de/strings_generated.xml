@@ -48,6 +48,18 @@
     <string name="presence_away">Abwesend</string>
     <string name="presence_here">Im Gespräch</string>
     <string name="presence_idle">Inaktiv</string>
+    <plurals name="presence_lastSeen_days">
+        <item quantity="one">Zuletzt vor %dT.</item>
+        <item quantity="other">Zuletzt vor %dT.</item>
+    </plurals>
+    <plurals name="presence_lastSeen_hours">
+        <item quantity="one">Zuletzt vor %dStd.</item>
+        <item quantity="other">Zuletzt vor %dStd.</item>
+    </plurals>
+    <plurals name="presence_lastSeen_minutes">
+        <item quantity="one">Zuletzt vor %dMin.</item>
+        <item quantity="other">Zuletzt vor %dMin.</item>
+    </plurals>
     <string name="presence_offline">Offline</string>
     <string name="presence_online">Online</string>
     <string name="settings_info_button_label">Mehr über %s erfahren</string>
