@@ -40,8 +40,14 @@
     <string name="login_signup_link">Registrarse</string>
     <string name="login_signup_prompt">¿No tienes cuenta?</string>
     <string name="login_username_label">Usuario</string>
+    <string name="onboarding_friends_badge">+%d cada uno</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d chispas para tu nivel 1</string>
     <string name="onboarding_gauge_reached">Nivel 1 alcanzado 🎉</string>
+    <string name="onboarding_global_sample_1">Hola desde São Paulo 👋</string>
+    <string name="onboarding_global_sample_2">¿Quién escucha Nova Club? 🎧</string>
+    <string name="onboarding_global_sample_3">¡Bienvenido/a!</string>
+    <string name="onboarding_languages_demo_translated">Hola, ¿qué tal?</string>
+    <string name="onboarding_notifications_sample">Lina te respondió en Meeshy Global</string>
     <plurals name="onboarding_points_a11y">
         <item quantity="one">%d chispa ganada</item>
         <item quantity="many">%d chispas ganadas</item>
@@ -59,6 +65,7 @@
         <item quantity="other">Más %d chispas</item>
     </plurals>
     <string name="onboarding_skipAll">Saltar todo</string>
+    <string name="onboarding_story_badge">24 h</string>
     <string name="registration_back">Atrás</string>
     <string name="share_link_join_anonymously">Unirse de forma anónima</string>
     <string name="share_link_resume_anonymously">Retomar de forma anónima</string>
