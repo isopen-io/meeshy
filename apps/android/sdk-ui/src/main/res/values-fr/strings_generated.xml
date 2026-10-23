@@ -48,8 +48,24 @@
     <string name="presence_away">Absent</string>
     <string name="presence_here">Dans la conversation</string>
     <string name="presence_idle">Inactif</string>
+    <plurals name="presence_lastSeen_days">
+        <item quantity="one">Vu il y a %dj</item>
+        <item quantity="many">Vu il y a %dj</item>
+        <item quantity="other">Vu il y a %dj</item>
+    </plurals>
+    <plurals name="presence_lastSeen_hours">
+        <item quantity="one">Vu il y a %dh</item>
+        <item quantity="many">Vu il y a %dh</item>
+        <item quantity="other">Vu il y a %dh</item>
+    </plurals>
+    <plurals name="presence_lastSeen_minutes">
+        <item quantity="one">Vu il y a %dmin</item>
+        <item quantity="many">Vu il y a %dmin</item>
+        <item quantity="other">Vu il y a %dmin</item>
+    </plurals>
     <string name="presence_offline">Hors ligne</string>
     <string name="presence_online">En ligne</string>
+    <string name="reactions_more">Plus de réactions</string>
     <string name="settings_info_button_label">En savoir plus sur %s</string>
     <string name="sticker_sheet_close">Fermer</string>
     <string name="sticker_sheet_favorites_empty">Appuie longuement sur une décoration pour l\'épingler ici.</string>

@@ -22,7 +22,10 @@ import {
   getAttachmentEncryptionService,
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
-import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson } from './media-renditions.js';
+import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson, renditionsJson } from './media-renditions.js';
+import { UnconvertibleImageError, convertHeifBuffer, isServerConvertedImage } from './heif-conversion.js';
+import { mediaJobQueueFromEnv, type MediaJobQueue } from './media-processing/queue.js';
+import { deferrableKinds, scheduleDeferred } from './media-processing/dispatch.js';
 import { isMediaMetadataStrippable, stripMediaMetadataBuffer } from './media-metadata-strip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizeAudioBuffer, normalizedAudioPath } from './audio-normalization.js';
@@ -66,6 +69,8 @@ export interface UploadResult {
   sampleRate?: number;
   codec?: string;
   channels?: number;
+  /** #11264 — `pending` quand des rendus sont confiés au worker de médias. */
+  processingState?: string;
   loudnessLufs?: number;
   metadata?: any;
   fps?: number;
@@ -137,8 +142,11 @@ export class UploadProcessor {
   private encryptionService: AttachmentEncryptionService;
   private metadataManager: MetadataManager;
 
-  constructor(prisma: PrismaClient) {
+  private readonly mediaQueue: MediaJobQueue | null;
+
+  constructor(prisma: PrismaClient, options: { readonly mediaQueue?: MediaJobQueue | null } = {}) {
     this.prisma = prisma;
+    this.mediaQueue = options.mediaQueue === undefined ? mediaJobQueueFromEnv() : options.mediaQueue;
     this.encryptionService = getAttachmentEncryptionService(prisma);
     // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
     this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
@@ -382,6 +390,13 @@ export class UploadProcessor {
     // représentation stockée peut diverger de l'upload après transcodage ;
     // tout ce qui est persisté plus bas (URL, taille, type, dimensions) lit
     // `renditions`, pas l'upload brut.
+    // #11264 — ce qui est différé au worker de médias (file allumée seulement).
+    // Différé seulement quand un worker bat : sinon tout reste dans la requête.
+    const deferred = await deferrableKinds(this.mediaQueue, {
+      attachmentType,
+      fileSize: saved.size,
+      compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
+    });
     const renditions = await produceMediaRenditions(
       { uploadBasePath: this.uploadBasePath, metadataManager: this.metadataManager, runFfmpeg },
       {
@@ -391,8 +406,15 @@ export class UploadProcessor {
         fileSize: saved.size,
         metadata,
         clientThumbHash: providedMetadata?.thumbHash ?? null,
-      }
-    );
+      },
+      { defer: deferred }
+    ).catch(async (error: unknown) => {
+      // #11263 — un HEIC/AVIF que le serveur ne sait pas convertir n'est
+      // jamais servi tel quel aux lecteurs : l'upload est refusé.
+      if (!(error instanceof UnconvertibleImageError)) throw error;
+      await fs.unlink(path.join(this.uploadBasePath, filePath)).catch(() => {});
+      return throwUploadValidationError('UNSUPPORTED_MEDIA_TYPE', error.message);
+    });
     const storedFilePath = renditions.storedPath;
     const storedFileSize = renditions.storedSize;
     const storedMimeType = renditions.storedMimeType;
@@ -423,6 +445,7 @@ export class UploadProcessor {
         thumbHash: thumbHash || undefined,
         imageVariants: imageVariants ? imageVariantsJson(imageVariants) : undefined,
         avifVariants: renditions.avifVariants ? imageVariantsJson(renditions.avifVariants) : undefined,
+        renditions: renditions.renditions ? renditionsJson(renditions.renditions) : undefined,
         width: metadata.width,
         height: metadata.height,
         duration: metadata.duration,
@@ -439,8 +462,11 @@ export class UploadProcessor {
         uploadedBy: userId,
         isAnonymous: isAnonymous,
         capturedInApp: declaredCaptureInApp(providedMetadata),
+        ...(deferred.length > 0 ? { processingState: 'pending' } : {}),
       },
     });
+    // File muette : la pièce reste `pending`, le balayage du worker la reprend.
+    await scheduleDeferred({ queue: this.mediaQueue, target: 'messageAttachment', recordId: attachment.id, kinds: deferred });
 
     return {
       id: attachment.id,
@@ -458,6 +484,7 @@ export class UploadProcessor {
       sampleRate: attachment.sampleRate || undefined,
       codec: attachment.codec || undefined,
       channels: attachment.channels || undefined,
+      processingState: attachment.processingState ?? undefined,
       loudnessLufs: attachment.loudnessLufs ?? undefined,
       metadata: attachment.metadata || undefined,
       fps: attachment.fps || undefined,
@@ -507,6 +534,14 @@ export class UploadProcessor {
     } else {
       fileBuffer = await stripMediaMetadataBuffer({ buffer: file.buffer, mimeType: file.mimeType, fileName: file.filename });
     }
+    // #11263 — un HEIC/AVIF est chiffré en JPEG : le destinataire qui déchiffre
+    // ne reçoit jamais `image/heic`. Ce chemin ne garde aucun rendu en clair,
+    // donc pas l'original non plus. Illisible ⇒ upload refusé.
+    if (attachmentType === 'image' && isServerConvertedImage(file.mimeType)) {
+      fileBuffer = await convertHeifBuffer(fileBuffer, file.mimeType).catch((error: unknown) =>
+        throwUploadValidationError('UNSUPPORTED_MEDIA_TYPE', error instanceof Error ? error.message : 'image illisible'));
+      storedMimeType = 'image/jpeg';
+    }
 
     // Le serveur reçoit le CLAIR ici : ce chemin n'est pas du E2EE (#9224). Il
     // retire donc GPS et métadonnées AVANT de chiffrer (#11258), et ne fabrique
@@ -516,7 +551,7 @@ export class UploadProcessor {
       metadataManager: this.metadataManager,
       attachmentType,
       buffer: fileBuffer,
-      mimeType: file.mimeType,
+      mimeType: storedMimeType,
     });
 
     const encryptionResult = await this.encryptionService.encryptAttachment({

@@ -119,6 +119,23 @@ export const messageAttachmentSchema = {
         },
       },
     },
+    processingState: { type: 'string', nullable: true, description: 'Media worker state (#11264): pending | ready | failed — absent means ready' },
+    renditions: {
+      type: 'array',
+      nullable: true,
+      description: 'Additional video renditions (#11261): H.264 compatibility rendition of an HEVC video, HDR tone-mapped to SDR BT.709 — the original fileUrl is untouched',
+      items: {
+        type: 'object',
+        properties: {
+          codec: { type: 'string', description: 'Codec of the rendition: h264 (video compatibility, #11261), heic / avif (image original, #11263)' },
+          mimeType: { type: 'string', description: 'Media type of the rendition file' },
+          url: { type: 'string', description: 'Rendition file URL' },
+          width: { type: 'number', description: 'Rendition width in pixels' },
+          height: { type: 'number', description: 'Rendition height in pixels' },
+          size: { type: 'number', description: 'Rendition byte size' },
+        },
+      },
+    },
 
     // Audio/Video metadata
     duration: { type: 'number', nullable: true, description: 'Duration in milliseconds' },

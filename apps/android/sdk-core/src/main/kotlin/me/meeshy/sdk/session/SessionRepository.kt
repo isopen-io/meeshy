@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ProfileEditApply
+import me.meeshy.sdk.model.ServedProfileDecor
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.auth.SessionOrigin
 import me.meeshy.sdk.net.NetworkResult
@@ -81,6 +82,15 @@ class SessionRepository @Inject constructor(
     fun applyProfileEdit(request: UpdateProfileRequest) {
         val current = _currentUser.value ?: return
         _currentUser.value = ProfileEditApply.apply(current, request)
+    }
+
+    /**
+     * Publie le décor de profil de SOI (fusion : aucun autre champ de [MeeshyUser] ne bouge) pour
+     * que chaque surface qui observe [currentUser] se repeigne au toucher. Sans effet hors session.
+     */
+    fun applyProfileDecor(decor: ServedProfileDecor) {
+        val current = _currentUser.value ?: return
+        _currentUser.value = current.copy(profileDecor = decor)
     }
 
     /**

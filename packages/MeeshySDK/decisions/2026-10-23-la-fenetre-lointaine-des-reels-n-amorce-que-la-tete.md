@@ -1,13 +1,13 @@
-# 2026-10-23 : La fenêtre lointaine des réels n'amorce que la tête du fichier (#11288)
+## La fenêtre lointaine des réels n'amorce que la tête du fichier (#11288)
 
-## Contexte
+### Contexte
 
 Le palier « amorcé » de la fenêtre des réels (N±3 à N±10) téléchargeait chaque
 fichier ENTIER : un balayage rapide de vingt réels en tirait vingt, quand la
 plupart ne seraient jamais vus. `primeBytes` existait dans la loi jumelle, mais
 le registre ne savait pas servir une plage.
 
-## Décision
+### Décision
 
 - **La tête seule.** `ReelPreloadWindow.headBytes` (ajout iOS, la jumelle web
   n'a rien à changer) rend l'amorce de `primeBytes`, bornée par le tier de
@@ -26,7 +26,7 @@ le registre ne savait pas servir une plage.
 - **Une tête au repos ne se joue pas sans élection** : `readableDownload(startsTransfer: false)`
   ne la rend pas (elle se figerait au bout de ses octets).
 
-## Conséquences
+### Conséquences
 
 - Octets par balayage de vingt réels : estimés divisés (seule la tête des
   lointains voyage) — argumenté, non mesuré.

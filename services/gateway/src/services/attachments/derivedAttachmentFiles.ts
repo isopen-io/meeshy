@@ -1,5 +1,7 @@
 import path from 'path';
 import { storageKeyFromMediaUrl } from './mediaStorageKey';
+import { RESPONSIVE_VARIANT_WIDTHS, avifVariantPathFor, thumbnailPathFor, variantPathFor } from './thumbnail';
+import { compatRenditionPathFor } from './video-compat-rendition';
 
 /**
  * LES FICHIERS QU'UNE PIÈCE JOINTE A FAIT NAÎTRE À CÔTÉ DE SES OCTETS (#9315).
@@ -21,8 +23,14 @@ export function derivedFileCandidates(row: {
   readonly translations?: unknown;
   readonly imageVariants?: unknown;
   readonly avifVariants?: unknown;
+  readonly renditions?: unknown;
 }): readonly string[] {
-  return [...translationTrackCandidates(row.translations), ...variantCandidates(row.imageVariants), ...variantCandidates(row.avifVariants)];
+  return [
+    ...translationTrackCandidates(row.translations),
+    ...variantCandidates(row.imageVariants),
+    ...variantCandidates(row.avifVariants),
+    ...variantCandidates(row.renditions),
+  ];
 }
 
 /**
@@ -68,4 +76,27 @@ function variantCandidates(imageVariants: unknown): readonly string[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Les chemins qu'un rendu POSE par convention à côté des octets — vignette
+ * (`_thumb.webp` d'une image, `_thumb.jpg` d'une vidéo), variantes WebP et
+ * AVIF de chaque largeur, rendu H.264 (`_h264.mp4`) — que la ligne les cite
+ * ou NON (#11264, contre-audit S9 N2).
+ *
+ * Le worker de médias écrit ses fichiers avant de les inscrire sur la ligne :
+ * une suppression qui lit la ligne PENDANT ce rendu ne les voit pas. Effacer
+ * aussi les chemins conventionnels, une fois qu'aucune ligne ne partage plus
+ * les octets, referme cette fenêtre. Ces chemins dérivent tous du `filePath`
+ * et ne peuvent pas le désigner lui-même.
+ */
+export function conventionalDerivedPaths(filePath: string): readonly string[] {
+  const ext = path.extname(filePath);
+  const base = ext ? filePath.slice(0, filePath.length - ext.length) : filePath;
+  return [
+    thumbnailPathFor(filePath),
+    `${base}_thumb.jpg`,
+    ...RESPONSIVE_VARIANT_WIDTHS.flatMap((width) => [variantPathFor(filePath, width), avifVariantPathFor(filePath, width)]),
+    compatRenditionPathFor(filePath),
+  ].filter((candidate) => candidate !== filePath);
 }

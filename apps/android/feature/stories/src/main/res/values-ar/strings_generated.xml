@@ -113,6 +113,8 @@
     <string name="story_composer_grabber">مقبض شريط الأدوات</string>
     <string name="story_composer_grabber_hint_dismiss">اسحب لأسفل للتصغير أو الإغلاق.</string>
     <string name="story_composer_grabber_hint_resize">اسحب لأعلى للتكبير، ولأسفل للتصغير أو الإغلاق.</string>
+    <string name="story_composer_redo">إعادة</string>
+    <string name="story_composer_undo">تراجع</string>
     <string name="story_send_caption_hint">أضف رسالة…</string>
     <string name="story_send_loading">جارٍ تحميل المحادثات…</string>
     <plurals name="story_send_members">

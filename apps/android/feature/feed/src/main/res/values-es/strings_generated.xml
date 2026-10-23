@@ -81,7 +81,14 @@
     <string name="post_comments_delete_error">No se pudo eliminar el comentario</string>
     <string name="post_comments_deleted">Comentario eliminado</string>
     <string name="post_comments_load_error">Error al cargar los comentarios</string>
+    <plurals name="post_comments_load_more_replies">
+        <item quantity="one">Ver %d respuesta más</item>
+        <item quantity="many">Ver %d respuestas más</item>
+        <item quantity="other">Ver %d respuestas más</item>
+    </plurals>
+    <string name="post_comments_load_more_replies_hint">Muestra las respuestas restantes de este hilo</string>
     <string name="post_comments_more_options">Más opciones</string>
+    <string name="post_comments_reply_a11y_label">%1$s, respuesta. %2$s. %3$s</string>
     <string name="post_comments_reply_action">Responder</string>
     <string name="post_comments_reply_badge">Responder</string>
     <string name="post_comments_reply_error">Error al enviar la respuesta</string>

@@ -196,6 +196,7 @@ class ConversationListViewModelEmptyTest {
         storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
         me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         io.mockk.mockk(relaxed = true),
+        idleRowSignalsSource(),
     )
 
     @Test

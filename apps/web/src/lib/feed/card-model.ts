@@ -3,7 +3,8 @@ import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor'
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
-import { attachmentSrc } from '@/lib/api/media-url';
+import { attachmentPictureSrcSets, attachmentSrc } from '@/lib/api/media-url';
+import { compatibilityRendition } from '@/lib/media/video-rendition';
 import { servedRingOf } from '@/lib/profile-decor/served-ring';
 import type { FeedMedia, FeedPost } from '@/lib/api/feed-pages';
 import { shortRelativeTime } from '@/lib/relative-time';
@@ -44,6 +45,13 @@ export type FeedCardMedia = {
   /** MILLISECONDES, comme la passerelle et iOS les servent — voir
    * `FeedMedia.duration` (`api/feed-pages.ts`). */
   readonly durationMs?: number;
+  /** #12316 — les `srcset` WebP et AVIF d'une image (`attachmentPictureSrcSets`) ; `src` reste l'original HD. */
+  readonly srcSet?: string;
+  readonly avifSrcSet?: string;
+  /** #12316 — le rendu H.264 de compatibilité d'une vidéo HEVC, résolu ; la surface l'élit (`useElectedVideoSrc`). */
+  readonly compatSrc?: string;
+  readonly compatSize?: number;
+  readonly fileSize?: number;
   /** LE TEXTE SERVI PAR LE PRISME (#6280, `resolveMediaCaption` — jamais
    * `PostMedia.caption` brut) : la langue résolue peut différer de la
    * langue source dès qu'une traduction du lecteur existe.
@@ -352,6 +360,9 @@ function resolveMedia(
     const width = numberOrUndefined(m.width);
     const height = numberOrUndefined(m.height);
     const mimeType = textOrUndefined(m.mimeType);
+    const pictures = attachmentPictureSrcSets({ ...(m.imageVariants ? { imageVariants: m.imageVariants } : {}), ...(m.avifVariants ? { avifVariants: m.avifVariants } : {}) });
+    const compat = compatibilityRendition(m.renditions);
+    const fileSize = numberOrUndefined(m.fileSize);
     return {
       id: m.id,
       kind: feedMediaKindOf(m.mimeType),
@@ -361,6 +372,10 @@ function resolveMedia(
       ...(placeholder !== undefined ? { placeholder } : {}),
       ratio: isReel ? reelCardRatio(width, height) : postMediaRatio(width, height),
       ...(durationMs !== undefined ? { durationMs } : {}),
+      ...(pictures.webp !== undefined ? { srcSet: pictures.webp } : {}),
+      ...(pictures.avif !== undefined ? { avifSrcSet: pictures.avif } : {}),
+      ...(compat !== undefined ? { compatSrc: attachmentSrc(compat.url), compatSize: compat.size } : {}),
+      ...(fileSize !== undefined ? { fileSize } : {}),
       ...(caption !== undefined
         ? { caption: caption.text, captionTranslated: caption.translated, captionOrigin: caption.origin }
         : {}),

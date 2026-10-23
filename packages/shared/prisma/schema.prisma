@@ -1338,6 +1338,8 @@ model MessageAttachment {
   thumbHash     String?   // ThumbHash base64 (~33 chars) — placeholder image instantane
   imageVariants Json?     // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
   avifVariants  Json?     // Variantes AVIF responsive (#11262), MÊME forme, format 'avif' — à CÔTÉ des WebP, jamais dedans (anciens clients)
+  renditions    Json?     // Rendus vidéo ADDITIONNELS (#11261) : [{ codec: 'h264', url, width, height, size }] — l'original reste servi à iOS
+  processingState String? // #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias ; absent = prêt (ligne héritée ou traitée pendant la requête)
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)
@@ -1497,6 +1499,7 @@ model MessageAttachment {
   // index, ce comptage balaie la collection entière à chaque suppression.
   @@index([filePath])
   @@index([thumbnailPath])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 // =====================================================
@@ -4162,6 +4165,12 @@ model PostMedia {
   /// #11262 — les mêmes largeurs en AVIF, à CÔTÉ des WebP (jamais dans `imageVariants`,
   /// que les anciens clients lisent sans filtrer le format). OPTIONNEL.
   avifVariants Json?
+  /// #11261 — rendus vidéo ADDITIONNELS (H.264 de compatibilité d'une vidéo HEVC) :
+  /// [{ codec, url, width, height, size }]. OPTIONNEL ; l'original n'est jamais remplacé.
+  renditions Json?
+  /// #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias.
+  /// OPTIONNEL : absent = prêt (ligne héritée, ou traitée pendant la requête).
+  processingState String?
 
   // Metadata audio/vidéo
   duration     Int?     // ms
@@ -4273,6 +4282,7 @@ model PostMedia {
   /// Sert le rattrapage et la garde de revendication (filtre sur uploadeur
   /// parmi les médias en attente).
   @@index([uploaderId, postId])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)

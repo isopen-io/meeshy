@@ -8,6 +8,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useMediaLoadFailure } from '@/lib/media/media-failure';
 import { useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
+import { useServedVideoSrc } from '@/lib/media/served-video';
 import { showsPausedBadge, type StagePresentation } from '@/lib/view/media-stage';
 import { infoDuration, lateralSeek } from '@/lib/view/media-transport';
 import { useEffacingControl } from '@/lib/view/use-effacing-control';
@@ -155,7 +156,7 @@ export default function ViewerVideoPage({
 
   const posterUrl = attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== '' ? attachmentSrc(attachment.thumbnailUrl) : undefined;
   const paused = showsPausedBadge(presentation, true, playing);
-  const videoSrc = attachmentSrc(attachment.fileUrl);
+  const videoSrc = useServedVideoSrc(attachment);
   const failure = useMediaLoadFailure(videoSrc);
   const [element, setElement] = useState<HTMLMediaElement | null>(null);
   const bindElement = useCallback(
@@ -205,7 +206,7 @@ export default function ViewerVideoPage({
       {...(isActive ? { onPointerDown: reveal, onPointerMove } : {})}
     >
       <video
-        key={`${attachment.fileUrl}:${failure.attempt}`}
+        key={`${videoSrc}:${failure.attempt}`}
         ref={bindElement}
         playsInline
         preload="auto"

@@ -201,4 +201,10 @@ class StorySnapResolverTest {
 
         assertThat(r.withinSafeZone).isFalse()
     }
+
+    @Test
+    fun `the magnet holds at the iOS tolerance of 0,015`() {
+        assertThat(StorySnapResolver.SNAP_THRESHOLD).isEqualTo(0.015f)
+        assertThat(StorySnapResolver.resolve(0.52f, 0.5f).verticalGuide).isNull()
+    }
 }

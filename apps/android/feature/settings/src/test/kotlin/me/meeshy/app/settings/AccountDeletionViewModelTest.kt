@@ -17,6 +17,8 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.AccountDeletionConfirmation
+import me.meeshy.sdk.model.AccountDeletionPhase
+import me.meeshy.sdk.model.AccountDeletionStatus
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AccountDeletionApi
@@ -387,5 +389,83 @@ class AccountDeletionViewModelTest {
         advanceUntilIdle()
         assertThat(ko.effects.take(2).toList())
             .containsExactly(AccountDeletionEffect.HAPTIC_HEAVY, AccountDeletionEffect.HAPTIC_ERROR).inOrder()
+    }
+
+    private fun apiWithStatus(status: AccountDeletionStatus): AccountDeletionApi {
+        val api = mockk<AccountDeletionApi>(relaxed = true)
+        coEvery { api.status() } returns NetworkResult.Success(status)
+        return api
+    }
+
+    @Test
+    fun `no request reads as none, a state and not an absence`() = runTest(dispatcher) {
+        val sut = vm(apiWithStatus(AccountDeletionStatus()))
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.deletion).isEqualTo(AccountDeletionPhase.None)
+    }
+
+    @Test
+    fun `a request awaiting its e-mail link reads as pending`() = runTest(dispatcher) {
+        val sut = vm(apiWithStatus(AccountDeletionStatus(status = "PENDING_EMAIL_CONFIRMATION")))
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.deletion).isEqualTo(AccountDeletionPhase.PendingConfirmation)
+    }
+
+    @Test
+    fun `a confirmed request shows the cancellation deadline`() = runTest(dispatcher) {
+        val sut = vm(
+            apiWithStatus(
+                AccountDeletionStatus(status = "CONFIRMED", gracePeriodEndsAt = "2026-11-01T00:00:00.000Z", canCancelUntil = "2026-11-01T00:00:00.000Z"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.deletion).isEqualTo(AccountDeletionPhase.GracePeriod("2026-11-01T00:00:00.000Z"))
+    }
+
+    @Test
+    fun `an unreadable status asserts nothing and raises no error`() = runTest(dispatcher) {
+        val api = mockk<AccountDeletionApi>(relaxed = true)
+        coEvery { api.status() } returns NetworkResult.Failure(ApiError(message = "offline", code = "NETWORK"))
+        val sut = vm(api)
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.deletion).isNull()
+        assertThat(sut.state.value.error).isNull()
+    }
+
+    @Test
+    fun `opening a request keeps the link expiry and flips to pending`() = runTest(dispatcher) {
+        val api = apiWithStatus(AccountDeletionStatus())
+        coEvery { api.open(any(), any()) } returns
+            NetworkResult.Success(AccountDeletionOpenedResponse(message = "ok", tokenExpiresAt = "2026-10-24T10:00:00.000Z"))
+        val sut = readyVm(api)
+
+        sut.submitConfirmed()
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.tokenExpiresAt).isEqualTo("2026-10-24T10:00:00.000Z")
+        assertThat(sut.state.value.deletion).isEqualTo(AccountDeletionPhase.PendingConfirmation)
+    }
+
+    @Test
+    fun `a 409 already pending re-reads the status instead of blocking`() = runTest(dispatcher) {
+        val api = mockk<AccountDeletionApi>(relaxed = true)
+        coEvery { api.status() } returnsMany listOf(
+            NetworkResult.Success(AccountDeletionStatus()),
+            NetworkResult.Success(AccountDeletionStatus(status = "CONFIRMED", canCancelUntil = "2026-11-01T00:00:00.000Z")),
+        )
+        coEvery { api.open(any(), any()) } returns
+            NetworkResult.Failure(ApiError(message = "already", code = "HTTP_409", httpStatus = 409))
+        val sut = readyVm(api)
+        advanceUntilIdle()
+
+        sut.submitConfirmed()
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.error).isEqualTo(AccountDeletionError.ALREADY_PENDING)
+        assertThat(sut.state.value.deletion).isEqualTo(AccountDeletionPhase.GracePeriod("2026-11-01T00:00:00.000Z"))
     }
 }
