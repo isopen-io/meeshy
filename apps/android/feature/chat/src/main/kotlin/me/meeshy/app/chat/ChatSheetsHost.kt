@@ -197,6 +197,8 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     details = details,
                     accentColor = accentColor,
                     onSelectTab = actions.selectReactionTab,
+                    onReact = { emoji -> actions.addReactionFromDetails(details.messageId, emoji) },
+                    onOpenFullPicker = { actions.openEmojiPicker(details.messageId) },
                     modifier = Modifier.navigationBarsPadding(),
                 )
             }
@@ -220,6 +222,8 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     onSelectReason = actions.selectReportReason,
                     onDetailsChange = actions.onReportDetailsChange,
                     onSubmit = actions.submitReport,
+                    onConfirmSubmit = actions.confirmReportSubmit,
+                    onCancelConfirm = actions.cancelReportConfirmation,
                     onDismiss = actions.dismissReport,
                 )
             }
