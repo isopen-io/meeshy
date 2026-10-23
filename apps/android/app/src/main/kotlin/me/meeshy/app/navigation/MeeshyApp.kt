@@ -173,6 +173,9 @@ fun MeeshyApp(
                                 launchSingleTop = true
                             }
                         },
+                        onToggleMute = callViewModel::toggleMute,
+                        onToggleSpeaker = callViewModel::toggleSpeaker,
+                        onHangUp = callViewModel::hangUp,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(padding)
