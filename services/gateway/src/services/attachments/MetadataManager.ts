@@ -109,11 +109,12 @@ export class MetadataManager {
     imagePath: string,
     options: { readonly strict?: boolean } = {}
   ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
-    return timeMediaStage('variants', 'image', () => this.generateImageVariantsUntimed(imagePath));
+    return timeMediaStage('variants', 'image', () => this.generateImageVariantsUntimed(imagePath, options));
   }
 
   private async generateImageVariantsUntimed(
-    imagePath: string
+    imagePath: string,
+    options: { readonly strict?: boolean }
   ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
     try {
       const fullPath = path.join(this.uploadBasePath, imagePath);
