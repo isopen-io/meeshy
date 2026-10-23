@@ -59,7 +59,7 @@ class ProfileSheetLoader @Inject constructor(
         val cachedStats = (known ?: cachedProfile?.id)?.let { id -> quiet { stats.cachedStats(id) } }
         apply(ProfileLoadEvent.CacheRead(cachedProfile, cachedStats))
         when (val result = remote.profile(key)) {
-            is NetworkResult.Success -> synchronize(result.data, key, ::apply)
+            is NetworkResult.Success -> synchronize(result.data, key) { apply(it) }
             is NetworkResult.Failure -> {
                 val failure = result.error.toFailure()
                 apply(ProfileLoadEvent.ProfileFailed(failure))

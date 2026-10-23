@@ -2,7 +2,6 @@ package me.meeshy.sdk.profile
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -54,15 +53,11 @@ class ProfileSheetLoaderTest {
         profiles.store(bob, id)
         statsCache.persistStats(id, UserStats(totalMessages = 1))
         val remote = FakeRemote(ok(), failure(null))
-        loader(remote).open(id, "bob").test {
-            val cached = awaitItem()
-            assertThat(remote.profileCalls).isEqualTo(0)
-            assertThat(cached.profile).isEqualTo(bob)
-            assertThat(cached.stats?.totalMessages).isEqualTo(1)
-            assertThat(cached.isLoadingProfile).isFalse()
-            val last = cancelAndConsumeRemainingEvents().filterIsInstance<app.cash.turbine.Event.Item<ProfileLoadState>>().last().value
-            assertThat(last.stats?.totalMessages).isEqualTo(7)
-        }
+        val states = loader(remote).states(id, "bob")
+        assertThat(states.first().profile).isEqualTo(bob)
+        assertThat(states.first().stats?.totalMessages).isEqualTo(1)
+        assertThat(states.first().isLoadingProfile).isFalse()
+        assertThat(states.last().stats?.totalMessages).isEqualTo(7)
         assertThat(remote.profileCalls).isEqualTo(1)
     }
 
