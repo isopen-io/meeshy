@@ -6,6 +6,8 @@
     <string name="common_clearSearch">Clear search</string>
     <string name="common_close">Close</string>
     <string name="common_done">Done</string>
+    <string name="common_selected">Selected</string>
+    <string name="components_characterCount_a11y">%1$d of %2$d characters</string>
     <string name="emoji_category_activities">Activities</string>
     <string name="emoji_category_animals">Animals</string>
     <string name="emoji_category_faces">Faces</string>
