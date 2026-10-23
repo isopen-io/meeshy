@@ -75,9 +75,11 @@ extension DiskCacheStore {
 
     /// Ouvre le transfert et l'inscrit au registre SANS l'attendre : un lecteur
     /// vidéo obtient ainsi, dans le même tour, le fichier qu'il va lire pendant
-    /// que le cache l'écrit (#9881).
+    /// que le cache l'écrit (#9881). Une TÊTE amorcée de la même clé (#11288)
+    /// devient ce fichier : le transfert la reprend là où elle s'est arrêtée.
     func startTransfer(fileKey: String, fetch: NetworkFetch) -> InFlightDownload {
-        let readable = fetch.transfer == .streamedToFile ? makeReadableDownload() : nil
+        let head = fetch.transfer == .streamedToFile ? heads.take(fileKey) : nil
+        let readable = fetch.transfer == .streamedToFile ? head?.download ?? makeReadableDownload() : nil
         let task = Task<Data, Error> {
             // Média protégé même-origine (ex. audio de la bibliothèque de sons
             // servi par `/api/v1/static/:filename`, route JWT) : la requête nue
@@ -96,7 +98,8 @@ extension DiskCacheStore {
                         request: request,
                         profile: fetch.profile,
                         progress: fetch.progress,
-                        into: readable
+                        into: readable,
+                        after: head
                     )
                 }
                 return try await streamedNetworkData(

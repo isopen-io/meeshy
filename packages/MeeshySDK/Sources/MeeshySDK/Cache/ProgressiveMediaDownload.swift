@@ -27,6 +27,14 @@ public final class ProgressiveMediaDownload: @unchecked Sendable {
         case failed(Error)
     }
 
+    /// D'où le prochain transfert écrit ce fichier (#11288).
+    public enum Continuation: Sendable, Equatable {
+        /// Le fichier est entier : il n'y a rien à demander.
+        case complete
+        /// Demander à partir de cet octet (`0` : le fichier entier).
+        case resume(from: Int64)
+    }
+
     private struct State {
         var fileURL: URL
         var ownsFile = true
@@ -34,6 +42,7 @@ public final class ProgressiveMediaDownload: @unchecked Sendable {
         var expected: Int64?
         var mimeType: String?
         var hasResponded = false
+        var resumable = false
         var outcome: Outcome?
         var writer: FileHandle?
         var reader: FileHandle?
@@ -150,13 +159,56 @@ public final class ProgressiveMediaDownload: @unchecked Sendable {
         state.mutateUnchecked { $0.fileURL }
     }
 
-    func respond(expectedBytes: Int64?, mimeType: String?) {
+    func respond(expectedBytes: Int64?, mimeType: String?, resumable: Bool = false) {
         state.mutateUnchecked { state in
             state.expected = expectedBytes.flatMap { $0 > 0 ? $0 : nil }
             state.mimeType = mimeType
             state.hasResponded = true
+            state.resumable = resumable
         }
         notify()
+    }
+
+    /// Une tête qu'un transfert pourra compléter : servie par plage et
+    /// interrompue sans échec, ou déjà entière (#11288).
+    var isContinuable: Bool {
+        state.mutateUnchecked { state -> Bool in
+            !Self.hasFailed(state) && (Self.isWhole(state) || (state.resumable && state.available > 0))
+        }
+    }
+
+    /// Prépare le fichier pour le transfert qui le complète (#11288) : rien à
+    /// faire s'il est entier ; reprise après la tête servie par plage ; sinon
+    /// (fichier vierge, réponse entière interrompue, échec) retour au premier
+    /// octet — les octets déjà lus par un lecteur sont ceux qui seront réécrits.
+    func prepareContinuation() throws -> Continuation {
+        try state.mutateUnchecked { state -> Continuation in
+            if Self.isWhole(state) { return .complete }
+            let writer = try state.writer ?? FileHandle(forWritingTo: state.fileURL)
+            state.writer = writer
+            if !Self.hasFailed(state), state.resumable, state.available > 0 {
+                try writer.seekToEnd()
+                return .resume(from: state.available)
+            }
+            try writer.truncate(atOffset: 0)
+            state.available = 0
+            state.expected = nil
+            state.hasResponded = false
+            state.resumable = false
+            state.outcome = nil
+            return .resume(from: 0)
+        }
+    }
+
+    private static func hasFailed(_ state: State) -> Bool {
+        guard case .failed? = state.outcome else { return false }
+        return true
+    }
+
+    private static func isWhole(_ state: State) -> Bool {
+        if case .finished? = state.outcome { return true }
+        guard state.hasResponded, let expected = state.expected else { return false }
+        return state.available >= expected
     }
 
     func append(_ data: Data) throws {

@@ -128,6 +128,16 @@ enum ReelPrewarm {
         return AttachmentDownloadCenter.key(for: attachment.fileUrl)
     }
 
+    /// Amorce la TÊTE du fichier vidéo de `post` (#11288) : `bytes` octets par
+    /// plage, gardés hors du cache, que le transfert de l'élection reprendra
+    /// à leur dernier octet. Sous la clé que le centre et la lecture liront.
+    static func prefetchHead(of post: FeedPost, bytes: Int, profile: MediaTransferProfile) async {
+        guard bytes > 0, let media = post.primaryReelDisplayMedia, media.type == .video,
+              videoURL(for: post) != nil else { return }
+        let key = AttachmentDownloadCenter.key(for: media.toMessageAttachment().fileUrl)
+        await CacheCoordinator.shared.video.prefetchHead(of: key, bytes: bytes, profile: profile)
+    }
+
     /// Attend que le téléchargement de `key` se termine — fini, échoué ou
     /// annulé — ou que la tâche soit annulée. La fin est SIGNALÉE par le
     /// registre (#9882) : la passe s'endort jusqu'à elle, sans relire l'état.
@@ -224,9 +234,10 @@ nonisolated enum ReelPosterPrefetch {
 ///   décodeurs matériels sont bornés : c'est le seul palier qui en tient un,
 ///   et le pool de `StoryMediaLoader` reste à trois.
 /// - **monté** (N±2) — fichier entier, lancé aussitôt avec le palier décode.
-/// - **amorcé** (N±3…N±R) — fichier entier aussi (le registre ne sait pas
-///   servir une plage), mais APRÈS les proches et un à la fois : il ne dispute
-///   jamais la bande passante du réel qu'on va voir.
+/// - **amorcé** (N±3…N±R) — la TÊTE seule (#11288) : `moov` et premier GOP,
+///   bornés par le tier de l'appareil (`ReelPreloadWindow.headBytes`), APRÈS
+///   les proches et un à la fois. Le reste arrive en flux quand le réel entre
+///   au palier monté : son transfert reprend la tête à son dernier octet.
 ///
 /// Le plus proche d'abord, devant avant derrière. Ce qui sort de la fenêtre
 /// rend son téléchargement automatique et son lecteur ; un appareil qui chauffe
@@ -333,12 +344,22 @@ final class ReelPagerPreloader {
         for entry in nearKeys where entry.step.tier == .mount {
             await ReelPrewarm.awaitFile(key: entry.key, center: center)
         }
+        await primeHeads(reels: reels, plan: plan)
+    }
+
+    /// Les têtes de la fenêtre lointaine, la plus proche d'abord (#11288) —
+    /// jamais le fichier entier d'un réel qu'on ne verra peut-être pas.
+    private func primeHeads(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
+        let network = ReelPreloadWindow.Network(snapshot: NetworkPathSource.shared.current)
+        let device = MediaPolicyMonitor.shared.policy.tier
+        let videoPolicy = MediaDownloadPreferencesStore.shared.preferences.video
         for step in plan where step.tier == .prime {
             guard !Task.isCancelled else { return }
-            guard let key = ReelPrewarm.prefetchFile(of: reels[step.index], tier: step.tier, center: center) else {
-                continue
-            }
-            await ReelPrewarm.awaitFile(key: key, center: center)
+            await ReelPrewarm.prefetchHead(
+                of: reels[step.index],
+                bytes: ReelPreloadWindow.headBytes(tier: step.tier, distance: abs(step.offset), network: network, device: device),
+                profile: ReelTransferPolicy.profile(for: step.tier, videoPolicy: videoPolicy)
+            )
         }
     }
 
