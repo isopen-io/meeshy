@@ -11,9 +11,9 @@
  * `check-ts-catalog-dead-entries.mjs` exige qu'elle ait son lecteur.
  *
  * Même patron que `ops-only-routes.ts` : une liste EXPLICITE de couples
- * (méthode, chemin), chacun avec sa raison. Le manifeste ne change pas ; seuls
- * les générateurs natifs (`scripts/generate-ios-endpoints.ts`,
- * `scripts/generate-android-endpoints.ts`) et leurs cliquets filtrent.
+ * (méthode, chemin), chacun avec sa raison. Le manifeste ne change pas : ces
+ * routes sont déclarées lues par le web seul dans `route-readers.ts` (#11271),
+ * le filtre UNIQUE des générateurs natifs et de leurs cliquets.
  * Une route qu'un écran natif se met à lire quitte cette liste.
  */
 import type { ManifestRouteInput } from './ops-only-routes.js';
@@ -32,14 +32,3 @@ export const WEB_CONSOLE_ROUTES: readonly WebConsoleRoute[] = [
       'Lue par l’onglet « Lecture » des statistiques de la console web ; aucun écran d’administration natif.',
   },
 ];
-
-const KEYS: ReadonlySet<string> = new Set(WEB_CONSOLE_ROUTES.map((route) => `${route.method} ${route.path}`));
-
-export function isWebConsoleRoute(route: ManifestRouteInput): boolean {
-  return KEYS.has(`${route.method} ${route.path}`);
-}
-
-/** Retire les routes de la seule console web d'une liste issue du manifeste — pour les catalogues natifs. */
-export function filterOutWebConsoleRoutes<T extends ManifestRouteInput>(routes: readonly T[]): readonly T[] {
-  return routes.filter((route) => !isWebConsoleRoute(route));
-}
