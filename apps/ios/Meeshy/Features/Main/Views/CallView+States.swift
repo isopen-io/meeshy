@@ -257,6 +257,9 @@ extension CallView {
                 .clipShape(Circle())
             }
         }
+        // Le contour équipé du correspondant (#12336), comme partout ailleurs
+        // (`MeeshyAvatar`) : DANS l'empreinte du disque, rien ne grandit.
+        .avatarRingWithin(ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing), footprint: size)
         .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
     }
 

@@ -228,11 +228,18 @@ internal object CallFrameRendererOrnaments {
         c.canvas.drawRect(fx.f(), (y + height).f(), (fx + width * 0.6).f(), (y + height + height * 0.6).f(), fillPaint(fringe))
     }
 
+    /**
+     * Skia lâche un rectangle anticrénelé de moins d'un pixel de haut là où CoreGraphics le couvre
+     * en partie : sur une vignette, les lignes d'iOS (0,7 px) disparaissaient. Une ligne plus fine
+     * qu'un pixel se peint donc sur un pixel, son opacité réduite d'autant — la même encre déposée.
+     */
     private fun scanlines(c: OrnamentCtx) {
         val step = max(2.0, c.u * 0.006)
+        val thickness = step * 0.35
+        val painted = max(1.0, thickness)
         val lines = Path()
-        (0 until kotlin.math.ceil(c.h / step).toInt()).forEach { lines.rect(0.0, it * step, c.w, step * 0.35) }
-        fill(c.canvas, lines, c.ink)
+        (0 until kotlin.math.ceil(c.h / step).toInt()).forEach { lines.rect(0.0, it * step, c.w, painted) }
+        fill(c.canvas, lines, c.ink, alphaScale = thickness / painted)
     }
 
     private fun grain(c: OrnamentCtx) {
