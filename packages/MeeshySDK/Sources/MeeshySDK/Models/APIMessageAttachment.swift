@@ -121,6 +121,9 @@ public struct APIMessageAttachment: Decodable, Sendable {
     /// Langue → texte traduit de `alt` ; décodage TOLÉRANT (une carte malformée
     /// ne fait jamais perdre la pièce).
     public let altTranslations: [String: String]?
+    /// Vrai quand la pièce OU son message est protégé : aucune description, pas
+    /// même la transcription (servie pour LIRE un vocal, jamais pour le décrire).
+    public let descriptionWithheld: Bool?
 
     private struct AltTranslationEntry: Decodable {
         let text: String?
@@ -143,7 +146,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         case viewedCount, downloadedCount, consumedCount
         case isEncrypted, encryptionMode, encryptionIv, encryptionAuthTag
         case transcription, translations
-        case alt, altLanguage, altTranslations
+        case alt, altLanguage, altTranslations, descriptionWithheld
     }
 
     /// Custom `init(from:)` to isolate `transcription` and `translations`
@@ -219,5 +222,6 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.altLanguage = (try? c.decodeIfPresent(String.self, forKey: .altLanguage)) ?? nil
         let altEntries = (try? c.decodeIfPresent([String: AltTranslationEntry].self, forKey: .altTranslations)) ?? nil
         self.altTranslations = altEntries?.compactMapValues { $0.text }
+        self.descriptionWithheld = (try? c.decodeIfPresent(Bool.self, forKey: .descriptionWithheld)) ?? nil
     }
 }

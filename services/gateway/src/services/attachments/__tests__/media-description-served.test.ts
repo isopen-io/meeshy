@@ -22,12 +22,12 @@ const DESCRIBED = {
   encryptionMode: null,
 };
 const LIVE_MESSAGE = { isViewOnce: false, isBlurred: false, effectFlags: 0, expiresAt: null, deletedAt: null, isEncrypted: false, encryptionMode: null };
-const MASKED = { alt: null, altLanguage: null, altTranslations: null };
+const MASKED = { alt: null, altLanguage: null, altTranslations: null, descriptionWithheld: true };
 
 describe('servedDescription — la loi', () => {
   it('pièce et message ordinaires : la description, sa langue et ses traductions', () => {
     expect(servedDescription({ ...DESCRIBED, message: LIVE_MESSAGE })).toEqual({
-      alt: DESCRIBED.alt, altLanguage: 'fr', altTranslations: DESCRIBED.altTranslations,
+      alt: DESCRIBED.alt, altLanguage: 'fr', altTranslations: DESCRIBED.altTranslations, descriptionWithheld: false,
     });
   });
 
@@ -72,5 +72,36 @@ describe('le fil charge et sert la description (REST et socket partagent `attach
     const served = serializeAttachmentForSocket(row({ message: { ...LIVE_MESSAGE, isViewOnce: true } })) as unknown as Record<string, unknown>;
     expect(served.alt).toBeNull();
     expect(served.altTranslations).toBeNull();
+    // La transcription reste servie (pour LIRE le vocal) : le drapeau interdit d'en faire une description.
+    expect(served.descriptionWithheld).toBe(true);
+  });
+});
+
+describe('le transfert copie la description AVEC sa langue et ses traductions (audit A4)', () => {
+  it('altLanguage et altTranslations voyagent', async () => {
+    const { copiedAttachmentFields } = await import('../../messaging/copiedAttachmentFields');
+    const fields = copiedAttachmentFields({
+      id: 'a1', fileName: 'f', originalName: 'f', mimeType: 'image/jpeg', fileSize: 1, filePath: 'p.jpg', fileUrl: 'p.jpg',
+      alt: 'Un chat', altLanguage: 'fr', altTranslations: { en: { text: 'A cat' } },
+    });
+    expect(fields).toEqual(expect.objectContaining({ alt: 'Un chat', altLanguage: 'fr', altTranslations: { en: { text: 'A cat' } } }));
+  });
+});
+
+describe('la liste dit ce que dit le fil : un éphémère vivant retient sa description (audit A2, décision #12443)', () => {
+  it('previewAltOf', async () => {
+    const { previewAltOf } = await import('../../../routes/conversations/utils/last-message-media');
+    const piece = { alt: 'Un chat', isViewOnce: false, isBlurred: false, effectFlags: 0 };
+    expect(previewAltOf(piece, false)).toBe('Un chat');
+    expect(previewAltOf(piece, false, true)).toBeNull();
+  });
+
+  it('resolvePreviewMediaFields — un message éphémère', async () => {
+    const { resolvePreviewMediaFields } = await import('../../../socketio/utils/lastMessagePreviewPrism');
+    const fields = resolvePreviewMediaFields({
+      attachments: [{ id: 'a1', mimeType: 'image/jpeg', alt: 'Un chat', isViewOnce: false, isBlurred: false, effectFlags: 0 }],
+      expiresAt: new Date('2099-01-01'),
+    } as never);
+    expect(fields.lastMessageAttachments[0]?.alt).toBeNull();
   });
 });

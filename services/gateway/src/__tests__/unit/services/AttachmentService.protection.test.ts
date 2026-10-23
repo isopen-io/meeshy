@@ -129,7 +129,11 @@ describe('AttachmentService.associateAttachmentsToMessage — le lien ne déplac
       where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
       data: { messageId: MSG_ID, rank: 0 },
     });
-    expect(prisma.messageAttachment.findMany).not.toHaveBeenCalled();
+    // Aucune lecture des bits d'effet. (La seule lecture restante est celle des
+    // pièces DÉCRITES, qui règle leur description au rattachement, #12333.)
+    expect(prisma.messageAttachment.findMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ select: { id: true, effectFlags: true } }),
+    );
   });
 
   it('AJOUTE les bits du message à ceux que la pièce porte déjà, pièce par pièce', async () => {

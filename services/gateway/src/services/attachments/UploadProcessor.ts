@@ -33,7 +33,6 @@ import { audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from './uploadMim
 import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
 import { runFfmpeg } from './ffmpeg-run.js';
 import { mediaDescriptionFields } from './mediaDescriptionInput.js';
-import { triggerMessageAttachmentAltTranslation } from './MessageAttachmentAltTranslationService.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -470,7 +469,6 @@ export class UploadProcessor {
     });
     // File muette : la pièce reste `pending`, le balayage du worker la reprend.
     await scheduleDeferred({ queue: this.mediaQueue, target: 'messageAttachment', recordId: attachment.id, kinds: deferred });
-    if (attachment.alt) triggerMessageAttachmentAltTranslation(attachment.id);
 
     return {
       id: attachment.id,

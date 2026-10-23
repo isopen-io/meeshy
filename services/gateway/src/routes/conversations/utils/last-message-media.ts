@@ -32,8 +32,11 @@ export function previewStickerOf(
 }
 
 /** Le texte alternatif d'une pièce, ou `null` s'il est vide ou que le message ou la pièce est protégé. */
-export function previewAltOf(attachment: PreviewAltAttachment, messageWithheld: boolean): string | null {
-  if (messageWithheld || maskedAttachment(attachment)) return null;
+export function previewAltOf(attachment: PreviewAltAttachment, messageWithheld: boolean, messageIsEphemeral = false): string | null {
+  // #12333 (audit A2) — un éphémère ENCORE VALIDE retient sa description dans
+  // la liste comme dans le fil (`mediaSideContentMayTravel`), en attendant la
+  // décision produit #12443.
+  if (messageWithheld || messageIsEphemeral || maskedAttachment(attachment)) return null;
   const alt = attachment.alt?.trim();
   return alt ? alt : null;
 }

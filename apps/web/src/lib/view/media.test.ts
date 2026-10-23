@@ -175,6 +175,24 @@ describe('electDescription — le TEXTE d’une pièce, et rien d’autre (#5805
     });
   });
 
+  test('une pièce dont la passerelle RETIENT la description (message flouté) : jamais la transcription (#12333, audit A1)', () => {
+    const withheld: MediaAttachment = { ...englishVoiceWithFrenchTrack, descriptionWithheld: true };
+    expect(electDescription({ attachment: withheld, readerLanguages: ['fr'], fallbackLanguage: 'en' })).toEqual({
+      text: 'report.wav', language: 'en', translated: false,
+    });
+  });
+
+  test('un message porteur PROTÉGÉ connu du client suffit, même sans le drapeau du serveur', () => {
+    expect(electDescription({
+      attachment: englishVoiceWithFrenchTrack, readerLanguages: ['fr'], fallbackLanguage: 'en',
+      carrier: { isBlurred: true },
+    }).text).toBe('report.wav');
+  });
+
+  test('une pièce floutée elle-même : rien non plus', () => {
+    expect(electDescription({ attachment: { ...englishVoiceWithFrenchTrack, isBlurred: true }, readerLanguages: ['fr'], fallbackLanguage: 'en' }).text).toBe('report.wav');
+  });
+
   test('une pièce sans transcription ni alt retombe sur son nom, jamais sur du vide inventé', () => {
     const bare: MediaAttachment = { originalName: 'facture.pdf', translations: {}, fileUrl: 'data:application/pdf;base64,ABC' };
     expect(electDescription({ attachment: bare, readerLanguages: ['en', 'fr'], fallbackLanguage: 'fr' })).toEqual({

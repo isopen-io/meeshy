@@ -52,6 +52,26 @@ struct MediaDescriptionResolverTests {
         #expect(attachment.servedDescription(preferredLanguages: ["es", "de"])?.text == "Eine rote Katze")
     }
 
+    @Test func servedDescription_descriptionRetenueParLaPasserelle_jamaisLaTranscription() {
+        let attachment = MeeshyMessageAttachment(
+            mimeType: "audio/mp4",
+            transcription: .init(text: "Le code est 4512", language: "fr"),
+            descriptionWithheld: true)
+        #expect(attachment.servedDescription(preferredLanguages: ["fr"]) == nil)
+    }
+
+    @Test func servedDescription_messageProtege_jamaisLaTranscription() {
+        let attachment = MeeshyMessageAttachment(mimeType: "audio/mp4", transcription: .init(text: "Le code est 4512", language: "fr"))
+        #expect(attachment.servedDescription(preferredLanguages: ["fr"], carrierIsProtected: true) == nil)
+        #expect(attachment.servedDescription(preferredLanguages: ["fr"])?.text == "Le code est 4512")
+    }
+
+    @Test func decodage_descriptionRetenue() throws {
+        let json = #"{"id":"a1","alt":null,"descriptionWithheld":true}"#
+        let decoded = try JSONDecoder().decode(APIMessageAttachment.self, from: Data(json.utf8))
+        #expect(decoded.descriptionWithheld == true)
+    }
+
     @Test func decodage_laDescriptionEtSesTraductionsDuFil() throws {
         let json = #"{"id":"a1","alt":"Un chat","altLanguage":"fr","altTranslations":{"en":{"text":"A cat","translationModel":"nllb"}}}"#
         let decoded = try JSONDecoder().decode(APIMessageAttachment.self, from: Data(json.utf8))

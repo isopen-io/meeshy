@@ -201,6 +201,8 @@ export interface Attachment {
   readonly altLanguage?: string;
   /** Traductions de `alt` (`{ [lang]: { text } }`, #12333) — à résoudre par `resolveMediaDescription`. */
   readonly altTranslations?: unknown;
+  /** Vrai sous protection (pièce ou message) : aucune description, pas même la transcription (#12333). */
+  readonly descriptionWithheld?: boolean;
   readonly caption?: string;        // Display caption
 
   // ===== IMAGE METADATA =====

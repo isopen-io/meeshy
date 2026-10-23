@@ -10,6 +10,7 @@ import {
 } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
+import { servedDescription } from '../../services/attachments/mediaSideContent';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { requirePermission } from '../../middleware/authorize';
@@ -437,7 +438,10 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             // Comme #4157 c.4 : seul `isProtected` sort, jamais les trois
             // drapeaux bruts qui l'ont décidé — la ligne annonce l'EFFET,
             // pas le mécanisme.
-            const { isViewOnce: _iv, isBlurred: _ib, effectFlags: _ef, ...attachmentRest } = attachment;
+            // #12333 (audit B1) — `message` (la protection du porteur, chargée
+            // par `attachmentSocketSelect` pour la loi des contenus d'à-côté)
+            // ne sort jamais : ce sont, eux aussi, des drapeaux bruts.
+            const { isViewOnce: _iv, isBlurred: _ib, effectFlags: _ef, message: _carrier, ...attachmentRest } = attachment;
             return {
               ...attachmentRest,
               fileUrl: protege ? null : attachment.fileUrl,
@@ -461,6 +465,10 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
               renditions: protege ? null : attachment.renditions,
               thumbHash: protege ? null : attachment.thumbHash,
               metadata: protege ? null : attachment.metadata,
+              // #12333 (audit B1) — la description et ses traductions, sous LA
+              // loi des contenus d'à-côté (`servedDescription`) : ce que dit le
+              // fil, l'administration le dit aussi, jamais plus.
+              ...(protege ? { alt: null, altLanguage: null, altTranslations: null, descriptionWithheld: true } : servedDescription({ ...attachment, message: { ...messageContext, isEncrypted: message.isEncrypted, encryptionMode: message.encryptionMode } })),
               isProtected: protege
             };
           })

@@ -19,6 +19,40 @@
 import { transcriptTranslationTexts } from '../types/attachment-audio.js';
 import { buildPostTranslationRecord, resolvePrismTranslation } from './conversation-helpers.js';
 import { normalizeLanguageForDedup } from './language-normalize.js';
+import { maskedAttachment } from './attachment-protection.js';
+
+/** Les drapeaux de protection d'une pièce, ou du message qui la porte. */
+export type SideContentProtection = {
+  readonly isViewOnce?: boolean | null;
+  readonly isBlurred?: boolean | null;
+  readonly effectFlags?: number | null;
+  readonly isEncrypted?: boolean | null;
+  readonly encryptionMode?: string | null;
+};
+
+export type SideContentCarrier = SideContentProtection & {
+  readonly expiresAt?: Date | string | null;
+  readonly deletedAt?: Date | string | null;
+};
+
+const encrypted = (p: SideContentProtection): boolean => p.isEncrypted === true || Boolean(p.encryptionMode);
+
+/**
+ * LA loi UNIQUE de ce qui voyage À CÔTÉ d'un média (#11329, #12333) — sa
+ * transcription en sous-titres, sa description et leurs traductions — pour
+ * la passerelle (fil, administration, sous-titres) comme pour les clients.
+ *
+ * Une pièce protégée — vue unique, floutée, effet masquant, chiffrée, au
+ * niveau de la PIÈCE ; vue unique, floutée, effet masquant, éphémère (échéance
+ * POSÉE, pas seulement échue), supprimée, chiffrée, au niveau du MESSAGE qui la
+ * porte — ne transporte rien de cela : une description dit ce que le flou
+ * cache.
+ */
+export function mediaSideContentMayTravel(attachment: SideContentProtection, carrier: SideContentCarrier | null | undefined): boolean {
+  if (maskedAttachment(attachment) || encrypted(attachment)) return false;
+  if (!carrier) return true;
+  return !maskedAttachment(carrier) && !encrypted(carrier) && !carrier.expiresAt && !carrier.deletedAt;
+}
 
 export const MEDIA_DESCRIPTION_MAX_LENGTH = 1000;
 

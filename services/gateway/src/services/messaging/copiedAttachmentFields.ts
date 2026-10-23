@@ -31,6 +31,8 @@ export interface SourceAttachment {
   readonly fileUrl: string;
   readonly title?: string | null;
   readonly alt?: string | null;
+  readonly altLanguage?: string | null;
+  readonly altTranslations?: unknown;
   readonly caption?: string | null;
   readonly width?: number | null;
   readonly height?: number | null;
@@ -82,6 +84,10 @@ export function copiedAttachmentFields<A extends SourceAttachment>(att: A) {
     fileUrl: att.fileUrl,
     title: att.title,
     alt: att.alt,
+    // #12333 (audit A4) — la description voyage AVEC sa langue et ses
+    // traductions : sans elles, la copie la servirait hors Prisme.
+    altLanguage: att.altLanguage,
+    altTranslations: (att.altTranslations ?? undefined) as Json<A, 'altTranslations'>,
     caption: att.caption,
     width: att.width,
     height: att.height,

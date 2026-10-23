@@ -68,6 +68,7 @@ export const messageAttachmentSchema = {
     title: { type: 'string', nullable: true, description: 'Human-readable title' },
     alt: { type: 'string', nullable: true, description: 'Accessibility alt text — null when the piece or its message is protected (#12333)' },
     altLanguage: { type: 'string', nullable: true, description: 'Source language of `alt` (#12333)' },
+    descriptionWithheld: { type: 'boolean', description: 'The piece or its message is protected: say NO description, not even the transcription (#12333)' },
     altTranslations: {
       type: 'object',
       nullable: true,

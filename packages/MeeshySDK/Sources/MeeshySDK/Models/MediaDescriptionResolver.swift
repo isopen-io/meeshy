@@ -49,9 +49,12 @@ public enum MediaDescriptionResolver {
 
 public extension MeeshyMessageAttachment {
     /// La description que VoiceOver dit à la place de cette pièce, dans la
-    /// langue du lecteur. `nil` sous protection (vue unique, flou, chiffrement)
-    /// ou quand la pièce n'a ni description ni transcription.
-    func servedDescription(preferredLanguages: [String]) -> MediaDescriptionResolver.Served? {
+    /// langue du lecteur. `nil` sous protection — la passerelle la RETIENT
+    /// (`descriptionWithheld`, pièce OU message), la pièce est à vue unique,
+    /// floutée ou chiffrée, ou l'appelant sait son message protégé — et alors
+    /// jamais la transcription, servie pour LIRE un vocal, pas pour le décrire
+    /// (audit #12333, A1). `nil` aussi sans description ni transcription.
+    func servedDescription(preferredLanguages: [String], carrierIsProtected: Bool = false) -> MediaDescriptionResolver.Served? {
         let author = alt.flatMap { text -> MediaDescriptionResolver.Source? in
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : MediaDescriptionResolver.Source(original: trimmed, language: altLanguage, translations: altTranslations ?? [:])
@@ -67,7 +70,7 @@ public extension MeeshyMessageAttachment {
             author: author,
             transcript: transcript,
             preferredLanguages: preferredLanguages,
-            isProtected: isViewOnce || isBlurred || isEncrypted
+            isProtected: carrierIsProtected || descriptionWithheld == true || isViewOnce || isBlurred || isEncrypted
         )
     }
 }

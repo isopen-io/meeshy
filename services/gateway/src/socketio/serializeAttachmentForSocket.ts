@@ -115,6 +115,8 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
   readonly alt: string | null;
   readonly altLanguage: string | null;
   readonly altTranslations: unknown;
+  /** Vrai sous protection : aucune description, pas même la transcription (`servedDescription`). */
+  readonly descriptionWithheld: boolean;
   /** BUG2 A' — réactions par-image agrégées (emoji→count). */
   readonly reactionSummary: Readonly<Record<string, number>>;
   /** BUG2 A' — emojis posés par le destinataire (vide si destinataire inconnu, ex broadcast). */

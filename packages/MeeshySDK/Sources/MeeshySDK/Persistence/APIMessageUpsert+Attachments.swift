@@ -55,7 +55,8 @@ extension APIMessageUpsert {
             downloadedCount: apiAtt.downloadedCount,
             consumedCount: apiAtt.consumedCount,
             altLanguage: apiAtt.altLanguage,
-            altTranslations: apiAtt.altTranslations
+            altTranslations: apiAtt.altTranslations,
+                descriptionWithheld: apiAtt.descriptionWithheld
         )
     }
 

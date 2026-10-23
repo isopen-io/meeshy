@@ -34,11 +34,11 @@ export interface ListLastMessageContext {
   readonly viewOnceConsumed: boolean;
 }
 
-function servedAttachment<A extends ListPreviewAttachmentRow>(attachment: A, withheld: boolean) {
+function servedAttachment<A extends ListPreviewAttachmentRow>(attachment: A, withheld: boolean, ephemeral: boolean) {
   return {
     ...attachment,
     ...previewAttachmentProtection(attachment),
-    alt: previewAltOf(attachment, withheld),
+    alt: previewAltOf(attachment, withheld, ephemeral),
   };
 }
 
@@ -57,7 +57,7 @@ export function projectListLastMessageBody<M extends ListLastMessageRow>(msg: M,
     // #7545 — la NATURE et le RÉSUMÉ de toutes les pièces jointes ; la liste
     // n'en SERT que la première en détail.
     ...resolveLastMessageNature(msg),
-    attachments: attachments.slice(0, 1).map((attachment) => servedAttachment(attachment, withheld)),
+    attachments: attachments.slice(0, 1).map((attachment) => servedAttachment(attachment, withheld, context.servedExpiresAt != null)),
     attachmentSummary: withheld ? null : summarizeAttachments(attachments, msg._count?.attachments),
     content: withheld ? '' : truncateMessagePreview(msg.content),
     ...(servedExpiresAt !== undefined ? { expiresAt: servedExpiresAt } : {}),

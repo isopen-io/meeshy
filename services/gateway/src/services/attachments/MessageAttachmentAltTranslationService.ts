@@ -7,9 +7,14 @@
  * (`PostMedia.alt`) et de `MessageAttachmentCaptionTranslationService` (dont
  * elle reprend la garde) :
  *
- * - **garde fail-closed relue en base** à chaque déclenchement : une pièce à
- *   vue unique, floutée ou chiffrée n'est JAMAIS traduite
- *   (`messageAttachmentCaptionMayTranslate`, décision #6533) ;
+ * - **jamais avant que le message soit connu** (audit #12333, A3) : à l'envoi,
+ *   une pièce n'a pas encore de message, donc ni sa protection ni le chiffrement
+ *   de sa conversation ne sont connus. La traduction part au RATTACHEMENT
+ *   (`settleLinkedDescriptions`), jamais à l'upload ;
+ * - **garde fail-closed relue en base**, à la demande ET à la réception :
+ *   pièce à vue unique, floutée ou chiffrée (`messageAttachmentCaptionMayTranslate`,
+ *   décision #6533), message protégé (`mediaSideContentMayTravel`, la loi des
+ *   contenus d'à-côté), conversation chiffrée — jamais traduite ;
  * - namespace ZMQ distinct (`message-attachment-alt:`) ;
  * - persistance par `$mergeObjects` (une langue à la fois, sans écraser les
  *   autres), puis `onTranslated` : la passerelle diffuse la pièce relue par
@@ -22,6 +27,37 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { translationTargetId, translationTargetNamespace } from '../zmq-translation/utils/zmq-helpers';
 import { detectContentLanguage } from '../../utils/content-language';
 import { messageAttachmentCaptionMayTranslate } from './MessageAttachmentCaptionTranslationService';
+import { MESSAGE_SIDE_PROTECTION_SELECT, mediaSideContentMayTravel } from './mediaSideContent';
+
+const GUARD_SELECT = {
+  alt: true,
+  isViewOnce: true,
+  isBlurred: true,
+  effectFlags: true,
+  isEncrypted: true,
+  encryptionMode: true,
+  messageId: true,
+  message: { select: { ...MESSAGE_SIDE_PROTECTION_SELECT, conversation: { select: { encryptionMode: true } } } },
+} as const;
+
+type GuardRow = {
+  readonly alt: string | null;
+  readonly isViewOnce: boolean | null;
+  readonly isBlurred: boolean | null;
+  readonly effectFlags: number | null;
+  readonly isEncrypted: boolean | null;
+  readonly encryptionMode: string | null;
+  readonly messageId: string | null;
+  readonly message: (Parameters<typeof mediaSideContentMayTravel>[1] & { readonly conversation?: { readonly encryptionMode: string | null } | null }) | null;
+};
+
+/** La description de cette pièce peut-elle partir au traducteur ? Fail-closed sur toute inconnue. */
+export function messageAttachmentAltMayTranslate(row: GuardRow | null): boolean {
+  if (!row || !row.messageId || !row.message) return false;
+  if (!messageAttachmentCaptionMayTranslate(row)) return false;
+  if (!mediaSideContentMayTravel(row, row.message)) return false;
+  return !row.message.conversation?.encryptionMode;
+}
 
 const log = enhancedLogger.child({ module: 'MessageAttachmentAltTranslationService' });
 
@@ -53,11 +89,8 @@ export class MessageAttachmentAltTranslationService {
   /** Après l'écriture d'une description neuve. Fire-and-forget, ne lève jamais. */
   async trigger(attachmentId: string): Promise<void> {
     try {
-      const row = await this.prisma.messageAttachment.findUnique({
-        where: { id: attachmentId },
-        select: { alt: true, isViewOnce: true, isBlurred: true, isEncrypted: true, encryptionMode: true },
-      });
-      if (!row || !messageAttachmentCaptionMayTranslate(row)) return;
+      const row = await this.prisma.messageAttachment.findUnique({ where: { id: attachmentId }, select: GUARD_SELECT }) as GuardRow | null;
+      if (!row || !messageAttachmentAltMayTranslate(row)) return;
       if (!row.alt || !row.alt.trim()) return;
 
       const sourceLanguage = detectContentLanguage(row.alt);
@@ -89,11 +122,8 @@ export class MessageAttachmentAltTranslationService {
 
   /** Persiste UNE langue, relit la garde (la pièce a pu devenir protégée), puis prévient. */
   async persist(attachmentId: string, event: Pick<TranslationCompletedEvent, 'targetLanguage' | 'result'>): Promise<void> {
-    const guard = await this.prisma.messageAttachment.findUnique({
-      where: { id: attachmentId },
-      select: { isViewOnce: true, isBlurred: true, isEncrypted: true, encryptionMode: true },
-    });
-    if (!guard || !messageAttachmentCaptionMayTranslate(guard)) return;
+    const guard = await this.prisma.messageAttachment.findUnique({ where: { id: attachmentId }, select: GUARD_SELECT }) as GuardRow | null;
+    if (!messageAttachmentAltMayTranslate(guard)) return;
 
     const entry = {
       text: event.result.translatedText,

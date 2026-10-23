@@ -9,7 +9,8 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { MessageAttachmentAltTranslationService } from '../MessageAttachmentAltTranslationService';
 
 const ID = 'aaaaaaaaaaaaaaaaaaaaaaa1';
-const OPEN = { isViewOnce: false, isBlurred: false, isEncrypted: false, encryptionMode: null };
+const LIVE_MESSAGE = { isViewOnce: false, isBlurred: false, effectFlags: 0, expiresAt: null, deletedAt: null, isEncrypted: false, encryptionMode: null, conversation: { encryptionMode: null } };
+const OPEN = { isViewOnce: false, isBlurred: false, effectFlags: 0, isEncrypted: false, encryptionMode: null, messageId: 'm1', message: LIVE_MESSAGE };
 
 function harness(row: Record<string, unknown> | null) {
   const update = jest.fn(async () => ({}));
@@ -38,6 +39,10 @@ describe('MessageAttachmentAltTranslationService', () => {
     ['chiffrée', { isEncrypted: true }],
     ['en mode e2ee', { encryptionMode: 'e2ee' }],
     ['dont la garde n’a pas été chargée', { isViewOnce: undefined }],
+    ['pas encore rattachée à un message (à l’upload)', { messageId: null, message: null }],
+    ['d’un message à vue unique', { message: { ...LIVE_MESSAGE, isViewOnce: true } }],
+    ['d’un message éphémère', { message: { ...LIVE_MESSAGE, expiresAt: new Date('2099-01-01') } }],
+    ['d’une conversation E2EE', { message: { ...LIVE_MESSAGE, conversation: { encryptionMode: 'e2ee' } } }],
   ])('une pièce %s n’est JAMAIS traduite', async (_label, over) => {
     const { service, translate, update } = harness({ alt: 'Un chat', ...OPEN, ...over });
     await service.trigger(ID);

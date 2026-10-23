@@ -27,6 +27,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
 import { conventionalDerivedPaths, derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
+import { settleLinkedDescriptions } from './linkedDescriptions';
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
@@ -187,6 +188,9 @@ export class AttachmentService {
         }),
       ),
     );
+    // #12333 (audit A3) — la description se règle ICI, quand la pièce connaît
+    // enfin son message : effacée en conversation chiffrée, traduite sinon.
+    await settleLinkedDescriptions(this.prisma, orderedIds, messageId);
   }
 
   private toAttachment(attachment: {

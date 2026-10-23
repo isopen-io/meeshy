@@ -216,6 +216,7 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     ...Object.keys(attachmentSocketSelect).filter((k) => k !== 'reactions' && k !== 'message'),
     'reactionSummary',
     'currentUserReactions',
+    'descriptionWithheld',
   ].sort();
 
   it('les pièces jointes voyagent à l’IDENTIQUE par les DEUX transports', async () => {

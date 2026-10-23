@@ -143,6 +143,8 @@ describe('serializeAttachmentForSocket — la garde d’INVENTAIRE (#7014)', () 
       ...Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions' && champ !== 'message'),
       'reactionSummary',
       'currentUserReactions',
+      // #12333 — dérivé de la loi des contenus d'à-côté, jamais chargé.
+      'descriptionWithheld',
     ]);
     const horsInventaire = Object.keys(charge).filter((champ) => !inventaire.has(champ));
 

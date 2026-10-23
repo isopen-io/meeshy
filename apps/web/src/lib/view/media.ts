@@ -1,4 +1,4 @@
-import { resolveMediaDescription } from '@meeshy/shared/utils/media-description';
+import { mediaSideContentMayTravel, resolveMediaDescription, type SideContentCarrier } from '@meeshy/shared/utils/media-description';
 import { electServedAudio, prismFor, type Served, type ServedTrack } from '@/lib/api/prism';
 import type { Attachment } from '@/lib/api/types';
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
@@ -131,7 +131,13 @@ export function mediaCarrierOf(params: {
  * - `electDescription` — le TEXTE d'une pièce, et rien d'autre (image, fichier) ;
  * - `electAudio` — le texte ET la piste d'un VOCAL, d'UNE descente.
  */
-export type MediaAttachment = Pick<Attachment, 'transcription' | 'translations' | 'alt' | 'altLanguage' | 'altTranslations' | 'originalName' | 'fileUrl'>;
+export type MediaAttachment = Pick<
+  Attachment,
+  'transcription' | 'translations' | 'alt' | 'altLanguage' | 'altTranslations' | 'descriptionWithheld' | 'originalName' | 'fileUrl'
+> & Partial<Pick<Attachment, 'isViewOnce' | 'isBlurred' | 'isEncrypted'>> & {
+  /** Le bitfield d'effets que la passerelle sert sur la pièce (`attachmentProtectionOf`). */
+  readonly effectFlags?: number;
+};
 
 type ElectionInput = {
   readonly attachment: MediaAttachment;
@@ -140,6 +146,8 @@ type ElectionInput = {
   readonly displayLanguage?: string | undefined;
   /** La langue de la pièce QUAND elle n'a pas de transcription — `message.originalLanguage`. */
   readonly fallbackLanguage: string;
+  /** La protection du MESSAGE porteur, quand l'appelant la connaît (#12333, audit A1). */
+  readonly carrier?: SideContentCarrier | null;
 };
 
 /**
@@ -148,10 +156,13 @@ type ElectionInput = {
  * un résolveur n'a corrigé personne tant qu'on ne sait pas QUI l'affiche).
  */
 export function electDescription(params: ElectionInput): Served {
-  const { attachment, readerLanguages, displayLanguage, fallbackLanguage } = params;
+  const { attachment, readerLanguages, displayLanguage, fallbackLanguage, carrier } = params;
   // #12333 — LA loi partagée : la description de l'auteur et la transcription
   // descendent ENSEMBLE le prisme, rang par rang (l'auteur d'abord à chaque
-  // rang). La passerelle a déjà retiré la description d'une pièce protégée.
+  // rang). Une pièce protégée — la passerelle le dit par `descriptionWithheld`
+  // (pièce OU message), le client le relit sur ce qu'il sait — n'en a AUCUNE,
+  // pas même la transcription qu'elle sert encore pour LIRE un vocal (audit A1).
+  const isProtected = attachment.descriptionWithheld === true || !mediaSideContentMayTravel(attachment, carrier ?? null);
   const described = resolveMediaDescription({
     alt: attachment.alt,
     altLanguage: attachment.altLanguage,
@@ -159,7 +170,7 @@ export function electDescription(params: ElectionInput): Served {
     transcription: attachment.transcription,
     translations: attachment.translations,
     preferredLanguages: prismFor({ readerLanguages, displayLanguage }),
-    isProtected: false,
+    isProtected,
   });
   return described
     ? { text: described.text, language: described.language ?? fallbackLanguage, translated: described.translated }

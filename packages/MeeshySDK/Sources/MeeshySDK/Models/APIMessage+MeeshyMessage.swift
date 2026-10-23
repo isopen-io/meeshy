@@ -113,7 +113,8 @@ extension APIMessage {
                 downloadedCount: apiAtt.downloadedCount, consumedCount: apiAtt.consumedCount,
                 currentUserConsumption: apiAtt.currentUserConsumption,
                 altLanguage: apiAtt.altLanguage,
-                altTranslations: apiAtt.altTranslations
+                altTranslations: apiAtt.altTranslations,
+                descriptionWithheld: apiAtt.descriptionWithheld
             )
         }
 

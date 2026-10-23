@@ -153,6 +153,9 @@ extension BubbleStandardLayout {
             allVisualAttachments: visualAttachments,
             messageId: message.id,
             messageDeliveryStatus: message.deliveryStatus,
+            // #12333 (audit A1) — la protection du MESSAGE (vue unique, flou,
+            // éphémère, chiffrement) retient aussi la description de ses pièces.
+            messageIsProtected: message.isViewOnce || message.isBlurred || message.expiresAt != nil || message.isEncrypted,
             cellPointWidth: cellPointWidth,
             revealedAttachmentIds: $revealedAttachmentIds,
             carouselIndex: $carouselIndex,
@@ -273,6 +276,8 @@ fileprivate struct BubbleGridCell: View {
     let allVisualAttachments: [MessageAttachment]
     let messageId: String
     let messageDeliveryStatus: Message.DeliveryStatus
+    /// Le message porteur est protégé : la pièce ne se DÉCRIT pas (#12333).
+    let messageIsProtected: Bool
     /// Largeur en points de cette cellule (par branche de `visualMediaGrid`),
     /// threadée jusqu'à `BubbleGridImageView` pour la sélection de variante (5.2).
     let cellPointWidth: CGFloat
@@ -481,10 +486,12 @@ fileprivate struct BubbleGridCell: View {
 
     /// #12333 — ce que VoiceOver dit de la pièce : la description de l'auteur
     /// ou, à défaut, la transcription, dans la langue du lecteur (Prisme, rang
-    /// par rang). `nil` sous protection : la loi du SDK ne décrit pas une pièce
-    /// à vue unique, floutée ou chiffrée, et la passerelle ne la sert pas.
+    /// par rang). `nil` sous protection de la pièce OU de son message, ou quand
+    /// la passerelle la retient (`descriptionWithheld`) — et jamais alors la
+    /// transcription : le libellé n'est donc posé que sur une pièce ouverte.
     private var spokenDescription: String? {
-        attachment.servedDescription(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))?.text
+        attachment.servedDescription(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
+                                     carrierIsProtected: messageIsProtected)?.text
     }
 
     @ViewBuilder
