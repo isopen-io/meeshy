@@ -458,6 +458,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
               translations: protege ? null : attachment.translations,
               imageVariants: protege ? null : attachment.imageVariants,
               avifVariants: protege ? null : attachment.avifVariants,
+              renditions: protege ? null : attachment.renditions,
               thumbHash: protege ? null : attachment.thumbHash,
               metadata: protege ? null : attachment.metadata,
               isProtected: protege

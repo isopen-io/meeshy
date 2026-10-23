@@ -28,7 +28,9 @@ public object OutboxKindCatalog {
     )
 
     private fun countsForSyncIndicator(kind: OutboxKind): Boolean = when (kind) {
-        OutboxKind.READ_RECEIPT -> false
+        OutboxKind.READ_RECEIPT,
+        OutboxKind.REPORT_ATTACHMENT_STATUS,
+        -> false
         OutboxKind.SEND_MESSAGE,
         OutboxKind.EDIT_MESSAGE,
         OutboxKind.DELETE_MESSAGE,
@@ -58,6 +60,7 @@ public object OutboxKindCatalog {
         OutboxKind.ADD_REACTION,
         OutboxKind.REMOVE_REACTION,
         OutboxKind.READ_RECEIPT,
+        OutboxKind.REPORT_ATTACHMENT_STATUS,
         OutboxKind.MARK_UNREAD,
         OutboxKind.DELETE_MESSAGE,
         OutboxKind.BLOCK_USER,
