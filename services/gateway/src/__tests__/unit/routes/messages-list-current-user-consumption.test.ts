@@ -24,7 +24,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { messageAttachmentSchema } from '@meeshy/shared/types/api-schemas';
-import { loadCurrentUserConsumptionMap } from '../../../routes/conversations/messages-list-query';
+import { loadCurrentUserConsumptionMap } from '../../../routes/conversations/messages-list-reader-state';
 
 // ─── Partie 1 — la DÉCLARATION ───────────────────────────────────────────────
 
