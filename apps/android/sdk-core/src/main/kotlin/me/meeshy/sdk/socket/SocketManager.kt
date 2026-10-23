@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
+import me.meeshy.sdk.call.CallActivityGate
 import me.meeshy.sdk.model.socket.SocketAuthPayload
 import me.meeshy.sdk.model.socket.SocketConnectDecision
 import me.meeshy.sdk.model.socket.SocketConnectOutcome
@@ -59,6 +60,7 @@ class SocketManager internal constructor(
     private val refresher: SessionRefresher,
     ioDispatcher: CoroutineDispatcher,
     private val nowEpochSeconds: () -> Double,
+    private val callGate: CallActivityGate,
 ) {
     @Inject
     constructor(
@@ -68,9 +70,24 @@ class SocketManager internal constructor(
         clientIdentity: SocketClientIdentity,
         refresher: SessionRefresher,
         @IoDispatcher ioDispatcher: CoroutineDispatcher,
+        callGate: CallActivityGate,
     ) : this(
         config, tokenStore, factory, clientIdentity, refresher, ioDispatcher,
         { System.currentTimeMillis() / 1000.0 },
+        callGate,
+    )
+
+    internal constructor(
+        config: MeeshyConfig,
+        tokenStore: TokenStore,
+        factory: SocketFactory,
+        clientIdentity: SocketClientIdentity,
+        refresher: SessionRefresher,
+        ioDispatcher: CoroutineDispatcher,
+        nowEpochSeconds: () -> Double,
+    ) : this(
+        config, tokenStore, factory, clientIdentity, refresher, ioDispatcher, nowEpochSeconds,
+        CallActivityGate(),
     )
 
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
@@ -190,14 +207,31 @@ class SocketManager internal constructor(
     private fun reasonOf(args: Array<Any>): String? =
         (args.firstOrNull() as? JSONObject)?.optString("reason")?.takeIf { it.isNotBlank() }
 
-    /** Ferme la socket, retire ses écouteurs et OUBLIE le registre : la session est finie. */
-    fun disconnect() = synchronized(lock) {
+    /**
+     * Ferme la socket, retire ses écouteurs et OUBLIE le registre : la session est finie.
+     * Pendant un appel actif la coupure est différée à sa fin ([CallActivityGate]).
+     */
+    fun disconnect() {
+        callGate.runOrDefer { disconnectNow() }
+    }
+
+    private fun disconnectNow() = synchronized(lock) {
         closeTransport()
         registered.clear()
     }
 
-    /** Referme puis rouvre avec le jeton courant, en gardant les écouteurs enregistrés. */
-    fun reconnectWithToken(): SocketConnectOutcome = synchronized(lock) {
+    /**
+     * Referme puis rouvre avec le jeton courant, en gardant les écouteurs enregistrés. Pendant un
+     * appel actif la rotation est différée à sa fin et rend l'issue courante (ARMED si ouverte).
+     */
+    fun reconnectWithToken(): SocketConnectOutcome {
+        var outcome: SocketConnectOutcome? = null
+        val ran = callGate.runOrDefer { outcome = reconnectNow() }
+        if (ran) return outcome ?: SocketConnectOutcome.NOT_ARMED
+        return if (_socket != null) SocketConnectOutcome.ARMED else SocketConnectOutcome.NOT_ARMED
+    }
+
+    private fun reconnectNow(): SocketConnectOutcome = synchronized(lock) {
         closeTransport()
         connect()
     }
