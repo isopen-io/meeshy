@@ -134,9 +134,16 @@ export type ModerationStatus = 'pending' | 'approved' | 'flagged' | 'rejected';
  * D4 — a single responsive downscaled WebP variant of an image attachment,
  * used to build a client `srcset`. @see schema.prisma MessageAttachment.imageVariants
  */
-/** #11261 — an additional video rendition (storage key in `url`). */
-export interface VideoRendition {
-  readonly codec: 'h264';
+/**
+ * Another encoding of the SAME media, next to `fileUrl` (storage key in `url`):
+ * - #11261 — `h264`: compatibility rendition of an HEVC video;
+ * - #11263 — `heic` / `avif`: the ORIGINAL of an image the server served as
+ *   JPEG (`fileUrl`), kept for clients that decode it (iOS).
+ */
+export interface MediaRendition {
+  readonly codec: 'h264' | 'heic' | 'avif';
+  /** Media type of the rendition file (absent on the first video renditions: `video/mp4`). */
+  readonly mimeType?: string;
   readonly url: string;
   readonly width: number;
   readonly height: number;
@@ -213,7 +220,7 @@ export interface Attachment {
    * gets an H.264 High ≤1080p rendition (HDR tone-mapped to SDR BT.709) for
    * readers that cannot decode HEVC. The original `fileUrl` stays untouched.
    */
-  readonly renditions?: readonly VideoRendition[];
+  readonly renditions?: readonly MediaRendition[];
   /**
    * #6221 — le TYPE CLIENT rattrape son contrat : la passerelle SERT ce champ
    * (`api-schemas/message-attachment.ts:91`, `schema.prisma:1010`,
@@ -537,7 +544,9 @@ export type UploadLimits = typeof UPLOAD_LIMITS;
  * Types MIME acceptés par catégorie
  */
 export const ACCEPTED_MIME_TYPES = {
-  IMAGE: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'] as const,
+  // #11263 — HEIC/HEIF/AVIF acceptés : le serveur les sert en JPEG
+  // (`fileUrl`) et garde l'original dans `renditions`.
+  IMAGE: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'image/avif'] as const,
   DOCUMENT: [
     'application/pdf',
     'text/plain',

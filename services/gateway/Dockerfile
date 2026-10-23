@@ -191,11 +191,16 @@ ENV NODE_ENV=production \
 # overlay SVG sharp) — sans elle, drawtext échoue faute de `fontfile` et sharp
 # rend le texte de l'overlay avec la police de substitution de fontconfig
 # (jamais celle attendue par `WATERMARK_FONT_FILE`, `services/media/mediaWatermark.ts`).
+# libheif-examples : `heif-convert` (libheif + libde265), qui décode un HEIC
+# d'iPhone pour le servir en JPEG (#11263, `services/attachments/heif-conversion.ts`)
+# — les binaires de sharp ne portent aucun décodeur HEVC. Sans lui, un HEIC est
+# refusé à l'envoi (415), jamais servi tel quel.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     curl \
     ffmpeg \
     fonts-dejavu-core \
+    libheif-examples \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 1001 nodejs \
     && useradd -u 1001 -g nodejs -m gateway \

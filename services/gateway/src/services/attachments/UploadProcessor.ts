@@ -23,7 +23,8 @@ import {
   getAttachmentEncryptionService,
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
-import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson, videoRenditionsJson } from './media-renditions.js';
+import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson, renditionsJson } from './media-renditions.js';
+import { UnconvertibleImageError, convertHeifBuffer, isServerConvertedImage } from './heif-conversion.js';
 import { isMediaMetadataStrippable, stripMediaMetadataBuffer } from './media-metadata-strip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
@@ -424,7 +425,13 @@ export class UploadProcessor {
         metadata,
         clientThumbHash: providedMetadata?.thumbHash ?? null,
       }
-    );
+    ).catch(async (error: unknown) => {
+      // #11263 — un HEIC/AVIF que le serveur ne sait pas convertir n'est
+      // jamais servi tel quel aux lecteurs : l'upload est refusé.
+      if (!(error instanceof UnconvertibleImageError)) throw error;
+      await fs.unlink(path.join(this.uploadBasePath, filePath)).catch(() => {});
+      return throwUploadValidationError('UNSUPPORTED_MEDIA_TYPE', error.message);
+    });
     const storedFilePath = renditions.storedPath;
     const storedFileSize = renditions.storedSize;
     const storedMimeType = renditions.storedMimeType;
@@ -455,7 +462,7 @@ export class UploadProcessor {
         thumbHash: thumbHash || undefined,
         imageVariants: imageVariants ? imageVariantsJson(imageVariants) : undefined,
         avifVariants: renditions.avifVariants ? imageVariantsJson(renditions.avifVariants) : undefined,
-        renditions: renditions.renditions ? videoRenditionsJson(renditions.renditions) : undefined,
+        renditions: renditions.renditions ? renditionsJson(renditions.renditions) : undefined,
         width: metadata.width,
         height: metadata.height,
         duration: metadata.duration,
@@ -536,6 +543,14 @@ export class UploadProcessor {
     } else {
       fileBuffer = await stripMediaMetadataBuffer({ buffer: file.buffer, mimeType: file.mimeType, fileName: file.filename });
     }
+    // #11263 — un HEIC/AVIF est chiffré en JPEG : le destinataire qui déchiffre
+    // ne reçoit jamais `image/heic`. Ce chemin ne garde aucun rendu en clair,
+    // donc pas l'original non plus. Illisible ⇒ upload refusé.
+    if (attachmentType === 'image' && isServerConvertedImage(file.mimeType)) {
+      fileBuffer = await convertHeifBuffer(fileBuffer, file.mimeType).catch((error: unknown) =>
+        throwUploadValidationError('UNSUPPORTED_MEDIA_TYPE', error instanceof Error ? error.message : 'image illisible'));
+      storedMimeType = 'image/jpeg';
+    }
 
     // Le serveur reçoit le CLAIR ici : ce chemin n'est pas du E2EE (#9224). Il
     // retire donc GPS et métadonnées AVANT de chiffrer (#11258), et ne fabrique
@@ -545,7 +560,7 @@ export class UploadProcessor {
       metadataManager: this.metadataManager,
       attachmentType,
       buffer: fileBuffer,
-      mimeType: file.mimeType,
+      mimeType: storedMimeType,
     });
 
     const encryptionResult = await this.encryptionService.encryptAttachment({

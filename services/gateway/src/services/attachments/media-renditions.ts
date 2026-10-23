@@ -5,7 +5,9 @@ import type { AttachmentMetadata, ImageVariant } from '@meeshy/shared/types/atta
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { ThumbHashGenerator } from './ThumbHashGenerator.js';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
-import { produceCompatibilityRendition, type VideoRendition } from './video-compat-rendition.js';
+import type { MediaRendition } from '@meeshy/shared/types/attachment';
+import { produceCompatibilityRendition } from './video-compat-rendition.js';
+import { convertStoredHeif } from './heif-conversion.js';
 
 const logger = enhancedLogger.child({ module: 'media-renditions' });
 
@@ -86,15 +88,31 @@ export interface MediaRenditions {
   readonly imageVariants?: readonly ImageVariant[];
   /** #11262 — les variantes AVIF, à CÔTÉ des WebP : absent quand aucune n'existe. */
   readonly avifVariants?: readonly ImageVariant[];
-  /** #11261 — rendus vidéo ADDITIONNELS (H.264 d'un HEVC) ; absent quand il n'y en a pas. */
-  readonly renditions?: readonly VideoRendition[];
+  /** #11261, #11263 — autres encodages du même média (H.264 d'un HEVC, original HEIC/AVIF) ; absent quand il n'y en a pas. */
+  readonly renditions?: readonly MediaRendition[];
   readonly thumbHash: string | null;
 }
 
 export async function produceMediaRenditions(
   deps: RenditionDeps,
-  source: RenditionSource
+  received: RenditionSource
 ): Promise<MediaRenditions> {
+  const converted = received.attachmentType === 'image'
+    ? await convertStoredHeif(deps.uploadBasePath, received.relPath, received.mimeType)
+    : null;
+  const source: RenditionSource = converted === null
+    ? received
+    : {
+      ...received,
+      relPath: converted.relPath,
+      mimeType: converted.mimeType,
+      fileSize: converted.fileSize,
+      metadata: await attempt(
+        'converted image metadata',
+        () => deps.metadataManager.extractMetadata(converted.relPath, received.attachmentType, converted.mimeType, undefined, converted.fileSize),
+        received.metadata,
+      ),
+    };
   const { attachmentType } = source;
   const visual = await visualRenditions(deps.metadataManager, source);
 
@@ -106,6 +124,7 @@ export async function produceMediaRenditions(
   const storedSize = transcoded?.fileSize ?? source.fileSize;
   const storedMimeType = transcoded?.mimeType ?? source.mimeType;
   const probed = transcoded ? await reprobe(deps.metadataManager, source, transcoded) : source.metadata;
+  const renditions = [...(converted ? [converted.original] : []), ...(compat ? [compat] : [])];
 
   const thumbHash = await resolveThumbHash({
     clientThumbHash: source.clientThumbHash,
@@ -122,7 +141,7 @@ export async function produceMediaRenditions(
     thumbnailPath: visual.thumbnailPath,
     ...(visual.imageVariants ? { imageVariants: visual.imageVariants } : {}),
     ...(visual.avifVariants ? { avifVariants: visual.avifVariants } : {}),
-    ...(compat ? { renditions: [compat] } : {}),
+    ...(renditions.length > 0 ? { renditions } : {}),
     thumbHash,
   };
 }
@@ -172,9 +191,9 @@ export function imageVariantsJson(variants: readonly ImageVariant[]): Prisma.Inp
   return variants.map(({ width, height, url, size, format }) => ({ width, height, url, size, format }));
 }
 
-/** La forme que la colonne `renditions` (`Json?`) reçoit (#11261). */
-export function videoRenditionsJson(renditions: readonly VideoRendition[]): Prisma.InputJsonArray {
-  return renditions.map(({ codec, url, width, height, size }) => ({ codec, url, width, height, size }));
+/** La forme que la colonne `renditions` (`Json?`) reçoit (#11261, #11263). */
+export function renditionsJson(renditions: readonly MediaRendition[]): Prisma.InputJsonArray {
+  return renditions.map(({ codec, mimeType, url, width, height, size }) => ({ codec, ...(mimeType ? { mimeType } : {}), url, width, height, size }));
 }
 
 export interface TranscodedVideo {
