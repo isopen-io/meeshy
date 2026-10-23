@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createLoudnessApplier, loudnessAttributes, type LoudnessGraph } from './loudness-level';
+import { createLoudnessApplier, type LoudnessGraph } from './loudness-level';
 
 /**
  * #12285 (web) — L'APPLICATION DU PLAN SUR UN ÉLÉMENT. Le graphe Web Audio est
@@ -88,13 +88,5 @@ describe('createLoudnessApplier — atténuer, amplifier, libérer', () => {
     const element = fakeElement();
     applier.apply(element, { kind: 'boost', gain: 2 });
     expect(element.volume).toBe(1);
-  });
-});
-
-describe('loudnessAttributes — l’élément demande le CORS seulement pour amplifier', () => {
-  test('amplifier ⇒ crossOrigin anonymous ; sinon, aucun attribut', () => {
-    expect(loudnessAttributes({ kind: 'boost', gain: 2 })).toEqual({ crossOrigin: 'anonymous' });
-    expect(loudnessAttributes({ kind: 'attenuate', volume: 0.5 })).toEqual({});
-    expect(loudnessAttributes({ kind: 'none' })).toEqual({});
   });
 });

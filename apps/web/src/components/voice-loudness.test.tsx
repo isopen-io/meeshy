@@ -12,8 +12,8 @@ import { Attachments } from './attachment-blocks';
 /**
  * #12285 (web) — LE VOCAL D'UN MESSAGE SE LIT AU NIVEAU DE LA CIBLE. Un vocal
  * fort (−10 LUFS) est atténué de 6 dB par le volume de son élément ; un vocal
- * faible (−24 LUFS) demande le mode CORS à la route de flux, qui permet au
- * graphe audio de l'amplifier. Sans mesure, rien ne change.
+ * faible (−24 LUFS) n'est amplifié qu'après la preuve CORS
+ * (`loudness-cors.test.tsx`). Sans mesure, rien ne change.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -65,8 +65,8 @@ function mounted(attachment: Attachment): HTMLAudioElement {
 }
 
 describe('le vocal d’un message, à −16 LUFS', () => {
-  test('un vocal faible demande le mode CORS à la passerelle, pour être amplifié', () => {
-    expect(markup(voice(-24))).toMatch(/<audio [^>]*crossorigin="anonymous"/);
+  test('un vocal faible ne demande PAS le mode CORS avant que la preuve soit faite (tour 5)', () => {
+    expect(markup(voice(-24))).not.toContain('crossorigin');
   });
 
   test('un vocal fort est atténué par le volume de l’élément, sans CORS', () => {

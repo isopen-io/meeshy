@@ -282,13 +282,13 @@ export default function ViewerAudioPage({
       style={{ padding: '16px 16px 24px' }}
     >
       <audio
-        key={track.url}
+        key={`${track.url}${loudness.remountKey}`}
         ref={bindAudio}
         preload="metadata"
         data-np-attachment={attachment.id}
         data-viewer-audio-track={track.language}
         className="hidden"
-        {...loudness}
+        {...loudness.attributes}
         {...(trackSrc === '' ? {} : { src: trackSrc })}
       />
 

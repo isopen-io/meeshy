@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 
@@ -122,12 +122,77 @@ export const browserLoudnessGraph: LoudnessGraph = {
 
 const browserApplier = createLoudnessApplier(browserLoudnessGraph);
 
-export const loudnessAttributes = (plan: LoudnessPlan): { readonly crossOrigin?: 'anonymous' } =>
-  plan.kind === 'boost' ? { crossOrigin: 'anonymous' } : {};
+/**
+ * **LA PREUVE CORS** (#12285, tour 5) — un élément audio branché sur un graphe
+ * Web Audio alors que sa réponse n'est pas lisible en CORS sort du SILENCE. La
+ * preuve se prend donc AVANT de demander le mode CORS à l'élément : une sonde
+ * `HEAD` en mode `cors`, une fois par origine. Elle lève quand l'en-tête manque
+ * (`refused`) ; elle répond quand il est là (`readable`). Un chargement en CORS
+ * qui échoue ensuite retire la preuve pour l'origine.
+ */
+export type CorsVerdict = 'unknown' | 'readable' | 'refused';
+
+export type CorsLedger = {
+  readonly verdict: (src: string) => CorsVerdict;
+  readonly probe: (src: string) => Promise<CorsVerdict>;
+  readonly refuse: (src: string) => void;
+};
+
+const originOf = (src: string): string => {
+  try {
+    return new URL(src, typeof location === 'object' ? location.href : 'https://meeshy.invalid').origin;
+  } catch {
+    return src;
+  }
+};
+
+export function createCorsLedger(check: (src: string) => Promise<boolean>): CorsLedger {
+  const verdicts = new Map<string, CorsVerdict>();
+  const pending = new Map<string, Promise<CorsVerdict>>();
+  const verdict = (src: string): CorsVerdict => verdicts.get(originOf(src)) ?? 'unknown';
+  const probe = (src: string): Promise<CorsVerdict> => {
+    const origin = originOf(src);
+    const known = verdicts.get(origin);
+    if (known !== undefined) return Promise.resolve(known);
+    const inFlight = pending.get(origin);
+    if (inFlight !== undefined) return inFlight;
+    const run = check(src)
+      .catch(() => false)
+      .then((readable) => {
+        if (!verdicts.has(origin)) verdicts.set(origin, readable ? 'readable' : 'refused');
+        pending.delete(origin);
+        return verdicts.get(origin) ?? 'refused';
+      });
+    pending.set(origin, run);
+    return run;
+  };
+  return { verdict, probe, refuse: (src) => verdicts.set(originOf(src), 'refused') };
+}
+
+const browserCorsLedger = createCorsLedger(async (src) => {
+  if (typeof fetch !== 'function') return false;
+  const response = await fetch(src, { method: 'HEAD', mode: 'cors', credentials: 'omit', cache: 'no-store' });
+  return response.ok;
+});
+
+export type LoudnessLevel = {
+  /** À répandre sur l'`<audio>` : le mode CORS, seulement quand la preuve est faite. */
+  readonly attributes: { readonly crossOrigin?: 'anonymous' };
+  /** À ajouter à la `key` de l'`<audio>` : change quand un chargement en CORS a échoué, pour remonter l'élément en lecture directe. */
+  readonly remountKey: string;
+};
+
+type LoadState = { readonly corsAtLoad: boolean | null; readonly readable: boolean; readonly failed: boolean };
+
+const FRESH: LoadState = { corsAtLoad: null, readable: false, failed: false };
 
 /**
- * Le plan d'un vocal monté, appliqué à son élément ; rend les attributs que
- * l'`<audio>` doit porter (le mode CORS quand il faut amplifier).
+ * Le niveau d'un vocal monté, appliqué à son élément. SÛR PAR DÉFAUT : le
+ * graphe Web Audio n'est branché qu'après DEUX preuves — la sonde CORS de
+ * l'origine, puis les métadonnées lues par un élément PARTI en
+ * `crossOrigin="anonymous"`. Un élément parti sans le mode CORS le garde, sans
+ * gain ; un élément parti en CORS qui échoue est remonté en lecture directe.
+ * L'atténuation, elle, ne passe que par le volume et n'attend rien.
  */
 export function useLoudnessLevel(params: {
   readonly element: HTMLMediaElement | null;
@@ -136,20 +201,72 @@ export function useLoudnessLevel(params: {
   /** L'adresse RÉSOLUE que joue l'élément. */
   readonly src: string;
   readonly applier?: LoudnessApplier;
-}): { readonly crossOrigin?: 'anonymous' } {
+  readonly ledger?: CorsLedger;
+}): LoudnessLevel {
   const { element, lufs, playsOriginal, src } = params;
   const applier = params.applier ?? browserApplier;
-  const boostable = mediaImageCrossOrigin(src) === 'anonymous';
-  const plan = useMemo(() => loudnessPlan({ lufs, playsOriginal, boostable }), [lufs, playsOriginal, boostable]);
+  const ledger = params.ledger ?? browserCorsLedger;
+  const [, setProbed] = useState(0);
+  const [load, setLoad] = useState<LoadState>(FRESH);
+  const [remounts, setRemounts] = useState(0);
+  const loadRef = useRef<LoadState>(FRESH);
+
+  const streamRoute = mediaImageCrossOrigin(src) === 'anonymous';
+  const verdict = ledger.verdict(src);
+  const plan = useMemo(() => loudnessPlan({ lufs, playsOriginal, boostable: streamRoute }), [lufs, playsOriginal, streamRoute]);
+  const wantsCors = plan.kind === 'boost' && verdict === 'readable';
+  const crossOrigin = load.corsAtLoad ?? wantsCors;
 
   useEffect(() => {
-    if (element !== null) applier.apply(element, plan);
-  }, [applier, element, plan]);
+    if (plan.kind !== 'boost' || verdict !== 'unknown') return undefined;
+    const alive = { current: true };
+    void ledger.probe(src).then(() => {
+      if (alive.current) setProbed((count) => count + 1);
+    });
+    return () => {
+      alive.current = false;
+    };
+  }, [ledger, plan.kind, src, verdict]);
+
+  useEffect(() => {
+    if (element === null) return undefined;
+    const update = (next: LoadState): void => {
+      loadRef.current = next;
+      setLoad(next);
+    };
+    update(FRESH);
+    const onLoadStart = (): void => {
+      if (loadRef.current.corsAtLoad === null) update({ ...loadRef.current, corsAtLoad: element.crossOrigin === 'anonymous' });
+    };
+    const onMetadata = (): void => {
+      if (loadRef.current.corsAtLoad === true) update({ ...loadRef.current, readable: true });
+    };
+    const onError = (): void => {
+      if (loadRef.current.corsAtLoad !== true || loadRef.current.readable) return;
+      ledger.refuse(src);
+      update({ ...loadRef.current, failed: true });
+      setRemounts((count) => count + 1);
+    };
+    element.addEventListener('loadstart', onLoadStart);
+    element.addEventListener('loadedmetadata', onMetadata);
+    element.addEventListener('error', onError);
+    return () => {
+      element.removeEventListener('loadstart', onLoadStart);
+      element.removeEventListener('loadedmetadata', onMetadata);
+      element.removeEventListener('error', onError);
+    };
+  }, [element, ledger, src]);
+
+  const applied: LoudnessPlan = plan.kind === 'boost' && !load.readable ? { kind: 'none' } : plan;
+
+  useEffect(() => {
+    if (element !== null) applier.apply(element, applied);
+  }, [applier, element, applied.kind, gainOf(applied)]);
 
   useEffect(() => {
     if (element === null) return undefined;
     return () => applier.release(element);
   }, [applier, element]);
 
-  return loudnessAttributes(plan);
+  return { attributes: crossOrigin && !load.failed ? { crossOrigin: 'anonymous' } : {}, remountKey: remounts === 0 ? '' : `:direct${remounts}` };
 }

@@ -139,12 +139,13 @@ export function MiniAudioPlayer({ carried, onClose, onOpen, concealed = false, c
         style={{ maxWidth: 420, backgroundColor: 'var(--ios-indigo-600)', color: 'var(--ios-on-brand)' }}
       >
         <audio
+          key={loudness.remountKey}
           ref={bindAudio}
           preload="auto"
           data-np-attachment={attachment.id}
           data-mini-audio-track={carried.trackLanguage}
           className="hidden"
-          {...loudness}
+          {...loudness.attributes}
           {...(trackSrc === '' ? {} : { src: trackSrc })}
         />
         <button

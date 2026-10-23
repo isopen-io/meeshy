@@ -5678,11 +5678,11 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Décision.**
 - **La loi** (`lib/media/loudness.ts`) : gain `−16 − loudnessLufs` dB, plafonné à +12 dB ; champ absent, `null` ou non fini ⇒ 0. Une piste TRADUITE (TTS) n'est pas le fichier mesuré : aucun gain.
 - **Atténuer** passe par `HTMLMediaElement.volume`, sans graphe ni CORS.
-- **Amplifier** passe par un graphe Web Audio partagé (source → gain → limiteur à −1 dBFS, ratio 20 → sortie), qui retient les crêtes que le gain ferait écrêter. Un élément n'est routé qu'une fois ; le contexte est repris à chaque `play`. Le graphe exige une réponse CORS : l'élément ne demande `crossOrigin="anonymous"` que pour amplifier, et seulement sur la route de flux de la passerelle (`mediaImageCrossOrigin`, qui sait qu'elle rend `Access-Control-Allow-Origin: *`). Ailleurs, on n'amplifie pas : un graphe sans CORS rendrait un silence.
+- **Amplifier** passe par un graphe Web Audio partagé (source → gain → limiteur à −1 dBFS, ratio 20 → sortie), qui retient les crêtes que le gain ferait écrêter. **Sûr par défaut (tour 5)** : un élément branché sur un graphe alors que sa réponse n'est pas lisible en CORS sort du SILENCE. Le graphe n'est donc branché qu'après deux preuves : une sonde `HEAD` en mode `cors`, une fois par origine (la route de flux rend `Access-Control-Allow-Origin: *`, `download.ts`), puis les métadonnées lues par un élément PARTI en `crossOrigin="anonymous"`. Un élément parti sans le mode CORS le garde, sans gain ; un élément en CORS qui échoue est remonté en lecture directe et l'origine perd sa preuve. Sans preuve : lecture directe, volume d'origine, jamais muette.
 - **Sites** : la bulle (`attachment-blocks.tsx`), la page plein écran (`viewer-audio-page.tsx`) et le mini-lecteur (`mini-audio-player.tsx`), par `useLoudnessLevel` (`lib/media/loudness-level.ts`).
 
 **Repli navigateur.** Safari iOS ignore `volume` : l'atténuation n'y a pas lieu, l'amplification y passe par le graphe. Sans `AudioContext`, rien ne change.
 
 **Ce que ce lot ne fait pas.** iOS (`packages/MeeshySDK`) et Android restent à faire (#12285 reste ouverte). Les citations et la bannière de notification jouent encore sans gain. Rien n'est mesuré ici.
 
-**Gardes.** `lib/media/loudness.test.ts`, `lib/media/loudness-level.test.ts`, `components/voice-loudness.test.tsx`.
+**Gardes.** `lib/media/loudness.test.ts`, `lib/media/loudness-level.test.ts`, `lib/media/loudness-cors.test.tsx` (une source sans CORS joue sans gain), `components/voice-loudness.test.tsx`.

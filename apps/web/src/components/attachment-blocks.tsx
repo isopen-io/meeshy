@@ -323,13 +323,13 @@ function VoiceAttachment({
           coupe le son et revient à `idle` — le bouton redit « Lire l'audio »
           et joue la piste NEUVE. */}
       <audio
-        key={track.url}
+        key={`${track.url}${loudness.remountKey}`}
         ref={bindAudio}
         preload="none"
         data-np-attachment={attachment.id}
         data-track-language={track.language}
         className="hidden"
-        {...loudness}
+        {...loudness.attributes}
         {...(trackSrc === '' ? {} : { src: trackSrc })}
       />
       <div className="flex items-center gap-2.5">
