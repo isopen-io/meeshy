@@ -103,6 +103,8 @@ const arComposerAttach = {
   'composer.guest.refused.size': '«{name}» كبير جدًا: {max} كحد أقصى.',
   'send.failure.guestKind': 'هذا الملف غير مقبول هنا',
   'send.failure.guestTooLarge': 'هذا الملف كبير جدًا هنا ({max} كحد أقصى)',
+  'send.failure.formatRefused': 'تنسيق الصورة هذا (HEIC) غير مقبول بعد',
+  'profile.image.formatRefused': 'تنسيق الصورة هذا (HEIC) غير مقبول بعد. اختر صورة JPEG أو PNG.',
 } satisfies ComposerAttachCatalogSlice;
 
 export default arComposerAttach;

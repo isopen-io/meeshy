@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import { Suspense, lazy, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 
 import { PACK_DOMAINS, type PackDomain } from '@meeshy/shared/types/content-pack';
 
@@ -9,7 +9,11 @@ import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { packQueryKeys } from '@/lib/api/pack-query-keys';
 import { loadShop, purchasePack, setShopPackInstalled, shopPackText, type ShopPack } from '@/lib/api/packs-shop';
+import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
+
+import { loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
+import { packIsLocked, packUnlockLine } from '@/lib/packs/unlock-line';
 import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -32,6 +36,8 @@ function MeePackCover({ slug }: { readonly slug: MeeBuiltinPack }) {
 
 /** Chargée à la demande, comme dans `frame-pack-shop.tsx` : `pack_shop` est `dynamic_only` (budgets.json). */
 const PackShop = lazy(() => import('./pack-shop').then((m) => ({ default: m.PackShop })));
+/* W16 — proposer une lens, chargé seulement quand le domaine « Lens » est choisi. */
+const LensSubmit = lazy(() => import('./lens-submit'));
 
 /**
  * **LA VITRINE UNIQUE** (#10632, spec § 9) — stickers, cadres, fonds,
@@ -62,6 +68,7 @@ const DOMAIN_KEYS: Readonly<Record<PackDomain, PlainStickerPacksKey>> = {
   'avatar-ring': 'packs.domain.avatar-ring',
   banner: 'packs.domain.banner',
   'banner-frame': 'packs.domain.banner-frame',
+  lens: 'packs.domain.lens',
 };
 
 
@@ -93,6 +100,7 @@ export const unifiedShopAdapter = (
   filter: UnifiedFilter,
   deps: ConversationsDeps,
   queryClient: QueryClient,
+  rankName?: (rank: GloryRankKey) => string,
 ): PackShopAdapter<UnifiedPack> => ({
   domain: filter,
   catalogueKey: shopKey(filter),
@@ -123,6 +131,9 @@ export const unifiedShopAdapter = (
     ) : (
       <img src={attachmentSrc(pack.coverUrl)} alt="" loading="lazy" decoding="async" className="block h-14 w-14 shrink-0 rounded-xl object-cover" />
     ),
+  unlock: (pack) =>
+    pack.requirementPreview === undefined ? null : packUnlockLine({ preview: pack.requirementPreview, language, ...(rankName !== undefined ? { rankName } : {}) }),
+  locked: (pack) => packIsLocked(pack.requirementPreview),
   price: (pack) => pack.price,
   owned: (pack) => pack.owned,
   removable: (pack) => pack.removable,
@@ -148,7 +159,24 @@ export function UnifiedShop({
 }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<UnifiedFilter>(initialDomain ?? 'all');
-  const adapter = useMemo(() => unifiedShopAdapter(language, filter, deps, queryClient), [language, filter, deps, queryClient]);
+  /* W18 — le nom d'un rang vit au catalogue du jeu, chargé à part : la ligne de
+     déblocage le nomme dès qu'il est là, et dit la Gloire qui manque en attendant. */
+  const [ranksReady, setRanksReady] = useState<InterfaceLanguage | null>(null);
+  useEffect(() => {
+    const alive = { current: true };
+    loadGameCatalogParts(language, ['banner']).then(
+      () => alive.current && setRanksReady(language),
+      () => undefined,
+    );
+    return () => {
+      alive.current = false;
+    };
+  }, [language]);
+  const rankName = useMemo(
+    () => (ranksReady === language ? (rank: GloryRankKey) => translateGame(language, `game.rank.${rank}`) : undefined),
+    [ranksReady, language],
+  );
+  const adapter = useMemo(() => unifiedShopAdapter(language, filter, deps, queryClient, rankName), [language, filter, deps, queryClient, rankName]);
   const balance = useQuery<number | null>({ queryKey: BALANCE_QUERY_KEY, queryFn: () => null, enabled: false, staleTime: Infinity });
   const chips: readonly { readonly id: UnifiedFilter; readonly label: string }[] = [
     { id: 'all', label: translateStickerPacks(language, 'packs.shop.all') },
@@ -190,6 +218,11 @@ export function UnifiedShop({
           empty={translateStickerPacks(language, 'packs.shop.empty')}
         />
       </Suspense>
+      {filter === 'lens' ? (
+        <Suspense fallback={null}>
+          <LensSubmit language={language} deps={deps} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

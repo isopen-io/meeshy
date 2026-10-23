@@ -91,8 +91,10 @@ export * from './glory-frame-pack.js';
 export * from './pack-ownership.js';
 export * from './pack-availability.js';
 export * from './pack-unlock.js';
+export * from './pack-registry-override.js';
 export * from './pack-presence.js';
 export * from './lens-format.js';
+export * from './lens-pack.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';

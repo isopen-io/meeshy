@@ -41,12 +41,16 @@ const MESSAGE_SOCKET_FILES = readdirSync(join(REPO_ROOT, MESSAGE_SOCKET_DIRECTOR
   .filter((name) => /^(MessageSocketManager|MessageSocketEvents|MessageSocketProviding)(\+.+)?\.swift$/.test(name))
   .map((name) => `${MESSAGE_SOCKET_DIRECTORY}/${name}`);
 
+// Android n'épelle plus ses noms dans `CallSignalManager` : ils vivent dans le
+// catalogue `SocketEventNames`, que le gestionnaire référence. Lire les deux garde
+// le catalogue ET tout littéral qui reviendrait en clair dans le gestionnaire.
+const ANDROID_EVENT_NAMES = 'apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/socket/SocketEventNames.kt';
+const ANDROID_CALL_SIGNAL_MANAGER = 'apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt';
+
 const CALL_SIGNALING_SOURCES: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [
   [`${CALL_MANAGER_DIRECTORY}/CallManager(+*).swift`, CALL_MANAGER_FILES],
   [`${MESSAGE_SOCKET_DIRECTORY}/MessageSocket(Manager|Events|Providing)(+*).swift`, MESSAGE_SOCKET_FILES],
-  ...[
-    'apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt',
-  ].map((path) => [path, [path]] as const),
+  [`${ANDROID_EVENT_NAMES} + ${ANDROID_CALL_SIGNAL_MANAGER}`, [ANDROID_EVENT_NAMES, ANDROID_CALL_SIGNAL_MANAGER]],
 ];
 
 const sharedContract = new Set<string>([

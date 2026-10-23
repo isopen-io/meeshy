@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_shell_minimized_write">Scrivi un messaggio</string>
+    <string name="composer_shell_minimized_mic">Registra un messaggio vocale</string>
+</resources>
