@@ -49,3 +49,32 @@ describe('startMetricsServer', () => {
     }
   });
 });
+
+describe('attachMetricsServer', () => {
+  it('ouvre le port interne quand la passerelle est prête, et le ferme avec elle', async () => {
+    const { default: Fastify } = await import('fastify');
+    const { attachMetricsServer } = await import('../metricsServer');
+    const metrics = mediaStageMetrics();
+    const app = Fastify({ logger: false });
+    const started: number[] = [];
+    attachMetricsServer(app, { port: 0, host: '127.0.0.1' }, metrics.registry, (port) => started.push(port));
+
+    await app.ready();
+    expect(started).toHaveLength(1);
+    expect((await fetch(`http://127.0.0.1:${started[0]}/metrics`)).status).toBe(200);
+
+    await app.close();
+    await expect(fetch(`http://127.0.0.1:${started[0]}/metrics`)).rejects.toThrow();
+  });
+
+  it('sans configuration, n’ouvre rien', async () => {
+    const { default: Fastify } = await import('fastify');
+    const { attachMetricsServer } = await import('../metricsServer');
+    const app = Fastify({ logger: false });
+    const started: number[] = [];
+    attachMetricsServer(app, null, mediaStageMetrics().registry, (port) => started.push(port));
+    await app.ready();
+    await app.close();
+    expect(started).toEqual([]);
+  });
+});
