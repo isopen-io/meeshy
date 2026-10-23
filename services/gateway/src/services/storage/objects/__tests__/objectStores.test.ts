@@ -137,6 +137,36 @@ describe('S3ObjectStore', () => {
   });
 });
 
+describe('S3ObjectStore.list — l’énumération du seau, page après page', () => {
+  it('suit le jeton de continuation jusqu’à la dernière page et rend clé et date', async () => {
+    const pages = [
+      { Contents: [{ Key: 'a.jpg', LastModified: new Date('2026-10-01T00:00:00Z') }, { Key: 'b.jpg' }], IsTruncated: true, NextContinuationToken: 't1' },
+      { Contents: [{ Key: 'c.jpg', LastModified: new Date('2026-10-02T00:00:00Z') }], IsTruncated: false },
+    ];
+    const sent: Array<{ name: string; input: Record<string, unknown> }> = [];
+    const client = {
+      send: async (command: unknown) => {
+        const { constructor, input } = command as { constructor: { name: string }; input: Record<string, unknown> };
+        sent.push({ name: constructor.name, input });
+        return pages[sent.length - 1];
+      },
+    };
+    const store = new S3ObjectStore({ client, bucket: 'meeshy-media' });
+
+    const listed = [];
+    for await (const object of store.list()) listed.push(object);
+
+    expect(listed).toEqual([
+      { key: 'a.jpg', lastModified: new Date('2026-10-01T00:00:00Z') },
+      { key: 'b.jpg', lastModified: null },
+      { key: 'c.jpg', lastModified: new Date('2026-10-02T00:00:00Z') },
+    ]);
+    expect(sent.map((call) => call.name)).toEqual(['ListObjectsV2Command', 'ListObjectsV2Command']);
+    expect(sent[0]!.input).toEqual({ Bucket: 'meeshy-media' });
+    expect(sent[1]!.input).toEqual({ Bucket: 'meeshy-media', ContinuationToken: 't1' });
+  });
+});
+
 describe('MirroredObjectStore — écriture en double, lecture locale puis S3', () => {
   const build = async (options: { failPut?: boolean } = {}) => {
     const root = await tmpRoot();
