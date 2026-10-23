@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="global_search_clear_field">Clear search</string>
+    <string name="global_search_offline_title">No connection</string>
+    <string name="global_search_tab_description">%1$s, %2$d results</string>
+    <string name="global_search_recent_item">Recent search: %s</string>
+    <string name="global_search_recent_relaunch_hint">Runs the search again</string>
+    <string name="global_search_recent_remove_action">Remove from recent searches</string>
+    <string name="global_search_open_conversation_hint">Opens the conversation</string>
+    <string name="global_search_view_profile_hint">View profile</string>
+    <string name="global_search_message_label">Message from %1$s in %2$s, %3$s</string>
+    <string name="global_search_last_message">last message: %s</string>
+    <string name="global_search_summary_hidden">1 hidden message</string>
+    <string name="global_search_summary_view_once">1 view-once message</string>
+    <string name="global_search_summary_expired">Message expired</string>
+    <string name="global_search_summary_ephemeral">Disappears after reading</string>
+</resources>

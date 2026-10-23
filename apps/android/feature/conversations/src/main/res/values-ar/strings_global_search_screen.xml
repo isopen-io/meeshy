@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="global_search_clear_field">مسح البحث</string>
+    <string name="global_search_offline_title">لا يوجد اتصال</string>
+    <string name="global_search_tab_description">%1$s، %2$d نتائج</string>
+    <string name="global_search_recent_item">بحث حديث: %s</string>
+    <string name="global_search_recent_relaunch_hint">يعيد تشغيل البحث</string>
+    <string name="global_search_recent_remove_action">إزالة من عمليات البحث الأخيرة</string>
+    <string name="global_search_open_conversation_hint">يفتح المحادثة</string>
+    <string name="global_search_view_profile_hint">عرض الملف الشخصي</string>
+    <string name="global_search_message_label">رسالة من %1$s في %2$s، %3$s</string>
+    <string name="global_search_last_message">آخر رسالة: %s</string>
+    <string name="global_search_summary_hidden">رسالة واحدة مخفية</string>
+    <string name="global_search_summary_view_once">رسالة واحدة للمشاهدة مرة واحدة</string>
+    <string name="global_search_summary_expired">انتهت صلاحية الرسالة</string>
+    <string name="global_search_summary_ephemeral">تختفي بعد القراءة</string>
+</resources>

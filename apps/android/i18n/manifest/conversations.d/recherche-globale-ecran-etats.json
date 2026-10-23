@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "global_search_clear_field",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_offline_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_tab_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_recent_item",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_recent_relaunch_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_recent_remove_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_open_conversation_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_view_profile_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_message_label",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_last_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_summary_hidden",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_summary_view_once",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_summary_expired",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_summary_ephemeral",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

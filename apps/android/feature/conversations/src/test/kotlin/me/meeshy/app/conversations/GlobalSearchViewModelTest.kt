@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
+import app.cash.turbine.test
 import io.mockk.verify
 import io.mockk.every
 import io.mockk.mockk
@@ -541,5 +542,61 @@ class GlobalSearchViewModelTest {
 
     private companion object {
         const val DEBOUNCE_PLUS = 350L
+    }
+
+    @Test
+    fun `selecting a tab emits one light haptic`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.effects.test {
+            vm.selectTab(GlobalSearchTab.USERS)
+            assertThat(awaitItem()).isEqualTo(GlobalSearchEffect.Haptic)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `relaunching a recent search emits a haptic and runs the query`() = runTest(dispatcher) {
+        stubSearch(GlobalSearchResults())
+        val vm = viewModel()
+        vm.effects.test {
+            vm.relaunchRecentSearch("belva")
+            assertThat(awaitItem()).isEqualTo(GlobalSearchEffect.Haptic)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertThat(vm.state.value.query).isEqualTo("belva")
+    }
+
+    @Test
+    fun `tapping a user emits a haptic then asks for the profile sheet`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.effects.test {
+            vm.onUserTapped("u1")
+            assertThat(awaitItem()).isEqualTo(GlobalSearchEffect.Haptic)
+            assertThat(awaitItem()).isEqualTo(GlobalSearchEffect.OpenUserProfile("u1"))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `tapping a result emits a haptic`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.effects.test {
+            vm.onResultTapped()
+            assertThat(awaitItem()).isEqualTo(GlobalSearchEffect.Haptic)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `retry emits a haptic`() = runTest(dispatcher) {
+        stubSearch(GlobalSearchResults())
+        val vm = viewModel()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+        vm.effects.test {
+            vm.retryLastSearch()
+            assertThat(awaitItem()).isEqualTo(GlobalSearchEffect.Haptic)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }
