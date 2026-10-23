@@ -26,7 +26,9 @@
     <string name="conversations_badge_locked">bloqueado</string>
     <string name="conversations_badge_muted">Silenciado</string>
     <string name="conversations_badge_pinned">fijado</string>
+    <string name="conversations_banner_connecting">Conectando</string>
     <string name="conversations_banner_offline">Sin conexión</string>
+    <string name="conversations_banner_online">En línea</string>
     <string name="conversations_banner_reconnecting">Reconectando…</string>
     <string name="conversations_banner_syncing">Sincronización</string>
     <string name="conversations_contacts">Contactos</string>
@@ -75,6 +77,7 @@
     <string name="conversations_logout">Cerrar sesión</string>
     <string name="conversations_new">Nueva conversación</string>
     <string name="conversations_open_dashboard">Panel</string>
+    <string name="conversations_preview_draft_label">Borrador</string>
     <string name="conversations_preview_draft_prefix">Borrador:</string>
     <string name="conversations_preview_ephemeral_content_description">Mensaje efímero</string>
     <string name="conversations_preview_expired">Mensaje caducado</string>
@@ -91,7 +94,6 @@
     <string name="conversations_search_clear">Borrar la búsqueda</string>
     <string name="conversations_search_close">Cerrar la búsqueda</string>
     <string name="conversations_search_hint">Buscar conversaciones</string>
-    <string name="conversations_section_pinned">fijado</string>
     <string name="conversations_tags_dialog_title">Etiquetas</string>
     <string name="conversations_tags_field_hint">Añadir una etiqueta…</string>
     <string name="conversations_tags_remove_content_description">Quitar la etiqueta %s</string>

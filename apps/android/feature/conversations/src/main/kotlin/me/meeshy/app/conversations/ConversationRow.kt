@@ -161,7 +161,7 @@ private fun ConversationRowContent(
     )
     val rowPreview = conversationRowPreview(
         typingLine = typingLine,
-        draftLine = draftLine,
+        draft = draftLine,
         summary = messageSummaryLine(
             message = conversation.lastMessage,
             currentUserId = currentUserId,

@@ -6,7 +6,6 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,11 +21,11 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.PreferencesSocketManager
-import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.status.StatusBarCache
@@ -56,6 +55,7 @@ class ConversationListViewModel @Inject constructor(
     storyRepository: StoryRepository,
     statusBarCache: StatusBarCache,
     messagePrefetch: ConversationListMessagePrefetchTriggers,
+    networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -121,20 +121,12 @@ class ConversationListViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
-            socketManager.connectionState.collect { connection ->
-                _state.update {
-                    it.copy(
-                        connection = connection,
-                        connectionSettled = it.connectionSettled || connection == SocketConnectionState.CONNECTED,
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            delay(CONNECTION_GRACE_MILLIS)
-            _state.update { it.copy(connectionSettled = true) }
-        }
+        ConversationListConnectionObserver(
+            scope = viewModelScope,
+            state = _state,
+            connectionState = socketManager.connectionState,
+            networkOnline = networkMonitor.isOnline,
+        ).start()
 
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
@@ -237,7 +229,7 @@ class ConversationListViewModel @Inject constructor(
         if (rawConversations.isEmpty()) error.message.orEmpty() else null
 
     companion object {
-        /** How long the first socket connection may take before the strip says « offline ». */
-        const val CONNECTION_GRACE_MILLIS: Long = 4_000L
+        /** How long the first socket connection may take before the strip announces it. */
+        const val CONNECTION_GRACE_MILLIS: Long = ConversationListConnectionObserver.CONNECTION_GRACE_MILLIS
     }
 }

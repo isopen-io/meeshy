@@ -26,7 +26,9 @@
     <string name="conversations_badge_locked">مقفل</string>
     <string name="conversations_badge_muted">مكتوم</string>
     <string name="conversations_badge_pinned">مثبَّتة</string>
+    <string name="conversations_banner_connecting">جارٍ الاتصال</string>
     <string name="conversations_banner_offline">غير متصل</string>
+    <string name="conversations_banner_online">متصل</string>
     <string name="conversations_banner_reconnecting">جارٍ إعادة الاتصال…</string>
     <string name="conversations_banner_syncing">المزامنة</string>
     <string name="conversations_contacts">جهات الاتصال</string>
@@ -75,6 +77,7 @@
     <string name="conversations_logout">تسجيل الخروج</string>
     <string name="conversations_new">محادثة جديدة</string>
     <string name="conversations_open_dashboard">لوحة التحكم</string>
+    <string name="conversations_preview_draft_label">مسودة</string>
     <string name="conversations_preview_draft_prefix">مسودة:</string>
     <string name="conversations_preview_ephemeral_content_description">رسالة مؤقتة</string>
     <string name="conversations_preview_expired">رسالة منتهية</string>
@@ -91,7 +94,6 @@
     <string name="conversations_search_clear">مسح البحث</string>
     <string name="conversations_search_close">إغلاق البحث</string>
     <string name="conversations_search_hint">البحث عن محادثات</string>
-    <string name="conversations_section_pinned">مثبَّتة</string>
     <string name="conversations_tags_dialog_title">الوسوم</string>
     <string name="conversations_tags_field_hint">إضافة وسم…</string>
     <string name="conversations_tags_remove_content_description">إزالة الوسم %s</string>

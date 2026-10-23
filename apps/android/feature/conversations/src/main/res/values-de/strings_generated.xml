@@ -26,7 +26,9 @@
     <string name="conversations_badge_locked">gesperrt</string>
     <string name="conversations_badge_muted">Stumm</string>
     <string name="conversations_badge_pinned">angeheftet</string>
+    <string name="conversations_banner_connecting">Verbindung wird hergestellt</string>
     <string name="conversations_banner_offline">Offline</string>
+    <string name="conversations_banner_online">Online</string>
     <string name="conversations_banner_reconnecting">Verbindung wird wiederhergestellt…</string>
     <string name="conversations_banner_syncing">Synchronisierung</string>
     <string name="conversations_contacts">Kontakte</string>
@@ -75,6 +77,7 @@
     <string name="conversations_logout">Abmelden</string>
     <string name="conversations_new">Neue Unterhaltung</string>
     <string name="conversations_open_dashboard">Übersicht</string>
+    <string name="conversations_preview_draft_label">Entwurf</string>
     <string name="conversations_preview_draft_prefix">Entwurf:</string>
     <string name="conversations_preview_ephemeral_content_description">Flüchtige Nachricht</string>
     <string name="conversations_preview_expired">Nachricht abgelaufen</string>
@@ -91,7 +94,6 @@
     <string name="conversations_search_clear">Suche löschen</string>
     <string name="conversations_search_close">Suche schließen</string>
     <string name="conversations_search_hint">Unterhaltungen suchen</string>
-    <string name="conversations_section_pinned">angeheftet</string>
     <string name="conversations_tags_dialog_title">Tags</string>
     <string name="conversations_tags_field_hint">Tag hinzufügen…</string>
     <string name="conversations_tags_remove_content_description">Tag %s entfernen</string>

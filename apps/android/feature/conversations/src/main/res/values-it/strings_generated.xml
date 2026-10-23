@@ -26,7 +26,9 @@
     <string name="conversations_badge_locked">bloccato</string>
     <string name="conversations_badge_muted">Silenziato</string>
     <string name="conversations_badge_pinned">fissato</string>
+    <string name="conversations_banner_connecting">Connessione in corso</string>
     <string name="conversations_banner_offline">Non in linea</string>
+    <string name="conversations_banner_online">Online</string>
     <string name="conversations_banner_reconnecting">Riconnessione in corso…</string>
     <string name="conversations_banner_syncing">Sincronizzazione</string>
     <string name="conversations_contacts">Contatti</string>
@@ -75,6 +77,7 @@
     <string name="conversations_logout">Esci</string>
     <string name="conversations_new">Nuova conversazione</string>
     <string name="conversations_open_dashboard">Dashboard</string>
+    <string name="conversations_preview_draft_label">Bozza</string>
     <string name="conversations_preview_draft_prefix">Bozza:</string>
     <string name="conversations_preview_ephemeral_content_description">Messaggio effimero</string>
     <string name="conversations_preview_expired">Messaggio scaduto</string>
@@ -91,7 +94,6 @@
     <string name="conversations_search_clear">Cancella ricerca</string>
     <string name="conversations_search_close">Chiudi la ricerca</string>
     <string name="conversations_search_hint">Cerca conversazioni</string>
-    <string name="conversations_section_pinned">fissato</string>
     <string name="conversations_tags_dialog_title">Tag</string>
     <string name="conversations_tags_field_hint">Aggiungi un tag…</string>
     <string name="conversations_tags_remove_content_description">Rimuovi il tag %s</string>
