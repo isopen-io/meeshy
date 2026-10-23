@@ -38,11 +38,11 @@ half4 main(float2 position) {
     half4 base = content.eval(position);
     if (base.a < 0.01 || progress <= 0.0 || progress >= 1.0) { return base; }
 
-    float step = 1.5;
-    float left = meeshyLuminance(content.eval(position - float2(step, 0.0)));
-    float right = meeshyLuminance(content.eval(position + float2(step, 0.0)));
-    float up = meeshyLuminance(content.eval(position - float2(0.0, step)));
-    float down = meeshyLuminance(content.eval(position + float2(0.0, step)));
+    float texel = 1.5;
+    float left = meeshyLuminance(content.eval(position - float2(texel, 0.0)));
+    float right = meeshyLuminance(content.eval(position + float2(texel, 0.0)));
+    float up = meeshyLuminance(content.eval(position - float2(0.0, texel)));
+    float down = meeshyLuminance(content.eval(position + float2(0.0, texel)));
     float3 normal = normalize(float3((left - right) * 3.0, (up - down) * 3.0, 1.0));
 
     float3 toLight = normalize(float3(-0.5, -0.6, 0.65));
