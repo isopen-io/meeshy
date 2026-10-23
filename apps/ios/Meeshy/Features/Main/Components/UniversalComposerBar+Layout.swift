@@ -83,7 +83,7 @@ extension UniversalComposerBar {
     }
 
     private func recordQuickEmojiFieldWidth(_ width: CGFloat) {
-        guard actionSlot == .quickEmoji, quickEmojiDrag == 0 else { return }
+        guard actionSlot == .quickEmoji, quickEmojiDrag == 0, quickEmojiHeld == 0 else { return }
         quickEmojiFieldWidth = width
     }
 
@@ -195,6 +195,7 @@ extension UniversalComposerBar {
                     // there is no overlay, so the TextField keeps its native tap-to-place-cursor behaviour.
                     textInputField
                         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { recordQuickEmojiFieldWidth($0) }
+                        .simultaneousGesture(TapGesture().onEnded { collapseQuickEmojiBand(after: .textTouched) })
                         .overlay {
                             if showAttachOptions {
                                 Color.clear
@@ -280,6 +281,7 @@ extension UniversalComposerBar {
             }
             if focused {
                 onAnyInteraction?()
+                collapseQuickEmojiBand(after: .textTouched)
             }
             if focused && showAttachOptions {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
