@@ -282,21 +282,15 @@ enum OutgoingImageWriter {
         return encode(original, as: format, maxPixelDimension: palier, policy: policy) ?? essai
     }
 
-    /// Décodage réduit et redressé par ImageIO ; le profil couleur suit l'image ;
-    /// les métadonnées de la prise suivent, sans le lieu sauf choix contraire ;
-    /// la carte de gain HDR suit quand l'image n'a pas eu à être redressée.
+    /// Décodage réduit et redressé par `ImageDownsampler` (#11845) ; le profil
+    /// couleur suit l'image ; les métadonnées de la prise suivent, sans le lieu
+    /// sauf choix contraire ; la carte de gain HDR suit quand l'image n'a pas eu
+    /// à être redressée.
     private static func encodeOnce(_ original: OriginalImage, as format: OutgoingImageFormat, limit: CGFloat,
                                    policy: OutgoingImagePolicy) -> OutgoingImage? {
-        guard let type = format.typeIdentifier else { return nil }
-        let thumbnailOptions: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: limit,
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(original.source, 0, thumbnailOptions as CFDictionary) else {
-            return nil
-        }
+        guard let type = format.typeIdentifier,
+              let image = ImageDownsampler.thumbnail(source: original.source, maxPixelSize: limit,
+                                                     decodeImmediately: true) else { return nil }
         let carried = PhotoCaptureMetadata.carried(from: original.properties)
             .filter { policy.keepsLocation || $0.key != kCGImagePropertyGPSDictionary }
         let quality: [CFString: Any] = format.isLossy ? [kCGImageDestinationLossyCompressionQuality: policy.quality] : [:]
