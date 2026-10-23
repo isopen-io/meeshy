@@ -414,6 +414,15 @@ public final class StoryMediaLayer: CALayer {
                                 resolver: (@Sendable (String) -> URL?)?) {
         guard let remoteURL = StoryMediaLayerRules.resolvedMediaURL(for: media, resolver: resolver) else { return }
 
+        // Ce lecteur lit déjà ce média — en flux, puis dans le fichier que le
+        // même transfert a fini d'écrire (#9881) : une reconfiguration
+        // (géométrie, cache `.edit`) ne le relance jamais, même si le fichier
+        // est entre-temps sur le disque.
+        if attachedURL == remoteURL, avPlayerLayer?.player?.currentItem != nil {
+            attachPlayer(url: remoteURL, mode: mode, loop: mode != .play)
+            return
+        }
+
         // Fast-path cache chaud : si l'URL est déjà locale (file://) OU si le
         // cache disk a déjà le fichier, on attache directement le player SANS
         // afficher de placeholder ThumbHash — évite le flash visuel quand on
@@ -429,50 +438,20 @@ public final class StoryMediaLayer: CALayer {
             return
         }
 
-        // Cache miss → ThumbHash placeholder pendant le fetch async — SAUF si
-        // ce player joue déjà cette URL distante (reconfiguration in-place du
-        // cache `.edit` sur changement de géométrie) : re-poser le placeholder
-        // recouvrirait la vidéo en cours de lecture, et `attachPlayer`
-        // (idempotent) ne le fadera jamais.
-        let isReconfiguringAttachedURL = attachedURL == remoteURL
-            && avPlayerLayer?.player?.currentItem != nil
-        if !isReconfiguringAttachedURL {
-            applyThumbHashPlaceholder(media.thumbHash)
-        }
+        // Cache miss → ThumbHash placeholder jusqu'à la première image.
+        applyThumbHashPlaceholder(media.thumbHash)
 
         // Annule le load précédent : un layer recyclé pour un autre média
         // ne doit pas stamp l'ancienne URL une fois résolue.
         currentVideoLoadTask?.cancel()
+        currentVideoLoadTask = nil
         videoLoadGeneration &+= 1
-        let generation = videoLoadGeneration
 
-        // Attache l'AVPlayer DÈS MAINTENANT avec l'URL distante. Sans ça,
-        // toute lecture immédiate (tests, indicateurs UI, accessibilité)
-        // verrait `avPlayer == nil` jusqu'à ce que la tâche async ait
-        // résolu le cache local. La task de cache continue tourner en
-        // arrière-plan et swap vers un fichier local s'il devient
-        // disponible — c'est une optimisation, pas une condition
-        // préalable à l'existence du player.
+        // UN transfert, lu pendant sa course (#9881) : l'asset lit le fichier
+        // que le cache écrit, si bien que la lecture démarre dès la tête et ne
+        // bascule jamais vers une copie locale en plein milieu — plus de
+        // second téléchargement, plus de `replaceCurrentItem` en lecture.
         attachPlayer(url: remoteURL, mode: mode, loop: mode != .play)
-
-        currentVideoLoadTask = Task { @MainActor [weak self] in
-            // Garantit une URL file:// avant de toucher AVURLAsset — sinon
-            // certaines surfaces (export, AVAudioFile) rejettent le HTTPS
-            // direct. Le helper retourne `nil` si le fetch échoue.
-            let localURL = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
-            if Task.isCancelled { return }
-            guard let self else { return }
-            // Race guard : entre l'await et ici, `tearDownPlayback` ou un
-            // autre `configureVideo` peuvent avoir incrémenté la génération.
-            // Touch la layer SEULEMENT si le token correspond toujours.
-            guard self.videoLoadGeneration == generation else { return }
-            // Swap UNIQUEMENT si le cache a fourni une vraie URL locale
-            // différente — sinon le player déjà attaché continue de jouer
-            // l'URL distante sans re-trigger un cold start.
-            if localURL != remoteURL {
-                self.attachPlayer(url: localURL, mode: mode, loop: mode != .play)
-            }
-        }
     }
 
     /// Résout l'URL locale vidéo SANS toucher au réseau ni à une Task. Retourne
@@ -519,10 +498,10 @@ public final class StoryMediaLayer: CALayer {
         attachedURL = url
         hasPlayedToEnd = false
 
-        let item = AVPlayerItem(url: url)
-        // Buffer modéré : 2 s suffit pour la plupart des vidéos courtes sans
-        // gaspiller la RAM. Sur 3G/4G lent, peut être ajusté à 4 s.
-        item.preferredForwardBufferDuration = 2.0
+        let item = AVPlayerItem(asset: CacheCoordinator.videoPlaybackAsset(for: url, startsTransfer: true))
+        // Tampon d'avance de la politique vivante (#9880) : 2 s à froid, moitié
+        // quand l'appareil chauffe ou économise — y compris en cours de lecture.
+        MediaPolicyMonitor.shared.adopt(item, role: .watched)
 
         // Nouvel item ⇒ fenêtre de rognage inconnue jusqu'à preuve du
         // contraire : repli "source entière" pendant le chargement (voir

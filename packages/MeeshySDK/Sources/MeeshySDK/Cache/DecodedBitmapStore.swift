@@ -118,8 +118,8 @@ enum DecodedBitmapStore {
     /// taille est celle qui s'AFFICHE (#9872) ; sans elle, le bitmap se décode
     /// au premier dessin, comme toute image dont on ignore où elle ira.
     static func downsampledImage(data: Data, maxPixelSize: CGFloat = 1200, tier: DeviceMediaTier = .current) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(min(maxPixelSize, pixelCeiling(for: tier)), decodeImmediately: true))
+        guard let cgImage = ImageDownsampler.thumbnail(data: data, maxPixelSize: min(maxPixelSize, pixelCeiling(for: tier)),
+                                                       decodeImmediately: true)
         else { return UIImage(data: data) }
         return UIImage(cgImage: cgImage)
     }
@@ -127,21 +127,14 @@ enum DecodedBitmapStore {
     /// Même réduction, lue directement depuis le fichier du cache (aucune copie
     /// des octets en mémoire).
     static func downsampledImage(fileURL: URL, maxPixelSize: CGFloat, decodeImmediately: Bool = true, tier: DeviceMediaTier = .current) -> UIImage? {
-        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, sourceOptions),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(min(maxPixelSize, pixelCeiling(for: tier)), decodeImmediately: decodeImmediately))
+        guard let cgImage = ImageDownsampler.thumbnail(fileURL: fileURL, maxPixelSize: min(maxPixelSize, pixelCeiling(for: tier)),
+                                                       decodeImmediately: decodeImmediately)
         else { return nil }
         return UIImage(cgImage: cgImage)
     }
 
     static func thumbnailOptions(_ maxPixelSize: CGFloat, decodeImmediately: Bool) -> CFDictionary {
-        [
-            kCGImageSourceShouldCache: false,
-            kCGImageSourceShouldCacheImmediately: decodeImmediately,
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ] as CFDictionary
+        ImageDownsampler.options(maxPixelSize: maxPixelSize, decodeImmediately: decodeImmediately)
     }
 
     // MARK: - Hors de l'acteur, à concurrence bornée (#9872)

@@ -90,6 +90,13 @@ public object ConversationSections {
     }
 
     /**
+     * Whether the list names its sections (iOS `showsSectionHeader`): the flat list — nothing
+     * but the « My conversations » catch-all — shows its rows without any header.
+     */
+    public fun showsHeaders(sections: List<ConversationSection>): Boolean =
+        sections.any { it.kind != ConversationSectionKind.ALL }
+
+    /**
      * The `orderInCategory` updates for dragging the row at [from] onto slot [to] inside
      * [section] (iOS `reorderConversations`). Only a user-category section reorders: the
      * pinned and catch-all sections are ordered by recency, so a drag there sends nothing.

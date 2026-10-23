@@ -1,0 +1,68 @@
+# Régénère le project.pbxproj committé depuis project.yml, à la demande d'un commit.
+#
+# Les sessions qui tournent dans un conteneur Linux n'ont ni Swift ni XcodeGen :
+# elles ne peuvent ni ajouter ni retirer un fichier sous apps/ios, parce que les
+# gardes Linux d'ios.yml (check_pbxproj_consistency, check_test_registration)
+# exigent un pbxproj committé à jour. Le job ios-build, lui, régénère déjà le
+# projet avant de compiler : seul le fichier committé manque.
+#
+# Déclenchement : un push sur une branche de travail dont le commit de tête
+# contient « [xcodegen] » dans son message. Le job lance `xcodegen generate`,
+# rejoue les gardes du pbxproj, puis commite le résultat sur la même branche.
+# Ce commit, poussé par GITHUB_TOKEN, ne relance pas la CI : l'auteur pousse
+# ensuite un commit (vide au besoin) dont le sujet contient « run test ».
+name: iOS — pbxproj régénéré à la demande
+
+on:
+  push:
+    branches:
+      - 'lot/**'
+      - 'fix/**'
+      - 'claude/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-xcodegen-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    name: Régénérer project.pbxproj
+    if: contains(github.event.head_commit.message, '[xcodegen]')
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Installer XcodeGen
+        run: brew install xcodegen
+
+      - name: Régénérer le projet
+        run: |
+          cd apps/ios
+          xcodegen generate
+
+      # Les gardes lisent le pbxproj de HEAD (`git show HEAD:…`) : elles ne
+      # jugent le projet régénéré qu'une fois COMMITÉ. Lancées avant le commit,
+      # elles relisaient l'ancien pbxproj et refusaient tout fichier de test
+      # neuf — la raison d'être de ce workflow. On commite, on juge, puis on pousse.
+      - name: Commiter le pbxproj régénéré, le juger, le pousser
+        run: |
+          if git diff --quiet -- apps/ios/Meeshy.xcodeproj; then
+            echo "::notice title=pbxproj::Déjà à jour, rien à commiter."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/ios/Meeshy.xcodeproj
+          git commit -m "chore(ios): project.pbxproj régénéré par XcodeGen depuis project.yml"
+          bash apps/ios/scripts/check_pbxproj_quoting.sh
+          bash apps/ios/scripts/check_pbxproj_consistency.sh
+          bash apps/ios/scripts/check_test_registration.sh
+          git push origin "HEAD:${GITHUB_REF#refs/heads/}"
+          echo "::notice title=pbxproj::Régénéré et poussé. Pousser ensuite un commit « run test » pour relancer la CI."

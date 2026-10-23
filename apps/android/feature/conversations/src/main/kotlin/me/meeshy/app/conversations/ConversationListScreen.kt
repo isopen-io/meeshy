@@ -41,6 +41,7 @@ fun ConversationListScreen(
     onGlobalSearch: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
     header: @Composable () -> Unit = {},
+    onRefresh: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -94,8 +95,10 @@ fun ConversationListScreen(
             previousScrollPosition = currentScrollPosition
         }
     }
+    var isSearchFocused by remember { mutableStateOf(false) }
     val searchBarVisible = ConversationSearchBarVisibility.isVisible(
-        isSearchActive = state.searchText.isNotBlank(),
+        hasQuery = state.searchText.isNotBlank(),
+        isFocused = isSearchFocused,
         isScrollingDown = isScrollingDown,
     )
 
@@ -119,6 +122,7 @@ fun ConversationListScreen(
                 ConversationSearchBar(
                     query = state.searchText,
                     onQueryChange = viewModel::setSearch,
+                    onFocusChange = { isSearchFocused = it },
                     onDashboard = onDashboard,
                     onGlobalSearch = onGlobalSearch,
                 )
@@ -139,7 +143,7 @@ fun ConversationListScreen(
                     onRetry = viewModel::refresh,
                     onNewConversation = onNewConversation,
                 ) {
-                    ConversationListBody(state = state, listState = listState, viewModel = viewModel)
+                    ConversationListBody(state = state, listState = listState, viewModel = viewModel, onRefresh = onRefresh)
                 }
             }
         }

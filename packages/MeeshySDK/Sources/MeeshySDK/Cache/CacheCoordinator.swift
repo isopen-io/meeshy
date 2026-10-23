@@ -191,7 +191,7 @@ public actor CacheCoordinator {
         // rejoués, et les 2 × 80 MB de plafonds théoriques disparaissent du
         // budget mémoire (cible app : < 150 MB). Funnel en flux vers un fichier (#9863).
         self.audio = DiskCacheStore(policy: .mediaAudio, memoryBudgetBytes: 8 * 1024 * 1024, networkTransfer: .streamedToFile)
-        self.video = DiskCacheStore(policy: .mediaVideo, memoryBudgetBytes: 8 * 1024 * 1024, networkTransfer: .streamedToFile)
+        self.video = DiskCacheStore(policy: .mediaVideo, memoryBudgetBytes: 8 * 1024 * 1024, networkTransfer: .streamedToFile, readsWhileDownloading: true)
         self.thumbnails = DiskCacheStore(policy: .thumbnails)
     }
 

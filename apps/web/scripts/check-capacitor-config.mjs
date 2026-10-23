@@ -293,6 +293,28 @@ function sourcesUnder(dir) {
   });
 }
 
+/**
+ * (6) LE PLANCHER DE WEBVIEW (#11325) — PURE. La coque n'exige une WebView
+ * minimale que si la config ÉVALUÉE par la CLI la porte (`android.minWebViewVersion`,
+ * égale à `MIN_ANDROID_WEBVIEW_MAJOR` de `src/lib/shell/webview-floor.ts`), si
+ * la page servie en dessous (`server.errorPath`) existe sous `public/`, et si
+ * `main.tsx` fait le contrôle au démarrage. Un seul des trois manquant laisse
+ * l'utilisateur d'une vieille WebView devant un écran cassé, sans explication.
+ */
+export function auditWebViewFloor({ capConfig, floorSource, publicFiles, mainSource }) {
+  const floor = Number(/MIN_ANDROID_WEBVIEW_MAJOR\s*=\s*(\d+)/.exec(floorSource)?.[1]);
+  const page = /WEBVIEW_UPDATE_PAGE\s*=\s*'([^']+)'/.exec(floorSource)?.[1];
+  const declared = capConfig?.android?.minWebViewVersion;
+  const errorPath = capConfig?.server?.errorPath;
+  return [
+    ...(Number.isInteger(floor) && floor >= 55 ? [] : ['webview-floor.ts ne déclare pas MIN_ANDROID_WEBVIEW_MAJOR (entier ≥ 55, le minimum de Capacitor).']),
+    ...(declared === floor ? [] : [`android.minWebViewVersion vaut ${JSON.stringify(declared)}, attendu ${floor} (webview-floor.ts).`]),
+    ...(page !== undefined && errorPath === page ? [] : [`server.errorPath vaut ${JSON.stringify(errorPath)}, attendu ${JSON.stringify(page)} (webview-floor.ts).`]),
+    ...(page !== undefined && publicFiles.includes(page) ? [] : [`public/${page} manque : la coque n'aurait rien à servir sous le plancher.`]),
+    ...(/redirectBelowWebViewFloor\(/.test(mainSource) ? [] : ['main.tsx n’appelle pas redirectBelowWebViewFloor : aucun contrôle au démarrage.']),
+  ];
+}
+
 function run() {
   runCapLs();
 
@@ -336,6 +358,24 @@ function run() {
     }
   } else {
     console.log('✓ iOS refuse MEESHY_SHELL_START_PATH en nommant CAPBridgeViewController.loadWebView (forme admise).');
+  }
+
+  let evaluated;
+  try {
+    evaluated = JSON.parse(androidResult.stdout)?.app?.extConfig;
+  } catch {
+    evaluated = undefined;
+  }
+  const floorViolations = auditWebViewFloor({
+    capConfig: evaluated,
+    floorSource: readFileSync(join(ROOT, 'src/lib/shell/webview-floor.ts'), 'utf8'),
+    publicFiles: readdirSync(join(ROOT, 'public')),
+    mainSource: readFileSync(join(ROOT, 'src/main.tsx'), 'utf8'),
+  });
+  if (floorViolations.length > 0) {
+    violations.push(...floorViolations.map((v) => `[webview] ${v}`));
+  } else {
+    console.log('✓ La coque Android exige sa WebView minimale, sert l’écran de mise à jour en dessous et le contrôle au démarrage (#11325).');
   }
 
   const pluginViolations = auditSyncedPlugins(

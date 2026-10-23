@@ -56,8 +56,8 @@ internal object CacheTables {
         createSql = "CREATE TABLE IF NOT EXISTS `keyed_json_cache` (`namespace` TEXT NOT NULL, `key` TEXT NOT NULL, `payload` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`namespace`, `key`))",
     )
 
-    /** The columns version 19 appended to `messages`, exactly as Room declares them. */
-    val messageColumnsAddedIn19: List<String> = listOf(
+    /** The columns version 20 appended to `messages`, exactly as Room declares them. */
+    val messageColumnsAddedIn20: List<String> = listOf(
         "`serverId` TEXT",
         "`senderId` TEXT",
         "`messageType` TEXT NOT NULL DEFAULT 'text'",
@@ -87,7 +87,7 @@ internal object CacheTables {
     val messages = CacheTableDefinition(
         name = "messages",
         createSql = "CREATE TABLE IF NOT EXISTS `messages` (`id` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `seq` INTEGER, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `sendState` TEXT, " +
-            messageColumnsAddedIn19.joinToString(", ") + ", PRIMARY KEY(`id`))",
+            messageColumnsAddedIn20.joinToString(", ") + ", PRIMARY KEY(`id`))",
         indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_messages_conversationId` ON `messages` (`conversationId`)") + messagesIndexes,
     )
 

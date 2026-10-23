@@ -37,6 +37,12 @@ public object PhonePlausibility {
 
     public fun isPlausible(raw: String): Boolean = refusal(raw) == null
 
+    /**
+     * Un numéro qu'un écran où il est REQUIS (récupération par téléphone, changement de numéro)
+     * peut envoyer : présent ET plausible. Site unique de ce seuil pour ces écrans.
+     */
+    public fun isSubmittable(raw: String): Boolean = digitsOnly(raw).isNotEmpty() && isPlausible(raw)
+
     private fun hasIdenticalRun(digits: String): Boolean {
         var run = 1
         for (i in 1 until digits.length) {

@@ -28,22 +28,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -88,6 +79,7 @@ public fun MessageBubble(
     onImageClick: ((Int) -> Unit)? = null,
     onLocationClick: ((BubbleLocation) -> Unit)? = null,
     onAudioClick: ((BubbleAudio) -> Unit)? = null,
+    audioPlayback: BubbleAudioPlayback? = null,
     onFileClick: ((BubbleFile) -> Unit)? = null,
     onReplyPreviewClick: (() -> Unit)? = null,
     onFlagTap: ((String) -> Unit)? = null,
@@ -115,7 +107,7 @@ public fun MessageBubble(
         isDeleted = content.isDeleted,
         expiresAtIso = content.expiresAtIso,
         isViewOnce = content.isViewOnce,
-        viewOnceCount = content.viewOnceCount,
+        isViewOnceOpenedByMe = content.isViewOnceOpenedByMe,
         isSystem = content.isSystem,
     )
     AnimatedVisibility(
@@ -161,6 +153,8 @@ public fun MessageBubble(
             content.isOutgoing -> outgoingColor
             else -> MeeshyTheme.tokens.backgroundTertiary
         }
+        Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
+        if (content.pinnedAtIso != null && !content.isDeleted) BubblePinnedIndicator()
         BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
         Column(
             modifier = Modifier
@@ -285,6 +279,7 @@ public fun MessageBubble(
                 content.audios.forEach { audio ->
                     AudioBubble(
                         audio = audio,
+                        playback = audioPlayback?.takeIf { it.attachmentId == audio.attachmentId },
                         onColor = onColor,
                         onClick = onAudioClick?.takeIf { audio.isPlayable }
                             ?.let { { it(audio) } },
@@ -348,68 +343,8 @@ public fun MessageBubble(
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = MeeshySpacing.xs),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-                ) {
-                    if (!content.isDeleted) {
-                        EphemeralCountdownBadge(expiresAtIso = content.expiresAtIso)
-                    }
-                    if (content.isStarred && !content.isDeleted) {
-                        Icon(
-                            imageVector = Icons.Filled.Bookmark,
-                            contentDescription = stringResource(R.string.bubble_starred),
-                            tint = onColor.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(14.dp)
-                                .padding(end = MeeshySpacing.xs),
-                        )
-                    }
-                    if (content.isTranslated) {
-                        Icon(
-                            imageVector = Icons.Filled.Translate,
-                            contentDescription = stringResource(R.string.bubble_translated),
-                            tint = onColor.copy(alpha = 0.7f),
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
-                    if (content.isEdited) {
-                        Text(
-                            text = stringResource(R.string.bubble_edited),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = onColor.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(start = MeeshySpacing.xs),
-                        )
-                    }
-                }
-
-                if (content.isOutgoing) {
-                    // The online in-flight clock is debounced: a send that
-                    // round-trips under 200ms never flashes it (parity iOS
-                    // `SendingClockGlyph`). The offline hourglass and every
-                    // settled tier render immediately.
-                    if (content.deliveryStatus == DeliveryStatus.Pending) {
-                        if (rememberSendingGlyphRevealed(content.createdAtIso)) {
-                            DeliveryStatusIcon(
-                                status = content.deliveryStatus,
-                                onColor = onColor,
-                            )
-                        }
-                    } else {
-                        DeliveryStatusIcon(
-                            status = content.deliveryStatus,
-                            onColor = onColor,
-                        )
-                    }
-                }
-            }
+            BubbleFooterRow(content = content, onColor = onColor)
+        }
         }
         }
     }
@@ -794,67 +729,6 @@ private fun LocationPreview(
     }
 }
 
-/**
- * Compact audio-message player row — Android render of the iOS `AudioPlayerView`
- * message-bubble context. Shows a play affordance, the `m:ss` duration (or the
- * download size when the clip isn't yet available), and the Prisme-resolved
- * transcription line under it. Tapping a playable clip hands its URL to the host.
- */
-@Composable
-private fun AudioBubble(
-    audio: BubbleAudio,
-    onColor: Color,
-    onClick: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    val playLabel = stringResource(R.string.bubble_audio_play)
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(MeeshyRadius.sm))
-            .background(onColor.copy(alpha = 0.1f))
-            .let { base ->
-                if (onClick == null) base
-                else base.clickable(onClick = onClick).semantics {
-                    role = Role.Button
-                    contentDescription = playLabel
-                }
-            }
-            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        ) {
-            Icon(
-                imageVector = if (audio.isPlayable) Icons.Filled.PlayArrow else Icons.Filled.Download,
-                contentDescription = null,
-                tint = onColor.copy(alpha = 0.9f),
-                modifier = Modifier.size(24.dp),
-            )
-            val meta = audio.formattedDuration
-                ?: audio.sizeBytes?.takeIf { it > 0 }?.let { formatFileSize(it) }
-            if (meta != null) {
-                Text(
-                    text = meta,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = onColor,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-        }
-        if (audio.hasTranscription) {
-            Text(
-                text = audio.transcriptionText.orEmpty(),
-                style = MaterialTheme.typography.labelSmall,
-                color = onColor.copy(alpha = 0.75f),
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = MeeshySpacing.xs),
-            )
-        }
-    }
-}
-
 @Composable
 @ReadOnlyComposable
 internal fun formatFileSize(bytes: Int): String = when {
@@ -1152,51 +1026,6 @@ private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?, onLongCli
             style = MaterialTheme.typography.labelSmall,
             color = if (entry.includesMe) MeeshyPalette.Indigo400 else MeeshyTheme.tokens.textPrimary,
             fontWeight = if (entry.includesMe) FontWeight.SemiBold else null,
-        )
-    }
-}
-
-@Composable
-private fun DeliveryStatusIcon(
-    status: DeliveryStatus,
-    onColor: Color,
-) {
-    when (status) {
-        DeliveryStatus.Pending -> Icon(
-            imageVector = Icons.Filled.Schedule,
-            contentDescription = stringResource(R.string.bubble_status_pending),
-            tint = onColor.copy(alpha = 0.5f),
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.QueuedOffline -> Icon(
-            imageVector = Icons.Filled.HourglassEmpty,
-            contentDescription = stringResource(R.string.bubble_status_queued),
-            tint = onColor.copy(alpha = 0.5f),
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.Sent -> Icon(
-            imageVector = Icons.Filled.Done,
-            contentDescription = stringResource(R.string.bubble_status_sent),
-            tint = onColor.copy(alpha = 0.5f),
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.Delivered -> Icon(
-            imageVector = Icons.Filled.DoneAll,
-            contentDescription = stringResource(R.string.bubble_status_delivered),
-            tint = onColor.copy(alpha = 0.5f),
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.Read -> Icon(
-            imageVector = Icons.Filled.DoneAll,
-            contentDescription = stringResource(R.string.bubble_status_read),
-            tint = MeeshyTheme.tokens.info,
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.Failed -> Icon(
-            imageVector = Icons.Filled.ErrorOutline,
-            contentDescription = stringResource(R.string.bubble_status_failed),
-            tint = MeeshyPalette.Error,
-            modifier = Modifier.size(16.dp),
         )
     }
 }

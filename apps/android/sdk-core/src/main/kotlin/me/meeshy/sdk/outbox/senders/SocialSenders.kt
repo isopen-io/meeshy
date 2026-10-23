@@ -21,6 +21,7 @@ import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.story.PublishMediaWriteBack
+import me.meeshy.sdk.story.StoryRepository
 import javax.inject.Inject
 
 /**
@@ -33,6 +34,7 @@ public class PublishStoryHandler @Inject constructor(
     private val postApi: PostApi,
     private val outboxRepository: OutboxRepository,
     private val json: Json,
+    private val storyRepository: StoryRepository,
 ) : OutboxKindHandler {
 
     override val payloadGraft: OutboxPayloadGraft = PublishMediaWriteBack::graft
@@ -42,6 +44,7 @@ public class PublishStoryHandler @Inject constructor(
             when (val result = apiCall { postApi.createStory(request) }) {
                 is NetworkResult.Success -> {
                     runCatching { outboxRepository.resolveLocalId(row.targetId, result.data.id) }
+                    runCatching { storyRepository.adoptPublished(result.data) }
                     SendResult.Success
                 }
                 is NetworkResult.Failure -> SendResult.TransientFailure

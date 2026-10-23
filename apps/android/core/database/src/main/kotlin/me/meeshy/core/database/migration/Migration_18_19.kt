@@ -4,14 +4,17 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Gives `messages` its queryable and local columns and creates `pending_ids`. Rows written before
- * the migration keep `columnsBackfilled = 0`: the Kotlin backfill derives their columns from the
- * payload after startup (no `json_extract`, no long migration on the main thread).
+ * Gives every queued mutation its next retry time, last error, waiting clock, cancel request and
+ * owning account. The columns are nullable and added in place, so no queued row is rebuilt or lost.
  */
 internal val Migration_18_19: Migration = object : Migration(18, 19) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        CacheTables.messageColumnsAddedIn19.forEach { column -> db.execSQL("ALTER TABLE `messages` ADD COLUMN $column") }
-        CacheTables.messagesIndexes.forEach(db::execSQL)
-        db.createCacheTable(CacheTables.pendingIds)
+        listOf(
+            "`nextAttemptAt` INTEGER",
+            "`lastError` TEXT",
+            "`waitingSince` INTEGER",
+            "`cancelRequestedAt` INTEGER",
+            "`ownerId` TEXT",
+        ).forEach { db.execSQL("ALTER TABLE `outbox` ADD COLUMN $it") }
     }
 }

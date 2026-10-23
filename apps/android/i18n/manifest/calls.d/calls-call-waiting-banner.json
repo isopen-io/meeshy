@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_waiting_reject",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_waiting_answer",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_waiting_reject_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_waiting_answer_hint",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -25,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -81,6 +82,14 @@ fun ActiveSessionsScreen(
                 )
             }
 
+            SessionRevocationConfirmations(
+                pending = state.pendingRevocation,
+                confirmingOthers = state.confirmingRevokeOthers,
+                onConfirmRevoke = viewModel::confirmRevoke,
+                onConfirmOthers = viewModel::confirmRevokeOthers,
+                onCancel = viewModel::cancelConfirmation,
+            )
+
             when {
                 state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = MeeshyPalette.Indigo500)
@@ -106,13 +115,13 @@ fun ActiveSessionsScreen(
                         SessionRow(
                             session = session,
                             isRevoking = state.revokingIds.contains(session.id),
-                            onRevoke = { viewModel.revoke(session.id) },
+                            onRevoke = { viewModel.requestRevoke(session) },
                         )
                     }
                     if (state.sessions.any { !it.isCurrentSession }) {
                         item(key = "revoke_others") {
                             TextButton(
-                                onClick = viewModel::revokeOthers,
+                                onClick = viewModel::requestRevokeOthers,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text(
@@ -208,4 +217,41 @@ internal fun sessionTitle(session: ActiveSessionInfo): String {
     val os = listOfNotNull(session.osName, session.osVersion).joinToString(" ")
     return listOf(device, os).filter { it.isNotBlank() }.joinToString(" · ")
         .ifBlank { session.ipAddress ?: session.id }
+}
+
+/** iOS `ActiveSessionsView` : déconnecter un appareil, ou tous les autres, se confirme d'abord. */
+@Composable
+private fun SessionRevocationConfirmations(
+    pending: ActiveSessionInfo?,
+    confirmingOthers: Boolean,
+    onConfirmRevoke: () -> Unit,
+    onConfirmOthers: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = onCancel,
+            title = { Text(stringResource(R.string.sessions_revoke_confirm_title)) },
+            text = { Text(stringResource(R.string.sessions_revoke_confirm_message, sessionTitle(pending))) },
+            confirmButton = {
+                TextButton(onClick = onConfirmRevoke) {
+                    Text(stringResource(R.string.sessions_revoke_confirm_action), color = MeeshyPalette.Error)
+                }
+            },
+            dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.sessions_cancel)) } },
+        )
+    }
+    if (confirmingOthers) {
+        AlertDialog(
+            onDismissRequest = onCancel,
+            title = { Text(stringResource(R.string.sessions_revoke_others)) },
+            text = { Text(stringResource(R.string.sessions_revoke_all_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = onConfirmOthers) {
+                    Text(stringResource(R.string.sessions_revoke_all_action), color = MeeshyPalette.Error)
+                }
+            },
+            dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.sessions_cancel)) } },
+        )
+    }
 }

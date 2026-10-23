@@ -1,8 +1,12 @@
 package me.meeshy.core.database.migration
 
-import androidx.test.platform.app.InstrumentationRegistry
+import android.content.Context
+import androidx.room.Room
 import androidx.room.testing.MigrationTestHelper
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import org.junit.Rule
 import org.junit.Test
@@ -15,42 +19,48 @@ class Migration18To19Test {
     @get:Rule
     val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), MeeshyDatabase::class.java)
 
-    @Test
-    fun `18 vers 19 conserve les messages et leur donne les valeurs par defaut`() {
-        helper.createDatabase(TEST_DB, 18).use { it.seedV16() }
-
-        helper.runMigrationsAndValidate(TEST_DB, 19, true, *MeeshyMigrations.all).use { db ->
-            assertThat(db.rows("SELECT id, payload, sendState FROM messages")).containsExactly(
-                listOf("m1", "{\"id\":\"m1\"}", "SENT"),
-            )
-            assertThat(db.rows("SELECT messageType, isEncrypted, retryCount, changeVersion, columnsBackfilled, serverId FROM messages"))
-                .containsExactly(listOf("text", "0", "0", "0", "0", null))
-        }
-    }
+    private val newColumns = listOf("nextAttemptAt", "lastError", "waitingSince", "cancelRequestedAt", "ownerId")
 
     @Test
-    fun `18 vers 19 cree pending_ids vide et les index des messages`() {
+    fun `18 vers 19 ajoute cinq colonnes nullables a outbox`() {
         helper.createDatabase(TEST_DB, 18).close()
 
         helper.runMigrationsAndValidate(TEST_DB, 19, true, *MeeshyMigrations.all).use { db ->
-            assertThat(db.rows("SELECT COUNT(*) FROM pending_ids")).containsExactly(listOf("0"))
-            val indexes = db.rows("SELECT name FROM pragma_index_list('messages')").flatten()
-            assertThat(indexes).containsAtLeast("index_messages_serverId", "index_messages_expiresAt", "index_messages_pinnedAt")
+            val columns = db.rows("SELECT name, \"notnull\" FROM pragma_table_info('outbox')").associate { it[0] to it[1] }
+            newColumns.forEach { assertThat(columns[it]).isEqualTo("0") }
         }
     }
 
     @Test
-    fun `18 vers 19 conserve octet pour octet les tables durables`() {
+    fun `18 vers 19 ne perd aucune ligne et laisse les nouvelles colonnes a NULL`() {
         val before = helper.createDatabase(TEST_DB, 18).use { db ->
             db.seedV16()
-            DURABLE_QUERIES.map(db::rows)
+            db.rows("SELECT * FROM outbox ORDER BY cmid")
         }
 
-        val after = helper.runMigrationsAndValidate(TEST_DB, 19, true, *MeeshyMigrations.all).use { db ->
-            DURABLE_QUERIES.map(db::rows)
+        helper.runMigrationsAndValidate(TEST_DB, 19, true, *MeeshyMigrations.all).use { db ->
+            val after = db.rows("SELECT * FROM outbox ORDER BY cmid")
+            assertThat(after.map { it.take(10) }).isEqualTo(before)
+            assertThat(after.flatMap { it.drop(10) }.all { it == null }).isTrue()
+            assertThat(db.rows("SELECT * FROM media_blob")).hasSize(1)
         }
+    }
 
-        assertThat(before.all { it.isNotEmpty() }).isTrue()
-        assertThat(after).isEqualTo(before)
+    @Test
+    fun `une base v16 arrive en v19 sans repli destructif et le DAO relit les lignes`() = runTest {
+        helper.createDatabase(TEST_DB, 16).use { it.seedV16() }
+        val context = ApplicationProvider.getApplicationContext<Context>()
+
+        val db = Room.databaseBuilder(context, MeeshyDatabase::class.java, TEST_DB)
+            .addMigrations(*MeeshyMigrations.all)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val rows = db.outboxDao().byState("PENDING") + db.outboxDao().byState("INFLIGHT")
+            assertThat(rows.map { it.cmid }).containsExactly("c1", "c2")
+            assertThat(rows.all { it.ownerId == null && it.nextAttemptAt == null }).isTrue()
+        } finally {
+            db.close()
+        }
     }
 }

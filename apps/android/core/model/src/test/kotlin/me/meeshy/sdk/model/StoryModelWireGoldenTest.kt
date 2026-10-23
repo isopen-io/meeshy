@@ -281,8 +281,10 @@ class StoryModelWireGoldenTest {
         assertThat(keys(exhaustive.encodeToJsonElement(StoryMediaObject.serializer(), StoryMediaObject(id = "m"))))
             .containsExactly(
                 "id", "postMediaId", "mediaType", "placement", "x", "y", "scale", "rotation", "volume",
-                "aspectRatio", "anchor", "isBackground", "loop", "zIndex",
+                "anchor", "isBackground", "loop", "zIndex",
             )
+        assertThat(keys(exhaustive.encodeToJsonElement(StoryMediaObject.serializer(), StoryMediaObject(id = "m", aspectRatio = 1.0))))
+            .contains("aspectRatio")
         assertThat(keys(exhaustive.encodeToJsonElement(StoryAudioPlayerObject.serializer(), StoryAudioPlayerObject(id = "a"))))
             .containsExactly("id", "postMediaId", "placement", "x", "y", "volume", "waveformSamples")
         assertThat(keys(exhaustive.encodeToJsonElement(StorySticker.serializer(), StorySticker(id = "s"))))

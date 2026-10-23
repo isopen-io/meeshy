@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 19,
-    "identityHash": "47cf5bde664998bedc915313c99dab47",
+    "identityHash": "1eeade074f1771f70eaae6c1d4f6c1be",
     "entities": [
       {
         "tableName": "conversations",
@@ -94,7 +94,7 @@
       },
       {
         "tableName": "outbox",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`cmid` TEXT NOT NULL, `lane` TEXT NOT NULL, `kind` TEXT NOT NULL, `targetId` TEXT NOT NULL, `payload` TEXT NOT NULL, `dependsOn` TEXT, `attempts` INTEGER NOT NULL, `state` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`cmid`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`cmid` TEXT NOT NULL, `lane` TEXT NOT NULL, `kind` TEXT NOT NULL, `targetId` TEXT NOT NULL, `payload` TEXT NOT NULL, `dependsOn` TEXT, `attempts` INTEGER NOT NULL, `state` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `nextAttemptAt` INTEGER, `lastError` TEXT, `waitingSince` INTEGER, `cancelRequestedAt` INTEGER, `ownerId` TEXT, PRIMARY KEY(`cmid`))",
         "fields": [
           {
             "fieldPath": "cmid",
@@ -155,6 +155,36 @@
             "columnName": "updatedAt",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "nextAttemptAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "lastError",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "waitingSince",
+            "columnName": "waitingSince",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cancelRequestedAt",
+            "columnName": "cancelRequestedAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "ownerId",
+            "columnName": "ownerId",
+            "affinity": "TEXT",
+            "notNull": false
           }
         ],
         "primaryKey": {
@@ -187,7 +217,7 @@
       },
       {
         "tableName": "messages",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `seq` INTEGER, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `sendState` TEXT, `serverId` TEXT, `senderId` TEXT, `messageType` TEXT NOT NULL DEFAULT 'text', `deletedAt` INTEGER, `expiresAt` INTEGER, `pinnedAt` INTEGER, `isEncrypted` INTEGER NOT NULL DEFAULT 0, `encryptionMode` TEXT, `encryptedPayload` TEXT, `contentText` TEXT, `deliveredCount` INTEGER NOT NULL DEFAULT 0, `readCount` INTEGER NOT NULL DEFAULT 0, `recipientCount` INTEGER NOT NULL DEFAULT 0, `retryCount` INTEGER NOT NULL DEFAULT 0, `lastError` TEXT, `viewOnceOpenedAt` INTEGER, `changeVersion` INTEGER NOT NULL DEFAULT 0, `columnsBackfilled` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `seq` INTEGER, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `sendState` TEXT, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -230,122 +260,6 @@
             "columnName": "sendState",
             "affinity": "TEXT",
             "notNull": false
-          },
-          {
-            "fieldPath": "serverId",
-            "columnName": "serverId",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "senderId",
-            "columnName": "senderId",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "messageType",
-            "columnName": "messageType",
-            "affinity": "TEXT",
-            "notNull": true,
-            "defaultValue": "'text'"
-          },
-          {
-            "fieldPath": "deletedAt",
-            "columnName": "deletedAt",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "expiresAt",
-            "columnName": "expiresAt",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "pinnedAt",
-            "columnName": "pinnedAt",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "isEncrypted",
-            "columnName": "isEncrypted",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
-          },
-          {
-            "fieldPath": "encryptionMode",
-            "columnName": "encryptionMode",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "encryptedPayload",
-            "columnName": "encryptedPayload",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "contentText",
-            "columnName": "contentText",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "deliveredCount",
-            "columnName": "deliveredCount",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
-          },
-          {
-            "fieldPath": "readCount",
-            "columnName": "readCount",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
-          },
-          {
-            "fieldPath": "recipientCount",
-            "columnName": "recipientCount",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
-          },
-          {
-            "fieldPath": "retryCount",
-            "columnName": "retryCount",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
-          },
-          {
-            "fieldPath": "lastError",
-            "columnName": "lastError",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "viewOnceOpenedAt",
-            "columnName": "viewOnceOpenedAt",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "changeVersion",
-            "columnName": "changeVersion",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
-          },
-          {
-            "fieldPath": "columnsBackfilled",
-            "columnName": "columnsBackfilled",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -363,33 +277,6 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_conversationId` ON `${TABLE_NAME}` (`conversationId`)"
-          },
-          {
-            "name": "index_messages_serverId",
-            "unique": false,
-            "columnNames": [
-              "serverId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_serverId` ON `${TABLE_NAME}` (`serverId`)"
-          },
-          {
-            "name": "index_messages_expiresAt",
-            "unique": false,
-            "columnNames": [
-              "expiresAt"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_expiresAt` ON `${TABLE_NAME}` (`expiresAt`)"
-          },
-          {
-            "name": "index_messages_pinnedAt",
-            "unique": false,
-            "columnNames": [
-              "pinnedAt"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_pinnedAt` ON `${TABLE_NAME}` (`pinnedAt`)"
           }
         ],
         "foreignKeys": []
@@ -1063,60 +950,12 @@
         },
         "indices": [],
         "foreignKeys": []
-      },
-      {
-        "tableName": "pending_ids",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` TEXT NOT NULL, `serverId` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `reconciledAt` INTEGER, PRIMARY KEY(`localId`))",
-        "fields": [
-          {
-            "fieldPath": "localId",
-            "columnName": "localId",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "serverId",
-            "columnName": "serverId",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "conversationId",
-            "columnName": "conversationId",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "reconciledAt",
-            "columnName": "reconciledAt",
-            "affinity": "INTEGER",
-            "notNull": false
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "localId"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_pending_ids_serverId",
-            "unique": false,
-            "columnNames": [
-              "serverId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_pending_ids_serverId` ON `${TABLE_NAME}` (`serverId`)"
-          }
-        ],
-        "foreignKeys": []
       }
     ],
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '47cf5bde664998bedc915313c99dab47')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1eeade074f1771f70eaae6c1d4f6c1be')"
     ]
   }
 }

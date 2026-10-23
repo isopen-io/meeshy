@@ -291,4 +291,29 @@ class CallRouteTest {
         durationSec = 42,
         peer = peer,
     )
+
+    @Test
+    fun `minimising a call that knows its conversation opens that chat`() {
+        assertThat(CallRoute.minimize("conv-1")).isEqualTo(Routes.chat("conv-1"))
+    }
+
+    @Test
+    fun `minimising a call without conversation returns to the list, never an unmatched chat route`() {
+        assertThat(CallRoute.minimize("")).isEqualTo(Routes.CONVERSATIONS)
+        assertThat(CallRoute.minimize("   ")).isEqualTo(Routes.CONVERSATIONS)
+    }
+
+    @Test
+    fun `calling back may switch an audio call to video`() {
+        val record = CallRecord(
+            callId = "c1", conversationId = "conv-9", conversationType = "direct", mode = "p2p",
+            status = "ended", direction = "missed", isVideo = false, startedAt = "2026-07-01T10:00:00Z",
+            durationSec = 0, peer = CallHistoryPeer(userId = "u1", username = "alice"),
+        )
+
+        val config = configOf(CallRoute.redial(record, isVideo = true))
+
+        assertThat(config.isVideo).isTrue()
+        assertThat(config.conversationId).isEqualTo("conv-9")
+    }
 }

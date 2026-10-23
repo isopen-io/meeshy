@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.timeline
 
+import me.meeshy.sdk.model.scene.ClipTransform
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryEasing

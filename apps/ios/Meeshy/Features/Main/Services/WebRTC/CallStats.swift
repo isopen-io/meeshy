@@ -41,6 +41,9 @@ struct CallStats: Equatable, Sendable {
     /// direct host/srflx path (`false`); `nil` while no pair is selected.
     /// Ephemeral like `inboundAudioLevel`: never persisted with the diagnostic.
     let relayed: Bool?
+    /// #11294 — gels, limitation, tampon de gigue, masquage, NACK et PLI.
+    /// Éphémère comme `relayed` : jamais persisté avec le diagnostic.
+    let mediaQuality: CallMediaQuality
 
     init(
         roundTripTimeMs: Double = 0,
@@ -57,7 +60,8 @@ struct CallStats: Equatable, Sendable {
         inboundAudioBytes: Int = 0,
         inboundVideoBytes: Int = 0,
         inboundAudioLevel: Double = 0,
-        relayed: Bool? = nil
+        relayed: Bool? = nil,
+        mediaQuality: CallMediaQuality = .none
     ) {
         self.roundTripTimeMs = roundTripTimeMs
         self.packetsLost = packetsLost
@@ -74,6 +78,7 @@ struct CallStats: Equatable, Sendable {
         self.inboundVideoBytes = inboundVideoBytes
         self.inboundAudioLevel = inboundAudioLevel
         self.relayed = relayed
+        self.mediaQuality = mediaQuality
     }
 }
 
@@ -106,6 +111,7 @@ extension CallStats: Codable {
         inboundVideoBytes = try c.decodeIfPresent(Int.self, forKey: .inboundVideoBytes) ?? 0
         inboundAudioLevel = 0
         relayed = nil
+        mediaQuality = .none
     }
 
     func encode(to encoder: Encoder) throws {
@@ -172,12 +178,13 @@ extension CallStats {
             "currentRoundTripTime", "availableOutgoingBitrate",
             "packetsLost", "packetsReceived",
             "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel",
-            "nominated"
+            "nominated", "freezeCount", "totalFreezesDuration", "framesPerSecond",
+            "jitterBufferDelay", "jitterBufferEmittedCount", "concealedSamples", "nackCount", "pliCount"
         ]
 
         nonisolated static let stringKeys = [
             "selectedCandidatePairId", "localCandidateId", "remoteCandidateId",
-            "candidateType", "state"
+            "candidateType", "state", "qualityLimitationReason"
         ]
 
         /// Projects one libwebrtc stats entry (`RTCStatistics.values`) onto the
@@ -291,7 +298,48 @@ extension CallStats {
             inboundAudioBytes: inboundAudioBytes,
             inboundVideoBytes: inboundVideoBytes,
             inboundAudioLevel: audioLevel,
-            relayed: relayedRoute(in: entries)
+            relayed: relayedRoute(in: entries),
+            mediaQuality: CallMediaQuality.reduce(entries: entries)
         )
+    }
+}
+
+// MARK: - Media Quality (#11294)
+
+/// **Ce que les gels et la limitation disent d'un appel** : lu sur les mêmes
+/// relevés `getStats` que `CallStats`. Les compteurs sont CUMULÉS par WebRTC
+/// depuis le début de l'appel : le dernier relevé les porte tous.
+nonisolated struct CallMediaQuality: Equatable, Sendable {
+    let freezeCount: Int
+    /// Durée cumulée des gels de la vidéo reçue, en secondes.
+    let totalFreezesDuration: Double
+    let framesPerSecond: Double
+    /// `none` | `cpu` | `bandwidth` | `other`, à l'émission vidéo.
+    let qualityLimitationReason: String?
+    /// Délai moyen du tampon de gigue audio, en millisecondes ; `nil` sans émission.
+    let jitterBufferDelayMs: Double?
+    let concealedSamples: Int
+    let nackCount: Int
+    let pliCount: Int
+
+    static let none = CallMediaQuality(freezeCount: 0, totalFreezesDuration: 0, framesPerSecond: 0,
+                                       qualityLimitationReason: nil, jitterBufferDelayMs: nil,
+                                       concealedSamples: 0, nackCount: 0, pliCount: 0)
+
+    static func reduce(entries: [CallStats.RawEntry]) -> CallMediaQuality {
+        let video = entries.filter { $0.type == "inbound-rtp" && $0.kind == "video" }
+        let audio = entries.filter { $0.type == "inbound-rtp" && $0.kind != "video" }
+        let somme = { (flux: [CallStats.RawEntry], cle: String) in flux.reduce(0.0) { $0 + ($1.values[cle] ?? 0) } }
+        let emissions = somme(audio, "jitterBufferEmittedCount")
+        return CallMediaQuality(
+            freezeCount: Int(somme(video, "freezeCount")),
+            totalFreezesDuration: somme(video, "totalFreezesDuration"),
+            framesPerSecond: video.compactMap { $0.values["framesPerSecond"] }.max() ?? 0,
+            qualityLimitationReason: entries.first { $0.type == "outbound-rtp" && $0.kind == "video" }?
+                .strings["qualityLimitationReason"],
+            jitterBufferDelayMs: emissions > 0 ? somme(audio, "jitterBufferDelay") / emissions * 1000 : nil,
+            concealedSamples: Int(somme(audio, "concealedSamples")),
+            nackCount: Int(somme(video, "nackCount")),
+            pliCount: Int(somme(video, "pliCount")))
     }
 }
