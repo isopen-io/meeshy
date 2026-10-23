@@ -119,10 +119,11 @@ class ContentExitLawTest {
     }
 
     @Test
-    fun `the copy reread as a subject is itself a timed flame`() {
+    fun `the copy reread as a subject cannot be forwarded again`() {
         val source = subject(flags = MessageEffectFlags.EPHEMERAL, duration = 300.0)
         val copy = ContentExitLaw.forwardedCopyProtection(source, null)!!
-        assertThat(law(copy.subject).forward).isEqualTo(ForwardVerdict.Allowed(300))
+        assertThat(law(copy.subject).forward)
+            .isEqualTo(ForwardVerdict.Refused(ContentExitLaw.ForwardRefusal.AFTER_READ))
     }
 
     @Test

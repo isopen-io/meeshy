@@ -12,6 +12,13 @@
     <string name="chat_delete_confirm_cancel">Cancelar</string>
     <string name="chat_delete_confirm_hint">Apagar para todos fica disponível por 2 h após o envio.</string>
     <string name="chat_delete_confirm_title">Apagar esta mensagem?</string>
+    <string name="chat_exit_blocked_after_read">Ela desaparece após a leitura: não pode ser encaminhada, salva nem compartilhada.</string>
+    <string name="chat_exit_blocked_attachment_not_in_source">Este item não faz mais parte da mensagem.</string>
+    <string name="chat_exit_blocked_encrypted_source">Este conteúdo criptografado é copiado deste dispositivo.</string>
+    <string name="chat_exit_blocked_source_unavailable">A mensagem original não está mais disponível.</string>
+    <string name="chat_exit_blocked_title">Esta mensagem fica no Meeshy</string>
+    <string name="chat_exit_blocked_understood">Entendi</string>
+    <string name="chat_exit_blocked_view_once">É de visualização única: não pode ser encaminhada, salva nem compartilhada. Fica na conversa até ser vista.</string>
     <string name="common_cancel">Cancelar</string>
     <string name="common_send">Enviar</string>
     <string name="common_unknown">Desconhecido</string>

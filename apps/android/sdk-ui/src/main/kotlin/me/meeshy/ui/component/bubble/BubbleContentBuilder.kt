@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.DeliveryTier
 import me.meeshy.sdk.model.SendLifecycle
 import me.meeshy.sdk.model.SendLifecycleResolver
+import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.model.isProtected
 
 public object BubbleContentBuilder {
@@ -263,6 +264,7 @@ public object BubbleContentBuilder {
             videoCount = files.count { it.isVideo },
             contactCards = contactCards,
             isBlurred = !isDeleted && message.effects.has(MessageEffectFlags.BLURRED),
+            exitOffer = message.exitOffer(),
             replyToIsMe = !replyToDeleted && currentUserId != null &&
                 message.replyTo?.senderId == currentUserId,
             isSlowSend = isOutgoing && isSlowSend,

@@ -10,6 +10,8 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ForwardRefusalReason
+import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 
@@ -53,17 +55,33 @@ internal class ChatForwardController(
      * conversation list is already loaded (the collector fills it in live).
      */
     fun open(messageId: String) {
+        val refusal = refusalFor(messageId)
         state.update {
             it.copy(
                 actionMessageId = null,
                 forward = ForwardUiState(
                     sourceMessageId = messageId,
                     sendingConversationId = sendingForwards[messageId],
+                    refusal = refusal,
                 ),
             )
         }
         recomputeTargets()
     }
+
+    /**
+     * The gateway refused the forward (`FORWARD_REFUSAL_CODES`): the same "does not leave
+     * Meeshy" card as a local refusal, never a recipient list. An unknown code changes nothing.
+     */
+    fun onGatewayRefusal(code: String?) {
+        val reason = ForwardRefusalReason.fromCode(code) ?: return
+        state.update { s -> s.forward?.let { s.copy(forward = it.copy(refusal = reason, sendingConversationId = null)) } ?: s }
+    }
+
+    /** What the exit law refuses for the message [messageId], or `null` when it may be forwarded. */
+    private fun refusalFor(messageId: String): ForwardRefusalReason? =
+        messages.value.firstOrNull { it.message.id == messageId }
+            ?.let { ForwardRefusalReason.local(it.message.exitOffer()) }
 
     fun onQueryChange(query: String) {
         state.update { s -> s.forward?.let { s.copy(forward = it.copy(query = query)) } ?: s }
@@ -84,6 +102,11 @@ internal class ChatForwardController(
     fun forwardTo(targetConversationId: String) {
         val forward = state.value.forward ?: return
         val sourceMessageId = forward.sourceMessageId
+        if (forward.refusal != null) return
+        refusalFor(sourceMessageId)?.let { reason ->
+            state.update { s -> s.forward?.let { s.copy(forward = it.copy(refusal = reason, targets = emptyList())) } ?: s }
+            return
+        }
         if (sendingForwards.containsKey(sourceMessageId)) return
         if (targetConversationId in forward.sentConversationIds) return
         val user = sessionRepository.currentUser.value ?: return
@@ -141,6 +164,7 @@ internal class ChatForwardController(
     private fun recomputeTargets() {
         state.update { s ->
             val forward = s.forward ?: return@update s
+            if (forward.refusal != null) return@update s.copy(forward = forward.copy(targets = emptyList()))
             s.copy(
                 forward = forward.copy(
                     targets = ForwardTargets.of(

@@ -37,11 +37,11 @@ data class ContentExitLaw(
 
     sealed interface ForwardVerdict {
         /** `maxDurationSeconds` nul ⇒ aucune borne ; sinon la copie dure AU PLUS autant. */
-        data class Allowed(val maxDurationSeconds: Int?) : ForwardVerdict
+        data class Allowed(override val maxDurationSeconds: Int?) : ForwardVerdict
         data class Refused(val reason: ForwardRefusal) : ForwardVerdict
 
         val isAllowed: Boolean get() = this is Allowed
-        val maxDurationSeconds: Int? get() = (this as? Allowed)?.maxDurationSeconds
+        val maxDurationSeconds: Int? get() = null
     }
 
     /** `FREE` : rien. `ANNOUNCED` : capture permise, annoncée. `BLOCKED` : noire, et la tentative annoncée. */

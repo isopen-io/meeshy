@@ -753,6 +753,9 @@ class ChatViewModel @Inject constructor(
     /** Optimistically forward the source message into [targetConversationId]; one at a time. */
     fun forwardTo(targetConversationId: String) = forward.forwardTo(targetConversationId)
 
+    /** The gateway refused the forward with [code] (`FORWARD_REFUSAL_CODES`): show the refusal card. */
+    fun onForwardGatewayRefusal(code: String?) = forward.onGatewayRefusal(code)
+
     // --- Search ---------------------------------------------------------------------------
 
     fun openSearch() {

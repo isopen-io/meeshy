@@ -2652,6 +2652,69 @@ class ChatViewModelTest {
             assertThat(forward.sendingConversationId).isNull()
         }
 
+    private fun refusedConversation(message: ApiMessage) = flowOf(
+        CacheResult.Fresh(listOf(LocalMessage(message, LocalSendState.SYNCED)), ageMillis = 0),
+    )
+
+    @Test
+    fun openForward_on_a_view_once_message_shows_the_refusal_card_and_no_recipients() = runTest(dispatcher) {
+        val source = ApiMessage(id = "m1", conversationId = "c1", senderId = "me", content = "secret", isViewOnce = true)
+        val h = harness(refusedConversation(source), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        val forward = h.vm.state.value.forward!!
+        assertThat(forward.refusal).isEqualTo(me.meeshy.sdk.model.ForwardRefusalReason.VIEW_ONCE)
+        assertThat(forward.targets).isEmpty()
+    }
+
+    @Test
+    fun forwardTo_never_sends_a_message_the_exit_law_refuses() = runTest(dispatcher) {
+        val source = ApiMessage(
+            id = "m1", conversationId = "c1", senderId = "me", content = "flamme",
+            effectFlags = (MessageEffectFlags.EPHEMERAL or MessageEffectFlags.EPHEMERAL_AFTER_READ).toInt(),
+        )
+        val h = harness(refusedConversation(source), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
+        assertThat(h.vm.state.value.forward!!.refusal).isEqualTo(me.meeshy.sdk.model.ForwardRefusalReason.AFTER_READ)
+    }
+
+    @Test
+    fun forwardTo_lets_a_blurred_message_through() = runTest(dispatcher) {
+        val source = ApiMessage(id = "m1", conversationId = "c1", senderId = "me", content = "flou", isBlurred = true)
+        val h = harness(refusedConversation(source), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun a_gateway_refusal_code_shows_the_same_card() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        h.vm.onForwardGatewayRefusal("view-once-not-forwardable")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.forward!!.refusal).isEqualTo(me.meeshy.sdk.model.ForwardRefusalReason.VIEW_ONCE)
+    }
+
     @Test
     fun forwardTo_is_inert_when_the_target_was_already_forwarded_to() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
