@@ -1,5 +1,6 @@
 import UIKit
 import ImageIO
+import MeeshySDK
 
 /// **Une scène ne décode jamais une photo au-delà de ce qui sera publié** (#6922).
 ///
@@ -82,20 +83,8 @@ public nonisolated enum SceneImageDownsampling {
     /// résultat est `.up`, et le canvas n'a plus de copie redressée à fabriquer.
     public static func image(fileAt url: URL, maxPixelSize: CGFloat) -> UIImage? {
         guard maxPixelSize.isFinite, maxPixelSize > 0 else { return nil }
-        let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else {
-            return nil
-        }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
+        return ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: maxPixelSize, decodeImmediately: true)
+            .map { UIImage(cgImage: $0) }
     }
 
     /// Réduit une image DÉJÀ en mémoire. Rend la MÊME instance quand elle tient

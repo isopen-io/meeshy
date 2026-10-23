@@ -23,4 +23,20 @@ internal object LinkStatsRoutesModule {
     @Provides
     @Singleton
     fun providesCommunityLinksApi(api: MeeshyApi): CommunityLinksApi = api.service(CommunityLinksApi::class.java)
+
+    @Provides
+    @Singleton
+    fun providesRedirectApi(api: MeeshyApi): RedirectApi = api.service(RedirectApi::class.java)
+
+    @Provides
+    @Singleton
+    fun providesLinkDetailApi(api: MeeshyApi): LinkDetailApi = api.service(LinkDetailApi::class.java)
+
+    @Provides
+    @Singleton
+    fun providesTrackingLinkTokenApi(api: MeeshyApi): TrackingLinkTokenApi = api.service(TrackingLinkTokenApi::class.java)
+
+    @Provides
+    @Singleton
+    fun providesAffiliateReferralApi(api: MeeshyApi): AffiliateReferralApi = api.service(AffiliateReferralApi::class.java)
 }

@@ -166,8 +166,11 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                         )
                     }
                 }
+                // A share-link guest carries composer permissions: iOS hides the call
+                // entry for `viewerIsGuest`, so does this header.
+                val callEntry = navigation.callEntry.takeIf { state.composerPermissions == null }
                 val ongoing = state.activeCall
-                    ?.takeIf { RejoinPillPolicy.shouldOffer(it, navigation.hasLocalLiveCall) }
+                    ?.takeIf { callEntry != null && RejoinPillPolicy.shouldOffer(it, navigation.hasLocalLiveCall) }
                 if (ongoing != null) {
                     // An call the local session lost is still live server-side:
                     // offer « Rejoindre » (a tap joins the existing call via the
@@ -176,7 +179,7 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                         isVideo = ongoing.isVideo,
                         onClick = { navigation.onRejoinCall(ongoing, peerName) },
                     )
-                } else {
+                } else if (callEntry?.canStart == true) {
                     IconButton(onClick = { navigation.onStartCall(peerName, false) }) {
                         Icon(Icons.Filled.Call, contentDescription = stringResource(R.string.chat_call_audio))
                     }

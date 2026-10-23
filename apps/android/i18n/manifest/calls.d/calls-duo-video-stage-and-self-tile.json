@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_stage_remote_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_remote_connecting",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_remote_live",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_peer_muted",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_peer_network",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_signaling",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_tile_swap",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_tile_swap_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_tile_small",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_tile_medium",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_tile_large",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_video_paused",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_video_paused_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_video_paused_short",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_tile_larger",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_stage_tile_smaller",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

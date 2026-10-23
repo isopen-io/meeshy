@@ -133,15 +133,8 @@ struct ShareIncomingThumbnail: View {
     /// plafond mémoire de l'extension.
     nonisolated static func downsampled(_ url: URL, maxPixel: Int) async -> UIImage? {
         await Task.detached(priority: .userInitiated) {
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-            ]
-            guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-            return UIImage(cgImage: thumbnail)
+            ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: CGFloat(maxPixel), decodeImmediately: true)
+                .map { UIImage(cgImage: $0) }
         }.value
     }
 
@@ -150,19 +143,7 @@ struct ShareIncomingThumbnail: View {
     /// ne passent en mémoire. Un fichier non décodable rend `nil` et la tuile
     /// garde son glyphe.
     nonisolated static func videoPoster(_ url: URL, maxPixel: Int) async -> UIImage? {
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxPixel, height: maxPixel)
-        generator.requestedTimeToleranceBefore = .positiveInfinity
-        generator.requestedTimeToleranceAfter = .positiveInfinity
-        do {
-            let duration = try await asset.load(.duration)
-            let seconds = min(0.1, max(0, duration.seconds.isFinite ? duration.seconds : 0))
-            let cgImage = try await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600)).image
-            return UIImage(cgImage: cgImage)
-        } catch {
-            return nil
-        }
+        await VideoThumbnailGenerator.shared.image(for: VideoThumbnailRequest(
+            url: url, instants: .start(atMost: 0.1), maximumSize: CGSize(width: maxPixel, height: maxPixel)))
     }
 }

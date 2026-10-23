@@ -221,7 +221,7 @@ final class ComposerTrimTrackTests: XCTestCase {
             film, look: ComposerPhotoLook(filter: .warm), timeRange: plage,
             person: CallFramePerson(id: "u1", name: "Ada", handle: nil, isSelf: true),
             date: Date(timeIntervalSince1970: 1_790_000_000))
-        let rendue = try XCTUnwrap(sortie)
+        let rendue = try XCTUnwrap(sortie?.gallery)
         addTeardownBlock { try? FileManager.default.removeItem(at: rendue) }
         let duree = try await AVURLAsset(url: rendue).load(.duration).seconds
         XCTAssertEqual(duree, 1, accuracy: 0.1, "seule la plage gardée part")
@@ -287,7 +287,7 @@ final class ComposerTrimTrackTests: XCTestCase {
     func test_finishEditingVideo_aFailedRender_neverFallsBackToTheRawClip() throws {
         let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertFalse(edition.contains("neuve ?? url"), "le brut ne remplace jamais un rendu raté")
-        XCTAssertTrue(edition.contains("guard let rendue else {"), "un rendu raté s'arrête avant toute remise")
+        XCTAssertTrue(edition.contains("guard let rendue = rendition?.delivery else {"), "un rendu raté s'arrête avant toute remise")
     }
 
     private static func clip() -> URL {

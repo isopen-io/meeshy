@@ -77,7 +77,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         activeCalls: any ActiveCallServiceProviding = ActiveCallService.shared,
         now: @escaping () -> Date = Date.init,
         samplingInterval: Duration = .milliseconds(400),
-        primaryVideoCeiling: @escaping @MainActor (CallVideoBudget?) -> Void = { CallManager.shared.webRTCService.setGroupVideoCeiling($0) }
+        primaryVideoCeiling: @escaping @MainActor (CallVideoBudget?) -> Void = { CallManagerHost.shared.manager?.builtWebRTCService?.setGroupVideoCeiling($0) }
     ) {
         self.linkFactory = linkFactory
         self.signaling = signaling

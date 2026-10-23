@@ -24,6 +24,17 @@ data class ConversationListUiState(
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
     val connection: SocketConnectionState = SocketConnectionState.DISCONNECTED,
+    /**
+     * True while the socket is connected, or once the grace window of the current wait
+     * (launch, or the last drop) has elapsed — only then may the strip announce it (see [bannerFor]).
+     */
+    val connectionSettled: Boolean = false,
+    /** The DEVICE network, which outranks the socket: no network reads « Offline ». */
+    val isNetworkOnline: Boolean = true,
+    /** The socket connected at least once — a wait reads « Reconnecting », else « Connecting ». */
+    val hasConnected: Boolean = false,
+    /** The short « Online » confirmation after a down state the user saw. */
+    val showBackOnline: Boolean = false,
     val currentUserId: String? = null,
     /**
      * The signed-in identity, kept alongside [currentUserId] so the preview
@@ -144,22 +155,36 @@ data class ConversationListUiState(
     fun typingDisplayNameFor(conversationId: String): String? =
         ConversationTypingRoster.typingDisplayName(typers, conversationId)
 
-    val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
+    val banner: ConnectionBanner
+        get() = bannerFor(
+            connection = connection,
+            isSyncing = isUserRefreshing,
+            connectionSettled = connectionSettled,
+            isNetworkOnline = isNetworkOnline,
+            hasConnected = hasConnected,
+            showBackOnline = showBackOnline,
+        )
 
     /** The persisted draft for [conversationId], if the composer holds one — drives the row's "Draft: …" preview. */
     fun draftFor(conversationId: String): ConversationDraft? = drafts[conversationId]
 
-    /** The preview card's cached messages for [conversationId], or `null` while not yet loaded. */
-    fun previewFor(conversationId: String): List<LocalMessage>? = previewMessages[conversationId]
+    /**
+     * The preview card's cached messages for [conversationId], or `null` while not yet loaded —
+     * and always `null` for a locked conversation, whatever was loaded before the lock (parity
+     * iOS `ConversationListPreviewLoader.state(for:)`: a lock set after a load leaves nothing readable).
+     */
+    fun previewFor(conversationId: String): List<LocalMessage>? =
+        if (isLocked(conversationId)) null else previewMessages[conversationId]
 
     /**
      * The live presence state for [conversation]'s other participant, or `null` for a
      * group/community/channel/bot conversation, or when nothing has arrived for them yet.
-     * UI wiring (the actual dot on the row/header) is a deliberately deferred follow-up —
-     * see `NOTES.md`/`PROGRESS.md` for this slice.
+     * A peer typing here is ALWAYS online, whatever the last presence frame said (product
+     * rule; parity iOS `LentilleConversationRow`: `typingUsername != nil ? .online`).
      */
     fun presenceStateFor(conversation: ApiConversation, nowEpochMillis: Long): PresenceState? {
         val otherId = conversation.otherParticipantUserId(currentUserId) ?: return null
+        if (typers[conversation.id]?.containsKey(otherId) == true) return PresenceState.ONLINE
         val event = presenceByUserId[otherId] ?: return null
         return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
     }
