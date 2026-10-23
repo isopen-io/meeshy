@@ -25,6 +25,16 @@ class KeyedJsonCache(
         dao.upsert(KeyedJsonCacheEntity(namespace, key, keyedJson.encodeToString(serializer, value), clock.nowMillis()))
     }
 
+    /**
+     * Rewrites a stored document WITHOUT touching its fetch instant: a local mutation must never
+     * make the key look freshly synced. No-op when nothing readable is stored.
+     */
+    suspend fun <T> update(namespace: String, key: String, serializer: KSerializer<T>, transform: (T) -> T) {
+        val row = dao.find(namespace, key) ?: return
+        val current = decode(row, serializer) ?: return
+        dao.upsert(row.copy(payload = keyedJson.encodeToString(serializer, transform(current.value))))
+    }
+
     /** `null` when nothing is stored OR the payload no longer decodes (a model that evolved). */
     suspend fun <T> get(namespace: String, key: String, serializer: KSerializer<T>): KeyedJsonDocument<T>? =
         dao.find(namespace, key)?.let { decode(it, serializer) }

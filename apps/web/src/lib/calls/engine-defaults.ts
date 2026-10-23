@@ -10,6 +10,7 @@ import { onConnectionChange } from '../device/capability-tier';
 import { fetchActiveCallId } from './active-call';
 import { deviceLabel } from './call-analytics';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
+import { callLensStore } from './call-lens-store';
 import { createCameraEffects } from './camera-effects';
 import { browserConnection, dataProfileOf, opusShapeFor, type DataProfile } from './call-data-profile';
 import { browserPreferenceStorage, preferredInputs, writeDevicePreference } from './call-devices';
@@ -108,6 +109,7 @@ function lazyCaptions(ctx: CaptionsContext): CaptionsPort {
 const cameraEffects = createCameraEffects({
   effects: () => videoEffectsStore.getState().effects,
   zoom: () => sentZoom(selfZoomStore.getState(), callStore.getState().call),
+  lens: () => callLensStore.getState().lens ?? undefined,
   colorSupported: browserColorSupport,
   loadPipeline: () => import('./video-effects-pipeline').then((module) => (camera, settings) => module.createEffectsPipeline(camera, settings)),
 });

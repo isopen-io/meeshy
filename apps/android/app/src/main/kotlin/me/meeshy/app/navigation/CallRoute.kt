@@ -122,12 +122,22 @@ object CallRoute {
      * call back" gesture. Threads the record's own conversation, its resolved
      * [CallRecord.displayName] and its media type straight into [path], so the
      * outgoing call re-initiates into the exact room — identical to a call
-     * placed from the chat header.
+     * placed from the chat header. [isVideo] is the media the user picked in the
+     * « Rappeler » menu or the detail sheet (the original call's by default).
      */
-    fun redial(record: CallRecord): String =
+    fun redial(record: CallRecord, isVideo: Boolean = record.isVideo): String =
         path(
             conversationId = record.conversationId,
             peerName = record.displayName,
-            isVideo = record.isVideo,
+            isVideo = isVideo,
         )
+
+    /**
+     * Where « Réduire » lands: the call's chat when its conversation is known, the
+     * conversation list otherwise. A blank id must never reach [Routes.chat] — `chat/`
+     * matches no destination and `navigate` throws (an offer, a swap or a push that
+     * carries no room used to crash the app on the chevron).
+     */
+    fun minimize(conversationId: String): String =
+        if (conversationId.isBlank()) Routes.CONVERSATIONS else Routes.chat(conversationId)
 }

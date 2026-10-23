@@ -46,8 +46,20 @@
         },
         {
           "catalog": "app",
+          "iosKey": "contacts.blocked.unblock.error",
+          "androidName": "contacts_blocked_unblock_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "contacts.blocked.unblock-message",
           "androidName": "contacts_blocked_unblock_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.blocked.unblock.success",
+          "androidName": "contacts_blocked_unblock_success",
           "status": "adopted"
         },
         {
@@ -217,6 +229,18 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "contacts.requests.accept-a11y",
+          "androidName": "contacts_requests_accept_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.requests.cancel-a11y",
+          "androidName": "contacts_requests_cancel_a11y",
+          "status": "adopted"
+        },
+        {
           "androidName": "contacts_requests_empty",
           "status": "android-only"
         },
@@ -224,6 +248,18 @@
           "catalog": "app",
           "iosKey": "contacts.requests.filter.received",
           "androidName": "contacts_requests_received",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.requests.received.intent",
+          "androidName": "contacts_requests_received_intent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.requests.reject-a11y",
+          "androidName": "contacts_requests_reject_a11y",
           "status": "adopted"
         },
         {

@@ -64,6 +64,9 @@ class StoryComposerViewModel @Inject constructor(
     private val _state = MutableStateFlow(StoryComposerUiState())
     val state: StateFlow<StoryComposerUiState> = _state.asStateFlow()
 
+    /** The author colour the reader paints a background-less slide with (#12314). */
+    val authorAccentHex: String get() = StorySceneFill.authorAccentHex(sessionRepository.currentUser.value)
+
     /** One-shot signal that a story was queued — the screen dismisses on it. */
     private val _published = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val published: SharedFlow<Unit> = _published.asSharedFlow()

@@ -35,17 +35,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
@@ -63,6 +65,7 @@ import me.meeshy.ui.component.swipe.SwipeableRow
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
+import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -107,12 +110,12 @@ internal fun ConversationRow(
  * to keep the composable-call graph unconditional.
  */
 @Composable
-private fun conversationRowRelativeTime(conversation: ApiConversation): String? {
+private fun conversationRowRelativeTime(conversation: ApiConversation, nowMillis: Long): String? {
     val strings = rememberRelativeTimeStrings()
     val millis = ConversationRowTime.epochMillis(conversation) ?: return null
     return RelativeTimeFormat.short(
         epochMillis = millis,
-        referenceMillis = System.currentTimeMillis(),
+        referenceMillis = nowMillis,
         zone = ZoneId.systemDefault(),
         locale = Locale.getDefault(),
         strings = strings,
@@ -147,13 +150,13 @@ private fun ConversationRowContent(
     )
     val rowPreview = conversationRowPreview(
         typingLine = typingLine,
-        draftLine = draftLine,
+        draft = draftLine,
         summary = messageSummaryLine(
             message = conversation.lastMessage,
             currentUserId = currentUserId,
             showSender = conversation.type != "direct",
             labels = previewLabels,
-            nowMillis = System.currentTimeMillis(),
+            nowMillis = model.nowMillis,
             // Prisme Linguistique on the row itself. The hard-press preview card two
             // hundred lines below already resolved it per message from this very
             // `currentUserPrefs`; the row behind it rendered the sender's language.
@@ -172,7 +175,7 @@ private fun ConversationRowContent(
     val palette = remember(conversation) { conversation.accentColorPalette() }
     val primaryAccent = hexColor(palette.primary)
     val secondaryAccent = hexColor(palette.secondary)
-    val heat = ConversationActivityHeat.of(conversation, System.currentTimeMillis())
+    val heat = ConversationActivityHeat.of(conversation, model.nowMillis)
     val gradient = ConversationActivityHeat.gradient(heat, isDark = MeeshyTheme.isDark)
     val heatBrush = Brush.linearGradient(
         colors = listOf(
@@ -193,7 +196,11 @@ private fun ConversationRowContent(
                         menuExpanded = true
                     },
                 )
-                .semantics { role = Role.Button; contentDescription = title },
+                .alpha(ConversationRowAppearance.rowOpacity(isMuted))
+                // Merged, never overridden: TalkBack reads the name, the pinned/muted/locked
+                // badges, the preview line, the time and the spoken unread count together
+                // (parity iOS `accessibilityElement(children: .combine)` + label).
+                .semantics(mergeDescendants = true) { role = Role.Button },
         ) {
             Row(
                 modifier = Modifier
@@ -235,6 +242,15 @@ private fun ConversationRowContent(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    ConversationRowAppearance.favoriteEmoji(prefs)?.let { emoji ->
+                        Text(
+                            text = emoji,
+                            fontSize = LentilleMetrics.Tags.emojiSize.value.sp,
+                            modifier = Modifier
+                                .padding(start = MeeshySpacing.xs)
+                                .clearAndSetSemantics {},
+                        )
+                    }
                     if (isMuted) {
                         Icon(
                             imageVector = Icons.Filled.NotificationsOff,
@@ -265,21 +281,17 @@ private fun ConversationRowContent(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             ) {
-                conversationRowRelativeTime(conversation)?.let { relativeTime ->
+                conversationRowRelativeTime(conversation, model.nowMillis)?.let { relativeTime ->
                     Text(
                         text = relativeTime,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (conversation.unreadCount > 0) {
-                            MeeshyTheme.tokens.error
-                        } else {
-                            primaryAccent
-                        },
+                        // A third level of text whatever the read state (parity iOS
+                        // `timestampColor`): the unread news is the badge, never a red time.
+                        color = MeeshyTheme.tokens.textMuted,
                         maxLines = 1,
                     )
                 }
-                if (conversation.unreadCount > 0) {
-                    MeeshyUnreadBadge(count = conversation.unreadCount)
-                }
+                MeeshyUnreadBadge(count = conversation.unreadCount)
             }
             }
         }

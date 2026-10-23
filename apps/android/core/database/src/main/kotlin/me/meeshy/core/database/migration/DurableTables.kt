@@ -56,13 +56,50 @@ internal object CacheTables {
         createSql = "CREATE TABLE IF NOT EXISTS `keyed_json_cache` (`namespace` TEXT NOT NULL, `key` TEXT NOT NULL, `payload` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`namespace`, `key`))",
     )
 
+    /** The columns version 20 appended to `messages`, exactly as Room declares them. */
+    val messageColumnsAddedIn20: List<String> = listOf(
+        "`serverId` TEXT",
+        "`senderId` TEXT",
+        "`messageType` TEXT NOT NULL DEFAULT 'text'",
+        "`deletedAt` INTEGER",
+        "`expiresAt` INTEGER",
+        "`pinnedAt` INTEGER",
+        "`isEncrypted` INTEGER NOT NULL DEFAULT 0",
+        "`encryptionMode` TEXT",
+        "`encryptedPayload` TEXT",
+        "`contentText` TEXT",
+        "`deliveredCount` INTEGER NOT NULL DEFAULT 0",
+        "`readCount` INTEGER NOT NULL DEFAULT 0",
+        "`recipientCount` INTEGER NOT NULL DEFAULT 0",
+        "`retryCount` INTEGER NOT NULL DEFAULT 0",
+        "`lastError` TEXT",
+        "`viewOnceOpenedAt` INTEGER",
+        "`changeVersion` INTEGER NOT NULL DEFAULT 0",
+        "`columnsBackfilled` INTEGER NOT NULL DEFAULT 0",
+    )
+
+    val messagesIndexes: List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_messages_serverId` ON `messages` (`serverId`)",
+        "CREATE INDEX IF NOT EXISTS `index_messages_expiresAt` ON `messages` (`expiresAt`)",
+        "CREATE INDEX IF NOT EXISTS `index_messages_pinnedAt` ON `messages` (`pinnedAt`)",
+    )
+
+    val messages = CacheTableDefinition(
+        name = "messages",
+        createSql = "CREATE TABLE IF NOT EXISTS `messages` (`id` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `seq` INTEGER, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `sendState` TEXT, " +
+            messageColumnsAddedIn20.joinToString(", ") + ", PRIMARY KEY(`id`))",
+        indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_messages_conversationId` ON `messages` (`conversationId`)") + messagesIndexes,
+    )
+
+    val pendingIds = CacheTableDefinition(
+        name = "pending_ids",
+        createSql = "CREATE TABLE IF NOT EXISTS `pending_ids` (`localId` TEXT NOT NULL, `serverId` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `reconciledAt` INTEGER, PRIMARY KEY(`localId`))",
+        indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_pending_ids_serverId` ON `pending_ids` (`serverId`)"),
+    )
+
     val all: List<CacheTableDefinition> = listOf(
         payloadTable("conversations", "id", "`updatedAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `unreadCount` INTEGER NOT NULL,"),
-        CacheTableDefinition(
-            name = "messages",
-            createSql = "CREATE TABLE IF NOT EXISTS `messages` (`id` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `seq` INTEGER, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `sendState` TEXT, PRIMARY KEY(`id`))",
-            indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_messages_conversationId` ON `messages` (`conversationId`)"),
-        ),
+        messages,
         payloadTable("stories", "id", "`createdAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL,"),
         payloadTable("call_history", "callId", "`startedAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL,"),
         payloadTable("friends", "userId", "`sortIndex` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL,"),
@@ -80,6 +117,7 @@ internal object CacheTables {
         mediaIndex,
         cacheEntries,
         keyedJsonCache,
+        pendingIds,
     )
 
     val names: Set<String> = all.map { it.name }.toSet()

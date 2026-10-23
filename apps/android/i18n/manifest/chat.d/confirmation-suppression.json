@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.view.delete_message.title",
+          "androidName": "chat_delete_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.view.delete_for_everyone.hint",
+          "androidName": "chat_delete_confirm_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.cancel",
+          "androidName": "chat_delete_confirm_cancel",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

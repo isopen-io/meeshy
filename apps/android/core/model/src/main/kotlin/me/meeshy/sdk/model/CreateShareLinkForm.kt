@@ -65,6 +65,17 @@ data class CreateShareLinkForm(
 ) {
     val canSubmit: Boolean get() = conversationId.isNotBlank()
 
+    /** `false` once [requireAccount] is on: the three guest requirements are then disabled. */
+    val guestRequirementsEditable: Boolean get() = !requireAccount
+
+    val effectiveRequireNickname: Boolean get() = requireNickname && !requireAccount
+
+    val effectiveRequireEmail: Boolean get() = requireEmail && !requireAccount
+
+    val effectiveRequireBirthday: Boolean get() = requireBirthday && !requireAccount
+
+    fun withConversation(id: String): CreateShareLinkForm = copy(conversationId = id)
+
     fun withName(value: String): CreateShareLinkForm = copy(name = value)
 
     fun withDescription(value: String): CreateShareLinkForm = copy(description = value)
@@ -92,7 +103,12 @@ data class CreateShareLinkForm(
 
     fun withMaxUsesEnabled(value: Boolean): CreateShareLinkForm = copy(maxUsesEnabled = value)
 
-    fun withMaxUses(value: Int): CreateShareLinkForm = copy(maxUses = value)
+    fun withMaxUses(value: Int): CreateShareLinkForm =
+        copy(maxUses = value.coerceIn(MIN_MAX_USES, MAX_MAX_USES))
+
+    fun incrementMaxUses(): CreateShareLinkForm = withMaxUses(maxUses + maxUsesStep(maxUses))
+
+    fun decrementMaxUses(): CreateShareLinkForm = withMaxUses(maxUses - maxUsesStep(maxUses))
 
     fun withExpiration(value: ShareLinkExpiration): CreateShareLinkForm = copy(expiration = value)
 
@@ -111,14 +127,26 @@ data class CreateShareLinkForm(
             allowAnonymousImages = allowAnonymousImages,
             allowViewHistory = allowViewHistory,
             requireAccount = requireAccount,
-            requireNickname = requireNickname && !requireAccount,
-            requireEmail = requireEmail && !requireAccount,
-            requireBirthday = requireBirthday && !requireAccount,
+            requireNickname = effectiveRequireNickname,
+            requireEmail = effectiveRequireEmail,
+            requireBirthday = effectiveRequireBirthday,
         )
     }
 
     companion object {
         const val DEFAULT_MAX_USES: Int = 100
+        const val MIN_MAX_USES: Int = 1
+        const val MAX_MAX_USES: Int = 10_000
+
+        /** iOS `Stepper` step: 1 below 100, 10 below 1000, 100 above. */
+        fun maxUsesStep(value: Int): Int = when {
+            value < 100 -> 1
+            value < 1000 -> 10
+            else -> 100
+        }
+
+        /** A form with no conversation yet: the owner picks one inside the form. */
+        fun empty(): CreateShareLinkForm = CreateShareLinkForm(conversationId = "")
 
         fun from(conversationId: String): CreateShareLinkForm =
             CreateShareLinkForm(conversationId = conversationId)

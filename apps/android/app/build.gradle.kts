@@ -49,6 +49,7 @@ android {
 
 dependencies {
     implementation(project(":sdk-core"))
+    implementation(project(":core:datastore"))
     implementation(project(":sdk-ui"))
     implementation(project(":feature:auth"))
     implementation(project(":feature:conversations"))

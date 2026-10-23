@@ -300,15 +300,12 @@ public struct StoredPackImage: View {
     }
 }
 
+/// Les vignettes de la boutique passent par le sous-échantillonneur unique
+/// (#11923) : mêmes règles que tout le reste, orientation EXIF comprise.
 nonisolated enum PackImageDecoder {
     @concurrent
     static func thumbnail(_ data: Data, maxPixelSize: Int) async -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                  kCGImageSourceCreateThumbnailFromImageAlways: true,
-                  kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-                  kCGImageSourceShouldCacheImmediately: true,
-              ] as CFDictionary) else { return nil }
-        return UIImage(cgImage: image)
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: CGFloat(maxPixelSize), decodeImmediately: true)
+            .map { UIImage(cgImage: $0) }
     }
 }

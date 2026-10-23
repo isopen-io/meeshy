@@ -1,5 +1,11 @@
 package me.meeshy.app.settings
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +27,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,9 +40,11 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +53,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -53,7 +65,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -73,6 +87,25 @@ fun AccountDeletionScreen(
     viewModel: AccountDeletionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val haptics = rememberMeeshyHaptics()
+    val reduceMotion = LocalReduceMotion.current
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                AccountDeletionEffect.HAPTIC_HEAVY -> haptics.heavy()
+                AccountDeletionEffect.HAPTIC_SUCCESS -> haptics.success()
+                AccountDeletionEffect.HAPTIC_ERROR -> haptics.error()
+            }
+        }
+    }
+
+    if (state.showFinalConfirmation) {
+        FinalConfirmationDialog(
+            onConfirm = viewModel::confirmDeletion,
+            onDismiss = viewModel::dismissFinalConfirmation,
+        )
+    }
 
     MeeshyBackground {
         Scaffold(
@@ -105,10 +138,25 @@ fun AccountDeletionScreen(
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {
-                if (state.isEmailSent) {
-                    EmailSentBlock(onDone = onBack)
-                } else {
-                    DeletionForm(state = state, viewModel = viewModel)
+                AnimatedContent(
+                    targetState = state.isEmailSent,
+                    transitionSpec = {
+                        if (reduceMotion) {
+                            fadeIn() togetherWith fadeOut()
+                        } else {
+                            val motion = spring<Float>(dampingRatio = 0.8f, stiffness = EMAIL_SWITCH_STIFFNESS)
+                            (fadeIn(motion) + scaleIn(motion, initialScale = 0.95f)) togetherWith fadeOut(motion)
+                        }
+                    },
+                    label = "deletion-email-switch",
+                ) { emailSent ->
+                    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg)) {
+                        if (emailSent) {
+                            EmailSentBlock(onDone = onBack)
+                        } else {
+                            DeletionForm(state = state, viewModel = viewModel)
+                        }
+                    }
                 }
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
@@ -132,12 +180,17 @@ private fun DeletionForm(
         color = MeeshyTheme.tokens.textPrimary,
     )
 
+    val phraseState = stringResource(
+        if (state.isConfirmed) R.string.account_delete_confirmation_value_matched
+        else R.string.account_delete_confirmation_value_pending,
+    )
     OutlinedTextField(
         value = state.confirmationText,
         onValueChange = viewModel::onConfirmationTextChange,
         label = { Text(stringResource(R.string.delete_account_confirm_label)) },
         singleLine = true,
         isError = state.confirmationText.isNotEmpty() && !state.isConfirmed,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
         trailingIcon = {
             if (state.isConfirmed) {
                 Icon(
@@ -149,7 +202,8 @@ private fun DeletionForm(
         },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = MeeshySpacing.sm),
+            .padding(top = MeeshySpacing.sm)
+            .semantics { stateDescription = phraseState },
     )
 
     PasswordField(
@@ -170,12 +224,17 @@ private fun DeletionForm(
         )
     }
 
+    val buttonState = stringResource(
+        if (state.isConfirmed) R.string.account_delete_button_hint_ready
+        else R.string.account_delete_button_hint_type_phrase,
+    )
     Button(
-        onClick = viewModel::submit,
+        onClick = viewModel::requestDeletion,
         enabled = state.canSubmit,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = MeeshySpacing.sm),
+            .padding(top = MeeshySpacing.sm)
+            .semantics { stateDescription = buttonState },
         colors = ButtonDefaults.buttonColors(containerColor = MeeshyPalette.Error),
     ) {
         if (state.isDeleting) {
@@ -226,6 +285,23 @@ private fun PasswordField(
             }
         },
         modifier = modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun FinalConfirmationDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.account_delete_final_title)) },
+        text = { Text(stringResource(R.string.account_delete_final_message)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.common_delete), color = MeeshyPalette.Error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        },
     )
 }
 
@@ -329,6 +405,9 @@ private fun EmailSentBlock(onDone: () -> Unit) {
     }
 }
 
+/** Spring response 0,5 s (iOS `.spring(response: 0.5)`) ≈ stiffness (2π/0,5)². */
+private const val EMAIL_SWITCH_STIFFNESS = 158f
+
 /**
  * The literal shown to the user inside the prompt. Kept as a display constant (not the raw
  * SSOT reference) so the monospace formatting is applied by the caller; the value is the
@@ -342,5 +421,5 @@ private fun AccountDeletionError.messageRes(): Int = when (this) {
     AccountDeletionError.ALREADY_PENDING -> R.string.delete_account_error_pending
     AccountDeletionError.NO_EMAIL -> R.string.delete_account_error_no_email
     AccountDeletionError.NETWORK -> R.string.delete_account_error_network
-    AccountDeletionError.GENERIC -> R.string.delete_account_error_generic
+    AccountDeletionError.GENERIC -> R.string.account_delete_error
 }

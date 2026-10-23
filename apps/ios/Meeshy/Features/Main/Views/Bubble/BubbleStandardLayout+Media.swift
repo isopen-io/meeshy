@@ -441,7 +441,6 @@ fileprivate struct BubbleGridCell: View {
                     accentColor: contactColor,
                     frame: .bubble,
                     availability: availability,
-                    performance: .inline,
                     playButtonDiameter: solo ? 64 : 44,
                     surfaceTapExpands: true,
                     onDownload: onDownload,

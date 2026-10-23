@@ -18,6 +18,9 @@ class MessageActionMenuTest {
         canDeleteForEveryone: Boolean = false,
         pinAction: PinAction = PinAction.Pin,
         hasOpenableFile: Boolean = false,
+        isEdited: Boolean = false,
+        hasText: Boolean = true,
+        hostedEntries: Set<MessageAction> = emptySet(),
     ) = MessageActionContext(
         isDeleted = isDeleted,
         isPending = isPending,
@@ -30,6 +33,9 @@ class MessageActionMenuTest {
         canDeleteForEveryone = canDeleteForEveryone,
         pinAction = pinAction,
         hasOpenableFile = hasOpenableFile,
+        isEdited = isEdited,
+        hasText = hasText,
+        hostedEntries = hostedEntries,
     )
 
     // MARK: - isActionable derivation
@@ -301,5 +307,76 @@ class MessageActionMenuTest {
             MessageAction.ShareFile,
             MessageAction.Pin,
         ).inOrder()
+    }
+
+    // MARK: - detail / selection entries
+
+    private val allHosted = setOf(
+        MessageAction.Views, MessageAction.History, MessageAction.Sentiment,
+        MessageAction.Select, MessageAction.ExportCard,
+    )
+
+    @Test
+    fun nothing_new_is_offered_while_the_host_serves_no_entry() {
+        val actions = MessageActionMenu.actions(ctx(isEdited = true))
+        assertThat(actions).containsNoneIn(allHosted)
+    }
+
+    @Test
+    fun a_received_edited_text_offers_actions_then_information_then_report() {
+        assertThat(MessageActionMenu.actions(ctx(isEdited = true, hostedEntries = allHosted))).containsExactly(
+            MessageAction.Reply,
+            MessageAction.Forward,
+            MessageAction.Copy,
+            MessageAction.Select,
+            MessageAction.ExportCard,
+            MessageAction.Pin,
+            MessageAction.Star,
+            MessageAction.DeleteForMe,
+            MessageAction.Views,
+            MessageAction.History,
+            MessageAction.Sentiment,
+            MessageAction.Report,
+        ).inOrder()
+    }
+
+    @Test
+    fun history_needs_an_edited_message() {
+        assertThat(MessageActionMenu.actions(ctx(isEdited = false, hostedEntries = allHosted)))
+            .doesNotContain(MessageAction.History)
+    }
+
+    @Test
+    fun sentiment_and_card_export_need_text() {
+        val actions = MessageActionMenu.actions(ctx(hasText = false, hostedEntries = allHosted))
+        assertThat(actions).containsNoneOf(MessageAction.Sentiment, MessageAction.ExportCard)
+        assertThat(actions).containsAtLeast(MessageAction.Views, MessageAction.Select)
+    }
+
+    @Test
+    fun a_deleted_message_exposes_none_of_the_new_entries() {
+        val actions = MessageActionMenu.actions(
+            ctx(isDeleted = true, isEdited = true, pinAction = PinAction.Unavailable, hostedEntries = allHosted),
+        )
+        assertThat(actions).isEmpty()
+    }
+
+    @Test
+    fun pending_and_failed_sends_keep_views_select_and_info_but_stay_without_report() {
+        listOf(ctx(isPending = true, isOutgoing = true, isEdited = true, hostedEntries = allHosted),
+            ctx(isFailed = true, isOutgoing = true, isEdited = true, hostedEntries = allHosted)).forEach {
+            val actions = MessageActionMenu.actions(it)
+            assertThat(actions).containsAtLeast(
+                MessageAction.Select, MessageAction.Views, MessageAction.History, MessageAction.Sentiment,
+            )
+            assertThat(actions).doesNotContain(MessageAction.Report)
+        }
+    }
+
+    @Test
+    fun an_outgoing_message_offers_the_new_entries_without_report() {
+        val actions = MessageActionMenu.actions(ctx(isOutgoing = true, hostedEntries = allHosted))
+        assertThat(actions).containsAtLeast(MessageAction.Views, MessageAction.Sentiment)
+        assertThat(actions).doesNotContain(MessageAction.Report)
     }
 }

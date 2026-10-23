@@ -18,19 +18,24 @@ import me.meeshy.app.profile.ReportUserViewModel
 internal fun NavGraphBuilder.socialNavGraph(
     navController: NavHostController,
 ) {
+    val openProfile: (String) -> Unit = { userId ->
+        if (userId.isNotBlank()) navController.navigate(Routes.profile(userId))
+    }
     composable(Routes.CONTACTS) {
-        ContactsScreen(onBack = { navController.popBackStack() })
+        ContactsScreen(onBack = { navController.popBackStack() }, onOpenProfile = openProfile)
     }
     composable(Routes.CONTACTS_DISCOVER) {
         ContactsScreen(
             onBack = { navController.popBackStack() },
             initialTab = me.meeshy.app.contacts.ContactsTab.Discover,
+            onOpenProfile = openProfile,
         )
     }
     composable(Routes.BLOCKED_USERS) {
         ContactsScreen(
             onBack = { navController.popBackStack() },
             initialTab = me.meeshy.app.contacts.ContactsTab.Blocked,
+            onOpenProfile = openProfile,
         )
     }
     composable(Routes.NOTIFICATIONS) {
@@ -57,6 +62,7 @@ internal fun NavGraphBuilder.socialNavGraph(
                 navController.navigate(Routes.reportUser(userId, username))
             },
             onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
+            onOpenConversation = { conversationId -> navController.navigate(Routes.chat(conversationId)) },
         )
     }
     composable(

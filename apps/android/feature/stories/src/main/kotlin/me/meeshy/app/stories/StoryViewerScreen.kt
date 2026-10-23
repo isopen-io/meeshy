@@ -12,7 +12,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -65,9 +64,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -89,6 +86,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.imageLoader
@@ -96,7 +96,7 @@ import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
-import me.meeshy.sdk.model.StoryBackgroundValue
+import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.scene.StoryTextBackground
@@ -114,12 +114,6 @@ import me.meeshy.ui.theme.hexColor
 private val SWIPE_HORIZONTAL_THRESHOLD = 64.dp
 private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 
-/** Foreground media renders at this fraction of the canvas width, scaled by the object's own [StoryForegroundMediaView.scale]. */
-private const val FOREGROUND_WIDTH_FRACTION = 0.45f
-
-/** Wire `StoryTextObject.fontSize` is authored in this 1080-referential design space (iOS parity); the on-screen size scales it by the canvas width. */
-private const val TEXT_DESIGN_CANVAS_WIDTH = 1080f
-
 /**
  * Minimal but real story viewer: segmented progress, tap-to-advance/dismiss,
  * timed auto-advance gated on the slide, Prisme-resolved text and the slide's
@@ -133,6 +127,14 @@ fun StoryViewerScreen(
     viewModel: StoryViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    if (state.loadFailed) {
+        StoryViewerNotFound(onRetry = viewModel::retry, onClose = onClose)
+        return
+    }
+    if (state.isLoading && state.slides.isEmpty()) {
+        StoryViewerLoading()
+        return
+    }
     val slide = state.current
     // Per-slide auto-advance timing (author-pinned → content-derived → 6s), resolved
     // by the shared StorySlideDuration rule at projection time. Drives both the
@@ -164,6 +166,12 @@ fun StoryViewerScreen(
     var heartBouncePulse by remember { mutableIntStateOf(0) }
     var boxOriginInRoot by remember { mutableStateOf(Offset.Zero) }
     val railOverlayActive = reactionBarVisible || languageBarVisible || scrubKind != null
+    val cover = StoryViewerCover(
+        sheet = showViewers || showComments || showSendTo,
+        railBar = railOverlayActive,
+        menu = showOptions,
+        dialog = showReportDialog || showDeleteDialog,
+    )
 
     fun closeRailBars() {
         reactionBarVisible = false
@@ -321,25 +329,36 @@ fun StoryViewerScreen(
         if (state.isDismissed) onClose()
     }
 
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    // Une story joue tant qu'elle n'est ni retenue (appui long) ni cachée : app en
+    // arrière-plan, appel entrant, écran éteint figent l'horloge et le son (#11040).
+    val playing = !state.isPaused && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    var progressSlideKey by remember { mutableStateOf<String?>(null) }
+
     androidx.compose.runtime.LaunchedEffect(
         state.groupIndex,
         state.index,
-        state.slides.size,
+        state.currentStoryId,
         state.canAutoAdvance,
         slideDurationMs,
-        showViewers,
-        showComments,
-        showSendTo,
-        railOverlayActive,
+        cover.freezesPlayback,
+        playing,
     ) {
-        if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments || showSendTo || railOverlayActive) return@LaunchedEffect
-        viewModel.markCurrentViewed()
-        progress.snapTo(0f)
-        // Gate: hold the countdown at empty until the current slide's media has
-        // painted (text-only slides are ready at once). When the gate flips the
-        // effect re-runs and the timer starts.
+        if (state.slides.isEmpty() || state.isDismissed) return@LaunchedEffect
+        val slideKey = "${state.groupIndex}:${state.index}:${state.currentStoryId}"
+        if (progressSlideKey != slideKey) {
+            // Une nouvelle story repart de zéro et compte UNE vue ; une pause, une
+            // feuille ou un retour au premier plan reprennent là où l'horloge s'était figée.
+            progressSlideKey = slideKey
+            progress.snapTo(0f)
+            viewModel.markCurrentViewed()
+        }
+        if (!playing || cover.freezesPlayback) return@LaunchedEffect
+        // Gate: hold the countdown until the current slide's media has painted
+        // (text-only slides are ready at once). When the gate flips the effect re-runs.
         if (!state.canAutoAdvance) return@LaunchedEffect
-        progress.animateTo(1f, tween(durationMillis = slideDurationMs, easing = LinearEasing))
+        val remainingMs = ((1f - progress.value) * slideDurationMs).roundToInt().coerceAtLeast(0)
+        progress.animateTo(1f, tween(durationMillis = remainingMs, easing = LinearEasing))
         viewModel.advance()
     }
 
@@ -351,15 +370,17 @@ fun StoryViewerScreen(
             .background(hexColor(accent))
             .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() }
             .pointerInput(state.groupIndex, state.index, state.slides.size) {
-                detectTapGestures { offset ->
+                // Appui long ≥ 200 ms = pause qui tient au relâchement ; le tap suivant
+                // reprend sans naviguer (iOS `StoryGestureOverlayView`).
+                detectStoryCanvasTaps(
+                    isDoubleTapZone = { StoryTapZone.of(it.x, size.width.toFloat()) == StoryTapZone.Center },
+                    onDoubleTap = { if (!overlayActiveState.value) viewModel.onCanvasDoubleTap() },
+                    onHold = { if (!overlayActiveState.value) viewModel.pauseByHold() },
+                ) { offset ->
                     if (overlayActiveState.value) {
                         closeRailBars()
-                        return@detectTapGestures
-                    }
-                    if (offset.x < size.width / 2f) {
-                        viewModel.back()
                     } else {
-                        viewModel.advance()
+                        viewModel.onCanvasTap(StoryTapZone.of(offset.x, size.width.toFloat()))
                     }
                 }
             }
@@ -394,8 +415,9 @@ fun StoryViewerScreen(
                 val bg = slide.backgroundTransform
                 ReelVideoSurface(
                     mediaUrl = slide.backgroundVideoUrl,
-                    isActive = true,
-                    muted = false,
+                    isActive = playing,
+                    rewindWhenInactive = false,
+                    muted = state.isMuted,
                     // La fenêtre de lecture que l'auteur a posée (#5129) — `null`
                     // quand la source joue en entier.
                     sourceStartMs = slide.backgroundVideoWindow?.startMs,
@@ -450,7 +472,7 @@ fun StoryViewerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(slideBackgroundBrush(slide.background, slide.accentHex)),
+                        .background(StorySceneFill.resolve(slide.background, slide.accentHex).brush()),
                 )
             }
         }
@@ -463,6 +485,8 @@ fun StoryViewerScreen(
                     StoryForegroundLayer(
                         media = foreground,
                         playheadSeconds = playheadSeconds,
+                        playing = playing,
+                        muted = state.isMuted,
                     )
                 }
             }
@@ -476,6 +500,17 @@ fun StoryViewerScreen(
                         playheadSeconds = playheadSeconds,
                     )
                 }
+            }
+        }
+
+        slide?.stickers?.forEach { sticker ->
+            if (sticker.isVisible(playheadSeconds)) {
+                key(sticker.id) { StoryStickerLayer(sticker = sticker, playheadSeconds = playheadSeconds) }
+            }
+        }
+        slide?.audioChips?.forEach { chip ->
+            if (chip.isVisible(playheadSeconds)) {
+                key(chip.id) { StoryAudioChipLayer(chip = chip) }
             }
         }
 
@@ -497,7 +532,9 @@ fun StoryViewerScreen(
             key(url) {
                 AudioTrackSurface(
                     mediaUrl = url,
-                    isActive = true,
+                    isActive = playing,
+                    rewindWhenInactive = false,
+                    volume = if (state.isMuted) 0f else 1f,
                     loop = slide.backgroundLoop,
                     sourceStartMs = slide.backgroundAudioWindow?.startMs,
                     sourceEndMs = slide.backgroundAudioWindow?.endMs,
@@ -508,7 +545,9 @@ fun StoryViewerScreen(
             key(url) {
                 AudioTrackSurface(
                     mediaUrl = url,
-                    isActive = true,
+                    isActive = playing,
+                    rewindWhenInactive = false,
+                    volume = if (state.isMuted) 0f else 1f,
                     loop = false,
                     // Un vocal rogné compte autant qu'une vidéo rognée : iOS
                     // écrit les deux bornes sur les deux familles (#5129).
@@ -519,19 +558,14 @@ fun StoryViewerScreen(
         }
 
         if (slide != null && slide.text.isNotBlank()) {
-            Text(
+            StoryCaptionOverlay(
                 text = slide.text,
-                color = MeeshyPalette.White,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(MeeshySpacing.xl),
+                storyId = slide.id,
+                modifier = Modifier.align(Alignment.BottomStart),
             )
         }
 
-        Column(
+        if (!state.isPaused) Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
@@ -548,52 +582,18 @@ fun StoryViewerScreen(
                     .padding(top = MeeshySpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
+                StoryAuthorIdentity(
+                    name = state.authorName,
+                    avatarUrl = state.authorAvatarUrl,
+                    accentHex = accent,
+                    createdAtMillis = slide?.createdAtMillis,
+                    repostAttribution = slide?.repostAttribution,
                     modifier = Modifier
                         .weight(1f)
                         .padding(start = MeeshySpacing.xs),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = state.authorName,
-                        color = MeeshyPalette.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    slide?.repostAttribution?.let { attribution ->
-                        val handle = attribution.handle
-                        val repostLabel = handle
-                            ?.let { stringResource(R.string.stories_reposted_from, it) }
-                            ?: stringResource(R.string.stories_reposted)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .padding(start = MeeshySpacing.xs)
-                                .semantics(mergeDescendants = true) {
-                                    contentDescription = repostLabel
-                                },
-                        ) {
-                            Icon(
-                                Icons.Filled.Repeat,
-                                contentDescription = null,
-                                tint = MeeshyPalette.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(12.dp),
-                            )
-                            handle?.let {
-                                Text(
-                                    text = "@$it",
-                                    color = MeeshyPalette.White.copy(alpha = 0.65f),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(start = 2.dp),
-                                )
-                            }
-                        }
-                    }
+                )
+                if (slide != null && slide.hasSound) {
+                    StoryMuteButton(isMuted = state.isMuted, onToggle = viewModel::toggleMute)
                 }
                 if (slide?.isTranslated == true) {
                     TranslatedBadge()
@@ -678,7 +678,7 @@ fun StoryViewerScreen(
         }
 
         val languageBadge = slide?.languageCode ?: state.languageOverride
-        if (slide != null && !state.isDismissed) {
+        if (slide != null && !state.isDismissed && !state.isPaused) {
             StoryActionRail(
                 plan = StoryRailPlan.resolve(
                     isOwnStory = state.isOwnStory,
@@ -688,7 +688,7 @@ fun StoryViewerScreen(
                 hasReacted = state.myReactions.isNotEmpty(),
                 languageBadgeCode = languageBadge,
                 heartBouncePulse = heartBouncePulse,
-                onTapHeart = { sendReaction("❤️", from = heartBounds) },
+                onTapHeart = { sendReaction(EmojiCatalog.DOUBLE_TAP_EMOJI, from = heartBounds) },
                 onTapLanguage = {
                     reactionBarVisible = false
                     hoveredIndex = null
@@ -774,13 +774,24 @@ fun StoryViewerScreen(
     }
 
     if (showFullEmojiPicker) {
-        ModalBottomSheet(onDismissRequest = { showFullEmojiPicker = false }) {
-            EmojiFullPicker(
-                onSelect = { emoji ->
-                    showFullEmojiPicker = false
-                    sendReaction(emoji, from = null)
-                },
-            )
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showFullEmojiPicker = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures { showFullEmojiPicker = false } },
+            ) {
+                me.meeshy.ui.component.ReactionCategorySheet(
+                    onReact = { emoji ->
+                        showFullEmojiPicker = false
+                        sendReaction(emoji, from = null)
+                    },
+                    onDismiss = { showFullEmojiPicker = false },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
     }
 
@@ -812,33 +823,6 @@ fun StoryViewerScreen(
                 sendToStoryId = null
             },
         )
-    }
-}
-
-/**
- * The base-layer brush for a media-less slide. When the author pinned a
- * [StoryBackgroundValue] we paint it — a solid colour, or the two-colour linear
- * gradient (top-leading → bottom-trailing, iOS `storyBackgroundStyle` convention) —
- * falling back to the accent→black gradient when there is no background or a
- * degraded value cannot resolve to a real colour (so the slide is never blank).
- */
-private fun slideBackgroundBrush(background: StoryBackgroundValue?, accentHex: String): Brush {
-    val fallback = Brush.verticalGradient(listOf(hexColor(accentHex), Color.Black))
-    return when (background) {
-        null -> fallback
-        is StoryBackgroundValue.Hex -> {
-            val color = hexColor(background.hex)
-            if (color == Color.Unspecified) fallback else SolidColor(color)
-        }
-        is StoryBackgroundValue.Gradient -> {
-            val start = hexColor(background.start)
-            val end = hexColor(background.end)
-            if (start == Color.Unspecified || end == Color.Unspecified) {
-                fallback
-            } else {
-                Brush.linearGradient(listOf(start, end))
-            }
-        }
     }
 }
 
@@ -971,144 +955,3 @@ private fun ReactionFlightOverlay(
             .wrapContentSize(Alignment.Center),
     )
 }
-
-/**
- * A foreground video/image layer positioned at [StoryForegroundMediaView.x]/[y]
- * (canvas-normalised, 0..1) as its center anchor, sized to a fraction of the
- * canvas width scaled by the object's own `scale`. The [playheadSeconds] clock
- * drives keyframe animation via the pure [StoryForegroundMediaView.animated]:
- * position/scale/opacity follow the clip's keyframes for the current instant, or
- * hold their static base when the clip has none. Rotation and inter-slide
- * transitions are still not applied in this projection.
- */
-@Composable
-private fun StoryForegroundLayer(
-    media: StoryForegroundMediaView,
-    playheadSeconds: Float,
-    modifier: Modifier = Modifier,
-) {
-    val animated = media.animated(playheadSeconds)
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val aspectRatio = animated.aspectRatio.toFloat().takeIf { it > 0f } ?: 1f
-        val targetWidth = maxWidth * FOREGROUND_WIDTH_FRACTION * animated.scale.toFloat().coerceIn(0.2f, 3f)
-        val targetHeight = targetWidth / aspectRatio
-        val offsetX = maxWidth * animated.x.toFloat() - targetWidth / 2
-        val offsetY = maxHeight * animated.y.toFloat() - targetHeight / 2
-        val layerModifier = Modifier
-            .offset(x = offsetX, y = offsetY)
-            .width(targetWidth)
-            .aspectRatio(aspectRatio)
-            .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
-        if (media.isVideo) {
-            ReelVideoSurface(
-                mediaUrl = media.url,
-                isActive = true,
-                muted = false,
-                modifier = layerModifier,
-                sourceStartMs = media.sourceWindow?.startMs,
-                sourceEndMs = media.sourceWindow?.endMs,
-            )
-        } else {
-            AsyncImage(
-                model = media.url,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = layerModifier,
-            )
-        }
-    }
-}
-
-/**
- * A text overlay positioned at [StoryTextObjectView.x]/[y] (canvas-normalised, 0..1)
- * as its center anchor. The [playheadSeconds] clock drives the pure
- * [StoryTextObjectView.animated]: position follows the object's keyframes and opacity
- * ramps through its fadeIn/fadeOut envelope for the current instant, or holds its
- * static base when the object authored neither. The Prisme-resolved [text] renders in
- * the authored [colorHex]/[align]; wire `fontSize` is a 1080-referential design unit
- * (× the object's `scale`) mapped onto the real canvas width, and [rotation] tilts the
- * glyphs about their own center — iOS `fontSize × scale` parity.
- */
-@Composable
-private fun StoryTextObjectLayer(
-    textObject: StoryTextObjectView,
-    playheadSeconds: Float,
-    modifier: Modifier = Modifier,
-) {
-    val animated = textObject.animated(playheadSeconds)
-    var textSize by remember { mutableStateOf(IntSize.Zero) }
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val density = LocalDensity.current
-        val centerXpx = with(density) { (maxWidth * animated.x.toFloat()).toPx() }
-        val centerYpx = with(density) { (maxHeight * animated.y.toFloat()).toPx() }
-        val canvasWidthPx = with(density) { maxWidth.toPx() }
-        val color = animated.colorHex
-            ?.let { runCatching { hexColor(it) }.getOrNull() }
-            ?: MeeshyPalette.White
-        val textAlign = when (animated.align) {
-            "left" -> TextAlign.Start
-            "right" -> TextAlign.End
-            else -> TextAlign.Center
-        }
-        val fontSizePx = (animated.fontSize * animated.scale)
-            .toFloat()
-            .times(canvasWidthPx / TEXT_DESIGN_CANVAS_WIDTH)
-            .coerceAtLeast(1f)
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .onSizeChanged { textSize = it }
-                .offset {
-                    IntOffset(
-                        (centerXpx - textSize.width / 2f).roundToInt(),
-                        (centerYpx - textSize.height / 2f).roundToInt(),
-                    )
-                }
-                .graphicsLayer { rotationZ = animated.rotation.toFloat() }
-                .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
-                .storyTextBacking(animated.background)
-                .padding(horizontal = 6.dp, vertical = 2.dp),
-        ) {
-            Text(
-                text = animated.text,
-                color = color,
-                textAlign = textAlign,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = with(density) { fontSizePx.toSp() },
-                // The EFFECT axis (#4870) — the same table as the composer preview
-                // and the two other clients, at the glyphs' real pixel size.
-                style = LocalTextStyle.current.copy(shadow = animated.effect.composeShadow(fontSizePx, color)),
-            )
-        }
-    }
-}
-
-/**
- * Paints an iOS/web-authored text backing behind the reader's glyphs (glue): a rounded
- * solid fill for [StoryTextBackground.Solid], a translucent frosted scrim approximating the
- * iOS glass blur for [StoryTextBackground.Glass], and nothing for [StoryTextBackground.None].
- * The *choice* of backing is the unit-tested [StoryTextBackground.resolve]; this only renders
- * it, mirroring the composer's own backing so author and reader agree on the look.
- */
-private fun Modifier.storyTextBacking(background: StoryTextBackground): Modifier = when (background) {
-    StoryTextBackground.None -> this
-    is StoryTextBackground.Solid ->
-        this.background(readerBackingColor(background.hex), RoundedCornerShape(10.dp))
-    is StoryTextBackground.Glass ->
-        this.background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
-}
-
-/**
- * Parses a `RRGGBB` or `RRGGBBAA` backing hex (gateway parity, no `#`) into a [Color],
- * honouring the alpha byte so a translucent solid renders as authored. Decays to
- * [Color.Transparent] on anything unexpected so a malformed backing never crashes the canvas.
- */
-private fun readerBackingColor(hex: String): Color = runCatching {
-    val h = hex.removePrefix("#")
-    val argb = when (h.length) {
-        8 -> h.substring(6, 8) + h.substring(0, 6)
-        6 -> "ff$h"
-        else -> return Color.Transparent
-    }
-    Color(argb.toLong(16))
-}.getOrDefault(Color.Transparent)
