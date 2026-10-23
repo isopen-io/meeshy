@@ -16,7 +16,8 @@
  * la marge HDR seule de son MakerNote (`apple-hdr-headroom.ts`). Les segments
  * ISO 21496-1 passent tels quels : ils ne portent que des nombres de tonalité.
  * Toute autre image annexée (vignette MPF, carte de profondeur) part, avec son
- * EXIF. Aucun octet d'image n'est réencodé.
+ * EXIF ; on n'en examine que huit, pour qu'un fichier forgé de milliers de
+ * débuts d'image ne coûte pas un parcours quadratique. Aucun octet d'image n'est réencodé.
  */
 import { appleHeadroomExifSegment, appleHeadroomTags, type AppleHeadroomTag } from './apple-hdr-headroom';
 import { gainMapProperties, gainMapXmpSegment, xmpPacketOf, type GainMapProperty } from './gain-map-xmp';
@@ -28,6 +29,7 @@ const APP2 = 0xe2;
 const ISO_21496_SIGNATURE = Buffer.from('urn:iso:std:iso:ts:21496:-1\0', 'latin1');
 const SOI_PREFIX = Buffer.from([0xff, 0xd8, 0xff]);
 const MPF_SEGMENT_LENGTH = 90;
+const MAX_APPENDED_IMAGES = 8;
 const MP_ENTRY_PRIMARY = 0x20030000;
 const MP_ENTRY_JPEG = 0x00000000;
 const MPF_TIFF_OFFSET_IN_SEGMENT = 8;
@@ -56,7 +58,7 @@ function asGainMap(image: JpegImage): GainMapImage | null {
 
 function findGainMap(buffer: Buffer, from: number): GainMapImage | null {
   let at = buffer.indexOf(SOI_PREFIX, from);
-  while (at !== -1) {
+  for (let tried = 0; at !== -1 && tried < MAX_APPENDED_IMAGES; tried += 1) {
     const image = readJpegImage(buffer, at);
     const gainMap = image === null ? null : asGainMap(image);
     if (gainMap !== null) return gainMap;
