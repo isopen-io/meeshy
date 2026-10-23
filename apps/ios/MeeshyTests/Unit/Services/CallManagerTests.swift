@@ -2525,7 +2525,7 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
             XCTFail("endCurrentAndAnswerPending not found"); return
         }
         XCTAssertTrue(
-            body.contains("Task.sleep"),
+            body.contains("cancellableSleep(") || body.contains("Task.sleep"),
             "endCurrentAndAnswerPending must sleep before routing the pending call to allow the previous call's " +
             "socket/WebRTC teardown to complete (avoids endCallInternal racing with handleIncomingCallNotification)"
         )
@@ -6446,14 +6446,9 @@ final class CallManagerBubblePositionTests: XCTestCase {
     /// unconditionally, not only in the conditional settle-window path.
     func test_endCallInternal_resetsBubblePositionUnconditionally() throws {
         let source = try callManagerSource()
-        guard let range = source.range(of: "func endCallInternal(reason: CallEndReason) {") else {
-            XCTFail("endCallInternal not found in CallManager.swift"); return
+        guard let body = DeclarationBodyScanner.body(containing: "func endCallInternal(reason: CallEndReason", in: source) else {
+            XCTFail("endCallInternal not found in the CallManager unit"); return
         }
-        let bodyEnd = source.range(
-            of: "\n    // MARK: - Audio Session",
-            range: range.upperBound..<source.endIndex
-        )?.lowerBound ?? source.endIndex
-        let body = String(source[range.lowerBound..<bodyEnd])
         XCTAssertTrue(
             body.contains("bubbleEdge = .trailing"),
             "endCallInternal must unconditionally reset bubbleEdge to .trailing — otherwise a call started " +
