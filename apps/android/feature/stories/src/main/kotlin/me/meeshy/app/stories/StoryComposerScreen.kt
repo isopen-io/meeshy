@@ -165,6 +165,9 @@ fun StoryComposerScreen(
                         transform = state.selectedSlideTransform,
                         backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
                             ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
+                        sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
+                            StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
+                        },
                         colorMatrix = state.selectedSlideFilterMatrix,
                         textElements = state.selectedSlideTextElements,
                         selectedElement = state.selectedTextElement,

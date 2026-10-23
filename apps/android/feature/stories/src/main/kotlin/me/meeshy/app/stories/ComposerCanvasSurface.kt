@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.PathEffect
@@ -58,6 +59,7 @@ import me.meeshy.sdk.model.scene.StoryColorMatrix
 internal fun StoryCanvasSurface(
     transform: StoryCanvasTransform,
     backgroundModel: Any?,
+    sceneBrush: Brush,
     colorMatrix: StoryColorMatrix,
     textElements: List<StoryTextElement>,
     selectedElement: StoryTextElement?,
@@ -105,7 +107,7 @@ internal fun StoryCanvasSurface(
                 .fillMaxHeight()
                 .aspectRatio(9f / 16f)
                 .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(sceneBrush)
                 .then(
                     if (warnBorder != null) {
                         Modifier.border(warnBorder, RoundedCornerShape(16.dp))

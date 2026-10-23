@@ -64,9 +64,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -100,7 +98,6 @@ import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
-import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.scene.StoryTextBackground
@@ -476,7 +473,7 @@ fun StoryViewerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(slideBackgroundBrush(slide.background, slide.accentHex)),
+                        .background(StorySceneFill.resolve(slide.background, slide.accentHex).brush()),
                 )
             }
         }
@@ -805,33 +802,6 @@ fun StoryViewerScreen(
                 sendToStoryId = null
             },
         )
-    }
-}
-
-/**
- * The base-layer brush for a media-less slide. When the author pinned a
- * [StoryBackgroundValue] we paint it — a solid colour, or the two-colour linear
- * gradient (top-leading → bottom-trailing, iOS `storyBackgroundStyle` convention) —
- * falling back to the accent→black gradient when there is no background or a
- * degraded value cannot resolve to a real colour (so the slide is never blank).
- */
-private fun slideBackgroundBrush(background: StoryBackgroundValue?, accentHex: String): Brush {
-    val fallback = Brush.verticalGradient(listOf(hexColor(accentHex), Color.Black))
-    return when (background) {
-        null -> fallback
-        is StoryBackgroundValue.Hex -> {
-            val color = hexColor(background.hex)
-            if (color == Color.Unspecified) fallback else SolidColor(color)
-        }
-        is StoryBackgroundValue.Gradient -> {
-            val start = hexColor(background.start)
-            val end = hexColor(background.end)
-            if (start == Color.Unspecified || end == Color.Unspecified) {
-                fallback
-            } else {
-                Brush.linearGradient(listOf(start, end))
-            }
-        }
     }
 }
 
