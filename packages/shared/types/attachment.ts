@@ -134,12 +134,22 @@ export type ModerationStatus = 'pending' | 'approved' | 'flagged' | 'rejected';
  * D4 — a single responsive downscaled WebP variant of an image attachment,
  * used to build a client `srcset`. @see schema.prisma MessageAttachment.imageVariants
  */
+/** #11261 — an additional video rendition (storage key in `url`). */
+export interface VideoRendition {
+  readonly codec: 'h264';
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+  readonly size: number;
+}
+
 export interface ImageVariant {
   readonly width: number;
   readonly height: number;
   readonly url: string;
   readonly size: number;
-  readonly format: 'webp';
+  /** `webp` dans `imageVariants`, `avif` dans `avifVariants` (#11262) — jamais mélangés. */
+  readonly format: 'webp' | 'avif';
 }
 
 /**
@@ -193,6 +203,18 @@ export interface Attachment {
    */
   readonly imageVariants?: readonly ImageVariant[];
   /**
+   * #11262 — the same responsive widths encoded as AVIF, in a SEPARATE array:
+   * older clients read `imageVariants` without filtering the format, so an
+   * AVIF never lands there. A client that decodes AVIF picks these first.
+   */
+  readonly avifVariants?: readonly ImageVariant[];
+  /**
+   * #11261 — additional video renditions next to the original: an HEVC upload
+   * gets an H.264 High ≤1080p rendition (HDR tone-mapped to SDR BT.709) for
+   * readers that cannot decode HEVC. The original `fileUrl` stays untouched.
+   */
+  readonly renditions?: readonly VideoRendition[];
+  /**
    * #6221 — le TYPE CLIENT rattrape son contrat : la passerelle SERT ce champ
    * (`api-schemas/message-attachment.ts:91`, `schema.prisma:1010`,
    * `serializeAttachmentForSocket.ts:106`) depuis avant ce lot ; il manquait
@@ -208,6 +230,8 @@ export interface Attachment {
   readonly sampleRate?: number;
   readonly codec?: string;
   readonly channels?: number;
+  /** Sonie intégrée EBU R128 (LUFS) du fichier stocké, mesurée à l'ingestion (#11259). */
+  readonly loudnessLufs?: number | null;
   readonly fps?: number;
   readonly videoCodec?: string;
 
@@ -395,6 +419,7 @@ export interface UploadedAttachmentResponse {
   readonly sampleRate?: number;
   readonly codec?: string;
   readonly channels?: number;
+  readonly loudnessLufs?: number;
   readonly uploadedBy: string;
   readonly isAnonymous: boolean;
   readonly createdAt: string;

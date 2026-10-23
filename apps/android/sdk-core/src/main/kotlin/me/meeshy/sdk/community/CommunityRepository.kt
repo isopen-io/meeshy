@@ -4,6 +4,7 @@ import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiCommunitySearchResult
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CommunityMini
 import me.meeshy.sdk.model.CreateCommunityRequest
 import me.meeshy.sdk.model.IdentifierAvailability
 import me.meeshy.sdk.model.InviteMemberRequest
@@ -15,6 +16,12 @@ import me.meeshy.sdk.net.api.UpdateCommunityMemberRoleRequest
 import me.meeshy.sdk.net.apiCall
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Le bilan d'une invitation de plusieurs personnes : [failed] sur [requested] ont échoué. */
+data class CommunityInviteOutcome(val requested: Int, val failed: Int) {
+    /** Zéro échec vaut succès. */
+    val isSuccess: Boolean get() = failed == 0
+}
 
 /** Communities, members and community conversations — port of CommunityService (CommunityService.swift). */
 @Singleton
@@ -106,6 +113,19 @@ class CommunityRepository @Inject constructor(
     suspend fun invite(communityId: String, userId: String): NetworkResult<ApiCommunityMember> =
         apiCall { communityApi.invite(communityId, InviteMemberRequest(userId)) }
 
+    /**
+     * Invite plusieurs personnes par une invitation unitaire chacune (parité iOS : la passerelle n'a
+     * pas d'endpoint batch). Un échec n'arrête pas les suivantes ; le bilan compte les échecs.
+     */
+    suspend fun inviteMany(communityId: String, userIds: List<String>): CommunityInviteOutcome {
+        val failed = userIds.count { invite(communityId, it) !is NetworkResult.Success }
+        return CommunityInviteOutcome(requested = userIds.size, failed = failed)
+    }
+
+    /** Les communautés créées ou administrées par moi (`role=admin,moderator`). */
+    suspend fun mine(role: String = ADMIN_ROLES): NetworkResult<List<CommunityMini>> =
+        apiCall { communityApi.mine(role) }
+
     suspend fun checkIdentifier(identifier: String): NetworkResult<IdentifierAvailability> =
         apiCall { communityApi.checkIdentifier(identifier) }
 
@@ -117,4 +137,8 @@ class CommunityRepository @Inject constructor(
         conversationId: String,
     ): NetworkResult<ApiConversation> =
         apiCall { communityApi.addConversation(communityId, conversationId) }
+
+    companion object {
+        const val ADMIN_ROLES = "admin,moderator"
+    }
 }

@@ -5,6 +5,8 @@ import type { AttachmentMetadata, ImageVariant } from '@meeshy/shared/types/atta
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { ThumbHashGenerator } from './ThumbHashGenerator.js';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
+import { produceCompatibilityRendition, type VideoRendition } from './video-compat-rendition.js';
+import { timeMediaStage } from '../metrics/mediaStageMetrics';
 
 const logger = enhancedLogger.child({ module: 'media-renditions' });
 
@@ -44,6 +46,9 @@ export interface RenditionMetadataPort {
   generateImageVariants(
     imagePath: string
   ): Promise<ReadonlyArray<{ path: string; width: number; height: number; size: number }>>;
+  generateAvifVariants(
+    imagePath: string
+  ): Promise<ReadonlyArray<{ path: string; width: number; height: number; size: number }>>;
   generateVideoThumbnail(videoPath: string): Promise<string | null>;
   extractMetadata(
     filePath: string,
@@ -80,6 +85,10 @@ export interface MediaRenditions {
   readonly thumbnailPath: string | null;
   /** Absent (et non vide) quand aucune variante n'existe : le champ est optionnel en base. */
   readonly imageVariants?: readonly ImageVariant[];
+  /** #11262 — les variantes AVIF, à CÔTÉ des WebP : absent quand aucune n'existe. */
+  readonly avifVariants?: readonly ImageVariant[];
+  /** #11261 — rendus vidéo ADDITIONNELS (H.264 d'un HEVC) ; absent quand il n'y en a pas. */
+  readonly renditions?: readonly VideoRendition[];
   readonly thumbHash: string | null;
 }
 
@@ -91,6 +100,9 @@ export async function produceMediaRenditions(
   const visual = await visualRenditions(deps.metadataManager, source);
 
   const transcoded = attachmentType === 'video' ? await transcodeVideoRendition(deps, source) : null;
+  const compat = attachmentType === 'video' && transcoded === null
+    ? await attempt('compat rendition', () => produceCompatibilityRendition(deps, source), null)
+    : null;
   const storedPath = transcoded?.filePath ?? source.relPath;
   const storedSize = transcoded?.fileSize ?? source.fileSize;
   const storedMimeType = transcoded?.mimeType ?? source.mimeType;
@@ -110,6 +122,8 @@ export async function produceMediaRenditions(
     metadata: { ...probed, thumbnailGenerated: visual.thumbnailPath !== null },
     thumbnailPath: visual.thumbnailPath,
     ...(visual.imageVariants ? { imageVariants: visual.imageVariants } : {}),
+    ...(visual.avifVariants ? { avifVariants: visual.avifVariants } : {}),
+    ...(compat ? { renditions: [compat] } : {}),
     thumbHash,
   };
 }
@@ -117,11 +131,16 @@ export async function produceMediaRenditions(
 async function visualRenditions(
   metadataManager: RenditionMetadataPort,
   source: RenditionSource
-): Promise<{ thumbnailPath: string | null; imageVariants?: readonly ImageVariant[] }> {
+): Promise<{ thumbnailPath: string | null; imageVariants?: readonly ImageVariant[]; avifVariants?: readonly ImageVariant[] }> {
   if (source.attachmentType === 'image') {
     const thumbnailPath = await attempt('thumbnail', () => metadataManager.generateThumbnail(source.relPath), null);
     const variants = await attempt('image variants', () => metadataManager.generateImageVariants(source.relPath), []);
-    return { thumbnailPath, ...(variants.length > 0 ? { imageVariants: variants.map(toImageVariant) } : {}) };
+    const avif = await attempt('avif variants', () => metadataManager.generateAvifVariants(source.relPath), []);
+    return {
+      thumbnailPath,
+      ...(variants.length > 0 ? { imageVariants: variants.map((v) => toImageVariant(v, 'webp')) } : {}),
+      ...(avif.length > 0 ? { avifVariants: avif.map((v) => toImageVariant(v, 'avif')) } : {}),
+    };
   }
   if (source.attachmentType === 'video') {
     const thumbnailPath = await attempt('video thumbnail', () => metadataManager.generateVideoThumbnail(source.relPath), null);
@@ -141,8 +160,8 @@ async function attempt<T>(label: string, run: () => Promise<T>, fallback: T): Pr
 }
 
 /** Les variantes se désignent par leur CLÉ DE STOCKAGE, jamais une adresse (#4324). */
-function toImageVariant(variant: { path: string; width: number; height: number; size: number }): ImageVariant {
-  return { width: variant.width, height: variant.height, url: variant.path, size: variant.size, format: 'webp' };
+function toImageVariant(variant: { path: string; width: number; height: number; size: number }, format: ImageVariant['format']): ImageVariant {
+  return { width: variant.width, height: variant.height, url: variant.path, size: variant.size, format };
 }
 
 /**
@@ -152,6 +171,11 @@ function toImageVariant(variant: { path: string; width: number; height: number; 
  */
 export function imageVariantsJson(variants: readonly ImageVariant[]): Prisma.InputJsonArray {
   return variants.map(({ width, height, url, size, format }) => ({ width, height, url, size, format }));
+}
+
+/** La forme que la colonne `renditions` (`Json?`) reçoit (#11261). */
+export function videoRenditionsJson(renditions: readonly VideoRendition[]): Prisma.InputJsonArray {
+  return renditions.map(({ codec, url, width, height, size }) => ({ codec, url, width, height, size }));
 }
 
 export interface TranscodedVideo {
@@ -193,7 +217,7 @@ export async function transcodeVideoRendition(
   const outputAbs = path.join(deps.uploadBasePath, outputRel);
 
   try {
-    await deps.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan));
+    await timeMediaStage('transcode', 'video', () => deps.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan)));
     const stat = await fs.stat(outputAbs);
     if (stat.size === 0 || stat.size >= source.fileSize) {
       await fs.unlink(outputAbs).catch(() => {});

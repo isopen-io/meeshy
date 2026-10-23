@@ -68,6 +68,7 @@ extension DiskCacheStore {
     /// concurrent ne récupère pas une tâche déjà condamnée.
     @discardableResult
     public func purge(urls urlStrings: Set<String>) async -> Int {
+        dropHeads(urlStrings)
         var freed = 0
         for urlString in urlStrings {
             let fileKey = Self.fileKey(for: urlString)

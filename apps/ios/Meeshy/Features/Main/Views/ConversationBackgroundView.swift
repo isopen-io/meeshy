@@ -19,8 +19,8 @@ struct ConversationBackgroundView: View {
     @State private var appearance: ConversationAppearance?
     @State private var photo: ConversationBackgroundPhoto?
     @State private var photoLoadFailed = false
-    /// Suivi en direct : passer en mode économie d'énergie pendant la lecture fige la couche Lottie sur-le-champ.
-    @State private var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+    /// Suivi en direct par la politique média (#9880) : l'économie d'énergie ou une chaleur sérieuse fige la couche Lottie sur-le-champ.
+    @State private var decorationSuspended = !MediaPolicyMonitor.shared.policy.animatesDecoration
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     init(
@@ -52,8 +52,8 @@ struct ConversationBackgroundView: View {
                 photoLoadFailed = false
                 appearance = changed
             }
-            .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange).receive(on: DispatchQueue.main)) { _ in
-                lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+            .onReceive(MediaPolicyMonitor.shared.$policy.dropFirst().receive(on: DispatchQueue.main)) { policy in
+                decorationSuspended = !policy.animatesDecoration
             }
     }
 
@@ -72,7 +72,7 @@ struct ConversationBackgroundView: View {
                 if let lottie = design.lottie {
                     PackLottieLayer(
                         ref: lottie,
-                        animates: ConversationBackgroundResolution.animatesLottieLayer(appearance, lowPowerMode: lowPowerMode),
+                        animates: ConversationBackgroundResolution.animatesLottieLayer(appearance, lowPowerMode: decorationSuspended),
                         contentMode: .fill
                     )
                 }

@@ -7,6 +7,9 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -47,6 +50,11 @@ class AccountDeletionViewModelTest {
 
     private fun vm(api: AccountDeletionApi = mockk(relaxed = true)) =
         AccountDeletionViewModel(api)
+
+    private fun AccountDeletionViewModel.submitConfirmed() {
+        requestDeletion()
+        confirmDeletion()
+    }
 
     @Test
     fun initialState_isNotConfirmedAndCannotSubmit() {
@@ -93,7 +101,7 @@ class AccountDeletionViewModelTest {
         sut.onConfirmationTextChange("SUPPRIMER") // partial
         sut.onCurrentPasswordChange("motdepasse")
 
-        sut.submit()
+        sut.submitConfirmed()
 
         coVerify(exactly = 0) { api.open(any(), any()) }
     }
@@ -104,7 +112,7 @@ class AccountDeletionViewModelTest {
         val sut = vm(api)
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
 
-        sut.submit()
+        sut.submitConfirmed()
 
         coVerify(exactly = 0) { api.open(any(), any()) }
     }
@@ -119,7 +127,7 @@ class AccountDeletionViewModelTest {
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("motdepasse")
 
-        sut.submit()
+        sut.submitConfirmed()
         advanceUntilIdle()
 
         val state = sut.state.value
@@ -142,7 +150,7 @@ class AccountDeletionViewModelTest {
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("motdepasse")
 
-        sut.submit()
+        sut.submitConfirmed()
         advanceUntilIdle()
 
         assertThat(sut.state.value.currentPassword).isEmpty()
@@ -157,7 +165,7 @@ class AccountDeletionViewModelTest {
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("wrong")
 
-        sut.submit()
+        sut.submitConfirmed()
         advanceUntilIdle()
 
         val state = sut.state.value
@@ -181,7 +189,7 @@ class AccountDeletionViewModelTest {
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("motdepasse")
 
-        sut.submit()
+        sut.submitConfirmed()
         advanceUntilIdle()
 
         val state = sut.state.value
@@ -199,7 +207,7 @@ class AccountDeletionViewModelTest {
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("motdepasse")
 
-        sut.submit()
+        sut.submitConfirmed()
         advanceUntilIdle()
 
         val state = sut.state.value
@@ -217,7 +225,7 @@ class AccountDeletionViewModelTest {
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("motdepasse")
 
-        sut.submit()
+        sut.submitConfirmed()
         advanceUntilIdle()
 
         assertThat(sut.state.value.error).isEqualTo(AccountDeletionError.NETWORK)
@@ -232,7 +240,7 @@ class AccountDeletionViewModelTest {
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("motdepasse")
 
-        sut.submit()
+        sut.submitConfirmed()
         advanceUntilIdle()
 
         assertThat(sut.state.value.error).isEqualTo(AccountDeletionError.GENERIC)
@@ -246,7 +254,7 @@ class AccountDeletionViewModelTest {
         val sut = vm(api)
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("motdepasse")
-        sut.submit()
+        sut.submitConfirmed()
         advanceUntilIdle()
         assertThat(sut.state.value.error).isEqualTo(AccountDeletionError.GENERIC)
 
@@ -263,7 +271,7 @@ class AccountDeletionViewModelTest {
         val sut = vm(api)
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("wrong")
-        sut.submit()
+        sut.submitConfirmed()
         advanceUntilIdle()
         assertThat(sut.state.value.error).isEqualTo(AccountDeletionError.INVALID_PASSWORD)
 
@@ -281,16 +289,103 @@ class AccountDeletionViewModelTest {
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
         sut.onCurrentPasswordChange("motdepasse")
 
-        sut.submit()
+        sut.submitConfirmed()
         runCurrent()
         assertThat(sut.state.value.isDeleting).isTrue()
         // a second tap while the first request is in flight must be ignored
-        sut.submit()
+        sut.submitConfirmed()
         runCurrent()
 
         gate.complete(NetworkResult.Success(AccountDeletionOpenedResponse()))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { api.open(any(), any()) }
+    }
+
+    private fun readyVm(api: AccountDeletionApi): AccountDeletionViewModel = vm(api).also {
+        it.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
+        it.onCurrentPasswordChange("motdepasse")
+    }
+
+    @Test
+    fun requestDeletion_raisesTheFinalAlertWithAHeavyHapticAndNoNetworkCall() = runTest(dispatcher) {
+        val api = mockk<AccountDeletionApi>(relaxed = true)
+        val sut = readyVm(api)
+
+        sut.requestDeletion()
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.showFinalConfirmation).isTrue()
+        assertThat(sut.effects.first()).isEqualTo(AccountDeletionEffect.HAPTIC_HEAVY)
+        coVerify(exactly = 0) { api.open(any(), any()) }
+    }
+
+    @Test
+    fun requestDeletion_whenGateIsClosed_doesNothing() = runTest(dispatcher) {
+        val sut = vm()
+        sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
+
+        sut.requestDeletion()
+
+        assertThat(sut.state.value.showFinalConfirmation).isFalse()
+    }
+
+    @Test
+    fun dismissFinalConfirmation_cancelsWithoutAnyCall() = runTest(dispatcher) {
+        val api = mockk<AccountDeletionApi>(relaxed = true)
+        val sut = readyVm(api)
+        sut.requestDeletion()
+
+        sut.dismissFinalConfirmation()
+        sut.confirmDeletion()
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.showFinalConfirmation).isFalse()
+        assertThat(sut.state.value.isDeleting).isFalse()
+        coVerify(exactly = 0) { api.open(any(), any()) }
+    }
+
+    @Test
+    fun confirmDeletion_withoutTheAlert_isIgnored() = runTest(dispatcher) {
+        val api = mockk<AccountDeletionApi>(relaxed = true)
+        val sut = readyVm(api)
+
+        sut.confirmDeletion()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { api.open(any(), any()) }
+    }
+
+    @Test
+    fun confirmDeletion_twice_callsTheApiOnce() = runTest(dispatcher) {
+        val api = mockk<AccountDeletionApi>()
+        coEvery { api.open(any(), any()) } returns NetworkResult.Success(AccountDeletionOpenedResponse())
+        val sut = readyVm(api)
+        sut.requestDeletion()
+
+        sut.confirmDeletion()
+        sut.confirmDeletion()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { api.open(any(), any()) }
+    }
+
+    @Test
+    fun confirmDeletion_successThenFailure_emitSuccessAndErrorHaptics() = runTest(dispatcher) {
+        val api = mockk<AccountDeletionApi>()
+        coEvery { api.open(any(), any()) } returns NetworkResult.Success(AccountDeletionOpenedResponse())
+        val ok = readyVm(api)
+        ok.submitConfirmed()
+        advanceUntilIdle()
+        assertThat(ok.effects.take(2).toList())
+            .containsExactly(AccountDeletionEffect.HAPTIC_HEAVY, AccountDeletionEffect.HAPTIC_SUCCESS).inOrder()
+
+        coEvery { api.open(any(), any()) } returns
+            NetworkResult.Failure(ApiError(message = "boom", code = "HTTP_500", httpStatus = 500))
+        val ko = readyVm(api)
+        ko.submitConfirmed()
+        advanceUntilIdle()
+        assertThat(ko.effects.take(2).toList())
+            .containsExactly(AccountDeletionEffect.HAPTIC_HEAVY, AccountDeletionEffect.HAPTIC_ERROR).inOrder()
     }
 }

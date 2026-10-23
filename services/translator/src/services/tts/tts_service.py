@@ -22,6 +22,7 @@ from .models import TTSModel, TTSModelInfo, TTS_MODEL_INFO
 from .model_manager import ModelManager, ModelStatus
 from .language_router import LanguageRouter
 from .synthesizer import Synthesizer, UnifiedTTSResult
+from utils.audio_pipeline_metrics import timed_audio_stage
 
 TTS_AUDIO_CACHE_TTL = int(os.getenv("TTS_AUDIO_CACHE_TTL", str(7 * 24 * 3600)))  # 7 days
 
@@ -279,6 +280,7 @@ class UnifiedTTSService:
 
         return success
 
+    @timed_audio_stage("tts")
     async def synthesize_with_voice(
         self,
         text: str,
