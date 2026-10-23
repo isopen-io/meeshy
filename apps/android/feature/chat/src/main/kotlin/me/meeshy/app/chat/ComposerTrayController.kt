@@ -90,7 +90,10 @@ class ComposerTrayController @Inject constructor(
      * par la mémoire ni par le fil principal, puis sa source est supprimée.
      */
     fun stageFile(file: File, declaredMimeType: String?) {
-        val scope = host?.scope ?: return
+        val scope = host?.scope ?: run {
+            file.delete()
+            return
+        }
         val mime = MimeTypeResolver.resolve(declaredMimeType, file.name)
         val info = AttachmentSourceInfo(file.name, mime, 0L)
         scope.launch {

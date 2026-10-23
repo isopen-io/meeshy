@@ -153,6 +153,19 @@ class ComposerTrayControllerTest {
     }
 
     @Test
+    fun `a recording handed to a tray whose screen is gone is deleted, never orphaned`() = runTest {
+        val r = rig()
+        r.tray.detach()
+        val recorded = java.io.File.createTempFile("voice_2", ".m4a").apply { writeBytes(byteArrayOf(1)) }
+
+        r.tray.stageFile(recorded, "audio/mp4")
+        advanceUntilIdle()
+
+        assertThat(recorded.exists()).isFalse()
+        assertThat(r.tray.state.value.items).isEmpty()
+    }
+
+    @Test
     fun `waiting on a capture returns once its copy is in the tray`() = runTest {
         val r = rig()
 
