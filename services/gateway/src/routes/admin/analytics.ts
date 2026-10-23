@@ -500,7 +500,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         ? Math.min(PLAYBACK_QOE_MAX_WINDOW_DAYS, Math.max(1, Math.floor(rawDays)))
         : PLAYBACK_QOE_DEFAULT_WINDOW_DAYS;
 
-      const cacheKey = `admin:analytics:playback:v1:${days}`;
+      const cacheKey = `admin:analytics:playback:v2:${days}`;
       const cached = await getCacheStore().get(cacheKey);
       if (cached) {
         return sendSuccess(reply, JSON.parse(cached));

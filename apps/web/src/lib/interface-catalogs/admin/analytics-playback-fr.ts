@@ -26,6 +26,20 @@ const f = {
   'admin.analytics.playback.column.rebuffer.p50': 'Rebuffer p50',
   'admin.analytics.playback.column.rebuffer.p95': 'Rebuffer p95',
   'admin.analytics.playback.column.rebuffered': 'Sessions interrompues',
+  'admin.analytics.playback.vitals.title': 'La page web pendant la lecture',
+  'admin.analytics.playback.vitals.hint': 'Web Vitals de la page (LCP, CLS, INP) et longues images d’animation survenues pendant la séance, médiane (p50) et 95e centile (p95). Seul le web les mesure.',
+  'admin.analytics.playback.vitals.column.day': 'Jour',
+  'admin.analytics.playback.vitals.column.surface': 'Surface',
+  'admin.analytics.playback.vitals.column.tier': 'Appareil',
+  'admin.analytics.playback.vitals.column.lcp.p50': 'LCP p50',
+  'admin.analytics.playback.vitals.column.lcp.p95': 'LCP p95',
+  'admin.analytics.playback.vitals.column.cls.p50': 'CLS p50',
+  'admin.analytics.playback.vitals.column.cls.p95': 'CLS p95',
+  'admin.analytics.playback.vitals.column.inp.p50': 'INP p50',
+  'admin.analytics.playback.vitals.column.inp.p95': 'INP p95',
+  'admin.analytics.playback.vitals.column.longFrames.p95': 'Longues images p95',
+  'admin.analytics.playback.vitals.column.longFramesBlocking.p95': 'Temps bloquant p95',
+  'admin.analytics.playback.vitals.column.longFrameWorst.p95': 'Pire image p95',
 } as const;
 
 export type PlaybackTextKey = keyof typeof f;

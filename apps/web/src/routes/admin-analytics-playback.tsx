@@ -2,11 +2,11 @@ import { AdminChartTable } from '@/components/admin/charts/chart-card';
 import { AdminStatGrid } from '@/components/admin/stat-card';
 import { AdminEmptyState, AdminInlineNotice, AdminSkeleton } from '@/components/admin/states';
 import { playbackWindowOf } from '@/lib/admin/analytics-windows';
-import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
+import { formatCount, formatDecimal, formatPercent } from '@/lib/admin/interpret/numbers';
 import { formatDuration } from '@/lib/admin/interpret/time';
 import type { AdminDeps } from '@/lib/api/admin';
 import type { KpiPeriod } from '@/lib/api/admin-analytics';
-import { loadPlaybackQoe, playbackKey, type PlaybackCell, type PlaybackQoe, type QuantilePair } from '@/lib/api/admin-analytics-playback';
+import { PLAYBACK_PAGE_VITALS, loadPlaybackQoe, playbackKey, type PlaybackCell, type PlaybackQoe, type QuantilePair } from '@/lib/api/admin-analytics-playback';
 import { playbackText, usePlaybackTexts, type PlaybackTexts } from '@/lib/admin/playback-texts';
 import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
@@ -40,6 +40,38 @@ const ms = (pair: QuantilePair | null, key: 'p50' | 'p95', language: AdminLangua
 /** Du jour le plus récent au plus ancien, puis par surface, puis du petit appareil au grand. */
 const ordered = (cells: readonly PlaybackCell[]): readonly PlaybackCell[] =>
   [...cells].sort((a, b) => b.day.localeCompare(a.day) || a.surface.localeCompare(b.surface) || tierRank(a.deviceTier) - tierRank(b.deviceTier));
+
+const carriesVitals = (cell: PlaybackCell): boolean => PLAYBACK_PAGE_VITALS.some((field) => cell[field] !== null);
+
+/** W11 (#11317) — la page web pendant la lecture : Web Vitals et longues images, pour les seules cellules qui les portent. */
+function VitalsTable({ language, texts, cells }: { readonly language: AdminLanguage; readonly texts: PlaybackTexts; readonly cells: readonly PlaybackCell[] }) {
+  const carrying = cells.filter(carriesVitals);
+  if (carrying.length === 0) return null;
+  const columns = (['day', 'surface', 'tier', 'lcp.p50', 'lcp.p95', 'cls.p50', 'cls.p95', 'inp.p50', 'inp.p95', 'longFrames.p95', 'longFramesBlocking.p95', 'longFrameWorst.p95'] as const).map((column) =>
+    playbackText(texts, `admin.analytics.playback.vitals.column.${column}`),
+  );
+  const rows = carrying.map((cell) => [
+    dayLabel(cell.day, language),
+    cell.surface,
+    tierLabel(cell.deviceTier, texts),
+    ms(cell.lcpMs, 'p50', language),
+    ms(cell.lcpMs, 'p95', language),
+    formatDecimal(cell.cls?.p50, language),
+    formatDecimal(cell.cls?.p95, language),
+    ms(cell.inpMs, 'p50', language),
+    ms(cell.inpMs, 'p95', language),
+    formatCount(cell.longFrames?.p95, language),
+    ms(cell.longFramesBlockingMs, 'p95', language),
+    ms(cell.longFrameWorstMs, 'p95', language),
+  ]);
+  return (
+    <StatsSection id="playback-page-vitals" title={playbackText(texts, 'admin.analytics.playback.vitals.title')} note={playbackText(texts, 'admin.analytics.playback.vitals.hint')}>
+      <div data-admin-playback-vitals-table>
+        <AdminChartTable table={{ caption: playbackText(texts, 'admin.analytics.playback.vitals.title'), columns, rows }} />
+      </div>
+    </StatsSection>
+  );
+}
 
 function PlaybackBody({ language, texts, block }: { readonly language: AdminLanguage; readonly texts: PlaybackTexts; readonly block: Block<PlaybackQoe> }) {
   const data = block.data;
@@ -86,9 +118,12 @@ function PlaybackBody({ language, texts, block }: { readonly language: AdminLang
       {data !== undefined && cells.length === 0 ? (
         <AdminEmptyState title={playbackText(texts, 'admin.analytics.playback.empty.title')} hint={playbackText(texts, 'admin.analytics.playback.empty.hint')} />
       ) : data === undefined ? null : (
-        <div data-admin-playback-table>
-          <AdminChartTable table={{ caption: playbackText(texts, 'admin.analytics.playback.title'), columns, rows }} />
-        </div>
+        <>
+          <div data-admin-playback-table>
+            <AdminChartTable table={{ caption: playbackText(texts, 'admin.analytics.playback.title'), columns, rows }} />
+          </div>
+          <VitalsTable language={language} texts={texts} cells={cells} />
+        </>
       )}
     </div>
   );
@@ -99,6 +134,8 @@ function PlaybackBody({ language, texts, block }: { readonly language: AdminLang
  * rebuffer, en p50/p95, par jour × surface × tier d'appareil, tels que la
  * passerelle les agrège. Une cellule sous le seuil de k-anonymat n'est jamais
  * servie : l'écran n'en dit que le nombre. Une mesure absente se dit « — ».
+ * Les Web Vitals et longues images du web (W11, #11317) ont leur propre table,
+ * qui n'apparaît que si une cellule les porte.
  */
 export function AdminPlaybackTab({ language, deps, period }: { readonly language: AdminLanguage; readonly deps: AdminDeps; readonly period: KpiPeriod }) {
   const days = playbackWindowOf(period);
