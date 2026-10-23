@@ -48,8 +48,21 @@
     <string name="presence_away">Away</string>
     <string name="presence_here">In the conversation</string>
     <string name="presence_idle">Idle</string>
+    <plurals name="presence_lastSeen_days">
+        <item quantity="one">Last seen %dd ago</item>
+        <item quantity="other">Last seen %dd ago</item>
+    </plurals>
+    <plurals name="presence_lastSeen_hours">
+        <item quantity="one">Last seen %dh ago</item>
+        <item quantity="other">Last seen %dh ago</item>
+    </plurals>
+    <plurals name="presence_lastSeen_minutes">
+        <item quantity="one">Last seen %dmin ago</item>
+        <item quantity="other">Last seen %dmin ago</item>
+    </plurals>
     <string name="presence_offline">Offline</string>
     <string name="presence_online">Online</string>
+    <string name="reactions_more">More reactions</string>
     <string name="settings_info_button_label">Learn more about %s</string>
     <string name="sticker_sheet_close">Close</string>
     <string name="sticker_sheet_favorites_empty">Long-press a decoration to pin it here.</string>

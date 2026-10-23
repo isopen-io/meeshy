@@ -40,6 +40,8 @@ function fieldMatches(row: Row, key: string, expected: unknown): boolean {
         return actual !== operand;
       case 'isSet':
         return operand === (key in row && actual !== undefined);
+      case 'lte':
+        return actual instanceof Date && operand instanceof Date && actual.getTime() <= operand.getTime();
       default:
         throw new Error(`double Prisma : opérateur « ${operator} » non modélisé sur « ${key} »`);
     }

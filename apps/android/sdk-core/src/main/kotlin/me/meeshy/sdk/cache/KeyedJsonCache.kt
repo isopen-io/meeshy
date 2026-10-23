@@ -35,6 +35,17 @@ class KeyedJsonCache(
         dao.upsert(row.copy(payload = keyedJson.encodeToString(serializer, transform(current.value))))
     }
 
+    /**
+     * Rewrites every readable document of [namespace] for which [transform] returns a new value
+     * (`null` = leave it); fetch instants are untouched. Returns how many documents changed.
+     */
+    suspend fun <T> updateAll(namespace: String, serializer: KSerializer<T>, transform: (T) -> T?): Int =
+        dao.findAll(namespace).count { row ->
+            val next = decode(row, serializer)?.value?.let(transform) ?: return@count false
+            dao.upsert(row.copy(payload = keyedJson.encodeToString(serializer, next)))
+            true
+        }
+
     /** `null` when nothing is stored OR the payload no longer decodes (a model that evolved). */
     suspend fun <T> get(namespace: String, key: String, serializer: KSerializer<T>): KeyedJsonDocument<T>? =
         dao.find(namespace, key)?.let { decode(it, serializer) }

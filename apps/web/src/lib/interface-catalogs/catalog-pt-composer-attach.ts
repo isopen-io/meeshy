@@ -103,6 +103,8 @@ const ptComposerAttach = {
   'composer.guest.refused.size': '“{name}” é grande demais: no máximo {max}.',
   'send.failure.guestKind': 'este arquivo não é aceito aqui',
   'send.failure.guestTooLarge': 'este arquivo é grande demais aqui (no máximo {max})',
+  'send.failure.formatRefused': 'este formato de foto (HEIC) ainda não é aceito',
+  'profile.image.formatRefused': 'Este formato de foto (HEIC) ainda não é aceito. Escolha uma foto JPEG ou PNG.',
 } satisfies ComposerAttachCatalogSlice;
 
 export default ptComposerAttach;

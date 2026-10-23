@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="account_lifecycle_deletion_pending">Eine Löschanfrage wartet auf Ihre Bestätigung. Öffnen Sie den Link aus der E-Mail.</string>
+    <string name="account_lifecycle_deletion_pending_expires">Der Link läuft am %1$s ab.</string>
+    <string name="account_lifecycle_deletion_grace">Ihr Konto wird am %1$s gelöscht. Zum Abbrechen öffnen Sie vor diesem Datum den Link aus der E-Mail.</string>
+    <string name="account_lifecycle_deletion_grace_no_date">Ihr Konto wird gelöscht. Zum Abbrechen öffnen Sie den Link aus der E-Mail.</string>
+    <string name="activation_invite_banner_title">Konto bestätigen</string>
+    <string name="activation_invite_banner_days">Verbleibende Tage: %1$d</string>
+    <string name="activation_invite_banner_no_days">Bestätigen Sie Ihre E-Mail-Adresse und fügen Sie eine Nummer hinzu.</string>
+    <string name="activation_invite_banner_later">Später</string>
+    <string name="birth_date_title">Geburtsdatum</string>
+    <string name="birth_date_message">Geben Sie Ihr Geburtsdatum an. Es kann nur einmal festgelegt werden.</string>
+    <string name="birth_date_pick">Mein Datum wählen</string>
+    <string name="birth_date_confirm">Bestätigen</string>
+    <string name="birth_date_done">Danke, Ihr Geburtsdatum ist gespeichert.</string>
+    <string name="birth_date_done_restricted">Danke. Sie können Meeshy lesen, das Schreiben ist für Ihr Alter gesperrt.</string>
+    <string name="birth_date_error_already_set">Ihr Geburtsdatum ist bereits festgelegt.</string>
+    <string name="birth_date_error_below_minimum">Meeshy ist für Personen unter 13 Jahren nicht verfügbar.</string>
+    <string name="birth_date_error_invalid">Dieses Datum ist ungültig.</string>
+    <string name="birth_date_error_unsupported">Dieser Server unterstützt diesen Schritt noch nicht.</string>
+    <string name="birth_date_error_unavailable">Ihr Geburtsdatum konnte nicht gespeichert werden. Versuchen Sie es erneut.</string>
+</resources>

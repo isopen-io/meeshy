@@ -30,7 +30,9 @@ public sealed interface CallEngineEvent {
 }
 
 /** Les sorties observables du moteur, alimentées par l'observateur du `PeerConnection`. */
-internal class CallEngineEvents {
+internal class CallEngineEvents(
+    private val onRemoteDataChannel: (DataChannel) -> Unit = {},
+) {
     private val _localIceCandidates = MutableSharedFlow<IceCandidate>(extraBufferCapacity = 64)
     val localIceCandidates: SharedFlow<IceCandidate> = _localIceCandidates.asSharedFlow()
 
@@ -81,6 +83,7 @@ internal class CallEngineEvents {
             channel ?: return
             openedChannels += channel
             _events.tryEmit(CallEngineEvent.DataChannelOpened(channel))
+            onRemoteDataChannel(channel)
         }
 
         override fun onRenegotiationNeeded() {

@@ -11,6 +11,7 @@ import androidx.core.telecom.CallsManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallAudioRouteKind
 import me.meeshy.sdk.model.call.TelecomDisconnectCause
 import me.meeshy.sdk.model.call.TelecomSystemDisconnectKind
@@ -57,7 +58,8 @@ class JetpackTelecomCallsGateway @Inject constructor(
             { handlers.onSetActive() },
             { handlers.onSetInactive() },
         ) {
-            block(ScopeControl(this))
+            val control = ScopeControl(this)
+            launch { block(control) }
         }
     }
 

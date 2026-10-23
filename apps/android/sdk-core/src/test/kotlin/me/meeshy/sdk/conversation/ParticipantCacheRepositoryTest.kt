@@ -200,4 +200,31 @@ class ParticipantCacheRepositoryTest {
 
         assertThat(net.calls).hasSize(2)
     }
+
+    @Test fun `user updated repaints the matching member of every cached roster by userId`() = runTest {
+        val net = Network(NetworkResult.Success(page("a", "b")))
+        val repo = repository(net)
+        repo.firstPage("c1")
+        repo.firstPage("c2")
+
+        val changed = repo.repaint(
+            me.meeshy.sdk.model.UserUpdatedEvent(
+                userId = "ua", displayName = "Zed", username = "zed", hasNameGroup = true,
+                avatar = me.meeshy.sdk.model.UserUpdatedEvent.OptionalMediaChange.Replaced("https://x/new.png"),
+            ),
+        )
+
+        assertThat(changed).isEqualTo(2)
+        val roster = (repo.firstPage("c1") as NetworkResult.Success).data
+        assertThat(roster.members.first { it.id == "a" }.displayName).isEqualTo("Zed")
+        assertThat(roster.members.first { it.id == "a" }.avatar).isEqualTo("https://x/new.png")
+        assertThat(roster.members.first { it.id == "b" }.displayName).isEqualTo("b")
+    }
+
+    @Test fun `user updated for an unknown user rewrites nothing`() = runTest {
+        val repo = repository(Network(NetworkResult.Success(page("a"))))
+        repo.firstPage("c1")
+
+        assertThat(repo.repaint(me.meeshy.sdk.model.UserUpdatedEvent(userId = "nobody", username = "n", hasNameGroup = true))).isEqualTo(0)
+    }
 }

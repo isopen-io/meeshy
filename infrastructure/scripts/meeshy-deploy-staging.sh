@@ -52,7 +52,10 @@ STAGING_DIR="${MEESHY_STAGING_DIR:-/opt/meeshy/staging}"
 # `database-staging`, `redis-staging` et les autres porteuses de données n'y
 # sont pas — la CI ne construit pas leurs images et ne doit pas pouvoir les
 # recréer.
-SERVICES_AUTORISES="frontend-staging gateway-staging translator-staging agent-staging static-files-staging"
+# `media-worker-staging` (#11264) partage l'image de la passerelle : il se
+# déploie AVEC elle, sans quoi la file de médias n'aurait aucun consommateur ou
+# un consommateur d'une autre version.
+SERVICES_AUTORISES="frontend-staging gateway-staging media-worker-staging translator-staging agent-staging static-files-staging"
 
 # Fenêtre de rétention : on garde de quoi revenir en arrière d'une semaine.
 RETENTION="${MEESHY_PRUNE_RETENTION:-168h}"
