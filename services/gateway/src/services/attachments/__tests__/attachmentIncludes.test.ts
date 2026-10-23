@@ -164,6 +164,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'thumbnailUrl',
         'thumbHash',
         'imageVariants',
+        'avifVariants',
         'width',
         'height',
         'duration',

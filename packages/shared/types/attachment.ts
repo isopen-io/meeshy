@@ -139,7 +139,8 @@ export interface ImageVariant {
   readonly height: number;
   readonly url: string;
   readonly size: number;
-  readonly format: 'webp';
+  /** `webp` dans `imageVariants`, `avif` dans `avifVariants` (#11262) — jamais mélangés. */
+  readonly format: 'webp' | 'avif';
 }
 
 /**
@@ -192,6 +193,12 @@ export interface Attachment {
    * original for inline previews.
    */
   readonly imageVariants?: readonly ImageVariant[];
+  /**
+   * #11262 — the same responsive widths encoded as AVIF, in a SEPARATE array:
+   * older clients read `imageVariants` without filtering the format, so an
+   * AVIF never lands there. A client that decodes AVIF picks these first.
+   */
+  readonly avifVariants?: readonly ImageVariant[];
   /**
    * #6221 — le TYPE CLIENT rattrape son contrat : la passerelle SERT ce champ
    * (`api-schemas/message-attachment.ts:91`, `schema.prisma:1010`,

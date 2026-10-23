@@ -1337,6 +1337,7 @@ model MessageAttachment {
   thumbnailUrl  String?
   thumbHash     String?   // ThumbHash base64 (~33 chars) — placeholder image instantane
   imageVariants Json?     // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
+  avifVariants  Json?     // Variantes AVIF responsive (#11262), MÊME forme, format 'avif' — à CÔTÉ des WebP, jamais dedans (anciens clients)
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)
@@ -4158,6 +4159,9 @@ model PostMedia {
   /// chemin résumable et le multipart partagent (#11260). OPTIONNEL : une ligne héritée n'en
   /// porte pas, et une image déjà petite non plus. Images non chiffrées uniquement.
   imageVariants Json?
+  /// #11262 — les mêmes largeurs en AVIF, à CÔTÉ des WebP (jamais dans `imageVariants`,
+  /// que les anciens clients lisent sans filtrer le format). OPTIONNEL.
+  avifVariants Json?
 
   // Metadata audio/vidéo
   duration     Int?     // ms

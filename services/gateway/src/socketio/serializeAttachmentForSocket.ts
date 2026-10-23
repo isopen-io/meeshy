@@ -75,6 +75,7 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
   readonly thumbnailUrl?: string | null;
   readonly thumbHash?: string | null;
   readonly imageVariants?: unknown;
+  readonly avifVariants?: unknown;
   readonly width?: number | null;
   readonly height?: number | null;
   readonly duration?: number | null;
@@ -185,6 +186,7 @@ export function serializeAttachmentForSocket(
     thumbnailUrl: (raw.thumbnailUrl as string | null | undefined) ?? null,
     thumbHash: (raw.thumbHash as string | null | undefined) ?? null,
     imageVariants: raw.imageVariants ?? null,
+    avifVariants: raw.avifVariants ?? null,
     width: (raw.width as number | null | undefined) ?? null,
     height: (raw.height as number | null | undefined) ?? null,
     duration: (raw.duration as number | null | undefined) ?? null,
