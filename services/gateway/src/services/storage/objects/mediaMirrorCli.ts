@@ -18,6 +18,12 @@
  *   seul. Il reprend au curseur, puis repasse chaque cycle sur les 24 dernières
  *   heures (vignettes, pistes TTS écrites APRÈS la ligne) ; la copie à la même
  *   taille est sautée, le repassage coûte des `HEAD`.
+ *   En staging, ce miroir tourne DANS la passerelle (`jobs/media-mirror-follow.ts`,
+ *   `MEDIA_S3_MIRROR_FOLLOW=on`) : aucun conteneur voisin ne monte les dépôts.
+ * - `--sweep` : retire du seau les copies qu'aucune ligne vivante ne nomme plus
+ *   (message purgé, compte effacé), plus vieilles que 24 h. C'est une PURGE :
+ *   même régime que `--apply`, et il refuse (code 2) sur une base qui ne nomme
+ *   rien ou s'il devait effacer plus de la moitié du seau.
  * - `--batch=<1..5000>` (500), `--limit=<lignes par collection>`.
  *
  * Code de sortie : 0 = terminé sans échec ; 4 = des copies ont échoué (relancer
@@ -32,11 +38,13 @@ import type { MediaObjectStore } from './MediaObjectStore';
 import { emptyMirrorCounts, runMirrorBatch, type MirrorCounts, type MirrorRowSource } from './mediaMirror';
 import { mediaObjectStoresFromEnv } from './mediaObjectStoreFactory';
 import { isPorteurApproval } from './mediaObjectStoreConfig';
+import { collectReferencedKeys, sweepBucket, type SweepReport } from './mediaBucketSweep';
+import type { S3ObjectStore } from './S3ObjectStore';
 
 export type MirrorOptions = { readonly apply: boolean; readonly batchSize: number; readonly limit: number | null; readonly reset: boolean };
 
 export type ParsedMirrorArgs =
-  | ({ readonly kind: 'run'; readonly follow: boolean } & MirrorOptions)
+  | ({ readonly kind: 'run'; readonly follow: boolean; readonly sweep: boolean } & MirrorOptions)
   | { readonly kind: 'refused'; readonly reason: 'unknown-argument' | 'invalid-batch' | 'invalid-limit' | 'follow-requires-apply' | 'production-requires-porteur-approval' };
 
 const MAX_BATCH = 5_000;
@@ -45,7 +53,7 @@ export const FOLLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
 export function parseMirrorArgs(argv: readonly string[], env: Readonly<Record<string, string | undefined>>): ParsedMirrorArgs {
   const flag = (name: string) => argv.includes(`--${name}`);
   const valueOf = (name: string) => argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
-  const known = ['--apply', '--follow', '--reset'];
+  const known = ['--apply', '--follow', '--reset', '--sweep'];
   const knownPrefixes = ['--batch=', '--limit=', '--porteur-approval='];
   if (argv.some((arg) => !known.includes(arg) && !knownPrefixes.some((prefix) => arg.startsWith(prefix)))) return { kind: 'refused', reason: 'unknown-argument' };
   const batchRaw = valueOf('batch');
@@ -60,7 +68,7 @@ export function parseMirrorArgs(argv: readonly string[], env: Readonly<Record<st
     return { kind: 'refused', reason: 'production-requires-porteur-approval' };
   }
   if (flag('follow') && !apply) return { kind: 'refused', reason: 'follow-requires-apply' };
-  return { kind: 'run', apply, follow: flag('follow'), batchSize, limit, reset: flag('reset') };
+  return { kind: 'run', apply, follow: flag('follow'), sweep: flag('sweep'), batchSize, limit, reset: flag('reset') };
 }
 
 /** Le plus petit ObjectId créé à `instant` ou après : 4 octets de secondes, puis des zéros. */
@@ -155,6 +163,13 @@ export function mediaMirrorSources(prisma: PrismaClient): readonly MirrorRowSour
   ];
 }
 
+async function sweepOnce(sources: readonly MirrorRowSource[], mirror: S3ObjectStore, uploadRoot: string, apply: boolean, log: (line: string) => void): Promise<SweepReport> {
+  const referenced = await collectReferencedKeys({ sources, uploadRoot, pageSize: 500 });
+  const report = await sweepBucket({ lister: mirror, remover: mirror, referenced, now: new Date(), graceMs: FOLLOW_WINDOW_MS, apply, log });
+  log(`balayage du seau : ${JSON.stringify(report)}`);
+  return report;
+}
+
 const failedCount = (reports: Readonly<Record<string, SourceReport>>) => Object.values(reports).reduce((sum, report) => sum + report.counts.failed, 0);
 
 export async function runMediaMirrorCli(argv: readonly string[], env: Readonly<Record<string, string | undefined>>): Promise<number> {
@@ -176,9 +191,11 @@ export async function runMediaMirrorCli(argv: readonly string[], env: Readonly<R
   try {
     const sources = mediaMirrorSources(prisma);
     const run = (startAfter?: string) =>
-      runMediaMirror({ sources, local: stores.local, mirror: stores.mirror as MediaObjectStore, uploadRoot, stateFile, options: parsed, log, ...(startAfter === undefined ? {} : { startAfter }) });
+      runMediaMirror({ sources, local: stores.local, mirror: stores.mirror, uploadRoot, stateFile, options: parsed, log, ...(startAfter === undefined ? {} : { startAfter }) });
     const reports = await run();
-    if (!parsed.follow) return failedCount(reports) > 0 ? 4 : 0;
+    const sweep = parsed.sweep ? await sweepOnce(sources, stores.mirror, uploadRoot, parsed.apply, log) : null;
+    if (sweep?.kind === 'refused') return 2;
+    if (!parsed.follow) return failedCount(reports) > 0 || (sweep?.kind === 'swept' && sweep.counts.failed > 0) ? 4 : 0;
     const intervalMs = Number(env.MEDIA_MIRROR_INTERVAL_MS) > 0 ? Number(env.MEDIA_MIRROR_INTERVAL_MS) : 60_000;
     for (;;) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
