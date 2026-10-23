@@ -196,6 +196,7 @@ class ConversationListViewModelTest {
         storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
         me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         io.mockk.mockk(relaxed = true),
+        idleRowSignalsSource(),
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(

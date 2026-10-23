@@ -1,7 +1,8 @@
-import { uploadAttachments } from '@/lib/api/attachments';
+import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
 import type { DataSource } from '@/lib/api/config';
 import type { HttpTransport } from '@/lib/api/http';
 import type { ProfileImageKind } from '@/lib/api/profile';
+import { isHeifFamily, servableHeif, UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 
 import { recompressImage } from './image-recompress';
 
@@ -31,7 +32,7 @@ export type ProfileImageUploadOutcome =
   | { readonly status: 'offline' }
   | { readonly status: 'cancelled' }
   | { readonly status: 'unreadable' }
-  | { readonly status: 'refused'; readonly error: string };
+  | { readonly status: 'refused'; readonly error: string; readonly code?: typeof UPLOAD_FORMAT_REFUSED };
 
 const EXTENSIONS: Readonly<Record<string, string>> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
 
@@ -60,20 +61,34 @@ export async function uploadProfileImage(params: {
   if (!deps.isOnline()) return { status: 'offline' };
 
   const image = await readableImage(file, kind, deps.recompress ?? recompressImage);
-  if (image === null) return { status: 'unreadable' };
+  const sent = image === null ? heifSentAsIs(file) : new File([image], `${kind}.${EXTENSIONS[image.type] ?? 'jpg'}`, { type: image.type });
+  if (sent === null) return { status: 'unreadable' };
   if (signal?.aborted === true) return { status: 'cancelled' };
 
   const upload = await uploadAttachments({
     source: deps.source,
     transport: deps.transport,
-    pending: [{ file: new File([image], `${kind}.${EXTENSIONS[image.type] ?? 'jpg'}`, { type: image.type }) }],
+    pending: [{ file: sent }],
     ...(signal === undefined ? {} : { signal }),
   });
-  if (!upload.ok) return cancelled(signal, upload.code) ? { status: 'cancelled' } : { status: 'refused', error: upload.error };
+  if (!upload.ok && cancelled(signal, upload.code)) return { status: 'cancelled' };
+  const failure = uploadShortfall([sent], upload);
+  if (failure !== null) return { status: 'refused', error: failure.error, ...(failure.code === UPLOAD_FORMAT_REFUSED ? { code: UPLOAD_FORMAT_REFUSED } : {}) };
+  if (!upload.ok) return { status: 'refused', error: upload.error };
 
   const url = upload.data.attachments[0]?.fileUrl;
   if (url === undefined || url === '') return { status: 'refused', error: 'Téléversement sans adresse' };
   if (cancelled(signal, undefined)) return { status: 'cancelled' };
 
-  return { status: 'uploaded', url, bytesSent: image.size };
+  return { status: 'uploaded', url, bytesSent: sent.size };
 }
+
+/**
+ * W9 (#11315) — une photo HEIC que ce navigateur ne décode pas (Chrome,
+ * Android) part TELLE QUELLE, sous son vrai type : la passerelle la convertit
+ * (S8, #11263) et sert un JPEG. Toute autre image illisible reste illisible.
+ */
+const heifSentAsIs = (file: Blob): File | null => {
+  const named = file instanceof File ? file : new File([file], 'photo', { type: file.type });
+  return isHeifFamily(named) ? servableHeif(named) : null;
+};

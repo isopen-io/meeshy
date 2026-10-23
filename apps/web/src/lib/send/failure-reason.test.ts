@@ -136,3 +136,24 @@ describe('sendFailureReason — une pièce jointe d’invité refusée sur son c
     }
   });
 });
+
+/**
+ * W9 (#11315) — un HEIC que la passerelle n'a pas su convertir : la cause dit
+ * le FORMAT, dans les sept langues, et pas « une pièce n'a pas pu être
+ * téléversée » qui laisserait croire à un incident réseau.
+ */
+describe('sendFailureReason — le format refusé (W9)', () => {
+  test('UPLOAD_FORMAT_REFUSED a sa cause, distincte du lot incomplet', () => {
+    const reason = sendFailureReason(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }));
+    expect(reason).toBe('ce format de photo (HEIC) n’est pas encore accepté');
+  });
+
+  test('la cause existe dans les sept langues, et aucune ne retombe sur le français', () => {
+    const french = sendFailureReasonIn(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }), 'fr');
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES.filter((code) => code !== 'fr')) {
+      const reason = sendFailureReasonIn(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }), language);
+      expect(reason).toContain('HEIC');
+      expect(reason).not.toBe(french);
+    }
+  });
+});

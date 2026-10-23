@@ -66,6 +66,7 @@ export interface SourceAttachment {
   readonly isViewOnce?: boolean;
   readonly isBlurred?: boolean;
   readonly effectFlags?: number;
+  readonly processingState?: string | null;
 }
 
 /** Une colonne JSON garde le type de SA ligne : Prisma d'un côté, le double structurel de l'autre. */
@@ -117,5 +118,8 @@ export function copiedAttachmentFields<A extends SourceAttachment>(att: A) {
     isViewOnce: att.isViewOnce,
     isBlurred: att.isBlurred,
     effectFlags: att.effectFlags,
+    // #11264 — une copie faite pendant le rendu différé reste `pending` : le
+    // worker écrit toutes les lignes qui partagent ses octets (audit S9, défaut 4).
+    processingState: att.processingState ?? undefined,
   };
 }

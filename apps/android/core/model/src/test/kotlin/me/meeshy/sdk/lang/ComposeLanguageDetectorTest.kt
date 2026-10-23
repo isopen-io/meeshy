@@ -1,6 +1,7 @@
 package me.meeshy.sdk.lang
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
 /**
@@ -121,6 +122,67 @@ class ComposeLanguageDetectorTest {
         // to French because the French signal dominates the score.
         assertThat(ComposeLanguageDetector.detect("Le petit chat de la maison mange le pain avec el pan", fallback = "en"))
             .isEqualTo("fr")
+    }
+
+    // --- identifieur injectable (ML Kit) ---------------------------------------------------------
+
+    private fun identifier(code: String, confidence: Double) =
+        LanguageIdentifying { LanguageIdentification(code, confidence) }
+
+    @Test
+    fun `identified language at the threshold wins`() = runTest {
+        val result = ComposeLanguageDetector.detect("Hello there my friend", "fr", identifier("en", 0.65))
+        assertThat(result).isEqualTo("en")
+    }
+
+    @Test
+    fun `identified language below the threshold falls back to the sender language`() = runTest {
+        val result = ComposeLanguageDetector.detect("Hello there my friend", "fr", identifier("en", 0.64))
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `undetermined identification falls back to the sender language`() = runTest {
+        val result = ComposeLanguageDetector.detect("Hello there my friend", "fr", identifier("und", 0.99))
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `fewer than four letters never consults the identifier`() = runTest {
+        var asked = false
+        val spy = LanguageIdentifying { asked = true; LanguageIdentification("en", 0.99) }
+        assertThat(ComposeLanguageDetector.detect("ok 123", "fr", spy)).isEqualTo("fr")
+        assertThat(asked).isFalse()
+    }
+
+    @Test
+    fun `urls are stripped before identification`() = runTest {
+        var seen = ""
+        val spy = LanguageIdentifying { seen = it; LanguageIdentification("en", 0.9) }
+        ComposeLanguageDetector.detect("hello world https://meeshy.me/x?a=1", "fr", spy)
+        assertThat(seen).isEqualTo("hello world")
+        assertThat(ComposeLanguageDetector.detect("https://meeshy.me/x?a=1", "fr", spy)).isEqualTo("fr")
+    }
+
+    @Test
+    fun `an unavailable identifier leaves the heuristic decide`() = runTest {
+        val result = ComposeLanguageDetector.detect(
+            "Bonjour, comment allez-vous aujourd'hui ?", "en", LanguageIdentifying.Unavailable,
+        )
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a failing identifier degrades to the heuristic`() = runTest {
+        val boom = LanguageIdentifying { error("no play services") }
+        val result = ComposeLanguageDetector.detect("Bonjour, comment allez-vous aujourd'hui ?", "en", boom)
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a regional identification is normalised`() = runTest {
+        val result = ComposeLanguageDetector.detect("Olá, tudo bem com você", "fr", identifier("pt-BR", 0.9))
+        assertThat(result).isEqualTo("pt")
     }
 }
 
