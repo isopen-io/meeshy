@@ -50,6 +50,7 @@
     <string name="presence_idle">Inativo</string>
     <string name="presence_offline">Offline</string>
     <string name="presence_online">Online</string>
+    <string name="reactions_more">Mais reações</string>
     <string name="settings_info_button_label">Saiba mais sobre %s</string>
     <string name="sticker_sheet_close">Fechar</string>
     <string name="sticker_sheet_favorites_empty">Toque e segure uma decoração para fixá-la aqui.</string>

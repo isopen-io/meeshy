@@ -50,6 +50,7 @@
     <string name="presence_idle">Inactif</string>
     <string name="presence_offline">Hors ligne</string>
     <string name="presence_online">En ligne</string>
+    <string name="reactions_more">Plus de réactions</string>
     <string name="settings_info_button_label">En savoir plus sur %s</string>
     <string name="sticker_sheet_close">Fermer</string>
     <string name="sticker_sheet_favorites_empty">Appuie longuement sur une décoration pour l\'épingler ici.</string>

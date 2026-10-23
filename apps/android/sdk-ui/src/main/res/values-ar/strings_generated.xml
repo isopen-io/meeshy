@@ -50,6 +50,7 @@
     <string name="presence_idle">غير نشط</string>
     <string name="presence_offline">غير متصل</string>
     <string name="presence_online">متصل</string>
+    <string name="reactions_more">مزيد من التفاعلات</string>
     <string name="settings_info_button_label">معرفة المزيد عن %s</string>
     <string name="sticker_sheet_close">إغلاق</string>
     <string name="sticker_sheet_favorites_empty">اضغط مطولاً على زخرفة لتثبيتها هنا.</string>

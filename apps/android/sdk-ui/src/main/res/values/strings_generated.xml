@@ -50,6 +50,7 @@
     <string name="presence_idle">Idle</string>
     <string name="presence_offline">Offline</string>
     <string name="presence_online">Online</string>
+    <string name="reactions_more">More reactions</string>
     <string name="settings_info_button_label">Learn more about %s</string>
     <string name="sticker_sheet_close">Close</string>
     <string name="sticker_sheet_favorites_empty">Long-press a decoration to pin it here.</string>
