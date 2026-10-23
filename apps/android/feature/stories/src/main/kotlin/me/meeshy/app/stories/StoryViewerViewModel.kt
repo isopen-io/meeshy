@@ -374,11 +374,11 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun observeStoryUpdates() {
         viewModelScope.launch {
-            socialSocket.storyUpdated.collect { event ->
+            socialSocket.storyUpdated.collectEachSafely { event ->
                 val storyId = event.story.id
                 val existingSlide = playback.groups.firstNotNullOfOrNull { group ->
                     group.slides.firstOrNull { it.id == storyId }
-                } ?: return@collect
+                } ?: return@collectEachSafely
                 val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
                 val newSlide = event.story.toStoryItem().toSlideView(existingSlide.accentHex, prefs)
                 playback = playback.replacingSlide(newSlide)
@@ -399,9 +399,9 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun observeStoryDeletions() {
         viewModelScope.launch {
-            socialSocket.storyDeleted.collect { event ->
+            socialSocket.storyDeleted.collectEachSafely { event ->
                 val next = playback.removingSlide(event.storyId)
-                if (next == playback) return@collect
+                if (next == playback) return@collectEachSafely
                 playback = next
                 rawItems.remove(event.storyId)
                 reactionStates.remove(event.storyId)
@@ -421,10 +421,10 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun observeTranslationUpdates() {
         viewModelScope.launch {
-            socialSocket.storyTranslationUpdated.collect { event ->
-                val item = rawItems[event.postId] ?: return@collect
+            socialSocket.storyTranslationUpdated.collectEachSafely { event ->
+                val item = rawItems[event.postId] ?: return@collectEachSafely
                 val merged = StoryTextObjectTranslationMerge.merge(item, event.textObjectIndex, event.translations)
-                if (merged == item) return@collect
+                if (merged == item) return@collectEachSafely
                 rawItems[event.postId] = merged
                 emit()
             }
@@ -439,12 +439,12 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun observeReactionDeltas() {
         viewModelScope.launch {
-            socialSocket.storyReacted.collect {
+            socialSocket.storyReacted.collectEachSafely {
                 onReactionDelta(it.storyId, it.emoji, delta = 1, actorId = it.userId)
             }
         }
         viewModelScope.launch {
-            socialSocket.storyUnreacted.collect {
+            socialSocket.storyUnreacted.collectEachSafely {
                 onReactionDelta(it.storyId, it.emoji, delta = -1, actorId = it.userId)
             }
         }
