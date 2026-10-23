@@ -118,7 +118,14 @@ export type LensPacksDeps = {
 type LensAuditEntry = {
   readonly adminId: string;
   readonly submitterId: string;
-  readonly action: 'LENS_PACK_APPROVE' | 'LENS_PACK_REJECT' | 'LENS_PACK_WITHDRAW' | 'LENS_PACK_REJECTION_REPLACED';
+  readonly action:
+    | 'LENS_PACK_APPROVE'
+    | 'LENS_PACK_REJECT'
+    | 'LENS_PACK_WITHDRAW'
+    | 'LENS_PACK_REJECTION_REPLACED'
+    | 'LENS_PACK_APPROVE_NOT_APPLIED'
+    | 'LENS_PACK_REJECT_NOT_APPLIED'
+    | 'LENS_PACK_WITHDRAW_NOT_APPLIED';
   readonly slug: string;
   readonly metadata: Readonly<Record<string, unknown>>;
 };
@@ -289,7 +296,7 @@ export class LensPacks {
     const json = servedDocument(stored, lens.window);
     if (existing !== null) {
       const journaled = await this.journal({
-        adminId: existing.reviewerId ?? userId,
+        adminId: userId,
         submitterId: userId,
         action: 'LENS_PACK_REJECTION_REPLACED',
         slug: lens.id,
@@ -387,7 +394,10 @@ export class LensPacks {
         ...fixed,
       },
     });
-    if (flipped.count === 0) return { kind: 'not-found' };
+    if (flipped.count === 0) {
+      await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: approve ? 'LENS_PACK_APPROVE_NOT_APPLIED' : 'LENS_PACK_REJECT_NOT_APPLIED', slug, metadata: { reason: 'concurrent-review' } });
+      return { kind: 'not-found' };
+    }
     const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
     return row === null ? { kind: 'not-found' } : { kind: 'reviewed', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }) };
   }
@@ -407,7 +417,10 @@ export class LensPacks {
       where: { slug, status: 'approved' },
       data: { status: 'withdrawn', reviewNote: note, reviewerId: moderatorId, reviewedAt: this.now() },
     });
-    if (flipped.count === 0) return { kind: 'not-found' };
+    if (flipped.count === 0) {
+      await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_WITHDRAW_NOT_APPLIED', slug, metadata: { reason: 'concurrent-review' } });
+      return { kind: 'not-found' };
+    }
     const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
     return row === null ? { kind: 'not-found' } : { kind: 'withdrawn', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }) };
   }
@@ -512,7 +525,11 @@ export class LensPacks {
       },
       installable: async (slug, userId) => {
         const row = await prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
-        if (row === null || row.status !== 'approved') return null;
+        // Une lens RETIRÉE reste désinstallable par qui l'a ; elle n'est plus offerte à personne.
+        if (row === null || (row.status !== 'approved' && row.status !== 'withdrawn')) return null;
+        if (row.status === 'withdrawn') {
+          return { id: row.id, installCount: row.installCount, version: 1, offered: false, project: (installed, installCount) => lensPackDetail({ ...row, installCount }, installed) };
+        }
         const offer = await context(userId);
         return {
           id: row.id,

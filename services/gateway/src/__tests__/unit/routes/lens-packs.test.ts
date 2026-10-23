@@ -336,7 +336,7 @@ describe('modération journalisée et retrait d’une lens publiée (audit de #1
 
     expect(h.tables.audit.map((entry) => entry.action)).toEqual(['LENS_PACK_REJECT', 'LENS_PACK_REJECTION_REPLACED']);
     const replaced = h.tables.audit[1]!;
-    expect(replaced).toMatchObject({ adminId: MODO, userId: BOB, entityId: 'aurore-polaire' });
+    expect(replaced).toMatchObject({ adminId: BOB, userId: BOB, entityId: 'aurore-polaire' });
     expect(JSON.parse(String(replaced.metadata))).toMatchObject({ reviewNote: 'Texte illisible', reviewerId: MODO });
   });
 
@@ -368,6 +368,24 @@ describe('modération journalisée et retrait d’une lens publiée (audit de #1
     await submit(pending, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
     expect((await withdraw(pending)).statusCode).toBe(404);
     expect(pending.tables.packs[0]!.status).toBe('pending');
+  });
+
+  it('qui l’avait installée la désinstalle encore après son retrait, et ne peut pas la réinstaller (contre-audit N4)', async () => {
+    const h = await approved();
+    await h.app.inject({ method: 'PUT', url: '/aurore-polaire/install' });
+    await withdraw(h);
+
+    expect((await h.app.inject({ method: 'DELETE', url: '/aurore-polaire/install' })).statusCode).toBe(200);
+    expect((await h.app.inject({ method: 'PUT', url: '/aurore-polaire/install' })).statusCode).toBe(404);
+  });
+
+  it('un geste perdu dans une course entre modérateurs est journalisé comme non appliqué (contre-audit N5)', async () => {
+    const h = await harness();
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    h.tables.lensPack.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
+
+    expect((await review(h, 'aurore-polaire', { decision: 'approve' })).statusCode).toBe(404);
+    expect(h.tables.audit.map((entry) => entry.action)).toEqual(['LENS_PACK_APPROVE', 'LENS_PACK_APPROVE_NOT_APPLIED']);
   });
 
   it('sans journal, rien n’est retiré', async () => {

@@ -42,4 +42,31 @@ describe('normalizeLensLut', () => {
   it('ce qui n’est pas une image est refusé', async () => {
     expect(await normalizeLensLut(Buffer.from('pas une image'))).toEqual({ ok: false, reason: 'not-an-image' });
   });
+
+  it('une LUT marquée Display P3 garde ses valeurs : aucune conversion de profil (contre-audit de #12293)', async () => {
+    const tagged = await sharp(gradient(64, 8), { raw: { width: 64, height: 8, channels: 3 } }).withIccProfile('p3').png().toBuffer();
+    const values = await sharp(tagged, { ignoreIcc: true }).raw().toBuffer();
+
+    const outcome = await normalizeLensLut(tagged);
+
+    if (!outcome.ok) throw new Error('refused');
+    expect(Buffer.compare(await sharp(outcome.image.bytes, { ignoreIcc: true }).raw().toBuffer(), values)).toBe(0);
+  });
+
+  it('une LUT 16 bits sort en 16 bits, chaque valeur intacte', async () => {
+    const width = 32;
+    const height = 8;
+    const raw16 = Buffer.alloc(width * height * 3 * 2);
+    for (let index = 0; index < width * height * 3; index += 1) raw16.writeUInt16LE((index * 977) % 65_536, index * 2);
+    const source = await sharp(raw16, { raw: { width, height, channels: 3, depth: 'ushort' } }).toColourspace('rgb16').png().toBuffer();
+
+    const outcome = await normalizeLensLut(source);
+
+    if (!outcome.ok) throw new Error('refused');
+    expect((await sharp(outcome.image.bytes).metadata()).depth).toBe('ushort');
+    const out = await sharp(outcome.image.bytes).raw({ depth: 'ushort' }).toBuffer();
+    const expected = await sharp(source).raw({ depth: 'ushort' }).toBuffer();
+    expect(Buffer.compare(out, expected)).toBe(0);
+  });
 });
+
