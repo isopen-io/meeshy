@@ -58,7 +58,7 @@ class CommunityLinkRoutesTest {
 
     @Test
     fun `le suivi couvre resolution, clic, etat de redirection, desactivation et statistiques`() = runTest {
-        val http = RecordingHttp(responseBody = """{"success":true,"data":{}}""")
+        val http = RecordingHttp(responseBody = """{"success":true,"data":{"id":"x","trackingLinks":[]}}""")
         val api = http.serve(TrackingLinkTokenApi::class.java)
 
         api.resolve("t")
