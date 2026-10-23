@@ -620,7 +620,8 @@ export class MessagingService {
         content: message.content,
         messageType: message.messageType,
         replyToId: message.replyToId,
-        storyReplyToId: message.storyReplyToId ?? null
+        storyReplyToId: message.storyReplyToId ?? null,
+        encryptionMode: message.encryptionMode ?? null
       },
       originalLanguage,
       onError: (effect, err) =>
