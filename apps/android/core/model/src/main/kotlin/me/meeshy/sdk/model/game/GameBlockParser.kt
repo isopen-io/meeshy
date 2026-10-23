@@ -67,6 +67,15 @@ public object GameBlockParser {
         boosts = parseBoosts(obj.reqObject("boosts")),
         guideSeen = obj.reqArray("guideSeen").strings("guideSeen"),
         starFragments = obj.lenient("starFragments", ::parseStarFragments),
+        league = obj.lenient("league", ::parseLeagueBlock),
+        duo = obj.lenient("duo", ::parseDuoBlock),
+        season = obj.lenient("season", ::parseSeasonBlock),
+        seasonUpcoming = obj.lenient("seasonUpcoming", ::parseUpcomingSeasonBlock),
+        trophies = obj.lenient("trophies", ::parseTrophiesBlock),
+        atlas = obj.lenient("atlas", ::parseAtlasBlock),
+        prestige = obj.lenient("prestige", ::parsePrestigeBlock),
+        visibility = obj.lenient("visibility", ::parseVisibility),
+        achievementRarities = parseRarities(obj),
     )
 
     private fun parseLevel(obj: JsonObject): GameLevel = GameLevel(
