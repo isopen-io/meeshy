@@ -775,13 +775,24 @@ fun StoryViewerScreen(
     }
 
     if (showFullEmojiPicker) {
-        ModalBottomSheet(onDismissRequest = { showFullEmojiPicker = false }) {
-            EmojiFullPicker(
-                onSelect = { emoji ->
-                    showFullEmojiPicker = false
-                    sendReaction(emoji, from = null)
-                },
-            )
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showFullEmojiPicker = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures { showFullEmojiPicker = false } },
+            ) {
+                me.meeshy.ui.component.ReactionCategorySheet(
+                    onReact = { emoji ->
+                        showFullEmojiPicker = false
+                        sendReaction(emoji, from = null)
+                    },
+                    onDismiss = { showFullEmojiPicker = false },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
     }
 

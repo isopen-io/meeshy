@@ -4,6 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.layout.Arrangement
@@ -100,7 +102,8 @@ public fun ReactionCategorySheet(
                 .fillMaxWidth()
                 .height(height.dp)
                 .clip(RoundedCornerShape(topStart = MeeshyRadius.xxl, topEnd = MeeshyRadius.xxl))
-                .background(MeeshyTheme.tokens.backgroundSecondary),
+                .background(MeeshyTheme.tokens.backgroundSecondary)
+                .pointerInput(Unit) { detectTapGestures { } },
         ) {
             Column(
                 modifier = Modifier
