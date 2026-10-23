@@ -28,7 +28,6 @@ import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.push.MeeshyFcmService
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
-import me.meeshy.app.theme.LocalizedActivityContext
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
@@ -124,7 +123,7 @@ class MainActivity : ComponentActivity() {
  * preference is "System" (`null`) the original context is used unchanged, so a device
  * locale the app has no translation for still falls back through Android's own resource
  * resolution. Works on every supported API level (minSdk 26) with no extra dependency.
- * The Activity stays the context's base ([LocalizedActivityContext]) so links, shares and
+ * The Activity stays the context's base ([localizedContext]) so links, shares and
  * permission prompts keep working when a language is forced.
  */
 @androidx.compose.runtime.Composable
@@ -137,8 +136,8 @@ private fun LocalizedContent(
     val baseConfiguration = LocalConfiguration.current
     val locale = remember(tag) { tag?.let(Locale::forLanguageTag) }
     if (locale != null) SideEffect { Locale.setDefault(locale) }
-    val localizedContext = remember(locale, baseContext, baseConfiguration) {
-        locale?.let { LocalizedActivityContext.wrap(baseContext, it) } ?: baseContext
+    val context = remember(tag, baseContext, baseConfiguration) {
+        tag?.let { localizedContext(baseContext, it, baseConfiguration) } ?: baseContext
     }
     val localizedConfiguration = remember(locale, baseConfiguration) {
         locale?.let { Configuration(baseConfiguration).apply { setLocale(it) } } ?: baseConfiguration
@@ -147,7 +146,7 @@ private fun LocalizedContent(
     // Toujours le même nœud : passer de « Système » à une langue ne recrée pas l'arbre,
     // donc la navigation reste sur l'écran où la langue a été choisie.
     CompositionLocalProvider(
-        LocalContext provides localizedContext,
+        LocalContext provides context,
         LocalConfiguration provides localizedConfiguration,
     ) {
         content()

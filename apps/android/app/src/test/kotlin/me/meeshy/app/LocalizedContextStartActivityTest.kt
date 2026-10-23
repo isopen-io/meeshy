@@ -1,4 +1,4 @@
-package me.meeshy.app.theme
+package me.meeshy.app
 
 import android.app.Activity
 import android.content.ContextWrapper
@@ -17,7 +17,7 @@ import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = android.app.Application::class, sdk = [34])
-class LocalizedActivityContextTest {
+class LocalizedContextStartActivityTest {
 
     private fun activity(): Activity = Robolectric.buildActivity(Activity::class.java).setup().get()
 
@@ -35,7 +35,7 @@ class LocalizedActivityContextTest {
 
     @Test
     fun `the forced language reaches the resources the tree reads its strings from`() {
-        val localized = LocalizedActivityContext.wrap(activity(), Locale.forLanguageTag("es"))
+        val localized = localizedContext(activity(), "es", activity().resources.configuration)
 
         assertThat(localized.resources.configuration.locales[0].language).isEqualTo("es")
     }
@@ -43,7 +43,7 @@ class LocalizedActivityContextTest {
     @Test
     fun `starting an activity from the localized context goes through the activity and does not throw`() {
         val activity = activity()
-        val localized = LocalizedActivityContext.wrap(activity, Locale.forLanguageTag("es"))
+        val localized = localizedContext(activity, "es", activity.resources.configuration)
 
         localized.startActivity(linkIntent())
 
@@ -53,7 +53,7 @@ class LocalizedActivityContextTest {
     @Test
     fun `the activity stays reachable by walking the wrapper chain`() {
         val activity = activity()
-        val localized = LocalizedActivityContext.wrap(activity, Locale.forLanguageTag("ar"))
+        val localized = localizedContext(activity, "ar", activity.resources.configuration)
 
         assertThat((localized as ContextWrapper).baseContext).isSameInstanceAs(activity)
     }
