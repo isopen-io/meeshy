@@ -9,6 +9,7 @@ import * as z from 'zod/mini';
 import { FrameUsageSchema, type FrameUsage, type FreeFrameSurface } from './frame-usage.js';
 import { GLORY_ATMOSPHERES } from './glory-atmospheres.js';
 import { type PackEligibilityRule } from './pack-ownership.js';
+import { PACK_TARGETING_LIMITS, type PackAvailability, type PackTargeting } from './pack-availability.js';
 import { GLORY_RANKS, type GloryRankKey } from '../utils/game/glory.js';
 import { PACK_DOMAINS, PACK_PRICE_MAX, PACK_LANGUAGES, PACK_LIMITS, PACK_SLUG_PATTERN, type PackAssetRef, type PackDefault, type PackDomain } from './content-pack.js';
 
@@ -56,6 +57,24 @@ export const PackEligibilityRuleSchema: z.ZodMiniType<PackEligibilityRule> = z.d
   z.object({ kind: z.literal('trophy'), key: z.string().check(z.minLength(1), z.maxLength(96)) }),
   z.object({ kind: z.literal('season'), number: z.int().check(z.minimum(1)) }),
 ]);
+
+/**
+ * La fenêtre de disponibilité (#11274) : deux instants ISO optionnels,
+ * `startsAt` inclus et `endsAt` exclu. Une fenêtre qui finit avant de
+ * commencer est illisible : l'entrée tombe, jamais le registre.
+ */
+export const PackAvailabilitySchema: z.ZodMiniType<PackAvailability> = z
+  .object({ startsAt: z.optional(z.iso.datetime()), endsAt: z.optional(z.iso.datetime()) })
+  .check(z.refine((window) => window.startsAt === undefined || window.endsAt === undefined || Date.parse(window.startsAt) < Date.parse(window.endsAt)));
+
+const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/;
+
+/** Le ciblage (#11274) : communautés (identifiants), pays (ISO alpha-2 en capitales), langues (ISO 639-1). */
+export const PackTargetingSchema: z.ZodMiniType<PackTargeting> = z.object({
+  communities: z.optional(z.array(z.string().check(z.regex(OBJECT_ID_PATTERN))).check(z.maxLength(PACK_TARGETING_LIMITS.communities))),
+  countries: z.optional(z.array(z.string().check(z.regex(/^[A-Z]{2}$/))).check(z.maxLength(PACK_TARGETING_LIMITS.countries))),
+  languages: z.optional(z.array(z.string().check(z.regex(/^[a-z]{2,3}$/))).check(z.maxLength(PACK_TARGETING_LIMITS.languages))),
+});
 
 /**
  * Les surfaces RÉSERVÉES : chacune n'est déclarée que par son domaine, et ce
@@ -150,6 +169,10 @@ export const PackIndexEntrySchema = z
     price: z.optional(z.int().check(z.minimum(1), z.maximum(PACK_PRICE_MAX))),
     collections: z.optional(z.array(collectionSchema)),
     atmosphere: z.optional(z.enum(GLORY_ATMOSPHERES)),
+    /** Quand le pack est OFFERT (#11274) ; la possession n'en dépend jamais. */
+    availability: z.optional(PackAvailabilitySchema),
+    /** À qui il est offert (#11274) : communautés, pays, langues. */
+    targeting: z.optional(PackTargetingSchema),
   })
   .check(
     z.refine(packUsageDeclared),
