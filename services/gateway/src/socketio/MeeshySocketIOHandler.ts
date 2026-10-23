@@ -19,6 +19,8 @@ import { MissionService, READ_ONLY_CREDIT } from '../services/game/MissionServic
 import { PersonalMissionService } from '../services/game/PersonalMissionService';
 import { mediaQueueEnabled } from '../services/attachments/media-processing/queue';
 import { gatewaySweepEnabled, startGatewayPendingSweep } from '../services/attachments/media-processing/gateway-sweep-runner';
+import { mediaReadyPorts } from '../services/attachments/media-processing/ready-listener';
+import { MessageAttachmentAltTranslationService } from '../services/attachments/MessageAttachmentAltTranslationService';
 import { startMediaReadyListener } from '../services/attachments/media-processing/ready-listener';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { getCacheStore } from '../services/CacheStore';
@@ -98,6 +100,19 @@ export class MeeshySocketIOHandler {
     // la passerelle reprend elle-même les pièces restées `pending`.
     if (gatewaySweepEnabled()) {
       this.mediaPendingSweep = startGatewayPendingSweep(mediaDeps);
+    }
+    // #12333 — la description d'une pièce traduite par NLLB rejoint ses
+    // lecteurs par `message:attachment-updated`, sous la loi de `servedDescription`.
+    const zmqClient = this.translationService.getZmqClient();
+    if (zmqClient) {
+      const ports = mediaReadyPorts(mediaDeps);
+      MessageAttachmentAltTranslationService.init(this.prisma, zmqClient, async (attachmentId) => {
+        const attachment = await ports.loadMessageAttachment(attachmentId);
+        const conversationId = attachment?.message?.conversationId;
+        if (attachment?.messageId && conversationId) {
+          await ports.emitAttachmentUpdated({ conversationId, messageId: attachment.messageId, attachment });
+        }
+      });
     }
 
     logger.info('✅ Socket.IO configuré et routes ajoutées');

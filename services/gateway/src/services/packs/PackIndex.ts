@@ -45,6 +45,7 @@ import { parseBannerFramePackContract } from '@meeshy/shared/types/banner-frame-
 import { parseGloryFramePackContract } from '@meeshy/shared/types/glory-frame-pack';
 import { gloryFrameAssets, parseGloryFrameContract } from '@meeshy/shared/types/glory-frames';
 import { PackRegistryOverrides, overlayPackIndex, type PackRegistryOverridesPrisma } from './PackRegistryOverrides';
+import { attachPackRegistryMetrics } from '../metrics/packRegistryMetrics';
 
 export type PackIndex = {
   /** Les entrées d'un domaine, dans l'ordre éditorial (`order`). */
@@ -291,6 +292,7 @@ export function startupBasePackIndex(): PackIndex {
  */
 export function liveRegistryOverrides(prisma: PackRegistryOverridesPrisma): PackRegistryOverrides {
   liveOverrides ??= new PackRegistryOverrides({ prisma });
+  attachPackRegistryMetrics(liveOverrides);
   return liveOverrides;
 }
 

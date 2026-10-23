@@ -35,11 +35,14 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UNKNOWN_PACK_AUDIENCE, isPackShelved, type PackAudience } from '@meeshy/shared/types/pack-availability';
 import { parseLens, LENS_PATTERNS, type Lens } from '@meeshy/shared/types/lens-format';
 import { LENS_PACK_LIMITS, isLensCostDeclaredHonestly, lensAssetRefs, measureLensCost, withLensAssets, type LensCost } from '@meeshy/shared/types/lens-pack';
-import type { PackAssetRef, PackStatus, PackSummary } from '@meeshy/shared/types/content-pack';
+import { packChoiceKey, type PackAssetRef, type PackStatus, type PackSummary } from '@meeshy/shared/types/content-pack';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
 import { normalizeStickerImage, type StickerImageOutcome } from '../stickers/stickerImage';
 import { normalizeLensLut } from './lensLutImage';
 import { isUniqueViolation, type CommunityPackStore, type PackViewer } from './PackCatalog';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'LensPacks' });
 
 export type LensPackDetail = PackSummary & {
   readonly cost: LensCost;
@@ -106,13 +109,31 @@ export type WithdrawLensOutcome =
   | { readonly kind: 'not-found' }
   | { readonly kind: 'audit-unavailable' };
 
+export type RestoreLensOutcome =
+  | { readonly kind: 'restored'; readonly pack: LensPackDetail; readonly installationsReset: number }
+  | { readonly kind: 'not-found' }
+  | { readonly kind: 'audit-unavailable' };
+
 export type LensFile = { readonly bytes: Buffer; readonly contentType: string };
 
 export type LensPacksDeps = {
-  readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog'>;
+  readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog' | 'userStickerPack'>;
   readonly now?: () => Date;
   readonly normalizeAsset?: (bytes: Buffer) => Promise<StickerImageOutcome>;
   readonly normalizeLut?: (bytes: Buffer) => Promise<StickerImageOutcome>;
+  /** Où se signale un trou du journal de modération (#12329 R2). */
+  readonly log?: LensPacksLog;
+};
+
+type LensPacksLog = { readonly error: (message: string, context?: Record<string, unknown>) => void };
+
+type NotAppliedReason = 'concurrent-review' | 'write-failed';
+
+type NotAppliedEntry = {
+  readonly moderatorId: string;
+  readonly submitterId: string;
+  readonly action: 'LENS_PACK_APPROVE_NOT_APPLIED' | 'LENS_PACK_REJECT_NOT_APPLIED' | 'LENS_PACK_WITHDRAW_NOT_APPLIED' | 'LENS_PACK_RESTORE_NOT_APPLIED';
+  readonly slug: string;
 };
 
 type LensAuditEntry = {
@@ -125,7 +146,10 @@ type LensAuditEntry = {
     | 'LENS_PACK_REJECTION_REPLACED'
     | 'LENS_PACK_APPROVE_NOT_APPLIED'
     | 'LENS_PACK_REJECT_NOT_APPLIED'
-    | 'LENS_PACK_WITHDRAW_NOT_APPLIED';
+    | 'LENS_PACK_WITHDRAW_NOT_APPLIED'
+    | 'LENS_PACK_RESTORE'
+    | 'LENS_PACK_RESTORE_APPLIED'
+    | 'LENS_PACK_RESTORE_NOT_APPLIED';
   readonly slug: string;
   readonly metadata: Readonly<Record<string, unknown>>;
 };
@@ -234,16 +258,40 @@ function decodeAssets(refs: readonly string[], provided: Readonly<Record<string,
 }
 
 export class LensPacks {
-  private readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog'>;
+  private readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog' | 'userStickerPack'>;
   private readonly now: () => Date;
   private readonly normalizeAsset: (bytes: Buffer) => Promise<StickerImageOutcome>;
   private readonly normalizeLut: (bytes: Buffer) => Promise<StickerImageOutcome>;
+  private readonly log: LensPacksLog;
 
   constructor(deps: LensPacksDeps) {
+    this.log = deps.log ?? logger;
     this.prisma = deps.prisma;
     this.now = deps.now ?? (() => new Date());
     this.normalizeAsset = deps.normalizeAsset ?? normalizeStickerImage;
     this.normalizeLut = deps.normalizeLut ?? normalizeLensLut;
+  }
+
+  /**
+   * Le geste journalisé n'a pas eu lieu (#12329 R2) : la ligne « non appliqué »
+   * dit pourquoi. Si elle-même ne s'écrit pas, le journal porte un geste sans
+   * son issue — ce trou se signale en erreur, nommé, au lieu de se taire.
+   */
+  private async recordNotApplied(entry: NotAppliedEntry & { readonly reason: NotAppliedReason }): Promise<void> {
+    const journaled = await this.journal({ adminId: entry.moderatorId, submitterId: entry.submitterId, action: entry.action, slug: entry.slug, metadata: { reason: entry.reason } });
+    if (!journaled) {
+      this.log.error('lens moderation journal incomplete: a gesture is journaled without its outcome', { action: entry.action, slug: entry.slug, reason: entry.reason });
+    }
+  }
+
+  /** L'écriture d'un geste déjà journalisé : si elle LÈVE, le journal le dit avant que l'erreur ne remonte. */
+  private async applyJournaled(update: () => Promise<{ readonly count: number }>, notApplied: NotAppliedEntry): Promise<{ readonly count: number }> {
+    try {
+      return await update();
+    } catch (error) {
+      await this.recordNotApplied({ ...notApplied, reason: 'write-failed' });
+      throw error;
+    }
   }
 
   /** Une ligne de journal, ÉCRITE avant d'agir : si elle ne s'écrit pas, on n'agit pas. */
@@ -384,18 +432,23 @@ export class LensPacks {
       metadata: { note, ...(approve ? { window, communities } : {}) },
     });
     if (!journaled) return { kind: 'audit-unavailable' };
-    const flipped = await this.prisma.lensPack.updateMany({
-      where: { slug, status: 'pending', submitterId: current.submitterId },
-      data: {
-        status: approve ? 'approved' : 'rejected',
-        reviewNote: note,
-        reviewerId: moderatorId,
-        reviewedAt: this.now(),
-        ...fixed,
-      },
-    });
+    const notApplied: NotAppliedEntry = { moderatorId, submitterId: current.submitterId, action: approve ? 'LENS_PACK_APPROVE_NOT_APPLIED' : 'LENS_PACK_REJECT_NOT_APPLIED', slug };
+    const flipped = await this.applyJournaled(
+      () =>
+        this.prisma.lensPack.updateMany({
+          where: { slug, status: 'pending', submitterId: current.submitterId },
+          data: {
+            status: approve ? 'approved' : 'rejected',
+            reviewNote: note,
+            reviewerId: moderatorId,
+            reviewedAt: this.now(),
+            ...fixed,
+          },
+        }),
+      notApplied,
+    );
     if (flipped.count === 0) {
-      await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: approve ? 'LENS_PACK_APPROVE_NOT_APPLIED' : 'LENS_PACK_REJECT_NOT_APPLIED', slug, metadata: { reason: 'concurrent-review' } });
+      await this.recordNotApplied({ ...notApplied, reason: 'concurrent-review' });
       return { kind: 'not-found' };
     }
     const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
@@ -413,16 +466,61 @@ export class LensPacks {
     const note = input.note?.trim().slice(0, LENS_PACK_LIMITS.maxReviewNoteLength) || null;
     const journaled = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_WITHDRAW', slug, metadata: { note } });
     if (!journaled) return { kind: 'audit-unavailable' };
-    const flipped = await this.prisma.lensPack.updateMany({
-      where: { slug, status: 'approved' },
-      data: { status: 'withdrawn', reviewNote: note, reviewerId: moderatorId, reviewedAt: this.now() },
-    });
+    const notApplied: NotAppliedEntry = { moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_WITHDRAW_NOT_APPLIED', slug };
+    const flipped = await this.applyJournaled(
+      () =>
+        this.prisma.lensPack.updateMany({
+          where: { slug, status: 'approved' },
+          data: { status: 'withdrawn', reviewNote: note, reviewerId: moderatorId, reviewedAt: this.now() },
+        }),
+      notApplied,
+    );
     if (flipped.count === 0) {
-      await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_WITHDRAW_NOT_APPLIED', slug, metadata: { reason: 'concurrent-review' } });
+      await this.recordNotApplied({ ...notApplied, reason: 'concurrent-review' });
       return { kind: 'not-found' };
     }
     const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
     return row === null ? { kind: 'not-found' } : { kind: 'withdrawn', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }) };
+  }
+
+  /**
+   * Rétablit une lens RETIRÉE par erreur (#12321) : `withdrawn → approved`,
+   * conditionnel, journalisé AVANT d'agir, puis son issue (`*_APPLIED` avec le
+   * nombre d'installations remises à zéro, ou `*_NOT_APPLIED` avec sa raison).
+   *
+   * Ses installations retirées NE REVIENNENT PAS (#12329 R3) : chacun la
+   * réinstallera par son propre geste. Elles sont remises à zéro AVANT que la
+   * lens redevienne visible — elle n'est donc jamais servie « installée » à
+   * qui ne l'a pas réinstallée — et `installCount` les décompte dans la même
+   * écriture que le rétablissement.
+   */
+  async restore(moderatorId: string, slug: string, input: { readonly note: string | null }): Promise<RestoreLensOutcome> {
+    const current = await this.prisma.lensPack.findUnique({ where: { slug }, select: { submitterId: true, status: true, installCount: true } });
+    if (current === null || current.status !== 'withdrawn') return { kind: 'not-found' };
+    const note = input.note?.trim().slice(0, LENS_PACK_LIMITS.maxReviewNoteLength) || null;
+    const journaled = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE', slug, metadata: { note } });
+    if (!journaled) return { kind: 'audit-unavailable' };
+    const notApplied: NotAppliedEntry = { moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE_NOT_APPLIED', slug };
+    const reset = await this.applyJournaled(
+      () => this.prisma.userStickerPack.updateMany({ where: { packSlug: packChoiceKey('lens', slug), installedAt: { not: null } }, data: { installedAt: null } }),
+      notApplied,
+    );
+    const flipped = await this.applyJournaled(
+      () =>
+        this.prisma.lensPack.updateMany({
+          where: { slug, status: 'withdrawn' },
+          data: { status: 'approved', reviewNote: note, reviewerId: moderatorId, reviewedAt: this.now(), installCount: Math.max(0, current.installCount - reset.count) },
+        }),
+      notApplied,
+    );
+    if (flipped.count === 0) {
+      await this.recordNotApplied({ ...notApplied, reason: 'concurrent-review' });
+      return { kind: 'not-found' };
+    }
+    const applied = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE_APPLIED', slug, metadata: { installationsReset: reset.count } });
+    if (!applied) this.log.error('lens moderation journal incomplete: a gesture is journaled without its outcome', { action: 'LENS_PACK_RESTORE_APPLIED', slug });
+    const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
+    return row === null ? { kind: 'not-found' } : { kind: 'restored', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }), installationsReset: reset.count };
   }
 
   /**
