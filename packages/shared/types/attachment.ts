@@ -134,6 +134,15 @@ export type ModerationStatus = 'pending' | 'approved' | 'flagged' | 'rejected';
  * D4 — a single responsive downscaled WebP variant of an image attachment,
  * used to build a client `srcset`. @see schema.prisma MessageAttachment.imageVariants
  */
+/** #11261 — an additional video rendition (storage key in `url`). */
+export interface VideoRendition {
+  readonly codec: 'h264';
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+  readonly size: number;
+}
+
 export interface ImageVariant {
   readonly width: number;
   readonly height: number;
@@ -199,6 +208,12 @@ export interface Attachment {
    * AVIF never lands there. A client that decodes AVIF picks these first.
    */
   readonly avifVariants?: readonly ImageVariant[];
+  /**
+   * #11261 — additional video renditions next to the original: an HEVC upload
+   * gets an H.264 High ≤1080p rendition (HDR tone-mapped to SDR BT.709) for
+   * readers that cannot decode HEVC. The original `fileUrl` stays untouched.
+   */
+  readonly renditions?: readonly VideoRendition[];
   /**
    * #6221 — le TYPE CLIENT rattrape son contrat : la passerelle SERT ce champ
    * (`api-schemas/message-attachment.ts:91`, `schema.prisma:1010`,

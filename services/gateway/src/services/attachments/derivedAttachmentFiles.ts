@@ -21,8 +21,14 @@ export function derivedFileCandidates(row: {
   readonly translations?: unknown;
   readonly imageVariants?: unknown;
   readonly avifVariants?: unknown;
+  readonly renditions?: unknown;
 }): readonly string[] {
-  return [...translationTrackCandidates(row.translations), ...variantCandidates(row.imageVariants), ...variantCandidates(row.avifVariants)];
+  return [
+    ...translationTrackCandidates(row.translations),
+    ...variantCandidates(row.imageVariants),
+    ...variantCandidates(row.avifVariants),
+    ...variantCandidates(row.renditions),
+  ];
 }
 
 /**

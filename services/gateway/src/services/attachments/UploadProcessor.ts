@@ -22,7 +22,7 @@ import {
   getAttachmentEncryptionService,
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
-import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson } from './media-renditions.js';
+import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson, videoRenditionsJson } from './media-renditions.js';
 import { isMediaMetadataStrippable, stripMediaMetadataBuffer } from './media-metadata-strip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizeAudioBuffer, normalizedAudioPath } from './audio-normalization.js';
@@ -423,6 +423,7 @@ export class UploadProcessor {
         thumbHash: thumbHash || undefined,
         imageVariants: imageVariants ? imageVariantsJson(imageVariants) : undefined,
         avifVariants: renditions.avifVariants ? imageVariantsJson(renditions.avifVariants) : undefined,
+        renditions: renditions.renditions ? videoRenditionsJson(renditions.renditions) : undefined,
         width: metadata.width,
         height: metadata.height,
         duration: metadata.duration,
