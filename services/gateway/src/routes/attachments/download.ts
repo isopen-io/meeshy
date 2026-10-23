@@ -22,7 +22,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ifNoneMatchMatches } from '../../utils/etag';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
-import { diskBytes, hasBucket, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
+import { diskBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
 
@@ -135,6 +135,7 @@ export async function registerDownloadRoutes(
         if (!stored) {
           return sendNotFound(reply, 'File not found on disk');
         }
+        if (isBucketUnavailable(stored)) return refuseUnopened(reply, stored);
 
         // #9478 — le même cache que la route par chemin pour un média protégé.
         // #11265 — même transport que la route par chemin : plages, ETag, 304.
@@ -216,6 +217,7 @@ export async function registerDownloadRoutes(
         if (!thumbnailStored) {
           return sendNotFound(reply, 'Thumbnail not found on disk');
         }
+        if (isBucketUnavailable(thumbnailStored)) return refuseUnopened(reply, thumbnailStored);
 
         // WebP thumbnails (sprint D4) advertise image/webp; legacy thumbnails
         // (always JPEG bytes whatever their extension) stay image/jpeg.
@@ -342,6 +344,7 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
         // ressusciterait.
         const stored = onDisk ?? (verdict.kind === 'serve' ? await locateBucketBytes(located.filePath, bytesSource) : null);
         if (!stored) return sendNotFound(reply, 'File not found');
+        if (isBucketUnavailable(stored)) return refuseUnopened(reply, stored);
 
         // #9600 — l'adresse NUE d'un fichier dont tous les porteurs vivants
         // disparaissent : comptée pendant la transition, refusée après.
@@ -444,6 +447,7 @@ function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient,
 
         const stored = await locateStoredBytes(located.filePath, bytesSource);
         if (!stored) return sendNotFound(reply, 'File not found');
+        if (isBucketUnavailable(stored)) return refuseUnopened(reply, stored);
 
         return await streamStoredFile(request, reply, {
           stored,

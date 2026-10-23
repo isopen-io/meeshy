@@ -44,12 +44,22 @@ function strongETag(etag: string): string {
  * (migration par lots, volume reconstruit). Le seau n'est jamais exposé : ses
  * octets passent par la route, sous les gardes que la route a déjà appliquées.
  */
-export async function locateStoredBytes(filePath: string, source: StoredBytesSource): Promise<StoredBytes | null> {
+/** Le seau n'a pas répondu : ni « absent », ni des octets (contre-audit C4). */
+export type BucketUnavailable = { readonly kind: 'unavailable'; readonly reason: string };
+
+/** Ce qu'une recherche d'octets rend : des octets, `null` (absent), ou un seau indisponible. */
+export type StoredBytesLookup = StoredBytes | BucketUnavailable | null;
+
+export function isBucketUnavailable(lookup: StoredBytesLookup): lookup is BucketUnavailable {
+  return lookup !== null && 'kind' in lookup && lookup.kind === 'unavailable';
+}
+
+export async function locateStoredBytes(filePath: string, source: StoredBytesSource): Promise<StoredBytesLookup> {
   return (await diskBytes(filePath)) ?? locateBucketBytes(filePath, source);
 }
 
 /** Le seau seul, pour l'appelant qui a déjà cherché sur le disque et jugé que la clé peut s'y chercher. */
-export async function locateBucketBytes(filePath: string, source: StoredBytesSource): Promise<StoredBytes | null> {
+export async function locateBucketBytes(filePath: string, source: StoredBytesSource): Promise<StoredBytesLookup> {
   const mirror = mirrorOf(source);
   if (!mirror) return null;
   const key = storageKeyUnder(filePath, uploadRootOf(source));
@@ -76,7 +86,7 @@ export async function diskBytes(filePath: string): Promise<StoredBytes | null> {
   }
 }
 
-async function bucketBytes(mirror: MediaObjectStore, key: string): Promise<StoredBytes | null> {
+async function bucketBytes(mirror: MediaObjectStore, key: string): Promise<StoredBytesLookup> {
   try {
     const head = await mirror.head(key);
     if (!head) return null;
@@ -87,7 +97,8 @@ async function bucketBytes(mirror: MediaObjectStore, key: string): Promise<Store
       open: (range) => mirror.read(key, range),
     };
   } catch (error: unknown) {
-    log.warn('Media bucket unreachable, file served as missing', { key, error: error instanceof Error ? error.message : String(error) });
-    return null;
+    const reason = error instanceof Error ? error.message : String(error);
+    log.warn('Media bucket unreachable', { key, error: reason });
+    return { kind: 'unavailable', reason };
   }
 }

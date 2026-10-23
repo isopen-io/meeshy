@@ -10,7 +10,7 @@ export type SweepCounts = { readonly kept: number; readonly removed: number; rea
 
 export type SweepReport =
   | { readonly kind: 'swept'; readonly counts: SweepCounts }
-  | { readonly kind: 'refused'; readonly reason: 'no-referenced-key' | 'too-many-removals' };
+  | { readonly kind: 'refused'; readonly reason: 'no-referenced-key' | 'too-many-removals' | 'mass-removal-count-mismatch' };
 
 /** Au-delà de cette part du seau, un passage est une configuration fausse plus probablement qu'une purge. */
 const MAX_REMOVAL_SHARE = 0.5;
@@ -40,7 +40,8 @@ export async function collectReferencedKeys(params: {
 /**
  * Le seau ne garde que ce qu'une ligne vivante nomme (#11267). Deux passes EN
  * FLUX, jamais le seau entier en mémoire (audit D5) : la première compte et
- * décide, la seconde efface — un refus n'a rien effacé. Seules les clés
+ * décide, la seconde efface au plus ce que la première a compté — un refus
+ * n'a rien effacé. Seules les clés
  * vivantes de la base sont tenues en mémoire. Un objet plus récent que `graceMs` (ou sans date) est épargné :
  * l'écriture en double précède la ligne qui le nommera.
  */
@@ -51,8 +52,12 @@ export async function sweepBucket(params: {
   readonly now: Date;
   readonly graceMs: number;
   readonly apply: boolean;
-  /** La sortie documentée du refus « plus de la moitié » : une purge massive se demande, elle ne se devine pas. */
-  readonly allowMassRemoval?: boolean;
+  /**
+   * La sortie documentée du refus « plus de la moitié » : le NOMBRE exact
+   * d'objets qu'un passage à blanc a annoncé (contre-audit C5). Une base fausse
+   * n'annonce pas le même compte : la purge refuse.
+   */
+  readonly allowMassRemoval?: number;
   readonly log?: (line: string) => void;
 }): Promise<SweepReport> {
   if (params.referenced.size === 0) return { kind: 'refused', reason: 'no-referenced-key' };
@@ -70,7 +75,8 @@ export async function sweepBucket(params: {
     unreferenced += 1;
     if (!isYoung(object)) doomed += 1;
   }
-  if (params.allowMassRemoval !== true && doomed > listed * MAX_REMOVAL_SHARE) return { kind: 'refused', reason: 'too-many-removals' };
+  if (params.allowMassRemoval !== undefined && params.allowMassRemoval !== doomed) return { kind: 'refused', reason: 'mass-removal-count-mismatch' };
+  if (params.allowMassRemoval === undefined && doomed > listed * MAX_REMOVAL_SHARE) return { kind: 'refused', reason: 'too-many-removals' };
 
   const base = { kept: listed - unreferenced, young: unreferenced - doomed };
   if (!params.apply) return { kind: 'swept', counts: { ...base, removed: 0, 'would-remove': doomed, failed: 0 } };
@@ -78,6 +84,7 @@ export async function sweepBucket(params: {
   let removed = 0;
   let failed = 0;
   for await (const object of params.lister.list()) {
+    if (removed + failed >= doomed) break;
     if (!isDoomed(object)) continue;
     try {
       await params.remover.remove(object.key);

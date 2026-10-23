@@ -13,8 +13,9 @@
  * déploiement de tout le staging. Dans la surcouche, `:?` refuse le démarrage
  * sans identifiants — MinIO prendrait sinon « minioadmin » (audit D3).
  *
- * Ni port, ni Traefik, ni réseau partagé avec la production, ni politique
- * anonyme ; la passerelle n'a qu'un compte de service limité au seau, jamais
+ * Ni port, ni Traefik, ni réseau partagé avec la production (le réseau du
+ * staging est un bridge ordinaire : ce sont les identifiants qui protègent), ni
+ * politique anonyme ; la passerelle n'a qu'un compte de service limité au seau, jamais
  * l'administrateur ; les images s'épinglent par empreinte. La production n'a
  * pas de seau : sa migration attend le porteur (#9232).
  *
@@ -62,7 +63,7 @@ describe('la surcouche du seau des médias reste privée (#11267)', () => {
   it.each([
     ['le seau', SEAU],
     ['son initialisation', INIT],
-  ])('%s ne publie aucun port, n’est pas routé par Traefik et ne rejoint que le réseau interne', (_name, bloc) => {
+  ])('%s ne publie aucun port, n’est pas routé par Traefik et ne rejoint que le réseau du staging', (_name, bloc) => {
     expect(bloc).not.toMatch(/^\s{4}ports:/m);
     expect(bloc).not.toMatch(/traefik/i);
     expect(bloc).toMatch(/networks:\n\s+- meeshy-staging-network\n?/);
@@ -108,7 +109,7 @@ describe('la surcouche du seau des médias reste privée (#11267)', () => {
   });
 });
 
-describe('la passerelle de staging adresse le seau par le réseau interne, avec son compte de service', () => {
+describe('la passerelle de staging adresse le seau par le réseau du staging, avec son compte de service', () => {
   const passerelle = serviceBlock(STAGING, 'gateway-staging');
 
   it('point d’accès interne, identifiants du compte de service, éteint par défaut', () => {

@@ -111,7 +111,7 @@ export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLog
         onSweepReport: (report) => {
           recordSweepReport(processMediaBucketMetrics, report, new Date());
           if (report.kind === 'refused') {
-            logger.warn('Media bucket sweep refused — nothing erased; see mediaMirrorCli --sweep --allow-mass-removal', { reason: report.reason });
+            logger.warn('Media bucket sweep refused — nothing erased; see mediaMirrorCli --sweep, then --sweep --apply --allow-mass-removal=<N>', { reason: report.reason });
           }
         },
       })));

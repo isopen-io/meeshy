@@ -32,7 +32,7 @@ Les médias (pièces jointes, vignettes, variantes, pistes TTS, médias de post)
    - **Un refus se voit** (audit D2) : un journal `warn` et la jauge `media_bucket_sweep_refused{reason}`. `media_bucket_sweep_last_success_timestamp_seconds` date le dernier balayage abouti. La sortie documentée du refus « plus de la moitié » est `--sweep --apply --allow-mass-removal`, sous le même régime de feu vert.
 7. **Le seau de staging vit dans une SURCOUCHE**, `docker-compose.staging.media-s3.yml`, incluse par `-f` (audit D3).
    - Mesuré (Compose v5.6) : `${VAR:?}` est évalué sur tout le fichier, profils inactifs compris. Dans le compose principal, il casserait tout le staging tant que les identifiants ne sont pas posés. Dans la surcouche, il refuse le démarrage sans eux : MinIO, à identifiants vides, prendrait `minioadmin`.
-   - Le seau n'a ni port, ni Traefik, et seul le réseau interne le joint. La console est éteinte, et aucune politique anonyme n'est posée.
+   - Le seau n'a ni port ni Traefik, et seul le réseau du staging le joint. Ce réseau est un bridge ordinaire, sans `internal: true` (contre-audit C6) : ce qui protège le seau, ce sont ses identifiants obligatoires et l'absence de politique anonyme, pas la topologie. La console est éteinte.
    - L'initialisation crée une politique limitée à CE seau (Get/Put/Delete sur ses objets, List sur lui) et le **compte de service** de la passerelle. Elle refuse un compte de service égal à l'administrateur, et la passerelle n'a jamais les identifiants de l'administrateur.
    - Garde : `media-bucket-never-public.test.ts`, prouvée rouge sous trois mutations. La production n'a pas de seau.
 8. **Images.** MinIO ne publie plus d'image communautaire depuis le 2025-10-23, et ses mainteneurs ont décliné de corriger CVE-2025-62506. Le staging prend donc la construction Chainguard (`cgr.dev/chainguard/minio`, `minio-client:latest-dev`), **épinglée par empreinte**, que l'opérateur fournit (`MEDIA_S3_IMAGE_DIGEST`, `MEDIA_S3_CLIENT_IMAGE_DIGEST`, lues par `docker buildx imagetools inspect`). Le registre n'est pas joignable depuis la session qui a écrit ce lot, et aucune empreinte n'a été inventée. MinIO est sous AGPLv3, utilisé sans modification comme service séparé. Le code ne parle que S3.
@@ -46,7 +46,7 @@ Les médias (pièces jointes, vignettes, variantes, pistes TTS, médias de post)
 
 - Performance : argumentée, non mesurée.
   - Un fichier présent sur le disque coûte ce qu'il coûtait.
-  - Avec un seau configuré, un fichier absent du disque coûte une requête de verdict, puis un `HEAD` et un `GET` S3 sur le réseau interne. **Toute sonde 404 par chemin coûte donc aussi une requête de verdict en base** (audit D8). Sans seau, rien ne change (#9315).
+  - Avec un seau configuré, un fichier absent du disque coûte une requête de verdict, puis un `HEAD` et un `GET` S3 sur le réseau du staging. **Toute sonde 404 par chemin coûte donc aussi une requête de verdict en base** (audit D8). Sans seau, rien ne change (#9315).
   - Un effacement coûte un `DELETE` S3 de plus.
   - Le miroir coûte un `HEAD` par clé de la fenêtre de 24 h et par minute, plus une passe complète par jour.
 - Restent ouverts :

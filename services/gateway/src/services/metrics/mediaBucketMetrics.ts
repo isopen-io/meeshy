@@ -14,7 +14,7 @@ import { Gauge, Registry } from 'prom-client';
 import type { SweepReport } from '../storage/objects/mediaBucketSweep';
 import { processMediaStageMetrics } from './mediaStageMetrics';
 
-const REFUSAL_REASONS = ['no-referenced-key', 'too-many-removals'] as const;
+const REFUSAL_REASONS = ['no-referenced-key', 'too-many-removals', 'mass-removal-count-mismatch'] as const;
 
 export type MediaBucketMetrics = {
   readonly registry: Registry;

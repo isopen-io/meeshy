@@ -14,9 +14,12 @@
 # refuse le démarrage sans eux : MinIO, à identifiants vides, retomberait sur
 # « minioadmin » (audit D3).
 #
-# Le seau n'est joignable que par la passerelle : ni `ports`, ni Traefik, et le
-# seul réseau interne du staging (jamais `meeshy-network`, partagé avec la
-# production). La passerelle n'y a qu'un COMPTE DE SERVICE limité à ce seau ;
+# Le seau n'est joignable que depuis le réseau du staging : ni `ports`, ni
+# Traefik, jamais `meeshy-network` (partagé avec la production). Ce réseau est
+# un bridge ORDINAIRE, sans `internal: true` (contre-audit C6) : les autres
+# conteneurs du staging le joignent, et ce qui protège le seau, ce sont ses
+# identifiants obligatoires et l'absence de politique anonyme, pas la
+# topologie. La passerelle n'y a qu'un COMPTE DE SERVICE limité à ce seau ;
 # l'administrateur ne sert qu'à l'initialisation. Garde :
 # services/gateway/src/__tests__/unit/config/media-bucket-never-public.test.ts.
 #

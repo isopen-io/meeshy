@@ -1,4 +1,4 @@
-import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client, type S3ClientConfig } from '@aws-sdk/client-s3';
 import { enhancedLogger } from '../../../utils/logger-enhanced';
 import { LocalObjectStore } from './LocalObjectStore';
 import type { MediaObjectStore } from './MediaObjectStore';
@@ -17,14 +17,24 @@ export type MediaObjectStores = {
   readonly config: MediaS3Config;
 };
 
-export function s3ObjectStoreFrom(config: Extract<MediaS3Config, { kind: 'mirror' }>): S3ObjectStore {
-  const client = new S3Client({
+/** Délais du client S3 (contre-audit C2) : un seau muet rend la main, il ne suspend rien. */
+const S3_CONNECTION_TIMEOUT_MS = 2_000;
+const S3_REQUEST_TIMEOUT_MS = 15_000;
+const S3_MAX_ATTEMPTS = 2;
+
+export function s3ClientOptions(config: Extract<MediaS3Config, { kind: 'mirror' }>): S3ClientConfig {
+  return {
     endpoint: config.endpoint,
     region: config.region,
     forcePathStyle: config.forcePathStyle,
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
-  });
-  return new S3ObjectStore({ client, bucket: config.bucket });
+    maxAttempts: S3_MAX_ATTEMPTS,
+    requestHandler: { connectionTimeout: S3_CONNECTION_TIMEOUT_MS, requestTimeout: S3_REQUEST_TIMEOUT_MS },
+  };
+}
+
+export function s3ObjectStoreFrom(config: Extract<MediaS3Config, { kind: 'mirror' }>): S3ObjectStore {
+  return new S3ObjectStore({ client: new S3Client(s3ClientOptions(config)), bucket: config.bucket });
 }
 
 /** Le stockage des médias que l'environnement désigne ; un miroir mal configuré retombe sur le disque, en le disant. */

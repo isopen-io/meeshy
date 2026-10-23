@@ -25,8 +25,9 @@
  *   même régime que `--apply`, et il refuse (code 2) sur une base qui ne nomme
  *   rien ou s'il devait effacer plus de la moitié du seau. Sortie documentée de
  *   ce second refus (jauge `media_bucket_sweep_refused{reason="too-many-removals"}`
- *   à 1) : vérifier que la base est la bonne, puis
- *   `--sweep --apply --allow-mass-removal`.
+ *   à 1) : vérifier que la base est la bonne, lancer `--sweep` à blanc, puis
+ *   `--sweep --apply --allow-mass-removal=<N>`, N étant le « would-remove »
+ *   annoncé. Un autre compte refuse ; la passe d'effacement ne dépasse jamais N.
  * - `--batch=<1..5000>` (500), `--limit=<lignes par collection>`.
  *
  * Code de sortie : 0 = terminé sans échec ; 4 = des copies ont échoué (relancer
@@ -54,8 +55,8 @@ import type { S3ObjectStore } from './S3ObjectStore';
 export type MirrorOptions = { readonly apply: boolean; readonly batchSize: number; readonly limit: number | null; readonly reset: boolean };
 
 export type ParsedMirrorArgs =
-  | ({ readonly kind: 'run'; readonly follow: boolean; readonly sweep: boolean; readonly allowMassRemoval: boolean } & MirrorOptions)
-  | { readonly kind: 'refused'; readonly reason: 'unknown-argument' | 'invalid-batch' | 'invalid-limit' | 'follow-requires-apply' | 'mass-removal-requires-sweep-apply' | 'production-requires-porteur-approval' };
+  | ({ readonly kind: 'run'; readonly follow: boolean; readonly sweep: boolean; readonly allowMassRemoval: number | null } & MirrorOptions)
+  | { readonly kind: 'refused'; readonly reason: 'unknown-argument' | 'invalid-batch' | 'invalid-limit' | 'follow-requires-apply' | 'mass-removal-requires-sweep-apply' | 'mass-removal-requires-count' | 'production-requires-porteur-approval' };
 
 const MAX_BATCH = 5_000;
 export const FOLLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -71,7 +72,7 @@ export function parseMirrorArgs(argv: readonly string[], env: Readonly<Record<st
   const flag = (name: string) => argv.includes(`--${name}`);
   const valueOf = (name: string) => argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
   const known = ['--apply', '--follow', '--reset', '--sweep', '--allow-mass-removal'];
-  const knownPrefixes = ['--batch=', '--limit=', '--porteur-approval='];
+  const knownPrefixes = ['--batch=', '--limit=', '--porteur-approval=', '--allow-mass-removal='];
   if (argv.some((arg) => !known.includes(arg) && !knownPrefixes.some((prefix) => arg.startsWith(prefix)))) return { kind: 'refused', reason: 'unknown-argument' };
   const batchRaw = valueOf('batch');
   const batchSize = batchRaw === undefined ? 500 : Number(batchRaw);
@@ -85,8 +86,12 @@ export function parseMirrorArgs(argv: readonly string[], env: Readonly<Record<st
     return { kind: 'refused', reason: 'production-requires-porteur-approval' };
   }
   if (flag('follow') && !apply) return { kind: 'refused', reason: 'follow-requires-apply' };
-  if (flag('allow-mass-removal') && !(apply && flag('sweep'))) return { kind: 'refused', reason: 'mass-removal-requires-sweep-apply' };
-  return { kind: 'run', apply, follow: flag('follow'), sweep: flag('sweep'), allowMassRemoval: flag('allow-mass-removal'), batchSize, limit, reset: flag('reset') };
+  const massRaw = valueOf('allow-mass-removal');
+  const massAsked = flag('allow-mass-removal') || massRaw !== undefined;
+  if (massAsked && !(apply && flag('sweep'))) return { kind: 'refused', reason: 'mass-removal-requires-sweep-apply' };
+  const massCount = massRaw === undefined ? null : Number(massRaw);
+  if (massAsked && (massCount === null || !Number.isInteger(massCount) || massCount < 1)) return { kind: 'refused', reason: 'mass-removal-requires-count' };
+  return { kind: 'run', apply, follow: flag('follow'), sweep: flag('sweep'), allowMassRemoval: massCount, batchSize, limit, reset: flag('reset') };
 }
 
 /** Le plus petit ObjectId créé à `instant` ou après : 4 octets de secondes, puis des zéros. */
@@ -186,11 +191,11 @@ async function sweepOnce(
   sources: readonly MirrorRowSource[],
   mirror: S3ObjectStore,
   uploadRoot: string,
-  options: { readonly apply: boolean; readonly allowMassRemoval: boolean },
+  options: { readonly apply: boolean; readonly allowMassRemoval: number | null },
   log: (line: string) => void,
 ): Promise<SweepReport> {
   const referenced = await collectReferencedKeys({ sources, uploadRoot, pageSize: 500 });
-  const report = await sweepBucket({ lister: mirror, remover: mirror, referenced, now: new Date(), graceMs: FOLLOW_WINDOW_MS, ...options, log });
+  const report = await sweepBucket({ lister: mirror, remover: mirror, referenced, now: new Date(), graceMs: FOLLOW_WINDOW_MS, apply: options.apply, ...(options.allowMassRemoval === null ? {} : { allowMassRemoval: options.allowMassRemoval }), log });
   log(`balayage du seau : ${JSON.stringify(report)}`);
   return report;
 }

@@ -74,6 +74,23 @@ function sameSource(copy: StoredObjectHead, source: StoredObjectHead): boolean {
   return copy.size === source.size && source.lastModified !== null && copy.sourceModified?.getTime() === source.lastModified.getTime();
 }
 
+/**
+ * Contre-audit C1 — une copie OUVERTE avant l'effacement du fichier se termine
+ * après lui (le flux tient l'inode) : sans cette relecture, la copie
+ * réapparaîtrait au seau d'un fichier que l'effacement synchrone venait d'y
+ * retirer. La source est relue APRÈS l'écriture ; disparue ou changée, la
+ * copie qu'on vient d'écrire est retirée.
+ */
+async function sourceOutlivedCopy(local: LocalObjectStore, key: string, source: StoredObjectHead): Promise<boolean> {
+  const after = await local.head(key);
+  return after !== null && after.size === source.size && after.lastModified?.getTime() === source.lastModified?.getTime();
+}
+
+async function retract(mirror: MediaObjectStore, key: string): Promise<MirrorOutcome> {
+  await mirror.remove(key);
+  return 'missing-local';
+}
+
 export async function mirrorKey(params: {
   readonly local: LocalObjectStore;
   readonly mirror: MediaObjectStore;
@@ -90,7 +107,7 @@ export async function mirrorKey(params: {
     const body = await local.read(key);
     if (body === null) return 'missing-local';
     await mirror.write(key, { body, size: source.size, ...(source.lastModified === null ? {} : { sourceModified: source.lastModified }) });
-    return 'copied';
+    return (await sourceOutlivedCopy(local, key, source)) ? 'copied' : await retract(mirror, key);
   } catch {
     return 'failed';
   }
