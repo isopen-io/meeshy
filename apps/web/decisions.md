@@ -5686,3 +5686,18 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Ce que ce lot ne fait pas.** iOS (`packages/MeeshySDK`) et Android restent à faire (#12285 reste ouverte). Les citations et la bannière de notification jouent encore sans gain. Rien n'est mesuré ici.
 
 **Gardes.** `lib/media/loudness.test.ts`, `lib/media/loudness-level.test.ts`, `lib/media/loudness-cors.test.tsx` (une source sans CORS joue sans gain), `components/voice-loudness.test.tsx`.
+
+## D-222 — Le registre des packs s'administre depuis l'écran du barème : publier, retirer, ordonner, mettre à prix, dater et cibler, avec la révision lue et une piste d'audit (2026-10-23, #11323 ; consomme S20 #11275)
+
+**Contexte.** S20 rend le registre des packs surchargeable sans déploiement (`GET|PUT|DELETE /api/v1/admin/packs/registry[/:domain/:slug]`, garde `canManageGame`), mais aucune console ne l'appelait : les deux entrées du catalogue TS restaient sans lecteur.
+
+**Décision.**
+- **Un bloc, comme le calendrier des saisons** : `routes/admin-packs-registry-block.tsx`, chargé par `lazy(import())` sous l'écran du barème, monté pour qui porte `canManageGame` (BIGBOSS, ADMIN). Aucune route neuve, aucun poids dans le module d'entrée.
+- **Le port** (`lib/api/admin-packs-registry.ts`) décode champ par champ. Chaque écriture porte la révision LUE : une révision périmée (409) se dit et relit le registre, une loi du registre violée (422) se dit sans relecture, un journal indisponible (500 `audit-unavailable`) se dit aussi.
+- **Le formulaire** (`lib/admin/packs-registry-form.ts`, loi pure) part de l'entrée servie et rend le seul correctif. Prix, fenêtre ou ciblage vides les retirent (`null`), les dates se saisissent en UTC, et une saisie hors des lois est refusée avant le réseau.
+- **La piste d'audit se voit** : la ligne dit « Surchargé · révision n », et qui lit le journal (`canViewAuditLogs`) a un lien vers la nouvelle famille « Packs » du journal. Elle range les six codes du registre et les sept de la modération des lens (S16).
+- **Les textes du bloc** vivent dans son module (`lib/admin/packs-registry-texts.ts`, les quatre langues de l'administration), pas dans le catalogue d'administration. Seuls les libellés du journal y entrent : ce catalogue est à son plafond de 231 Ko.
+
+**Ce que ce lot ne fait pas.** La modération des packs COMMUNAUTAIRES (stickers, fonds, contours, bannières) garde ses routes de revue par domaine, qu'aucun écran web ne lit encore. Celle des lens est le lot W16 (#11322).
+
+**Gardes.** `lib/api/admin-packs-registry.test.ts`, `lib/admin/packs-registry-form.test.ts`, `routes/admin-packs-registry-block.test.tsx`, `lib/admin/audit-vocabulary.test.ts`, `routes/admin-audit.test.tsx`.
