@@ -6,6 +6,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useLoudnessLevel } from '@/lib/media/loudness-level';
 import { useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
 import { flag } from '@/lib/languages';
 import type { CarryProvider } from '@/lib/view/audio-carry-on-close';
@@ -179,7 +180,9 @@ export default function ViewerAudioPage({
     },
     [bind],
   );
-  useRememberSeenAttachment({ element: audioElement, attachmentId: attachment.id, src: track.url === '' ? '' : attachmentSrc(track.url), active: isActive });
+  const trackSrc = track.url === '' ? '' : attachmentSrc(track.url);
+  useRememberSeenAttachment({ element: audioElement, attachmentId: attachment.id, src: trackSrc, active: isActive });
+  const loudness = useLoudnessLevel({ element: audioElement, lufs: attachment.loudnessLufs, playsOriginal: !track.translated, src: trackSrc });
 
   /* La reprise se lit sur ce qui jouait au DERNIER rendu : la fermeture
      démonte la page sans la re-rendre, et l'élément peut déjà être arrêté. */
@@ -285,7 +288,8 @@ export default function ViewerAudioPage({
         data-np-attachment={attachment.id}
         data-viewer-audio-track={track.language}
         className="hidden"
-        {...(track.url === '' ? {} : { src: attachmentSrc(track.url) })}
+        {...loudness}
+        {...(trackSrc === '' ? {} : { src: trackSrc })}
       />
 
       <div className="flex w-full flex-1 flex-col justify-center gap-5" style={{ maxWidth: COLUMN_MAX_PX }}>
