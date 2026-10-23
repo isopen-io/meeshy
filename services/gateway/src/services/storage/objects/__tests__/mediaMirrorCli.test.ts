@@ -34,6 +34,11 @@ describe('parseMirrorArgs', () => {
     expect(parseMirrorArgs([], {})).toMatchObject({ kind: 'run', apply: false });
   });
 
+  it('le miroir continu ne tourne pas à blanc : --follow exige --apply', () => {
+    expect(parseMirrorArgs(['--follow'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'follow-requires-apply' });
+    expect(parseMirrorArgs(['--apply', '--follow'], { MEESHY_ENV: 'staging' })).toMatchObject({ kind: 'run', apply: true, follow: true });
+  });
+
   it('un argument inconnu ou une taille de lot hors bornes est refusé', () => {
     expect(parseMirrorArgs(['--aply'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'unknown-argument' });
     expect(parseMirrorArgs(['--batch=0'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'invalid-batch' });
