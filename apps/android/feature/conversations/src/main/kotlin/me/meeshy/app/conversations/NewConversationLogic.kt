@@ -19,6 +19,8 @@ data class SelectableUser(
     val avatarUrl: String?,
     val isOnline: Boolean,
     val isSelected: Boolean = false,
+    /** Blocked by me: the row says « Blocked », dims, and cannot be picked (iOS `isBlocked`). */
+    val isBlocked: Boolean = false,
 )
 
 /**
@@ -109,5 +111,12 @@ object NewConversationLogic {
                 isOnline = friend.isOnline == true,
                 isSelected = friend.id in selectedIds,
             )
+        }
+
+    /** Marks the rows of [blockedIds] blocked — and unpicked, since a blocked user is never offered. */
+    fun withBlocked(rows: List<SelectableUser>, blockedIds: Set<String>): List<SelectableUser> =
+        rows.map { row ->
+            val blocked = row.id in blockedIds
+            row.copy(isBlocked = blocked, isSelected = row.isSelected && !blocked)
         }
 }
