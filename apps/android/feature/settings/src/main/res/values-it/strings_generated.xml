@@ -140,6 +140,8 @@
     <string name="settings_export_data">Esporta i miei dati</string>
     <string name="settings_language_dialog_close">Chiudi</string>
     <string name="settings_log_out">Esci</string>
+    <string name="settings_logout_confirm_message">Vuoi davvero uscire?</string>
+    <string name="settings_logout_confirm_title">Esci</string>
     <string name="settings_media_capture_header">Durante lo scatto</string>
     <string name="settings_media_capture_original_subtitle">La foto o il video originale, senza effetti né cornice, viene salvato in Foto a ogni scatto.</string>
     <string name="settings_media_capture_original_title">Salva l\'originale</string>

@@ -143,6 +143,7 @@ public enum StoryRenderer {
             let inWindow = shouldRender(item: item, at: time, mode: mode)
             guard inWindow || outOfWindowGhostOpacity != nil else { continue }
             let layer: CALayer
+            let keyframePlan = inWindow ? cache?.coreAnimationPlan(for: item) : nil
             if let cache {
                 // The build closure inherits MainActor isolation from the
                 // enclosing @MainActor `render` function (MeeshyUI's
@@ -164,21 +165,8 @@ public enum StoryRenderer {
                 // En `.play` (compositor export / reader) les deux restent
                 // désactivés — comportement historique, items figés.
                 let contentHash: Int? = (mode == .edit) ? editContentHash(for: item) : nil
-                let mediaReconfigure: ((any RenderableItem, CALayer) -> CALayer?)? =
-                    (mode == .edit)
-                    ? { rebuiltItem, existing in
-                        guard let media = rebuiltItem as? StoryMediaObject,
-                              let mediaLayer = existing as? StoryMediaLayer else { return nil }
-                        mediaLayer.configure(with: media,
-                                             geometry: geometry,
-                                             mode: mode,
-                                             resolver: resolver,
-                                             imageCache: imageCache,
-                                             playerProvider: playerProvider,
-                                             renderScale: contentsScale, decodeTiming: imageDecodeTiming)
-                        return mediaLayer
-                    }
-                    : nil
+                let mediaReconfigure = editMediaReconfigure(mode: mode, geometry: geometry, resolver: resolver, imageCache: imageCache,
+                                                            playerProvider: playerProvider, contentsScale: contentsScale, imageDecodeTiming: imageDecodeTiming)
                 layer = cache.layer(for: item, at: time.seconds, languages: languages,
                                     contentHash: contentHash,
                                     reconfigure: mediaReconfigure) { rebuiltItem in
@@ -190,7 +178,7 @@ public enum StoryRenderer {
                                resolver: resolver,
                                imageCache: imageCache,
                                playerProvider: playerProvider,
-                               contentsScale: contentsScale, imageDecodeTiming: imageDecodeTiming)
+                               contentsScale: contentsScale, imageDecodeTiming: imageDecodeTiming, keyframesByCoreAnimation: keyframePlan != nil)
                 }
             } else {
                 layer = renderItem(item,
@@ -288,10 +276,11 @@ public enum StoryRenderer {
             // Ordre d'application aligné sur `renderItem` pour ces types :
             // une opacité de keyframe est authored explicitement, elle gagne
             // sur l'enveloppe fade qui n'est qu'un défaut.
-            if mode == .play, !(item is StoryMediaObject),
-               let resolved = resolvedNonMediaOpacity(item: item, at: time.seconds) {
+            if mode == .play, !(item is StoryMediaObject), let resolved = keyframePlan != nil
+                ? fadeOpacity(item: item, at: time.seconds) : resolvedNonMediaOpacity(item: item, at: time.seconds) {
                 layer.opacity = Float(resolved)
             }
+            if let keyframePlan { playKeyframes(keyframePlan, on: layer, at: time.seconds, geometry: geometry) }
 
             // #4821 — la POSE d'une décoration animée : une fonction PURE du
             // temps depuis son apparition, réappliquée à chaque tick par la
@@ -465,7 +454,7 @@ public enum StoryRenderer {
                                    resolver: (@Sendable (String) -> URL?)? = nil,
                                    imageCache: ImageCacheReader? = nil,
                                    playerProvider: (any StoryCarrierPlayerProviding)? = nil,
-                                   contentsScale: CGFloat = StoryCanvasDisplayScale.ambient, imageDecodeTiming: StoryImageDecodeTiming = .immediate) -> CALayer {
+                                   contentsScale: CGFloat = StoryCanvasDisplayScale.ambient, imageDecodeTiming: StoryImageDecodeTiming = .immediate, keyframesByCoreAnimation: Bool = false) -> CALayer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
             layer.configure(with: media,
@@ -505,7 +494,7 @@ public enum StoryRenderer {
                 applyFadeOpacity(item: text, at: time.seconds, into: layer)
             }
             // Keyframe overrides for text objects (position, scale, opacity)
-            if mode == .play, let kfs = text.keyframes, !kfs.isEmpty {
+            if mode == .play, !keyframesByCoreAnimation, let kfs = text.keyframes, !kfs.isEmpty {
                 applyKeyframeOverrides(kfs,
                                        startTime: text.startTime ?? 0,
                                        at: time.seconds,

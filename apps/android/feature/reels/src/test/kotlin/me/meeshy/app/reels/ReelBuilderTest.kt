@@ -106,4 +106,44 @@ class ReelBuilderTest {
         assertThat(ReelBuilder.withSeedFirst(reels, null)).isEqualTo(reels)
         assertThat(ReelBuilder.withSeedFirst(reels, "")).isEqualTo(reels)
     }
+
+    // MARK: - build: Prisme of the caption, author identity
+
+    private fun captioned() = videoPost("r1").copy(
+        content = "Hello everyone",
+        originalLanguage = "en",
+        translations = mapOf(
+            "es" to me.meeshy.sdk.model.ApiPostTranslationEntry(text = "Hola a todos"),
+            "fr" to me.meeshy.sdk.model.ApiPostTranslationEntry(text = "Bonjour à tous"),
+        ),
+        author = me.meeshy.sdk.model.ApiAuthor(id = "u9", username = "amina", displayName = "Amina", avatar = "avatars/u9.jpg"),
+    )
+
+    @Test
+    fun `the caption is served in the reader's language, descending the prism past an absent first rank`() {
+        val reader = me.meeshy.sdk.model.MeeshyUser(id = "me", username = "me", systemLanguage = "de", regionalLanguage = "fr")
+
+        val reel = ReelBuilder.build(listOf(captioned()), mediaBaseUrl = null, preferences = reader).single()
+
+        assertThat(reel.caption).isEqualTo("Bonjour à tous")
+        assertThat(reel.isCaptionTranslated).isTrue()
+    }
+
+    @Test
+    fun `a caption already in the reader's language stays the original`() {
+        val reader = me.meeshy.sdk.model.MeeshyUser(id = "me", username = "me", systemLanguage = "en")
+
+        val reel = ReelBuilder.build(listOf(captioned()), mediaBaseUrl = null, preferences = reader).single()
+
+        assertThat(reel.caption).isEqualTo("Hello everyone")
+        assertThat(reel.isCaptionTranslated).isFalse()
+    }
+
+    @Test
+    fun `the author's id travels with the reel so the header opens the profile`() {
+        val reel = ReelBuilder.build(listOf(captioned()), mediaBaseUrl = "https://gate.test").single()
+
+        assertThat(reel.authorId).isEqualTo("u9")
+        assertThat(reel.authorAvatarUrl).isNotNull()
+    }
 }

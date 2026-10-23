@@ -86,6 +86,11 @@ object SdkModule {
 
     @Provides
     @Singleton
+    fun providesRecentEmojiStore(@ApplicationContext context: Context): me.meeshy.sdk.reaction.RecentEmojiStore =
+        me.meeshy.sdk.reaction.SharedPrefsRecentEmojiStore.shared(context)
+
+    @Provides
+    @Singleton
     fun providesRecentSearchesStore(
         @ApplicationContext context: Context,
         json: Json,

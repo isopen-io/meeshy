@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="audio_fullscreen_dial">الموضع في الرسالة الصوتية</string>
+    <string name="avatar_a11y_mood">المزاج %s</string>
     <string name="common_clearSearch">مسح البحث</string>
     <string name="common_close">إغلاق</string>
     <string name="emoji_category_activities">الأنشطة</string>
@@ -21,6 +22,11 @@
     <string name="notification_date_minutes">%d د</string>
     <string name="notification_date_now">الآن</string>
     <string name="notification_date_yesterdayAt">أمس %s</string>
+    <string name="presence_away">بعيد</string>
+    <string name="presence_here">في المحادثة</string>
+    <string name="presence_idle">غير نشط</string>
+    <string name="presence_offline">غير متصل</string>
+    <string name="presence_online">متصل</string>
     <string name="settings_info_button_label">معرفة المزيد عن %s</string>
     <string name="sticker_sheet_instants_lieu">أماكن</string>
     <string name="sticker_sheet_instants_message">رسائل</string>

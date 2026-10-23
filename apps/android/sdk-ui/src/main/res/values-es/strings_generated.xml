@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="audio_fullscreen_dial">Posición en el mensaje de voz</string>
+    <string name="avatar_a11y_mood">estado de ánimo %s</string>
     <string name="common_clearSearch">Borrar búsqueda</string>
     <string name="common_close">Cerrar</string>
     <string name="emoji_category_activities">Actividades</string>
@@ -21,6 +22,11 @@
     <string name="notification_date_minutes">%d min</string>
     <string name="notification_date_now">justo ahora</string>
     <string name="notification_date_yesterdayAt">ayer %s</string>
+    <string name="presence_away">Ausente</string>
+    <string name="presence_here">En la conversación</string>
+    <string name="presence_idle">Inactivo</string>
+    <string name="presence_offline">Desconectado</string>
+    <string name="presence_online">En línea</string>
     <string name="settings_info_button_label">Más información sobre %s</string>
     <string name="sticker_sheet_instants_lieu">Lugares</string>
     <string name="sticker_sheet_instants_message">Mensajes</string>
