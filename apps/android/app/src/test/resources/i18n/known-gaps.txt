@@ -24,6 +24,7 @@ bare-specifier :feature:chat en chat_forward_members
 # Chaînes GÉNÉRÉES à un seul spécificateur : xcstrings_to_android.py ne numérote un spécificateur
 # que s'il y en a plusieurs ou que la source iOS est déjà positionnelle ; le cliquet les garde
 # jusqu'à ce que le générateur les émette en %1$s / %1$d.
+bare-specifier :sdk-ui en avatar_a11y_mood
 bare-specifier :sdk-ui en notification_date_ago
 bare-specifier :sdk-ui en notification_date_hours
 bare-specifier :sdk-ui en notification_date_minutes
@@ -933,3 +934,15 @@ bare-specifier :feature:auth en login_server_origin
 bare-specifier :feature:auth en signup_language_pill
 bare-specifier :feature:contacts en contacts_blocked_unblock_a11y
 bare-specifier :feature:contacts en contacts_blocked_unblock_message
+
+# Chaînes GÉNÉRÉES à un seul spécificateur (le générateur rend %s nu) relevées le 2026-10-23.
+bare-specifier :feature:auth en email_verification_subtitle
+bare-specifier :feature:auth en email_verification_subtitle_account_created
+bare-specifier :feature:auth en email_verification_subtitle_activation_required
+bare-specifier :feature:profile en profile_connection_context_received
+bare-specifier :feature:profile en profile_connection_context_sent
+bare-specifier :feature:contacts en contacts_requests_accept_a11y
+bare-specifier :feature:contacts en contacts_requests_cancel_a11y
+bare-specifier :feature:contacts en contacts_requests_reject_a11y
+bare-specifier :feature:stories en stories_viewer_profile_of
+bare-specifier :feature:settings en sessions_revoke_confirm_message

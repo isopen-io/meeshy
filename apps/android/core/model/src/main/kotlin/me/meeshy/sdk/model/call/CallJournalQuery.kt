@@ -81,7 +81,7 @@ internal fun foldForSearch(text: String): String =
 fun CallRecord.matches(query: String, fallbackName: String): Boolean {
     val needle = foldForSearch(query)
     if (needle.isEmpty()) return true
-    val shown = displayNameOr(fallbackName)
+    val shown = displayName(fallbackName)
     val fields = listOf(shown, peer?.username) +
         participants.flatMap { listOf(it.displayName, it.username) }
     return fields.filterNotNull().any { foldForSearch(it).contains(needle) }

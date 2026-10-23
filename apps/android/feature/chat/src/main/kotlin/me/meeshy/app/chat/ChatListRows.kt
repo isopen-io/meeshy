@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.link.LinkPreviewCache
+import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -49,13 +50,15 @@ internal fun ChatListRow(
     linkPreviewStore: LinkPreviewStore,
     linkPreviewCache: LinkPreviewCache,
     actions: ChatMessageRowActions,
+    audioPlayer: ChatAudioPlayer? = null,
+    isGroup: Boolean = true,
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
         is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(accentColor)
         is ChatListItem.EncryptionNotice -> EncryptionNoticeRow(accentColor)
         is ChatListItem.Message -> ChatMessageRow(
-            bubble = item.bubble,
+            bubble = item.bubble.inConversation(isGroup),
             accentColor = accentColor,
             mentionDisplayNames = mentionDisplayNames,
             highlightTerm = highlightTerm,
@@ -63,9 +66,19 @@ internal fun ChatListRow(
             linkPreviewStore = linkPreviewStore,
             linkPreviewCache = linkPreviewCache,
             actions = actions,
+            audioPlayer = audioPlayer,
         )
     }
 }
+
+/**
+ * The sender name above a series only identifies someone in a GROUP: in a one-to-one
+ * conversation the peer is the conversation itself, so iOS never repeats it
+ * (`showIdentityBar = !isDirect && …`). Returns the same instance when nothing changes, so
+ * the bubble's equality — and the row's skipping — is preserved.
+ */
+internal fun BubbleContent.inConversation(isGroup: Boolean): BubbleContent =
+    if (isGroup || !showSenderName) this else copy(showSenderName = false)
 
 /** The « loading older history » spinner drawn above the oldest loaded message. */
 @Composable

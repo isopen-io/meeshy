@@ -24,6 +24,9 @@ struct MediaDownloadSettingsView: View {
     @ObservedObject private var preferences = UserPreferencesManager.shared
 
     private let accentColor = MeeshyColors.brandPrimaryHex
+    private static let fieldIconSide: CGFloat = 28
+    /// Le séparateur s'aligne sur le texte des lignes : leur marge, leur icône, puis l'espacement.
+    private static let separatorInset = MeeshySpacing.mdPlus + fieldIconSide + MeeshySpacing.md
 
     var body: some View {
         ZStack {
@@ -141,7 +144,7 @@ struct MediaDownloadSettingsView: View {
                               subtitle: String(localized: "settings.media.capture.original.subtitle",
                                                defaultValue: "La photo ou la vidéo brute, sans effet ni cadre, rejoint Photos à chaque prise.",
                                                bundle: .main))
-                Divider().padding(.leading, 54)
+                Divider().padding(.leading, Self.separatorInset)
                 captureToggle(isOn: Binding(get: { captureRenderedMode == .automatic },
                                             set: { captureRenderedMode = $0 ? .automatic : .manual }),
                               icon: "camera.filters",
@@ -170,7 +173,7 @@ struct MediaDownloadSettingsView: View {
                               subtitle: String(localized: "settings.media.outgoing.compress.subtitle",
                                                defaultValue: "Économise des données en réduisant chaque photo et chaque vidéo (720p). Sinon, elles partent en haute définition (vidéos en 1080p), compressées sans perte visible.",
                                                bundle: .main))
-                Divider().padding(.leading, 54)
+                Divider().padding(.leading, Self.separatorInset)
                 captureToggle(isOn: $keepsPhotoLocation, icon: "location",
                               title: String(localized: "settings.media.outgoing.location.title",
                                             defaultValue: "Conserver le lieu des photos", bundle: .main),
@@ -241,7 +244,7 @@ struct MediaDownloadSettingsView: View {
                     .accessibilityAddTraits(binding.wrappedValue == policy ? .isSelected : [])
 
                     if index != AutoDownloadPolicy.allCases.count - 1 {
-                        Divider().padding(.leading, 54)
+                        Divider().padding(.leading, Self.separatorInset)
                     }
                 }
             }
@@ -290,7 +293,7 @@ struct MediaDownloadSettingsView: View {
         Image(systemName: name)
             .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
             .foregroundColor(Color(hex: color))
-            .frame(width: 28, height: 28)
+            .frame(width: Self.fieldIconSide, height: Self.fieldIconSide)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(Color(hex: color).opacity(0.12))

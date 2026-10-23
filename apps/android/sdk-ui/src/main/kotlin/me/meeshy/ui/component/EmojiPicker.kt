@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,22 +47,34 @@ import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiCategoryId
 import me.meeshy.sdk.model.EmojiPickerPresenter
+import me.meeshy.sdk.model.ReactionBarLaw
 import me.meeshy.sdk.reaction.SharedPrefsRecentEmojiStore
 import me.meeshy.ui.R
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
+/** Skin of the quick-reaction strip — iOS `EmojiReactionPickerChrome`. */
+public enum class ReactionStripChrome {
+    /** The floating pill (glass seam), the default. */
+    Capsule,
+
+    /** No pill, no background: the strip rests bare on what is already there (full-screen stories). */
+    None,
+}
+
 /**
  * Horizontal quick-reaction strip — port of `EmojiReactionPicker`'s quick bar
  * (EmojiReactionPicker.swift). The caller passes a usage-ordered [emojis] list
  * (see `EmojiUsageRanker`); a trailing "+" opens the full picker.
  *
- * The strip sits inside a pill so it keeps the anchored "floating bar" look of
- * the iOS quick-reaction overlay. Emojis the user already reacted with are
- * highlighted in the brand accent.
+ * Every size is multiplied by [scale] (default [ReactionBarLaw.DEFAULT_SCALE] = 1.5, the size of
+ * Meeshy's bars on every surface where one can react). The row scrolls horizontally when the
+ * fifteen emojis do not fit. A tile under the scrub finger ([highlightedIndex]) springs to
+ * [ReactionBarLaw.HOVER_SCALE] with a light haptic tick.
  */
 @Composable
 fun EmojiQuickStrip(
@@ -73,29 +86,31 @@ fun EmojiQuickStrip(
     onExpand: (() -> Unit)? = null,
     highlightedIndex: Int? = null,
     onTileBounds: ((Int, Rect) -> Unit)? = null,
+    scale: Float = ReactionBarLaw.DEFAULT_SCALE,
+    chrome: ReactionStripChrome = ReactionStripChrome.Capsule,
 ) {
+    val haptics = rememberMeeshyHaptics()
+    LaunchedEffect(highlightedIndex) {
+        if (highlightedIndex != null) haptics.light()
+    }
     // Scrub mode (bounds requested): keep the pill as a BACKGROUND shape only,
     // without clipping — a hovered tile scaled ×1.35 must overflow the pill.
     // Non-scrub callers (chat) keep the original clipped pill.
     val scrubMode = onTileBounds != null
+    val pill = RoundedCornerShape(MeeshyRadius.pill)
     Row(
         modifier = modifier
             .let { base ->
-                if (scrubMode) {
-                    base.background(
-                        MeeshyTheme.tokens.backgroundSecondary,
-                        RoundedCornerShape(MeeshyRadius.pill),
-                    )
-                } else {
-                    base
-                        .clip(RoundedCornerShape(MeeshyRadius.pill))
-                        .background(MeeshyTheme.tokens.backgroundSecondary)
+                when {
+                    chrome == ReactionStripChrome.None -> base
+                    scrubMode -> base.background(MeeshyTheme.tokens.backgroundSecondary, pill)
+                    else -> base.clip(pill).background(MeeshyTheme.tokens.backgroundSecondary)
                 }
             }
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+            .padding(horizontal = MeeshySpacing.sm * scale, vertical = MeeshySpacing.xs * scale),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs * scale),
     ) {
         emojis.forEachIndexed { index, emoji ->
             EmojiTile(
@@ -103,7 +118,8 @@ fun EmojiQuickStrip(
                 isMine = emoji in ownReactions,
                 isHighlighted = highlightedIndex == index,
                 accentColor = accentColor,
-                onClick = { onReact(emoji) },
+                scale = scale,
+                onClick = { haptics.light(); onReact(emoji) },
                 onBounds = onTileBounds?.let { report -> { rect -> report(index, rect) } },
             )
         }
@@ -111,13 +127,13 @@ fun EmojiQuickStrip(
             val expandLabel = stringResource(R.string.emoji_picker_expand)
             val plusIndex = emojis.size
             val plusScale by animateFloatAsState(
-                targetValue = if (highlightedIndex == plusIndex) 1.35f else 1f,
+                targetValue = if (highlightedIndex == plusIndex) ReactionBarLaw.HOVER_SCALE else 1f,
                 animationSpec = MeeshyMotion.bouncySpring(),
                 label = "emojiPlusScale",
             )
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(TileSize * scale)
                     .let { base ->
                         val report = onTileBounds
                         if (report != null) {
@@ -129,7 +145,7 @@ fun EmojiQuickStrip(
                     .graphicsLayer { scaleX = plusScale; scaleY = plusScale }
                     .clip(CircleShape)
                     .background(MeeshyTheme.tokens.backgroundTertiary)
-                    .clickable(onClick = onExpand)
+                    .clickable { haptics.light(); onExpand() }
                     .semantics { contentDescription = expandLabel },
                 contentAlignment = Alignment.Center,
             ) {
@@ -137,12 +153,14 @@ fun EmojiQuickStrip(
                     imageVector = Icons.Filled.Add,
                     contentDescription = null,
                     tint = MeeshyTheme.tokens.textSecondary,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(18.dp * scale),
                 )
             }
         }
     }
 }
+
+private val TileSize = 36.dp
 
 @Composable
 private fun EmojiTile(
@@ -150,22 +168,23 @@ private fun EmojiTile(
     isMine: Boolean,
     isHighlighted: Boolean,
     accentColor: Color,
+    scale: Float,
     onClick: () -> Unit,
     onBounds: ((Rect) -> Unit)?,
 ) {
     val reactLabel = stringResource(R.string.emoji_react_with, emoji)
-    val scale by animateFloatAsState(
-        targetValue = if (isHighlighted) 1.35f else 1f,
+    val hoverScale by animateFloatAsState(
+        targetValue = if (isHighlighted) ReactionBarLaw.HOVER_SCALE else 1f,
         animationSpec = MeeshyMotion.bouncySpring(),
         label = "emojiTileScale",
     )
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(TileSize * scale)
             .let { base ->
                 if (onBounds != null) base.onGloballyPositioned { onBounds(it.boundsInRoot()) } else base
             }
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .graphicsLayer { scaleX = hoverScale; scaleY = hoverScale }
             .clip(CircleShape)
             .background(if (isMine) accentColor.copy(alpha = 0.22f) else Color.Transparent)
             .let { base ->
@@ -175,7 +194,7 @@ private fun EmojiTile(
             .semantics { contentDescription = reactLabel },
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = emoji, fontSize = 22.sp)
+        Text(text = emoji, fontSize = (22f * scale).sp)
     }
 }
 

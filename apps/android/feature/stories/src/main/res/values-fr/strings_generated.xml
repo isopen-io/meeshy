@@ -7,6 +7,8 @@
     <string name="stories_action_translations">Traductions</string>
     <string name="stories_add">Ajouter</string>
     <string name="stories_cancel">Annuler</string>
+    <string name="stories_caption_see_less">voir moins</string>
+    <string name="stories_caption_see_more">voir plus</string>
     <plurals name="stories_comments_count">
         <item quantity="one">%d commentaire</item>
         <item quantity="many">%d commentaires</item>
@@ -49,6 +51,8 @@
     <string name="stories_composer_style_neon">Néon</string>
     <string name="stories_composer_style_typewriter">Machine</string>
     <string name="stories_composer_text_caption">Légende</string>
+    <string name="stories_composer_text_finish">Terminé</string>
+    <string name="stories_composer_text_finish_a11y">Terminer l\'édition du texte</string>
     <string name="stories_delete_confirm_title">Supprimer la story ?</string>
     <string name="stories_publish_retry">Réessayer</string>
     <string name="stories_report_reason_harassment">Harcèlement</string>
@@ -60,9 +64,17 @@
     <string name="stories_report_reason_violence">Violence</string>
     <string name="stories_reposted">Republié</string>
     <string name="stories_translated">Traduction disponible</string>
+    <string name="stories_tray_add_story">Ajouter une story</string>
+    <string name="stories_tray_view_my_story">Voir ma story</string>
     <string name="stories_viewer_close">Fermer</string>
+    <string name="stories_viewer_mute">Couper le son de fond</string>
     <string name="stories_viewer_next">Story suivante</string>
+    <string name="stories_viewer_not_found_description">Impossible de charger cette story. Réessayez ou fermez.</string>
+    <string name="stories_viewer_not_found_title">Story introuvable</string>
     <string name="stories_viewer_previous">Story précédente</string>
+    <string name="stories_viewer_profile_of">Profil de %s</string>
+    <string name="stories_viewer_retry">Réessayer</string>
+    <string name="stories_viewer_unmute">Réactiver le son de fond</string>
     <plurals name="stories_viewers_count">
         <item quantity="one">%d vue</item>
         <item quantity="many">%d vues</item>

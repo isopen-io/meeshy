@@ -18,6 +18,10 @@ data class ActiveSessionsUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val revokingIds: Set<String> = emptySet(),
+    /** iOS `ActiveSessionsViewModel.pendingRevocation` : l'appareil dont la déconnexion attend un « oui ». */
+    val pendingRevocation: ActiveSessionInfo? = null,
+    /** iOS `isConfirmingRevokeAll` : « Déconnecter tous les autres appareils ? » attend un « oui ». */
+    val confirmingRevokeOthers: Boolean = false,
 )
 
 /** Sessions actives : liste, revocation unitaire optimiste, revocation des autres. */
@@ -47,7 +51,32 @@ class ActiveSessionsViewModel @Inject constructor(
         }
     }
 
-    fun revoke(sessionId: String) {
+    /** Un toucher sur « Déconnecter » ne déconnecte rien : il demande confirmation (iOS). */
+    fun requestRevoke(session: ActiveSessionInfo) {
+        _state.update { it.copy(pendingRevocation = session) }
+    }
+
+    fun confirmRevoke() {
+        val session = _state.value.pendingRevocation ?: return
+        _state.update { it.copy(pendingRevocation = null) }
+        revoke(session.id)
+    }
+
+    fun requestRevokeOthers() {
+        _state.update { it.copy(confirmingRevokeOthers = true) }
+    }
+
+    fun confirmRevokeOthers() {
+        if (!_state.value.confirmingRevokeOthers) return
+        _state.update { it.copy(confirmingRevokeOthers = false) }
+        revokeOthers()
+    }
+
+    fun cancelConfirmation() {
+        _state.update { it.copy(pendingRevocation = null, confirmingRevokeOthers = false) }
+    }
+
+    private fun revoke(sessionId: String) {
         _state.update { it.copy(revokingIds = it.revokingIds + sessionId) }
         viewModelScope.launch {
             when (authRepository.revokeSession(sessionId)) {
@@ -64,7 +93,7 @@ class ActiveSessionsViewModel @Inject constructor(
         }
     }
 
-    fun revokeOthers() {
+    private fun revokeOthers() {
         viewModelScope.launch {
             if (authRepository.revokeOtherSessions() is NetworkResult.Success) {
                 _state.update { it.copy(sessions = it.sessions.filter { s -> s.isCurrentSession }) }

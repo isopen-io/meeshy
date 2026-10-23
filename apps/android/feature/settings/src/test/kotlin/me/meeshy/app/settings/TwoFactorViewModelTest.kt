@@ -5,6 +5,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -14,6 +17,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.auth.AuthRepository
+import me.meeshy.sdk.model.TwoFactorSetupStep
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo
@@ -105,7 +109,7 @@ class TwoFactorViewModelTest {
     }
 
     @Test
-    fun beginSetup_failure_fallsBackToStatusWithSetupError() = runTest(dispatcher) {
+    fun beginSetup_failure_showsFullScreenErrorStepWithSetupError() = runTest(dispatcher) {
         val repository = mockk<AuthRepository>(relaxed = true)
         coEvery { repository.beginTwoFactorSetup() } returns
             NetworkResult.Failure(ApiError(message = "boom", code = "HTTP_400", httpStatus = 400))
@@ -116,7 +120,8 @@ class TwoFactorViewModelTest {
         advanceUntilIdle()
 
         val state = sut.state.value
-        assertThat(state.stage).isEqualTo(TwoFactorStage.STATUS)
+        assertThat(state.stage).isEqualTo(TwoFactorStage.SETUP)
+        assertThat(state.flow.step).isEqualTo(TwoFactorSetupStep.ERROR)
         assertThat(state.error).isEqualTo(TwoFactorErrorKind.SETUP)
     }
 
@@ -396,5 +401,145 @@ class TwoFactorViewModelTest {
         val state = sut.state.value
         assertThat(state.stage).isEqualTo(TwoFactorStage.STATUS)
         assertThat(state.disablePassword).isEmpty()
+    }
+
+    // ─── Parcours par étapes, copie, étape initiale ──────────────────────
+
+    private fun setupRepository(): AuthRepository {
+        val repository = mockk<AuthRepository>(relaxed = true)
+        coEvery { repository.beginTwoFactorSetup() } returns NetworkResult.Success(setupInfo())
+        coEvery { repository.enableTwoFactor("123456") } returns
+            NetworkResult.Success(TwoFactorBackupCodesInfo(backupCodes = listOf("AAAA1111", "BBBB2222")))
+        return repository
+    }
+
+    @Test
+    fun setupFlow_walksLoadingQrCodeSuccessAndBackToQr() = runTest(dispatcher) {
+        val sut = vm(setupRepository())
+        advanceUntilIdle()
+
+        sut.beginSetup()
+        runCurrent()
+        assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.LOADING)
+        advanceUntilIdle()
+        assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.QR)
+
+        sut.onNext()
+        assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.CODE)
+        sut.onBackToQr()
+        assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.QR)
+
+        sut.onNext()
+        sut.onCodeChange("123456")
+        sut.confirmSetup()
+        advanceUntilIdle()
+        assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.SUCCESS)
+    }
+
+    @Test
+    fun setupFlow_errorThenRetryReloads() = runTest(dispatcher) {
+        val repository = mockk<AuthRepository>(relaxed = true)
+        coEvery { repository.beginTwoFactorSetup() } returnsMany listOf(
+            NetworkResult.Failure(ApiError(message = "boom", code = "HTTP_500", httpStatus = 500)),
+            NetworkResult.Success(setupInfo()),
+        )
+        val sut = vm(repository)
+        advanceUntilIdle()
+
+        sut.beginSetup()
+        advanceUntilIdle()
+        assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.ERROR)
+
+        sut.beginSetup()
+        advanceUntilIdle()
+        assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.QR)
+        assertThat(sut.state.value.error).isNull()
+    }
+
+    @Test
+    fun setupFlow_invalidCodeStaysOnCodeStepWithRejection() = runTest(dispatcher) {
+        val repository = setupRepository()
+        coEvery { repository.enableTwoFactor("000000") } returns
+            NetworkResult.Failure(ApiError(message = "bad", code = "HTTP_400", httpStatus = 400))
+        val sut = vm(repository)
+        advanceUntilIdle()
+        sut.beginSetup()
+        advanceUntilIdle()
+        sut.onNext()
+        sut.onCodeChange("000000")
+
+        sut.confirmSetup()
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.CODE)
+        assertThat(sut.state.value.flow.codeRejected).isTrue()
+    }
+
+    @Test
+    fun onCodeChange_keepsOnlyTheFirstSixDigits() = runTest(dispatcher) {
+        val sut = vm()
+        advanceUntilIdle()
+
+        sut.onCodeChange("12a3 45678")
+
+        assertThat(sut.state.value.codeInput).isEqualTo("123456")
+    }
+
+    @Test
+    fun openAtStep_setup_startsTheSetupDirectlyAndOnlyOnce() = runTest(dispatcher) {
+        val repository = setupRepository()
+        val sut = vm(repository)
+        advanceUntilIdle()
+
+        sut.openAtStep("setup")
+        sut.openAtStep("setup")
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.stage).isEqualTo(TwoFactorStage.SETUP)
+        coVerify(exactly = 1) { repository.beginTwoFactorSetup() }
+    }
+
+    @Test
+    fun copySecret_emitsTheEffectOnceThenShowsTheCheckmarkFor2Seconds() = runTest(dispatcher) {
+        val sut = vm(setupRepository())
+        advanceUntilIdle()
+        sut.beginSetup()
+        advanceUntilIdle()
+        val received = mutableListOf<TwoFactorEffect>()
+        val collector = launch { sut.effects.toList(received) }
+        runCurrent()
+
+        sut.copySecret()
+        sut.copySecret()
+        runCurrent()
+
+        assertThat(received).containsExactly(TwoFactorEffect.CopySecret("JBSWY3DPEHPK3PXP"))
+        assertThat(sut.state.value.copiedKey).isTrue()
+        advanceTimeBy(2_001)
+        runCurrent()
+        assertThat(sut.state.value.copiedKey).isFalse()
+        collector.cancel()
+    }
+
+    @Test
+    fun copyBackupCodes_joinsCodesOnePerLine() = runTest(dispatcher) {
+        val sut = vm(setupRepository())
+        advanceUntilIdle()
+        sut.beginSetup()
+        advanceUntilIdle()
+        sut.onNext()
+        sut.onCodeChange("123456")
+        sut.confirmSetup()
+        advanceUntilIdle()
+        val received = mutableListOf<TwoFactorEffect>()
+        val collector = launch { sut.effects.toList(received) }
+        runCurrent()
+
+        sut.copyBackupCodes()
+        runCurrent()
+
+        assertThat(received).contains(TwoFactorEffect.CopyBackupCodes("AAAA1111\nBBBB2222"))
+        assertThat(sut.state.value.copiedCodes).isTrue()
+        collector.cancel()
     }
 }

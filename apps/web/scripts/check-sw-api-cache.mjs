@@ -703,7 +703,7 @@ async function mesureNavigateur(dist) {
   const { launchChromium } = await import('./lib/browser.mjs');
   /* Une image RÉELLE, prise dans l'artefact : un PNG codé en dur dans ce
      fichier serait une constante à croire, celle-ci est déjà servie en
-     production (`globPatterns` de `vite.config.ts` la précache). */
+     production (`globPatterns` de `vite/pwa.ts` la précache). */
   const png = readFileSync(`${dist}/favicon-48.png`);
 
   const origine = serveurOrigine(dist, png);

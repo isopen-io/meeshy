@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.call
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.junit.Test
 
@@ -25,8 +26,8 @@ class CallRecordTest {
         conversationTitle: String? = "Team",
         conversationAvatar: String? = null,
         durationSec: Int = 0,
-        bytesSent: Int? = null,
-        bytesReceived: Int? = null,
+        bytesSent: Long? = null,
+        bytesReceived: Long? = null,
         peer: CallHistoryPeer? = null,
     ): CallRecord = CallRecord(
         callId = "c1",
@@ -299,6 +300,32 @@ class CallRecordTest {
         assertThat(group("A").participantsLabel).isEqualTo("A")
         assertThat(group("A", "B").participantsLabel).isEqualTo("A, B")
         assertThat(group("A", "B", "C", "D").participantsLabel).isEqualTo("A, B +2")
+    }
+    }
+
+    @Test
+    fun `a long call past 2 GB in one direction still decodes and labels its data`() {
+        val raw = """{"callId":"c9","conversationId":"conv1","conversationType":"direct","mode":"p2p",
+            "status":"ended","direction":"outgoing","isVideo":true,"startedAt":"2026-07-01T10:00:00.000Z",
+            "durationSec":7200,"bytesSent":3000000000,"bytesReceived":2500000000}"""
+
+        val decoded = json.decodeFromString<CallRecord>(raw)
+
+        assertThat(decoded.bytesSent).isEqualTo(3_000_000_000L)
+        assertThat(decoded.dataLabel).isEqualTo("5.1 GB")
+    }
+
+    @Test
+    fun `two counters whose sum overflows an int still give a positive data label`() {
+        assertThat(record(bytesSent = 2_000_000_000L, bytesReceived = 2_000_000_000L).dataLabel).isEqualTo("3.7 GB")
+    }
+
+    @Test
+    fun `a nameless record falls back to the name the screen passes in its language`() {
+        val nameless = record(conversationTitle = null, peer = null)
+
+        assertThat(nameless.displayName(fallback = "Unknown")).isEqualTo("Unknown")
+        assertThat(record(conversationTitle = "Team").displayName(fallback = "Unknown")).isEqualTo("Team")
     }
 
     private companion object {

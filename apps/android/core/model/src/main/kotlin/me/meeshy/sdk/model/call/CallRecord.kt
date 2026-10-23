@@ -116,8 +116,9 @@ data class CallRecord(
     val answeredAt: String? = null,
     val endedAt: String? = null,
     val durationSec: Int,
-    val bytesSent: Int? = null,
-    val bytesReceived: Int? = null,
+    /** Long: one direction of a long video or group call passes 2 GiB. */
+    val bytesSent: Long? = null,
+    val bytesReceived: Long? = null,
     val peer: CallHistoryPeer? = null,
     /** Who joined a group call (reader excluded, join order); empty when absent. */
     val participants: List<CallHistoryParticipant> = emptyList(),
@@ -135,10 +136,15 @@ data class CallRecord(
      * (group) → fallback. Blank candidates are skipped (surpasses iOS, which
      * only skips empty strings and would surface a whitespace-only name).
      */
-    val displayName: String get() = displayNameOr(FALLBACK_NAME)
+    val displayName: String
+        get() = displayName(fallback = FALLBACK_NAME)
 
-    /** [displayName] with a caller-supplied (localized) fallback. */
-    fun displayNameOr(fallback: String): String {
+    /**
+     * [displayName] with the screen's own localised [fallback] (iOS
+     * `displayName(fallback: call.unknown)`): a model constant cannot follow the
+     * interface language, so every screen passes its resource.
+     */
+    fun displayName(fallback: String): String {
         peer?.displayName?.let { if (it.isNotBlank()) return it }
         peer?.username?.let { if (it.isNotBlank()) return it }
         conversationTitle?.let { if (it.isNotBlank()) return it }
@@ -185,7 +191,7 @@ private const val FALLBACK_NAME = "Inconnu"
 private const val GROUP_LABEL_NAMES = 2
 private val BYTE_UNITS = listOf("KB", "MB", "GB", "TB")
 
-private fun formatBytes(total: Int): String {
+private fun formatBytes(total: Long): String {
     if (total < 1024) return "$total B"
     var value = total.toDouble() / 1024.0
     var unitIndex = 0

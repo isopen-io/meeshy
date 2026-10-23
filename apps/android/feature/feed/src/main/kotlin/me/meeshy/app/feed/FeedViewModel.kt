@@ -35,7 +35,18 @@ data class FeedUiState(
     val posts: List<FeedPostPresentation> = emptyList(),
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
-    val errorMessage: String? = null,
+    /**
+     * The feed could not load and has nothing to show: the screen draws the error state
+     * (« Impossible de charger le fil » + Réessayer, iOS FeedView) instead of the empty one.
+     */
+    val loadFailed: Boolean = false,
+    /** A one-shot localized feedback (toast), cleared by [FeedViewModel.consumeNotice]. */
+    val notice: FeedNotice? = null,
+    /**
+     * The text and visibility of a post whose publication failed, so the composer reopens on
+     * it instead of losing what the author wrote. Cleared by [FeedViewModel.consumeUnpublishedDraft].
+     */
+    val unpublishedDraft: FeedComposerDraft? = null,
     val hasMore: Boolean = true,
     val isLoadingMore: Boolean = false,
     /** Count of posts that arrived via `post:created` since the last acknowledge/refresh. */
@@ -130,11 +141,7 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             combine(
                 postRepository.feedStream(
-                    onSyncError = { error ->
-                        _state.update {
-                            it.copy(errorMessage = error.message, isSyncing = false, showSkeleton = false)
-                        }
-                    },
+                    onSyncError = { _ -> _state.update { it.withLoadFailure() } },
                 ),
                 sessionRepository.currentUser,
                 postRepository.feedHasMore,
@@ -344,7 +351,7 @@ class FeedViewModel @Inject constructor(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
-                _state.update { it.copy(errorMessage = error.message) }
+                _state.update { it.copy(notice = FeedNotice.TRANSLATION_FAILED) }
             } finally {
                 _state.update { it.copy(translatingLanguages = it.translatingLanguages - key) }
             }
@@ -396,16 +403,27 @@ class FeedViewModel @Inject constructor(
 
     fun refresh() {
         realtimeHead.update { FeedRealtimeReducer.clear(it) }
-        _state.update { it.copy(errorMessage = null, isSyncing = true) }
+        _state.update { it.copy(loadFailed = false, isSyncing = true) }
         viewModelScope.launch {
-            try {
-                postRepository.refresh()
+            val failure = try {
+                postRepository.refreshReporting()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message, isSyncing = false) }
+                e
             }
+            _state.update { if (failure == null) it.copy(isSyncing = false) else it.withLoadFailure() }
         }
+    }
+
+    /** The toast for [FeedUiState.notice] has been shown. */
+    fun consumeNotice() {
+        _state.update { it.copy(notice = null) }
+    }
+
+    /** The composer has reopened on [FeedUiState.unpublishedDraft]. */
+    fun consumeUnpublishedDraft() {
+        _state.update { it.copy(unpublishedDraft = null) }
     }
 
     /**
@@ -424,7 +442,7 @@ class FeedViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message) }
+                _state.update { it.copy(notice = FeedNotice.LIKE_FAILED) }
             }
         }
     }
@@ -499,7 +517,7 @@ class FeedViewModel @Inject constructor(
             )
             when (result) {
                 is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+                is NetworkResult.Failure -> _state.update { it.copy(notice = FeedNotice.REPOST_FAILED) }
             }
         }
     }
@@ -513,27 +531,38 @@ class FeedViewModel @Inject constructor(
      */
     fun pinPost(postId: String) {
         viewModelScope.launch {
-            when (val result = postRepository.pinPost(postId)) {
+            when (postRepository.pinPost(postId)) {
                 is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+                is NetworkResult.Failure -> _state.update { it.copy(notice = FeedNotice.PIN_FAILED) }
             }
         }
     }
 
-    /** Suppression confirmee cote UI ; le refresh retire le post du flux. */
+    /**
+     * Suppression confirmee cote UI, OPTIMISTE (iOS FeedViewModel+PostActions) : le post
+     * quitte le fil aussitot (tombstone de la tete temps reel, deja relachee par la
+     * reconciliation quand le cache ne le porte plus) ; un echec le fait revenir, avec
+     * le message localise.
+     */
     fun deletePost(postId: String) {
+        realtimeHead.update { FeedRealtimeReducer.remove(it, postId) }
         viewModelScope.launch {
-            when (val result = postRepository.delete(postId)) {
+            when (postRepository.delete(postId)) {
                 is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+                is NetworkResult.Failure -> {
+                    realtimeHead.update { FeedRealtimeReducer.restore(it, postId) }
+                    _state.update { it.copy(notice = FeedNotice.DELETE_FAILED) }
+                }
             }
         }
     }
 
-    /** Signale [postId] pour [reason] — best effort, echec silencieux (parite report user). */
+    /** Signale [postId] pour [reason] et confirme l'envoi — ou dit l'echec (iOS `feed.post.reported`). */
     fun reportPost(postId: String, reason: ReportReason) {
         viewModelScope.launch {
-            reportRepository.reportPost(postId, reason, details = null)
+            val result = reportRepository.reportPost(postId, reason, details = null)
+            val notice = if (result is NetworkResult.Success) FeedNotice.REPORTED else FeedNotice.REPORT_FAILED
+            _state.update { it.copy(notice = notice) }
         }
     }
 
@@ -553,7 +582,7 @@ class FeedViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message) }
+                _state.update { it.copy(notice = FeedNotice.BOOKMARK_FAILED) }
             }
         }
     }
@@ -607,15 +636,16 @@ class FeedViewModel @Inject constructor(
                     mediaAlt = mediaAlt.ifEmpty { null },
                 )
                 when (result) {
-                    is NetworkResult.Success ->
+                    is NetworkResult.Success -> {
                         realtimeHead.update { FeedRealtimeReducer.created(it, result.data) }
-                    is NetworkResult.Failure ->
-                        _state.update { it.copy(errorMessage = result.error.message) }
+                        _state.update { it.copy(notice = FeedNotice.PUBLISHED) }
+                    }
+                    is NetworkResult.Failure -> _state.update { it.withPublishFailure(content, visibility) }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message) }
+                _state.update { it.withPublishFailure(content, visibility) }
             }
         }
     }
@@ -725,7 +755,7 @@ private fun FeedUiState.project(
     val prefs = user ?: EmptyContentPreferences
     val projected = realtimePosts.toPresentations(prefs, mediaBaseUrl, overrides) +
         cachePosts.toPresentations(prefs, mediaBaseUrl, overrides)
-    val clearedError = if (result is CacheResult.Fresh) null else errorMessage
+    val stillFailed = loadFailed && result !is CacheResult.Fresh && projected.isEmpty()
     val isSyncing = when (result) {
         is CacheResult.Fresh -> false
         is CacheResult.Stale -> true
@@ -734,14 +764,31 @@ private fun FeedUiState.project(
     }
     val showSkeleton = when (result) {
         is CacheResult.Fresh, is CacheResult.Stale -> false
-        is CacheResult.Syncing, CacheResult.Empty -> projected.isEmpty() && clearedError == null
+        is CacheResult.Syncing, CacheResult.Empty -> projected.isEmpty() && !stillFailed
     }
     return copy(
         posts = projected,
         isSyncing = isSyncing,
         showSkeleton = showSkeleton,
-        errorMessage = clearedError,
+        loadFailed = stillFailed,
         newPostsCount = newPostsCount,
         currentUserId = user?.id,
     )
 }
+
+/**
+ * A load failure: with nothing on screen, the drawn error state; with posts already shown,
+ * only the localized toast — the reader keeps reading what the cache holds.
+ */
+private fun FeedUiState.withLoadFailure(): FeedUiState =
+    if (posts.isEmpty()) copy(loadFailed = true, isSyncing = false, showSkeleton = false)
+    else copy(notice = FeedNotice.LOAD_FAILED, isSyncing = false, showSkeleton = false)
+
+private fun FeedUiState.withPublishFailure(content: String, visibility: String): FeedUiState =
+    copy(
+        notice = FeedNotice.PUBLISH_FAILED,
+        unpublishedDraft = FeedComposerDraft(
+            text = content,
+            visibility = FeedPostVisibility.entries.firstOrNull { it.wire == visibility } ?: FeedPostVisibility.PUBLIC,
+        ),
+    )

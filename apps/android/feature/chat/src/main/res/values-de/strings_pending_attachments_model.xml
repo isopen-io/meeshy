@@ -4,4 +4,5 @@
     <string name="chat_tray_cap_reached">Limit von 199 Medien erreicht</string>
     <string name="chat_tray_remove">%1$s entfernen</string>
     <string name="chat_tray_preparing">%1$s wird vorbereitet</string>
+    <string name="chat_tray_too_large">%1$s ist größer als %2$d MB und kann nicht gesendet werden</string>
 </resources>

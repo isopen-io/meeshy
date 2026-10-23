@@ -25,6 +25,11 @@ public data class GalleryPage(
     val createdAtIso: String? = null,
     /** Author-authored accessibility description (`MessageAttachment.alt`, #6813); `null` falls back to the viewer's generic label. */
     val alt: String? = null,
+    /**
+     * A view-once or blurred piece (iOS `mediaExitGate`): shown because its own bubble
+     * opened it, but never saved nor shared out of Meeshy.
+     */
+    val isProtected: Boolean = false,
 )
 
 /**
@@ -76,6 +81,9 @@ public data class ConversationGallery(
      */
     val altTexts: List<String?> get() = pages.map { it.alt }
 
+    /** Per page, whether the piece may leave Meeshy (save, share) — false for a protected one. */
+    val exportable: List<Boolean> get() = pages.map { !it.isProtected }
+
     /** True when the conversation carries no showable image — nothing to open. */
     val isEmpty: Boolean get() = pages.isEmpty()
 }
@@ -92,6 +100,11 @@ public data class ConversationGallery(
  * out-of-range or negative index never escapes the message). When the tapped
  * message is unknown, deleted, or carries no image, the gallery still opens on
  * the whole conversation from its first image rather than collapsing to nothing.
+ *
+ * A view-once or blurred message (iOS `galleryAttachments`) never joins the series
+ * opened from another photo: its bubble hides it, and a swipe must not show it in
+ * the clear. It enters only when its OWN bubble opened the viewer — then as a
+ * non-exportable page — and never again once this reader has burnt it.
  *
  * Each page carries its owning message's text as the caption (trimmed, null when
  * blank) — every image of a multi-image message shares that one caption, exactly
@@ -111,8 +124,11 @@ public object ConversationMediaGallery {
         var matched = false
         for (message in messages) {
             if (message.isDeleted) continue
+            val isTapped = message.messageId == messageId
+            val isProtected = message.isProtectedMedia
+            if (isProtected && (!isTapped || message.isViewOnceOpenedByMe)) continue
             val images = message.images
-            if (!matched && message.messageId == messageId && images.isNotEmpty()) {
+            if (!matched && isTapped && images.isNotEmpty()) {
                 startIndex = pages.size + imageIndex.coerceIn(0, images.lastIndex)
                 matched = true
             }
@@ -128,6 +144,7 @@ public object ConversationMediaGallery {
                         senderName = senderName,
                         createdAtIso = createdAtIso,
                         alt = it.alt,
+                        isProtected = isProtected,
                     ),
                 )
             }
@@ -136,3 +153,6 @@ public object ConversationMediaGallery {
         return ConversationGallery(pages, startIndex.coerceIn(0, pages.lastIndex))
     }
 }
+
+private val BubbleContent.isProtectedMedia: Boolean
+    get() = isViewOnce || isBlurred || blurReveal != null

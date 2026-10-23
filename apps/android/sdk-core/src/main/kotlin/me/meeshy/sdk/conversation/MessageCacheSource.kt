@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.SyncMetaDao
+import me.meeshy.core.database.dao.upsertKeepingLocal
 import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
@@ -185,7 +186,8 @@ internal class MessageCacheSource(
         val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
         val ackedLocalIds = messages.mapNotNull { it.clientMessageId }
         database.withTransaction {
-            messageDao.upsertAll(rows)
+            messageDao.upsertKeepingLocal(rows)
+            recordAcks(messages, now)
             if (ackedLocalIds.isNotEmpty()) messageDao.deleteByIds(ackedLocalIds)
             if (rows.isEmpty()) {
                 messageDao.deleteMissing(conversationId, emptyList())
@@ -213,9 +215,18 @@ internal class MessageCacheSource(
         val ackedLocalIds = messages.mapNotNull { it.clientMessageId }
         val currentEtag = syncMetaDao.etag(resourceKey)
         database.withTransaction {
-            messageDao.upsertAll(rows)
+            messageDao.upsertKeepingLocal(rows)
+            recordAcks(messages, now)
             if (ackedLocalIds.isNotEmpty()) messageDao.deleteByIds(ackedLocalIds)
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, currentEtag, null))
+        }
+    }
+
+    /** The server echoed the `cid_` it was sent: bridge it to the server id so late events find the row. */
+    private suspend fun recordAcks(messages: List<ApiMessage>, now: Long) {
+        messages.forEach { message ->
+            val localId = message.clientMessageId ?: return@forEach
+            MessageIdReconciliation.recordAck(database, localId, message.id, conversationId, now)
         }
     }
 

@@ -89,9 +89,9 @@ final class LentilleSkeletonGeometryTests: XCTestCase {
     func test_bothRowAndSkeleton_useRowHeightMetric() throws {
         for (name, code) in try rowAndSkeletonSources() {
             XCTAssertTrue(
-                normalizedCode(code).contains("frame(height: LentilleMetrics.Row.height)"),
-                "\(name) doit fixer sa hauteur avec LentilleMetrics.Row.height — un littéral 64 " +
-                "recopié d'un seul côté produirait un saut visible à l'hydratation (contrat §LWS-7)."
+                normalizedCode(code).contains("frame(height: LentilleMetrics.Row.height(for: dynamicTypeSize))"),
+                "\(name) doit fixer sa hauteur de layout avec LentilleMetrics.Row.height(for:) — une hauteur " +
+                "qui ne suivrait la taille du texte que d'un seul côté produirait un saut visible à l'hydratation (contrat §LWS-7)."
             )
         }
     }
