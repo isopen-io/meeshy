@@ -2,8 +2,10 @@
 <resources>
     <string name="audio_fullscreen_dial">Position in der Sprachnachricht</string>
     <string name="avatar_a11y_mood">Stimmung %s</string>
+    <string name="common_cancel">Abbrechen</string>
     <string name="common_clearSearch">Suche löschen</string>
     <string name="common_close">Schließen</string>
+    <string name="common_done">Fertig</string>
     <string name="emoji_category_activities">Aktivitäten</string>
     <string name="emoji_category_animals">Tiere</string>
     <string name="emoji_category_flags">Flaggen</string>

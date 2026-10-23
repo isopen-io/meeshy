@@ -2,8 +2,10 @@
 <resources>
     <string name="audio_fullscreen_dial">Position in the voice message</string>
     <string name="avatar_a11y_mood">mood %s</string>
+    <string name="common_cancel">Cancel</string>
     <string name="common_clearSearch">Clear search</string>
     <string name="common_close">Close</string>
+    <string name="common_done">Done</string>
     <string name="emoji_category_activities">Activities</string>
     <string name="emoji_category_animals">Animals</string>
     <string name="emoji_category_flags">Flags</string>
