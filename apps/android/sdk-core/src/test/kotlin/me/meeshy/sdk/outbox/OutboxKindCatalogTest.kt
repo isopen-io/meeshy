@@ -14,8 +14,9 @@ class OutboxKindCatalogTest {
     }
 
     @Test
-    fun `only background read receipts stay out of the sync indicator`() {
-        assertThat(OutboxKindCatalog.syncIndicatorExcludedDiskValues).containsExactly("READ_RECEIPT")
+    fun `only background reports nobody waits for stay out of the sync indicator`() {
+        assertThat(OutboxKindCatalog.syncIndicatorExcludedDiskValues)
+            .containsExactly("READ_RECEIPT", "REPORT_ATTACHMENT_STATUS")
         assertThat(OutboxKindCatalog.metaFor(OutboxKind.MARK_UNREAD).countsForSyncIndicator).isTrue()
         assertThat(OutboxKindCatalog.metaFor(OutboxKind.SEND_MESSAGE).countsForSyncIndicator).isTrue()
     }
@@ -28,7 +29,13 @@ class OutboxKindCatalogTest {
 
     @Test
     fun `idempotent toggles and receipts are disposable once terminal`() {
-        listOf(OutboxKind.ADD_REACTION, OutboxKind.LIKE_POST, OutboxKind.READ_RECEIPT, OutboxKind.BLOCK_USER)
+        listOf(
+            OutboxKind.ADD_REACTION,
+            OutboxKind.LIKE_POST,
+            OutboxKind.READ_RECEIPT,
+            OutboxKind.REPORT_ATTACHMENT_STATUS,
+            OutboxKind.BLOCK_USER,
+        )
             .forEach { assertThat(OutboxKindCatalog.metaFor(it).terminalDisposable).isTrue() }
         assertThat(OutboxKindCatalog.terminalDisposableDiskValues).contains("UNLIKE_POST")
     }

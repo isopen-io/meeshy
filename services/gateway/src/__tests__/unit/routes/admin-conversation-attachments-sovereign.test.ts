@@ -130,6 +130,7 @@ function pieceFixture(overrides: AnyRecord = {}): AnyRecord {
     thumbHash: 'YTQGFYQYd4h_iIeHh4d3iAeQhw',
     imageVariants: [{ url: '/api/v1/attachments/file/uploads%2Freunion-512.webp', size: 512, format: 'webp' }],
     avifVariants: [{ url: '/api/v1/attachments/file/uploads%2Freunion-512.avif', size: 400, format: 'avif' }],
+    renditions: [{ codec: 'h264', url: '/api/v1/attachments/file/uploads%2Freunion_h264.mp4', width: 640, height: 360, size: 9 }],
     metadata: { audioEffectsTimeline: [{ at: 0, effect: 'none' }] },
     transcription: { text: 'la reunion est deplacee a jeudi', segments: [] },
     translations: {
@@ -454,6 +455,7 @@ describe('GET /admin/conversations/:id/attachments — une pièce PROTÉGÉE ren
     expect(piece.thumbHash).toBeNull();
     expect(piece.imageVariants).toEqual([]);
     expect(piece.avifVariants).toEqual([]);
+    expect(piece.renditions).toEqual([]);
     expect(piece.transcription).toBeUndefined();
     expect(piece.translations).toBeUndefined();
     expect(piece.metadata).toBeUndefined();

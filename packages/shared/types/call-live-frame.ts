@@ -1,13 +1,15 @@
 import { z } from 'zod';
 
 /**
- * LE CADRE EN DIRECT D'UN APPEL À DEUX (#9214, doc frames 06 § 4, étape 3.2).
+ * LE CADRE EN DIRECT D'UN APPEL (#9214, doc frames 06 § 4, étape 3.2 ; en groupe #11279).
  *
  * Chaque participant compose LOCALEMENT sa vue — sa vidéo et celle qu'il reçoit
  * dans les cases du cadre ; la vidéo envoyée ne porte jamais le cadre. Ce qui
  * voyage est donc minimal : l'identifiant du cadre du catalogue (ou `null` pour
  * le retirer) et les textes que l'émetteur accepte de partager. La passerelle
- * relaie à l'AUTRE participant d'un appel à deux, et à personne d'autre.
+ * relaie aux AUTRES participants de l'appel : à deux, à toute la room ; en
+ * groupe (3 à `CALL_MAX_PARTICIPANTS`), aux seules sockets qui annoncent
+ * `call-live-frame-group` (`utils/client-capabilities.ts`).
  *
  * Les bornes sont la loi de FORME, exécutée à la frontière du socket et lisible
  * par les clients. Les types en dérivent.
@@ -66,7 +68,7 @@ export const callLiveFrameSelectSchema = z
 
 export type CallLiveFrameSelectEvent = z.input<typeof callLiveFrameSelectSchema>;
 
-/** Serveur → l'autre participant de l'appel à deux. */
+/** Serveur → les autres participants de l'appel (en groupe : ceux qui annoncent la capacité). */
 export type CallLiveFrameSelectedEvent = {
   readonly callId: string;
   readonly userId: string;

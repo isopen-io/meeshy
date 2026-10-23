@@ -95,6 +95,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
         'thumbHash',
         'imageVariants',
         'avifVariants',
+        'renditions',
         'duration',
         'order',
         'caption',
