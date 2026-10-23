@@ -13,6 +13,7 @@
  */
 import fs from 'fs/promises';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { mediaKindOf, timeMediaStage } from '../metrics/mediaStageMetrics';
 import { isExifStrippable, stripExifFromImageBuffer } from './ExifStrip';
 import { isVideoMetadataStrippable, stripVideoMetadataBuffer, stripVideoMetadataFile } from './VideoMetadataStrip';
 
@@ -24,6 +25,10 @@ export function isMediaMetadataStrippable(mimeType: string): boolean {
 
 /** Retire en place ; rend la taille écrite, ou `null` si rien n'a changé. */
 export async function stripStoredMediaMetadata(params: { filePath: string; mimeType: string }): Promise<number | null> {
+  return timeMediaStage('exif', mediaKindOf(params.mimeType), () => stripStoredMediaMetadataUntimed(params));
+}
+
+async function stripStoredMediaMetadataUntimed(params: { filePath: string; mimeType: string }): Promise<number | null> {
   try {
     if (isExifStrippable(params.mimeType)) {
       const original = await fs.readFile(params.filePath);
@@ -41,6 +46,10 @@ export async function stripStoredMediaMetadata(params: { filePath: string; mimeT
 }
 
 export async function stripMediaMetadataBuffer(params: { buffer: Buffer; mimeType: string; fileName: string }): Promise<Buffer> {
+  return timeMediaStage('exif', mediaKindOf(params.mimeType), () => stripMediaMetadataBufferUntimed(params));
+}
+
+async function stripMediaMetadataBufferUntimed(params: { buffer: Buffer; mimeType: string; fileName: string }): Promise<Buffer> {
   try {
     if (isExifStrippable(params.mimeType)) return await stripExifFromImageBuffer(params.buffer, params.mimeType);
     return await stripVideoMetadataBuffer(params);

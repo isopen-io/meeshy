@@ -131,4 +131,6 @@
     <string name="story_tool_text">نص</string>
     <string name="story_tool_texture">خلفية</string>
     <string name="story_tool_timeline">الخط الزمني</string>
+    <string name="story_tray_menu_profile">عرض الملف الشخصي</string>
+    <string name="story_tray_menu_viewStories">عرض القصص</string>
 </resources>

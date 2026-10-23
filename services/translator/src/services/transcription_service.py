@@ -58,6 +58,11 @@ except ImportError:
 
 
 from utils.audio_utils import get_audio_duration as _get_librosa_duration
+from utils.audio_pipeline_metrics import timed_audio_stage
+from .audio_pipeline.speaker_probe import ProbeDecision, diarization_mode, probe_multi_speaker, should_diarize
+
+# La sonde n'a entendu qu'une voix : la transcription part sans diarization (#11268).
+DIARIZATION_SKIPPED = object()
 
 
 @dataclass
@@ -422,12 +427,15 @@ class TranscriptionService:
             diarization_result = None
 
             if enable_diarization and return_timestamps:
-                logger.info("[TRANSCRIPTION] 🚀 Lancement parallèle: Whisper + Diarization")
+                logger.info("[TRANSCRIPTION] 🚀 Lancement parallèle: Whisper + Diarization (si plusieurs voix, #11268)")
                 whisper_result, diarization_result = await asyncio.gather(
                     self._run_whisper(audio_path, model, return_timestamps),
-                    self._run_diarization(audio_path),
+                    self._run_diarization_if_several_voices(audio_path),
                     return_exceptions=True
                 )
+                if diarization_result is DIARIZATION_SKIPPED:
+                    enable_diarization = False
+                    diarization_result = None
 
                 # Gérer les erreurs de chaque tâche
                 if isinstance(whisper_result, Exception):
@@ -530,6 +538,7 @@ class TranscriptionService:
             traceback.print_exc()
             raise RuntimeError(f"Échec de la transcription: {e}")
 
+    @timed_audio_stage("whisper")
     async def _run_whisper(self, audio_path: str, model, return_timestamps: bool):
         """
         Exécute Whisper dans un thread et retourne (segments_list, info).
@@ -555,6 +564,14 @@ class TranscriptionService:
         )
         segments_list = list(segments_raw)
         return segments_list, info
+
+    async def _run_diarization_if_several_voices(self, audio_path: str):
+        """La diarization complète, seulement si la sonde entend plusieurs voix (#11268) ; sinon `DIARIZATION_SKIPPED`."""
+        decision = await should_diarize(audio_path, mode=diarization_mode(os.environ), probe=probe_multi_speaker)
+        if decision is ProbeDecision.SKIP:
+            logger.info("[TRANSCRIPTION] ⚪ Une seule voix entendue : diarization évitée")
+            return DIARIZATION_SKIPPED
+        return await self._run_diarization(audio_path)
 
     async def _run_diarization(self, audio_path: str, sender_voice_profile=None):
         """

@@ -124,6 +124,7 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   // un ancien client ignore la clé.
   imageVariants: true,
   avifVariants: true,
+  renditions: true,
   duration: true,
   order: true,
   caption: true,
