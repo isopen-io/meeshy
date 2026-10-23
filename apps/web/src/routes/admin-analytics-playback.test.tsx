@@ -95,6 +95,44 @@ describe('l’onglet Lecture — le temps jusqu’à la première image et le re
   });
 });
 
+const vitalsRows = (host: Element): readonly (readonly string[])[] =>
+  [...host.querySelectorAll('[data-admin-playback-vitals-table] tbody tr')].map((row) => [...row.children].map((c) => (c.textContent ?? '').replace(/\s+/g, ' ').trim()));
+
+const VITALS = {
+  lcpMs: { p50: 1800, p95: 3900 },
+  cls: { p50: 0.07, p95: 0.24 },
+  inpMs: { p50: 160, p95: 480 },
+  longFrames: { p50: 2, p95: 11 },
+  longFramesBlockingMs: { p50: 90, p95: 640 },
+  longFrameWorstMs: { p50: 120, p95: 410 },
+};
+
+describe('l’onglet Lecture — Web Vitals et longues images de la séance (W11, #11317)', () => {
+  test('une table « page web » par jour × surface × appareil, pour les seules cellules qui portent ces mesures', async () => {
+    const data = summary({ cells: [cell(VITALS), cell({ day: '2026-10-21', surface: 'feed', deviceTier: 'high' })] });
+    const host = await openTab(statsGateway({ [PATH]: { ok: true, data } }).deps);
+
+    const table = vitalsRows(host);
+    expect(table).toHaveLength(1);
+    const line = table[0]?.join(' ') ?? '';
+    expect(line).toContain('reels');
+    expect(line).toMatch(/1,8\s*s/);
+    expect(line).toMatch(/3,9\s*s/);
+    expect(line).toContain('0,07');
+    expect(line).toContain('0,24');
+    expect(line).toMatch(/160\s*ms/);
+    expect(line).toMatch(/480\s*ms/);
+    expect(line).toContain('11');
+    expect(line).toMatch(/410\s*ms/);
+  });
+
+  test('aucune cellule ne les porte (applications natives, ancien web, ancienne passerelle) : pas de table, rien d’inventé', async () => {
+    const host = await openTab(statsGateway({ [PATH]: { ok: true, data: summary() } }).deps);
+    expect(host.querySelector('[data-admin-playback-vitals-table]')).toBeNull();
+    expect(host.querySelector('[data-admin-playback-table]')).not.toBeNull();
+  });
+});
+
 describe('decodePlaybackQoe', () => {
   test('écarte une cellule illisible seule, et refuse une réponse sans cellules', () => {
     const decoded = decodePlaybackQoe(summary({ cells: [cell(), { day: 3 }, cell({ timeToFirstFrameMs: { p50: 'x', p95: 1 } })] }));
@@ -102,4 +140,11 @@ describe('decodePlaybackQoe', () => {
     expect(decoded?.cells[1]?.timeToFirstFrameMs).toBeNull();
     expect(decodePlaybackQoe({ windowDays: 7 })).toBeNull();
   });
+
+  test('lit les Web Vitals d’une cellule ; une passerelle qui ne les sert pas rend null (W11)', () => {
+    const decoded = decodePlaybackQoe(summary({ cells: [cell(VITALS), cell()] }));
+    expect(decoded?.cells[0]).toMatchObject(VITALS);
+    expect(decoded?.cells[1]).toMatchObject({ lcpMs: null, cls: null, inpMs: null, longFrames: null, longFramesBlockingMs: null, longFrameWorstMs: null });
+  });
 });
+
