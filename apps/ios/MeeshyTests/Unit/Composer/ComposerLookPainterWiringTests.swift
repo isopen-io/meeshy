@@ -93,8 +93,8 @@ final class ComposerLookPainterWiringTests: XCTestCase {
         XCTAssertEqual(prises.components(separatedBy: "aspect: proportions").count - 1, 2,
                        "la photo et la vidéo de la galerie partent aux proportions du viseur")
         let edition = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
-        XCTAssertEqual(edition.components(separatedBy: "aspect: proportions").count - 1, 2,
-                       "la photo et la vidéo retouchées partent aux proportions du viseur")
+        XCTAssertEqual(edition.components(separatedBy: "aspect: proportions").count - 1, 3,
+                       "la photo et la vidéo retouchées partent aux proportions du viseur, et une prise intacte n'en est une qu'à ces proportions")
         XCTAssertFalse(edition.contains("ComposerLookPainter.designCanvas"), "le cadrage se règle sur la toile du viseur")
         let toucher = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Tap.swift")
         XCTAssertFalse(toucher.contains("ComposerLookPainter.designCanvas"), "le point visé se lit sur la toile du viseur")
