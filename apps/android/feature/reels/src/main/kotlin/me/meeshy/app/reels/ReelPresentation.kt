@@ -5,13 +5,23 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
+import me.meeshy.sdk.model.ReelMediaLayout
+import me.meeshy.sdk.model.FeedMedia
+import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.lang.LanguageResolver
 
 /** A single reel ready to render: a playable video + its author/caption/counters. */
 data class ReelPresentation(
     val id: String,
-    val videoUrl: String,
+    /** The URL the player streams: the video, else the audio track; null for an images-only reel. */
+    val videoUrl: String?,
     val posterUrl: String?,
+    /** Which surface renders the reel's media (video / images / audio / images + audio). */
+    val layout: ReelMediaLayout = ReelMediaLayout.Empty,
+    /** Resolved image URLs, in order — the slides of an image reel or the backdrop of an audio one. */
+    val imageUrls: List<String> = emptyList(),
+    val audioUrl: String? = null,
+    val username: String? = null,
     val authorId: String?,
     val authorName: String?,
     val authorAvatarUrl: String?,
@@ -43,14 +53,23 @@ object ReelBuilder {
         posts.asSequence()
             .filter { it.type?.uppercase() == "REEL" }
             .mapNotNull { post ->
-                val video = post.media.orEmpty()
+                val feedMedia = post.media.orEmpty()
                     .sortedBy { it.order ?: Int.MAX_VALUE }
-                    .firstOrNull { it.isVideo && it.fileUrl != null }
-                    ?: return@mapNotNull null
+                    .mapNotNull { it.toReelMedia() }
+                val layout = ReelMediaLayout.resolve(feedMedia)
+                if (layout is ReelMediaLayout.Empty) return@mapNotNull null
+                val resolve = { url: String -> resolveMediaUrl(url, mediaBaseUrl) }
+                val images = feedMedia.filter { it.type == FeedMediaType.IMAGE }.mapNotNull { it.url?.let(resolve) }
+                val audio = feedMedia.firstOrNull { it.type == FeedMediaType.AUDIO }?.url?.let(resolve)
+                val video = (layout as? ReelMediaLayout.Video)?.media
                 ReelPresentation(
                     id = post.id,
-                    videoUrl = resolveMediaUrl(video.fileUrl!!, mediaBaseUrl),
-                    posterUrl = video.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    videoUrl = video?.url?.let(resolve) ?: audio,
+                    posterUrl = (video?.thumbnailUrl ?: feedMedia.firstOrNull()?.thumbnailUrl)?.let(resolve),
+                    layout = layout,
+                    imageUrls = images,
+                    audioUrl = audio,
+                    username = post.author?.username?.takeIf { it.isNotBlank() },
                     authorId = post.author?.id,
                     authorName = (post.author?.displayName ?: post.author?.username)
                         ?.takeIf { it.isNotBlank() },
@@ -81,7 +100,16 @@ object ReelBuilder {
         return listOf(seedReel) + reels.filterIndexed { index, _ -> index != seedIndex }
     }
 
-    private val ApiPostMedia.isVideo: Boolean
-        get() = mimeType?.startsWith("video/") == true
+    private fun ApiPostMedia.toReelMedia(): FeedMedia? {
+        val url = fileUrl ?: return null
+        val mime = mimeType.orEmpty()
+        val type = when {
+            mime.startsWith("video/") -> FeedMediaType.VIDEO
+            mime.startsWith("audio/") -> FeedMediaType.AUDIO
+            mime.startsWith("image/") -> FeedMediaType.IMAGE
+            else -> return null
+        }
+        return FeedMedia(id = id, type = type, url = url, thumbnailUrl = thumbnailUrl, duration = duration)
+    }
 
 }
