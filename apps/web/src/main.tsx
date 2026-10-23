@@ -22,6 +22,7 @@ import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
 import { shellStartHref } from '@/lib/links/shell-start';
 import { installHapticsDriver, shellHapticsDriver } from '@/lib/view/haptics';
 import { coqueCourante } from '@/lib/native-shell';
+import { redirectBelowWebViewFloor } from '@/lib/shell/webview-floor';
 import { Router, href, navigate, preload } from '@/routes/route-table';
 
 /**
@@ -31,6 +32,14 @@ import { Router, href, navigate, preload } from '@/routes/route-table';
  * et la recette simulateur R4 pour la preuve qu'elle est bien montee ici.
  */
 followSystem();
+
+/**
+ * LE PLANCHER DE WEBVIEW (#11325) — dans la coque, une Android System WebView
+ * sous Chrome 111 part vers l'écran de mise à jour. Le natif
+ * (`android.minWebViewVersion`) l'a déjà fait quand il sait dater la WebView ;
+ * ce contrôle couvre celles qu'il ne date pas, par `navigator.userAgent`.
+ */
+if (__SHELL__) redirectBelowWebViewFloor({ userAgent: navigator.userAgent, replace: (url) => location.replace(url) });
 
 /**
  * LA SESSION EST TENUE (#5605, § 7.3) — lecture `localStorage` seule, aucun

@@ -14,7 +14,7 @@ import okhttp3.Response
 public class ProactiveRefreshInterceptor(
     private val tokenStore: TokenStore,
     private val refresher: SessionRefresher,
-    private val apiPathPrefix: String = "/api/v1",
+    private val apiPathPrefix: String = API_PATH_PREFIX,
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()

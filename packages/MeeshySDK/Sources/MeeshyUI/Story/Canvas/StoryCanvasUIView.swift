@@ -343,7 +343,7 @@ public final class StoryCanvasUIView: UIView {
     /// pendant la lecture (cf. spec § 2.2 A.1). L'extension content fingerprint
     /// de `ItemSignature` détecte les mutations de modèle à id constant pour
     /// invalider correctement le cache d'une frame à l'autre.
-    let rendererCache = StoryRendererCache()
+    let rendererCache = StoryRendererCache(keyframesPlayedByCoreAnimation: true)
 
     // MARK: - Content readiness tracking
 

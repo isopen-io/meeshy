@@ -41,7 +41,7 @@ class CallWaitingControllerTest {
         val offers = MutableSharedFlow<WaitingCall>(extraBufferCapacity = 16)
         val signals: CallSignalManager = mockk(relaxed = true)
         val haptics: CallHaptics = mockk(relaxed = true)
-        val host = FakeHost(scope)
+        val host = FakeHost(scope.backgroundScope)
         val controller: CallWaitingController
 
         init {
