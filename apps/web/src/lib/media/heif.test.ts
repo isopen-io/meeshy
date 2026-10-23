@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodesInBrowser, isHeifFamily, servableHeif } from './heif';
+import { decodesInBrowser, isHeifFamily, needsServedPreview, servableHeif } from './heif';
 
 const file = (name: string, type: string): File => new File([new Uint8Array([0, 0, 0, 24])], name, { type });
 
@@ -54,5 +54,29 @@ describe('decodesInBrowser — l’essai createImageBitmap', () => {
 
   test('aucun décodeur (navigateur ancien) : non décodable', async () => {
     expect(await decodesInBrowser(file('a.heic', 'image/heic'), null)).toBe(false);
+  });
+});
+
+describe('needsServedPreview — l’aperçu attend-il la vignette servie ?', () => {
+  const failing = async (): Promise<{ close: () => void }> => {
+    throw new Error('undecodable');
+  };
+
+  test('un HEIC que le navigateur ne décode pas : oui', async () => {
+    expect(await needsServedPreview(file('IMG_1.HEIC', ''), failing)).toBe(true);
+  });
+
+  test('un HEIC que le navigateur décode (Safari) : non, l’aperçu local se montre', async () => {
+    expect(await needsServedPreview(file('IMG_1.HEIC', 'image/heic'), async () => ({ close: () => undefined }))).toBe(false);
+  });
+
+  test('toute autre photo : non, sans même essayer de la décoder', async () => {
+    const tried: string[] = [];
+    const spy = async (): Promise<{ close: () => void }> => {
+      tried.push('decode');
+      throw new Error('x');
+    };
+    expect(await needsServedPreview(file('a.jpg', 'image/jpeg'), spy)).toBe(false);
+    expect(tried).toEqual([]);
   });
 });

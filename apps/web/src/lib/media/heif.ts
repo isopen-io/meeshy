@@ -13,6 +13,9 @@ import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
  * (`createImageBitmap`) — qui décide seulement de l'APERÇU : décodable, il se
  * montre ; sinon l'aperçu attend la vignette servie.
  */
+/** Un HEIC que la passerelle n'a pas su convertir (serveur d'avant S8, #11263) : la cause est le FORMAT. */
+export const UPLOAD_FORMAT_REFUSED = 'UPLOAD_FORMAT_REFUSED';
+
 const HEIF_TYPES: ReadonlySet<string> = new Set(['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence']);
 
 const canonicalType = (file: { readonly type: string; readonly name: string }): string =>
@@ -40,4 +43,14 @@ export async function decodesInBrowser(blob: Blob, decode: BitmapDecoder | null 
   } catch {
     return false;
   }
+}
+
+/**
+ * Un aperçu LOCAL serait une image cassée : le fichier est un HEIC que ce
+ * navigateur ne décode pas. L'écran montre alors ce qu'il montrait, puis la
+ * vignette servie (le JPEG de la passerelle) une fois l'envoi accusé.
+ */
+export async function needsServedPreview(file: File, decode: BitmapDecoder | null = browserDecoder): Promise<boolean> {
+  if (!isHeifFamily(file)) return false;
+  return !(await decodesInBrowser(file, decode));
 }

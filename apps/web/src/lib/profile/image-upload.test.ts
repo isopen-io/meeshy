@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createHttpTransport } from '@/lib/api/http';
+import { UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 
 import { uploadProfileImage, type ProfileImageUploadDeps } from './image-upload';
 
@@ -9,7 +10,7 @@ import { uploadProfileImage, type ProfileImageUploadDeps } from './image-upload'
  * la décode pas, donc la recompression du profil lève : avant ce lot, la photo
  * était dite « illisible » et rien ne partait. Elle part désormais TELLE QUELLE,
  * typée `image/heic`, et la passerelle (S8, #11263) la sert en JPEG. Si la
- * passerelle ne sait pas la convertir, le refus est MOTIVÉ (`FORMAT_REFUSED`).
+ * passerelle ne sait pas la convertir, le refus est MOTIVÉ (`UPLOAD_FORMAT_REFUSED`).
  */
 type Reply = { readonly status: number; readonly body: unknown };
 
@@ -24,7 +25,7 @@ const gatewayAnswering = (reply: Reply) => {
 };
 
 const depsOf = (transport: ProfileImageUploadDeps['transport']): ProfileImageUploadDeps => ({
-  source: 'api',
+  source: 'gateway',
   transport,
   isOnline: () => true,
   recompress: async () => {
@@ -52,13 +53,13 @@ describe('uploadProfileImage — une photo HEIC que le navigateur ne décode pas
   test('la passerelle l’écarte (serveur d’avant S8) : refus MOTIVÉ, jamais un échec muet', async () => {
     const gateway = gatewayAnswering({ status: 200, body: { success: true, data: { attachments: [] } } });
     const outcome = await uploadProfileImage({ kind: 'avatar', file: heicFromChrome(), deps: depsOf(gateway.transport) });
-    expect(outcome).toMatchObject({ status: 'refused', code: 'FORMAT_REFUSED' });
+    expect(outcome).toMatchObject({ status: 'refused', code: UPLOAD_FORMAT_REFUSED });
   });
 
   test('la passerelle refuse le type par un 4xx : refus MOTIVÉ aussi', async () => {
     const gateway = gatewayAnswering({ status: 415, body: { success: false, error: 'Unsupported media type' } });
     const outcome = await uploadProfileImage({ kind: 'avatar', file: heicFromChrome(), deps: depsOf(gateway.transport) });
-    expect(outcome).toMatchObject({ status: 'refused', code: 'FORMAT_REFUSED' });
+    expect(outcome).toMatchObject({ status: 'refused', code: UPLOAD_FORMAT_REFUSED });
   });
 
   test('CONTRE-ÉPREUVE : un JPEG illisible reste « illisible », rien ne part', async () => {
