@@ -6,7 +6,7 @@
  *
  * @jest-environment node
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import { mediaStageMetrics } from '../mediaStageMetrics';
 import { metricsServerConfig, startMetricsServer } from '../metricsServer';
 
