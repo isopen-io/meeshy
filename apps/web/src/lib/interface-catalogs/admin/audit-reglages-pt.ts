@@ -221,6 +221,12 @@ const f = {
   'admin.audit.action.LENS_PACK_WITHDRAW.explain': 'A lente saiu da loja.',
   'admin.audit.action.LENS_PACK_WITHDRAW_NOT_APPLIED': 'Retirada de lente sem efeito',
   'admin.audit.action.LENS_PACK_WITHDRAW_NOT_APPLIED.explain': 'Nada mudou.',
+  'admin.audit.action.LENS_PACK_RESTORE': 'Lente restabelecida',
+  'admin.audit.action.LENS_PACK_RESTORE.explain': 'A lente retirada voltou à loja.',
+  'admin.audit.action.LENS_PACK_RESTORE_APPLIED': 'Restabelecimento de lente aplicado',
+  'admin.audit.action.LENS_PACK_RESTORE_APPLIED.explain': 'A lente voltou a ser publicada; as instalações retiradas não voltam.',
+  'admin.audit.action.LENS_PACK_RESTORE_NOT_APPLIED': 'Restabelecimento de lente sem efeito',
+  'admin.audit.action.LENS_PACK_RESTORE_NOT_APPLIED.explain': 'Nada mudou.',
 
   // ── Audit log: the detail sheet ────────────────────────────────────────────
   'admin.audit.detail.action': 'Ação',
