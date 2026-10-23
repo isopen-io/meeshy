@@ -199,7 +199,9 @@ struct IncomingCallView: View {
                 CachedAsyncImage(
                     url: avatar,
                     targetSize: CGSize(width: 110, height: 110),
-                    thumbHash: peerProfile?.avatarThumbHash
+                    thumbHash: peerProfile?.avatarThumbHash,
+                    showsStatusOverlays: false,
+                    autoLoad: true
                 ) {
                     Color.clear
                 }
