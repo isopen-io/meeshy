@@ -287,4 +287,12 @@ class CallRecordTest {
     fun `two counters whose sum overflows an int still give a positive data label`() {
         assertThat(record(bytesSent = 2_000_000_000L, bytesReceived = 2_000_000_000L).dataLabel).isEqualTo("3.7 GB")
     }
+
+    @Test
+    fun `a nameless record falls back to the name the screen passes in its language`() {
+        val nameless = record(conversationTitle = null, peer = null)
+
+        assertThat(nameless.displayName(fallback = "Unknown")).isEqualTo("Unknown")
+        assertThat(record(conversationTitle = "Team").displayName(fallback = "Unknown")).isEqualTo("Team")
+    }
 }

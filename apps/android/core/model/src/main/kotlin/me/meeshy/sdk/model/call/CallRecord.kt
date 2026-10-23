@@ -108,12 +108,19 @@ data class CallRecord(
      * only skips empty strings and would surface a whitespace-only name).
      */
     val displayName: String
-        get() {
-            peer?.displayName?.let { if (it.isNotBlank()) return it }
-            peer?.username?.let { if (it.isNotBlank()) return it }
-            conversationTitle?.let { if (it.isNotBlank()) return it }
-            return FALLBACK_NAME
-        }
+        get() = displayName(fallback = FALLBACK_NAME)
+
+    /**
+     * [displayName] with the screen's own localised [fallback] (iOS
+     * `displayName(fallback: call.unknown)`): a model constant cannot follow the
+     * interface language, so every screen passes its resource.
+     */
+    fun displayName(fallback: String): String {
+        peer?.displayName?.let { if (it.isNotBlank()) return it }
+        peer?.username?.let { if (it.isNotBlank()) return it }
+        conversationTitle?.let { if (it.isNotBlank()) return it }
+        return fallback
+    }
 
     /** Peer avatar for a direct call; else the conversation (group) avatar. */
     val avatarUrl: String? get() = peer?.avatar ?: conversationAvatar

@@ -302,4 +302,18 @@ class CallRouteTest {
         assertThat(CallRoute.minimize("")).isEqualTo(Routes.CONVERSATIONS)
         assertThat(CallRoute.minimize("   ")).isEqualTo(Routes.CONVERSATIONS)
     }
+
+    @Test
+    fun `calling back may switch an audio call to video`() {
+        val record = CallRecord(
+            callId = "c1", conversationId = "conv-9", conversationType = "direct", mode = "p2p",
+            status = "ended", direction = "missed", isVideo = false, startedAt = "2026-07-01T10:00:00Z",
+            durationSec = 0, peer = CallHistoryPeer(userId = "u1", username = "alice"),
+        )
+
+        val config = configOf(CallRoute.redial(record, isVideo = true))
+
+        assertThat(config.isVideo).isTrue()
+        assertThat(config.conversationId).isEqualTo("conv-9")
+    }
 }
