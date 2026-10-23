@@ -1099,11 +1099,9 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // which already has the generation check.
         let source = try p2pClientSource()
 
-        guard let fnRange = source.range(of: "private func restartCapturerIfStopped()") else {
+        guard let fnBody = DeclarationBodyScanner.body(containing: "private func restartCapturerIfStopped()", in: source) else {
             XCTFail("restartCapturerIfStopped not found in P2PWebRTCClient.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1200, limitedBy: source.endIndex) ?? source.endIndex
-        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
             fnBody.contains("let generation = sessionGeneration"),

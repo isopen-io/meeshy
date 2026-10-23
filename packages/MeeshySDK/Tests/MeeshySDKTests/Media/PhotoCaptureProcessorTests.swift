@@ -150,6 +150,34 @@ final class PhotoCaptureProcessorTests: XCTestCase {
         zip(avant, apres).forEach { XCTAssertEqual(Int($0), Int($1), accuracy: 3, "ni vibrance ni ombres : \(avant) → \(apres)") }
     }
 
+    // MARK: - HDR (verdict #11247 : « profil couleur et HDR conservés », #11847)
+
+    func test_processEncoded_hdrShot_keepsItsGainMap() throws {
+        try HDRPhotoFixture.requireHDREncoding()
+        guard #available(iOS 18.0, macOS 15.0, *) else { return }
+        let data = try HDRPhotoFixture.jpeg(width: 1200, height: 800)
+        let processed = try XCTUnwrap(PhotoCaptureProcessor().process(encoded: data, settings: .capture))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(processed.data), "une prise HDR ne doit pas ressortir en SDR")
+        XCTAssertEqual(try Self.pixelSize(of: processed.data), CGSize(width: 1200, height: 800))
+    }
+
+    func test_processEncoded_rotatedHdrShot_isUprightAndKeepsItsGainMap() throws {
+        try HDRPhotoFixture.requireHDREncoding()
+        guard #available(iOS 18.0, macOS 15.0, *) else { return }
+        let data = try HDRPhotoFixture.jpeg(width: 1200, height: 800, orientation: 6)
+        let processed = try XCTUnwrap(PhotoCaptureProcessor().process(encoded: data, settings: .capture))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(processed.data))
+        XCTAssertEqual(HDRPhotoFixture.orientation(of: processed.data), 1)
+        XCTAssertEqual(processed.image.width, 800)
+        XCTAssertEqual(processed.image.height, 1200)
+    }
+
+    func test_processEncoded_sdrShot_carriesNoGainMap() throws {
+        let data = try Self.jpeg(width: 400, height: 300, orientation: 1)
+        let processed = try XCTUnwrap(PhotoCaptureProcessor().process(encoded: data, settings: .capture))
+        XCTAssertFalse(HDRPhotoFixture.hasGainMap(processed.data))
+    }
+
     // MARK: - Fabriques
 
     private static func uniform(red: CGFloat, green: CGFloat, blue: CGFloat) -> CGImage? {

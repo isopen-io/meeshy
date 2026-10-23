@@ -30,4 +30,11 @@ internal object ComposerBandTools {
             StoryToolMode.DRAWING to strokeCount,
             StoryToolMode.TEXTURE to if (hasBackground) 1 else 0,
         )
+
+    /**
+     * Whether the open tool's panel is shown over the stage. It steps aside while a text is
+     * edited or a stroke drawn: their settings live in the stage footer, which the panel would
+     * otherwise cover (#12298). The band keeps its open tool, so the panel returns after.
+     */
+    fun showsPanel(isDrawing: Boolean, isEditingText: Boolean): Boolean = !isDrawing && !isEditingText
 }

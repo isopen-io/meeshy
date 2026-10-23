@@ -104,6 +104,21 @@ export const messageAttachmentSchema = {
         },
       },
     },
+    avifVariants: {
+      type: 'array',
+      nullable: true,
+      description: 'Responsive AVIF variants (#11262), same widths as imageVariants, kept SEPARATE so older clients never receive AVIF — non-encrypted images only',
+      items: {
+        type: 'object',
+        properties: {
+          width: { type: 'number', description: 'Variant width in pixels' },
+          height: { type: 'number', description: 'Variant height in pixels' },
+          url: { type: 'string', description: 'Variant file URL' },
+          size: { type: 'number', description: 'Variant byte size' },
+          format: { type: 'string', description: 'Encoded format (avif)' },
+        },
+      },
+    },
 
     // Audio/Video metadata
     duration: { type: 'number', nullable: true, description: 'Duration in milliseconds' },
@@ -111,6 +126,7 @@ export const messageAttachmentSchema = {
     sampleRate: { type: 'number', nullable: true, description: 'Sample rate in Hz' },
     codec: { type: 'string', nullable: true, description: 'Audio codec (opus, aac, mp3)' },
     channels: { type: 'number', nullable: true, description: 'Audio channels (1=mono, 2=stereo)' },
+    loudnessLufs: { type: 'number', nullable: true, description: 'Integrated loudness (EBU R128, LUFS) of the stored audio, measured at ingestion (#11259)' },
 
     // Video-specific
     fps: { type: 'number', nullable: true, description: 'Frames per second' },

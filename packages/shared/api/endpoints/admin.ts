@@ -108,6 +108,9 @@ export const analyticsLanguageDistribution = '/api/v1/admin/analytics/language-d
 /** GET /api/v1/admin/analytics/message-types */
 export const analyticsMessageTypes = '/api/v1/admin/analytics/message-types';
 
+/** GET /api/v1/admin/analytics/playback */
+export const analyticsPlayback = '/api/v1/admin/analytics/playback';
+
 /** GET /api/v1/admin/analytics/realtime */
 export const analyticsRealtime = '/api/v1/admin/analytics/realtime';
 

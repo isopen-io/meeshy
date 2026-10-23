@@ -19,6 +19,24 @@ package me.meeshy.sdk.model
  */
 object ShareLinkEligibility {
 
+    /** The picker sections, in display order, filtered by a trimmed case-insensitive title [query]. */
+    fun sections(
+        conversations: List<ApiConversation>,
+        query: String,
+        title: (ApiConversation) -> String,
+    ): List<ShareLinkPickerGroup> {
+        val needle = query.trim()
+        val matching = if (needle.isEmpty()) {
+            conversations
+        } else {
+            conversations.filter { title(it).contains(needle, ignoreCase = true) }
+        }
+        val bySection = matching.groupBy { ShareLinkPickerSection.of(it.type) }
+        return ShareLinkPickerSection.entries.mapNotNull { section ->
+            bySection[section]?.let { ShareLinkPickerGroup(section, it) }
+        }
+    }
+
     fun isEligible(
         conversation: ApiConversation,
         currentUserId: String?,
@@ -40,3 +58,26 @@ object ShareLinkEligibility {
         conversation.currentUserRole?.let(MemberRole::from)
             ?: conversation.currentUserRole(currentUserId)
 }
+
+/** The four sections of the in-form conversation picker (iOS groups, communities, channels, public). */
+enum class ShareLinkPickerSection {
+    Groups,
+    Communities,
+    Channels,
+    Public,
+    ;
+
+    companion object {
+        fun of(type: String): ShareLinkPickerSection = when (type.lowercase()) {
+            "community" -> Communities
+            "channel", "broadcast" -> Channels
+            "public", "global" -> Public
+            else -> Groups
+        }
+    }
+}
+
+data class ShareLinkPickerGroup(
+    val section: ShareLinkPickerSection,
+    val conversations: List<ApiConversation>,
+)

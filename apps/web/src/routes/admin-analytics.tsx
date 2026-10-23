@@ -5,7 +5,7 @@ import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminOfflineNotice } from '@/components/admin/states';
 import { AdminFilterChips } from '@/components/admin/list-toolbar';
 import { AdminTabPanel, AdminTabs, useAdminTab } from '@/components/admin/tabs';
-import { ACTIVITY_DEFAULT, ACTIVITY_PERIODS, CALLS_DEFAULT, CALLS_PERIODS, MESSAGES_DEFAULT, MESSAGES_PERIODS } from '@/lib/admin/analytics-windows';
+import { ACTIVITY_DEFAULT, ACTIVITY_PERIODS, CALLS_DEFAULT, CALLS_PERIODS, MESSAGES_DEFAULT, MESSAGES_PERIODS, PLAYBACK_DEFAULT, PLAYBACK_PERIODS } from '@/lib/admin/analytics-windows';
 import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
@@ -13,9 +13,10 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { AdminActivityTab } from './admin-analytics-activity';
 import { AdminCallsTab } from './admin-analytics-calls';
 import { AdminMessagesTab } from './admin-analytics-messages';
+import { AdminPlaybackTab } from './admin-analytics-playback';
 import { periodLabel, usePeriodParam, type WindowPeriod } from './admin-analytics-parts';
 
-const TABS = ['activity', 'messages', 'calls'] as const;
+const TABS = ['activity', 'messages', 'calls', 'playback'] as const;
 
 type PeriodControlProps<T extends WindowPeriod> = {
   readonly language: AdminLanguage;
@@ -63,12 +64,18 @@ function TabBody({ tab, language, deps, now }: { readonly tab: (typeof TABS)[num
           {(period) => <AdminCallsTab language={language} deps={deps} period={period} />}
         </WithPeriod>
       );
+    case 'playback':
+      return (
+        <WithPeriod language={language} periods={PLAYBACK_PERIODS} fallback={PLAYBACK_DEFAULT}>
+          {(period) => <AdminPlaybackTab language={language} deps={deps} period={period} />}
+        </WithPeriod>
+      );
   }
 }
 
 /**
- * **LE PANNEAU DES STATISTIQUES** (#8876, #6728) — trois onglets dans l'adresse
- * (`?tab=activity|messages|calls`) et une période dans l'adresse (`?period=`), chaque
+ * **LE PANNEAU DES STATISTIQUES** (#8876, #6728) — quatre onglets dans l'adresse
+ * (`?tab=activity|messages|calls|playback`, la lecture depuis #11280) et une période dans l'adresse (`?period=`), chaque
  * onglet avec ses propres périodes. `deps` et `now` sont injectables : les témoins
  * montent le panneau sans transport réel et avec une horloge fixe.
  *

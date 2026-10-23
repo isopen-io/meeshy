@@ -159,7 +159,8 @@ final class BubbleWindowMetricsTests: XCTestCase {
         let code = codeLines(try source(Self.messageOverlayMenu))
 
         XCTAssertTrue(
-            code.contains(".environment(\\.bubbleContainerWidth, geometry.size.width > 0 ? geometry.size.width : nil)"),
+            code.contains("containerSize: geometry.size")
+                && code.contains(".environment(\\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)"),
             "The long-press preview must cap against the column it is drawn in, like the bubble it mirrors."
         )
         XCTAssertFalse(
@@ -215,8 +216,9 @@ final class BubbleWindowMetricsTests: XCTestCase {
         let cellBody = String(code[cellSite.upperBound...].prefix(600))
         XCTAssertTrue(cellBody.contains("targetWidthPx: Int((cellPointWidth * displayScale).rounded())"),
                       "la case élit pour SA largeur, jamais pour l'écran")
-        XCTAssertEqual(code.components(separatedBy: "ImageVariantSelector.bestImageURL").count - 1, 1,
+        XCTAssertEqual(code.components(separatedBy: "BubbleImageSourceLaw.displayedURL(").count - 1, 1,
                        "seule la case de grille élit localement ; le plein écran passe par la galerie")
-        XCTAssertTrue(cellBody.contains("ImageVariantSelector.bestImageURL"))
+        XCTAssertFalse(code.contains("ImageVariantSelector."), "la bulle n'élit jamais elle-même : la case passe par BubbleImageSourceLaw")
+        XCTAssertTrue(cellBody.contains("BubbleImageSourceLaw.displayedURL("))
     }
 }

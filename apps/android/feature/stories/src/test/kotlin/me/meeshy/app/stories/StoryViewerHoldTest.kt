@@ -87,11 +87,11 @@ class StoryViewerHoldTest {
     }
 
     @Test
-    fun `a tap on a frozen story resumes it without navigating`() = runTest(dispatcher) {
+    fun `a tap on an edge of a frozen story resumes it without navigating`() = runTest(dispatcher) {
         val vm = viewer()
         vm.pauseByHold()
 
-        vm.onCanvasTap(onLeftHalf = false)
+        vm.onCanvasTap(StoryTapZone.Next)
 
         assertThat(vm.state.value.isPaused).isFalse()
         assertThat(vm.state.value.current?.id).isEqualTo("b1")
@@ -101,10 +101,36 @@ class StoryViewerHoldTest {
     fun `a tap on a playing story navigates by side`() = runTest(dispatcher) {
         val vm = viewer()
 
-        vm.onCanvasTap(onLeftHalf = false)
+        vm.onCanvasTap(StoryTapZone.Next)
         assertThat(vm.state.value.current?.id).isEqualTo("b2")
 
-        vm.onCanvasTap(onLeftHalf = true)
+        vm.onCanvasTap(StoryTapZone.Previous)
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+    }
+
+    @Test
+    fun `a single tap in the middle band neither navigates nor resumes`() = runTest(dispatcher) {
+        val vm = viewer()
+
+        vm.onCanvasTap(StoryTapZone.Center)
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.isPaused).isFalse()
+
+        vm.pauseByHold()
+        vm.onCanvasTap(StoryTapZone.Center)
+        assertThat(vm.state.value.isPaused).isTrue()
+    }
+
+    @Test
+    fun `a double tap in the middle band toggles the pause without navigating`() = runTest(dispatcher) {
+        val vm = viewer()
+
+        vm.onCanvasDoubleTap()
+        assertThat(vm.state.value.isPaused).isTrue()
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+
+        vm.onCanvasDoubleTap()
+        assertThat(vm.state.value.isPaused).isFalse()
         assertThat(vm.state.value.current?.id).isEqualTo("b1")
     }
 

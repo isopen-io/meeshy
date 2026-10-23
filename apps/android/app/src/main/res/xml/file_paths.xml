@@ -9,4 +9,9 @@
     <cache-path
         name="captures"
         path="captures/" />
+    <!-- Fullscreen viewer "Share outside Meeshy": a local copy of the viewed media, handed
+         to the system share sheet (GalleryMediaSharer). -->
+    <cache-path
+        name="shared-media"
+        path="shared-media/" />
 </paths>
