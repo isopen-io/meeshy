@@ -556,14 +556,22 @@ try {
 
       // #8643 — LIRE FLOUTE LE RÉEL ; ÉCRIRE LE RÉDUIT, NET, AU-DESSUS DE LA
       // FEUILLE ; replier (⌄) rend la lecture. Même loi que la story.
+      // #11307 — le flou ne vit plus sur le PAGER (un filtre sur la vidéo en
+      // lecture se recalculait à chaque image) : le réel visible se met en
+      // pause sous son AFFICHE floutée (`[data-reel-veil]`).
       const pagerYield = () =>
         page.evaluate(() => {
           const pager = document.querySelector('[data-reels-pager]');
           const sheet = document.querySelector('[data-story-comments-sheet]');
           if (pager === null || sheet === null) return null;
+          const visible = pager.querySelector('[data-reel-mode="active"]');
+          const veil = visible?.querySelector('[data-reel-veil]') ?? null;
+          const video = visible?.querySelector('video') ?? null;
           return {
             etat: pager.getAttribute('data-scene-yields'),
             filtre: getComputedStyle(pager).filter,
+            voile: veil === null ? null : getComputedStyle(veil).filter,
+            enPause: video === null ? null : video.paused,
             basPager: Math.round(pager.getBoundingClientRect().bottom),
             hautFeuille: Math.round(sheet.getBoundingClientRect().top),
           };
@@ -581,13 +589,16 @@ try {
           .catch(() => undefined);
       await pagerSettled('reading');
       const lu = await pagerYield();
-      check(lu?.etat === 'reading' && /blur\(/.test(lu.filtre), `${label} : feuille ouverte, le réel se floute pour laisser lire le fil (#8643) — ${JSON.stringify(lu)}`);
+      check(
+        lu?.etat === 'reading' && lu.filtre === 'none' && /blur\(/.test(lu.voile ?? '') && lu.enPause !== false,
+        `${label} : feuille ouverte, le réel se met en pause sous son affiche floutée, le pager sans filtre (#8643, #11307) — ${JSON.stringify(lu)}`,
+      );
       if ((await page.$('[data-comment-field]')) !== null) {
         await page.click('[data-comment-field]');
         await pagerSettled('writing');
         const ecrit = await pagerYield();
         check(
-          ecrit?.etat === 'writing' && ecrit.filtre === 'none' && ecrit.basPager <= ecrit.hautFeuille,
+          ecrit?.etat === 'writing' && ecrit.filtre === 'none' && ecrit.voile === null && ecrit.basPager <= ecrit.hautFeuille,
           `${label} : champ pris, le réel revient net et tient ENTIER au-dessus de la feuille (#8643) — ${JSON.stringify(ecrit)}`,
         );
         await capture(page, `reels-ecrire-${slug}`);

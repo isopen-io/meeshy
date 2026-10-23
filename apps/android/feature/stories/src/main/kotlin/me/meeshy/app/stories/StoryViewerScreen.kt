@@ -420,7 +420,7 @@ fun StoryViewerScreen(
                     mediaUrl = slide.backgroundVideoUrl,
                     isActive = playing,
                     rewindWhenInactive = false,
-                    muted = false,
+                    muted = state.isMuted,
                     // La fenêtre de lecture que l'auteur a posée (#5129) — `null`
                     // quand la source joue en entier.
                     sourceStartMs = slide.backgroundVideoWindow?.startMs,
@@ -489,6 +489,7 @@ fun StoryViewerScreen(
                         media = foreground,
                         playheadSeconds = playheadSeconds,
                         playing = playing,
+                        muted = state.isMuted,
                     )
                 }
             }
@@ -525,6 +526,7 @@ fun StoryViewerScreen(
                     mediaUrl = url,
                     isActive = playing,
                     rewindWhenInactive = false,
+                    volume = if (state.isMuted) 0f else 1f,
                     loop = slide.backgroundLoop,
                     sourceStartMs = slide.backgroundAudioWindow?.startMs,
                     sourceEndMs = slide.backgroundAudioWindow?.endMs,
@@ -537,6 +539,7 @@ fun StoryViewerScreen(
                     mediaUrl = url,
                     isActive = playing,
                     rewindWhenInactive = false,
+                    volume = if (state.isMuted) 0f else 1f,
                     loop = false,
                     // Un vocal rogné compte autant qu'une vidéo rognée : iOS
                     // écrit les deux bornes sur les deux familles (#5129).
@@ -547,15 +550,10 @@ fun StoryViewerScreen(
         }
 
         if (slide != null && slide.text.isNotBlank()) {
-            Text(
+            StoryCaptionOverlay(
                 text = slide.text,
-                color = MeeshyPalette.White,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(MeeshySpacing.xl),
+                storyId = slide.id,
+                modifier = Modifier.align(Alignment.BottomStart),
             )
         }
 
@@ -576,52 +574,18 @@ fun StoryViewerScreen(
                     .padding(top = MeeshySpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
+                StoryAuthorIdentity(
+                    name = state.authorName,
+                    avatarUrl = state.authorAvatarUrl,
+                    accentHex = accent,
+                    createdAtMillis = slide?.createdAtMillis,
+                    repostAttribution = slide?.repostAttribution,
                     modifier = Modifier
                         .weight(1f)
                         .padding(start = MeeshySpacing.xs),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = state.authorName,
-                        color = MeeshyPalette.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    slide?.repostAttribution?.let { attribution ->
-                        val handle = attribution.handle
-                        val repostLabel = handle
-                            ?.let { stringResource(R.string.stories_reposted_from, it) }
-                            ?: stringResource(R.string.stories_reposted)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .padding(start = MeeshySpacing.xs)
-                                .semantics(mergeDescendants = true) {
-                                    contentDescription = repostLabel
-                                },
-                        ) {
-                            Icon(
-                                Icons.Filled.Repeat,
-                                contentDescription = null,
-                                tint = MeeshyPalette.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(12.dp),
-                            )
-                            handle?.let {
-                                Text(
-                                    text = "@$it",
-                                    color = MeeshyPalette.White.copy(alpha = 0.65f),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(start = 2.dp),
-                                )
-                            }
-                        }
-                    }
+                )
+                if (slide != null && slide.hasSound) {
+                    StoryMuteButton(isMuted = state.isMuted, onToggle = viewModel::toggleMute)
                 }
                 if (slide?.isTranslated == true) {
                     TranslatedBadge()
@@ -1014,6 +978,7 @@ private fun StoryForegroundLayer(
     media: StoryForegroundMediaView,
     playheadSeconds: Float,
     playing: Boolean,
+    muted: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val animated = media.animated(playheadSeconds)
@@ -1033,7 +998,7 @@ private fun StoryForegroundLayer(
                 mediaUrl = media.url,
                 isActive = playing,
                 rewindWhenInactive = false,
-                muted = false,
+                muted = muted,
                 modifier = layerModifier,
                 sourceStartMs = media.sourceWindow?.startMs,
                 sourceEndMs = media.sourceWindow?.endMs,
