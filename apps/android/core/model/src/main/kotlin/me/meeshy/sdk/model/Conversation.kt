@@ -235,9 +235,6 @@ internal object LossyRecentMessagesSerializer :
 internal object TolerantMessageCountSerializer :
     KSerializer<ApiMessageCount?> by TolerantSerializer(ApiMessageCount.serializer())
 
-internal object TolerantSharedPlaceSerializer :
-    KSerializer<SharedPlace?> by TolerantSerializer(SharedPlace.serializer())
-
 /** User-scoped conversation preferences. */
 @Serializable
 data class ApiConversationPreferences(
