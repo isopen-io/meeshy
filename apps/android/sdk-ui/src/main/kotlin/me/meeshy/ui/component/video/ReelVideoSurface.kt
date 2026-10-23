@@ -28,6 +28,11 @@ import androidx.media3.ui.PlayerView
 fun ReelVideoSurface(
     mediaUrl: String,
     isActive: Boolean,
+    /**
+     * `false` : l'inactivité est une PAUSE qui garde la position (story retenue, app en
+     * arrière-plan) ; `true` (défaut) : rembobine, comme une page de réel quittée.
+     */
+    rewindWhenInactive: Boolean = true,
     modifier: Modifier = Modifier,
     muted: Boolean = true,
     /**
@@ -84,7 +89,7 @@ fun ReelVideoSurface(
 
     LaunchedEffect(player, isActive) {
         player.playWhenReady = isActive
-        if (!isActive) player.seekTo(0)
+        if (!isActive && rewindWhenInactive) player.seekTo(0)
     }
 
     // Bail de lecture : la ressource jouée est à l'abri de l'éviction LRU tant que le player vit.

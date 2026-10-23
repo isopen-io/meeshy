@@ -1,12 +1,12 @@
-# Une issue de décision encore ouverte n'est pas une décision en attente : lire ses commentaires
+## Une issue de décision encore ouverte n'est pas une décision en attente : lire ses commentaires
 
 **Date :** 2026-10-22 · **Domaine :** pilotage, relevé d'avancement
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Un bilan du chantier média a rapporté au porteur que les neuf issues de décision (#11247 à #11255) « attendaient son verdict », sur la seule foi de `state == open`. Or le porteur avait écrit son verdict en commentaire dès le 2026-10-21 (« les DÉFAUTS proposés sont validés ») sur sept d'entre elles. Il a dû rappeler que « sans perte » était déjà tranché.
 
-## La règle
+### La règle
 
 Une issue `décision-produit` reste souvent ouverte après le verdict, parce que son critère de fin (« chaque point a un verdict ») n'est pas fermé par un commit. Avant de dire qu'une décision attend quelqu'un :
 
