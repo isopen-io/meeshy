@@ -23,6 +23,7 @@ Le registre des packs officiels (`PackIndex`) est une donnée versionnée du dé
 
 - **Un pack gratuit ne redevient jamais payant.** La garde compare au prix EFFECTIF courant (dépôt + surcharge), et non plus au seul dépôt. Elle vaut sur PUT comme sur DELETE (retour au dépôt) : 422 `PACK_OVERRIDE_UNLAWFUL`, refus journalisé.
 - **Fail-closed au démarrage.** La route d'administration charge les surcharges dans `onReady`, donc avant que le serveur écoute. Tant qu'aucune lecture n'a abouti (base injoignable au démarrage), l'instantané est inconnu et chaque pack du registre est servi MASQUÉ. Il est hors rayon, ni installable ni achetable, et reste rendu chez qui le tient déjà.
+- **La lecture initiale est bornée (contre-audit N1).** Fastify coupe un hook `onReady` à 10 s : une base lente aurait fait boucler le redémarrage. Au-delà de 2,5 s, le serveur démarre, le registre reste masqué, et la lecture continue en tâche de fond.
 - **La relecture après écriture se fait au mieux.** Une écriture réussie reste un succès, même si la relecture échoue. La réponse sert ce qui a été écrit. La passerelle qui écrit attend une relecture déjà en vol, puis relit. Un retour au dépôt qui échoue est journalisé `PACK_REGISTRY_RESET_FAILED`.
 - **Un pack masqué, ou dont la fenêtre n'est pas ouverte, ne se lit plus par son slug** (`PackCatalog.detail`), sauf pour qui l'a installé ou le tient. La règle est la même que pour l'installation.
 

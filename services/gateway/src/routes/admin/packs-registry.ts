@@ -29,7 +29,17 @@ export const requirePackAdmin = requirePermission('canManageGame');
 export type PacksRegistryAdminOptions = {
   readonly index?: PackIndex;
   readonly overrides?: PackRegistryOverrides;
+  /** Borne de la lecture initiale (contre-audit N1) : au-delà, le serveur démarre, registre masqué. */
+  readonly initialLoadTimeoutMs?: number;
 };
+
+/**
+ * Fastify coupe un hook `onReady` à 10 s (`pluginTimeout`) et le serveur ne
+ * démarre pas : une base lente (élection de primaire) ferait boucler le
+ * redémarrage. La lecture initiale est donc BORNÉE ; au-delà, elle continue en
+ * tâche de fond et le registre reste servi masqué jusqu'à ce qu'elle aboutisse.
+ */
+export const PACK_REGISTRY_INITIAL_LOAD_TIMEOUT_MS = 2_500;
 
 const actorOf = (request: FastifyRequest): string | null => {
   const ctx = (request as UnifiedAuthRequest).authContext;
@@ -123,7 +133,14 @@ export async function packsRegistryAdminRoutes(fastify: FastifyInstance, options
 
   // Les surcharges se lisent AVANT que le serveur écoute : jusque-là, le registre est servi masqué (fail-closed).
   fastify.addHook('onReady', async () => {
-    await overrides.refresh().catch((error: unknown) => logError('pack registry overrides initial load failed', error, { source: 'admin-packs-registry' }));
+    const loading = overrides.refresh().catch((error: unknown) => logError('pack registry overrides initial load failed', error, { source: 'admin-packs-registry' }));
+    let timer: NodeJS.Timeout | undefined;
+    const bounded = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, options.initialLoadTimeoutMs ?? PACK_REGISTRY_INITIAL_LOAD_TIMEOUT_MS);
+      timer.unref?.();
+    });
+    await Promise.race([loading, bounded]);
+    clearTimeout(timer);
   });
 
   const rowOf = (domain: PackDomain, entry: PackIndexEntry) => {
