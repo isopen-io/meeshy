@@ -11,9 +11,17 @@
  * croit illisible pour le serveur gardait le message lisible en base. La règle
  * échoue désormais FERMÉE : le texte est refusé, avec un code stable.
  *
+ Les PIÈCES JOINTES suivent la même règle (#12518). Aucun chemin de la
+ * passerelle ne reçoit aujourd'hui un fichier chiffré par l'appareil (#10789) :
+ * `uploadEncryptedFile` reçoit le CLAIR puis le chiffre lui-même. Une pièce
+ * portée dans une conversation e2ee — rattachée, transférée ou recopiée par une
+ * diffusion — est donc une pièce que le serveur a lue, puis qu'il aurait
+ * transcrite, traduite et clonée : elle est refusée, sous le MÊME code, que les
+ * clients savent déjà dire (« conversation chiffrée de bout en bout »).
+ *
  * Ce qui reste admis, et pourquoi :
- * - un message SANS texte (pièces jointes seules) — aucune chaîne en clair
- *   n'est écrite ; le chiffrement des fichiers est un autre chantier ;
+ * - à côté d'un chiffré, le seul littéral `[Encrypted]` que les clients posent
+ *   dans `content` (`validation/encryption-envelope.ts`) — jamais écrit ;
  * - les modes `server` et `hybrid` — le serveur y chiffre lui-même ce qu'il
  *   reçoit en clair, c'est leur contrat.
  *
@@ -34,6 +42,16 @@ export const E2EE_PLAINTEXT_REFUSED = 'E2EE_PLAINTEXT_REFUSED';
 
 export const E2EE_PLAINTEXT_REFUSAL_MESSAGE =
   'Cette conversation est chiffrée de bout en bout : le serveur n’accepte aucun message en clair';
+
+export const E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE =
+  'Cette conversation est chiffrée de bout en bout : le serveur n’accepte aucune pièce jointe en clair';
+
+/** Le littéral que les clients posent dans `content` quand ils envoient un chiffré. */
+export const E2EE_CONTENT_PLACEHOLDER = '[Encrypted]';
+
+/** Le texte en clair que porte un envoi À CÔTÉ de son chiffré : tout, sauf le littéral convenu. */
+export const plaintextBesideCiphertext = (content: string | null | undefined): string =>
+  content?.trim() === E2EE_CONTENT_PLACEHOLDER ? '' : content ?? '';
 
 /** Le mode arrive avec la casse de son émetteur : iOS écrit « E2EE ». */
 export const isEndToEndMode = (mode: string | null | undefined): boolean =>
@@ -66,8 +84,8 @@ export const plaintextRefusedIn = (params: {
 export class E2eePlaintextRefusedError extends Error {
   readonly code = E2EE_PLAINTEXT_REFUSED;
 
-  constructor() {
-    super(E2EE_PLAINTEXT_REFUSAL_MESSAGE);
+  constructor(message: string = E2EE_PLAINTEXT_REFUSAL_MESSAGE) {
+    super(message);
     this.name = 'E2eePlaintextRefusedError';
   }
 }
@@ -78,4 +96,14 @@ export const isE2eePlaintextRefusal = (error: unknown): error is E2eePlaintextRe
 /** Lève le refus quand le texte ne peut pas être écrit en clair. */
 export function assertPlaintextAdmitted(params: Parameters<typeof plaintextRefusedIn>[0]): void {
   if (plaintextRefusedIn(params)) throw new E2eePlaintextRefusedError();
+}
+
+/** Lève le refus quand une conversation e2ee recevrait des pièces que le serveur a lues (#12518). */
+export function assertNoPlaintextPieces(params: {
+  readonly encryptionMode: string | null | undefined;
+  readonly carriedPieceCount: number;
+}): void {
+  if (isEndToEndMode(params.encryptionMode) && params.carriedPieceCount > 0) {
+    throw new E2eePlaintextRefusedError(E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE);
+  }
 }

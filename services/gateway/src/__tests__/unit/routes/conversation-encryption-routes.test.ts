@@ -19,8 +19,7 @@
  *     - already encrypted → 400
  *     - not a member → 403
  *     - group + no moderator role → 403
- *     - group creator / platform ADMIN|BIGBOSS member → allowed (#11218)
- *     - direct conversation → skips role check
+ *     - only a platform ADMIN|BIGBOSS member may activate, every mode (#12517)
  *     - mode=e2ee → no server key
  *     - mode=server → getOrCreateConversationKey called
  *     - senderParticipant found → message created
@@ -284,25 +283,43 @@ describe('POST /conversations/:conversationId/encryption', () => {
   });
 
   it.each([
-    ['le créateur du groupe', { role: 'creator', user: { role: 'USER' } }],
-    ['un administrateur du groupe', { role: 'admin', user: { role: 'USER' } }],
-    ['un modérateur du groupe, rang en majuscules', { role: 'MODERATOR', user: { role: 'USER' } }],
-    ['un ADMIN de plateforme membre', { role: 'member', user: { role: 'ADMIN' } }],
-    ['un BIGBOSS de plateforme membre', { role: 'member', user: { role: 'BIGBOSS' } }],
-  ])('active le chiffrement d’un groupe pour %s (#11218)', async (_label, member) => {
-    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, ...member }], type: 'group' } });
+    ['un ADMIN de plateforme membre d’un groupe', { role: 'member', user: { role: 'ADMIN' } }, 'group'],
+    ['un BIGBOSS de plateforme membre d’un groupe', { role: 'member', user: { role: 'BIGBOSS' } }, 'group'],
+    ['un ADMIN de plateforme dans un tête-à-tête, rôle en minuscules', { role: 'member', user: { role: 'admin' } }, 'direct'],
+    ['un BIGBOSS de plateforme créateur du groupe', { role: 'creator', user: { role: 'BIGBOSS' } }, 'group'],
+  ])('active le chiffrement pour %s (#12517)', async (_label, member, type) => {
+    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, ...member }], type } });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(res.statusCode).toBe(200);
     await app.close();
   });
 
   it.each([
-    ['un MODERATOR de plateforme simple membre (participant ordinaire)', { role: 'member', user: { role: 'MODERATOR' } }],
-    ['un rang illisible (owner) — fermé par défaut', { role: 'owner', user: { role: 'USER' } }],
-  ])('refuse le chiffrement d’un groupe à %s (#11218)', async (_label, member) => {
-    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, ...member }], type: 'group' } });
+    ['le créateur USER d’un groupe', { role: 'creator', user: { role: 'USER' } }, 'group'],
+    ['un administrateur USER du groupe', { role: 'admin', user: { role: 'USER' } }, 'group'],
+    ['un modérateur USER du groupe', { role: 'MODERATOR', user: { role: 'USER' } }, 'group'],
+    ['un MODERATOR de plateforme simple membre', { role: 'member', user: { role: 'MODERATOR' } }, 'group'],
+    ['un AUDIT de plateforme dans un tête-à-tête', { role: 'member', user: { role: 'AUDIT' } }, 'direct'],
+    ['un USER dans un tête-à-tête', { role: 'member', user: { role: 'USER' } }, 'direct'],
+    ['un rôle de plateforme absent dans un tête-à-tête — fermé par défaut', { role: 'member', user: null }, 'direct'],
+    ['un rang illisible (owner) — fermé par défaut', { role: 'owner', user: { role: 'USER' } }, 'group'],
+  ])('refuse le chiffrement à %s tant que l’E2EE n’est pas opérationnel (#12517)', async (_label, member, type) => {
+    const prisma = makePrisma({ conversation: { participants: [{ userId: USER_ID, ...member }], type } });
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', prisma as unknown);
+    await app.register(encryptionRoutes);
+    await app.ready();
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(res.statusCode).toBe(403);
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each(['e2ee', 'server', 'hybrid'])('la restriction couvre le mode %s et porte un code lisible (#12517)', async (mode) => {
+    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, role: 'creator', user: { role: 'USER' } }], type: 'group' } });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ success: false, code: 'ENCRYPTION_ACTIVATION_RESTRICTED' });
     await app.close();
   });
 
@@ -318,9 +335,9 @@ describe('POST /conversations/:conversationId/encryption', () => {
     await app.close();
   });
 
-  it('returns 200 for direct conversation regardless of role (e2ee, no server key)', async () => {
+  it('returns 200 for a platform admin in a direct conversation (e2ee, no server key)', async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'MEMBER' }], type: 'direct' },
+      conversation: { participants: [{ userId: USER_ID, role: 'MEMBER', user: { role: 'ADMIN' } }], type: 'direct' },
       senderParticipant: { id: PARTICIPANT_ID },
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
@@ -331,7 +348,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
   it('returns 200 for server mode (calls getOrCreateConversationKey)', async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'admin' }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
       senderParticipant: { id: PARTICIPANT_ID },
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
@@ -342,7 +359,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
   it('returns 200 for hybrid mode (calls getOrCreateConversationKey)', async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'MODERATOR' }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'MODERATOR', user: { role: 'BIGBOSS' } }], type: 'group' },
       senderParticipant: { id: PARTICIPANT_ID },
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'hybrid' } });
@@ -353,7 +370,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
   it("pose une clé localisable sur l'avis système, jamais seulement le texte anglais (#7545)", async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'admin' }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
       senderParticipant: { id: PARTICIPANT_ID },
     });
     const create = (app as unknown as { prisma: { message: { create: jest.Mock } } }).prisma.message.create;
@@ -366,7 +383,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
   it('skips system message creation when senderParticipant is null', async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'admin' }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
       senderParticipant: null,
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });

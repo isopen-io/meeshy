@@ -223,6 +223,21 @@ describe('MessagingService.handleMessage — aucun clair dans une conversation e
     expect(written.content).toBe('');
   });
 
+  it('refuse un vocal sans texte — REST et socket convergent ici (#12518)', async () => {
+    conversationIn(E2EE);
+
+    const response = await service.handleMessage(
+      { conversationId, content: '', originalLanguage: 'fr', attachmentIds: ['507f1f77bcf86cd799439099'] } as MessageRequest,
+      senderParticipantId
+    );
+
+    expect(response.success).toBe(false);
+    expect(response.code).toBe(E2EE_PLAINTEXT_REFUSED);
+    expect(response.error).toMatch(/pièce jointe/);
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    expect(mockHandleNewMessage).not.toHaveBeenCalled();
+  });
+
   it('laisse une conversation en clair inchangée', async () => {
     conversationIn(CLEAR);
 
