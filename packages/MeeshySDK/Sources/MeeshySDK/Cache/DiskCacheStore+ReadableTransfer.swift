@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Le transfert vidéo LISIBLE pendant sa course (#9881).
 ///
