@@ -115,6 +115,8 @@ class CallViewModel @Inject constructor(
     val activeConfig: CallConfig get() = config
 
     init {
+        coordinator.onRemoteBye = { onRemoteBye() }
+        coordinator.onSetupFailed = { message -> dispatch(CallEvent.ConnectionFailed(message)) }
         peers.attach(host)
         waiting.attach(host)
         watchdogs.attach(host)
@@ -171,7 +173,10 @@ class CallViewModel @Inject constructor(
 
     /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */
     private fun onIceServersRefreshed(iceServers: List<SocketIceServer>) {
-        if (!awaitingIncomingIce) return
+        if (!awaitingIncomingIce) {
+            if (callId.isNotBlank()) coordinator.updateIceServers(iceServers)
+            return
+        }
         awaitingIncomingIce = false
         coordinator.startIncoming(
             viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo,
@@ -264,6 +269,7 @@ class CallViewModel @Inject constructor(
     /** Local user hangs up an active call — end the FSM and the call on the wire. */
     fun hangUp() {
         dispatch(CallEvent.LocalHangUp)
+        coordinator.sendHangupBye()
         emitIfIdentified { signalManager.emitEnd(it) }
         coordinator.end()
     }
@@ -356,6 +362,13 @@ class CallViewModel @Inject constructor(
             return
         }
         waiting.onRemotelyEnded(signal.callId)
+    }
+
+    /** In-band `bye` from the peer: instant cut; the `call:ended` fanout that follows finds the call already ended. */
+    private fun onRemoteBye() {
+        if (!callState.isActive) return
+        dispatch(CallEvent.RemoteHangUp)
+        coordinator.end()
     }
 
     /** Runs [emit] with the current [callId] only once one is known — inert otherwise. */
