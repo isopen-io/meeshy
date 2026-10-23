@@ -158,6 +158,25 @@ class KeystoreSecureStoreTest {
     }
 
     @Test
+    fun `un registre de reprise qui ne s'ouvre pas laisse le compte illisible et le fichier en place`() {
+        var resets = 0
+        val healthy = prefs("vault_ledger_absent")
+        val store = KeystoreSecureStore(
+            open = { healthy },
+            reset = { resets++ },
+            recoveryLedger = { throw IllegalStateException("disk") },
+        )
+        assertThat(store.read("k", "A")).isEqualTo(SecureRead.Unreadable)
+        var calls = 0
+        KeystoreSecureStore(
+            open = { if (calls++ == 0) throw GeneralSecurityException("bad tag") else healthy },
+            reset = { resets++ },
+            recoveryLedger = { throw IllegalStateException("disk") },
+        ).read("k", "A")
+        assertThat(resets).isEqualTo(0)
+    }
+
+    @Test
     fun `une lecture qui leve sur une entree isolee est illisible`() {
         val throwing = object : SharedPreferences by prefs("vault_throw") {
             override fun contains(key: String?): Boolean = true

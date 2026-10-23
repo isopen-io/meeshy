@@ -24,6 +24,10 @@ import me.meeshy.sdk.model.security.SecureStore
  *   after an open failure (we cannot know what it held) and any entry that throws are
  *   [SecureRead.Unreadable], so a caller never regenerates a secret over data it merely failed to read.
  *   [acknowledgeRecovery] is the explicit, per-account way out.
+ * - Durable recovery: the "recreated" mark and the per-account acknowledgements also live in
+ *   [recoveryLedger], a plain (non-secret) file written BEFORE the vault file is deleted, so the
+ *   next launch still reads [SecureRead.Unreadable] instead of "absent". An unreadable ledger keeps
+ *   every account unreadable; a ledger that cannot be written leaves the vault file in place.
  * - Silent: no value (and no key) is ever logged.
  *
  * [open] is injected so tests substitute real `SharedPreferences` for the
@@ -41,6 +45,15 @@ class KeystoreSecureStore(
     private var gaveUp = false
     private var recreated = false
     private val acknowledged = mutableSetOf<String>()
+    private var ledgerBroken = false
+    private val ledger: SharedPreferences? by lazy {
+        try {
+            recoveryLedger()
+        } catch (_: Exception) {
+            ledgerBroken = true
+            null
+        }
+    }
 
     private fun prefs(): SharedPreferences? = synchronized(lock) {
         cached ?: if (gaveUp) null else openOrRecreate().also { cached = it; gaveUp = it == null }
@@ -49,9 +62,15 @@ class KeystoreSecureStore(
     private fun openOrRecreate(): SharedPreferences? =
         attempt(open) ?: run {
             recreated = true
+            if (!markRecreated()) return null
             attempt(reset)
             attempt(open)
         }
+
+    private fun markRecreated(): Boolean {
+        val ledger = ledger ?: return !ledgerBroken
+        return attempt { ledger.edit().putBoolean(RECREATED, true).remove(ACKNOWLEDGED).commit() } == true
+    }
 
     private fun <T> attempt(block: () -> T): T? = try {
         block()
@@ -75,11 +94,30 @@ class KeystoreSecureStore(
     }
 
     override fun acknowledgeRecovery(account: String?) {
-        synchronized(lock) { acknowledged.add(SecureKeyNamespace.normalize(account).orEmpty()) }
+        val owner = SecureKeyNamespace.normalize(account).orEmpty()
+        synchronized(lock) {
+            acknowledged.add(owner)
+            val ledger = ledger ?: return
+            attempt {
+                val known = ledger.getStringSet(ACKNOWLEDGED, null).orEmpty()
+                ledger.edit().putStringSet(ACKNOWLEDGED, known + owner).commit()
+            }
+        }
     }
 
     private fun isRecoveryPending(account: String?): Boolean = synchronized(lock) {
-        recreated && SecureKeyNamespace.normalize(account).orEmpty() !in acknowledged
+        val owner = SecureKeyNamespace.normalize(account).orEmpty()
+        (recreated || ledgerSaysRecreated()) && owner !in acknowledged && !ledgerAcknowledged(owner)
+    }
+
+    private fun ledgerSaysRecreated(): Boolean {
+        val ledger = ledger ?: return ledgerBroken
+        return attempt { ledger.getBoolean(RECREATED, false) } ?: true
+    }
+
+    private fun ledgerAcknowledged(owner: String): Boolean {
+        val ledger = ledger ?: return false
+        return attempt { ledger.getStringSet(ACKNOWLEDGED, null).orEmpty().contains(owner) } ?: false
     }
 
     override fun put(key: String, value: String, account: String?): Boolean {
@@ -123,6 +161,9 @@ class KeystoreSecureStore(
         withContext(io) { remove(key, account) }
 
     companion object {
+        private const val RECREATED = "recreated"
+        private const val ACKNOWLEDGED = "acknowledged"
+
         /** Opens (or reopens, unchanged) the Keystore-encrypted file [fileName]. */
         fun create(context: Context, fileName: String): KeystoreSecureStore {
             val app = context.applicationContext
@@ -140,6 +181,7 @@ class KeystoreSecureStore(
                     )
                 },
                 reset = { app.deleteSharedPreferences(fileName) },
+                recoveryLedger = { app.getSharedPreferences("$fileName.recovery", Context.MODE_PRIVATE) },
             )
         }
     }
