@@ -69,6 +69,7 @@ class StarredMessagesRealtimeBinding @Inject constructor(
 ) : RealtimeBinding, PerAccountCache {
 
     private var scope: CoroutineScope? = null
+    private var socketListenerRegistered = false
 
     private val sync: StarredMessagesSync
         get() = StarredMessagesSync(
@@ -82,7 +83,10 @@ class StarredMessagesRealtimeBinding @Inject constructor(
     override fun attach() {
         detach()
         val live = CoroutineScope(SupervisorJob() + io).also { scope = it }
-        socketManager.on("message:starred") { args -> onStarredFrame(args) }
+        if (!socketListenerRegistered) {
+            socketListenerRegistered = true
+            socketManager.on("message:starred") { args -> onStarredFrame(args) }
+        }
         live.launchSafely { messageSocketManager.messageDeleted.collect { sync.onGone(it.messageId) } }
         live.launchSafely { messageSocketManager.messageExpired.collect { sync.onGone(it.messageId) } }
         live.launchSafely { messageSocketManager.messageEdited.collect { sync.onEdited(it) } }
