@@ -31,6 +31,7 @@ import type { LocalObjectStore } from './LocalObjectStore';
 import type { MediaObjectStore } from './MediaObjectStore';
 import { emptyMirrorCounts, runMirrorBatch, type MirrorCounts, type MirrorRowSource } from './mediaMirror';
 import { mediaObjectStoresFromEnv } from './mediaObjectStoreFactory';
+import { isPorteurApproval } from './mediaObjectStoreConfig';
 
 export type MirrorOptions = { readonly apply: boolean; readonly batchSize: number; readonly limit: number | null; readonly reset: boolean };
 
@@ -39,7 +40,7 @@ export type ParsedMirrorArgs =
   | { readonly kind: 'refused'; readonly reason: 'unknown-argument' | 'invalid-batch' | 'invalid-limit' | 'follow-requires-apply' | 'production-requires-porteur-approval' };
 
 const MAX_BATCH = 5_000;
-const FOLLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const FOLLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export function parseMirrorArgs(argv: readonly string[], env: Readonly<Record<string, string | undefined>>): ParsedMirrorArgs {
   const flag = (name: string) => argv.includes(`--${name}`);
@@ -55,7 +56,7 @@ export function parseMirrorArgs(argv: readonly string[], env: Readonly<Record<st
   if (limit !== null && (!Number.isInteger(limit) || limit < 1)) return { kind: 'refused', reason: 'invalid-limit' };
   const apply = flag('apply');
   const approval = valueOf('porteur-approval') ?? '';
-  if (apply && !isStagingEnvironment(env.MEESHY_ENV) && !/^https:\/\/github\.com\/isopen-io\/meeshy\/(issues|pull)\/\d+/.test(approval)) {
+  if (apply && !isStagingEnvironment(env.MEESHY_ENV) && !isPorteurApproval(approval)) {
     return { kind: 'refused', reason: 'production-requires-porteur-approval' };
   }
   if (flag('follow') && !apply) return { kind: 'refused', reason: 'follow-requires-apply' };

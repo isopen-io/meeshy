@@ -36,3 +36,8 @@ export function mediaS3ConfigFromEnv(env: Readonly<Record<string, string | undef
     forcePathStyle: value('MEDIA_S3_FORCE_PATH_STYLE').toLowerCase() !== 'false',
   };
 }
+
+/** Le feu vert du porteur se nomme par l'adresse de sa décision (#9232) — jamais par un « oui ». */
+export function isPorteurApproval(value: string | undefined): boolean {
+  return /^https:\/\/github\.com\/isopen-io\/meeshy\/(issues|pull)\/\d+/.test(value ?? '');
+}
