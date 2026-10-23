@@ -107,6 +107,8 @@
     <string name="story_composer_grabber">Maniglia della barra strumenti</string>
     <string name="story_composer_grabber_hint_dismiss">Trascina verso il basso per ridurre o chiudere.</string>
     <string name="story_composer_grabber_hint_resize">Trascina verso l\'alto per ingrandire, verso il basso per ridurre o chiudere.</string>
+    <string name="story_composer_redo">Ripristina</string>
+    <string name="story_composer_undo">Annulla</string>
     <string name="story_send_caption_hint">Aggiungi un messaggio…</string>
     <string name="story_send_loading">Caricamento delle conversazioni…</string>
     <plurals name="story_send_members">

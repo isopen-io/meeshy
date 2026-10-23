@@ -740,6 +740,7 @@ class PostCommentsViewModel @Inject constructor(
                             likeState = likeState,
                             activeLanguageCode = activeLanguages[it.id],
                             currentUserId = currentUserId,
+                            depth = 1,
                         )
                     },
                     isPreview = !expanded && shown.isNotEmpty(),

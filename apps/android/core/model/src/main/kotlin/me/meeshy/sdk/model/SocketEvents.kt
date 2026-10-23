@@ -1,7 +1,22 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
+import me.meeshy.sdk.model.preview.ConversationActiveCall
+import me.meeshy.sdk.model.preview.ConversationLastReaction
+import me.meeshy.sdk.model.preview.ConversationPreviewSticker
+import me.meeshy.sdk.model.preview.LastMessageAttachmentSummary
+import me.meeshy.sdk.model.preview.LastMessageCallSummary
+import me.meeshy.sdk.model.preview.LastMessageSystemEvent
+import me.meeshy.sdk.model.preview.PreviewFieldUpdate
+import me.meeshy.sdk.model.preview.PreviewFieldUpdateSerializer
+import me.meeshy.sdk.model.preview.TolerantAttachmentSummarySerializer
+import me.meeshy.sdk.model.preview.TolerantCallSummarySerializer
+import me.meeshy.sdk.model.preview.TolerantPreviewStickerSerializer
+import me.meeshy.sdk.model.preview.TolerantSystemEventSerializer
 
 /** Mirrors iOS MessageSocketManager event payloads (Sockets/MessageSocketManager.swift). */
 
@@ -168,6 +183,15 @@ data class AttachmentUpdatedEvent(
     val thumbnailUrl: String? = null,
 )
 
+/**
+ * `conversation:updated` — métadonnées (titre, avatar…) ET groupe « dernier message » en clés plates
+ * `lastMessage*` (#7545, #7548), miroir de `ConversationUpdatedEvent` (iOS).
+ *
+ * Tout est facultatif : le chemin message-driven ne porte que l'identité et l'aperçu, un renommage que
+ * les métadonnées. Les clés qui peuvent légitimement VIDER la ligne (identité, auteur, carte du Prisme,
+ * réaction, appel) sont tri-état ([PreviewFieldUpdate]) ; chaque sous-champ du contrat est tolérant,
+ * pour qu'une forme inattendue d'UN champ neuf ne jette jamais l'événement qui porte aussi le rang.
+ */
 @Serializable
 data class ConversationUpdatedSocketEvent(
     val conversationId: String,
@@ -175,7 +199,110 @@ data class ConversationUpdatedSocketEvent(
     val description: String? = null,
     val avatar: String? = null,
     val updatedAt: String? = null,
+    val banner: String? = null,
+    val defaultWriteRole: String? = null,
+    val isAnnouncementChannel: Boolean? = null,
+    val slowModeSeconds: Int? = null,
+    val autoTranslateEnabled: Boolean? = null,
+    val lastMessageAt: String? = null,
+    @Serializable(with = StringUpdateSerializer::class)
+    val lastMessageId: PreviewFieldUpdate<String> = PreviewFieldUpdate.Unchanged,
+    val lastMessagePreview: String? = null,
+    @Serializable(with = StringUpdateSerializer::class)
+    val lastMessageSenderName: PreviewFieldUpdate<String> = PreviewFieldUpdate.Unchanged,
+    val lastMessageSenderUserId: String? = null,
+    @Serializable(with = TranslationsUpdateSerializer::class)
+    val lastMessageTranslations: PreviewFieldUpdate<Map<String, String>> = PreviewFieldUpdate.Unchanged,
+    val lastMessageOriginalLanguage: String? = null,
+    @Serializable(with = TolerantSharedPlaceSerializer::class)
+    val location: SharedPlace? = null,
+    val senderId: String? = null,
+    /** Vrai quand le serveur a RECALCULÉ l'aperçu : seul cas où le groupe peut reculer dans le temps. */
+    val previewRecalculated: Boolean = false,
+    @Serializable(with = LossyApiMessageAttachmentListOrNullSerializer::class)
+    val lastMessageAttachments: List<ApiMessageAttachment>? = null,
+    val lastMessageAttachmentCount: Int? = null,
+    val lastMessageIsBlurred: Boolean? = null,
+    val lastMessageIsViewOnce: Boolean? = null,
+    val lastMessageExpiresAt: String? = null,
+    val lastMessageType: String? = null,
+    val lastMessageEffectFlags: Int? = null,
+    val lastMessageEphemeralDuration: Int? = null,
+    val lastMessageIsEncrypted: Boolean? = null,
+    val lastMessageIsForwarded: Boolean? = null,
+    @Serializable(with = TolerantSystemEventSerializer::class)
+    val lastMessageSystemEvent: LastMessageSystemEvent? = null,
+    @Serializable(with = TolerantCallSummarySerializer::class)
+    val lastMessageCallSummary: LastMessageCallSummary? = null,
+    @Serializable(with = TolerantAttachmentSummarySerializer::class)
+    val lastMessageAttachmentSummary: LastMessageAttachmentSummary? = null,
+    @Serializable(with = TolerantPreviewStickerSerializer::class)
+    val lastMessageSticker: ConversationPreviewSticker? = null,
+    @Serializable(with = LastReactionUpdateSerializer::class)
+    val lastReaction: PreviewFieldUpdate<ConversationLastReaction> = PreviewFieldUpdate.Unchanged,
+    @Serializable(with = ActiveCallUpdateSerializer::class)
+    val activeCall: PreviewFieldUpdate<ConversationActiveCall> = PreviewFieldUpdate.Unchanged,
+    val listRankAt: String? = null,
+) {
+    /** La nature du message nommé ; `null` quand AUCUNE de ses clés n'est sur le fil. */
+    val lastMessageNature: LastMessageNature?
+        get() = LastMessageNature(
+            messageType = lastMessageType,
+            effectFlags = lastMessageEffectFlags,
+            ephemeralDuration = lastMessageEphemeralDuration,
+            isEncrypted = lastMessageIsEncrypted ?: false,
+            isForwarded = lastMessageIsForwarded ?: false,
+            systemEvent = lastMessageSystemEvent,
+            callSummary = lastMessageCallSummary,
+            attachmentSummary = lastMessageAttachmentSummary,
+            sticker = lastMessageSticker,
+        ).takeUnless { it.isEmpty }
+}
+
+internal object StringUpdateSerializer :
+    KSerializer<PreviewFieldUpdate<String>> by PreviewFieldUpdateSerializer(String.serializer())
+
+internal object TranslationsUpdateSerializer :
+    KSerializer<PreviewFieldUpdate<Map<String, String>>> by PreviewFieldUpdateSerializer(
+        MapSerializer(String.serializer(), String.serializer()),
+    )
+
+internal object LastReactionUpdateSerializer :
+    KSerializer<PreviewFieldUpdate<ConversationLastReaction>> by PreviewFieldUpdateSerializer(ConversationLastReaction.serializer())
+
+internal object ActiveCallUpdateSerializer :
+    KSerializer<PreviewFieldUpdate<ConversationActiveCall>> by PreviewFieldUpdateSerializer(ConversationActiveCall.serializer())
+
+/**
+ * `conversation:participant-joined` — l'effectif ACTIF APRÈS l'adhésion est absolu : à POSER, pas à
+ * incrémenter (un delta ne converge pas après un événement manqué). Absent d'un serveur ancien.
+ */
+@Serializable
+data class ParticipantJoinedEvent(
+    val conversationId: String,
+    val userId: String? = null,
+    val displayName: String? = null,
+    val joinedAt: String? = null,
+    val memberCount: Int? = null,
+    val memberCountCapped: Boolean? = null,
 )
+
+/**
+ * `conversation:participant-unbanned` — la levée du bannissement ; l'appartenance n'est rendue que si
+ * le bannissement l'avait prise ([membershipRestored] absent se lit `true`).
+ */
+@Serializable
+data class ParticipantUnbannedEvent(
+    val conversationId: String,
+    val userId: String? = null,
+    val participantId: String? = null,
+    val membershipRestored: Boolean? = null,
+    val memberCount: Int? = null,
+    val memberCountCapped: Boolean? = null,
+) {
+    fun names(identity: String): Boolean =
+        identity.isNotEmpty() && (identity == userId || identity == participantId)
+}
 
 /**
  * `conversation:participant-left`.
@@ -624,3 +751,6 @@ data class SocketStatusUnreactedData(
     val userId: String,
     val emoji: String,
 )
+
+/** `message:translation-shared` (#9899) : la même forme que la lecture REST, enveloppe scellée comprise. */
+typealias MessageTranslationSharedEvent = me.meeshy.sdk.model.translation.SharedTranslation

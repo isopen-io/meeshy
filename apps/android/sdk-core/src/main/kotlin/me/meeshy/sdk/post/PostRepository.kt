@@ -29,6 +29,8 @@ import me.meeshy.sdk.net.api.CreatePostRequest
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.MobileTranscriptionPayload
 import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.net.api.PostLikeRequest
+import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.net.api.PostImpressionsRequest
 import me.meeshy.sdk.net.api.PostTranslationRequest
 import me.meeshy.sdk.net.api.PostViewRequest
@@ -445,6 +447,19 @@ class PostRepository @Inject constructor(
      */
     suspend fun like(postId: String): NetworkResult<Unit> =
         apiCall { postApi.like(postId) }
+
+    /**
+     * Réagit à un post avec [emoji] — la palette d'appui long du cœur (iso `addPostReaction`).
+     * **Additif et sans état local** : ni `isLikedByMe` ni `likeCount` ne bougent, il n'y a rien à
+     * réconcilier ni à défaire. Le cœur seul garde le corps vide de [like] (la passerelle l'entend
+     * comme ❤️) ; l'hôte, lui, bascule son état « aimé » par [toggleLike] avant d'appeler ceci.
+     */
+    suspend fun react(postId: String, emoji: String): NetworkResult<Unit> =
+        if (emoji == EmojiCatalog.DOUBLE_TAP_EMOJI) {
+            like(postId)
+        } else {
+            apiCall { postApi.likeWithEmoji(postId, PostLikeRequest(emoji)) }
+        }
 
     /** Non-durable unlike — see [like]'s KDoc. Prefer [toggleLike]. */
     suspend fun unlike(postId: String): NetworkResult<Unit> =
