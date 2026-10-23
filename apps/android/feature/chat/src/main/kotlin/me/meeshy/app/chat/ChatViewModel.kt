@@ -47,7 +47,9 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
 import me.meeshy.sdk.reaction.ReactionRepository
+import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
@@ -95,6 +97,7 @@ class ChatViewModel @Inject constructor(
     private val fileAttachmentDownloader: FileAttachmentDownloader,
     savedStateHandle: SavedStateHandle,
     contributedControllers: Set<@JvmSuppressWildcards ChatController> = emptySet(),
+    recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -160,6 +163,7 @@ class ChatViewModel @Inject constructor(
         workManager = workManager,
         clock = clock,
         pendingTray = { controllers.find<ComposerTrayController>() },
+        recentEmojis = recentEmojiStore,
     )
 
     private val reactions = ChatReactionController(

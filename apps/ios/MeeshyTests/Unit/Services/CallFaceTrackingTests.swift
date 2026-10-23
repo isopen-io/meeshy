@@ -1,6 +1,7 @@
 import CoreImage
 import CoreVideo
 import ImageIO
+import MeeshySDK
 import XCTest
 @testable import Meeshy
 
@@ -75,6 +76,47 @@ final class CallFaceTrackingTests: XCTestCase {
         XCTAssertEqual(bounds.height, 50, accuracy: 0.001)
         XCTAssertEqual(leftEye.x, 84, accuracy: 0.001)
         XCTAssertEqual(leftEye.y, 57.5, accuracy: 0.001)
+    }
+
+    // MARK: - 76 points, orientation, sonde réduite (#11299)
+
+    func test_tracker_detectsOnAReducedProbe() {
+        let detector = CountingFaceDetector(result: Self.face)
+        let tracker = CallFaceTracker(detector: detector, executor: InlineVisionExecutor())
+        let frame = CallSyntheticFrame.make(width: 1280, height: 720)
+        (0..<2).forEach { _ in _ = tracker.landmarks(for: frame, orientation: .up, canvas: CGSize(width: 1280, height: 720), isDegraded: false) }
+        XCTAssertEqual(detector.calls, 1)
+        XCTAssertEqual(detector.lastWidth, Int(CallFaceTracker.probeWidth), "le visage se lit sur une sonde de 320 px, jamais sur l'image entière")
+    }
+
+    func test_tracker_servesTheLensFrame_andItsTriggers() {
+        let bouche = (0..<8).map { index -> CGPoint in
+            let angle = CGFloat(index) / 8 * 2 * .pi
+            return CGPoint(x: 0.5 + cos(angle) * 0.15, y: 0.25 + sin(angle) * 0.1)
+        }
+        let lens = LensFaceFrame(boundingBox: Self.face.boundingBox, points: Array(repeating: .zero, count: 76),
+                                 leftEye: [], rightEye: [], innerLips: bouche, yaw: 0.6, roll: 0, pitch: 0)
+        let detection = CallFaceDetection(boundingBox: Self.face.boundingBox, leftEye: Self.face.leftEye,
+                                          rightEye: Self.face.rightEye, lens: lens)
+        let tracker = CallFaceTracker(detector: CountingFaceDetector(result: detection), executor: InlineVisionExecutor())
+        let frame = CallSyntheticFrame.make(width: 64, height: 48)
+        XCTAssertNil(tracker.lensFrame)
+        (0..<2).forEach { _ in _ = tracker.landmarks(for: frame, orientation: .up, canvas: CGSize(width: 64, height: 48), isDegraded: false) }
+        XCTAssertEqual(tracker.lensFrame, lens)
+        XCTAssertEqual(tracker.triggers, [.mouthOpen, .headTurned])
+        tracker.reset()
+        XCTAssertNil(tracker.lensFrame, "un visage oublié ne déclenche plus rien")
+    }
+
+    func test_detector_asksForThe76PointConstellation() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let code = try String(contentsOf: racine.appendingPathComponent("Meeshy/Features/Main/Services/CallFaceTracker.swift"),
+                              encoding: .utf8)
+        XCTAssertTrue(code.contains("VNDetectFaceLandmarksRequestRevision3"))
+        XCTAssertTrue(code.contains(".constellation76Points"))
+        XCTAssertTrue(code.contains("observation.pitch"), "l'orientation complète : lacet, roulis et tangage")
     }
 
     func test_tracker_resetDuringADetection_dropsTheStaleFace() {
@@ -158,6 +200,7 @@ final class CallFaceTrackingTests: XCTestCase {
 nonisolated final class CountingFaceDetector: CallFaceLandmarkDetecting, @unchecked Sendable {
     private let result: CallFaceDetection?
     private(set) var calls = 0
+    private(set) var lastWidth = 0
 
     init(result: CallFaceDetection?) {
         self.result = result
@@ -165,6 +208,7 @@ nonisolated final class CountingFaceDetector: CallFaceLandmarkDetecting, @unchec
 
     nonisolated func detect(in pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> CallFaceDetection? {
         calls += 1
+        lastWidth = CVPixelBufferGetWidth(pixelBuffer)
         return result
     }
 }

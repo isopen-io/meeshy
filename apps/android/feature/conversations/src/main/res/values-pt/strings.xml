@@ -63,4 +63,5 @@
     <string name="dashboard_action_search">Busca global</string>
     <string name="global_search_empty_subtitle">Mensagens, conversas, usuários</string>
     <string name="global_search_hint">Pesquisar em tudo…</string>
+    <string name="new_conversation_error_blocked">Você não pode iniciar uma conversa com este usuário.</string>
 </resources>

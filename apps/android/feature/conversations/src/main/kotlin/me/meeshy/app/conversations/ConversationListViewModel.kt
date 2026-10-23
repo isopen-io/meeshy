@@ -6,6 +6,7 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +26,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.PreferencesSocketManager
+import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.status.StatusBarCache
@@ -109,7 +111,7 @@ class ConversationListViewModel @Inject constructor(
             repository.conversationsStream(
                 onSyncError = { error ->
                     _state.update {
-                        it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
+                        it.copy(errorMessage = syncErrorFor(error), showSkeleton = false, isSyncing = false)
                     }
                 },
             ).collect { result ->
@@ -121,8 +123,17 @@ class ConversationListViewModel @Inject constructor(
 
         viewModelScope.launch {
             socketManager.connectionState.collect { connection ->
-                _state.update { it.copy(connection = connection) }
+                _state.update {
+                    it.copy(
+                        connection = connection,
+                        connectionSettled = it.connectionSettled || connection == SocketConnectionState.CONNECTED,
+                    )
+                }
             }
+        }
+        viewModelScope.launch {
+            delay(CONNECTION_GRACE_MILLIS)
+            _state.update { it.copy(connectionSettled = true) }
         }
 
         viewModelScope.launch {
@@ -209,11 +220,24 @@ class ConversationListViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(errorMessage = e.message, showSkeleton = false)
+                    it.copy(errorMessage = syncErrorFor(e), showSkeleton = false)
                 }
             } finally {
                 _state.update { it.copy(isUserRefreshing = false, isSyncing = false) }
             }
         }
+    }
+
+    /**
+     * A failed sync only becomes an error STATE when nothing is on screen: over a populated
+     * list it stays silent, so a later filter that empties the list reads « no results »,
+     * never a stale error (parity iOS `emptyBranch`, which never recycles an old error).
+     */
+    private fun syncErrorFor(error: Throwable): String? =
+        if (rawConversations.isEmpty()) error.message.orEmpty() else null
+
+    companion object {
+        /** How long the first socket connection may take before the strip says « offline ». */
+        const val CONNECTION_GRACE_MILLIS: Long = 4_000L
     }
 }

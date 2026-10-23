@@ -53,7 +53,7 @@ class HexColorTest {
         assertThat(HexColor.parse("FFFFFF")!!.readableInk).isEqualTo(InkColor.BLACK)
         assertThat(HexColor.parse("FFD60A")!!.readableInk).isEqualTo(InkColor.BLACK)
         assertThat(HexColor.parse("000000")!!.readableInk).isEqualTo(InkColor.WHITE)
-        assertThat(HexColor.parse("6366F1")!!.readableInk).isEqualTo(InkColor.WHITE)
+        assertThat(HexColor.parse("4F46E5")!!.readableInk).isEqualTo(InkColor.WHITE)
     }
 
     @Test

@@ -21,7 +21,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
-import { createReelMediaUnlocker } from '@/lib/reels/media-unlock';
+import { createReelMediaUnlocker, currentReelUnlockScope } from '@/lib/reels/media-unlock';
 import { reelPrimeSourceOf } from '@/lib/reels/scene';
 import { createPagerSettle } from '@/lib/reels/settle';
 import { useReelPreload } from '@/lib/reels/use-reel-preload';
@@ -340,17 +340,23 @@ export default function ReelsScreen() {
   /* Commenter fait céder le chrome — retour, identité, légende, rail —
      par la loi unique du lecteur (#8601, `lib/view/chrome-yields.ts`). */
   const chromeYielded = chromeYields({ sheetOpen });
-  /* Et le réel lui-même cède (#8643, même loi que la story) : flouté quand on
-     lit le fil, net et réduit au-dessus de la barre quand on écrit. */
+  /* Et le réel lui-même cède (#8643, même loi que la story) : net et réduit
+     au-dessus de la barre quand on écrit. Le FLOU de lecture n'est plus sur le
+     pager (#11307) — un filtre sur la `<video>` en lecture se recalculait à
+     chaque image : le réel visible se met en pause sous son affiche floutée
+     (`ReelVeil`), et seul lui reçoit `sceneYield` (ses voisins mémoïsés ne se
+     re-rendent pas). */
+  const sceneYield = sceneYieldOf({ sheetOpen, writing: comments.writing !== null });
   const scene = yieldingScene({
-    yieldTo: sceneYieldOf({ sheetOpen, writing: comments.writing !== null }),
+    yieldTo: sceneYield,
     scale: comments.writing === null ? 1 : writingSceneScale({ ...comments.writing, anchorTop: 0 }),
     anchorTop: 0,
     reducedMotion: prefersReducedMotion(),
+    blurCarrier: 'poster',
   });
   const countRef = useRef(count);
   countRef.current = count;
-  const [unlocker] = useState(createReelMediaUnlocker);
+  const [unlocker] = useState(() => createReelMediaUnlocker({ scope: currentReelUnlockScope() }));
 
   const close = useCallback(() => {
     if (reelsExitOf(currentHistory()) === 'back') window.history.back();
@@ -492,6 +498,7 @@ export default function ReelsScreen() {
             onSoundBlocked={soundBlocked}
             viewAttribution={viewAttribution}
             chromeHidden={chromeYielded}
+            sceneYield={index === active ? sceneYield : 'full'}
             {...(canWrite ? { onComment: comments.open, onRepost } : { onComment: ask })}
           />
         ))}

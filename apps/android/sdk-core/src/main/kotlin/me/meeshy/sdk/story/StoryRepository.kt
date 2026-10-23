@@ -110,6 +110,13 @@ class StoryRepository @Inject constructor(
         return true
     }
 
+    /**
+     * Les stories déjà en main dans le cache de la barre, sans réseau : le lecteur s'ouvre
+     * sur ce que l'anneau touché montrait, hors ligne compris (iOS
+     * `StoryViewerContainer.ensureGroupAvailable`, cache d'abord).
+     */
+    suspend fun cachedStories(): List<ApiPost> = cacheSource.readLocal()
+
     suspend fun list(cursor: String? = null, limit: Int = 50): NetworkResult<List<ApiPost>> =
         apiCall { storyApi.list(cursor, limit) }
 
@@ -160,8 +167,22 @@ class StoryRepository @Inject constructor(
     suspend fun republish(storyId: String): NetworkResult<ApiPost> =
         apiCall { storyApi.republish(storyId) }
 
-    suspend fun markViewed(storyId: String): NetworkResult<Unit> =
-        apiCall { storyApi.markViewed(storyId) }
+    /**
+     * La vue est appliquée au cache de la barre AVANT l'appel réseau : l'anneau et ses
+     * points se grisent dès le retour à la liste, et l'ordre (non vus d'abord) suit — même
+     * hors ligne, comme iOS qui marque la story vue localement. La vue est monotone : la
+     * revalidation et `story:updated` ne la défont pas ([StoryUpdateMerge]).
+     */
+    suspend fun markViewed(storyId: String): NetworkResult<Unit> {
+        markViewedLocally(storyId)
+        return apiCall { storyApi.markViewed(storyId) }
+    }
+
+    private suspend fun markViewedLocally(storyId: String) {
+        val cached = cacheSource.findLocal(storyId) ?: return
+        if (cached.isViewedByMe == true) return
+        cacheSource.upsertLocal(cached.copy(isViewedByMe = true))
+    }
 
     suspend fun delete(storyId: String): NetworkResult<Unit> =
         apiCall { storyApi.delete(storyId) }

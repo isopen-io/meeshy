@@ -15,6 +15,7 @@ import me.meeshy.sdk.composer.AttachmentIngesting
 import me.meeshy.sdk.composer.AttachmentSourceInfo
 import me.meeshy.sdk.composer.IngestedFile
 import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
 import me.meeshy.sdk.model.composer.PendingAttachmentPhase
 import me.meeshy.sdk.model.composer.PendingAttachmentType
 import org.junit.Test
@@ -33,6 +34,8 @@ class ComposerTrayControllerTest {
         val failing = mutableSetOf<String>()
         val gates = mutableMapOf<String, CompletableDeferred<Unit>>()
         val deleted = mutableListOf<String>()
+        val ingested = mutableListOf<String>()
+        val copiedSizes = mutableMapOf<String, Long>()
 
         override suspend fun describe(uri: Uri): AttachmentSourceInfo =
             infos[uri.toString()] ?: AttachmentSourceInfo(null, "application/octet-stream", 0L)
@@ -40,7 +43,8 @@ class ComposerTrayControllerTest {
         override suspend fun ingest(uri: Uri, id: String, info: AttachmentSourceInfo): IngestedFile? {
             gates[uri.toString()]?.await()
             if (uri.toString() in failing) return null
-            return IngestedFile("/work/${id}_${info.fileName}", info.sizeBytes)
+            ingested += uri.toString()
+            return IngestedFile("/work/${id}_${info.fileName}", copiedSizes[uri.toString()] ?: info.sizeBytes)
         }
 
         override suspend fun ingestBytes(bytes: ByteArray, id: String, fileName: String?, mimeType: String) =
@@ -93,6 +97,81 @@ class ComposerTrayControllerTest {
         assertThat(items.map { it.fileName }).containsExactly("a.jpg", "b.jpg", "c.jpg").inOrder()
         assertThat(items.all { it.phase == PendingAttachmentPhase.Ready }).isTrue()
         assertThat(items.all { it.type == PendingAttachmentType.IMAGE }).isTrue()
+    }
+
+    @Test
+    fun `a source above the upload ceiling is refused before its copy, and says why`() = runTest {
+        val r = rig()
+        r.ingestor.infos["content://long"] = AttachmentSourceInfo("long.mp4", "video/mp4", ComposerAttachmentLimits.MAX_UPLOAD_BYTES + 1)
+
+        r.tray.stageUris(listOf(Uri.parse("content://long")))
+        advanceUntilIdle()
+
+        assertThat(r.tray.state.value.items).isEmpty()
+        assertThat(r.ingestor.ingested).isEmpty()
+        assertThat(r.host.errors.single()).contains("long.mp4")
+    }
+
+    @Test
+    fun `a refused piece is announced on the tray notices, so a full conversation still shows it`() = runTest {
+        val r = rig()
+        r.ingestor.infos["content://long"] = AttachmentSourceInfo("long.mp4", "video/mp4", ComposerAttachmentLimits.MAX_UPLOAD_BYTES + 1)
+
+        r.tray.notices.test {
+            r.tray.stageUris(listOf(Uri.parse("content://long")))
+            assertThat(awaitItem()).contains("long.mp4")
+        }
+    }
+
+    @Test
+    fun `a copy that turns out above the ceiling is dropped with its working file`() = runTest {
+        val r = rig()
+        r.ingestor.infos["content://unsized"] = AttachmentSourceInfo("unsized.mp4", "video/mp4", 0L)
+        r.ingestor.copiedSizes["content://unsized"] = ComposerAttachmentLimits.MAX_UPLOAD_BYTES + 1
+
+        r.tray.stageUris(listOf(Uri.parse("content://unsized")))
+        advanceUntilIdle()
+
+        assertThat(r.tray.state.value.items).isEmpty()
+        assertThat(r.ingestor.deleted).contains("/work/id0_unsized.mp4")
+        assertThat(r.host.errors.single()).contains("unsized.mp4")
+    }
+
+    @Test
+    fun `a recorded file joins the tray by copy, and its source is deleted`() = runTest {
+        val r = rig()
+        val recorded = java.io.File.createTempFile("voice_1", ".m4a").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+
+        r.tray.stageFile(recorded, "audio/mp4")
+        advanceUntilIdle()
+
+        val item = r.tray.state.value.items.single()
+        assertThat(item.type).isEqualTo(PendingAttachmentType.AUDIO)
+        assertThat(item.phase).isEqualTo(PendingAttachmentPhase.Ready)
+        assertThat(r.ingestor.ingested.single()).endsWith(recorded.name)
+        assertThat(r.ingestor.deleted).contains(recorded.path)
+    }
+
+    @Test
+    fun `a recording handed to a tray whose screen is gone is deleted, never orphaned`() = runTest {
+        val r = rig()
+        r.tray.detach()
+        val recorded = java.io.File.createTempFile("voice_2", ".m4a").apply { writeBytes(byteArrayOf(1)) }
+
+        r.tray.stageFile(recorded, "audio/mp4")
+        advanceUntilIdle()
+
+        assertThat(recorded.exists()).isFalse()
+        assertThat(r.tray.state.value.items).isEmpty()
+    }
+
+    @Test
+    fun `waiting on a capture returns once its copy is in the tray`() = runTest {
+        val r = rig()
+
+        r.tray.stageUrisAndWait(listOf(r.source("content://cam", "cam.jpg", "image/jpeg")))
+
+        assertThat(r.tray.state.value.items.single().phase).isEqualTo(PendingAttachmentPhase.Ready)
     }
 
     @Test
@@ -228,6 +307,8 @@ class ComposerTrayControllerTest {
 
         assertThat(r.tray.takeForSend()).isNull()
         assertThat(r.tray.state.value.items).hasSize(1)
+        gate.complete(Unit)
+        advanceUntilIdle()
     }
 
     @Test

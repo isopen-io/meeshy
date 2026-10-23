@@ -55,4 +55,5 @@
     <string name="dashboard_action_search">بحث شامل</string>
     <string name="global_search_empty_subtitle">الرسائل والمحادثات والمستخدمون</string>
     <string name="global_search_hint">ابحث في كل مكان…</string>
+    <string name="new_conversation_error_blocked">لا يمكنك بدء محادثة مع هذا المستخدم.</string>
 </resources>

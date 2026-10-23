@@ -156,4 +156,20 @@ class RealtimeSessionCoordinatorTest {
 
         assertEquals(listOf("attach"), healthy.events)
     }
+
+    @Test
+    fun `a binding attaches after the connection is requested and again after a re-arm`() {
+        val binding = RecordingBinding()
+        val coordinator = coordinator(setOf(binding))
+
+        coordinator.onAuthenticatedChanged(isAuthenticated = true)
+        coordinator.onAuthenticatedChanged(isAuthenticated = false)
+        coordinator.onAuthenticatedChanged(isAuthenticated = true)
+
+        assertEquals(listOf("attach", "detach", "attach"), binding.events)
+        verifyOrder {
+            socketManager.connect()
+            messageSocketManager.attach()
+        }
+    }
 }

@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_composer_edit_title">Editar el mensaje</string>
+    <string name="chat_composer_reply_a11y">Respuesta a %1$s: %2$s</string>
+    <string name="chat_composer_reply_file">Archivo</string>
+    <string name="chat_composer_reply_location">Ubicación</string>
+    <string name="chat_composer_reply_photo">Foto</string>
+    <string name="chat_composer_reply_unknown">un mensaje</string>
+    <string name="chat_composer_reply_video">Vídeo</string>
+    <string name="chat_composer_reply_voice">Mensaje de voz</string>
+    <string name="chat_composer_reply_you">Tú</string>
+    <string name="chat_delete_confirm_cancel">Cancelar</string>
+    <string name="chat_delete_confirm_hint">Eliminar para todos está disponible durante 2 h después del envío.</string>
+    <string name="chat_delete_confirm_title">¿Eliminar este mensaje?</string>
     <string name="composer_a11y_addSelection">Añadir la selección</string>
     <string name="composer_a11y_cancelSelection">Cancelar la selección</string>
     <string name="composer_a11y_openFullLibrary">Abrir toda la fototeca</string>
