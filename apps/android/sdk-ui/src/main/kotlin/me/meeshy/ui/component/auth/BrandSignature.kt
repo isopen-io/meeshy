@@ -13,9 +13,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -37,6 +41,8 @@ private val MARK_SIZE = 28.dp
 private const val VERSION_ALPHA = 0.85f
 private const val CREDIT_ALPHA = 0.7f
 private const val MARK_ALPHA = 0.85f
+private const val MIN_SCALE = 0.7f
+private const val SHRINK_STEP = 0.92f
 
 /**
  * La signature de marque en pied d'écran (iOS `BrandSignature`) — trois lignes empilées : la
@@ -71,20 +77,14 @@ public fun BrandSignature(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Text(
+        ShrinkingLine(
             text = stamp.line,
-            style = MaterialTheme.typography.labelSmall,
             color = tokens.textMuted.copy(alpha = tokens.textMuted.alpha * VERSION_ALPHA),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.semantics { contentDescription = versionDescription },
         )
-        Text(
+        ShrinkingLine(
             text = BrandSignatureCopy.CREDIT,
-            style = MaterialTheme.typography.labelSmall,
             color = tokens.textMuted.copy(alpha = tokens.textMuted.alpha * CREDIT_ALPHA),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .minimumInteractiveComponentSize()
                 .clickable(onClickLabel = openCredit, role = Role.Button) {
@@ -104,6 +104,29 @@ public fun BrandSignature(
             )
         }
     }
+}
+
+/**
+ * Une ligne qui rétrécit jusqu'à 70 % de sa taille avant de tronquer (iOS `minimumScaleFactor(0.7)`).
+ */
+@Composable
+private fun ShrinkingLine(text: String, color: Color, modifier: Modifier = Modifier) {
+    val base = MaterialTheme.typography.labelSmall
+    var scale by remember(text) { mutableFloatStateOf(1f) }
+    Text(
+        text = text,
+        style = base.copy(fontSize = base.fontSize * scale),
+        color = color,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = { layout ->
+            if (layout.hasVisualOverflow && scale > MIN_SCALE) {
+                scale = (scale * SHRINK_STEP).coerceAtLeast(MIN_SCALE)
+            }
+        },
+        modifier = modifier,
+    )
 }
 
 /** Ouvre la plateforme ; sans navigateur pour la servir, le toucher ne fait rien plutôt que de planter. */
