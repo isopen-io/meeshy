@@ -1339,6 +1339,7 @@ model MessageAttachment {
   imageVariants Json?     // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
   avifVariants  Json?     // Variantes AVIF responsive (#11262), MÊME forme, format 'avif' — à CÔTÉ des WebP, jamais dedans (anciens clients)
   renditions    Json?     // Rendus vidéo ADDITIONNELS (#11261) : [{ codec: 'h264', url, width, height, size }] — l'original reste servi à iOS
+  processingState String? // #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias ; absent = prêt (ligne héritée ou traitée pendant la requête)
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)
@@ -4165,6 +4166,9 @@ model PostMedia {
   /// #11261 — rendus vidéo ADDITIONNELS (H.264 de compatibilité d'une vidéo HEVC) :
   /// [{ codec, url, width, height, size }]. OPTIONNEL ; l'original n'est jamais remplacé.
   renditions Json?
+  /// #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias.
+  /// OPTIONNEL : absent = prêt (ligne héritée, ou traitée pendant la requête).
+  processingState String?
 
   // Metadata audio/vidéo
   duration     Int?     // ms

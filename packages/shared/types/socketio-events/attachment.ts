@@ -44,3 +44,25 @@ export interface AttachmentUpdatedEventData {
   readonly messageId: string;
   readonly attachment: unknown;
 }
+
+/**
+ * Où en est le traitement d'un média sorti de la requête HTTP (#11264).
+ * Absent sur une ligne héritée ou traitée pendant la requête : elle est prête.
+ */
+export type MediaProcessingState = 'pending' | 'ready' | 'failed';
+
+/**
+ * Payload de `SERVER_EVENTS.ATTACHMENT_READY` (#11264) : le worker de médias a
+ * fini un rendu différé (vignette, variantes, rendu vidéo). Adressé à la room
+ * personnelle de l'auteur de l'envoi — pièce de message OU média de post.
+ * Les lecteurs d'une conversation reçoivent, eux, le `message:attachment-updated`
+ * qu'ils savent déjà appliquer (un ancien client n'écoute pas celui-ci).
+ */
+export interface AttachmentReadyEventData {
+  readonly attachmentId: string;
+  readonly target: 'messageAttachment' | 'postMedia';
+  readonly messageId: string | null;
+  readonly conversationId: string | null;
+  readonly processingState: MediaProcessingState;
+  readonly attachment: unknown;
+}
