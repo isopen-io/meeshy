@@ -27,6 +27,16 @@ export const E2EE_ENVELOPE_BOUNDS = {
   maxTotalBase64Chars: Math.ceil((512 * 1024) / 3) * 4,
 } as const;
 
+/**
+ * Le nombre d'appareils chiffrés ACTIFS d'un compte (#12543). Sesame exige une
+ * enveloppe par appareil actif : un envoi en tête-à-tête vise les appareils du
+ * destinataire ET les autres appareils de l'émetteur, soit au plus
+ * 2 × borne − 1 enveloppes, qui doivent tenir dans `maxEnvelopes`. Au-delà, le
+ * compte deviendrait injoignable. Les numéros 1…borne sont les seules places :
+ * un appareil retiré rend la sienne.
+ */
+export const E2EE_MAX_ACTIVE_DEVICES = Math.floor((E2EE_ENVELOPE_BOUNDS.maxEnvelopes + 1) / 2);
+
 /** Un lot de pré-clés uniques (§ 3.2) : 100 au plus par publication. */
 export const E2EE_ONE_TIME_PREKEY_BATCH_MAX = 100;
 

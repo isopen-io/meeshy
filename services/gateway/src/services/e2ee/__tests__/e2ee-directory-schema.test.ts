@@ -9,7 +9,7 @@ import { join } from 'path';
 
 const SCHEMA = readFileSync(join(__dirname, '../../../../../../packages/shared/prisma/schema.prisma'), 'utf8');
 
-const DIRECTORY_MODELS = ['E2EEDevice', 'E2EEOneTimePreKey', 'E2EEDeviceCounter', 'MessageEnvelope'] as const;
+const DIRECTORY_MODELS = ['E2EEDevice', 'E2EEOneTimePreKey', 'MessageEnvelope'] as const;
 
 const modelBody = (name: string): string | undefined => {
   const match = new RegExp(`^model ${name} \\{([\\s\\S]*?)^\\}`, 'm').exec(SCHEMA);
@@ -36,7 +36,6 @@ describe("l'annuaire E2EE par appareil (schéma)", () => {
   it('garantit un appareil par (utilisateur, deviceId) et une pré-clé par (appareil, nature, keyId)', () => {
     expect(modelBody('E2EEDevice')).toMatch(/@@unique\(\[userId, deviceId\]\)/);
     expect(modelBody('E2EEOneTimePreKey')).toMatch(/@@unique\(\[userId, deviceId, kind, keyId\]\)/);
-    expect(modelBody('E2EEDeviceCounter')).toMatch(/userId\s+String\s+@unique/);
   });
 
   it('indexe la réservation sur usedAt et la lecture des enveloppes par appareil destinataire', () => {

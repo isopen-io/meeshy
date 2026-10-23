@@ -17,14 +17,14 @@ export const fakeVerifier: SignatureVerifier = {
 
 export const randomKey = (bytes = 33): string => randomBytes(bytes).toString('base64');
 
-export function fakeDeviceKeys(options: { oneTime?: number; kyber?: number; firstKeyId?: number } = {}) {
+export function fakeDeviceKeys(options: { oneTime?: number; kyber?: number; firstKeyId?: number; registrationId?: number } = {}) {
   const identityKey = randomKey();
   const signed = (keyId: number, bytes = 33) => {
     const publicKey = randomKey(bytes);
     return { keyId, publicKey, signature: fakeSign(identityKey, publicKey) };
   };
   const first = options.firstKeyId ?? 1;
-  const registrationId = 1 + Math.floor(Math.random() * 16000);
+  const registrationId = options.registrationId ?? 1 + Math.floor(Math.random() * 16000);
   return {
     identityKey,
     registrationId,

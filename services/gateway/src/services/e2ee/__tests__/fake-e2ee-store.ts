@@ -160,9 +160,9 @@ export function createFakeE2EEStore() {
       signedPreKeyRotatedAt: new Date(),
     })),
     E2EEOneTimePreKey: new FakeCollection([['userId', 'deviceId', 'kind', 'keyId']], () => ({ usedAt: null, usedBy: null, signature: null, createdAt: new Date() })),
-    E2EEDeviceCounter: new FakeCollection([['userId']], () => ({ lastDeviceId: 0 })),
     MessageEnvelope: new FakeCollection([['messageId', 'recipientUserId', 'recipientDeviceId']], () => ({ createdAt: new Date() })),
     Participant: new FakeCollection([], () => ({ isActive: true, type: 'user' })),
+    UserSession: new FakeCollection([], () => ({ isValid: true, invalidatedAt: null, expiresAt: new Date(Date.now() + 86_400_000) })),
   };
 
   const findAndModify = (command: FindAndModify) => {
@@ -194,9 +194,9 @@ export function createFakeE2EEStore() {
   const prisma = {
     e2EEDevice: collections.E2EEDevice.delegate(),
     e2EEOneTimePreKey: collections.E2EEOneTimePreKey.delegate(),
-    e2EEDeviceCounter: collections.E2EEDeviceCounter.delegate(),
     messageEnvelope: collections.MessageEnvelope.delegate(),
     participant: collections.Participant.delegate(),
+    userSession: collections.UserSession.delegate(),
     $runCommandRaw: async (command: unknown) => {
       await tick();
       const typed = command as FindAndModify;

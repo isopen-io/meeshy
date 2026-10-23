@@ -3269,7 +3269,8 @@ model SignalPreKeyBundle {
 
 /// Un appareil enrôlé (iPhone, Mac) : son identité publique, sa pré-clé signée
 /// EC et sa pré-clé Kyber de dernier recours, toutes deux signées XEdDSA par
-/// l'identité. `deviceId` 1…127, attribué par E2EEDeviceCounter, jamais réutilisé.
+/// l'identité. `deviceId` = une place 1…E2EE_MAX_ACTIVE_DEVICES ; un appareil retiré
+/// rend la sienne, jamais à la même registrationId (#12543).
 model E2EEDevice {
   id             String @id @default(auto()) @map("_id") @db.ObjectId
   userId         String @db.ObjectId
@@ -3327,14 +3328,6 @@ model E2EEOneTimePreKey {
 
   @@unique([userId, deviceId, kind, keyId])
   @@index([userId, deviceId, kind, usedAt])
-}
-
-/// Le dernier deviceId attribué à un compte (0 = aucun) : incrémenté
-/// atomiquement (findAndModify + $inc), jamais décrémenté, donc jamais réutilisé.
-model E2EEDeviceCounter {
-  id           String @id @default(auto()) @map("_id") @db.ObjectId
-  userId       String @unique @db.ObjectId
-  lastDeviceId Int    @default(0)
 }
 
 /// Une enveloppe libsignal opaque adressée à UN appareil destinataire. Effacée à

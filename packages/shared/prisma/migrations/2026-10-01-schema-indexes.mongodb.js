@@ -69,7 +69,6 @@ const specs = [
   { collection: 'E2EEDevice', name: 'E2EEDevice_userId_retiredAt_idx', key: { userId: 1, retiredAt: 1 } },
   { collection: 'E2EEOneTimePreKey', name: 'E2EEOneTimePreKey_userId_deviceId_kind_keyId_key', key: { userId: 1, deviceId: 1, kind: 1, keyId: 1 }, unique: true },
   { collection: 'E2EEOneTimePreKey', name: 'E2EEOneTimePreKey_userId_deviceId_kind_usedAt_idx', key: { userId: 1, deviceId: 1, kind: 1, usedAt: 1 } },
-  { collection: 'E2EEDeviceCounter', name: 'E2EEDeviceCounter_userId_key', key: { userId: 1 }, unique: true },
   { collection: 'MessageEnvelope', name: 'MessageEnvelope_messageId_recipientUserId_recipientDeviceId_key', key: { messageId: 1, recipientUserId: 1, recipientDeviceId: 1 }, unique: true },
   { collection: 'MessageEnvelope', name: 'MessageEnvelope_recipientUserId_recipientDeviceId_createdAt_idx', key: { recipientUserId: 1, recipientDeviceId: 1, createdAt: 1 } },
   { collection: 'MessageEnvelope', name: 'MessageEnvelope_createdAt_idx', key: { createdAt: 1 } },

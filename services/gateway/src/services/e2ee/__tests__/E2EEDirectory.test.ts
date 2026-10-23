@@ -1,4 +1,4 @@
-import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_ENVELOPE_BOUNDS, E2EE_ERROR_CODES, E2EE_MAX_ACTIVE_DEVICES, E2EE_SEND_SHAPE } from '@meeshy/shared/types/e2ee-directory';
 import {
   createE2EEDirectory,
   E2EEDirectoryError,
@@ -13,8 +13,14 @@ const BOB = 'b2'.repeat(12);
 const SESSION_1 = 'c3'.repeat(12);
 const SESSION_2 = 'd4'.repeat(12);
 
+const sessionIdOf = (index: number): string => index.toString(16).padStart(24, 'e');
+
+const liveSession = (store: FakeE2EEStore, id: string) =>
+  store.collections.UserSession.insert({ id, isValid: true, expiresAt: new Date(NOW.getTime() + 86_400_000) });
+
 function directoryWith(options: { store?: FakeE2EEStore; verifier?: SignatureVerifier } = {}) {
   const store = options.store ?? createFakeE2EEStore();
+  [SESSION_1, SESSION_2].filter((id) => !store.collections.UserSession.rows.some((row) => row.id === id)).forEach((id) => liveSession(store, id));
   const directory = createE2EEDirectory({
     prisma: store.prisma as never,
     verifier: options.verifier ?? fakeVerifier,
@@ -72,7 +78,6 @@ describe("l'annuaire E2EE par appareil", () => {
       expect(error.code).toBe(E2EE_ERROR_CODES.SIGNATURE_INVALID);
       expect(error.status).toBe(400);
       expect(store.collections.E2EEDevice.rows).toHaveLength(0);
-      expect(store.collections.E2EEDeviceCounter.rows).toHaveLength(0);
     });
 
     it("échoue FERMÉ quand la vérification est impossible (bibliothèque absente)", async () => {
@@ -116,26 +121,94 @@ describe("l'annuaire E2EE par appareil", () => {
       await expect(refusal(directory.enrollDevice({ userId: ALICE, sessionId: SESSION_1, request: stale }))).resolves.toMatchObject({ code: E2EE_ERROR_CODES.BINDING_INVALID });
     });
 
-    it("retire l'appareil précédent de la MÊME session et ne réutilise jamais son numéro", async () => {
+    it("retire l'appareil précédent de la MÊME session et rend son numéro à l'appareil qui le remplace", async () => {
       const { directory, store } = directoryWith();
-      const first = await enroll(directory, ALICE, SESSION_1);
-      const replaced = await enroll(directory, ALICE, SESSION_1);
+      const first = await enroll(directory, ALICE, SESSION_1, fakeDeviceKeys({ oneTime: 10, registrationId: 100 }));
+      const replaced = await enroll(directory, ALICE, SESSION_1, fakeDeviceKeys({ oneTime: 3, registrationId: 200 }));
 
-      expect(replaced.deviceId).toBe(2);
-      const old = store.collections.E2EEDevice.rows.find((row) => row.deviceId === first.deviceId);
-      expect(old?.retiredAt).toBeInstanceOf(Date);
-      expect(store.collections.E2EEOneTimePreKey.rows.filter((row) => row.deviceId === first.deviceId)).toHaveLength(0);
+      expect(replaced.deviceId).toBe(first.deviceId);
+      expect(store.collections.E2EEDevice.rows).toHaveLength(1);
+      expect(store.collections.E2EEDevice.rows[0]).toMatchObject({ registrationId: 200, retiredAt: null, identityKey: replaced.keys.identityKey });
+      expect(store.collections.E2EEOneTimePreKey.rows.map((row) => row.publicKey)).toEqual(replaced.keys.oneTimePreKeys.map((key) => key.publicKey));
     });
 
-    it('refuse un 128e appareil (plage 1…127 de libsignal)', async () => {
-      const store = createFakeE2EEStore();
-      store.collections.E2EEDeviceCounter.insert({ userId: ALICE, lastDeviceId: 127 });
-      const { directory } = directoryWith({ store });
+    it("ne rend jamais un numéro retiré à la MÊME registrationId : l'appareil périmé resterait indécelable (stale du 409)", async () => {
+      const { directory } = directoryWith();
+      await enroll(directory, ALICE, SESSION_1, fakeDeviceKeys({ registrationId: 100 }));
+      const again = await enroll(directory, ALICE, SESSION_1, fakeDeviceKeys({ registrationId: 100 }));
 
-      const error = await refusal(enroll(directory, ALICE, SESSION_1));
+      expect(again.deviceId).toBe(2);
+    });
 
-      expect(error.code).toBe(E2EE_ERROR_CODES.DEVICE_LIMIT_REACHED);
-      expect(store.collections.E2EEDevice.rows).toHaveLength(0);
+    it('réallouer le plus petit numéro libre : 127 enrôlements suivis chacun d’un retrait laissent le 128e réussir', async () => {
+      const { directory } = directoryWith();
+      for (let round = 1; round <= 127; round += 1) {
+        const { deviceId } = await enroll(directory, ALICE, SESSION_1, fakeDeviceKeys({ registrationId: round }));
+        await directory.retireDevice({ userId: ALICE, deviceId });
+      }
+
+      const last = await enroll(directory, ALICE, SESSION_1, fakeDeviceKeys({ registrationId: 128 }));
+
+      expect(last).toMatchObject({ deviceId: 1, created: true });
+    });
+
+    it(`borne les appareils actifs d'un compte à ${E2EE_MAX_ACTIVE_DEVICES} : au-delà, un code lisible et rien d'écrit`, async () => {
+      const { directory, store } = directoryWith();
+      const sessions = Array.from({ length: E2EE_MAX_ACTIVE_DEVICES + 1 }, (_, index) => sessionIdOf(index + 1));
+      sessions.forEach((id) => liveSession(store, id));
+      for (const sessionId of sessions.slice(0, -1)) await enroll(directory, ALICE, sessionId);
+
+      const error = await refusal(enroll(directory, ALICE, sessions[sessions.length - 1]));
+
+      expect(error).toMatchObject({ code: E2EE_ERROR_CODES.DEVICE_LIMIT_REACHED, status: 409 });
+      expect(error.message).toMatch(/retirez/i);
+      expect(store.collections.E2EEDevice.rows).toHaveLength(E2EE_MAX_ACTIVE_DEVICES);
+    });
+
+    it('tient la borne sous la concurrence : des enrôlements simultanés ne dépassent jamais le plafond ni ne partagent un numéro', async () => {
+      const { directory, store } = directoryWith();
+      const sessions = Array.from({ length: E2EE_MAX_ACTIVE_DEVICES * 2 }, (_, index) => sessionIdOf(index + 1));
+      sessions.forEach((id) => liveSession(store, id));
+
+      const outcomes = await Promise.allSettled(sessions.map((sessionId) => enroll(directory, ALICE, sessionId)));
+
+      const enrolled = outcomes.flatMap((outcome) => (outcome.status === 'fulfilled' ? [outcome.value.deviceId] : []));
+      const active = store.collections.E2EEDevice.rows.filter((row) => row.retiredAt === null);
+      expect(active).toHaveLength(E2EE_MAX_ACTIVE_DEVICES);
+      expect(new Set(enrolled).size).toBe(enrolled.length);
+      expect(outcomes.filter((outcome) => outcome.status === 'rejected').map((outcome) => (outcome as PromiseRejectedResult).reason.code))
+        .toEqual(Array(sessions.length - enrolled.length).fill(E2EE_ERROR_CODES.DEVICE_LIMIT_REACHED));
+    });
+
+    it("garde un destinataire joignable : même 33 enrôlements sur 33 sessions ne demandent jamais plus d'enveloppes qu'un envoi n'en porte", async () => {
+      const { directory, store } = directoryWith();
+      const sessions = Array.from({ length: 33 }, (_, index) => sessionIdOf(index + 1));
+      sessions.forEach((id) => liveSession(store, id));
+      await Promise.allSettled(sessions.map((sessionId) => enroll(directory, BOB, sessionId)));
+      const sender = await enroll(directory, ALICE, SESSION_1);
+      await Promise.allSettled(sessions.map((sessionId) => enroll(directory, ALICE, sessionId)));
+
+      const recipients = [...(await directory.listDevices(BOB)).map((device) => ({ ...device, userId: BOB })),
+        ...(await directory.listDevices(ALICE)).filter((device) => device.deviceId !== sender.deviceId).map((device) => ({ ...device, userId: ALICE }))];
+      const envelopes = recipients.map((device) => ({ userId: device.userId, deviceId: device.deviceId, registrationId: device.registrationId, type: 3, body: 'Y2lwaGVy' }));
+
+      expect(envelopes.length).toBeLessThanOrEqual(E2EE_ENVELOPE_BOUNDS.maxEnvelopes);
+      expect(E2EE_SEND_SHAPE.envelopes.safeParse(envelopes).success).toBe(true);
+    });
+
+    it("retire, à l'enrôlement suivant du compte, l'appareil dont la session est close ou expirée, et lui rend sa place", async () => {
+      const { directory, store } = directoryWith();
+      const closed = await enroll(directory, ALICE, SESSION_1);
+      liveSession(store, sessionIdOf(9));
+      const expired = await enroll(directory, ALICE, sessionIdOf(9));
+      Object.assign(store.collections.UserSession.rows.find((row) => row.id === SESSION_1)!, { isValid: false, invalidatedAt: NOW });
+      Object.assign(store.collections.UserSession.rows.find((row) => row.id === sessionIdOf(9))!, { expiresAt: new Date(NOW.getTime() - 1) });
+
+      const next = await enroll(directory, ALICE, SESSION_2);
+
+      expect([closed.deviceId, expired.deviceId]).toEqual([1, 2]);
+      expect(next.deviceId).toBe(1);
+      expect(await directory.listDevices(ALICE)).toEqual([{ deviceId: 1, registrationId: next.keys.registrationId }]);
     });
   });
 
@@ -217,13 +290,15 @@ describe("l'annuaire E2EE par appareil", () => {
     });
 
     it("ne sert ni un appareil retiré, ni un appareil hors de la liste demandée", async () => {
-      const { directory } = directoryWith();
-      await enroll(directory, BOB, SESSION_1);
+      const { directory, store } = directoryWith();
+      liveSession(store, sessionIdOf(3));
       await enroll(directory, BOB, SESSION_1);
       await enroll(directory, BOB, SESSION_2);
+      await enroll(directory, BOB, sessionIdOf(3));
+      await directory.retireDevice({ userId: BOB, deviceId: 1 });
 
       const all = await directory.reserveBundles({ requesterUserId: ALICE, targetUserId: BOB });
-      const only3 = await directory.reserveBundles({ requesterUserId: ALICE, targetUserId: BOB, deviceIds: [3] });
+      const only3 = await directory.reserveBundles({ requesterUserId: ALICE, targetUserId: BOB, deviceIds: [3, 1] });
 
       expect(all.map((bundle) => bundle.deviceId)).toEqual([2, 3]);
       expect(only3.map((bundle) => bundle.deviceId)).toEqual([3]);

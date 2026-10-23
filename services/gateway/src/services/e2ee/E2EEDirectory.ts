@@ -8,24 +8,29 @@
  * `usedAt: null` — jamais une lecture suivie d'une écriture.
  *
  * Un appareil est lié à la session (`UserSession`, claim `sid`) qui l'a enrôlé :
- * seule elle publie ses clés. Son `deviceId` (1…127) vient d'un compteur
- * atomique par compte et n'est jamais réutilisé.
+ * seule elle publie ses clés, et il est retiré quand elle finit
+ * (`device-retirement.ts`). Un compte a au plus `E2EE_MAX_ACTIVE_DEVICES`
+ * appareils actifs, sur les places 1…borne : un nouvel appareil prend la plus
+ * petite place libre, jamais sous la `registrationId` de l'appareil retiré qui
+ * l'occupait — c'est elle qui rend le 409 `stale` à l'émetteur dont la session
+ * libsignal visait l'ancien occupant (#12543).
  */
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   deviceBindingMessage,
   E2EE_DEVICE_BINDING_MAX_SKEW_MS,
-  E2EE_DEVICE_ID_MAX,
   E2EE_ERROR_CODES,
+  E2EE_MAX_ACTIVE_DEVICES,
   E2EE_ONE_TIME_PREKEY_STOCK_MAX,
   type E2EEDeviceBundle,
   type E2EEEnrollDeviceRequest,
   type E2EEErrorCode,
   type E2EEPublishKeysRequest,
 } from '@meeshy/shared/types/e2ee-directory';
+import { retireDeviceRows, retireDevicesOfEndedSessions } from './device-retirement';
 import type { SignatureVerifier } from './signature-verifier';
 
-export type DirectoryPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | '$runCommandRaw'>;
+export type DirectoryPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession' | '$runCommandRaw'>;
 
 export type E2EEDirectoryDeps = {
   readonly prisma: DirectoryPrisma;
@@ -124,6 +129,29 @@ const oneTimeRowsOf = (batches: OneTimeBatches): OneTimeRow[] => [
 
 const rowKey = (key: { kind: string; keyId: number }): string => `${key.kind}:${key.keyId}`;
 
+const deviceLimitReached = () =>
+  new E2EEDirectoryError(
+    E2EE_ERROR_CODES.DEVICE_LIMIT_REACHED,
+    409,
+    `Ce compte a déjà ${E2EE_MAX_ACTIVE_DEVICES} appareils chiffrés actifs : retirez-en un pour chiffrer sur celui-ci`,
+  );
+
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';
+
+type SlotRow = { deviceId: number; registrationId: number; retiredAt: Date | null };
+
+/** La plus petite place libre : ni occupée, ni tenue par un appareil retiré de même `registrationId`. */
+function freeSlot(rows: readonly SlotRow[], registrationId: number): number | null {
+  const active = rows.filter((row) => row.retiredAt === null);
+  if (active.length >= E2EE_MAX_ACTIVE_DEVICES) return null;
+  const blocked = new Set(rows.filter((row) => row.retiredAt === null || row.registrationId === registrationId).map((row) => row.deviceId));
+  const slot = Array.from({ length: E2EE_MAX_ACTIVE_DEVICES }, (_, index) => index + 1).find((candidate) => !blocked.has(candidate));
+  return slot ?? null;
+}
+
+type DeviceFields = Omit<Prisma.E2EEDeviceUncheckedCreateInput, 'userId' | 'deviceId'>;
+
 export class E2EEDirectory {
   private readonly prisma: DirectoryPrisma;
   private readonly verifier: SignatureVerifier;
@@ -153,10 +181,10 @@ export class E2EEDirectory {
       return { deviceId: existing.deviceId, created: false };
     }
 
-    const deviceId = await this.allocateDeviceId(userId);
+    await retireDevicesOfEndedSessions(this.prisma, { userId, now: at });
     await this.retireDevices({ userId, sessionId });
-    await this.prisma.e2EEDevice.create({
-      data: { userId, deviceId, registrationId: request.registrationId, identityKey: request.identityKey, sessionId, ...keyFields, ...profile },
+    const deviceId = await this.claimSlot(userId, {
+      registrationId: request.registrationId, identityKey: request.identityKey, sessionId, ...keyFields, ...profile,
     });
     await this.addOneTimeKeys(userId, deviceId, request);
     return { deviceId, created: true };
@@ -247,29 +275,47 @@ export class E2EEDirectory {
 
   private async retireDevices(where: { userId: string; deviceId?: number; sessionId?: string; id?: { not: string } }): Promise<number[]> {
     const doomed = await this.prisma.e2EEDevice.findMany({ where: { ...where, ...ACTIVE }, select: { deviceId: true } });
-    if (doomed.length === 0) return [];
     const deviceIds = doomed.map((device) => device.deviceId);
-    await this.prisma.e2EEDevice.updateMany({ where: { userId: where.userId, deviceId: { in: deviceIds }, ...ACTIVE }, data: { retiredAt: this.now() } });
-    await this.prisma.e2EEOneTimePreKey.deleteMany({ where: { userId: where.userId, deviceId: { in: deviceIds } } });
-    // Un appareil retiré ne lit plus rien : ses enveloppes en attente n'ont plus de destinataire légitime.
-    await this.prisma.messageEnvelope.deleteMany({ where: { recipientUserId: where.userId, recipientDeviceId: { in: deviceIds } } });
+    await retireDeviceRows(this.prisma, { userId: where.userId, deviceIds, now: this.now() });
     return deviceIds;
   }
 
-  private async allocateDeviceId(userId: string): Promise<number> {
-    const result = (await this.prisma.$runCommandRaw({
-      findAndModify: 'E2EEDeviceCounter',
-      query: { userId: { $oid: userId } },
-      update: { $inc: { lastDeviceId: 1 } },
-      upsert: true,
-      new: true,
-      fields: { lastDeviceId: 1 },
-    } as never)) as { value?: { lastDeviceId?: unknown } | null } | null;
-    const allocated = Number(result?.value?.lastDeviceId);
-    if (!Number.isInteger(allocated) || allocated < 1 || allocated > E2EE_DEVICE_ID_MAX) {
-      throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_LIMIT_REACHED, 409, 'Ce compte a atteint le nombre maximal d’appareils chiffrés');
+  /**
+   * Prend une place pour ce nouvel appareil, sans lecture-puis-écriture fautive :
+   * une place jamais servie se prend par `create` (l'index unique
+   * `(userId, deviceId)` départage deux enrôlements simultanés), une place
+   * retirée par un `updateMany` conditionné à `retiredAt` non nul, atomique sur
+   * son document. Le perdant relit et prend la suivante, ou bute sur la borne.
+   */
+  private async claimSlot(userId: string, fields: DeviceFields): Promise<number> {
+    for (let attempt = 0; attempt <= E2EE_MAX_ACTIVE_DEVICES; attempt += 1) {
+      const rows = await this.prisma.e2EEDevice.findMany({ where: { userId }, select: { deviceId: true, registrationId: true, retiredAt: true } });
+      const slot = freeSlot(rows, fields.registrationId);
+      if (slot === null) throw deviceLimitReached();
+      if (await this.takeSlot(userId, slot, fields, rows)) return slot;
     }
-    return allocated;
+    throw deviceLimitReached();
+  }
+
+  private async takeSlot(userId: string, deviceId: number, fields: DeviceFields, rows: readonly SlotRow[]): Promise<boolean> {
+    if (!rows.some((row) => row.deviceId === deviceId)) {
+      return this.prisma.e2EEDevice.create({ data: { userId, deviceId, ...fields } }).then(
+        () => true,
+        (error: unknown) => {
+          if (isUniqueViolation(error)) return false;
+          throw error;
+        },
+      );
+    }
+    const at = this.now();
+    const { count } = await this.prisma.e2EEDevice.updateMany({
+      where: { userId, deviceId, retiredAt: { not: null }, registrationId: { not: fields.registrationId } },
+      data: { ...fields, pushTokenId: null, createdAt: at, retiredAt: null },
+    });
+    if (count === 0) return false;
+    await this.prisma.e2EEOneTimePreKey.deleteMany({ where: { userId, deviceId } });
+    await this.prisma.messageEnvelope.deleteMany({ where: { recipientUserId: userId, recipientDeviceId: deviceId } });
+    return true;
   }
 
   private async stockOf(userId: string, deviceId: number): Promise<PreKeyStock> {

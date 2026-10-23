@@ -6,9 +6,12 @@ répond toujours 503. Spécification : `docs/superpowers/specs/2026-10-23-e2ee-l
 
 **Décision** :
 - Modèles additifs `E2EEDevice` (un appareil : identité publique, pré-clé signée, pré-clé Kyber de dernier
-  recours, lien push), `E2EEOneTimePreKey` (EC et Kyber, un document par clé), `E2EEDeviceCounter`
-  (`deviceId` 1…127 jamais réutilisé) et `MessageEnvelope` (une enveloppe par appareil destinataire,
+  recours, lien push), `E2EEOneTimePreKey` (EC et Kyber, un document par clé) et `MessageEnvelope` (une enveloppe par appareil destinataire,
   effacée à l'accusé de réception, au plus tard à 30 jours). Aucun champ de clé privée.
+- Au plus 16 appareils actifs par compte (`E2EE_MAX_ACTIVE_DEVICES`, pour qu'un envoi en tête-à-tête tienne
+  dans 32 enveloppes), sur les places `deviceId` 1…16 ; un appareil retiré rend sa place, jamais à la même
+  `registrationId`, et l'appareil d'une session finie est retiré (#12543). Le compteur jamais décrémenté de
+  la première version épuisait la plage en 127 réinstallations.
 - Pré-clé unique réservée par `findOneAndUpdate` sur `usedAt: null` ; signatures XEdDSA vérifiées à la
   publication (`@signalapp/libsignal-client`).
 - Routes neuves sous `/api/v1/e2ee/` ; un envoi `e2ee` porte une enveloppe par appareil actif des
