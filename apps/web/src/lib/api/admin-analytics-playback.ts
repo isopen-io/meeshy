@@ -27,7 +27,15 @@ export type PlaybackCell = {
   readonly timeToFirstFrameMs: QuantilePair | null;
   readonly rebufferMs: QuantilePair | null;
   readonly rebufferedRate: number | null;
-};
+} & PlaybackPageVitals;
+
+/**
+ * W11 (#11317) — les Web Vitals de la page et les longues images d'animation
+ * survenues pendant la séance, en p50/p95. `null` quand aucune séance de la
+ * cellule ne les porte (applications natives, ancien web, passerelle d'avant).
+ */
+export const PLAYBACK_PAGE_VITALS = ['lcpMs', 'cls', 'inpMs', 'longFrames', 'longFramesBlockingMs', 'longFrameWorstMs'] as const;
+export type PlaybackPageVitals = { readonly [K in (typeof PLAYBACK_PAGE_VITALS)[number]]: QuantilePair | null };
 
 export type PlaybackQoe = {
   readonly windowDays: number;
@@ -65,6 +73,7 @@ function decodeCell(raw: unknown): PlaybackCell | null {
     timeToFirstFrameMs: quantiles(record.timeToFirstFrameMs),
     rebufferMs: quantiles(record.rebufferMs),
     rebufferedRate: nonNegative(record.rebufferedRate),
+    ...(Object.fromEntries(PLAYBACK_PAGE_VITALS.map((field) => [field, quantiles(record[field])])) as PlaybackPageVitals),
   };
 }
 

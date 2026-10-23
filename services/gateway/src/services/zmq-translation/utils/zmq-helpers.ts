@@ -125,7 +125,7 @@ export function mimeTypeToAudioFormat(mimeType: string): string {
  * `message_id`). Son unique consommateur est l'écouteur que la requête pose
  * elle-même, apparié par `taskId`.
  */
-export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'direct-text'] as const;
+export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'message-attachment-alt', 'direct-text'] as const;
 
 export type TranslationTargetNamespace = (typeof TRANSLATION_TARGET_NAMESPACES)[number];
 

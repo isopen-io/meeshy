@@ -6,7 +6,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { fetchPiece, savePiece, type NoticeKey } from '@/lib/media/save-piece';
 import { servedMediaFile } from '@/lib/media/served-media';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { openSendSheet } from '@/lib/send/send-sheet-store';
+import { openSendSheet, type SendSheetRequest } from '@/lib/send/send-sheet-store';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
 import { performAttachmentReaction } from '@/lib/view/attachment-reaction';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
@@ -26,22 +26,44 @@ import { ViewerMenu, ViewerReactionTray } from './viewer-chrome-menu';
  * action (`mediaPageOffers`) : une visionneuse ouverte depuis l'écran des
  * médias sur une pièce protégée n'en paie rien.
  *
- * Disposition d'iOS (`ConversationMediaGalleryView+Actions.swift`,
- * `+Menu.swift`) ET du chrome commun des plein écrans (#8879,
- * `viewer-chrome.tsx`) : « Enregistrer » DANS le menu « … » de la barre haute
- * (iOS #6145) ; Réagir · Créer avec ce média en rail vertical à droite de la
- * légende, 40 de verre dans 44 de cible. Partager (#8884) s'y pose entre les
- * deux, au MÊME endroit que dans le rail d'une story : il ouvre la feuille
- * d'envoi commune (`openSendSheet`), que l'hôte a déjà remplie (`page.share`). « Répondre… » n'est plus un bouton du
- * rail : c'est la capsule de la barre basse, que la visionneuse pose. « Réagir »
- * est une ACTION, pas un ornement : il ouvre la traînée d'émojis, un choix la
- * referme.
+ * Disposition demandée par le porteur le 2026-10-23 (#12424, jumelles iOS
+ * #12420 et #12421) : le rail vertical à droite de la légende porte
+ * Répondre · Réagir · Transférer · Enregistrer · Créer avec ce média, 40 de
+ * verre dans 44 de cible (`viewer-chrome.tsx`, #8879). Enregistrer et
+ * Transférer restent AUSSI dans le menu « … » de la barre haute. Transférer
+ * ouvre la feuille d'envoi commune (`openSendSheet`), que l'hôte a déjà
+ * remplie (`page.share`) ; il s'appelle « Partager » quand la pièce n'est pas
+ * celle d'un message (publication, média nu). « Réagir » est une ACTION, pas un
+ * ornement : il ouvre la traînée d'émojis, un choix la referme.
  *
  * Chaque geste dit son issue dans la région vivante UNIQUE de la visionneuse
  * (`announce`) : enregistrer, réagir ou composer peut échouer hors ligne, et un
  * échec muet ressemble à un bouton inerte.
  */
 export type { NoticeKey } from '@/lib/media/save-piece';
+
+/** Une pièce de message se TRANSFÈRE ; une publication ou un média nu se PARTAGE. */
+const sendVerbOf = (language: InterfaceLanguage, share: SendSheetRequest): string =>
+  translate(language, share.intent === 'forward' ? 'message.menu.forward' : 'story.action.share');
+
+/** Enregistrer, une fois à la fois — le rail et le menu partagent le même geste. */
+function useSavePiece(page: MediaViewerPage, announce: (key: NoticeKey) => void): (() => void) | undefined {
+  const saving = useRef(false);
+  if (!page.offers.save) return undefined;
+  return () => {
+    if (saving.current) return;
+    saving.current = true;
+    void savePiece(page.attachment).then((key) => {
+      saving.current = false;
+      announce(key);
+    });
+  };
+}
+
+const sendOf = (page: MediaViewerPage): (() => void) | undefined => {
+  const { share } = page;
+  return page.offers.share && share !== undefined ? () => openSendSheet(share) : undefined;
+};
 
 function SaveMenu({
   page,
@@ -54,15 +76,8 @@ function SaveMenu({
   readonly announce: (key: NoticeKey) => void;
   readonly onOverlayChange?: ((open: boolean) => void) | undefined;
 }) {
-  const saving = useRef(false);
-  const save = (): void => {
-    if (saving.current) return;
-    saving.current = true;
-    void savePiece(page.attachment).then((key) => {
-      saving.current = false;
-      announce(key);
-    });
-  };
+  const save = useSavePiece(page, announce);
+  const send = sendOf(page);
   return (
     <ViewerMenu
       label={translate(language, 'feed.post.more_options')}
@@ -72,7 +87,13 @@ function SaveMenu({
           key: 'save',
           label: translate(language, 'media.viewer.save'),
           glyph: <Glyph name="downloadSimple" size={GLYPH_SIZE.md} />,
-          onSelect: page.offers.save ? save : undefined,
+          onSelect: save,
+        },
+        {
+          key: 'share',
+          label: page.share === undefined ? '' : sendVerbOf(language, page.share),
+          glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.arrowBendUpRight} size={GLYPH_SIZE.md} />,
+          onSelect: send,
         },
       ]}
     />
@@ -157,8 +178,16 @@ function ActionRail({
       });
   };
 
+  const save = useSavePiece(page, announce);
   const { share } = page;
+  const forwards = share?.intent === 'forward';
   const actions: readonly ViewerAction[] = [
+    {
+      action: 'reply',
+      label: translate(language, 'media.viewer.reply'),
+      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.arrowUUpLeft} size={GLYPH_SIZE.lg} />,
+      onPress: offers.reply ? page.onReply : undefined,
+    },
     {
       action: 'react',
       label: translate(language, 'media.viewer.react'),
@@ -169,9 +198,15 @@ function ActionRail({
     },
     {
       action: 'share',
-      label: translate(language, 'story.action.share'),
-      glyph: <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={GLYPH_SIZE.lg} />,
-      onPress: offers.share && share !== undefined ? () => openSendSheet(share) : undefined,
+      label: share === undefined ? '' : sendVerbOf(language, share),
+      glyph: <GlyphSvg glyph={forwards ? THREAD_MENU_GLYPHS.arrowBendUpRight : FEED_GLYPHS.shareNetwork} size={GLYPH_SIZE.lg} />,
+      onPress: sendOf(page),
+    },
+    {
+      action: 'save',
+      label: translate(language, 'media.viewer.save'),
+      glyph: <Glyph name="downloadSimple" size={GLYPH_SIZE.lg} />,
+      onPress: save,
     },
     {
       action: 'compose',

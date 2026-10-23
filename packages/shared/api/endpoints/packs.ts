@@ -105,6 +105,9 @@ export const lensBySlugDocument = (slug: string): string => `/api/v1/packs/lens/
 /** PUT · DELETE /api/v1/packs/lens/:slug/install */
 export const lensBySlugInstall = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}/install`;
 
+/** POST /api/v1/packs/lens/:slug/restore */
+export const lensBySlugRestore = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}/restore`;
+
 /** POST /api/v1/packs/lens/:slug/review */
 export const lensBySlugReview = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}/review`;
 

@@ -1,10 +1,10 @@
 import { DEVICE_TIERS, type DeviceTier } from '@meeshy/shared/types/social-events-v2';
-import type { PlaybackQoeCell, QuantilePair } from '@meeshy/shared/types/playback-qoe';
+import { PLAYBACK_PAGE_VITALS, type PlaybackPageVital, type PlaybackPageVitalsQuantiles, type PlaybackQoeCell, type QuantilePair } from '@meeshy/shared/types/playback-qoe';
 import { CONTENT_EVENT_COLLECTION, type RawCommandPrisma } from './contentEvents';
 
 /**
- * La LECTURE de la qualité de lecture (#11280) : temps-à-première-image et
- * rebuffer de chaque surface, en p50/p95, par tier d'appareil et par jour —
+ * La LECTURE de la qualité de lecture (#11280) : temps-à-première-image,
+ * rebuffer et — pour le web — Web Vitals et longues images (#11317) de chaque surface, en p50/p95, par tier d'appareil et par jour —
  * depuis les sessions `playback` que l'ingestion v2 range dans `ContentEvent`.
  *
  * Pur et total sauf `readPlaybackQoeRows`. Une mesure illisible est écartée
@@ -22,7 +22,7 @@ export type PlaybackQoeRow = {
   readonly rebufferMs?: number;
   readonly playedMs?: number;
   readonly rebufferCount?: number;
-};
+} & { readonly [K in PlaybackPageVital]?: number };
 
 const TIERS: ReadonlySet<string> = new Set(DEVICE_TIERS);
 const UNKNOWN = 'unknown';
@@ -54,8 +54,13 @@ export function coercePlaybackQoeRow(value: unknown): PlaybackQoeRow | null {
     rebufferMs: nonNegative(props.rebufferMs),
     playedMs: nonNegative(props.playedMs),
     rebufferCount: nonNegative(props.rebufferCount),
+    ...vitalsOf(props),
   };
 }
+
+/** W11 (#11317) — les mesures de page du résumé ; une illisible est écartée SEULE. */
+const vitalsOf = (props: Record<string, unknown>): { readonly [K in PlaybackPageVital]?: number } =>
+  Object.fromEntries(PLAYBACK_PAGE_VITALS.map((field) => [field, nonNegative(props[field])]));
 
 const nearestRank = (sorted: readonly number[], p: number): number =>
   sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)];
@@ -95,8 +100,12 @@ const cellOf = (rows: readonly PlaybackQoeRow[]): PlaybackQoeCell => {
     rebufferMs: quantiles(defined(rows.map((row) => row.rebufferMs))),
     rebufferRatio: quantiles(defined(rows.map(ratioOf))),
     rebufferedRate: counted.length > 0 ? counted.filter((row) => (row.rebufferCount ?? 0) > 0).length / counted.length : null,
+    ...vitalQuantilesOf(rows),
   };
 };
+
+const vitalQuantilesOf = (rows: readonly PlaybackQoeRow[]): PlaybackPageVitalsQuantiles =>
+  Object.fromEntries(PLAYBACK_PAGE_VITALS.map((field) => [field, quantiles(defined(rows.map((row) => row[field])))])) as PlaybackPageVitalsQuantiles;
 
 const byCellKey = (a: PlaybackQoeCell, b: PlaybackQoeCell): number =>
   a.day.localeCompare(b.day) || a.surface.localeCompare(b.surface) || a.deviceTier.localeCompare(b.deviceTier);
@@ -144,6 +153,7 @@ export function playbackQoePipeline(params: { readonly sinceDay: number; readonl
         'props.playedMs': 1,
         'props.rebufferCount': 1,
         'props.deviceTier': 1,
+        ...Object.fromEntries(PLAYBACK_PAGE_VITALS.map((field) => [`props.${field}`, 1])),
       },
     },
   ];

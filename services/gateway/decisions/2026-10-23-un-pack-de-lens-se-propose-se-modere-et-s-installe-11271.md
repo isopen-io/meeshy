@@ -44,7 +44,9 @@ MeeshyLens v1 avait son contrat (`lens-format.ts`, #11270) mais aucun circuit : 
   - une table 16 bits sort en 16 bits (`rgb16`), et une table 16 bits sans couleur est refusée ;
   - depuis #12329 (R4), une source hors RVB et gris (CMYK, Lab) est refusée : la convertir changerait chaque valeur.
 - **Le journal nomme le modérateur** (N3) : `adminId` porte l'identifiant de qui a modéré. Ce n'est pas forcément un administrateur : un MODERATOR peut modérer les lens (`canModerateContent`).
-- **Une lens retirée reste désinstallable, jamais réinstallable** (N4). `installable` la rend « non offerte » : `PUT /:slug/install` répond 404, tandis que `DELETE /:slug/install` aboutit pour qui l'avait installée. Son rétablissement est #12321.
+- **Une lens retirée reste désinstallable, jamais réinstallable** (N4). `installable` la rend « non offerte » : `PUT /:slug/install` répond 404, tandis que `DELETE /:slug/install` aboutit pour qui l'avait installée. **Une lens retirée par erreur se rétablit** (#12321) : `POST /:slug/restore`, sous `canModerateContent`, fait `withdrawn → approved`, de façon conditionnelle.
+  - Le geste est journalisé avant d'agir (`LENS_PACK_RESTORE`), puis son issue (`LENS_PACK_RESTORE_APPLIED` avec `installationsReset`, ou `LENS_PACK_RESTORE_NOT_APPLIED`).
+  - **Tranché (#12329 R3) : ses installations retirées ne reviennent pas.** Elles sont remises à zéro avant que la lens redevienne visible, et `installCount` les décompte dans la même écriture. Chacun la réinstalle par son propre geste : une lens que la modération a jugée retirable ne réapparaît pas d'elle-même dans la caméra de qui ne l'a pas redemandée.
 - **Un geste qui n'a pas eu lieu le dit** :
   - une course entre modérateurs (`updateMany` sans ligne) journalise `LENS_PACK_APPROVE_NOT_APPLIED`, `LENS_PACK_REJECT_NOT_APPLIED` ou `LENS_PACK_WITHDRAW_NOT_APPLIED`, avec la raison `concurrent-review` (N5) ;
   - depuis #12329 (R2), une écriture qui LÈVE journalise la même ligne avec la raison `write-failed` avant que l'erreur ne remonte (500) ;

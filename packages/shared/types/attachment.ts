@@ -197,6 +197,10 @@ export interface Attachment {
   // ===== METADATA =====
   readonly title?: string;          // Human-readable title
   readonly alt?: string;            // Accessibility alt text
+  /** Langue source de `alt` (#12333). */
+  readonly altLanguage?: string;
+  /** Traductions de `alt` (`{ [lang]: { text } }`, #12333) — à résoudre par `resolveMediaDescription`. */
+  readonly altTranslations?: unknown;
   readonly caption?: string;        // Display caption
 
   // ===== IMAGE METADATA =====

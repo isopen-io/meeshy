@@ -66,7 +66,22 @@ export const messageAttachmentSchema = {
 
     // User-provided metadata
     title: { type: 'string', nullable: true, description: 'Human-readable title' },
-    alt: { type: 'string', nullable: true, description: 'Accessibility alt text' },
+    alt: { type: 'string', nullable: true, description: 'Accessibility alt text — null when the piece or its message is protected (#12333)' },
+    altLanguage: { type: 'string', nullable: true, description: 'Source language of `alt` (#12333)' },
+    altTranslations: {
+      type: 'object',
+      nullable: true,
+      description: 'Translations of `alt`, keyed by language (#12333) — resolve with the Prisme (`resolveMediaDescription`)',
+      additionalProperties: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          translationModel: { type: 'string' },
+          confidenceScore: { type: 'number' },
+          createdAt: { type: 'string' },
+        },
+      },
+    },
     caption: { type: 'string', nullable: true, description: 'Caption/legend' },
 
     // Forwarding
