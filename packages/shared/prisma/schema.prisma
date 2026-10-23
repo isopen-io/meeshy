@@ -1353,6 +1353,7 @@ model MessageAttachment {
   sampleRate Int? // Fréquence d'échantillonnage en Hz (ex: 44100, 48000)
   codec      String? // Codec audio (ex: "opus", "aac", "vorbis", "mp3")
   channels   Int? // Nombre de canaux audio (1: mono, 2: stereo)
+  loudnessLufs Float? // Sonie intégrée EBU R128 du fichier STOCKÉ (LUFS), mesurée à l'ingestion (#11259) — null si non mesurée
 
   // Métadonnées spécifiques vidéo
   fps        Float? // Frames per second pour vidéos
@@ -1504,6 +1505,7 @@ model MessageAttachment {
   // index, ce comptage balaie la collection entière à chaque suppression.
   @@index([filePath])
   @@index([thumbnailPath])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 // =====================================================
@@ -4286,6 +4288,7 @@ model PostMedia {
   /// Sert le rattrapage et la garde de revendication (filtre sur uploadeur
   /// parmi les médias en attente).
   @@index([uploaderId, postId])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)

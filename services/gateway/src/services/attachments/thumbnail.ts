@@ -16,6 +16,7 @@
 import sharp from 'sharp';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { encodeHdrAvif, hasGainMap, type HdrAvifEncoder } from './hdr-avif';
 
 export const THUMBNAIL_MAX_SIZE = 300;
 export const THUMBNAIL_WEBP_QUALITY = 80;
@@ -43,7 +44,8 @@ export type ImageVariant = {
  * q60 / effort 4 is a perceptual quality comparable to WebP q78 at a smaller
  * weight (verdict #11247: one perceptual generation, colour profile kept):
  * the source ICC profile (Display P3 on every recent phone) is KEPT, where the
- * WebP variants convert to sRGB.
+ * WebP variants convert to sRGB. A source carrying an HDR gain map gets
+ * HDR AVIF variants (10-bit BT.2100 PQ, `hdr-avif.ts`, #12290) — or none.
  */
 export const AVIF_VARIANT_QUALITY = 60;
 export const AVIF_VARIANT_EFFORT = 4;
@@ -113,16 +115,26 @@ export async function createResponsiveVariants(
  */
 export async function createAvifVariants(
   input: Buffer | string,
-  opts: { widths?: readonly number[]; quality?: number } = {}
+  opts: { widths?: readonly number[]; quality?: number; encodeHdr?: HdrAvifEncoder } = {}
 ): Promise<AvifImageVariant[]> {
   const widths = opts.widths ?? RESPONSIVE_VARIANT_WIDTHS;
   const quality = opts.quality ?? AVIF_VARIANT_QUALITY;
   const source = typeof input === 'string' ? await fs.readFile(input) : input;
   const srcWidth = (await sharp(source).metadata()).width ?? 0;
   const targets = [...new Set(widths)].filter((w) => w > 0 && w < srcWidth).sort((a, b) => a - b);
+  const hdr = await hasGainMap(source);
+  const encodeHdr = opts.encodeHdr ?? encodeHdrAvif;
 
   const variants: AvifImageVariant[] = [];
   for (const width of targets) {
+    if (hdr) {
+      // #12290 — une source HDR rend un AVIF HDR, ou AUCUN AVIF : jamais un SDR.
+      const encoded = await encodeHdr(source, width);
+      if (encoded === null) return [];
+      const meta = await sharp(encoded).metadata();
+      variants.push({ width: meta.width ?? width, height: meta.height ?? 0, format: 'avif', buffer: encoded });
+      continue;
+    }
     const { data, info } = await sharp(source)
       .resize(width, null, { fit: 'inside', withoutEnlargement: true })
       .keepIccProfile()

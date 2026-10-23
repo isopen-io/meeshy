@@ -30,7 +30,6 @@
     <string name="conversations_delete_for_all_confirm_message">« %1$s » sera fermée pour tous les participants. Plus personne ne pourra y écrire.</string>
     <string name="new_conversation_search_hint">Rechercher des personnes</string>
     <string name="share_link_field_slug">Slug URL personnalisé (optionnel)</string>
-    <string name="share_link_access_birthday">Date de naissance requise</string>
     <string name="share_link_field_max_uses">Utilisations maximum</string>
     <string name="share_link_created_title">Lien créé</string>
     <string name="share_link_created_subtitle">Partagez-le pour inviter des personnes dans la conversation.</string>

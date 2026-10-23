@@ -63,15 +63,18 @@ class StoriesViewModel @Inject constructor(
                     },
                 ),
                 storyRepository.publishQueue(),
-            ) { result, queue -> result to queue }
+                // La session peut se résoudre APRÈS la première émission du cache (démarrage
+                // à froid) : la barre se recompose alors, sinon mes stories restent rangées
+                // comme celles d'un autre auteur jusqu'à la prochaine émission.
+                sessionRepository.currentUser,
+            ) { result, queue, user -> Triple(result, queue, user) }
                 .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false) } }
-                .collectEachSafely { (result, queue) ->
+                .collectEachSafely { (result, queue, user) ->
                     val pending = queue.pending
                     val failed = queue.failed
                     reconcileDeliveredPublishes(pending, failed)
                     rawStories = StoryTrayReducer.stories(result, rawStories)
                     val flags = StoryTrayReducer.flags(result, rawStories.isNotEmpty())
-                    val user = sessionRepository.currentUser.value
                     val currentUserId = user?.id
                     val self = user?.let {
                         StoryOptimisticTray.SelfIdentity(it.id, it.effectiveDisplayName, it.avatar)

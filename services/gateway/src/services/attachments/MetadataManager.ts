@@ -101,7 +101,8 @@ export class MetadataManager {
    * image E2EE révélerait son contenu en clair).
    */
   async generateImageVariants(
-    imagePath: string
+    imagePath: string,
+    options: { readonly strict?: boolean } = {}
   ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
     try {
       const fullPath = path.join(this.uploadBasePath, imagePath);
@@ -121,6 +122,8 @@ export class MetadataManager {
       return written;
     } catch (error) {
       logger.error('[MetadataManager] Erreur génération variantes responsive', error);
+      // Le worker (#11264) veut l'échec : sa file reprend, puis passe la pièce à `failed`.
+      if (options.strict) throw error;
       return [];
     }
   }
@@ -130,7 +133,8 @@ export class MetadataManager {
    * `<base>_<largeur>w.avif`.
    */
   async generateAvifVariants(
-    imagePath: string
+    imagePath: string,
+    options: { readonly strict?: boolean } = {}
   ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
     try {
       const fullPath = path.join(this.uploadBasePath, imagePath);
@@ -144,6 +148,8 @@ export class MetadataManager {
       return written;
     } catch (error) {
       logger.error('[MetadataManager] Erreur génération variantes AVIF', error);
+      // Le worker (#11264) veut l'échec : sa file reprend, puis passe la pièce à `failed`.
+      if (options.strict) throw error;
       return [];
     }
   }

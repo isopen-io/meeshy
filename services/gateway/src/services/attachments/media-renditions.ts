@@ -46,10 +46,12 @@ export const MAX_THUMBHASH_LENGTH = 100;
 export interface RenditionMetadataPort {
   generateThumbnail(imagePath: string): Promise<string | null>;
   generateImageVariants(
-    imagePath: string
+    imagePath: string,
+    options?: { readonly strict?: boolean }
   ): Promise<ReadonlyArray<{ path: string; width: number; height: number; size: number }>>;
   generateAvifVariants(
-    imagePath: string
+    imagePath: string,
+    options?: { readonly strict?: boolean }
   ): Promise<ReadonlyArray<{ path: string; width: number; height: number; size: number }>>;
   generateVideoThumbnail(videoPath: string): Promise<string | null>;
   extractMetadata(
@@ -202,8 +204,8 @@ async function visualRenditions(
 ): Promise<{ thumbnailPath: string | null; imageVariants?: readonly ImageVariant[]; avifVariants?: readonly ImageVariant[] }> {
   if (source.attachmentType === 'image') {
     const thumbnailPath = await attempt('thumbnail', () => metadataManager.generateThumbnail(source.relPath), null, strict);
-    const variants = await attempt('image variants', () => metadataManager.generateImageVariants(source.relPath), [], strict);
-    const avif = await attempt('avif variants', () => metadataManager.generateAvifVariants(source.relPath), [], strict);
+    const variants = await attempt('image variants', () => metadataManager.generateImageVariants(source.relPath, { strict }), [], strict);
+    const avif = await attempt('avif variants', () => metadataManager.generateAvifVariants(source.relPath, { strict }), [], strict);
     return {
       thumbnailPath,
       ...(variants.length > 0 ? { imageVariants: variants.map((v) => toImageVariant(v, 'webp')) } : {}),

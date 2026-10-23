@@ -91,9 +91,9 @@ class SignupFormTest {
     }
 
     @Test
-    fun phoneNeverBlocksSubmission() {
+    fun anAbsentPhoneNeverBlocksSubmission() {
         assertThat(valid().copy(phoneDigits = "").canSubmit).isTrue()
-        assertThat(valid().copy(phoneDigits = "12").canSubmit).isTrue()
+        assertThat(valid().copy(phoneDigits = "0612345678").canSubmit).isTrue()
         assertThat(valid().validate().issueFor(SignupField.PHONE)).isNull()
     }
 
@@ -316,6 +316,36 @@ class SignupFormTest {
     fun hasPhone_ignoresFormattingThatCarriesNoDigit() {
         assertThat(SignupForm(phoneDigits = " () - ").hasPhone).isFalse()
         assertThat(SignupForm(phoneDigits = "0").hasPhone).isTrue()
+    }
+
+    @Test
+    fun `un telephone vide n'est jamais refuse`() {
+        val form = valid().copy(phoneDigits = "")
+        assertThat(form.validate().issueFor(SignupField.PHONE)).isNull()
+        assertThat(form.canSubmit).isTrue()
+    }
+
+    @Test
+    fun `un telephone saisi trop court bloque l'envoi avec son motif`() {
+        val form = valid().copy(phoneDigits = "12345678")
+        assertThat(form.visibleValidation().issueFor(SignupField.PHONE)).isEqualTo(SignupFieldIssue.PHONE_TOO_SHORT)
+        assertThat(form.canSubmit).isFalse()
+    }
+
+    @Test
+    fun `un telephone de remplissage bloque l'envoi avec le motif implausible`() {
+        listOf("1111100000", "4242424242", "123123123").forEach { digits ->
+            val form = valid().copy(phoneDigits = digits)
+            assertThat(form.validate().issueFor(SignupField.PHONE)).isEqualTo(SignupFieldIssue.PHONE_IMPLAUSIBLE)
+            assertThat(form.canSubmit).isFalse()
+        }
+    }
+
+    @Test
+    fun `un telephone ordinaire reste accepte`() {
+        listOf("0642424242", "06 44 44 12 30").forEach { digits ->
+            assertThat(valid().copy(phoneDigits = digits).canSubmit).isTrue()
+        }
     }
 }
 

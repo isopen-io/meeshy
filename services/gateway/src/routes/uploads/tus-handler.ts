@@ -19,7 +19,8 @@ import { runFfmpeg } from '../../services/attachments/ffmpeg-run';
 import { UnconvertibleImageError } from '../../services/attachments/heif-conversion';
 import type { MediaJobTarget } from '../../services/attachments/media-processing/jobs';
 import { mediaJobQueueFromEnv, type MediaJobQueue } from '../../services/attachments/media-processing/queue';
-import { deferrableKinds, scheduleOrRender, type DispatchOutcome } from '../../services/attachments/media-processing/dispatch';
+import { deferrableKinds, scheduleDeferred as scheduleMediaJob } from '../../services/attachments/media-processing/dispatch';
+import { normalizeStoredAudio } from '../../services/attachments/audio-normalization';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
 import {
   resolveAnonymousUploadIdentity,
@@ -525,8 +526,6 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // un même fichier laisse la même trace par les deux portes. Appelée
       // APRÈS les gardes de chaque branche, jamais avant : un upload refusé ne
       // laisse derrière lui ni variante ni sortie de transcodage.
-      // #11263 — un HEIC/AVIF illisible par le serveur est REFUSÉ (415),
-      // jamais servi tel quel aux lecteurs ; la copie posée est retirée.
       // #11264 — ce qui est différé au worker de médias (file allumée seulement).
       // Différé seulement quand un worker bat ; file muette ⇒ rendu ici.
       const deferred = await deferrableKinds(mediaQueue, {
@@ -535,18 +534,31 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
       });
       const processingFields = deferred.length > 0 ? { processingState: 'pending' } : {};
-      const scheduleDeferred = (target: MediaJobTarget, id: string): Promise<DispatchOutcome> =>
-        scheduleOrRender({
-          queue: mediaQueue,
-          deps: { prisma: prisma as never, uploadBasePath: UPLOAD_PATH, metadataManager, runFfmpeg },
-          target,
-          recordId: id,
-          kinds: deferred,
-        });
-      const renderMedia = () =>
-        produceMediaRenditions(
+      // File muette : la pièce reste `pending`, le balayage du worker la reprend.
+      const scheduleDeferred = (target: MediaJobTarget, id: string) =>
+        scheduleMediaJob({ queue: mediaQueue, target, recordId: id, kinds: deferred });
+      //
+      // #11259 — un audio est normalisé en M4A ICI, après les gardes, comme
+      // sur la porte multipart (`UploadProcessor.saveFile`) : AAC mono remuxé
+      // sans réencodage, le reste amené à −16 LUFS ; sa sonie mesurée est
+      // persistée. Le fichier normalisé remplace l'original (chemin, type,
+      // taille et métadonnées relus) ; un échec garde l'original.
+      const renderMedia = async (): Promise<{ readonly rendered: MediaRenditions; readonly loudnessLufs: number | null }> => {
+        const audio = attachmentType === 'audio' ? await normalizeStoredAudio(destPath) : null;
+        const stored = audio === null
+          ? { relPath, mimeType, fileSize, metadata }
+          : await (async () => {
+            const audioRelPath = path.join(year, month, userId, path.basename(audio.filePath));
+            const audioMetadata = await metadataManager
+              .extractMetadata(audioRelPath, attachmentType, audio.mimeType, clientMeasuredMetadata(upload.metadata?.duration), audio.size)
+              .catch(() => metadata);
+            return { relPath: audioRelPath, mimeType: audio.mimeType, fileSize: audio.size, metadata: audioMetadata };
+          })();
+        // #11263 — un HEIC/AVIF illisible par le serveur est REFUSÉ (415),
+        // jamais servi tel quel aux lecteurs ; la copie posée est retirée.
+        const renditions = await produceMediaRenditions(
           { uploadBasePath: UPLOAD_PATH, metadataManager, runFfmpeg },
-          { relPath, mimeType, attachmentType, fileSize, metadata, clientThumbHash: upload.metadata?.thumbhash ?? null },
+          { ...stored, attachmentType, clientThumbHash: upload.metadata?.thumbhash ?? null },
           { defer: deferred },
         ).catch(async (error: unknown) => {
           if (!(error instanceof UnconvertibleImageError)) throw error;
@@ -554,6 +566,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           logger.warn(`[TUS] Upload REFUSED — ${error.message} (userId=${userId})`);
           throw { status_code: 415, body: 'Image format not supported by the server\n' };
         });
+        return { rendered: renditions, loudnessLufs: audio?.loudnessLufs ?? null };
+      };
+      let loudnessLufs: number | null = null;
 
       // #11329 — la description saisie à l'envoi (métadonnée TUS `alt`).
       const description = mediaDescriptionFields(upload.metadata?.alt);
@@ -564,8 +579,6 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       const isPostMedia = isPostMediaUploadContext(uploadContext);
 
       let recordId: string;
-      let dispatched: DispatchOutcome = 'none';
-      let servedThumbnail: string | null = null;
       let rendered: MediaRenditions;
       if (isPostMedia) {
         // Upload destiné à un post/story/status : créer PostMedia directement (postId=null = pending)
@@ -586,7 +599,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             body: 'Post media upload requires an identifiable registered account\n',
           };
         }
-        rendered = await renderMedia();
+        ({ rendered } = await renderMedia());
         metadata = rendered.metadata;
         const postMedia = await prisma.postMedia.create({
           data: {
@@ -605,10 +618,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         });
         recordId = postMedia.id;
         if ('alt' in description) triggerMediaAltTranslations([{ id: postMedia.id, text: description.alt }]);
-        dispatched = await scheduleDeferred('postMedia', postMedia.id);
-        if (dispatched === 'rendered') {
-          servedThumbnail = (await prisma.postMedia.findUnique({ where: { id: postMedia.id }, select: { thumbnailUrl: true } }))?.thumbnailUrl ?? null;
-        }
+        await scheduleDeferred('postMedia', postMedia.id);
         logger.info(`[TUS] PostMedia created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes, postId=null pending)`);
       } else {
         // Upload destiné à un message : créer MessageAttachment
@@ -655,7 +665,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           }
         }
 
-        rendered = await renderMedia();
+        ({ rendered, loudnessLufs } = await renderMedia());
         metadata = rendered.metadata;
 
         // Lue ici, sur la branche MESSAGE et pour un AUDIO seulement :
@@ -677,6 +687,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             sampleRate: metadata.sampleRate || null,
             codec: metadata.codec || null,
             channels: metadata.channels || null,
+            loudnessLufs,
             fps: metadata.fps || null,
             videoCodec: metadata.videoCodec || null,
             pageCount: metadata.pageCount || null,
@@ -701,10 +712,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = attachment.id;
-        dispatched = await scheduleDeferred('messageAttachment', attachment.id);
-        if (dispatched === 'rendered') {
-          servedThumbnail = (await prisma.messageAttachment.findUnique({ where: { id: attachment.id }, select: { thumbnailUrl: true } }))?.thumbnailUrl ?? null;
-        }
+        await scheduleDeferred('messageAttachment', attachment.id);
         logger.info(`[TUS] MessageAttachment created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes)`);
       }
 
@@ -721,9 +729,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
               mimeType: rendered.storedMimeType,
               fileSize: rendered.storedSize,
               fileUrl: rendered.storedPath,
-              thumbnailUrl: rendered.thumbnailPath ?? servedThumbnail ?? undefined,
+              thumbnailUrl: rendered.thumbnailPath ?? undefined,
               // #11264 — `pending` : la vignette et les rendus arrivent par `attachment:ready`.
-              processingState: dispatched === 'scheduled' ? 'pending' : dispatched === 'failed' ? 'failed' : undefined,
+              processingState: deferred.length > 0 ? 'pending' : undefined,
               thumbHash: rendered.thumbHash,
               width: metadata.width,
               height: metadata.height,
@@ -732,6 +740,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
               sampleRate: metadata.sampleRate,
               codec: metadata.codec,
               channels: metadata.channels,
+              loudnessLufs: loudnessLufs ?? undefined,
               // `UploadedAttachmentResponse` déclare ces trois champs REQUIS,
               // et ce corps ne les portait pas : le chemin résumable ne
               // servait que les fichiers > 50 Mo, jusqu'à ce que le transport

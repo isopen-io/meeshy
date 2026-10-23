@@ -563,3 +563,13 @@ l'utilisateur ne compare pas).
 `LanguageQuickStrip` et `StoryActionRail` s'assouplissent (raideur 200 → 158). `EmojiDetector.fontSizeSp` (90 / 60 /
 45) et `MessageBubble` écrivent encore l'emoji en `sp` mis à l'échelle : le branchement de `emojiTextStyle` relève du
 lot qui découpe la bulle (fichier chaud).
+
+## ADR-026 — Épinglage SPKI de la passerelle (production et staging)
+
+**Décision.** Le client OkHttp PARTAGÉ (REST, Socket.IO polling et WebSocket) porte un intercepteur réseau `CertificatePinInterceptor`, contribué par `CertificatePinnerContributor` (`@IntoSet HttpClientContributor`). Pour `gate.meeshy.me` et `gate.staging.meeshy.me`, un certificat de la chaîne doit porter une empreinte SHA-256 de SPKI (RSA 2048/4096, EC P-256/P-384) du pin-set (`GatewayPins` : clé courante + clé de secours), sinon `SSLPeerUnverifiedException` avant tout envoi de requête (donc de jeton). Miroir d'iOS (`CertificatePinning.swift`), dont le verdict (`CertificatePinDecision`) est repris dans `:core:model`. Le journal ne contient que l'hôte et le nombre d'empreintes, jamais la chaîne.
+
+**Mode non configuré.** localhost, 10.0.2.2 et tout environnement personnalisé ne sont pas épinglés ; un pin-set vide laisse aussi l'hôte non configuré (validation système seule) — état de livraison tant que les empreintes de production ne sont pas renseignées (elles ne se mesurent pas depuis le conteneur de développement). `network_security_config.xml` refuse le clair en release ; la variante debug n'ouvre que localhost et 10.0.2.2.
+
+**Expiration.** `GatewayPins.EXPIRES_AT_EPOCH_MILLIS` : passé ce jour, le pin-set est ignoré, la validation système reste, un avertissement est journalisé une fois par processus. Pas de brique silencieuse : l'application ne cesse pas de fonctionner parce qu'une rotation a été oubliée, mais l'oubli est visible.
+
+**Procédure de rotation.** (1) Générer la future clé hors ligne ; calculer `openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64`. (2) Publier une version qui l'ajoute à `BACKUP` (ancienne `CURRENT` conservée) et repousser la date d'expiration. (3) Attendre l'adoption de cette version (version minimale). (4) Faire émettre le certificat sur la nouvelle clé. (5) Version suivante : la nouvelle clé en `CURRENT`, nouvelle clé de secours en `BACKUP`. Jamais de bascule sèche (rétrocompatibilité de la production).

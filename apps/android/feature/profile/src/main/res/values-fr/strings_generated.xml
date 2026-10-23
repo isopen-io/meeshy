@@ -58,4 +58,7 @@
     <string name="report_reason_spam">Spam</string>
     <string name="report_submit">Envoyer le signalement</string>
     <string name="report_title_generic">Signaler</string>
+    <string name="report_user_details_a11y">Détails du signalement</string>
+    <string name="report_user_submit_hint">Envoyer le signalement pour</string>
+    <string name="report_user_success">Signalement envoyé</string>
 </resources>

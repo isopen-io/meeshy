@@ -1511,6 +1511,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/analytics/playback",
+      "module": "analyticsRoutes",
+      "mountPrefix": "/api/v1/admin/analytics",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/analytics/realtime",
       "module": "analyticsRoutes",
       "mountPrefix": "/api/v1/admin/analytics",

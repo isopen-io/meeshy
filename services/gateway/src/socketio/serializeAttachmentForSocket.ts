@@ -85,6 +85,7 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
   readonly sampleRate?: number | null;
   readonly codec?: string | null;
   readonly channels?: number | null;
+  readonly loudnessLufs?: number | null;
   readonly fps?: number | null;
   readonly videoCodec?: string | null;
   readonly pageCount?: number | null;
@@ -197,6 +198,7 @@ export function serializeAttachmentForSocket(
     sampleRate: (raw.sampleRate as number | null | undefined) ?? null,
     codec: (raw.codec as string | null | undefined) ?? null,
     channels: (raw.channels as number | null | undefined) ?? null,
+    loudnessLufs: (raw.loudnessLufs as number | null | undefined) ?? null,
     fps: (raw.fps as number | null | undefined) ?? null,
     videoCodec: (raw.videoCodec as string | null | undefined) ?? null,
     pageCount: (raw.pageCount as number | null | undefined) ?? null,

@@ -7,7 +7,6 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import os from 'os';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
@@ -26,10 +25,10 @@ import { MetadataManager } from './MetadataManager';
 import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson, renditionsJson } from './media-renditions.js';
 import { UnconvertibleImageError, convertHeifBuffer, isServerConvertedImage } from './heif-conversion.js';
 import { mediaJobQueueFromEnv, type MediaJobQueue } from './media-processing/queue.js';
-import { deferrableKinds, scheduleOrRender } from './media-processing/dispatch.js';
+import { deferrableKinds, scheduleDeferred } from './media-processing/dispatch.js';
 import { isMediaMetadataStrippable, stripMediaMetadataBuffer } from './media-metadata-strip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
-import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
+import { NORMALIZED_AUDIO, normalizeAudioBuffer, normalizedAudioPath } from './audio-normalization.js';
 import { audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from './uploadMimeType.js';
 import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
 import { runFfmpeg } from './ffmpeg-run.js';
@@ -48,6 +47,9 @@ export interface FileToUpload {
  * jamais de serveur, et un appelant HTTP en a besoin pour choisir le bon
  * statut plutôt que de laisser une exception nue dégénérer en 500 générique.
  */
+/** Ce que `saveFile` a écrit : un audio peut changer de chemin, de type, et porter sa sonie mesurée (#11259). */
+export type SavedFile = { size: number; relativePath: string; mimeType?: string; loudnessLufs?: number | null };
+
 export type AttachmentValidationVerdict =
   | { valid: true; error?: undefined; code?: undefined }
   | { valid: false; error: string; code: 'FILE_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE' };
@@ -70,6 +72,7 @@ export interface UploadResult {
   channels?: number;
   /** #11264 — `pending` quand des rendus sont confiés au worker de médias. */
   processingState?: string;
+  loudnessLufs?: number;
   metadata?: any;
   fps?: number;
   videoCodec?: string;
@@ -239,43 +242,6 @@ export class UploadProcessor {
   }
 
   /**
-   * Normalise un audio en AAC/M4A (+9 dB pour la transcription et la
-   * diarization). Le conteneur de SORTIE est toujours M4A, quelle que soit la
-   * source (#8039) : l'AAC ne tient ni dans un WebM, ni dans un Ogg, ni dans
-   * un MP3 — ffmpeg refusait ces combinaisons, et le WebM/Opus de Chrome
-   * partait tel quel vers iOS, qui ne le lit pas. `null` = échec : l'appelant
-   * garde l'original, une normalisation ratée ne fait pas échouer l'upload.
-   */
-  private async normalizeAudio(buffer: Buffer, sourceFilename: string): Promise<Buffer | null> {
-    const tempInputPath = path.join(os.tmpdir(), `audio_input_${uuidv4()}${path.extname(sourceFilename) || '.bin'}`);
-    const tempOutputPath = path.join(os.tmpdir(), `audio_output_${uuidv4()}${NORMALIZED_AUDIO.extension}`);
-    try {
-      await fs.writeFile(tempInputPath, buffer);
-      // Bitrate aligné sur la source iOS (64 kbps mono AAC) — ré-encoder à
-      // 128 kbps doublait la taille sans bénéfice perceptif sur de la voix.
-      await runFfmpeg([
-        '-i', tempInputPath,
-        '-af', 'volume=9dB',
-        '-c:a', 'aac',
-        '-b:a', '64k',
-        '-ac', '1',
-        '-f', NORMALIZED_AUDIO.ffmpegFormat,
-        '-y',
-        tempOutputPath,
-      ]);
-      const normalized = await fs.readFile(tempOutputPath);
-      logger.debug('Audio normalisé en M4A (+9dB)', { inputBytes: buffer.length, outputBytes: normalized.length });
-      return normalized;
-    } catch (error) {
-      logger.error('Normalisation audio échouée, original conservé', error as Error);
-      return null;
-    } finally {
-      await fs.unlink(tempInputPath).catch(() => {});
-      await fs.unlink(tempOutputPath).catch(() => {});
-    }
-  }
-
-  /**
    * Sauvegarde physiquement un fichier avec permissions sécurisées.
    * Un audio est normalisé en M4A : le fichier écrit peut alors changer
    * d'extension et de type — ce que rend `relativePath`/`mimeType`, et ce que
@@ -285,16 +251,18 @@ export class UploadProcessor {
     buffer: Buffer,
     relativePath: string,
     mimeType?: string
-  ): Promise<{ size: number; relativePath: string; mimeType?: string }> {
+  ): Promise<SavedFile> {
     let finalBuffer = buffer;
     let finalPath = relativePath;
     let finalMimeType = mimeType;
+    let loudnessLufs: number | null = null;
     if (mimeType && mimeType.startsWith('audio/')) {
-      const normalized = await this.normalizeAudio(buffer, relativePath);
+      const normalized = await normalizeAudioBuffer(buffer, relativePath);
       if (normalized) {
-        finalBuffer = normalized;
+        finalBuffer = normalized.buffer;
         finalPath = normalizedAudioPath(relativePath);
         finalMimeType = NORMALIZED_AUDIO.mimeType;
+        loudnessLufs = normalized.loudnessLufs;
       }
     } else if (mimeType && isMediaMetadataStrippable(mimeType)) {
       // #3627, #11258 — GPS et métadonnées retirés AVANT persistance, photo et
@@ -314,7 +282,7 @@ export class UploadProcessor {
       logger.error('Impossible de modifier les permissions du fichier', error as Error);
     }
 
-    return { size: finalBuffer.length, relativePath: finalPath, mimeType: finalMimeType };
+    return { size: finalBuffer.length, relativePath: finalPath, mimeType: finalMimeType, ...(loudnessLufs === null ? {} : { loudnessLufs }) };
   }
 
   /**
@@ -327,7 +295,7 @@ export class UploadProcessor {
   private async saveAdmittedFile(
     file: FileToUpload,
     relativePath: string
-  ): Promise<{ saved: { size: number; relativePath: string; mimeType?: string }; declaredMimeType: string }> {
+  ): Promise<{ saved: SavedFile; declaredMimeType: string }> {
     const saved = await this.saveFile(file.buffer, relativePath, file.mimeType);
     if (!mayBeAudioOnlyContainer(file.mimeType)) return { saved, declaredMimeType: file.mimeType };
     const storedPath = path.join(this.uploadBasePath, saved.relativePath);
@@ -464,7 +432,7 @@ export class UploadProcessor {
       ? { audioEffectsTimeline: metadata.audioEffectsTimeline } as any
       : undefined;
 
-    const created = await this.prisma.messageAttachment.create({
+    const attachment = await this.prisma.messageAttachment.create({
       data: {
         messageId: finalMessageId,
         fileName: path.basename(storedFilePath),
@@ -490,6 +458,7 @@ export class UploadProcessor {
         videoCodec: metadata.videoCodec,
         pageCount: metadata.pageCount,
         lineCount: metadata.lineCount,
+        loudnessLufs: saved.loudnessLufs ?? undefined,
         metadata: metadataJson,
         uploadedBy: userId,
         isAnonymous: isAnonymous,
@@ -498,17 +467,8 @@ export class UploadProcessor {
         ...(deferred.length > 0 ? { processingState: 'pending' } : {}),
       },
     });
-    // File muette : le rendu se fait ici, et la réponse sert la ligne rendue.
-    const dispatched = await scheduleOrRender({
-      queue: this.mediaQueue,
-      deps: { prisma: this.prisma as never, uploadBasePath: this.uploadBasePath, metadataManager: this.metadataManager, runFfmpeg },
-      target: 'messageAttachment',
-      recordId: created.id,
-      kinds: deferred,
-    });
-    const attachment = dispatched === 'rendered' || dispatched === 'failed'
-      ? (await this.prisma.messageAttachment.findUnique({ where: { id: created.id } })) ?? created
-      : created;
+    // File muette : la pièce reste `pending`, le balayage du worker la reprend.
+    await scheduleDeferred({ queue: this.mediaQueue, target: 'messageAttachment', recordId: attachment.id, kinds: deferred });
 
     return {
       id: attachment.id,
@@ -527,6 +487,7 @@ export class UploadProcessor {
       codec: attachment.codec || undefined,
       channels: attachment.channels || undefined,
       processingState: attachment.processingState ?? undefined,
+      loudnessLufs: attachment.loudnessLufs ?? undefined,
       metadata: attachment.metadata || undefined,
       fps: attachment.fps || undefined,
       videoCodec: attachment.videoCodec || undefined,
@@ -564,11 +525,13 @@ export class UploadProcessor {
     // Amplifier l'audio AVANT chiffrement pour améliorer la transcription/diarization
     let fileBuffer = file.buffer;
     let storedMimeType = file.mimeType;
+    let loudnessLufs: number | null = null;
     if (attachmentType === 'audio') {
-      const normalized = await this.normalizeAudio(file.buffer, file.filename);
+      const normalized = await normalizeAudioBuffer(file.buffer, file.filename);
       if (normalized) {
-        fileBuffer = normalized;
+        fileBuffer = normalized.buffer;
         storedMimeType = NORMALIZED_AUDIO.mimeType;
+        loudnessLufs = normalized.loudnessLufs;
       }
     } else {
       fileBuffer = await stripMediaMetadataBuffer({ buffer: file.buffer, mimeType: file.mimeType, fileName: file.filename });
@@ -661,6 +624,7 @@ export class UploadProcessor {
         sampleRate: metadata.sampleRate,
         codec: metadata.codec,
         channels: metadata.channels,
+        loudnessLufs: loudnessLufs ?? undefined,
         metadata: metadataJson,
         uploadedBy: userId,
         isAnonymous: isAnonymous,
@@ -695,6 +659,7 @@ export class UploadProcessor {
       sampleRate: attachment.sampleRate || undefined,
       codec: attachment.codec || undefined,
       channels: attachment.channels || undefined,
+      loudnessLufs: attachment.loudnessLufs ?? undefined,
       metadata: attachment.metadata || undefined,
       uploadedBy: attachment.uploadedBy,
       isAnonymous: attachment.isAnonymous,
