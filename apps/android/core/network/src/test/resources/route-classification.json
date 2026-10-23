@@ -204,6 +204,7 @@
     "POST /api/v1/admin/users/:userId/voice-consent",
     "POST /api/v1/packs/lens/:slug/review",
     "POST /api/v1/packs/lens/:slug/withdraw",
+    "POST /api/v1/packs/lens/:slug/restore",
     "POST /api/v1/packs/lens/submissions",
     "PUT /api/v1/admin/agent/configs/:conversationId",
     "PUT /api/v1/admin/agent/global-config",

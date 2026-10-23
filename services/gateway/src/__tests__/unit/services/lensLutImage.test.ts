@@ -68,5 +68,15 @@ describe('normalizeLensLut', () => {
     const expected = await sharp(source).raw({ depth: 'ushort' }).toBuffer();
     expect(Buffer.compare(out, expected)).toBe(0);
   });
-});
 
+  it('une source CMYK est refusée : la convertir en RVB changerait chaque valeur de la table (#12329 R4)', async () => {
+    const cmyk = await sharp(gradient(64, 8), { raw: { width: 64, height: 8, channels: 3 } }).toColourspace('cmyk').jpeg({ quality: 100 }).toBuffer();
+    expect((await sharp(cmyk).metadata()).space).toBe('cmyk');
+    expect(await normalizeLensLut(cmyk)).toEqual({ ok: false, reason: 'not-an-image' });
+  });
+
+  it('une table en niveaux de gris reste acceptée', async () => {
+    const grey = await sharp(gradient(64, 8), { raw: { width: 64, height: 8, channels: 3 } }).toColourspace('b-w').png().toBuffer();
+    expect((await normalizeLensLut(grey)).ok).toBe(true);
+  });
+});

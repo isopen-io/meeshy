@@ -158,10 +158,10 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
     act(() => {
       container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
     });
-    await until(() => viewer()?.querySelector('[data-viewer-reply]') !== null && viewer() !== null);
+    await until(() => viewer()?.querySelector('[data-viewer-action="reply"]') !== null && viewer() !== null);
 
     act(() => {
-      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-reply]')!.click();
+      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="reply"]')!.click();
     });
     expect(replies).toEqual([[M2, A3]]);
     await until(() => viewer() === null);
@@ -200,7 +200,7 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
   test('en bout en bout, la visionneuse ne répond ni ne partage : le web n’enverrait que du clair (#11372)', async () => {
     mountThreadGrid(() => {}, 'u-me', menuScope({ id: 'u-me' }, { encryptionMode: 'e2ee' }));
     await openOnSecondTile();
-    expect(viewer()!.querySelector('[data-viewer-reply]')).toBeNull();
+    expect(viewer()!.querySelector('[data-viewer-action="reply"]')).toBeNull();
     expect(viewer()!.querySelector('[data-viewer-action="reply"]')).toBeNull();
     expect(viewer()!.querySelector('[data-viewer-action="share"]')).toBeNull();
   });
@@ -209,14 +209,14 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
     mountThreadGrid(() => {}, 'u-me', menuScope({ id: 'u-me', isActiveMember: false }));
     await openOnSecondTile();
     expect(viewer()!.querySelector('[data-viewer-action="react"]')).toBeNull();
-    expect(viewer()!.querySelector('[data-viewer-reply]')).toBeNull();
+    expect(viewer()!.querySelector('[data-viewer-action="reply"]')).toBeNull();
   });
 
   test('un membre qui écrit en clair y garde Réagir, Répondre et Partager', async () => {
     mountThreadGrid(() => {});
     await openOnSecondTile();
     expect(viewer()!.querySelector('[data-viewer-action="react"]')).not.toBeNull();
-    expect(viewer()!.querySelector('[data-viewer-reply]')).not.toBeNull();
+    expect(viewer()!.querySelector('[data-viewer-action="reply"]')).not.toBeNull();
     expect(viewer()!.querySelector('[data-viewer-action="share"]')).not.toBeNull();
   });
 });

@@ -40,6 +40,8 @@ import type { PackIndex } from './PackIndex';
 const logger = enhancedLogger.child({ module: 'PackRegistryOverrides' });
 
 export const PACK_REGISTRY_TTL_MS = 30_000;
+/** #12329 R1 — une relecture des surcharges rend la main au plus tard après ce délai. */
+export const PACK_REGISTRY_REFRESH_TIMEOUT_MS = 5_000;
 
 export type PackRegistryOverridesPrisma = Pick<PrismaClient, 'packRegistryEntry'>;
 
@@ -92,12 +94,22 @@ export class PackRegistryOverrides {
   private readonly ttlMs: number;
   private current: Snapshot | null = null;
   private loadedAt = Number.NEGATIVE_INFINITY;
+  private snapshotAt = Number.NEGATIVE_INFINITY;
+  private readonly refreshTimeoutMs: number;
   private inflight: Promise<void> | null = null;
+  private generation = 0;
+  private appliedGeneration = 0;
 
-  constructor(deps: { readonly prisma: PackRegistryOverridesPrisma; readonly now?: () => Date; readonly ttlMs?: number }) {
+  constructor(deps: { readonly prisma: PackRegistryOverridesPrisma; readonly now?: () => Date; readonly ttlMs?: number; readonly refreshTimeoutMs?: number }) {
     this.prisma = deps.prisma;
     this.now = deps.now ?? (() => new Date());
     this.ttlMs = deps.ttlMs ?? PACK_REGISTRY_TTL_MS;
+    this.refreshTimeoutMs = deps.refreshTimeoutMs ?? PACK_REGISTRY_REFRESH_TIMEOUT_MS;
+  }
+
+  /** Ce que les jauges lisent : le registre est-il masqué (aucune lecture aboutie), et depuis quand l'instantané date-t-il. */
+  state(): { readonly masked: boolean; readonly ageMs: number | null } {
+    return this.current === null ? { masked: true, ageMs: null } : { masked: false, ageMs: this.now().getTime() - this.snapshotAt };
   }
 
   /** L'instantané courant, sans attendre (`null` tant qu'aucune lecture n'a abouti) ; une relecture part en arrière-plan s'il est périmé. */
@@ -108,12 +120,27 @@ export class PackRegistryOverrides {
     return this.current;
   }
 
-  /** Relit toutes les surcharges ; une ligne illisible est écartée seule. Une base injoignable garde la dernière lecture. */
+  /**
+   * Relit toutes les surcharges ; une ligne illisible est écartée seule. Une base injoignable garde la dernière lecture.
+   * BORNÉE (#12329 R1) : une lecture qui ne rend pas la main échoue au bout de `refreshTimeoutMs`, libère la place
+   * pour la relecture suivante, et son résultat tardif, s'il arrive, n'écrase jamais une lecture plus récente.
+   */
   refresh(): Promise<void> {
     if (this.inflight !== null) return this.inflight;
+    const generation = (this.generation += 1);
     this.inflight = (async () => {
+      let timer: NodeJS.Timeout | undefined;
       try {
-        const rows = await this.prisma.packRegistryEntry.findMany({ select: { domain: true, slug: true, override: true, revision: true } });
+        const reading = this.prisma.packRegistryEntry.findMany({ select: { domain: true, slug: true, override: true, revision: true } });
+        const deadline = new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error(`pack registry overrides refresh timeout after ${this.refreshTimeoutMs} ms`)), this.refreshTimeoutMs);
+          timer.unref();
+        });
+        reading.catch(() => undefined);
+        const rows = await Promise.race([reading, deadline]);
+        if (generation < this.appliedGeneration) return;
+        this.appliedGeneration = generation;
+        this.snapshotAt = this.now().getTime();
         this.current = new Map(
           rows.flatMap((row) => {
             const parsed = PackRegistryOverrideSchema.safeParse(row.override);
@@ -127,6 +154,7 @@ export class PackRegistryOverrides {
         this.loadedAt = this.now().getTime();
         throw error;
       } finally {
+        clearTimeout(timer);
         this.inflight = null;
       }
     })();

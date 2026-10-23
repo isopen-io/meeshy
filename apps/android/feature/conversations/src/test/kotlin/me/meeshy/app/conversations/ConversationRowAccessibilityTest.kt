@@ -3,49 +3,66 @@ package me.meeshy.app.conversations
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
+/** Parité iOS `ThemedConversationRow.conversationAccessibilityLabel` : un seul libellé, dans CET ordre. */
 class ConversationRowAccessibilityTest {
 
-    private val strings = ConversationRowAccessibility.Strings(
-        conversationWith = { "Conversation avec $it" },
-        lastMessage = { "dernier message : $it" },
-        unread = { "$it messages non lus" },
-        muted = "en silence",
-        pinned = "épinglée",
-        pendingSync = "synchronisation en attente",
+    private fun label(
+        preview: String? = "last message: hi",
+        time: String? = "5 min",
+        unread: String? = "3 unread",
+        muted: String? = "muted",
+        pinned: String? = "pinned",
+        locked: String? = null,
+        points: String? = null,
+        pendingSync: String? = null,
+    ) = ConversationRowAccessibility.label(
+        title = "Conversation with Ana",
+        preview = preview,
+        time = time,
+        unread = unread,
+        muted = muted,
+        pinned = pinned,
+        locked = locked,
+        points = points,
+        pendingSync = pendingSync,
     )
 
-    private fun label(
-        preview: String? = "Salut",
-        time: String? = "5 min",
-        unread: Int = 0,
-        muted: Boolean = false,
-        pinned: Boolean = false,
-        sync: Boolean = false,
-    ) = ConversationRowAccessibility.label("Alice", preview, time, unread, muted, pinned, sync, strings)
-
     @Test
-    fun `a quiet row reads name, preview and time`() {
-        assertThat(label()).isEqualTo("Conversation avec Alice, dernier message : Salut, 5 min")
+    fun `the label reads name, preview, time, unread, muted, pinned in that order`() {
+        assertThat(label())
+            .isEqualTo("Conversation with Ana, last message: hi, 5 min, 3 unread, muted, pinned")
     }
 
     @Test
-    fun `every state is spoken in order`() {
-        assertThat(label(unread = 3, muted = true, pinned = true, sync = true)).isEqualTo(
-            "Conversation avec Alice, dernier message : Salut, 5 min, 3 messages non lus, " +
-                "en silence, épinglée, synchronisation en attente",
+    fun `absent and blank parts leave no hole`() {
+        assertThat(label(preview = null, time = " ", unread = null, muted = null))
+            .isEqualTo("Conversation with Ana, pinned")
+    }
+
+    @Test
+    fun `the engagement points are spoken last, after the lock`() {
+        assertThat(label(muted = null, pinned = null, unread = null, locked = "locked", points = "4 day streak"))
+            .isEqualTo("Conversation with Ana, last message: hi, 5 min, locked, 4 day streak")
+    }
+
+    @Test
+    fun `a pending sync is spoken after the pin, before the lock and the points`() {
+        assertThat(label(pendingSync = "sync pending", locked = "locked", points = "4 day streak")).isEqualTo(
+            "Conversation with Ana, last message: hi, 5 min, 3 unread, muted, pinned, sync pending, " +
+                "locked, 4 day streak",
         )
     }
 
     @Test
     fun `a pending sync alone adds only its phrase`() {
-        assertThat(label(sync = true)).endsWith(", synchronisation en attente")
-        assertThat(label(sync = true)).doesNotContain("en silence")
+        val spoken = label(unread = null, muted = null, pinned = null, pendingSync = "sync pending")
+
+        assertThat(spoken).isEqualTo("Conversation with Ana, last message: hi, 5 min, sync pending")
     }
 
     @Test
-    fun `a missing preview or time is skipped without a stray separator`() {
-        assertThat(label(preview = null, time = null)).isEqualTo("Conversation avec Alice")
-        assertThat(label(preview = "  ")).isEqualTo("Conversation avec Alice, 5 min")
+    fun `no pending sync says nothing about sync`() {
+        assertThat(label()).doesNotContain("sync")
     }
 
     @Test
