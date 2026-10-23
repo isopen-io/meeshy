@@ -15,14 +15,14 @@ import {
 } from '../../services/attachments/fileRouteVerdict';
 import { admitUnsignedFile, resolveSignedFileAccess } from '../../services/attachments/readerFileGate';
 import { readSigningKeys, readerFileSignatureEnforced, SIGNED_FILE_ROUTE } from '../../services/attachments/readerFileSignature';
-import { createReadStream, type Stats } from 'fs';
-import { stat } from 'fs/promises';
+import type { Readable } from 'stream';
 import { relative as pathRelative, resolve as pathResolve, sep as pathSep } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { ifNoneMatchMatches, storedFileETag } from '../../utils/etag';
+import { ifNoneMatchMatches } from '../../utils/etag';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
+import { locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
 
@@ -62,7 +62,8 @@ function crossOriginMediaHeaders(
 
 export async function registerDownloadRoutes(
   fastify: FastifyInstance,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  bytesSource: StoredBytesSource = {}
 ) {
   const attachmentService = new AttachmentService(prisma);
 
@@ -130,16 +131,15 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'File not found');
         }
 
-        const fileStats = await statOrNull(filePath);
-        if (!fileStats) {
+        const stored = await locateStoredBytes(filePath, bytesSource);
+        if (!stored) {
           return sendNotFound(reply, 'File not found on disk');
         }
 
         // #9478 — le même cache que la route par chemin pour un média protégé.
         // #11265 — même transport que la route par chemin : plages, ETag, 304.
         return streamStoredFile(request, reply, {
-          filePath,
-          fileStats,
+          stored,
           cacheControl: await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()),
           representation: attachmentRepresentation(attachment),
         });
@@ -212,16 +212,15 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'Thumbnail not found');
         }
 
-        const thumbnailStats = await statOrNull(thumbnailPath);
-        if (!thumbnailStats) {
+        const thumbnailStored = await locateStoredBytes(thumbnailPath, bytesSource);
+        if (!thumbnailStored) {
           return sendNotFound(reply, 'Thumbnail not found on disk');
         }
 
         // WebP thumbnails (sprint D4) advertise image/webp; legacy thumbnails
         // (always JPEG bytes whatever their extension) stay image/jpeg.
         return streamStoredFile(request, reply, {
-          filePath: thumbnailPath,
-          fileStats: thumbnailStats,
+          stored: thumbnailStored,
           cacheControl: await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()),
           representation: { contentType: thumbnailContentType(thumbnailPath), headers: { 'Content-Disposition': 'inline' } },
         });
@@ -237,8 +236,8 @@ export async function registerDownloadRoutes(
   // pointent les `fileUrl` persistées en base depuis des années. L'extraction lui
   // donne un site UNIQUE — un alias qui RECOPIERAIT le handler recréerait la
   // jumelle qu'il prétend fermer (issue #4187).
-  registerFileStreamRoute(fastify, prisma);
-  registerSignedFileRoute(fastify, prisma);
+  registerFileStreamRoute(fastify, prisma, bytesSource);
+  registerSignedFileRoute(fastify, prisma, bytesSource);
 }
 
 /**
@@ -257,7 +256,7 @@ export async function registerDownloadRoutes(
  * Fonction et non plugin : les DEUX montages appellent le MÊME site, sans copie
  * de handler ni encapsulation supplémentaire.
  */
-export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRouteVerdictPrisma): void {
+export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRouteVerdictPrisma, bytesSource: StoredBytesSource = {}): void {
   /**
    * GET /attachments/file/*
    * Stream un fichier via son chemin (utilisé pour les URLs générées)
@@ -313,15 +312,15 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const decodedPath = decodeURIComponent((request.params as { '*': string })['*']);
-        const located = locateStoredFile(decodedPath);
+        const located = locateStoredFile(decodedPath, uploadRootOf(bytesSource));
         if (located.kind === 'outside') {
           log.warn('Path traversal attempt rejected', { decodedPath });
           return sendForbidden(reply, 'Forbidden');
         }
         if (located.kind === 'hidden') return sendNotFound(reply, 'File not found');
 
-        const fileStats = await statOrNull(located.filePath);
-        if (!fileStats) return sendNotFound(reply, 'File not found');
+        const stored = await locateStoredBytes(located.filePath, bytesSource);
+        if (!stored) return sendNotFound(reply, 'File not found');
 
         // #9315 — le même cycle de vie que les routes par identifiant. La clé
         // est relue sur le chemin RÉSOLU : double barre, `./`, remontée ou
@@ -370,7 +369,7 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
             ? 'public, no-cache'
             : 'private, max-age=31536000');
 
-        return streamStoredFile(request, reply, { filePath: located.filePath, fileStats, cacheControl, representation: pathRepresentation(decodedPath) });
+        return streamStoredFile(request, reply, { stored, cacheControl, representation: pathRepresentation(decodedPath) });
       } catch (error: unknown) {
         log.error('Error serving file by path', { error: error instanceof Error ? error.message : String(error) });
         return sendInternalError(reply, 'Error serving file');
@@ -393,7 +392,7 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
  * Mêmes octets, mêmes en-têtes et même lecture par plages que la route par
  * chemin (`streamStoredFile`), sous le cache que le fichier autorise.
  */
-function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient): void {
+function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient, bytesSource: StoredBytesSource): void {
   fastify.get(
     `${SIGNED_FILE_ROUTE}/:token/*`,
     {
@@ -421,7 +420,7 @@ function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient)
       try {
         const params = request.params as { token: string; '*': string };
         const decodedPath = decodeURIComponent(params['*']);
-        const located = locateStoredFile(decodedPath);
+        const located = locateStoredFile(decodedPath, uploadRootOf(bytesSource));
         if (located.kind !== 'file') return sendNotFound(reply, 'File not found');
 
         const access = await resolveSignedFileAccess(prisma, {
@@ -435,12 +434,11 @@ function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient)
           return sendNotFound(reply, 'File not found');
         }
 
-        const fileStats = await statOrNull(located.filePath);
-        if (!fileStats) return sendNotFound(reply, 'File not found');
+        const stored = await locateStoredBytes(located.filePath, bytesSource);
+        if (!stored) return sendNotFound(reply, 'File not found');
 
         return streamStoredFile(request, reply, {
-          filePath: located.filePath,
-          fileStats,
+          stored,
           cacheControl: immutableWhenWriteOnce(located.storageKey, access.cacheControl),
           representation: pathRepresentation(decodedPath),
         });
@@ -494,24 +492,13 @@ type LocatedFile =
  * envois EN COURS, pas encore rattachés à un message. Refusé avant tout accès
  * disque, pour que leur existence ne se lise pas.
  */
-function locateStoredFile(decodedPath: string): LocatedFile {
-  const uploadBasePath = process.env.UPLOAD_PATH || 'uploads/attachments';
+function locateStoredFile(decodedPath: string, uploadBasePath: string): LocatedFile {
   const baseAbs = pathResolve(uploadBasePath);
   const filePath = pathResolve(uploadBasePath, decodedPath);
   if (filePath !== baseAbs && !filePath.startsWith(baseAbs + pathSep)) return { kind: 'outside' };
   const segments = pathRelative(baseAbs, filePath).split(pathSep);
   if (segments.some((segment) => segment.startsWith('.'))) return { kind: 'hidden' };
   return { kind: 'file', filePath, storageKey: segments.join('/') };
-}
-
-/** Single stat() — was previously called twice with a race window between the existence probe and the metadata read. */
-async function statOrNull(filePath: string): Promise<Stats | null> {
-  try {
-    return await stat(filePath);
-  } catch (statError: unknown) {
-    log.info('File not found on disk', { filePath, code: (statError as { code?: string } | null)?.code });
-    return null;
-  }
 }
 
 const MIME_TYPES: Readonly<Record<string, string>> = {
@@ -606,21 +593,20 @@ function attachmentRepresentation(attachment: { readonly mimeType: string; reado
  * téléchargement. Le cache n'est jamais assoupli ici : `immutable` ou
  * `no-store` viennent de `fileRouteVerdict.ts`, pas d'une décision de transport.
  */
-function streamStoredFile(
+async function streamStoredFile(
   request: FastifyRequest,
   reply: FastifyReply,
   input: {
-    readonly filePath: string;
-    readonly fileStats: Stats;
+    readonly stored: StoredBytes;
     readonly cacheControl: string;
     readonly representation: StoredFileRepresentation;
   }
 ) {
-  const { filePath, cacheControl, representation } = input;
-  const fileSize = input.fileStats.size;
+  const { stored, cacheControl, representation } = input;
+  const fileSize = stored.size;
 
   // ETag FORT : `If-Range` ne s'honore qu'avec un validateur fort (RFC 9110 §13.1.5).
-  const etag = storedFileETag(input.fileStats);
+  const etag = stored.etag;
   reply.header('Accept-Ranges', 'bytes');
   appendVary(reply, 'Accept');
 
@@ -669,7 +655,7 @@ function streamStoredFile(
     reply.header('Content-Type', representation.contentType);
     reply.headers(representation.headers);
 
-    return reply.send(createReadStream(filePath, { start, end }));
+    return sendOpened(reply, await stored.open({ start, end }));
   }
 
   describeServedBytes();
@@ -677,7 +663,14 @@ function streamStoredFile(
   reply.header('Content-Length', fileSize);
   reply.headers(representation.headers);
 
-  return reply.send(createReadStream(filePath));
+  return sendOpened(reply, await stored.open());
+}
+
+/** Un objet effacé entre la description et l'ouverture : le fichier n'existe plus, rien n'a été envoyé. */
+function sendOpened(reply: FastifyReply, body: Readable | null) {
+  if (body) return reply.send(body);
+  for (const header of ['ETag', 'Cache-Control', 'Content-Range', 'Content-Length', 'Content-Type', 'Content-Disposition']) reply.removeHeader(header);
+  return sendNotFound(reply, 'File not found');
 }
 
 /**
