@@ -323,8 +323,7 @@ internal struct _InlineRenderer: View {
         fileUrl: String,
         hasReadableTransfer: (String) -> Bool = { CacheCoordinator.videoHasReadableTransfer(for: $0) }
     ) -> Bool {
-        guard let resolved = MeeshyConfig.resolveMediaURL(fileUrl), !resolved.isFileURL else { return false }
-        return hasReadableTransfer(resolved.absoluteString)
+        VideoAvailability.playsWhileDownloading(fileUrl: fileUrl, hasReadableTransfer: hasReadableTransfer)
     }
 
     private func formatSize(_ bytes: Int64) -> String {
