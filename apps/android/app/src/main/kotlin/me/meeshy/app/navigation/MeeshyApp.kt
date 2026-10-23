@@ -1,6 +1,10 @@
 package me.meeshy.app.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -10,7 +14,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -145,42 +148,51 @@ fun MeeshyApp(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize()) {
-                ProvideAppLocals(extensions.localsProviders) {
-                    NavHost(
-                        navController = navController,
-                        startDestination = startDestination,
-                        modifier = Modifier.padding(padding),
-                    ) {
-                        authNavGraph(navController, authViewModel)
-                        conversationsNavGraph(navController, authViewModel, callState)
-                        feedNavGraph(navController)
-                        callNavGraph(navController, callViewModel)
-                        socialNavGraph(navController)
-                        settingsNavGraph(navController, authViewModel)
-                        extensions.graphContributors.forEach { it.contribute(this, navController) }
+                val showsCallPill = CallPillPresenter.shouldShow(callState.status, onCallScreen)
+                // The minimised-call pill PUSHES the destination down instead of floating
+                // over it: pinned under the status bar, it would lie under the system status
+                // window (its controls untappable) and cover the destination's top bar. The
+                // pill takes the status-bar inset, so the destination below consumes it.
+                Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                    // A live, non-incoming call while off the CALL screen. A tap rebuilds the
+                    // CALL route from the live config; the Activity-scoped [callViewModel] is
+                    // reused, so `start()` is inert.
+                    if (showsCallPill) {
+                        CallPill(
+                            state = callState,
+                            onClick = {
+                                navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
+                                    launchSingleTop = true
+                                }
+                            },
+                            onToggleMute = callViewModel::toggleMute,
+                            onToggleSpeaker = callViewModel::toggleSpeaker,
+                            onHangUp = callViewModel::hangUp,
+                            modifier = Modifier
+                                .statusBarsPadding()
+                                .padding(vertical = MeeshySpacing.xs),
+                        )
                     }
-                }
-
-                // Minimised-call pill: a full-width banner pinned under the status bar, shown
-                // only for a live, non-incoming call while off the CALL screen. A tap rebuilds
-                // the CALL route from the live config; the Activity-scoped [callViewModel] is
-                // reused, so `start()` is inert.
-                if (CallPillPresenter.shouldShow(callState.status, onCallScreen)) {
-                    CallPill(
-                        state = callState,
-                        onClick = {
-                            navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
-                                launchSingleTop = true
-                            }
-                        },
-                        onToggleMute = callViewModel::toggleMute,
-                        onToggleSpeaker = callViewModel::toggleSpeaker,
-                        onHangUp = callViewModel::hangUp,
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(padding)
-                            .padding(top = MeeshySpacing.sm),
-                    )
+                            .weight(1f)
+                            .then(if (showsCallPill) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
+                    ) {
+                        ProvideAppLocals(extensions.localsProviders) {
+                            NavHost(
+                                navController = navController,
+                                startDestination = startDestination,
+                            ) {
+                                authNavGraph(navController, authViewModel)
+                                conversationsNavGraph(navController, authViewModel, callState)
+                                feedNavGraph(navController)
+                                callNavGraph(navController, callViewModel)
+                                socialNavGraph(navController)
+                                settingsNavGraph(navController, authViewModel)
+                                extensions.graphContributors.forEach { it.contribute(this, navController) }
+                            }
+                        }
+                    }
                 }
 
                 // Les deux boutons flottants (parite iOS RootView.draggableFloatingButtons),
