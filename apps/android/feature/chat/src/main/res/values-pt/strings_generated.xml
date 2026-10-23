@@ -38,4 +38,8 @@
     <string name="message_detail_report_confirm_title">Denunciar esta mensagem?</string>
     <string name="recentMedia_resolveFailed">Não foi possível preparar esta mídia — use a biblioteca de fotos completa</string>
     <string name="recentMedia_resolveFailed_multiple">Não foi possível preparar %d mídias — use toda a fototeca</string>
+    <string name="starred_more_options">Mais opções</string>
+    <string name="starred_remove">Remover dos favoritos</string>
+    <string name="starred_remove_all">Remover tudo</string>
+    <string name="starred_row_hint">Abre a conversa</string>
 </resources>
