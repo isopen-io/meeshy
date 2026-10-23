@@ -1,5 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 
+import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
+
 /**
  * **LES EFFETS DE MA VIDÉO** (#8442) — les règles et l'état, sans traitement
  * d'image : ce module est LÉGER, l'écran d'appel le lit ; le traitement vit
@@ -63,17 +65,21 @@ export function effectsFilter(effects: VideoEffects): string {
 /** Faut-il traiter les images ? Le flou seul non : il se règle sur la caméra elle-même. */
 export const needsFramePipeline = (effects: VideoEffects): boolean => effectsFilter(effects) !== 'none' || effects.faceEffect !== 'none';
 
-/** Ce que le traitement des images reçoit : les effets, le zoom numérique, et si le flou lui revient (la caméra ne le fait pas). */
-export type FrameSettings = { readonly effects: VideoEffects; readonly zoom: number; readonly segmentBlur: boolean };
+/**
+ * Ce que le traitement des images reçoit : les effets, le zoom numérique, si le flou lui revient (la caméra ne
+ * le fait pas), et la lens MeeshyLens posée sur l'image, s'il y en a une (W14, `lib/meeshy-lens/lens-stage.ts`).
+ */
+export type FrameSettings = { readonly effects: VideoEffects; readonly zoom: number; readonly segmentBlur: boolean; readonly lens?: LensSettings };
 
-export const frameSettings = (effects: VideoEffects, camera: { readonly nativeBlur: boolean; readonly zoom: number }): FrameSettings => ({
+export const frameSettings = (effects: VideoEffects, camera: { readonly nativeBlur: boolean; readonly zoom: number }, lens?: LensSettings): FrameSettings => ({
   effects,
   zoom: Number.isFinite(camera.zoom) ? Math.max(1, camera.zoom) : 1,
   segmentBlur: effects.blur && !camera.nativeBlur,
+  ...(lens === undefined ? {} : { lens }),
 });
 
 /** Faut-il traiter les images ? Sinon la caméra part BRUTE, sans traverser le moindre code. */
-export const needsFrames = (settings: FrameSettings): boolean => needsFramePipeline(settings.effects) || settings.segmentBlur || settings.zoom > 1;
+export const needsFrames = (settings: FrameSettings): boolean => needsFramePipeline(settings.effects) || settings.segmentBlur || settings.zoom > 1 || settings.lens !== undefined;
 
 /** Les noms que `call:analytics` retient (`effectsUsed`). */
 export function effectsUsedOf(effects: VideoEffects): readonly string[] {

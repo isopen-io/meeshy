@@ -1,5 +1,6 @@
 import { cameraBlur, cameraSourceOf, effectsUsedOf, forgetCameraSource, frameSettings, needsFrames, registerCameraSource, type FrameSettings, type VideoEffects } from './video-effects';
 import type { EffectsPipeline } from './video-effects-pipeline';
+import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
 
 /**
  * **LA CAMÉRA ET SES EFFETS, VUS DU MOTEUR** (#8442) — le moteur ne sait rien
@@ -29,6 +30,8 @@ type CameraEffectsDeps = {
   readonly effects: () => VideoEffects;
   /** Le zoom numérique de la caméra en cours (#8441) — 1× par défaut. */
   readonly zoom?: () => number;
+  /** La lens posée par une surface d'appel (#11994, `call-lens.ts`) — absente : aucune. */
+  readonly lens?: () => LensSettings | undefined;
   readonly colorSupported: () => boolean;
   readonly loadPipeline: () => Promise<PipelineFactory>;
 };
@@ -46,7 +49,7 @@ export function createCameraEffects(deps: CameraEffectsDeps): CameraEffectsPort 
   const pipelines = new WeakMap<MediaStreamTrack, EffectsPipeline>();
   const building = new WeakMap<MediaStreamTrack, Promise<MediaStreamTrack>>();
 
-  const settingsFor = (camera: MediaStreamTrack): FrameSettings => frameSettings(deps.effects(), { nativeBlur: cameraBlur(camera), zoom: deps.zoom?.() ?? 1 });
+  const settingsFor = (camera: MediaStreamTrack): FrameSettings => frameSettings(deps.effects(), { nativeBlur: cameraBlur(camera), zoom: deps.zoom?.() ?? 1 }, deps.lens?.());
 
   const applyBlur = (camera: MediaStreamTrack): void => {
     if (!cameraBlur(camera)) return;
