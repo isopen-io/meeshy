@@ -24,6 +24,16 @@ final class LentilleSkeletonRowTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    private func realRowSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
     private func normalizedCode(_ source: String) -> String {
         AppSourceGuard.stripComments(source)
             .components(separatedBy: .whitespacesAndNewlines)
@@ -31,13 +41,22 @@ final class LentilleSkeletonRowTests: XCTestCase {
             .joined(separator: " ")
     }
 
-    /// La hauteur du rang squelette doit être LA MÊME référence que le rang
-    /// réel (`LentilleMetrics.Row.height`, 64) — jamais un `64` recopié.
+    /// La hauteur de layout du rang squelette doit être LA MÊME référence que
+    /// celle du rang réel (`LentilleMetrics.Row.height(for: dynamicTypeSize)`,
+    /// 84 à la taille de texte par défaut) — jamais un littéral recopié, et
+    /// jamais la hauteur fixe `LentilleMetrics.Row.height` : à une taille de
+    /// texte agrandie, le rang réel grandit et la liste sauterait à
+    /// l'hydratation.
     func test_skeletonRow_usesRowHeightMetric_notALiteral() throws {
+        let expected = "frame(height: LentilleMetrics.Row.height(for: dynamicTypeSize))"
         let code = normalizedCode(try skeletonSource())
         XCTAssertTrue(
-            code.contains("frame(height: LentilleMetrics.Row.height)"),
-            "LentilleSkeletonRow doit fixer sa hauteur avec LentilleMetrics.Row.height — même référence que LentilleConversationRow, aucun littéral 64 recopié"
+            code.contains(expected),
+            "LentilleSkeletonRow doit fixer sa hauteur de layout avec LentilleMetrics.Row.height(for: dynamicTypeSize) — même référence que LentilleConversationRow, Dynamic Type compris, aucun littéral recopié"
+        )
+        XCTAssertTrue(
+            normalizedCode(try realRowSource()).contains(expected),
+            "LentilleConversationRow doit poser la même hauteur de layout que son squelette"
         )
     }
 
@@ -75,7 +94,7 @@ final class LentilleSkeletonRowTests: XCTestCase {
     /// numériques attendues n'apparaissent QUE via `LentilleMetrics`).
     func test_skeletonRow_neverHardcodes44or64() throws {
         let code = normalizedCode(try skeletonSource())
-        XCTAssertFalse(code.contains("height: 64"), "hauteur du rang : jamais 64 en dur, toujours LentilleMetrics.Row.height")
+        XCTAssertFalse(code.contains("height: 64") || code.contains("height: 84"), "hauteur du rang : jamais en dur, toujours LentilleMetrics.Row.height(for:)")
         XCTAssertFalse(code.contains("width: 44") || code.contains(": 44,"), "diamètre avatar : jamais 44 en dur, toujours LentilleMetrics.Avatar.size")
     }
 }
