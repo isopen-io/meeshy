@@ -40,6 +40,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.sync.SyncAccountProvider
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,6 +51,7 @@ class ConversationRepository @Inject constructor(
     private val conversationDao: ConversationDao,
     syncMetaDao: SyncMetaDao,
     private val outboxRepository: OutboxRepository,
+    syncAccountProvider: SyncAccountProvider = SyncAccountProvider.None,
 ) {
     private val cacheSource = ConversationCacheSource(
         database = database,
@@ -57,6 +59,7 @@ class ConversationRepository @Inject constructor(
         syncMetaDao = syncMetaDao,
         conversationApi = conversationApi,
         clock = SystemCacheClock,
+        accountProvider = syncAccountProvider,
     )
 
     /**
