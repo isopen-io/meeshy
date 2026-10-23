@@ -18,6 +18,7 @@ import { GameBlockService } from '../services/game/GameBlockService';
 import { MissionService, READ_ONLY_CREDIT } from '../services/game/MissionService';
 import { PersonalMissionService } from '../services/game/PersonalMissionService';
 import { mediaQueueEnabled } from '../services/attachments/media-processing/queue';
+import { gatewaySweepEnabled, startGatewayPendingSweep } from '../services/attachments/media-processing/gateway-sweep-runner';
 import { startMediaReadyListener } from '../services/attachments/media-processing/ready-listener';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { getCacheStore } from '../services/CacheStore';
@@ -33,6 +34,7 @@ export class MeeshySocketIOHandler {
   private socketIOManager: MeeshySocketIOManager | null = null;
 
   private mediaReadyListener: { close(): Promise<void> } | null = null;
+  private mediaPendingSweep: { close(): void } | null = null;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -81,15 +83,21 @@ export class MeeshySocketIOHandler {
 
     // #11264 — les médias rendus par le worker se signalent ici (file allumée seulement).
     const manager = this.socketIOManager;
+    const mediaDeps = {
+      prisma: this.prisma,
+      io: manager.getIO() as never,
+      deliveryQueue: new RedisDeliveryQueue(getCacheStore()),
+      connectedUsers: () => new Set(manager.getConnectedUsers()),
+      socialEvents: () => manager.getSocialEventsHandler(),
+      leaseStore: getCacheStore(),
+    };
     if (mediaQueueEnabled() && process.env.REDIS_URL) {
-      this.mediaReadyListener = startMediaReadyListener({
-        prisma: this.prisma,
-        io: manager.getIO() as never,
-        deliveryQueue: new RedisDeliveryQueue(getCacheStore()),
-        connectedUsers: () => new Set(manager.getConnectedUsers()),
-        socialEvents: () => manager.getSocialEventsHandler(),
-        leaseStore: getCacheStore(),
-      }, process.env.REDIS_URL);
+      this.mediaReadyListener = startMediaReadyListener(mediaDeps, process.env.REDIS_URL);
+    }
+    // R1 — sans worker vivant, ou file mise à l'arrêt (`MEDIA_QUEUE=drain`),
+    // la passerelle reprend elle-même les pièces restées `pending`.
+    if (gatewaySweepEnabled()) {
+      this.mediaPendingSweep = startGatewayPendingSweep(mediaDeps);
     }
 
     logger.info('✅ Socket.IO configuré et routes ajoutées');
@@ -114,6 +122,7 @@ export class MeeshySocketIOHandler {
       logger.warn('⚠️ Could not set call handler shutdown mode', error);
     }
     await this.mediaReadyListener?.close().catch((error: unknown) => logger.warn('⚠️ Media ready listener close failed', error));
+    this.mediaPendingSweep?.close();
     await manager.close();
     logger.info('✓ Socket.IO closed (clients reconnect to the new instance)');
   }

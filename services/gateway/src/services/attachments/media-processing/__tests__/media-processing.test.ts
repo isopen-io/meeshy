@@ -30,6 +30,8 @@ import { deferrableKinds, scheduleDeferred } from '../dispatch';
 import { handleMediaReady, readMediaReadyNotice, type MediaReadyPorts } from '../ready-notifier';
 import { listenerLease, type LeaseClient } from '../listener-lease';
 import { sweepPendingMedia } from '../sweep';
+import { sweepPendingInGateway, type GatewaySweepPorts } from '../gateway-sweep';
+import { markMediaJobFailed } from '../process-job';
 import { runMediaJob, workerConcurrency } from '../../../../workers/media-worker';
 import { MetadataManager } from '../../MetadataManager';
 import { UploadProcessor } from '../../UploadProcessor';
@@ -280,6 +282,23 @@ describe('processMediaJob — rendre, écrire, relire (#11264, audit S9 défauts
     expect(rows.get(ID(6))?.thumbnailPath).toBeUndefined();
   }, 120_000);
 
+  it('une copie insérée APRÈS la première écriture passe `ready` AVEC la vignette (troisième passe, R2)', async () => {
+    const base = await uploadRoot();
+    await fs.writeFile(path.join(base, 'p.jpg'), await smallPhoto());
+    const { rows, delegate, prisma } = rowsStore([photoRow()]);
+    const realUpdate = delegate.updateMany.getMockImplementation();
+    delegate.updateMany.mockImplementationOnce(async (args) => {
+      const result = realUpdate ? await realUpdate(args) : { count: 0 };
+      rows.set(ID(7), photoRow({ id: ID(7) }));
+      return result;
+    });
+
+    await processMediaJob(depsFor(base, prisma), { target: 'messageAttachment', recordId: ID(1), kinds: ['thumb'] });
+
+    expect(rows.get(ID(7))?.processingState).toBe('ready');
+    expect(rows.get(ID(7))?.thumbnailPath).toBe('p_thumb.webp');
+  }, 120_000);
+
   it('une pièce SUPPRIMÉE PENDANT le rendu : ce qui vient d’être produit est effacé du disque (défaut 3)', async () => {
     const base = await uploadRoot();
     await fs.writeFile(path.join(base, 'p.jpg'), await bigPhoto());
@@ -480,5 +499,70 @@ describe('copiedAttachmentFields — une copie faite pendant le rendu reste `pen
   it('reprend `processingState`', () => {
     const fields = copiedAttachmentFields({ id: ID(1), fileName: 'f', originalName: 'f', mimeType: 'image/jpeg', fileSize: 1, filePath: 'p.jpg', fileUrl: 'p.jpg', processingState: 'pending' });
     expect(fields.processingState).toBe('pending');
+  });
+});
+
+describe('sweepPendingInGateway — file éteinte ou worker perdu : la passerelle reprend les pièces `pending` (troisième passe, R1)', () => {
+  const pendingRow = { id: ID(1), filePath: 'p.jpg', mimeType: 'image/jpeg', fileSize: 1, thumbHash: null, renditions: null, processingState: 'pending' };
+
+  function gatewayPorts(base: string, over: Partial<GatewaySweepPorts> = {}) {
+    const store = rowsStore([pendingRow]);
+    const notified: string[][] = [];
+    const ports: GatewaySweepPorts = {
+      queue: null,
+      lease: { holds: async () => true },
+      listPending: async (target) => (target === 'messageAttachment' ? [{ id: ID(1), filePath: 'p.jpg', mimeType: 'image/jpeg', fileSize: 3 * 1024 * 1024 }] : []),
+      render: async (job) => {
+        const outcome = await processMediaJob(depsFor(base, store.prisma), job);
+        return outcome.status === 'done' ? outcome.recordIds : [];
+      },
+      fail: (job) => markMediaJobFailed(depsFor(base, store.prisma), job),
+      notify: async (_job, ids) => { notified.push([...ids]); },
+      ...over,
+    };
+    return { store, notified, ports };
+  }
+
+  it('file ÉTEINTE (retour arrière) + pièce pending ⇒ rendue, `ready`, annoncée', async () => {
+    const base = await uploadRoot();
+    await fs.writeFile(path.join(base, 'p.jpg'), await smallPhoto());
+    const { store, notified, ports } = gatewayPorts(base);
+
+    await expect(sweepPendingInGateway(ports, { now: new Date(), compatRenditionEnabled: false })).resolves.toBe(1);
+
+    expect(store.rows.get(ID(1))?.processingState).toBe('ready');
+    expect(store.rows.get(ID(1))?.thumbnailPath).toBe('p_thumb.webp');
+    expect(notified).toEqual([[ID(1)]]);
+  }, 120_000);
+
+  it('un worker bat : la passerelle ne rend rien (pas de double rendu)', async () => {
+    const render = jest.fn(async () => [] as readonly string[]);
+    const { ports } = gatewayPorts('/nowhere', { queue: recordingQueue(true), render });
+    await expect(sweepPendingInGateway(ports, { now: new Date(), compatRenditionEnabled: false })).resolves.toBe(0);
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('sans le bail : une autre instance balaie, celle-ci ne rend rien', async () => {
+    const render = jest.fn(async () => [] as readonly string[]);
+    const { ports } = gatewayPorts('/nowhere', { lease: { holds: async () => false }, render });
+    await expect(sweepPendingInGateway(ports, { now: new Date(), compatRenditionEnabled: false })).resolves.toBe(0);
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('un rendu impossible passe la pièce `failed`, jamais `pending` pour toujours', async () => {
+    const base = await uploadRoot();
+    await fs.writeFile(path.join(base, 'p.jpg'), Buffer.from('pas une image'));
+    const { store, ports } = gatewayPorts(base);
+
+    await sweepPendingInGateway(ports, { now: new Date(), compatRenditionEnabled: false });
+
+    expect(store.rows.get(ID(1))?.processingState).toBe('failed');
+  });
+
+  it('ne reprend que les pièces plus vieilles que 15 min', async () => {
+    const listPending = jest.fn(async () => []);
+    const { ports } = gatewayPorts('/nowhere', { listPending });
+    await sweepPendingInGateway(ports, { now: new Date('2026-10-23T12:00:00Z'), compatRenditionEnabled: false });
+    expect(listPending).toHaveBeenCalledWith('messageAttachment', new Date('2026-10-23T11:45:00Z'), 5);
   });
 });

@@ -15,14 +15,19 @@
  * Idempotent (un index déjà présent sous ce nom n'est pas recréé), sans
  * effacement, rétrocompatible : aucune donnée ne change.
  *
+ * La base est celle de la connexion (`<uri>/<base>`), ou `DB_NAME` s'il est
+ * passé : le staging lit `${MONGODB_DATABASE:-meeshy}`, la production `meeshy`.
+ * Le script imprime la base qu'il vise AVANT toute écriture.
+ *
  * Usage :
- *   mongosh <uri> --file media_processing_sweep_indexes_11264.js                      # SIMULATION
- *   mongosh <uri> --eval 'var APPLIQUER=true' --file media_processing_sweep_indexes_11264.js
+ *   mongosh <uri> --eval 'var DB_NAME="meeshy_staging"' --file media_processing_sweep_indexes_11264.js   # SIMULATION
+ *   mongosh <uri> --eval 'var DB_NAME="meeshy_staging"; var APPLIQUER=true' --file media_processing_sweep_indexes_11264.js
  *
  * Staging : sur décision de Claude (#9226). Production : feu vert du porteur (#9223).
  */
 const appliquer = typeof APPLIQUER !== 'undefined' && APPLIQUER === true;
-const base = db.getSiblingDB('meeshy');
+const base = typeof DB_NAME !== 'undefined' && DB_NAME ? db.getSiblingDB(DB_NAME) : db;
+print(`Base visée : ${base.getName()}`);
 const NAME = 'processingState_1_createdAt_1';
 const KEY = { processingState: 1, createdAt: 1 };
 

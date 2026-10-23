@@ -2,14 +2,17 @@
  * La file de médias (#11264) : BullMQ sur le Redis existant, une seule file
  * (`media-processing`), une tâche par pièce, trois essais à reprise
  * exponentielle. Allumée par `MEDIA_QUEUE=bullmq` (staging) ; éteinte, aucune
- * tâche n'existe et tout le rendu reste dans la requête, comme avant.
+ * tâche n'existe et tout le rendu reste dans la requête, comme avant —
+ * `MEDIA_QUEUE=drain` l'éteint en vidant les pièces restées `pending`
+ * (`gateway-sweep.ts`, retour arrière).
  *
  * Audit S9, défauts 1 et 2 — la requête ne doit JAMAIS attendre Redis :
  * - la connexion PRODUCTRICE est distincte de celle du worker : sans file hors
  *   ligne, réessais bornés, délai de connexion court. Celle du worker garde
  *   `maxRetriesPerRequest: null`, qu'exige le blocage de BullMQ ;
- * - chaque appel est borné (`MEDIA_QUEUE_CALL_TIMEOUT_MS`) ; au-delà, il échoue
- *   et l'appelant rend sur place ;
+ * - chaque appel est borné (`MEDIA_QUEUE_CALL_TIMEOUT_MS`) ; au-delà, il échoue,
+ *   la pièce reste `pending` et un balayage la reprend (`dispatch.ts`) — jamais
+ *   de rendu sur place, qui doublerait une mise en file tardive ;
  * - on ne diffère que si un worker est VIVANT : il pose un battement de cœur
  *   en Redis, à échéance courte ; sans battement, tout reste synchrone.
  */
