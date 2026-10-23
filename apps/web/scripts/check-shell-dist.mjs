@@ -17,9 +17,10 @@
  *      chemin navigué autre que `/` résout contre CE chemin (404), et une
  *      balise `<base>` qui le rattraperait casserait au passage toutes les
  *      URL réduites à un fragment (D-27 corrigée en revue, #5812) ;
- *   2. AUCUN service worker n'est émis (`sw.js`, `registerSW.js`) — la coque
- *      gère son propre cycle de vie, deux caches sur le même bundle se
- *      marcheraient dessus ;
+ *   2. AUCUN service worker de BUNDLE n'est émis (`sw.js`, `registerSW.js`) —
+ *      la coque gère son propre cycle de vie, deux caches sur le même bundle
+ *      se marcheraient dessus ; le SEUL worker émis est `sw-recent-media.js`
+ *      (#11326), qui ne touche qu'à l'audio et à la vidéo vus récemment ;
  *   3. `viewport-fit=cover` est présent — sans lui la safe-area basse
  *      (défaut 3a) n'est jamais exposée dans le dist réellement embarqué ;
  *   4. le `theme-color` sombre `#09090b` (la surface, #10005) est présent — sans lui, un flash
@@ -46,6 +47,7 @@ import { INSTITUTIONAL_ROUTES } from './lib/institutional-routes.mjs';
 
 const APP = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const OUT_DIR = 'dist-capacitor';
+const SHELL_RECENT_MEDIA_WORKER = 'sw-recent-media.js';
 const OUT = join(APP, OUT_DIR);
 
 /**
@@ -102,13 +104,25 @@ export function auditShellDist(html, files) {
      recopiait de `public/` dans la variante B — un service worker MORT
      embarqué dans l'APK et l'IPA sous une affirmation contraire. Une clause
      qui énumère des noms garde les noms, pas la propriété. */
-  const serviceWorkerFiles = files.filter((f) =>
-    /(?:^|\/)(?:sw[-.].*\.js|sw\.js|registerSW\.js|.*service-worker.*\.js|workbox-[^/]*\.js)$/.test(f),
+  const serviceWorkerFiles = files.filter(
+    (f) =>
+      /(?:^|\/)(?:sw[-.].*\.js|sw\.js|registerSW\.js|.*service-worker.*\.js|workbox-[^/]*\.js)$/.test(f) &&
+      !f.endsWith(`/${SHELL_RECENT_MEDIA_WORKER}`),
   );
   if (serviceWorkerFiles.length > 0) {
     violations.push(
       `un service worker est émis (${serviceWorkerFiles.join(', ')}) — la coque gère son propre ` +
         'cycle de vie, deux caches sur le même bundle se marcheraient dessus.',
+    );
+  }
+
+  /* LE SEUL WORKER DE LA COQUE (#11326) : celui des médias vus récemment. Il
+     ne précache rien du bundle et ne répond qu'aux requêtes audio et vidéo,
+     depuis le seau que la page remplit — sans lui, un réel vu sur le Wi-Fi
+     ne se relit pas hors ligne dans l'application Android. */
+  if (!files.some((f) => f.endsWith(`/${SHELL_RECENT_MEDIA_WORKER}`))) {
+    violations.push(
+      `${SHELL_RECENT_MEDIA_WORKER} absent — la coque ne resservirait aucun média vu récemment hors ligne (#11326).`,
     );
   }
 
@@ -375,7 +389,7 @@ async function main() {
 
   console.log(
     `  ${OUT_DIR}/ honore le contrat de la variante B : base root-absolue sans balise <base>, ` +
-      'sans service worker, ' +
+      'sans service worker de bundle (le seul : sw-recent-media.js), ' +
       'viewport-fit=cover, theme-color #09090b ; lien profond /c/c-deploiement monte le fil, ' +
       '/c/zzz-inconnu rend le refus (D-6).',
   );

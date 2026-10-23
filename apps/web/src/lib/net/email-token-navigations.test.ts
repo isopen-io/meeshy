@@ -117,7 +117,7 @@ describe('EMAIL_TOKEN_NAVIGATIONS — les liens à jeton partent au réseau', ()
   });
 
   test('le service worker reçoit la liste dans son `navigateFallbackDenylist`', () => {
-    const config = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../vite.config.ts'), 'utf8');
+    const config = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../vite/pwa.ts'), 'utf8');
     const wired = /navigateFallbackDenylist:\s*\[[^\]]*\.\.\.EMAIL_TOKEN_NAVIGATIONS[^\]]*\]/.test(config);
     expect({ wired }).toEqual({ wired: true });
   });

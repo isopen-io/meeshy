@@ -13,7 +13,7 @@ const read = (path: string): string => readFileSync(new URL(path, import.meta.ur
 const SITEMAP = read('../../public/sitemap.xml');
 const ROBOTS = read('../../public/robots.txt');
 const NGINX = read('../../nginx.conf');
-const VITE = read('../../vite.config.ts');
+const VITE = read('../../vite.config.ts') + read('../../vite/pwa.ts');
 const ORIGIN = 'https://meeshy.me';
 
 describe('sitemap.xml', () => {
