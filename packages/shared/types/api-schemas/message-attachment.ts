@@ -119,6 +119,7 @@ export const messageAttachmentSchema = {
         },
       },
     },
+    processingState: { type: 'string', nullable: true, description: 'Media worker state (#11264): pending | ready | failed — absent means ready' },
     renditions: {
       type: 'array',
       nullable: true,

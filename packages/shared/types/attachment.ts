@@ -222,6 +222,11 @@ export interface Attachment {
    */
   readonly renditions?: readonly MediaRendition[];
   /**
+   * #11264 — `pending` while the media worker renders a deferred rendition
+   * (thumbnail, variants, video rendition); absent or `ready` otherwise.
+   */
+  readonly processingState?: 'pending' | 'ready' | 'failed';
+  /**
    * #6221 — le TYPE CLIENT rattrape son contrat : la passerelle SERT ce champ
    * (`api-schemas/message-attachment.ts:91`, `schema.prisma:1010`,
    * `serializeAttachmentForSocket.ts:106`) depuis avant ce lot ; il manquait
