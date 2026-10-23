@@ -27685,43 +27685,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سيبدأ التشغيل بعد التنزيل"
+            "value": "جارٍ تحضير التشغيل…"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Wiedergabe startet nach dem Download"
+            "value": "Wiedergabe wird vorbereitet…"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Playback will start after the download"
+            "value": "Preparing playback…"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La reproducción empezará tras la descarga"
+            "value": "Preparando la reproducción…"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "La lecture démarrera après le téléchargement"
+            "value": "Préparation de la lecture…"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La riproduzione inizierà dopo il download"
+            "value": "Preparazione della riproduzione…"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A reprodução começará após o download"
+            "value": "Preparando a reprodução…"
           }
         }
       }

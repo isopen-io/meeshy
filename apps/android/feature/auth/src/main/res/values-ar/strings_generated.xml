@@ -44,8 +44,14 @@
     <string name="guest_join_back">رجوع</string>
     <string name="guest_join_birthday">تاريخ الميلاد</string>
     <string name="guest_join_email">البريد الإلكتروني</string>
+    <string name="guest_join_email_optional">البريد الإلكتروني (اختياري)</string>
+    <string name="guest_join_error_join_failed">خطأ أثناء الاتصال</string>
+    <string name="guest_join_error_link_not_found">رابط المحادثة هذا غير موجود</string>
+    <string name="guest_join_error_too_many_users">عدد المستخدمين المتصلين كبير جدًا</string>
     <string name="guest_join_first_name">الاسم الأول</string>
     <string name="guest_join_last_name">اسم العائلة</string>
+    <string name="guest_join_optional_section">اختياري</string>
+    <string name="guest_join_required_section">المعلومات المطلوبة</string>
     <string name="guest_join_retry">إعادة المحاولة</string>
     <string name="guest_join_sign_in">تسجيل الدخول</string>
     <string name="guest_join_submit">انضمام</string>
@@ -64,8 +70,14 @@
     <string name="login_signup_prompt">ليس لديك حساب؟</string>
     <string name="login_username_label">اسم المستخدم</string>
     <string name="logout_in_progress">جارٍ تسجيل الخروج...</string>
+    <string name="onboarding_friends_badge">+%d لكلٍّ منكما</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d شرارة للمستوى ١</string>
     <string name="onboarding_gauge_reached">وصلت إلى المستوى ١ 🎉</string>
+    <string name="onboarding_global_sample_1">تحية من ساو باولو 👋</string>
+    <string name="onboarding_global_sample_2">من يستمع إلى Nova Club؟ 🎧</string>
+    <string name="onboarding_global_sample_3">أهلًا بك!</string>
+    <string name="onboarding_languages_demo_translated">مرحبًا، كيف حالك؟</string>
+    <string name="onboarding_notifications_sample">ردّت عليك لينا في Meeshy Global</string>
     <plurals name="onboarding_points_a11y">
         <item quantity="zero">تم كسب %d شرارة</item>
         <item quantity="one">تم كسب %d شرارة</item>
@@ -92,6 +104,7 @@
         <item quantity="other">زائد %d شرارة</item>
     </plurals>
     <string name="onboarding_skipAll">تخطَّ الكل</string>
+    <string name="onboarding_story_badge">٢٤ س</string>
     <string name="registration_back">رجوع</string>
     <string name="session_closed_continue">تسجيل الدخول مجددًا</string>
     <string name="session_closed_signed_out_message">أُغلقت هذه الجلسة. سجّل الدخول مجددًا للمتابعة.</string>
@@ -116,7 +129,9 @@
     <string name="signup_password_hide">إخفاء كلمة المرور</string>
     <string name="signup_password_label">كلمة المرور</string>
     <string name="signup_password_show">إظهار كلمة المرور</string>
+    <string name="signup_phone_implausible">لا يبدو هذا الرقم حقيقيًا، يُرجى التحقق منه.</string>
     <string name="signup_phone_label">الهاتف</string>
+    <string name="signup_phone_too_short">هذا الرقم قصير جدًا: %d أرقام على الأقل.</string>
     <string name="signup_sign_in">تسجيل الدخول</string>
     <string name="signup_subtitle">ستقرأ الجميع بلغتك.</string>
     <string name="signup_title">أنشئ حسابك</string>

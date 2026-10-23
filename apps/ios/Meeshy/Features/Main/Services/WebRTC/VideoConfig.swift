@@ -7,7 +7,7 @@ import MeeshySDK
 /// Video capture/encoding ceiling. Kept as a single source of truth so the
 /// camera format picker (`P2PWebRTCClient.selectFormat`) and the encoding
 /// config stay in sync when the preset is updated.
-struct VideoConfig: Sendable {
+nonisolated struct VideoConfig: Sendable {
     let maxResolution: CGSize
     let maxFrameRate: Int
 

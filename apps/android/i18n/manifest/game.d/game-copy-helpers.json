@@ -1,0 +1,1024 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.count",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.convertible.count",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.glory",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.treasury.next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.missions.locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.meeshes.none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.meeshes.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.meeshes.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.days.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.days.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.actions.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.actions.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.levels.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.levels.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.etincelle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.lueur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.lumiere",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.eclat",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.rayon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.aurore",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.comete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.etoile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.constellation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.galaxie",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.nebuleuse",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.pulsar",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.quasar",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.supernova",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.magnetar",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.amas",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.superamas",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.cosmos",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.infini",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.singularite",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.3",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.4",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.5",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.6",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.7",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.8",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.9",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.10",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.11",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.12",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.13",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.14",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.15",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.16",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.17",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.18",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.19",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.tier.ordinal.20",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.to_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.ring.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.material.copper",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.material.bronze",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.material.silver",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.material.gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.material.platinum",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.material.obsidian",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.material.prism",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.material.flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.murmure",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.echo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.voix",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.conteur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.passeur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.polyglotte",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.ambassadeur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.orateur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.oracle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.legende",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.mythe",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rank.mythe_seat",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.treasury.bourse",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.treasury.escarcelle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.treasury.coffret",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.treasury.coffre",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.treasury.tresor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.treasury.reserve",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.form.braise",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.form.flamme",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.form.brasier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.form.astre",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.form.soleil",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.edition.silver",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.edition.gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.edition.prism",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.difficulty.easy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.difficulty.medium",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.difficulty.hard",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.difficulty.gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.react_messages.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.react_messages.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.send_voice.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.send_voice.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.send_texts.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.send_texts.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.use_stickers.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.use_stickers.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.send_attachments.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.send_attachments.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.reply_conversations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.write_conversations.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.write_conversations.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.comment_text.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.comment_text.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.publish_story.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.publish_story.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.publish_post.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.publish_post.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.share_link.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.share_link.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.prism_foreign_messages.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.prism_foreign_messages.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.prism_foreign_exchange",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.voice_comments.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.voice_comments.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.publish_reel.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.publish_reel.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.long_chat",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.gold_replies_received",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.react_posts.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.react_posts.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.reply_story.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.reply_story.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.join_community.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.join_community.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.write_someone_new.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.write_someone_new.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.start_conversation.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.start_conversation.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.community_hello.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.community_hello.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.comment_stranger_post.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.comment_stranger_post.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.cross_language_chat.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.cross_language_chat.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.reply_their_language.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.reply_their_language.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.create_invite_link.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.create_invite_link.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.invite_contact.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.invite_contact.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.invite_joined.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.invite_joined.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.generic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.insufficient_points",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.insufficient_meeshes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.blocked.debt_plain",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.treasury_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.freeze_at_maximum",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.relight_not_allowed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.mission_not_found",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.mission_reroll_exhausted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.mission_reroll_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.missions_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.chest_not_ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.request_id_conflict",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.league_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.league_minor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.league_consent_required",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.league_pseudonym_invalid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.league_pseudonym_taken",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.league_pseudonym_forbidden",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.duo_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.duo_not_friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.duo_already_active",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.duo_not_found",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.duo_transition_refused",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.season_not_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.season_step_not_found",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.season_step_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.season_step_already_claimed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.seal_already_owned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.prestige_level_too_low",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.prestige_at_maximum",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.price_changed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.generic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.personal",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.finished",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.missed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.timer.remaining",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.timer.starts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.held.none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.held.bourse",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.held.escarcelle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.held.coffret",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.held.coffre",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.held.tresor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.held.reserve",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.opens.bourse",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.opens.escarcelle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.opens.coffret",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.opens.coffre",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.opens.tresor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.opens.reserve",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duration.days_hours",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duration.hours",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duration.minutes",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -122,6 +122,7 @@ internal class ChatReactionController(
         val isAdding = emoji !in mine
         if (isAdding) emojiUsageStore.record(emoji)
         mutableOwnReactions.update { it + (messageId to if (isAdding) mine + emoji else mine - emoji) }
+        applySelfToOpenDetails(messageId, emoji, present = isAdding)
         state.update { it.copy(actionMessageId = null, emojiPickerMessageId = null) }
         scope.launch {
             try {
@@ -129,15 +130,44 @@ internal class ChatReactionController(
                     workManager.enqueue(OutboxFlushWorker.buildRequest())
                 } else {
                     mutableOwnReactions.update { it + (messageId to mine) }
+                    applySelfToOpenDetails(messageId, emoji, present = !isAdding)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 mutableOwnReactions.update { it + (messageId to mine) }
+                applySelfToOpenDetails(messageId, emoji, present = !isAdding)
                 state.update { it.copy(errorMessage = e.message) }
             } finally {
                 togglesInFlight.remove(key)
             }
+        }
+    }
+
+    /**
+     * Quick-strip add from the who-reacted sheet: puts [emoji] on [messageId] unless the viewer
+     * already has it (the strip adds, it never takes a reaction back). The usage is recorded by
+     * [toggle], so the strip re-ranks.
+     */
+    fun addFromDetails(messageId: String, emoji: String) {
+        if (emoji in (mutableOwnReactions.value[messageId] ?: emptySet())) return
+        toggle(messageId, emoji)
+    }
+
+    /** Mirrors the viewer's toggle into the open who-reacted sheet so its tabs and counts move at once. */
+    private fun applySelfToOpenDetails(messageId: String, emoji: String, present: Boolean) {
+        val me = sessionRepository.currentUser.value ?: return
+        val name = me.displayName?.takeIf { it.isNotBlank() } ?: me.username
+        state.update { current ->
+            val open = current.reactionDetails?.takeIf { it.messageId == messageId } ?: return@update current
+            val breakdown = open.breakdown.withSelfReaction(emoji, me.id, name, present)
+            current.copy(
+                reactionDetails = open.copy(
+                    breakdown = breakdown,
+                    selectedTabIndex = open.selectedTabIndex.coerceIn(0, (breakdown.tabs.size - 1).coerceAtLeast(0)),
+                    quickEmojis = emojiUsageStore.top(DETAIL_QUICK_REACTION_COUNT),
+                ),
+            )
         }
     }
 
@@ -155,6 +185,7 @@ internal class ChatReactionController(
                     messageId = messageId,
                     isLoading = true,
                     breakdown = ReactionBreakdown(emptyList()),
+                    quickEmojis = emojiUsageStore.top(DETAIL_QUICK_REACTION_COUNT),
                 ),
             )
         }
@@ -185,6 +216,7 @@ internal class ChatReactionController(
     }
 
     private companion object {
-        const val QUICK_REACTION_COUNT = 8
+        val QUICK_REACTION_COUNT: Int = EmojiCatalog.defaultQuickReactions.size
+        const val DETAIL_QUICK_REACTION_COUNT = 12
     }
 }
