@@ -35,7 +35,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UNKNOWN_PACK_AUDIENCE, isPackShelved, type PackAudience } from '@meeshy/shared/types/pack-availability';
 import { parseLens, LENS_PATTERNS, type Lens } from '@meeshy/shared/types/lens-format';
 import { LENS_PACK_LIMITS, isLensCostDeclaredHonestly, lensAssetRefs, measureLensCost, withLensAssets, type LensCost } from '@meeshy/shared/types/lens-pack';
-import type { PackAssetRef, PackStatus, PackSummary } from '@meeshy/shared/types/content-pack';
+import { packChoiceKey, type PackAssetRef, type PackStatus, type PackSummary } from '@meeshy/shared/types/content-pack';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
 import { normalizeStickerImage, type StickerImageOutcome } from '../stickers/stickerImage';
 import { normalizeLensLut } from './lensLutImage';
@@ -109,10 +109,15 @@ export type WithdrawLensOutcome =
   | { readonly kind: 'not-found' }
   | { readonly kind: 'audit-unavailable' };
 
+export type RestoreLensOutcome =
+  | { readonly kind: 'restored'; readonly pack: LensPackDetail; readonly installationsReset: number }
+  | { readonly kind: 'not-found' }
+  | { readonly kind: 'audit-unavailable' };
+
 export type LensFile = { readonly bytes: Buffer; readonly contentType: string };
 
 export type LensPacksDeps = {
-  readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog'>;
+  readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog' | 'userStickerPack'>;
   readonly now?: () => Date;
   readonly normalizeAsset?: (bytes: Buffer) => Promise<StickerImageOutcome>;
   readonly normalizeLut?: (bytes: Buffer) => Promise<StickerImageOutcome>;
@@ -127,7 +132,7 @@ type NotAppliedReason = 'concurrent-review' | 'write-failed';
 type NotAppliedEntry = {
   readonly moderatorId: string;
   readonly submitterId: string;
-  readonly action: 'LENS_PACK_APPROVE_NOT_APPLIED' | 'LENS_PACK_REJECT_NOT_APPLIED' | 'LENS_PACK_WITHDRAW_NOT_APPLIED';
+  readonly action: 'LENS_PACK_APPROVE_NOT_APPLIED' | 'LENS_PACK_REJECT_NOT_APPLIED' | 'LENS_PACK_WITHDRAW_NOT_APPLIED' | 'LENS_PACK_RESTORE_NOT_APPLIED';
   readonly slug: string;
 };
 
@@ -141,7 +146,10 @@ type LensAuditEntry = {
     | 'LENS_PACK_REJECTION_REPLACED'
     | 'LENS_PACK_APPROVE_NOT_APPLIED'
     | 'LENS_PACK_REJECT_NOT_APPLIED'
-    | 'LENS_PACK_WITHDRAW_NOT_APPLIED';
+    | 'LENS_PACK_WITHDRAW_NOT_APPLIED'
+    | 'LENS_PACK_RESTORE'
+    | 'LENS_PACK_RESTORE_APPLIED'
+    | 'LENS_PACK_RESTORE_NOT_APPLIED';
   readonly slug: string;
   readonly metadata: Readonly<Record<string, unknown>>;
 };
@@ -250,7 +258,7 @@ function decodeAssets(refs: readonly string[], provided: Readonly<Record<string,
 }
 
 export class LensPacks {
-  private readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog'>;
+  private readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog' | 'userStickerPack'>;
   private readonly now: () => Date;
   private readonly normalizeAsset: (bytes: Buffer) => Promise<StickerImageOutcome>;
   private readonly normalizeLut: (bytes: Buffer) => Promise<StickerImageOutcome>;
@@ -473,6 +481,46 @@ export class LensPacks {
     }
     const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
     return row === null ? { kind: 'not-found' } : { kind: 'withdrawn', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }) };
+  }
+
+  /**
+   * Rétablit une lens RETIRÉE par erreur (#12321) : `withdrawn → approved`,
+   * conditionnel, journalisé AVANT d'agir, puis son issue (`*_APPLIED` avec le
+   * nombre d'installations remises à zéro, ou `*_NOT_APPLIED` avec sa raison).
+   *
+   * Ses installations retirées NE REVIENNENT PAS (#12329 R3) : chacun la
+   * réinstallera par son propre geste. Elles sont remises à zéro AVANT que la
+   * lens redevienne visible — elle n'est donc jamais servie « installée » à
+   * qui ne l'a pas réinstallée — et `installCount` les décompte dans la même
+   * écriture que le rétablissement.
+   */
+  async restore(moderatorId: string, slug: string, input: { readonly note: string | null }): Promise<RestoreLensOutcome> {
+    const current = await this.prisma.lensPack.findUnique({ where: { slug }, select: { submitterId: true, status: true, installCount: true } });
+    if (current === null || current.status !== 'withdrawn') return { kind: 'not-found' };
+    const note = input.note?.trim().slice(0, LENS_PACK_LIMITS.maxReviewNoteLength) || null;
+    const journaled = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE', slug, metadata: { note } });
+    if (!journaled) return { kind: 'audit-unavailable' };
+    const notApplied: NotAppliedEntry = { moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE_NOT_APPLIED', slug };
+    const reset = await this.applyJournaled(
+      () => this.prisma.userStickerPack.updateMany({ where: { packSlug: packChoiceKey('lens', slug), installedAt: { not: null } }, data: { installedAt: null } }),
+      notApplied,
+    );
+    const flipped = await this.applyJournaled(
+      () =>
+        this.prisma.lensPack.updateMany({
+          where: { slug, status: 'withdrawn' },
+          data: { status: 'approved', reviewNote: note, reviewerId: moderatorId, reviewedAt: this.now(), installCount: Math.max(0, current.installCount - reset.count) },
+        }),
+      notApplied,
+    );
+    if (flipped.count === 0) {
+      await this.recordNotApplied({ ...notApplied, reason: 'concurrent-review' });
+      return { kind: 'not-found' };
+    }
+    const applied = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE_APPLIED', slug, metadata: { installationsReset: reset.count } });
+    if (!applied) this.log.error('lens moderation journal incomplete: a gesture is journaled without its outcome', { action: 'LENS_PACK_RESTORE_APPLIED', slug });
+    const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
+    return row === null ? { kind: 'not-found' } : { kind: 'restored', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }), installationsReset: reset.count };
   }
 
   /**
