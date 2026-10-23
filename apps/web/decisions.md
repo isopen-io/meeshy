@@ -5711,6 +5711,8 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 
 **Ce que ce lot ne fait pas.** Les médias de POSTS (fil, réels) ne lisent encore ni variantes ni rendus (`lib/feed/card-model.ts` sert `fileUrl`) : issue de suivi. Rien n'est mesuré ici (poids servi, temps à la première image) : argumenté, non mesuré.
 
+**Complément (2026-10-23, #12316) — le fil et les réels.** `FeedMedia` déclare `fileSize`, `imageVariants`, `avifVariants` et `renditions`, que `postIncludes.ts` sert déjà. Le modèle de carte (`lib/feed/card-model.ts`) les résout une fois : `srcSet` / `avifSrcSet` (par `attachmentPictureSrcSets`) et `compatSrc` / `compatSize` (par `compatibilityRendition`). La surface du fil (`feed-media-surface.tsx`, `sizes` de la colonne de 640 px) et la galerie d'un réel (`reel-images.tsx`, `<picture class="contents">` pour que l'`<img>` reste l'enfant du défilement aimanté) passent par `ServedPicture` ; la vidéo du fil et celle d'un réel (`reel-page.tsx`) jouent `useElectedVideoSrc`, la même loi `electVideoSource` sur des adresses déjà résolues. La mémoire « vu récemment » d'un réel suit l'adresse jouée. Les pistes de scène (`reel-scene-stage.tsx`) ne sont pas touchées.
+
 **Gardes.** `lib/media/video-rendition.test.ts`, `lib/media/served-video.test.ts`, `lib/api/media-url.test.ts` (`attachmentPictureSrcSets`), `components/served-rendition.test.tsx` (DOM de la grille et de la tuile vidéo), `lib/api/admin-conversations.test.ts` (masquage).
 
 ## D-219 — Une photo HEIC choisie sur Android ou Chrome part telle quelle et la passerelle la convertit ; l'aperçu attend la vignette servie ; un refus nomme le format (2026-10-23, #11315 ; consomme S8 #11263)

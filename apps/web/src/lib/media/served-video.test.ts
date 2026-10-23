@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { MediaRendition } from '@meeshy/shared/types/attachment';
 
-import { decodesHevcWith, servedVideoSrc, type VideoServingEnv } from './served-video';
+import { decodesHevcWith, electedVideoSrc, servedVideoSrc, type VideoServingEnv } from './served-video';
 
 const h264: MediaRendition = { codec: 'h264', mimeType: 'video/mp4', url: '2026/10/u/clip_h264.mp4', width: 1920, height: 1080, size: 1 };
 const piece = { fileUrl: '2026/10/u/clip.mov', fileSize: 10, renditions: [h264] };
@@ -37,5 +37,19 @@ describe('decodesHevcWith — la sonde du décodeur HEVC', () => {
         },
       }),
     ).toBe(false);
+  });
+});
+
+describe('electedVideoSrc — la vidéo d’un post, adresses déjà résolues', () => {
+  const resolved = { src: 'https://g/clip.mov', fileSize: 10, compatSrc: 'https://g/clip_h264.mp4', compatSize: 4 };
+
+  test('sans décodeur HEVC : le rendu ; avec, sur un tier haut : l’original', () => {
+    expect(electedVideoSrc(resolved, env({ decodesHevc: () => false }))).toBe('https://g/clip_h264.mp4');
+    expect(electedVideoSrc(resolved, env())).toBe('https://g/clip.mov');
+  });
+
+  test('tier moyen : le plus léger ; sans rendu : l’original', () => {
+    expect(electedVideoSrc(resolved, env({ tier: () => 'mid' }))).toBe('https://g/clip_h264.mp4');
+    expect(electedVideoSrc({ src: 'https://g/clip.webm' }, env({ decodesHevc: () => false }))).toBe('https://g/clip.webm');
   });
 });

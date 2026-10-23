@@ -15,15 +15,18 @@ import type { ReactNode } from 'react';
 export function ServedPicture({
   avifSrcSet,
   sizes,
+  className,
   children,
 }: {
   readonly avifSrcSet: string | undefined;
   readonly sizes: string;
+  /** `contents` quand l'`<img>` doit rester l'enfant de mise en page de son parent (une rangée flex, un défilement aimanté). */
+  readonly className?: string;
   readonly children: ReactNode;
 }) {
   if (avifSrcSet === undefined) return <>{children}</>;
   return (
-    <picture>
+    <picture {...(className !== undefined ? { className } : {})}>
       <source type="image/avif" srcSet={avifSrcSet} sizes={sizes} />
       {children}
     </picture>
