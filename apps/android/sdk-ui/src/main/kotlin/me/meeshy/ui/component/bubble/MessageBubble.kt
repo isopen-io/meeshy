@@ -28,22 +28,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -348,68 +341,7 @@ public fun MessageBubble(
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = MeeshySpacing.xs),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-                ) {
-                    if (!content.isDeleted) {
-                        EphemeralCountdownBadge(expiresAtIso = content.expiresAtIso)
-                    }
-                    if (content.isStarred && !content.isDeleted) {
-                        Icon(
-                            imageVector = Icons.Filled.Bookmark,
-                            contentDescription = stringResource(R.string.bubble_starred),
-                            tint = onColor.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(14.dp)
-                                .padding(end = MeeshySpacing.xs),
-                        )
-                    }
-                    if (content.isTranslated) {
-                        Icon(
-                            imageVector = Icons.Filled.Translate,
-                            contentDescription = stringResource(R.string.bubble_translated),
-                            tint = onColor.copy(alpha = 0.7f),
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
-                    if (content.isEdited) {
-                        Text(
-                            text = stringResource(R.string.bubble_edited),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = onColor.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(start = MeeshySpacing.xs),
-                        )
-                    }
-                }
-
-                if (content.isOutgoing) {
-                    // The online in-flight clock is debounced: a send that
-                    // round-trips under 200ms never flashes it (parity iOS
-                    // `SendingClockGlyph`). The offline hourglass and every
-                    // settled tier render immediately.
-                    if (content.deliveryStatus == DeliveryStatus.Pending) {
-                        if (rememberSendingGlyphRevealed(content.createdAtIso)) {
-                            DeliveryStatusIcon(
-                                status = content.deliveryStatus,
-                                onColor = onColor,
-                            )
-                        }
-                    } else {
-                        DeliveryStatusIcon(
-                            status = content.deliveryStatus,
-                            onColor = onColor,
-                        )
-                    }
-                }
-            }
+            BubbleFooterRow(content = content, onColor = onColor)
         }
         }
     }
@@ -1152,51 +1084,6 @@ private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?, onLongCli
             style = MaterialTheme.typography.labelSmall,
             color = if (entry.includesMe) MeeshyPalette.Indigo400 else MeeshyTheme.tokens.textPrimary,
             fontWeight = if (entry.includesMe) FontWeight.SemiBold else null,
-        )
-    }
-}
-
-@Composable
-private fun DeliveryStatusIcon(
-    status: DeliveryStatus,
-    onColor: Color,
-) {
-    when (status) {
-        DeliveryStatus.Pending -> Icon(
-            imageVector = Icons.Filled.Schedule,
-            contentDescription = stringResource(R.string.bubble_status_pending),
-            tint = onColor.copy(alpha = 0.5f),
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.QueuedOffline -> Icon(
-            imageVector = Icons.Filled.HourglassEmpty,
-            contentDescription = stringResource(R.string.bubble_status_queued),
-            tint = onColor.copy(alpha = 0.5f),
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.Sent -> Icon(
-            imageVector = Icons.Filled.Done,
-            contentDescription = stringResource(R.string.bubble_status_sent),
-            tint = onColor.copy(alpha = 0.5f),
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.Delivered -> Icon(
-            imageVector = Icons.Filled.DoneAll,
-            contentDescription = stringResource(R.string.bubble_status_delivered),
-            tint = onColor.copy(alpha = 0.5f),
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.Read -> Icon(
-            imageVector = Icons.Filled.DoneAll,
-            contentDescription = stringResource(R.string.bubble_status_read),
-            tint = MeeshyTheme.tokens.info,
-            modifier = Modifier.size(16.dp),
-        )
-        DeliveryStatus.Failed -> Icon(
-            imageVector = Icons.Filled.ErrorOutline,
-            contentDescription = stringResource(R.string.bubble_status_failed),
-            tint = MeeshyPalette.Error,
-            modifier = Modifier.size(16.dp),
         )
     }
 }
