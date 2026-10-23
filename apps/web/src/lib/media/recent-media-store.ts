@@ -1,3 +1,5 @@
+import { browserConnection } from '@/lib/device/capability-tier';
+
 import { SW_RECENT_MEDIA_CACHE } from './recent-media-cache-name';
 import {
   RECENT_MEDIA_STORED_AT_HEADER,
@@ -93,13 +95,12 @@ export async function rememberRecentMedia(
 }
 
 function browserDeps(): RecentMediaDeps {
-  const nav = typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { readonly connection?: RecentMediaConnection });
   const storage = (globalThis as { readonly caches?: CacheStorage }).caches;
   return {
     caches: storage === undefined ? undefined : { open: async (name) => adapt(await storage.open(name)) },
     fetch: (url, init) => fetch(url, init),
     now: () => Date.now(),
-    connection: () => nav?.connection,
+    connection: browserConnection,
   };
 }
 

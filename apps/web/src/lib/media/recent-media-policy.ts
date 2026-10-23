@@ -1,3 +1,5 @@
+import type { NetworkConnection } from '@/lib/device/capability-tier';
+
 /**
  * LE SEAU DES MÉDIAS VUS RÉCEMMENT (#11326, défaut retenu de #11253) — ce qui
  * y entre, ce qui en sort. Pur : la garde (`recent-media-store.ts`) et le
@@ -22,8 +24,8 @@ export const RECENT_MEDIA_STORED_AT_HEADER = 'X-Meeshy-Stored-At';
  */
 export type RecentMediaProtection = 'none' | 'protected';
 
-/** `navigator.connection` (Network Information API) — absent sur Safari et Firefox. */
-export type RecentMediaConnection = { readonly type?: string; readonly saveData?: boolean } | undefined;
+/** La connexion normalisée par le lecteur unique (`lib/device/capability-tier.ts`, W10) — absente sur Safari et Firefox. */
+export type RecentMediaConnection = Pick<NetworkConnection, 'type' | 'saveData'> | null | undefined;
 
 export type RecentMediaRefusal = 'protected' | 'not-http' | 'signed-url' | 'not-wifi' | 'save-data';
 
