@@ -497,7 +497,7 @@ class PostDetailViewModel @Inject constructor(
     ): PostDetailUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
         val projected = post?.let {
-            FeedPostBuilder.build(it, prefs, config.socketUrl, activeLanguageCode = active, currentUserId = user?.id)
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, activeLanguageCode = active, currentUserId = user?.id)
         }?.let { presentation ->
             presentation.copy(
                 commentCount = overlay.commentCount?.coerceAtLeast(0) ?: presentation.commentCount,

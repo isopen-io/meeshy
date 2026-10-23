@@ -15,7 +15,8 @@
  *     carte de réel ;
  *  2. toucher la carte ouvre `/reels?seed=<id>` SUR ce réel, peint depuis le
  *     cache : aucun squelette, aucun disque flottant ;
- *  3. le réel visible JOUE, et lui seul ; au plus cinq lecteurs montés (N±2, #9702) ;
+ *  3. le réel visible JOUE, et lui seul ; au plus cinq lecteurs montés (N±2, #9702),
+ *     dont N±2 sans rien charger (#11308) ;
  *  4. un balayage tactile vers le haut accroche le réel SUIVANT (un arrêt par
  *     réel), vers le bas le PRÉCÉDENT, sans tâche longue ; la lecture suit ;
  *  5. les flèches du clavier valent le balayage ;
@@ -388,6 +389,12 @@ try {
       const atRest = await players(page);
       check(atRest.filter((p) => p.playing).length === 1 && atRest.every((p) => !p.playing || p.page === 0), `${label} : lui seul (${JSON.stringify(atRest)})`);
       check(atRest.length <= 5, `${label} : au plus cinq lecteurs montés — le visible et la fenêtre N±2 (${atRest.length})`);
+      /* N±2 reste MONTÉ sans rien charger (#11308) : `preload="none"`, aucun
+         lecteur créé, donc aucun décodeur pris au réel visible et à N±1. */
+      const warmLoads = await page.evaluate(() =>
+        [...document.querySelectorAll('[data-reel-mode="warm"] [data-reel-media]')].map((m) => ({ preload: m.preload, readyState: m.readyState })),
+      );
+      check(warmLoads.length > 0 && warmLoads.every((m) => m.preload === 'none' && m.readyState === 0), `${label} : N±2 monté sans rien charger ni décoder (${JSON.stringify(warmLoads)})`);
       await capture(page, `reels-lecture-${slug}`);
 
       // ------------------------------------------------ 7. contraste et cibles

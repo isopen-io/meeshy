@@ -93,6 +93,7 @@ class ReelsViewModelTest {
         allowAnalytics: Boolean = true,
     ): ReelsViewModel {
         every { session.currentUserId } returns currentUserId
+        every { session.currentUser } returns kotlinx.coroutines.flow.MutableStateFlow(null)
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked
@@ -696,5 +697,21 @@ class ReelsViewModelTest {
 
         assertThat(vm.state.value.reels.map { it.bookmarkCount }).containsExactly(1, 9).inOrder()
         assertThat(vm.state.value.reels.first { it.id == "r1" }.isBookmarked).isFalse()
+    }
+
+    // MARK: - Media addresses resolve against the API base, never the socket origin
+
+    @Test
+    fun `a reel stored as a key plays from the API attachment route`() = runTest {
+        val stored = reel("r1").copy(
+            media = listOf(ApiPostMedia(id = "m1", mimeType = "video/mp4", fileUrl = "2026/10/r1/clip.mp4", thumbnailUrl = "2026/10/r1/poster.jpg")),
+        )
+        val vm = viewModel(thread = listOf(stored))
+
+        vm.load()
+
+        val shown = vm.state.value.reels.single()
+        assertThat(shown.videoUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/r1/clip.mp4")
+        assertThat(shown.posterUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/r1/poster.jpg")
     }
 }

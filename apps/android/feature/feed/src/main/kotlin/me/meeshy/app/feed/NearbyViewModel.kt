@@ -167,7 +167,7 @@ class NearbyViewModel @Inject constructor(
 
     private fun project(list: NearbyListState, user: MeeshyUser?, st: NearbyStatus): NearbyUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val projected = list.posts.map { FeedPostBuilder.build(it, prefs, config.socketUrl) }
+        val projected = list.posts.map { FeedPostBuilder.build(it, prefs, config.apiBaseUrl) }
         val showSkeleton = st.isLoading && !list.hasLoaded && projected.isEmpty() && st.error == null
         return NearbyUiState(
             posts = projected,
