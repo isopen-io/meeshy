@@ -24,6 +24,7 @@ import me.meeshy.app.conversations.ShareLinkDetailViewModel
 import me.meeshy.app.conversations.ShareLinkPickerScreen
 import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
+import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.stories.StoryTray
 
@@ -153,6 +154,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         val conversationId = entry.arguments
             ?.getString(ChatViewModel.CONVERSATION_ID_ARG)
             .orEmpty()
+        ReportsConversationViewing(conversationId)
         ChatScreen(
             onBack = { navController.popBackStack() },
             onStartCall = { peerName, isVideo ->
