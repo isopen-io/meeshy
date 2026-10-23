@@ -5697,3 +5697,18 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 - **Le geste** : tant que l'aperçu n'est pas rempli (`packIsLocked`), la rangée montre « À débloquer » à la place de « Installer » ou « Acheter ». Un pack payant à fenêtre ouverte reste achetable. Le serveur reste juge.
 
 **Gardes.** `lib/packs/unlock-line.test.ts`, `lib/api/packs-shop-unlock.test.ts`, `components/unified-shop-unlock.test.tsx`.
+
+## D-218 — Le web choisit le rendu servi : l'AVIF avant le WebP dans une `<picture>`, l'original HD en `src` ; une vidéo HEVC joue son rendu H.264 là où le navigateur ou le tier le demandent (2026-10-23, #11318 ; consomme S7 #11262 et S6 #11261)
+
+**Contexte.** La passerelle sert désormais, à côté de `imageVariants` (WebP), une liste `avifVariants` aux mêmes largeurs, et à côté de l'original d'une vidéo HEVC un rendu `renditions[codec = 'h264']` ≤ 1080p mappé en SDR BT.709. Le web ne lisait que le WebP et jouait toujours l'original : une vidéo d'iPhone restait noire sur Chrome sans décodeur HEVC et dans la coque Android.
+
+**Décision.**
+- **Image : `ServedPicture`** (`components/served-picture.tsx`) enveloppe l'`<img>` de la grille (`ImageTile`, `GridCellImage`) dans une `<picture>` dont la `<source type="image/avif">` porte les variantes AVIF au MÊME `sizes` que l'image. L'`<img>` garde son `srcset` WebP et son `src`, l'original HD : la visionneuse plein écran le sert toujours (verdict du porteur, la photo reste HD), et un navigateur sans AVIF retombe sur le WebP sans rien demander. Sans AVIF, aucune `<picture>` : le DOM d'avant. Les deux listes sont lues par `attachmentPictureSrcSets` (`lib/api/media-url.ts`), qui filtre le format de chacune — jamais un AVIF dans le `srcset` WebP.
+- **Vidéo : une loi pure, `electVideoSource`** (`lib/media/video-rendition.ts`). Sans rendu H.264 ⇒ l'original. Navigateur sans HEVC ⇒ le rendu, quel que soit le tier. Tier `low` ⇒ le rendu ; `mid` ⇒ le plus léger des deux ; `high`/`pro` ⇒ l'original (HDR). Le tier est celui de W10 (`capability-tier.ts`), jamais un seuil local. La sonde HEVC (`canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"')`) vit dans `lib/media/served-video.ts`, mémoïsée une fois par session ; la tuile vidéo et la page plein écran lisent `useServedVideoSrc`, élue une fois par pièce montée sur des primitives : un tier qui change en cours de lecture ne recharge pas la vidéo.
+- **L'administration masque les deux** : `SECRETS_DUNE_PIECE` retire `avifVariants` et `renditions` d'une pièce voilée, comme `imageVariants`.
+
+**Repli navigateur.** Safari 16+ décode l'AVIF et le HEVC : il reçoit l'AVIF et l'original. Chrome et la WebView Android décodent l'AVIF ; le HEVC dépend du matériel, et la sonde le dit. Firefox ne décode pas le HEVC : il reçoit le H.264.
+
+**Ce que ce lot ne fait pas.** Les médias de POSTS (fil, réels) ne lisent encore ni variantes ni rendus (`lib/feed/card-model.ts` sert `fileUrl`) : issue de suivi. Rien n'est mesuré ici (poids servi, temps à la première image) : argumenté, non mesuré.
+
+**Gardes.** `lib/media/video-rendition.test.ts`, `lib/media/served-video.test.ts`, `lib/api/media-url.test.ts` (`attachmentPictureSrcSets`), `components/served-rendition.test.tsx` (DOM de la grille et de la tuile vidéo), `lib/api/admin-conversations.test.ts` (masquage).
