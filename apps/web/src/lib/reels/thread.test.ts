@@ -11,6 +11,7 @@ import {
   neighborIndex,
   pageModeOf,
   playbackIntentOf,
+  reelPreloadOf,
   reelSeedOf,
   reelDisplayOf,
   reelVisitorState,
@@ -179,6 +180,19 @@ describe('pageModeOf — un seul réel joue, N±2 restent montés, les autres so
     expect(pageModeOf(5, 3)).toBe('warm');
     expect(pageModeOf(0, 3)).toBe('far');
     expect(pageModeOf(6, 3)).toBe('far');
+  });
+});
+
+describe('reelPreloadOf — seul N±1 est décodé, N±2 n’est que des octets (#11308, défaut de #11253)', () => {
+  test('le réel visible et ses voisins immédiats chargent tout : leur première image est décodée avant le balayage', () => {
+    expect(reelPreloadOf(pageModeOf(3, 3))).toBe('auto');
+    expect(reelPreloadOf(pageModeOf(2, 3))).toBe('auto');
+    expect(reelPreloadOf(pageModeOf(4, 3))).toBe('auto');
+  });
+
+  test('N±2 reste monté sans rien charger ni décoder : ses octets de tête viennent de l’amorceur, son affiche de l’élément', () => {
+    expect(reelPreloadOf(pageModeOf(1, 3))).toBe('none');
+    expect(reelPreloadOf(pageModeOf(5, 3))).toBe('none');
   });
 });
 
