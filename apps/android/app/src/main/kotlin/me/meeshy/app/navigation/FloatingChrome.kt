@@ -242,7 +242,12 @@ internal fun MeeshyFloatingChrome(
                 unfoldUpward = menuUnfoldsUpward(rightButtonPosition),
                 growRightward = menuGrowsRightward(rightButtonPosition),
                 collapsedContent = { expanded ->
-                    ChromeAvatarButton(user = chromeCurrentUser, unreadCount = chromeUnread, menuExpanded = expanded)
+                    ChromeAvatarButton(
+                        user = chromeCurrentUser,
+                        avatarUrl = chromeViewModel.avatarModel(chromeCurrentUser),
+                        unreadCount = chromeUnread,
+                        menuExpanded = expanded,
+                    )
                 },
                 onAnchorTapWhileExpanded = navigateToProfile,
             )

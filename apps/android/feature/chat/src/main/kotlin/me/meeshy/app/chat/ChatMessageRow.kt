@@ -3,6 +3,8 @@ package me.meeshy.app.chat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -62,8 +64,12 @@ internal fun ChatMessageRow(
     linkPreviewStore: LinkPreviewStore,
     linkPreviewCache: LinkPreviewCache,
     actions: ChatMessageRowActions,
+    audioPlayer: ChatAudioPlayer? = null,
 ) {
     val uriHandler = LocalUriHandler.current
+    val audioPlayback by remember(bubble.audios, audioPlayer) {
+        derivedStateOf { audioPlayer?.let { player -> bubble.audios.firstNotNullOfOrNull(player::bubbleFor) } }
+    }
     val linkContext = LocalContext.current
     val messageId = bubble.messageId
     SwipeToReplyContainer(
@@ -86,9 +92,8 @@ internal fun ChatMessageRow(
             onLocationClick = { location ->
                 location.geoUri?.let { runCatching { uriHandler.openUri(it) } }
             },
-            onAudioClick = { audio ->
-                audio.url?.let { runCatching { uriHandler.openUri(it) } }
-            },
+            onAudioClick = { audio -> audioPlayer?.toggle(audio) },
+            audioPlayback = audioPlayback,
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },

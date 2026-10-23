@@ -1,11 +1,24 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_composer_edit_title">تعديل الرسالة</string>
+    <string name="chat_composer_reply_a11y">رد على %1$s: %2$s</string>
+    <string name="chat_composer_reply_file">ملف</string>
+    <string name="chat_composer_reply_location">موقع</string>
+    <string name="chat_composer_reply_photo">صورة</string>
+    <string name="chat_composer_reply_unknown">رسالة</string>
+    <string name="chat_composer_reply_video">فيديو</string>
+    <string name="chat_composer_reply_voice">رسالة صوتية</string>
+    <string name="chat_composer_reply_you">أنت</string>
+    <string name="chat_delete_confirm_cancel">إلغاء</string>
+    <string name="chat_delete_confirm_hint">الحذف للجميع متاح لمدة ساعتين بعد الإرسال.</string>
+    <string name="chat_delete_confirm_title">حذف هذه الرسالة؟</string>
     <string name="composer_a11y_addSelection">إضافة التحديد</string>
     <string name="composer_a11y_cancelSelection">إلغاء التحديد</string>
     <string name="composer_a11y_openFullLibrary">فتح مكتبة الصور كاملة</string>
     <string name="composer_a11y_recentPhoto">صورة حديثة</string>
     <string name="composer_a11y_recentVideo">فيديو حديث</string>
     <string name="composer_a11y_selectedState">محدّد</string>
+    <string name="composer_drop_unnamedItem">عنصر بلا اسم</string>
     <string name="composer_recent_accessDenied">تم رفض الوصول إلى الصور</string>
     <string name="composer_recent_accessDenied_hint">اضغط لفتح الإعدادات</string>
     <string name="composer_recent_add">إضافة</string>

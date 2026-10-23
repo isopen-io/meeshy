@@ -11,7 +11,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.friend.FriendshipPages
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.notification.observeNotificationSync
@@ -46,9 +48,13 @@ class ChromeViewModel @Inject constructor(
     private val friendRepository: FriendRepository,
     private val friendshipCache: FriendshipCache,
     messageSocketManager: MessageSocketManager,
+    private val config: MeeshyConfig,
 ) : ViewModel() {
 
     val currentUser: StateFlow<MeeshyUser?> = sessionRepository.currentUser
+
+    /** The chrome avatar's loadable address — the stored key resolved against the API base. */
+    fun avatarModel(user: MeeshyUser?): String? = chromeAvatarModel(user?.avatar, config.apiBaseUrl)
 
     val unreadNotifications: StateFlow<Int> = notificationRepository.unreadCountStream
 
@@ -71,11 +77,15 @@ class ChromeViewModel @Inject constructor(
         warmedUp = true
         notificationRepository.notificationsStream(onSyncError = {}).launchIn(viewModelScope)
         viewModelScope.launch {
-            val received = friendRepository.receivedRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
-            val sent = friendRepository.sentRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
-            if (received is NetworkResult.Success && sent is NetworkResult.Success) {
-                friendshipCache.hydrate(sent = sent.data, received = received.data)
-            }
+            friendshipCache.hydrateCoalesced(fetch = {
+                val received = friendRepository.receivedRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
+                val sent = friendRepository.sentRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
+                if (received is NetworkResult.Success && sent is NetworkResult.Success) {
+                    FriendshipPages(sent = sent.data, received = received.data)
+                } else {
+                    null
+                }
+            })
         }
     }
 

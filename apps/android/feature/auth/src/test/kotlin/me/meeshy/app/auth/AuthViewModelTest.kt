@@ -420,6 +420,37 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun selectEnvironment_otherThanTheRunningServer_asksForARestart() {
+        val vm = viewModel(ApiResponse(success = false), environmentStore = InMemoryServerEnvironmentStore())
+
+        vm.selectEnvironment(ServerEnvironment.STAGING)
+
+        // Le client réseau est construit une fois par processus : sans redémarrage, la connexion
+        // partirait vers le serveur EN COURS (production) sous l'étiquette « staging ».
+        assertThat(vm.state.value.restartToApplyEnvironment).isTrue()
+    }
+
+    @Test
+    fun selectEnvironment_theRunningServer_needsNoRestart() {
+        val vm = viewModel(ApiResponse(success = false), environmentStore = InMemoryServerEnvironmentStore())
+
+        vm.selectEnvironment(ServerEnvironment.STAGING)
+        vm.selectEnvironment(ServerEnvironment.PRODUCTION)
+
+        assertThat(vm.state.value.restartToApplyEnvironment).isFalse()
+    }
+
+    @Test
+    fun applyCustomHost_asksForARestart() {
+        val vm = viewModel(ApiResponse(success = false), environmentStore = InMemoryServerEnvironmentStore())
+
+        vm.onCustomHostChange("gate.example.com")
+        vm.applyCustomHost()
+
+        assertThat(vm.state.value.restartToApplyEnvironment).isTrue()
+    }
+
+    @Test
     fun selectEnvironment_custom_updatesStateButDoesNotPersistUntilApplied() {
         val environmentStore = InMemoryServerEnvironmentStore()
         val vm = viewModel(ApiResponse(success = false), environmentStore = environmentStore)

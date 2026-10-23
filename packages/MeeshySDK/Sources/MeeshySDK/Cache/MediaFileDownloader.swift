@@ -52,6 +52,25 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
     private struct TransferLedger {
         var sessions: [MediaTransferProfile: URLSession] = [:]
         var transfers: [ObjectIdentifier: Transfer] = [:]
+        var streams: [ObjectIdentifier: ReadableTransfer] = [:]
+    }
+
+    /// Un transfert LISIBLE en cours de route (#9881) : ses octets vont dans
+    /// un `ProgressiveMediaDownload` au fil de leur arrivée.
+    private final class ReadableTransfer {
+        let continuation: CheckedContinuation<URLResponse, Error>
+        let sink: ProgressiveMediaDownload
+        let progress: ProgressHandler?
+        var cadence: TransferProgressCadence
+        var rejected: URLResponse?
+        var written: Int64 = 0
+
+        init(continuation: CheckedContinuation<URLResponse, Error>, sink: ProgressiveMediaDownload, progress: ProgressHandler?, cadence: TransferProgressCadence) {
+            self.continuation = continuation
+            self.sink = sink
+            self.progress = progress
+            self.cadence = cadence
+        }
     }
 
     private final class Transfer {
@@ -146,6 +165,37 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
         }
     }
 
+    /// Télécharge `request` EN FLUX dans `sink`, lisible pendant le transfert
+    /// (#9881). Rend la réponse à la fin ; une réponse HTTP d'erreur arrête le
+    /// transfert à son premier octet et se rend telle quelle, sans rien écrire.
+    /// L'annulation de la `Task` appelante annule le transfert et lève
+    /// `CancellationError` ; une panne réseau lève l'`URLError` d'origine.
+    public func stream(
+        _ request: URLRequest,
+        profile: MediaTransferProfile = .standard,
+        into sink: ProgressiveMediaDownload,
+        progress: ProgressHandler? = nil
+    ) async throws -> URLResponse {
+        try Task.checkCancellation()
+        let relay = CancellationRelay()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URLResponse, Error>) in
+                let task = session(for: profile).dataTask(with: request)
+                let stream = ReadableTransfer(
+                    continuation: continuation,
+                    sink: sink,
+                    progress: progress,
+                    cadence: TransferProgressCadence(minimumInterval: cadenceInterval)
+                )
+                ledger.mutateUnchecked { $0.streams[ObjectIdentifier(task)] = stream }
+                relay.attach(task)
+                task.resume()
+            }
+        } onCancel: {
+            relay.cancel()
+        }
+    }
+
     /// Une session par profil : une `URLSession` ne change pas de configuration
     /// après sa création. Au plus quatre (deux priorités × deux réglages).
     func session(for profile: MediaTransferProfile) -> URLSession {
@@ -224,6 +274,10 @@ extension MediaFileDownloader: URLSessionDownloadDelegate {
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let stream = ledger.mutateUnchecked({ $0.streams.removeValue(forKey: ObjectIdentifier(task)) }) {
+            finishStream(stream, task: task, error: error)
+            return
+        }
         guard let transfer = ledger.mutateUnchecked({ $0.transfers.removeValue(forKey: ObjectIdentifier(task)) }) else { return }
         let staged = ledger.mutateUnchecked { _ in transfer.staged }
         if let error {
@@ -241,5 +295,63 @@ extension MediaFileDownloader: URLSessionDownloadDelegate {
         case nil:
             transfer.continuation.resume(throwing: URLError(.cannotCreateFile))
         }
+    }
+}
+
+extension MediaFileDownloader: URLSessionDataDelegate {
+    /// Les octets d'un flux vont dans son fichier, sur la file du délégué. La
+    /// réponse est lue au premier paquet : une erreur HTTP (404…) arrête le
+    /// transfert sans qu'un seul de ses octets passe pour du média.
+    public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard let stream = ledger.mutateUnchecked({ $0.streams[ObjectIdentifier(dataTask)] }) else { return }
+        if ledger.mutateUnchecked({ _ in stream.rejected != nil }) { return }
+        if !stream.sink.snapshot.hasResponded, let response = dataTask.response {
+            guard Self.isSuccess(response) else {
+                ledger.mutateUnchecked { _ in stream.rejected = response }
+                dataTask.cancel()
+                return
+            }
+            stream.sink.respond(expectedBytes: response.expectedContentLength, mimeType: response.mimeType)
+        }
+        do {
+            try stream.sink.append(data)
+        } catch {
+            logger.error("progressive media write failed: \(error.localizedDescription, privacy: .public)")
+            dataTask.cancel()
+            return
+        }
+        let now = ProcessInfo.processInfo.systemUptime
+        let report = ledger.mutateUnchecked { _ -> (ProgressHandler, Int64, Int64)? in
+            stream.written += Int64(data.count)
+            let expected = dataTask.countOfBytesExpectedToReceive
+            guard let progress = stream.progress,
+                  stream.cadence.admits(writtenBytes: stream.written, expectedBytes: expected, now: now) else { return nil }
+            return (progress, stream.written, expected)
+        }
+        if let report { report.0(report.1, report.2) }
+    }
+
+    private func finishStream(_ stream: ReadableTransfer, task: URLSessionTask, error: Error?) {
+        if let rejected = ledger.mutateUnchecked({ _ in stream.rejected }) {
+            stream.continuation.resume(returning: rejected)
+            return
+        }
+        if let error {
+            stream.continuation.resume(throwing: Self.normalized(error))
+            return
+        }
+        guard let response = task.response else {
+            stream.continuation.resume(throwing: URLError(.badServerResponse))
+            return
+        }
+        if !stream.sink.snapshot.hasResponded, Self.isSuccess(response) {
+            stream.sink.respond(expectedBytes: response.expectedContentLength, mimeType: response.mimeType)
+        }
+        stream.continuation.resume(returning: response)
+    }
+
+    private static func isSuccess(_ response: URLResponse) -> Bool {
+        guard let http = response as? HTTPURLResponse else { return true }
+        return (200...299).contains(http.statusCode)
     }
 }

@@ -21,6 +21,12 @@ enum class StoryTextStyle(val wire: String) {
     TYPEWRITER("typewriter"),
     HANDWRITING("handwriting"),
     CLASSIC("classic"),
+    ;
+
+    companion object {
+        /** The style a wire `textStyle` names — absent or unknown reads as [BOLD], iOS `parsedTextStyle` parity. */
+        fun fromWire(raw: String?): StoryTextStyle = entries.firstOrNull { it.wire == raw } ?: BOLD
+    }
 }
 
 /**
@@ -155,6 +161,19 @@ data class StoryTextElement(
      * is unaffected.
      */
     val baseDirection: StoryTextDirection get() = StoryTextBidi.resolveBaseDirection(text)
+
+    /**
+     * The glyph size, in pixels, this element is laid out at on a scene [canvasWidthPx]
+     * wide — BEFORE its own [scale], which the scene applies as a layer transform. Same
+     * law as the reader ([StoryTextMetrics]), so what the author sees is what is read.
+     */
+    /** The glyph outline stroke in pixels on a scene [canvasWidthPx] wide, before [scale] — the reader's law (#12324). */
+    fun previewOutlinePx(canvasWidthPx: Float): Float =
+        StoryTextMetrics.designPx(outline.width.toDouble(), 1.0, canvasWidthPx)
+
+
+    fun previewFontPx(canvasWidthPx: Float): Float =
+        StoryTextMetrics.fontPx(size.designSize.toDouble(), 1.0, canvasWidthPx)
 
     /**
      * A copy with every continuous field pulled back into its legal range: [x]/[y]

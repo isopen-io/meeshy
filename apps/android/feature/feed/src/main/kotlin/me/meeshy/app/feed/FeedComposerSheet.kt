@@ -61,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -212,7 +213,7 @@ fun FeedComposerSheet(
     var showLanguagePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val mediaLimitMessage = stringResource(R.string.feed_composer_media_limit, FeedComposerDraft.MAX_MEDIA)
+    val mediaLimitMessage = pluralStringResource(R.plurals.feed_composer_media_limit, FeedComposerDraft.MAX_MEDIA, FeedComposerDraft.MAX_MEDIA)
     val mediaUnusableMessage = stringResource(R.string.feed_composer_media_unusable)
 
     // The shared upload tail every attach path (gallery/camera/file Uris, and now a

@@ -98,9 +98,7 @@ enum ReelPrewarm {
         preroll: Bool = true,
         center: AttachmentDownloadCenter = .shared
     ) async {
-        guard MediaThermalPolicy.shouldPrefetchVideo(
-            thermalState: ProcessInfo.processInfo.thermalState
-        ) else { return }
+        guard MediaPolicyMonitor.shared.policy.prefetchesVideo else { return }
         guard let key = prefetchFile(of: post, center: center) else { return }
         guard preroll else { return }
         await awaitFile(key: key, center: center)
@@ -131,13 +129,10 @@ enum ReelPrewarm {
     }
 
     /// Attend que le téléchargement de `key` se termine — fini, échoué ou
-    /// annulé — ou que la tâche soit annulée. Le registre n'expose qu'un état
-    /// (`progress(for:)`) : on le relit à cadence lente plutôt que de risquer
-    /// de manquer l'événement de fin entre le lancement et l'abonnement.
+    /// annulé — ou que la tâche soit annulée. La fin est SIGNALÉE par le
+    /// registre (#9882) : la passe s'endort jusqu'à elle, sans relire l'état.
     static func awaitFile(key: String, center: AttachmentDownloadCenter = .shared) async {
-        while center.progress(for: key) != nil, !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: 120_000_000)
-        }
+        await center.awaitEnd(of: key)
     }
 
     /// Prépare le lecteur de `post` — seulement si son fichier est sur le
@@ -265,15 +260,13 @@ final class ReelPagerPreloader {
 
     /// Les signaux de l'appareil, lus à l'instant : chemin réseau, mémoire,
     /// économie d'énergie, état thermique, et son tier média (#11281).
+    /// L'énergie, la chaleur et le tier viennent de la politique VIVANTE
+    /// (#9880), la même que lisent les lecteurs.
     static func liveContext(visits: [ReelPreloadWindow.Visit]) -> ReelPreloadWindow.Context {
-        let info = ProcessInfo.processInfo
-        return ReelPreloadWindow.Context(
+        MediaPolicyMonitor.shared.policy.reelWindowContext(
             visits: visits,
             network: ReelPreloadWindow.Network(snapshot: NetworkPathSource.shared.current),
-            deviceMemoryGb: ReelPreloadWindow.gigabytes(physicalMemory: info.physicalMemory),
-            lowPower: info.isLowPowerModeEnabled,
-            thermalState: info.thermalState,
-            tier: DeviceMediaTier.current
+            deviceMemoryGb: ReelPreloadWindow.gigabytes(physicalMemory: ProcessInfo.processInfo.physicalMemory)
         )
     }
 
@@ -314,9 +307,7 @@ final class ReelPagerPreloader {
     }
 
     private func prepareWindow(reels: [FeedPost], activeIndex: Int, window: ReelPreloadWindow.Window) async {
-        guard MediaThermalPolicy.shouldPrefetchVideo(
-            thermalState: ProcessInfo.processInfo.thermalState
-        ) else { return }
+        guard MediaPolicyMonitor.shared.policy.prefetchesVideo else { return }
         let plan = ReelPreloadWindow.plan(count: reels.count, activeIndex: activeIndex, window: window)
         // Les posters partent EN MÊME TEMPS que les fichiers : quelques
         // centaines de Ko, et c'est ce que la page montre la première.

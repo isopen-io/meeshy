@@ -57,10 +57,11 @@ class StoryTextObjectProjectionTest {
     }
 
     @Test
-    fun `resolveText prefers an exact key over a normalized sibling`() {
+    fun `resolveText settles two keys of one language by content, the canonical key winning`() {
         val obj = textObject(translations = mapOf("pt-BR" to "Ola BR", "pt" to "Ola"))
-        // The exact "pt-BR" key wins outright over the normalized "pt" sibling that would also match.
-        assertThat(StoryTextObjectProjection.resolveText(obj, preferredLanguages = listOf("pt-BR"))).isEqualTo("Ola BR")
+        // Same rule as iOS PrismTranslationResolver: keys that canonicalise alike are settled by
+        // CONTENT (the canonical key wins), never by map order — one payload, one text.
+        assertThat(StoryTextObjectProjection.resolveText(obj, preferredLanguages = listOf("pt-BR"))).isEqualTo("Ola")
     }
 
     @Test

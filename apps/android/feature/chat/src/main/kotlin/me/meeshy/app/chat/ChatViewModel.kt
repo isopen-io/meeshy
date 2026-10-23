@@ -41,13 +41,16 @@ import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
+import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
 import me.meeshy.sdk.reaction.ReactionRepository
+import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
@@ -95,6 +98,7 @@ class ChatViewModel @Inject constructor(
     private val fileAttachmentDownloader: FileAttachmentDownloader,
     savedStateHandle: SavedStateHandle,
     contributedControllers: Set<@JvmSuppressWildcards ChatController> = emptySet(),
+    recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -116,6 +120,12 @@ class ChatViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId, draft = initialDraft.orEmpty()))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
+
+    private val _callEntry = MutableStateFlow<HeaderCallEntry?>(null)
+
+    /** The header's call entry ([HeaderCallEntry.resolve], iOS parity): `null` hides every
+     * call button (guest, global, broadcast…), `canStart == false` keeps only « Rejoindre ». */
+    val callEntry: StateFlow<HeaderCallEntry?> = _callEntry.asStateFlow()
 
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
@@ -159,6 +169,8 @@ class ChatViewModel @Inject constructor(
         messageSocketManager = messageSocketManager,
         workManager = workManager,
         clock = clock,
+        pendingTray = { controllers.find<ComposerTrayController>() },
+        recentEmojis = recentEmojiStore,
     )
 
     private val reactions = ChatReactionController(
@@ -255,6 +267,14 @@ class ChatViewModel @Inject constructor(
                 val viewerRole = conversation.participants
                     .firstOrNull { it.userId == currentUserId }
                     ?.role
+                _callEntry.value = HeaderCallEntry.resolve(
+                    conversationId = conversation.id,
+                    conversationType = conversation.type,
+                    viewerConversationRole = viewerRole,
+                    viewerPlatformRole = sessionRepository.currentUser.value?.role,
+                    viewerIsGuest = sessionRepository.currentUser.value?.isAnonymous == true,
+                    directPeerUserId = conversation.otherParticipantUserId(currentUserId),
+                )
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
@@ -577,6 +597,10 @@ class ChatViewModel @Inject constructor(
     /** Sends a file picked from the system document/photo picker through the durable upload chain. */
     fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
         composer.sendFileAttachment(bytes, fileName, declaredMimeType)
+
+    /** Un fichier choisi, une photo ou un vocal rejoint le plateau : rien ne part avant [send]. */
+    fun onPickFile(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
+        controllers.find<ComposerTrayController>()?.stageBytes(bytes, fileName, declaredMimeType)
 
     /** Present the composer's message-effects picker sheet. */
     fun openEffectsPicker() = composer.openEffectsPicker()

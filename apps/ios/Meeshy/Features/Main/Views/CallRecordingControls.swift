@@ -252,7 +252,6 @@ struct CallRecordingPlayback: View {
                     accentColor: accentHex,
                     frame: .bubble,
                     availability: availability,
-                    performance: .inline,
                     onDownload: onDownload
                 )
             }

@@ -87,8 +87,8 @@ final class StoryKeyframeAnimationPlanTests: XCTestCase {
                 let s = Double(step) / 20
                 let x = Self.bezier(s, 0, Double(c1x), Double(c2x), 1)
                 let y = Self.bezier(s, 0, Double(c1y), Double(c2y), 1)
-                XCTAssertEqual(x, s, accuracy: 1e-9, "\(timing) : le temps avance linéairement le long de la courbe")
-                XCTAssertEqual(y, timing.progress(s), accuracy: 1e-9, "\(timing) à \(s)")
+                XCTAssertEqual(x, s, accuracy: Self.floatControlPointPrecision, "\(timing) : le temps avance linéairement le long de la courbe")
+                XCTAssertEqual(y, timing.progress(s), accuracy: Self.floatControlPointPrecision, "\(timing) à \(s)")
             }
         }
     }
@@ -191,6 +191,8 @@ final class StoryKeyframeAnimationPlanTests: XCTestCase {
         default: XCTFail("\(label) : \(String(describing: expected)) ≠ \(String(describing: served))")
         }
     }
+
+    private static let floatControlPointPrecision = Double(Float.ulpOfOne)
 
     private static func bezier(_ s: Double, _ p0: Double, _ p1: Double, _ p2: Double, _ p3: Double) -> Double {
         let u = 1 - s

@@ -41,4 +41,16 @@ class ImageViewerTransformTest {
         assertThat(ImageViewerTransform.doubleTapTarget(3.7f))
             .isEqualTo(ImageViewerTransform.MIN_SCALE)
     }
+
+    @Test
+    fun `the zoom reaches x5 like iOS`() {
+        assertThat(ImageViewerTransform.MAX_SCALE).isEqualTo(5f)
+        assertThat(ImageViewerTransform.clampScale(4.8f)).isEqualTo(4.8f)
+    }
+
+    @Test
+    fun `a drag follows the finger only at rest zoom`() {
+        assertThat(ImageViewerTransform.dismissDragEnabled(scale = 1f)).isTrue()
+        assertThat(ImageViewerTransform.dismissDragEnabled(scale = 1.2f)).isFalse()
+    }
 }

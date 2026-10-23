@@ -3,7 +3,9 @@ package me.meeshy.sdk.net.api
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AttachmentStatusUser
 import me.meeshy.sdk.model.TranscribeRequest
+import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.MediaUploadResponse
+import me.meeshy.sdk.model.media.AttachmentStatusBody
 import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -29,4 +31,14 @@ interface MediaApi {
 
     @POST("attachments/{id}/transcribe")
     suspend fun transcribe(@Path("id") attachmentId: String, @Body body: TranscribeRequest): ApiResponse<kotlinx.serialization.json.JsonElement>
+
+    /**
+     * Consommation d'un média (`listened` / `watched` / `viewed` / `downloaded`), avec les
+     * plages continues et leur fin. La charge utile de la réponse n'est pas lue.
+     */
+    @POST("attachments/{attachmentId}/status")
+    suspend fun reportStatus(
+        @Path("attachmentId") attachmentId: String,
+        @Body body: AttachmentStatusBody,
+    ): ApiResponse<JsonElement>
 }

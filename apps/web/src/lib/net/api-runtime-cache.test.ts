@@ -57,8 +57,8 @@ describe('une réponse d’administration ne va JAMAIS dans le cache du service 
    * `dist/sw.js`, juge. Les deux assertions ci-dessous gardent donc ce qui SE
    * SÉRIALISE, pas ce qui se lit.
    */
-  test('`vite.config.ts` reçoit une VALEUR sérialisable, jamais un prédicat importé', () => {
-    const config = readFileSync(new URL('../../../vite.config.ts', import.meta.url), 'utf8');
+  test('`vite/pwa.ts` reçoit une VALEUR sérialisable, jamais un prédicat importé', () => {
+    const config = readFileSync(new URL('../../../vite/pwa.ts', import.meta.url), 'utf8');
     expect(config).toContain('urlPattern: API_RESPONSE_CACHE_PATTERN');
     // La forme de `dev` — si elle revient, la charge d'administration repart
     // sur le disque sans qu'aucun autre témoin ne le voie.
@@ -228,8 +228,8 @@ describe('`crossOrigin` se pose sur ce que la PASSERELLE sert, jamais à l’ave
  * suffit pas (`check-sw-api-cache.mjs` fait décider l'artefact), il garde
  * juste le CÂBLAGE que Workbox lit.
  */
-describe('`vite.config.ts` déclare les deux moitiés, dans le bon ORDRE', () => {
-  const config = readFileSync(new URL('../../../vite.config.ts', import.meta.url), 'utf8');
+describe('`vite/pwa.ts` déclare les deux moitiés, dans le bon ORDRE', () => {
+  const config = readFileSync(new URL('../../../vite/pwa.ts', import.meta.url), 'utf8');
 
   test('le seau des médias est enregistré AVANT celui de l’API — Workbox retient la première route', () => {
     const medias = config.indexOf('SW_RUNTIME_CACHES.medias');

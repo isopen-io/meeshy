@@ -609,7 +609,8 @@ final class MessageActionResolverTests: XCTestCase {
     func test_primaryActions_neverExceedSixBeforeMore() {
         let crowded = lawCtx { $0.kindActions = [.openLink, .copyLink] }
         let actions = MessageActionResolver.primaryActions(crowded)
-        XCTAssertLessThanOrEqual(actions.filter { $0 != .more }.count, MessageActionPolicy.maxPrimaryActions)
+        XCTAssertLessThanOrEqual(actions.filter { $0 != .more && $0 != .deleteMessage }.count, MessageActionPolicy.maxPrimaryActions,
+                                 "six actions clés au plus ; « Supprimer » s'y ajoute, rouge, juste avant « Plus… » (295526b392)")
         XCTAssertEqual(actions.last, .more)
         XCTAssertEqual(actions.first, .reply)
     }

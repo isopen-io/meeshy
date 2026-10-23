@@ -30,9 +30,6 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** L'URL publique d'un post — meme format que le deep link iOS `meeshy.me/post/{id}`. */
-internal fun postShareUrl(postId: String): String = "https://meeshy.me/post/$postId"
-
 /**
  * L'overflow en haut a droite de chaque card — rendu bete de [PostActionMenu],
  * qui decide seul de la liste et de l'ordre (verrouille par test).

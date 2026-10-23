@@ -46,7 +46,7 @@ class AppLinksAssetlinksGuardTest {
     @Test
     fun `meeshy me and www meeshy me verify every path the app opens`() {
         val links = autoVerifyLinks()
-        val paths = listOf("/auth/magic-link", "/u/", "/chat/", "/join/")
+        val paths = listOf("/auth/magic-link", "/u/", "/chat/", "/join/", "/feeds/post/", "/post/")
         listOf("meeshy.me", "www.meeshy.me").forEach { host ->
             assertThat(links.filter { it.host == host }.map { it.path }).containsAtLeastElementsIn(paths)
         }
