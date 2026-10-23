@@ -1,9 +1,10 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
 import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import {
   DURATION_BADGE_OPACITY,
@@ -138,13 +139,17 @@ export function VideoTile({
      `ref` STABLE : un rappel neuf à chaque rendu délierait puis relierait
      l'élément, et `bind(null)` ramène la lecture à `idle`. */
   const elementRef = useRef<HTMLMediaElement | null>(null);
+  const [element, setElement] = useState<HTMLMediaElement | null>(null);
   const bindElement = useCallback(
-    (element: HTMLMediaElement | null) => {
-      elementRef.current = element;
-      bind(element);
+    (bound: HTMLMediaElement | null) => {
+      elementRef.current = bound;
+      bind(bound);
+      setElement(bound);
     },
     [bind],
   );
+  /* Vue, une vidéo de message se relit hors ligne — si la bulle la déclare standard (#12052). */
+  useRememberSeenAttachment({ element, attachmentId: attachment.id, src: attachment.fileUrl === '' ? '' : attachmentSrc(attachment.fileUrl), active: true });
 
   if (attachment.fileUrl === '') return <VideoFallback attachment={attachment} />;
 

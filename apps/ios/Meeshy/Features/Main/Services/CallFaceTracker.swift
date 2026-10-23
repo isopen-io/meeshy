@@ -61,7 +61,8 @@ nonisolated final class VisionFaceLandmarkDetector: CallFaceLandmarkDetecting, @
         func points(_ region: VNFaceLandmarkRegion2D?) -> [CGPoint] { region?.normalizedPoints ?? [] }
         return LensFaceFrame(boundingBox: observation.boundingBox, points: points(landmarks.allPoints),
                              leftEye: points(landmarks.leftEye), rightEye: points(landmarks.rightEye),
-                             innerLips: points(landmarks.innerLips),
+                             innerLips: points(landmarks.innerLips), outerLips: points(landmarks.outerLips),
+                             leftEyebrow: points(landmarks.leftEyebrow), rightEyebrow: points(landmarks.rightEyebrow),
                              yaw: observation.yaw?.doubleValue, roll: observation.roll?.doubleValue,
                              pitch: observation.pitch?.doubleValue)
     }

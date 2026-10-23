@@ -19,6 +19,13 @@ public actor DiskCacheStore: ReadableCacheStore {
     let urlSession: URLSession
     let networkTransfer: NetworkTransfer
     let fileDownloader: MediaFileDownloader
+    /// Les transferts EN FLUX se lisent pendant leur course (#9881) : un
+    /// lecteur vidéo joue la tête du fichier que le cache est en train d'écrire.
+    let readsWhileDownloading: Bool
+    var readableTransfers: [String: ReadableTransfer] = [:]
+    nonisolated let readableKeys = Locked<Set<String>>([])
+    /// Les TÊTES amorcées hors du cache, reprises à l'élection (#11288).
+    var heads = ProgressiveHeadLedger()
 
     /// Clés dont la dernière réponse interdisait le stockage (`no-store` /
     /// `no-cache`, #9478) : leurs octets ne vont ni sur le disque, ni dans le
@@ -69,8 +76,10 @@ public actor DiskCacheStore: ReadableCacheStore {
         memoryBudgetBytes: Int = 80 * 1024 * 1024,
         urlSession: URLSession = .shared,
         networkTransfer: NetworkTransfer = .inMemory,
-        fileDownloader: MediaFileDownloader? = nil
+        fileDownloader: MediaFileDownloader? = nil,
+        readsWhileDownloading: Bool = false
     ) {
+        self.readsWhileDownloading = readsWhileDownloading
         self.policy = policy
         self.memoryBudgetBytes = memoryBudgetBytes
         self.urlSession = urlSession
@@ -175,9 +184,11 @@ public actor DiskCacheStore: ReadableCacheStore {
         // pin conservé re-protégerait un futur re-download de la même clé.
         loadPinsIfNeeded()
         if pinExpiries.removeValue(forKey: fileKey) != nil { persistPins() }
+        dropHeads([key])
     }
 
     public func invalidateAll() async {
+        heads.removeAll().forEach { $0.response.cancel() }
         memoryCache.removeAllObjects()
         fileTimestamps.removeAll()
         transientKeys.removeAll()

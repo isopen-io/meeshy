@@ -4,6 +4,7 @@ import {
   SCENE_READING_BLUR_PX,
   WRITING_SCENE_GAP_PX,
   keyboardInsetOf,
+  reelUnderSheet,
   sceneYieldOf,
   writingSceneScale,
   yieldingScene,
@@ -106,5 +107,49 @@ describe('yieldingScene — comment la scène cède', () => {
   test('le mouvement est animé, et ne l’est plus sous prefers-reduced-motion', () => {
     expect(yieldingScene({ yieldTo: 'reading', scale: 1, anchorTop: 0, reducedMotion: false }).style.transition).not.toBe('none');
     expect(yieldingScene({ yieldTo: 'reading', scale: 1, anchorTop: 0, reducedMotion: true }).style.transition).toBe('none');
+  });
+});
+
+/**
+ * #11307 (défaut retenu de #11253, parité iOS) — UN RÉEL SOUS LA FEUILLE NE SE
+ * REFILTRE PLUS À CHAQUE IMAGE. Un `filter: blur()` posé sur le pager qui
+ * contient la `<video>` en lecture se recalcule à chaque image décodée : le
+ * réel se met en PAUSE, et c'est son AFFICHE, une image fixe, qui porte le
+ * flou — rastérisée une fois.
+ */
+describe('yieldingScene — un pager de réels ne porte jamais le flou (#11307)', () => {
+  test('lecture : le flou ne se pose pas sur la scène quand l’affiche le porte', () => {
+    const props = yieldingScene({ yieldTo: 'reading', scale: 1, anchorTop: 0, reducedMotion: false, blurCarrier: 'poster' });
+    expect(props['data-scene-yields']).toBe('reading');
+    expect(props.style.filter).toBe('none');
+  });
+
+  test('aucune transition de filtre sur la scène : seule la réduction s’anime', () => {
+    const props = yieldingScene({ yieldTo: 'writing', scale: 0.5, anchorTop: 0, reducedMotion: false, blurCarrier: 'poster' });
+    expect(props.style.transition).not.toContain('filter');
+    expect(props.style.transition).toContain('transform');
+    expect(props.style.transform).toBe('scale(0.5)');
+  });
+
+  test('la story, qui ne le demande pas, garde son flou de scène', () => {
+    expect(yieldingScene({ yieldTo: 'reading', scale: 1, anchorTop: 0, reducedMotion: false }).style.filter).toBe(`blur(${SCENE_READING_BLUR_PX}px)`);
+  });
+});
+
+describe('reelUnderSheet — le réel visible se met en pause sous son affiche floutée (#11307)', () => {
+  test('feuille fermée : il joue, sans voile', () => {
+    expect(reelUnderSheet({ yieldTo: 'full', active: true })).toEqual({ held: false, veiled: false });
+  });
+
+  test('lire le fil : en pause, sous son affiche floutée', () => {
+    expect(reelUnderSheet({ yieldTo: 'reading', active: true })).toEqual({ held: true, veiled: true });
+  });
+
+  test('écrire : en pause, NET — on voit ce qu’on commente', () => {
+    expect(reelUnderSheet({ yieldTo: 'writing', active: true })).toEqual({ held: true, veiled: false });
+  });
+
+  test('un voisin hors champ n’est ni retenu ni voilé : il ne jouait pas, et rien ne le peint', () => {
+    expect(reelUnderSheet({ yieldTo: 'reading', active: false })).toEqual({ held: false, veiled: false });
   });
 });

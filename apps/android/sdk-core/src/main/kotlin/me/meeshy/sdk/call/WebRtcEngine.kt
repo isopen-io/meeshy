@@ -2,77 +2,82 @@ package me.meeshy.sdk.call
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import me.meeshy.sdk.model.call.SocketIceServer
-import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
-import org.webrtc.Camera2Enumerator
-import org.webrtc.CameraEnumerator
-import org.webrtc.CameraVideoCapturer
-import org.webrtc.DataChannel
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
-import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
-import org.webrtc.RtpReceiver
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
-import org.webrtc.SurfaceTextureHelper
-import org.webrtc.VideoSource
 import org.webrtc.VideoTrack
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+/** La pile WebRTC native : le contexte EGL et la fabrique de pairs, nés ENSEMBLE au premier appel. */
+internal class WebRtcStack(val eglBase: EglBase, val factory: PeerConnectionFactory)
+
 /**
- * The WebRTC media engine (SDK-level, stateful) — the piece missing on Android that
- * left calls stuck on "Connecting…". Owns one [PeerConnection] per call: local mic
- * capture, SDP offer/answer, ICE. The orchestration (which SDP to emit, when) lives
- * app-side and drives this through the signaling layer ([me.meeshy.sdk.socket
- * .CallSignalManager]). Video capture/render is added in P4.
+ * Façade du `PeerConnection` d'un appel (SDK, avec état). Le moteur est un `@Singleton` mais ne coûte
+ * RIEN au démarrage à froid : ni [EglBase] ni [PeerConnectionFactory] n'existent avant la première
+ * [createConnection] (ils pesaient 983 des 1 318 échantillons du fil principal côté iOS, #7955).
+ *
+ * Les sources locales vivent dans [CallMediaSources], les événements du pair dans [CallEngineEvents],
+ * la lecture du pair dans [CallPeerHandle] et la réécriture du SDP local dans [LocalSdpTransformer].
+ * Pendant l'appel, [CallActivityGate] garde la socket de signalisation ouverte.
  */
 @Singleton
-class WebRtcEngine @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+class WebRtcEngine internal constructor(
+    appContext: Context,
+    stackProvider: () -> WebRtcStack,
+    private val activityGate: CallActivityGate,
 ) {
-    val eglBase: EglBase = EglBase.create()
+    @Inject
+    constructor(
+        @ApplicationContext appContext: Context,
+        activityGate: CallActivityGate,
+    ) : this(appContext, { buildStack(appContext) }, activityGate)
 
-    private val factory: PeerConnectionFactory by lazy { buildFactory() }
+    private val stack = lazy(stackProvider)
+    private val media = CallMediaSources(appContext, stack)
+    private val engineEvents = CallEngineEvents()
 
     private var peerConnection: PeerConnection? = null
-    private var audioSource: AudioSource? = null
-    private var localAudioTrack: AudioTrack? = null
 
-    private var videoCapturer: CameraVideoCapturer? = null
-    private var videoSource: VideoSource? = null
-    private var surfaceTextureHelper: SurfaceTextureHelper? = null
+    /** Le contexte EGL partagé ; le lire avant tout appel construit la pile (rendu vidéo). */
+    val eglBase: EglBase get() = stack.value.eglBase
 
-    /** The local camera preview track, present only while a video call is capturing. */
-    var localVideoTrack: VideoTrack? = null
-        private set
+    /** Vrai tant que la pile native n'a pas été construite : aucun appel n'a encore eu lieu. */
+    internal val isStackBuilt: Boolean get() = stack.isInitialized()
 
-    private val _localIceCandidates = MutableSharedFlow<IceCandidate>(extraBufferCapacity = 64)
-    val localIceCandidates: SharedFlow<IceCandidate> = _localIceCandidates.asSharedFlow()
+    /** Réécriture du SDP local ; identité par défaut. */
+    @Volatile
+    var localSdpTransformer: LocalSdpTransformer = LocalSdpTransformer.Identity
 
-    private val _iceConnectionState = MutableStateFlow(PeerConnection.IceConnectionState.NEW)
-    val iceConnectionState: StateFlow<PeerConnection.IceConnectionState> = _iceConnectionState.asStateFlow()
+    /** La piste d'aperçu caméra, présente seulement pendant une capture vidéo. */
+    val localVideoTrack: VideoTrack? get() = media.localVideoTrack
 
-    private val remoteTracks = RemoteTrackRegistry()
-    val remoteAudioTracks: SharedFlow<AudioTrack> = remoteTracks.audio
-    val remoteVideoTracks: SharedFlow<VideoTrack> = remoteTracks.video
+    val localIceCandidates: SharedFlow<IceCandidate> = engineEvents.localIceCandidates
+    val iceConnectionState: StateFlow<PeerConnection.IceConnectionState> = engineEvents.iceConnectionState
+    val remoteAudioTracks: SharedFlow<AudioTrack> = engineEvents.remoteTracks.audio
+    val remoteVideoTracks: SharedFlow<VideoTrack> = engineEvents.remoteTracks.video
 
-    /** Opens a fresh peer connection configured with the gateway's per-user ICE servers. */
+    /** Canal de données, renégociation, état de connexion complet. */
+    val events: SharedFlow<CallEngineEvent> = engineEvents.events
+
+    /** Lecture du pair courant, `null` hors appel. */
+    val peerHandle: CallPeerHandle?
+        get() = peerConnection?.let { PeerConnectionHandle(it) { engineEvents.dataChannels } }
+
+    /** Ouvre un pair neuf configuré avec les serveurs ICE par utilisateur de la passerelle. */
     fun createConnection(iceServers: List<SocketIceServer>, enableVideo: Boolean = false) {
         close()
         val config = PeerConnection.RTCConfiguration(iceServers.map { it.toIceServer() }).apply {
@@ -81,55 +86,24 @@ class WebRtcEngine @Inject constructor(
             bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
             rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
         }
-        peerConnection = factory.createPeerConnection(config, observer)
-        addLocalAudio()
-        if (enableVideo) addLocalVideo()
+        val peer = stack.value.factory.createPeerConnection(config, engineEvents.observer)
+        peerConnection = peer
+        peer ?: return
+        activityGate.setActive(true)
+        media.attachAudio(peer)
+        if (enableVideo) media.attachVideo(peer)
     }
 
-    private fun addLocalAudio() {
-        val source = factory.createAudioSource(MediaConstraints())
-        val track = factory.createAudioTrack(AUDIO_TRACK_ID, source)
-        audioSource = source
-        localAudioTrack = track
-        peerConnection?.addTrack(track, listOf(STREAM_ID))
-    }
+    fun setAudioEnabled(enabled: Boolean) = media.setAudioEnabled(enabled)
 
-    private fun addLocalVideo() {
-        val capturer = createCameraCapturer() ?: return
-        val helper = SurfaceTextureHelper.create("MeeshyCapture", eglBase.eglBaseContext)
-        val source = factory.createVideoSource(false)
-        capturer.initialize(helper, appContext, source.capturerObserver)
-        capturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS)
-        val track = factory.createVideoTrack(VIDEO_TRACK_ID, source)
-        videoCapturer = capturer
-        videoSource = source
-        surfaceTextureHelper = helper
-        localVideoTrack = track
-        peerConnection?.addTrack(track, listOf(STREAM_ID))
-    }
-
-    private fun createCameraCapturer(): CameraVideoCapturer? {
-        val enumerator: CameraEnumerator = Camera2Enumerator(appContext)
-        val names = enumerator.deviceNames
-        return names.firstOrNull { enumerator.isFrontFacing(it) }?.let { enumerator.createCapturer(it, null) }
-            ?: names.firstOrNull()?.let { enumerator.createCapturer(it, null) }
-    }
-
-    fun setAudioEnabled(enabled: Boolean) {
-        localAudioTrack?.setEnabled(enabled)
-    }
-
-    fun setVideoEnabled(enabled: Boolean) {
-        localVideoTrack?.setEnabled(enabled)
-        runCatching { if (enabled) videoCapturer?.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS) else videoCapturer?.stopCapture() }
-    }
+    fun setVideoEnabled(enabled: Boolean) = media.setVideoEnabled(enabled)
 
     suspend fun createOffer(): SessionDescription = createSdp(isOffer = true)
 
     suspend fun createAnswer(): SessionDescription = createSdp(isOffer = false)
 
-    private suspend fun createSdp(isOffer: Boolean): SessionDescription =
-        suspendCancellableCoroutine { cont ->
+    private suspend fun createSdp(isOffer: Boolean): SessionDescription {
+        val created = suspendCancellableCoroutine<SessionDescription> { cont ->
             val pc = peerConnection ?: return@suspendCancellableCoroutine cont.resumeWithException(
                 IllegalStateException("createSdp: no peer connection"),
             )
@@ -143,6 +117,8 @@ class WebRtcEngine @Inject constructor(
             val constraints = MediaConstraints()
             if (isOffer) pc.createOffer(observer, constraints) else pc.createAnswer(observer, constraints)
         }
+        return localSdpTransformer.transform(created)
+    }
 
     suspend fun setLocalDescription(desc: SessionDescription) = applyDescription(desc, local = true)
 
@@ -168,68 +144,24 @@ class WebRtcEngine @Inject constructor(
     }
 
     /**
-     * Marks the connection for an ICE restart: the next [createOffer] carries
-     * fresh ufrag/pwd so the pair re-gathers candidates over the CURRENT network
-     * (WiFi→LTE handoff, router reboot). Pure building block — WHEN to restart
-     * (stall detection, who re-offers) is the app-side coordinator's policy.
+     * Marque la connexion pour un redémarrage ICE : la prochaine [createOffer] porte de nouveaux
+     * ufrag/pwd pour recollecter les candidats sur le réseau COURANT (bascule WiFi→LTE). Brique
+     * pure — QUAND redémarrer relève de la politique du coordinateur applicatif.
      */
     fun restartIce() {
         peerConnection?.restartIce()
     }
 
     fun close() {
-        runCatching { videoCapturer?.stopCapture() }
-        videoCapturer?.dispose()
-        surfaceTextureHelper?.dispose()
-        localVideoTrack?.dispose()
-        videoSource?.dispose()
+        media.releaseVideo()
         peerConnection?.dispose()
-        localAudioTrack?.dispose()
-        audioSource?.dispose()
-        videoCapturer = null
-        surfaceTextureHelper = null
-        localVideoTrack = null
-        videoSource = null
         peerConnection = null
-        localAudioTrack = null
-        audioSource = null
-        _iceConnectionState.value = PeerConnection.IceConnectionState.NEW
-        // The peer connection dies above with the call's remote tracks, but this
-        // engine is a @Singleton reused by the NEXT call — without forgetting them
-        // here, a fresh remoteVideoTracks subscriber (e.g. CallScreen recomposing)
-        // would be replayed the disposed VideoTrack from the call that just ended.
-        remoteTracks.reset()
-    }
-
-    private fun buildFactory(): PeerConnectionFactory {
-        ensureGlobalInit(appContext)
-        return PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true))
-            .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
-            .createPeerConnectionFactory()
-    }
-
-    private val observer = object : PeerConnection.Observer {
-        override fun onIceCandidate(candidate: IceCandidate) {
-            _localIceCandidates.tryEmit(candidate)
-        }
-
-        override fun onIceConnectionChange(state: PeerConnection.IceConnectionState) {
-            _iceConnectionState.value = state
-        }
-
-        override fun onAddTrack(receiver: RtpReceiver, streams: Array<out MediaStream>) {
-            remoteTracks.onAddTrack(receiver.track())
-        }
-
-        override fun onSignalingChange(state: PeerConnection.SignalingState?) = Unit
-        override fun onIceConnectionReceivingChange(receiving: Boolean) = Unit
-        override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) = Unit
-        override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) = Unit
-        override fun onAddStream(stream: MediaStream?) = Unit
-        override fun onRemoveStream(stream: MediaStream?) = Unit
-        override fun onDataChannel(channel: DataChannel?) = Unit
-        override fun onRenegotiationNeeded() = Unit
+        media.releaseAudio()
+        // Le moteur est un @Singleton réutilisé par l'appel SUIVANT : sans oublier les pistes
+        // distantes ici, un nouvel abonné à remoteVideoTracks se verrait rejouer la VideoTrack
+        // disposée de l'appel qui vient de finir.
+        engineEvents.reset()
+        activityGate.setActive(false)
     }
 
     private fun SocketIceServer.toIceServer(): PeerConnection.IceServer =
@@ -238,20 +170,23 @@ class WebRtcEngine @Inject constructor(
             .setPassword(credential.orEmpty())
             .createIceServer()
 
-    companion object {
-        private const val AUDIO_TRACK_ID = "meeshy_audio"
-        private const val VIDEO_TRACK_ID = "meeshy_video"
-        private const val STREAM_ID = "meeshy_stream"
-        private const val CAPTURE_WIDTH = 1280
-        private const val CAPTURE_HEIGHT = 720
-        private const val CAPTURE_FPS = 30
-
+    private companion object {
         @Volatile
         private var globalInitDone = false
 
-        /** `PeerConnectionFactory.initialize` must run exactly once per process. */
+        fun buildStack(context: Context): WebRtcStack {
+            ensureGlobalInit(context)
+            val egl = EglBase.create()
+            val factory = PeerConnectionFactory.builder()
+                .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, true, true))
+                .setVideoDecoderFactory(DefaultVideoDecoderFactory(egl.eglBaseContext))
+                .createPeerConnectionFactory()
+            return WebRtcStack(egl, factory)
+        }
+
+        /** `PeerConnectionFactory.initialize` doit tourner exactement une fois par processus. */
         @Synchronized
-        private fun ensureGlobalInit(context: Context) {
+        fun ensureGlobalInit(context: Context) {
             if (globalInitDone) return
             PeerConnectionFactory.initialize(
                 PeerConnectionFactory.InitializationOptions.builder(context.applicationContext)

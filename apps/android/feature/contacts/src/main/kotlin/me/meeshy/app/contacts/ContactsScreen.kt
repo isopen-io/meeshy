@@ -1,6 +1,17 @@
 package me.meeshy.app.contacts
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import me.meeshy.ui.component.ConnectionFeedbackHost
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,11 +34,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.Color
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -57,6 +66,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 fun ContactsScreen(
     onBack: () -> Unit,
     initialTab: ContactsTab? = null,
+    onOpenProfile: (userId: String) -> Unit = {},
     viewModel: ContactsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -118,18 +128,20 @@ fun ContactsScreen(
                 }
             }
             when (state.selectedTab) {
-                ContactsTab.Contacts -> ContactsListTab()
+                ContactsTab.Contacts -> ContactsListTab(onOpenProfile = onOpenProfile)
                 ContactsTab.Requests -> RequestsTab(
                     state = state,
                     onAccept = viewModel::acceptRequest,
                     onDecline = viewModel::declineRequest,
                     onCancel = viewModel::cancelRequest,
+                    onOpenProfile = onOpenProfile,
                 )
-                ContactsTab.Discover -> DiscoverTab()
-                ContactsTab.Blocked -> BlockedTab()
+                ContactsTab.Discover -> DiscoverTab(onOpenProfile = onOpenProfile)
+                ContactsTab.Blocked -> BlockedTab(onOpenProfile = onOpenProfile)
             }
         }
     }
+    ConnectionFeedbackHost(feedback = viewModel.feedback)
     }
 }
 
@@ -139,6 +151,7 @@ private fun RequestsTab(
     onAccept: (String) -> Unit,
     onDecline: (String) -> Unit,
     onCancel: (String) -> Unit,
+    onOpenProfile: (String) -> Unit,
 ) {
     if (state.isLoadingRequests) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -162,6 +175,7 @@ private fun RequestsTab(
                     pending = request.id in state.pendingActionIds,
                     onAccept = { onAccept(request.id) },
                     onDecline = { onDecline(request.id) },
+                    onOpenProfile = { onOpenProfile(request.senderId) },
                 )
             }
         }
@@ -172,6 +186,7 @@ private fun RequestsTab(
                     request = request,
                     pending = request.id in state.pendingActionIds,
                     onCancel = { onCancel(request.id) },
+                    onOpenProfile = { onOpenProfile(request.receiverId) },
                 )
             }
         }
@@ -184,15 +199,32 @@ private fun ReceivedRequestRow(
     pending: Boolean,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
-    RequestRow(user = request.sender, userId = request.senderId) {
-        OutlinedButton(onClick = onDecline, enabled = !pending) {
-            Text(stringResource(R.string.contacts_request_decline))
-        }
+    val name = request.sender.displayLabel()
+    RequestRow(
+        user = request.sender,
+        userId = request.senderId,
+        subtitle = request.personalMessage() ?: stringResource(R.string.contacts_requests_received_intent),
+        onOpenProfile = onOpenProfile,
+    ) {
+        RoundAction(
+            icon = Icons.Filled.Close,
+            description = stringResource(R.string.contacts_requests_reject_a11y, name),
+            container = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.15f),
+            tint = MeeshyTheme.tokens.textSecondary,
+            enabled = !pending,
+            onClick = onDecline,
+        )
         Spacer(Modifier.width(8.dp))
-        FilledTonalButton(onClick = onAccept, enabled = !pending) {
-            Text(stringResource(R.string.contacts_request_accept))
-        }
+        RoundAction(
+            icon = Icons.Filled.Check,
+            description = stringResource(R.string.contacts_requests_accept_a11y, name),
+            container = MeeshyPalette.Success,
+            tint = Color.White,
+            enabled = !pending,
+            onClick = onAccept,
+        )
     }
 }
 
@@ -201,11 +233,50 @@ private fun SentRequestRow(
     request: FriendRequest,
     pending: Boolean,
     onCancel: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
-    RequestRow(user = request.receiver, userId = request.receiverId) {
-        OutlinedButton(onClick = onCancel, enabled = !pending) {
-            Text(stringResource(R.string.contacts_request_cancel))
+    val name = request.receiver.displayLabel()
+    val cancelDescription = stringResource(R.string.contacts_requests_cancel_a11y, name)
+    RequestRow(user = request.receiver, userId = request.receiverId, subtitle = null, onOpenProfile = onOpenProfile) {
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = stringResource(R.string.contacts_discover_pending),
+                style = MaterialTheme.typography.labelSmall,
+                color = MeeshyPalette.Warning,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(MeeshyPalette.Warning.copy(alpha = 0.15f))
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+            TextButton(
+                onClick = onCancel,
+                enabled = !pending,
+                modifier = Modifier.semantics { contentDescription = cancelDescription },
+            ) {
+                Text(stringResource(R.string.contacts_request_cancel), color = MeeshyPalette.Error)
+            }
         }
+    }
+}
+
+@Composable
+private fun RoundAction(
+    icon: ImageVector,
+    description: String,
+    container: Color,
+    tint: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(container),
+    ) {
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -213,12 +284,15 @@ private fun SentRequestRow(
 private fun RequestRow(
     user: FriendRequestUser?,
     userId: String,
+    subtitle: String?,
+    onOpenProfile: () -> Unit,
     actions: @Composable () -> Unit,
 ) {
     val name = user.displayLabel()
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = userId.isNotBlank(), onClick = onOpenProfile)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -226,6 +300,7 @@ private fun RequestRow(
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(userId.ifBlank { name })),
+            imageUrl = user?.avatar,
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -241,6 +316,15 @@ private fun RequestRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MeeshyTheme.tokens.textSecondary,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            subtitle?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

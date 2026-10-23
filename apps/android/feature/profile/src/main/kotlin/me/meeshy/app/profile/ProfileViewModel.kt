@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.profile.ProfileSelfRule
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
@@ -55,7 +56,7 @@ class ProfileViewModel @Inject constructor(
     private var timelineLoaded = false
 
     init {
-        if (userId == null) {
+        if (userId == null || isSessionUser(userId)) {
             // Own profile — observe session
             viewModelScope.launch {
                 sessionRepository.currentUser.collect { user ->
@@ -75,6 +76,17 @@ class ProfileViewModel @Inject constructor(
             _state.update { it.copy(isOwnProfile = false) }
             loadProfile(userId)
         }
+    }
+
+    private fun isSessionUser(handle: String): Boolean {
+        val myId = sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return false
+        if (handle == myId) return true
+        return ProfileSelfRule.isSelf(
+            sessionUserId = myId,
+            sessionUsername = sessionRepository.currentUser.value?.username,
+            userId = handle,
+            username = handle,
+        )
     }
 
     fun onFirstNameChange(value: String) = _state.update { it.copy(firstName = value) }

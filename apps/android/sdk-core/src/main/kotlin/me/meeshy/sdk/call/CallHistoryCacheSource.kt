@@ -3,6 +3,7 @@ package me.meeshy.sdk.call
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -52,80 +53,44 @@ internal class CallHistoryCacheSource(
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
 
     /**
-     * Pages through `GET /calls/history` — cursor-paginated over a 3-month
-     * server-side sliding window (`CallService.listHistory`,
-     * `services/gateway/src/services/CallService.ts`) — up to [MAX_PAGES]
-     * (`× [HISTORY_PAGE_SIZE]` = 1 500 calls; the gateway caps `limit` at 50).
+     * One request: the first page of [HISTORY_PAGE_SIZE] rows, merged with the cached
+     * tail (iso-iOS; before, up to 30 pages were pulled at every revalidation).
      *
-     * #5190 — the previous implementation called `callHistoryApi.history(null,
-     * HISTORY_PAGE_SIZE, null)` for a SINGLE page (≤ 30 rows, the server's own
-     * default), then `deleteNotIn`'d everything outside it — any account with
-     * more terminal calls than that in the 3-month window lost the rest on
-     * every revalidation (the cache-policy tick or an explicit pull-to-refresh).
-     * Same patron already established for
-     * [me.meeshy.sdk.conversation.ConversationCacheSource] (#5186 and its own
-     * hardening, #5186 review thread): [persist] only prunes rows absent from
-     * the fetched set when the sweep is PROVEN exhaustive — the server said
-     * `hasMore = false` — never merely because the page budget ran out. An
-     * envelope with NO `pagination` block at all is UNKNOWN completeness, not
-     * proven completeness: what was seen is still upserted, but the sweep
-     * stops right there and [persist] runs with `prune = false` — reading a
-     * missing block as "done" is the wrong failure direction for a DELETE.
-     *
-     * The 3-month window bounds the total naturally for the overwhelming
-     * majority of accounts, but does not CAP it — a heavy caller can still
-     * clear SQLite's 999-bound-variable ceiling inside three months, which is
-     * exactly what [pruneMissing]'s chunked delete-set exists to survive (note
-     * de revue on #5186's own review thread, 2026-09-05).
+     * Rows OLDER than the fresh page are the cached tail and are kept (within the
+     * server's 90-day window, capped at [MAX_ROWS]). Rows inside the fresh window that
+     * the server no longer lists are deleted. The window is proven only by the page:
+     * when `hasMore` it starts at the page's oldest call; when the server says the
+     * sweep is complete it spans everything; an envelope with NO `pagination` block is
+     * UNKNOWN completeness (#5190) — what was seen is upserted, nothing is pruned.
      */
     override suspend fun revalidate() {
-        val collected = mutableListOf<CallRecord>()
-        var cursor: String? = null
-        var isComplete = false
-
-        for (page in 0 until MAX_PAGES) {
-            when (val result = pagedApiCall { callHistoryApi.history(cursor, HISTORY_PAGE_SIZE, null) }) {
-                is NetworkResult.Success -> {
-                    collected += result.data.data
-                    val pagination = result.data.pagination
-                        ?: break // Unknown completeness — never infer "done" from a missing block.
-                    if (!pagination.hasMore) {
-                        isComplete = true
-                        break
-                    }
-                    cursor = pagination.nextCursor ?: break
-                }
-                is NetworkResult.Failure -> throw CallHistorySyncException(result.error.message)
-            }
-        }
-
-        persist(collected, prune = isComplete)
-    }
-
-    /**
-     * Deletes stale rows by computing the delete-set in Kotlin — `localIds -
-     * keptIds` — rather than a single `DELETE ... WHERE callId NOT IN
-     * (:keptIds)`. SQLite caps bound variables per statement at
-     * `SQLITE_MAX_VARIABLE_NUMBER` — 999 on Android API 26-29, the floor
-     * `minSdk = 26` makes this app hold under. A `NOT IN` cannot be chunked
-     * directly either: deleting "not in chunk 1" would also delete every row
-     * that only appears in chunk 2. Deletion goes through
-     * [CallHistoryDao.deleteByIds], which DOES bind one variable per id, so the
-     * ids to delete are chunked to [DELETE_CHUNK_SIZE] (900, comfortably under
-     * the 999 floor) before each call. Mirrors
-     * `ConversationCacheSource.pruneMissing` exactly.
-     */
-    private suspend fun pruneMissing(keptIds: List<String>) {
-        val kept = keptIds.toHashSet()
-        val toDelete = callHistoryDao.allIds().filterNot { it in kept }
-        toDelete.chunked(DELETE_CHUNK_SIZE).forEach { chunk ->
-            callHistoryDao.deleteByIds(chunk)
+        when (val result = pagedApiCall { callHistoryApi.history(null, HISTORY_PAGE_SIZE, FILTER_ALL, null, null) }) {
+            is NetworkResult.Success -> persist(
+                records = result.data.data,
+                completeness = result.data.pagination?.let { if (it.hasMore) Window.PARTIAL else Window.COMPLETE }
+                    ?: Window.UNKNOWN,
+            )
+            is NetworkResult.Failure -> throw CallHistorySyncException(result.error.message)
         }
     }
 
-    private suspend fun persist(records: List<CallRecord>, prune: Boolean) {
+    /** Ids erased locally and not yet confirmed gone from the server: a revalidation must not resurrect them. */
+    private val suppressedIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    internal fun suppress(callIds: Collection<String>) {
+        suppressedIds.addAll(callIds)
+    }
+
+    internal fun unsuppress(callIds: Collection<String>) {
+        suppressedIds.removeAll(callIds.toSet())
+    }
+
+    internal enum class Window { PARTIAL, COMPLETE, UNKNOWN }
+
+    private suspend fun persist(records: List<CallRecord>, completeness: Window) {
         val now = clock.nowMillis()
-        val rows = records.map { record ->
+        val fresh = records.filterNot { it.callId in suppressedIds }
+        val rows = fresh.map { record ->
             CallHistoryEntity(
                 callId = record.callId,
                 payload = MeeshyApi.json.encodeToString(record),
@@ -135,15 +100,35 @@ internal class CallHistoryCacheSource(
         }
         database.withTransaction {
             callHistoryDao.upsertAll(rows)
-            if (prune) pruneMissing(rows.map { it.callId })
+            val windowStart = when (completeness) {
+                Window.COMPLETE -> Long.MIN_VALUE
+                Window.PARTIAL -> rows.minOfOrNull { it.startedAt }?.let { it + 1 }
+                Window.UNKNOWN -> null
+            }
+            if (windowStart != null) {
+                val keep = records.mapTo(HashSet()) { it.callId }
+                pruneIds(callHistoryDao.idsSince(windowStart).filterNot { it in keep })
+            }
+            callHistoryDao.deleteOlderThan(now - WINDOW_MILLIS)
+            pruneIds(callHistoryDao.idsBeyond(MAX_ROWS))
             syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
         }
+    }
+
+    private suspend fun pruneIds(ids: List<String>) {
+        ids.chunked(DELETE_CHUNK_SIZE).forEach { callHistoryDao.deleteByIds(it) }
     }
 
     internal companion object {
         const val RESOURCE_KEY: String = "call_history"
         private const val HISTORY_PAGE_SIZE = 50
-        private const val MAX_PAGES = 30
+        private const val FILTER_ALL = "all"
+
+        /** The server's sliding window: older cached rows have left the journal. */
+        const val WINDOW_MILLIS: Long = 90L * 24 * 60 * 60 * 1000
+
+        /** Cap of the cached journal (the 30 pages x 50 the old sweep could reach). */
+        const val MAX_ROWS: Int = 1_500
 
         /**
          * Bound-variable budget per [CallHistoryDao.deleteByIds] call — under

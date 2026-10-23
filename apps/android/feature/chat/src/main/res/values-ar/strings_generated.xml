@@ -1,8 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_composer_edit_title">تعديل الرسالة</string>
+    <string name="chat_composer_reply_a11y">رد على %1$s: %2$s</string>
+    <string name="chat_composer_reply_file">ملف</string>
+    <string name="chat_composer_reply_location">موقع</string>
+    <string name="chat_composer_reply_photo">صورة</string>
+    <string name="chat_composer_reply_unknown">رسالة</string>
+    <string name="chat_composer_reply_video">فيديو</string>
+    <string name="chat_composer_reply_voice">رسالة صوتية</string>
+    <string name="chat_composer_reply_you">أنت</string>
     <string name="chat_delete_confirm_cancel">إلغاء</string>
     <string name="chat_delete_confirm_hint">الحذف للجميع متاح لمدة ساعتين بعد الإرسال.</string>
     <string name="chat_delete_confirm_title">حذف هذه الرسالة؟</string>
+    <string name="common_cancel">إلغاء</string>
+    <string name="common_send">إرسال</string>
+    <string name="common_unknown">غير معروف</string>
     <string name="composer_a11y_addSelection">إضافة التحديد</string>
     <string name="composer_a11y_cancelSelection">إلغاء التحديد</string>
     <string name="composer_a11y_openFullLibrary">فتح مكتبة الصور كاملة</string>
@@ -20,6 +32,14 @@
     <string name="composer_recent_grantAccess">السماح بالوصول إلى الصور</string>
     <string name="composer_recent_grantAccess_hint">لعرض وسائطك الأخيرة هنا</string>
     <string name="composer_recent_select">تحديد</string>
+    <string name="message_detail_reactions_count_a11y">%d تفاعل</string>
+    <string name="message_detail_reactions_empty">لا توجد تفاعلات</string>
+    <string name="message_detail_report_confirm_message">سيتم إرسال الرسالة إلى الإشراف.</string>
+    <string name="message_detail_report_confirm_title">الإبلاغ عن هذه الرسالة؟</string>
     <string name="recentMedia_resolveFailed">تعذّر تحضير هذه الوسائط — استخدم مكتبة الصور الكاملة</string>
     <string name="recentMedia_resolveFailed_multiple">تعذّر تجهيز %d من الوسائط — استخدم مكتبة الصور كاملة</string>
+    <string name="starred_more_options">المزيد من الخيارات</string>
+    <string name="starred_remove">إزالة من المفضّلة</string>
+    <string name="starred_remove_all">إزالة الكل</string>
+    <string name="starred_row_hint">يفتح المحادثة</string>
 </resources>
