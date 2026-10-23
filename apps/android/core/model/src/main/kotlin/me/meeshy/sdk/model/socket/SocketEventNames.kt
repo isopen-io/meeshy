@@ -116,6 +116,7 @@ object SocketEventNames {
     const val MESSAGE_NEW = "message:new"
     const val MESSAGE_PINNED = "message:pinned"
     const val MESSAGE_TRANSLATION = "message:translation"
+    const val MESSAGE_TRANSLATION_SHARED = "message:translation-shared"
     const val MESSAGE_UNPINNED = "message:unpinned"
 
     // notification
@@ -265,6 +266,7 @@ object SocketEventNames {
         MESSAGE_NEW,
         MESSAGE_PINNED,
         MESSAGE_TRANSLATION,
+        MESSAGE_TRANSLATION_SHARED,
         MESSAGE_UNPINNED,
         NOTIFICATION_COUNTS,
         NOTIFICATION_DELETED,
