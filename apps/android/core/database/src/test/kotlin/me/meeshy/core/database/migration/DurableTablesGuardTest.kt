@@ -11,11 +11,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
 
-private fun SupportSQLiteDatabase.userTables(): Set<String> =
-    rows("SELECT name FROM sqlite_master WHERE type = 'table'").flatten().filterNotNull()
-        .filterNot { it.startsWith("sqlite_") || it.startsWith("android_") || it == "room_master_table" }
-        .toSet()
-
 private fun SupportSQLiteDatabase.shape(table: String): List<List<String?>> =
     rows("SELECT name, type, \"notnull\", pk FROM pragma_table_info('$table') ORDER BY cid") +
         rows("SELECT name FROM pragma_index_list('$table') ORDER BY name")

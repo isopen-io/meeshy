@@ -83,12 +83,9 @@ extension APIMessage {
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
                 mimeType: apiAtt.mimeType ?? "application/octet-stream", fileSize: apiAtt.fileSize ?? 0,
                 fileUrl: apiAtt.fileUrl ?? "",
+                alt: apiAtt.alt,
                 forwardedFromAttachmentId: apiAtt.forwardedFromAttachmentId, isForwarded: apiAtt.isForwarded == true,
                 capturedInApp: apiAtt.capturedInApp == true,
-                // #7070 — la charge socket et REST porte désormais ces cinq
-                // familles (protection + chiffrement) ; les PORTER ici est ce
-                // qui manquait — le décodage seul (`APIMessageAttachment`) ne
-                // suffit pas, voir #7098.
                 isViewOnce: apiAtt.isViewOnce == true, maxViewOnceCount: apiAtt.maxViewOnceCount,
                 viewOnceCount: apiAtt.viewOnceCount ?? 0, isBlurred: apiAtt.isBlurred == true,
                 effectFlags: apiAtt.effectFlags,
@@ -110,7 +107,9 @@ extension APIMessage {
                 downloadedByAllAt: apiAtt.downloadedByAllAt, listenedByAllAt: apiAtt.listenedByAllAt,
                 watchedByAllAt: apiAtt.watchedByAllAt, viewedCount: apiAtt.viewedCount,
                 downloadedCount: apiAtt.downloadedCount, consumedCount: apiAtt.consumedCount,
-                currentUserConsumption: apiAtt.currentUserConsumption
+                currentUserConsumption: apiAtt.currentUserConsumption,
+                altLanguage: apiAtt.altLanguage,
+                altTranslations: apiAtt.altTranslations
             )
         }
 

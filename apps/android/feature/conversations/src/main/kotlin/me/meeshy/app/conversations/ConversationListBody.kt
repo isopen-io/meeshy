@@ -115,7 +115,7 @@ private fun ConversationListRow(
             isLocked = state.isLocked(conversation.id),
             nowMillis = now,
             hasPendingSync = signals.hasPendingSync(conversation.id),
-            peerHere = signals.peerHere(conversation, currentUserId),
+            here = signals.peerHere(conversation, currentUserId).toAvatarHere(),
             callInProgress = signals.hasCallInProgress(conversation.id),
         ),
         actions = actions,

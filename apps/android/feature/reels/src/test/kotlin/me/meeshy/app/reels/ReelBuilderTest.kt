@@ -146,4 +146,40 @@ class ReelBuilderTest {
         assertThat(reel.authorId).isEqualTo("u9")
         assertThat(reel.authorAvatarUrl).isNotNull()
     }
+
+    private fun mediaPost(id: String, vararg mimes: String, type: String? = "REEL") = ApiPost(
+        id = id,
+        type = type,
+        media = mimes.mapIndexed { i, m ->
+            ApiPostMedia(id = "m$i-$id", mimeType = m, fileUrl = "https://cdn.test/$id-$i")
+        },
+    )
+
+    @Test
+    fun `build admits video, images, audio and image-with-audio reels with their layout`() {
+        val reels = ReelBuilder.build(
+            listOf(
+                mediaPost("v", "video/mp4"),
+                mediaPost("i", "image/jpeg", "image/png"),
+                mediaPost("a", "audio/mpeg"),
+                mediaPost("ia", "image/jpeg", "audio/mpeg"),
+            ),
+            mediaBaseUrl = null,
+        )
+
+        assertThat(reels.map { it.id }).containsExactly("v", "i", "a", "ia").inOrder()
+        assertThat(reels[0].layout).isInstanceOf(me.meeshy.sdk.model.ReelMediaLayout.Video::class.java)
+        assertThat(reels[1].layout).isInstanceOf(me.meeshy.sdk.model.ReelMediaLayout.Images::class.java)
+        assertThat(reels[1].imageUrls).hasSize(2)
+        assertThat(reels[1].videoUrl).isNull()
+        assertThat(reels[2].audioUrl).isEqualTo("https://cdn.test/a-0")
+        assertThat(reels[3].layout).isInstanceOf(me.meeshy.sdk.model.ReelMediaLayout.ImagesWithAudio::class.java)
+    }
+
+    @Test
+    fun `build drops a non-REEL post whatever its media`() {
+        val reels = ReelBuilder.build(listOf(mediaPost("p", "image/jpeg", type = "POST")), mediaBaseUrl = null)
+
+        assertThat(reels).isEmpty()
+    }
 }

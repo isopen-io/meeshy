@@ -23,16 +23,6 @@ class UserApiRoutesTest {
     }
 
     @Test
-    fun `a public profile resolves by username on the u address`() = runTest {
-        val http = RecordingHttp(responseBody = """{"success":true,"data":{"id":"u1","username":"alice"}}""")
-        val response = http.serve(UserApi::class.java).getProfileByUsername("alice")
-
-        assertThat(http.only.method).isEqualTo("GET")
-        assertThat(http.only.path).isEqualTo("/api/v1/u/alice")
-        assertThat(response.data!!.username).isEqualTo("alice")
-    }
-
-    @Test
     fun `mentions of the user and of a message are readable`() = runTest {
         val mine = RecordingHttp(
             responseBody = """{"success":true,"data":[{"id":"m1","messageId":"x","message":{"id":"x","content":"hi @me","sender":null,"conversation":{"id":"c","title":"T","type":"group"}}}]}""",

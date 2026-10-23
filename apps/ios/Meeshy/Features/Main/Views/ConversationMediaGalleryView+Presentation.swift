@@ -17,11 +17,7 @@ import MeeshyUI
 
 extension ConversationMediaGalleryView {
 
-    /// Le toucher qui montre ou masque les détails et les actions ne vibre pas
-    /// (#12421) : seules les portes qui AGISSENT se sentent.
-    nonisolated static func stageEntryVibrates(_ door: StageEntry) -> Bool {
-        door != .tap
-    }
+    nonisolated static func stageEntryVibrates(_ door: StageEntry) -> Bool { door != .tap }
 
     /// **La seule écriture de l'état d'immersion.**
     ///
@@ -44,11 +40,6 @@ extension ConversationMediaGalleryView {
     ///   posée plus haut, elle installerait une transaction animée sur tout
     ///   l'arbre, pager compris.
     func onEnterStage(_ door: StageEntry) {
-        // **Le toucher qui RAMÈNE le bouton pause garde AUSSI sa porte** (#9577,
-        // décision porteur 2026-10-08, alignée sur le web) : il réarme la
-        // seconde du bouton central PUIS bascule le plein cadre, en un seul
-        // geste. Aucun retour anticipé ici — le toucher ne s'arrête jamais au
-        // bouton.
         if door == .tap {
             withAnimation(playPauseFadeAnimation) { playPauseFade = playPauseFade.tappingMedia() }
         }

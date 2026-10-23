@@ -58,6 +58,9 @@ import me.meeshy.feature.reels.R
 import me.meeshy.sdk.model.PostReactionPaletteState
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.ReelMediaLayout
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import me.meeshy.ui.component.reaction.PostReactionPalette
 import me.meeshy.ui.modifier.reactionPaletteTrigger
 import androidx.compose.runtime.remember
@@ -138,12 +141,24 @@ fun ReelsScreen(
                 ) { page ->
                     val reel = state.reels[page]
                     Box(Modifier.fillMaxSize()) {
-                        ReelVideoSurface(
-                            mediaUrl = reel.videoUrl,
-                            isActive = page == pagerState.currentPage,
-                            modifier = Modifier.fillMaxSize(),
-                            muted = muted,
-                        )
+                        (reel.imageUrls.firstOrNull() ?: reel.posterUrl)
+                            ?.takeIf { reel.layout !is ReelMediaLayout.Video }
+                            ?.let { backdrop ->
+                                AsyncImage(
+                                    model = backdrop,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        reel.videoUrl?.let { playable ->
+                            ReelVideoSurface(
+                                mediaUrl = playable,
+                                isActive = page == pagerState.currentPage,
+                                modifier = Modifier.fillMaxSize(),
+                                muted = muted,
+                            )
+                        }
                         ReelOverlay(
                             reel = reel,
                             onLike = { viewModel.toggleLike(reel.id) },

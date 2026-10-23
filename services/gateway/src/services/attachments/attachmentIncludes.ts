@@ -44,6 +44,7 @@
  * fully-typed Prisma result — no `as any` cast.
  */
 
+import { MESSAGE_SIDE_PROTECTION_SELECT } from './mediaSideContent';
 import { Prisma } from '@meeshy/shared/prisma/client';
 import {
   ATTACHMENT_PROTECTION_FIELDS,
@@ -188,6 +189,13 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
 export const attachmentSocketSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
   ...attachmentMediaSelect,
   ...attachmentProtectionSelect,
+  // #12333 — la description, servie masquée sous protection de la pièce OU de
+  // son message (`servedDescription`, `mediaSideContent.ts`) : la protection du
+  // porteur voyage donc avec la pièce. Le message n'est jamais servi tel quel.
+  alt: true,
+  altLanguage: true,
+  altTranslations: true,
+  message: { select: MESSAGE_SIDE_PROTECTION_SELECT },
   forwardedFromAttachmentId: true,
   isForwarded: true,
   maxViewOnceCount: true,
