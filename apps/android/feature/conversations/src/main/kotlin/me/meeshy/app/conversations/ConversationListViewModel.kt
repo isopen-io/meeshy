@@ -6,6 +6,7 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,7 @@ import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusRepository
 import me.meeshy.sdk.story.StoryRepository
 import javax.inject.Inject
 
@@ -56,6 +58,7 @@ class ConversationListViewModel @Inject constructor(
     statusBarCache: StatusBarCache,
     messagePrefetch: ConversationListMessagePrefetchTriggers,
     networkMonitor: NetworkMonitor,
+    statusRepository: StatusRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -94,6 +97,12 @@ class ConversationListViewModel @Inject constructor(
         preferencesSocketManager = preferencesSocketManager,
         starredStore = starredStore,
         currentUserId = { _state.value.currentUserId },
+    )
+    private val pullRefresh = ConversationListPullRefresh(
+        storyRepository = storyRepository,
+        statusRepository = statusRepository,
+        statusBarCache = statusBarCache,
+        categoryRepository = categoryRepository,
     )
     private val observers = ConversationListObservers(
         scope = viewModelScope,
@@ -202,12 +211,19 @@ class ConversationListViewModel @Inject constructor(
     /**
      * Pull-to-refresh: the visible spinner tracks the user gesture only —
      * background SWR revalidations stay silent ([ConversationListUiState.isSyncing]).
+     * The gesture also reloads the stories tray, the moods and the categories (iOS
+     * `onRefresh`), and ends once all of them are back.
      */
     fun refresh() {
         _state.update { it.copy(errorMessage = null, isSyncing = true, isUserRefreshing = true) }
         viewModelScope.launch {
             try {
-                repository.refresh()
+                coroutineScope {
+                    launch {
+                        pullRefresh.refreshSurroundings { moods -> _state.update { it.copy(moodStatuses = moods) } }
+                    }
+                    repository.refresh()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
