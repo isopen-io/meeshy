@@ -1,5 +1,6 @@
 package me.meeshy.sdk.net.api
 
+import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.signal.EstablishSessionRequest
 import me.meeshy.sdk.model.signal.EstablishSessionResult
@@ -44,4 +45,18 @@ interface SignalApi {
     /** Établit une session avec [EstablishSessionRequest.recipientUserId] dans une conversation. */
     @POST("signal/session/establish")
     suspend fun establishSession(@Body body: EstablishSessionRequest): ApiResponse<EstablishSessionResult>
+
+    /**
+     * Variantes à `data` BRUTE (objet JSON) : `MeeshyApi.json` coerce (`coerceInputValues`), et un champ
+     * de sécurité coercé est une rétrogradation silencieuse. L'appelant décode ensuite STRICTEMENT
+     * (`SignalWireDecoder`). Les chemins sont ceux des trois méthodes ci-dessus.
+     */
+    @POST("signal/keys")
+    suspend fun uploadKeysObject(@Body bundle: SignalPreKeyBundle): ApiResponse<JsonObject>
+
+    @GET("signal/keys/{userId}")
+    suspend fun keysForObject(@Path("userId") userId: String): ApiResponse<JsonObject>
+
+    @POST("signal/session/establish")
+    suspend fun establishSessionObject(@Body body: EstablishSessionRequest): ApiResponse<JsonObject>
 }

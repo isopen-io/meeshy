@@ -38,6 +38,7 @@ dependencies {
     api(project(":core:network"))
     implementation(project(":core:common"))
     implementation(project(":core:datastore"))
+    implementation(project(":core:crypto"))
     implementation(project(":core:database"))
 
     implementation(libs.androidx.core.ktx)
