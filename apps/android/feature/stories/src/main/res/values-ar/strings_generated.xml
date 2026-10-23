@@ -54,6 +54,8 @@
     <string name="stories_composer_style_neon">نيون</string>
     <string name="stories_composer_style_typewriter">آلة كاتبة</string>
     <string name="stories_composer_text_caption">تعليق</string>
+    <string name="stories_composer_text_finish">تم</string>
+    <string name="stories_composer_text_finish_a11y">إنهاء تعديل النص</string>
     <string name="stories_delete_confirm_title">حذف القصة؟</string>
     <string name="stories_publish_retry">إعادة المحاولة</string>
     <string name="stories_report_reason_harassment">تحرّش</string>

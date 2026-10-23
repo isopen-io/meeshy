@@ -50,6 +50,8 @@
     <string name="stories_composer_style_neon">Neon</string>
     <string name="stories_composer_style_typewriter">Schreibmaschine</string>
     <string name="stories_composer_text_caption">Bildunterschrift</string>
+    <string name="stories_composer_text_finish">Fertig</string>
+    <string name="stories_composer_text_finish_a11y">Textbearbeitung beenden</string>
     <string name="stories_delete_confirm_title">Story löschen?</string>
     <string name="stories_publish_retry">Erneut versuchen</string>
     <string name="stories_report_reason_harassment">Belästigung</string>

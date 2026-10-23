@@ -51,6 +51,8 @@
     <string name="stories_composer_style_neon">Neon</string>
     <string name="stories_composer_style_typewriter">Macchina</string>
     <string name="stories_composer_text_caption">Didascalia</string>
+    <string name="stories_composer_text_finish">Fatto</string>
+    <string name="stories_composer_text_finish_a11y">Termina la modifica del testo</string>
     <string name="stories_delete_confirm_title">Eliminare la storia?</string>
     <string name="stories_publish_retry">Riprova</string>
     <string name="stories_report_reason_harassment">Molestie</string>

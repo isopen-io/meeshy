@@ -1,7 +1,7 @@
 package me.meeshy.app.stories
 
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -12,10 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -35,13 +31,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import coil.compose.AsyncImage
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryDrawingStroke
@@ -58,12 +51,8 @@ import me.meeshy.sdk.model.scene.StoryColorMatrix
  * the measured canvas size into normalised fractions), so this Composable stays
  * declarative glue. A tap on the empty canvas deselects ([onBackgroundTap]).
  *
- * While a text element is being edited the [floatingToolbar] floats in-place just
- * clear of that element — above or below it, clamped inside the canvas — at the
- * vertical anchor decided by the pure, unit-tested [StoryToolbarPlacement] (fed the
- * element's measured centre/half-height, the toolbar's measured height, and the
- * keyboard-shrunk canvas height). The composer applies `imePadding`, so the canvas
- * already excludes the soft keyboard and the toolbar always lands in view.
+ * Nothing but the scene's own objects is laid on it (#12298): the selected text's settings
+ * live in the band under the stage ([TextStyleToolbar]), iOS `apps/ios/CLAUDE.md` § 1.
  */
 @Composable
 internal fun StoryCanvasSurface(
@@ -97,7 +86,6 @@ internal fun StoryCanvasSurface(
     onBackgroundTap: () -> Unit,
     snapFeedback: SnapFeedback?,
     modifier: Modifier = Modifier,
-    floatingToolbar: @Composable () -> Unit = {},
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
     val guideColor = MaterialTheme.colorScheme.primary
@@ -108,9 +96,6 @@ internal fun StoryCanvasSurface(
     }
     var canvasWidthPx by remember { mutableFloatStateOf(0f) }
     var canvasHeightPx by remember { mutableFloatStateOf(0f) }
-    var selectedHalfHeightPx by remember { mutableFloatStateOf(0f) }
-    var toolbarHeightPx by remember { mutableFloatStateOf(0f) }
-    val gapPx = with(LocalDensity.current) { 8.dp.toPx() }
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
@@ -239,9 +224,6 @@ internal fun StoryCanvasSurface(
                     onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
                     onRemove = { onElementRemove(element.id) },
                     onTextChange = onElementTextChange,
-                    onMeasured = { size ->
-                        if (element.id == selectedElement?.id) selectedHalfHeightPx = size.height / 2f
-                    },
                 )
             }
             stickers.forEach { sticker ->
@@ -271,29 +253,6 @@ internal fun StoryCanvasSurface(
                 onStrokeCaptured = onStrokeCaptured,
                 modifier = Modifier.fillMaxSize(),
             )
-            if (selectedElement != null) {
-                val placement = StoryToolbarPlacement.resolve(
-                    elementCenterYpx = selectedElement.y * canvasHeightPx,
-                    elementHalfHeightPx = selectedHalfHeightPx,
-                    toolbarHeightPx = toolbarHeightPx,
-                    canvasHeightPx = canvasHeightPx,
-                    gapPx = gapPx,
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .offset { IntOffset(0, placement.topPx.roundToInt()) }
-                        .padding(horizontal = 8.dp)
-                        .onSizeChanged { toolbarHeightPx = it.height.toFloat() }
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                            shape = RoundedCornerShape(12.dp),
-                        )
-                        .padding(8.dp),
-                ) {
-                    floatingToolbar()
-                }
-            }
         }
     }
 }
