@@ -8,15 +8,22 @@
  *   déclaré au moins égal au coût MESURÉ (`measureLensCost`), exactement les
  *   fichiers que les couches nomment, chacun ré-encodé (`normalizeAsset`, la
  *   porte des octets des stickers) et RENOMMÉ par l'empreinte de ses octets.
+ *   Une LUT passe par sa propre porte, SANS PERTE (`normalizeLut`) : une table
+ *   de couleurs redimensionnée ou compressée avec perte ne correspond plus à rien.
  *   Ce qui est gardé est la copie re-sérialisée de ce que le schéma a lu. La
  *   lens naît `pending` : rien n'est servi ni installable avant la modération ;
  * - **modérer** — sous `canModerateContent`, jamais sa propre proposition. La
  *   revue FIXE la fenêtre et les communautés (le document servi est réécrit,
- *   donc ré-adressé). Aucun prix : une lens est gratuite ;
+ *   donc ré-adressé). Aucun prix : une lens est gratuite. Une lens publiée se
+ *   RETIRE (`withdrawn`). Chaque geste s'écrit au journal (`AdminAuditLog`) AVANT
+ *   d'agir : sans journal, rien ne bouge ; un refus remplacé par une nouvelle
+ *   proposition y laisse sa trace ;
  * - **servir** — le magasin communautaire du moteur de packs (`lensStore`)
  *   n'offre une lens publiée que dans sa fenêtre et à ses communautés
- *   (`isPackShelved`, #11274) ; `/pack-assets` sert son document et ses
- *   fichiers une fois publiée (`approvedFile`).
+ *   (`isPackShelved`, #11274) — détail et document compris, sauf pour son auteur
+ *   et la modération ; `/pack-assets` sert son document et ses fichiers une fois
+ *   publiée et sa fenêtre ouverte (`approvedFile`). Le document servi ne porte
+ *   pas ses communautés : c'est la passerelle qui gouverne l'offre.
  *
  * Points « ATTEND » de #11251 laissés ABSENTS, jamais tranchés ici : ni
  * rémunération, ni crédit « Lens par X » en E2EE, ni géo-créneau — la revue
@@ -31,6 +38,7 @@ import { LENS_PACK_LIMITS, isLensCostDeclaredHonestly, lensAssetRefs, measureLen
 import type { PackAssetRef, PackStatus, PackSummary } from '@meeshy/shared/types/content-pack';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
 import { normalizeStickerImage, type StickerImageOutcome } from '../stickers/stickerImage';
+import { normalizeLensLut } from './lensLutImage';
 import { isUniqueViolation, type CommunityPackStore, type PackViewer } from './PackCatalog';
 
 export type LensPackDetail = PackSummary & {
@@ -76,7 +84,8 @@ export type SubmitLensOutcome =
   | { readonly kind: 'cost-understated'; readonly declared: LensCost; readonly measured: LensCost }
   | { readonly kind: 'asset-refused'; readonly src: string; readonly reason: LensAssetRefusal }
   | { readonly kind: 'slug-taken' }
-  | { readonly kind: 'too-many-pending' };
+  | { readonly kind: 'too-many-pending' }
+  | { readonly kind: 'audit-unavailable' };
 
 export type LensReview = {
   readonly decision: 'approve' | 'reject';
@@ -89,14 +98,29 @@ export type ReviewLensOutcome =
   | { readonly kind: 'reviewed'; readonly pack: LensPackDetail }
   | { readonly kind: 'not-found' }
   | { readonly kind: 'self-review' }
-  | { readonly kind: 'invalid-window' };
+  | { readonly kind: 'invalid-window' }
+  | { readonly kind: 'audit-unavailable' };
+
+export type WithdrawLensOutcome =
+  | { readonly kind: 'withdrawn'; readonly pack: LensPackDetail }
+  | { readonly kind: 'not-found' }
+  | { readonly kind: 'audit-unavailable' };
 
 export type LensFile = { readonly bytes: Buffer; readonly contentType: string };
 
 export type LensPacksDeps = {
-  readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset'>;
+  readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog'>;
   readonly now?: () => Date;
   readonly normalizeAsset?: (bytes: Buffer) => Promise<StickerImageOutcome>;
+  readonly normalizeLut?: (bytes: Buffer) => Promise<StickerImageOutcome>;
+};
+
+type LensAuditEntry = {
+  readonly adminId: string;
+  readonly submitterId: string;
+  readonly action: 'LENS_PACK_APPROVE' | 'LENS_PACK_REJECT' | 'LENS_PACK_WITHDRAW' | 'LENS_PACK_REJECTION_REPLACED';
+  readonly slug: string;
+  readonly metadata: Readonly<Record<string, unknown>>;
 };
 
 const sha256Of = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex');
@@ -135,8 +159,11 @@ export function lensPackDetail(row: LensPackRow, installed: boolean, viewer?: Pa
   };
 }
 
+const isOwnView = (row: Pick<LensPackRow, 'submitterId'>, viewer: PackViewer): boolean =>
+  row.submitterId === viewer.userId || viewer.canModerate;
+
 const isVisible = (row: Pick<LensPackRow, 'status' | 'submitterId'>, viewer: PackViewer): boolean =>
-  row.status === 'approved' || row.submitterId === viewer.userId || viewer.canModerate;
+  row.status === 'approved' || isOwnView(row, viewer);
 
 /** L'offre d'une lens publiée : sa fenêtre (fixée à la revue) et ses communautés (vide = tout le monde). */
 const offerOf = (row: Pick<LensPackRow, 'startsAt' | 'endsAt' | 'communities'>) => ({
@@ -144,14 +171,37 @@ const offerOf = (row: Pick<LensPackRow, 'startsAt' | 'endsAt' | 'communities'>) 
   ...(row.communities.length > 0 ? { targeting: { communities: row.communities } } : {}),
 });
 
-/** Le document servi : la lens lue, ses fichiers renommés, sa fenêtre fixée, sans géo-créneau (#11251, point 7 en attente). */
-const servedDocument = (lens: Lens, window: { readonly startsAt: string; readonly endsAt: string }, communities: readonly string[]): string =>
-  JSON.stringify({ ...lens, window: { startsAt: window.startsAt, endsAt: window.endsAt, ...(communities.length > 0 ? { communities } : {}) } });
+/**
+ * Le document servi : la lens lue, ses fichiers renommés, sa fenêtre fixée, sans
+ * géo-créneau (#11251, point 7 en attente) ni communautés — le ciblage reste à la
+ * passerelle, et des identifiants de communautés privées n'ont rien à faire dans
+ * un fichier que `/pack-assets` sert sans authentification.
+ */
+const servedDocument = (lens: Lens, window: { readonly startsAt: string; readonly endsAt: string }): string =>
+  JSON.stringify({ ...lens, window: { startsAt: window.startsAt, endsAt: window.endsAt } });
 
-const documentColumns = (json: string) => {
+export const documentColumns = (json: string) => {
   const sha256 = sha256Of(json);
   return { documentJson: json, documentSha256: sha256, documentSrc: `${sha256.slice(0, 16)}.json`, documentBytes: Buffer.byteLength(json, 'utf8') };
 };
+
+/**
+ * Le document publié d'un compte purgé : `credits.author` réécrit, le reste
+ * intact, ré-adressé par sa nouvelle empreinte (l'ancienne adresse ne sert plus
+ * rien). Un document illisible garde ses octets — il n'a pas d'auteur à taire.
+ */
+export function anonymizedLensDocument(json: string, author: string): ReturnType<typeof documentColumns> {
+  const parsed: unknown = (() => {
+    try {
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  })();
+  const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (!isObject(parsed) || !isObject(parsed.credits)) return documentColumns(json);
+  return documentColumns(JSON.stringify({ ...parsed, credits: { ...parsed.credits, author } }));
+}
 
 const isWindowLawful = (window: { readonly startsAt: string; readonly endsAt: string }): boolean => {
   const starts = Date.parse(window.startsAt);
@@ -177,14 +227,35 @@ function decodeAssets(refs: readonly string[], provided: Readonly<Record<string,
 }
 
 export class LensPacks {
-  private readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset'>;
+  private readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog'>;
   private readonly now: () => Date;
   private readonly normalizeAsset: (bytes: Buffer) => Promise<StickerImageOutcome>;
+  private readonly normalizeLut: (bytes: Buffer) => Promise<StickerImageOutcome>;
 
   constructor(deps: LensPacksDeps) {
     this.prisma = deps.prisma;
     this.now = deps.now ?? (() => new Date());
     this.normalizeAsset = deps.normalizeAsset ?? normalizeStickerImage;
+    this.normalizeLut = deps.normalizeLut ?? normalizeLensLut;
+  }
+
+  /** Une ligne de journal, ÉCRITE avant d'agir : si elle ne s'écrit pas, on n'agit pas. */
+  private async journal(entry: LensAuditEntry): Promise<boolean> {
+    try {
+      await this.prisma.adminAuditLog.create({
+        data: {
+          adminId: entry.adminId,
+          userId: entry.submitterId,
+          action: entry.action,
+          entity: 'LensPack',
+          entityId: entry.slug,
+          metadata: JSON.stringify(entry.metadata),
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async submit(userId: string, input: { readonly document: unknown; readonly assets: Readonly<Record<string, string>> }): Promise<SubmitLensOutcome> {
@@ -199,10 +270,14 @@ export class LensPacks {
 
     const decoded = decodeAssets(lensAssetRefs(lens), input.assets);
     if ('reason' in decoded) return { kind: 'asset-refused', src: decoded.src, reason: decoded.reason };
-    const normalized = await this.normalizeAll(decoded.bytes);
+    const luts = new Set(lens.layers.flatMap((layer) => (layer.kind === 'lut' ? [layer.asset] : [])));
+    const normalized = await this.normalizeAll(decoded.bytes, luts);
     if ('reason' in normalized) return { kind: 'asset-refused', src: normalized.src, reason: normalized.reason };
 
-    const existing = await this.prisma.lensPack.findUnique({ where: { slug: lens.id }, select: { id: true, submitterId: true, status: true } });
+    const existing = await this.prisma.lensPack.findUnique({
+      where: { slug: lens.id },
+      select: { id: true, submitterId: true, status: true, reviewNote: true, reviewerId: true, reviewedAt: true, documentSha256: true },
+    });
     const replacing = existing !== null && existing.submitterId === userId && existing.status === 'rejected';
     if (existing !== null && !replacing) return { kind: 'slug-taken' };
     const pending = await this.prisma.lensPack.count({ where: { submitterId: userId, status: 'pending' } });
@@ -211,7 +286,22 @@ export class LensPacks {
     const renamed = new Map([...normalized.files].map(([src, file]) => [src, file.src]));
     const stored = withLensAssets(lens, renamed);
     const communities = lens.window.communities ?? [];
-    const json = servedDocument(stored, lens.window, communities);
+    const json = servedDocument(stored, lens.window);
+    if (existing !== null) {
+      const journaled = await this.journal({
+        adminId: existing.reviewerId ?? userId,
+        submitterId: userId,
+        action: 'LENS_PACK_REJECTION_REPLACED',
+        slug: lens.id,
+        metadata: {
+          reviewNote: existing.reviewNote,
+          reviewerId: existing.reviewerId,
+          reviewedAt: existing.reviewedAt?.toISOString() ?? null,
+          documentSha256: existing.documentSha256,
+        },
+      });
+      if (!journaled) return { kind: 'audit-unavailable' };
+    }
     try {
       if (existing !== null) await this.discard(existing.id);
       const row = await this.prisma.lensPack.create({
@@ -275,14 +365,23 @@ export class LensPacks {
           startsAt: new Date(window.startsAt),
           endsAt: new Date(window.endsAt),
           communities: [...communities],
-          ...documentColumns(servedDocument(parsed.lens, window, communities)),
+          ...documentColumns(servedDocument(parsed.lens, window)),
         }
       : {};
+    const note = review.note?.trim().slice(0, LENS_PACK_LIMITS.maxReviewNoteLength) || null;
+    const journaled = await this.journal({
+      adminId: moderatorId,
+      submitterId: current.submitterId,
+      action: approve ? 'LENS_PACK_APPROVE' : 'LENS_PACK_REJECT',
+      slug,
+      metadata: { note, ...(approve ? { window, communities } : {}) },
+    });
+    if (!journaled) return { kind: 'audit-unavailable' };
     const flipped = await this.prisma.lensPack.updateMany({
       where: { slug, status: 'pending', submitterId: current.submitterId },
       data: {
         status: approve ? 'approved' : 'rejected',
-        reviewNote: review.note?.trim().slice(0, LENS_PACK_LIMITS.maxReviewNoteLength) || null,
+        reviewNote: note,
         reviewerId: moderatorId,
         reviewedAt: this.now(),
         ...fixed,
@@ -293,7 +392,31 @@ export class LensPacks {
     return row === null ? { kind: 'not-found' } : { kind: 'reviewed', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }) };
   }
 
-  /** Le document d'une lens pour qui peut la voir : publiée pour tous, en attente ou refusée pour son auteur et les modérateurs. */
+  /**
+   * Retire une lens PUBLIÉE (abus, signalement) : elle quitte le rayon, les
+   * installés et le magasin des fichiers. Journalisé d'abord ; conditionnel sur
+   * `approved`, deux modérateurs ne se marchent pas dessus.
+   */
+  async withdraw(moderatorId: string, slug: string, input: { readonly note: string | null }): Promise<WithdrawLensOutcome> {
+    const current = await this.prisma.lensPack.findUnique({ where: { slug }, select: { submitterId: true, status: true } });
+    if (current === null || current.status !== 'approved') return { kind: 'not-found' };
+    const note = input.note?.trim().slice(0, LENS_PACK_LIMITS.maxReviewNoteLength) || null;
+    const journaled = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_WITHDRAW', slug, metadata: { note } });
+    if (!journaled) return { kind: 'audit-unavailable' };
+    const flipped = await this.prisma.lensPack.updateMany({
+      where: { slug, status: 'approved' },
+      data: { status: 'withdrawn', reviewNote: note, reviewerId: moderatorId, reviewedAt: this.now() },
+    });
+    if (flipped.count === 0) return { kind: 'not-found' };
+    const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
+    return row === null ? { kind: 'not-found' } : { kind: 'withdrawn', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }) };
+  }
+
+  /**
+   * Le document d'une lens : publiée pour tous, en attente, refusée ou retirée pour
+   * son auteur et les modérateurs. L'OFFRE (fenêtre, communautés) se juge avant,
+   * par le détail du moteur de packs (route `/document`).
+   */
   async document(slug: string, viewer: PackViewer): Promise<{ readonly documentJson: string; readonly sha256: string } | null> {
     const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: { status: true, submitterId: true, documentJson: true, documentSha256: true } });
     if (row === null || !isVisible(row, viewer)) return null;
@@ -306,7 +429,7 @@ export class LensPacks {
    */
   async approvedFile(src: string): Promise<LensFile | null> {
     if (src.endsWith('.json')) {
-      const row = await this.prisma.lensPack.findFirst({ where: { documentSrc: src, status: 'approved' }, select: { documentJson: true, documentSha256: true } });
+      const row = await this.prisma.lensPack.findFirst({ where: { documentSrc: src, ...this.servable() }, select: { documentJson: true, documentSha256: true } });
       if (row === null || sha256Of(row.documentJson) !== row.documentSha256) return null;
       return { bytes: Buffer.from(row.documentJson, 'utf8'), contentType: DOCUMENT_CONTENT_TYPE };
     }
@@ -314,20 +437,31 @@ export class LensPacks {
     // Une même image peut servir deux lens : elle se sert dès que l'UNE est publiée (mêmes octets, même empreinte).
     const copies = await this.prisma.lensPackAsset.findMany({ where: { src }, select: { packId: true, mimeType: true, bytes: true } });
     if (copies.length === 0) return null;
-    const pack = await this.prisma.lensPack.findFirst({ where: { id: { in: copies.map((copy) => copy.packId) }, status: 'approved' }, select: { id: true } });
+    const pack = await this.prisma.lensPack.findFirst({ where: { id: { in: copies.map((copy) => copy.packId) }, ...this.servable() }, select: { id: true } });
     const served = copies.find((copy) => copy.packId === pack?.id);
     return served === undefined ? null : { bytes: Buffer.from(served.bytes), contentType: served.mimeType };
   }
 
+  /**
+   * Ce que `/pack-assets` peut servir SANS authentification : une lens publiée dont
+   * la fenêtre est OUVERTE — jamais une surprise avant son heure. Après la fin, ses
+   * installés gardent leurs fichiers ; le ciblage, lui, se juge au détail, seule
+   * porte qui donne l'adresse (`<sha16>`) d'un fichier.
+   */
+  private servable() {
+    return { status: 'approved', startsAt: { lte: this.now() } };
+  }
+
   private async normalizeAll(
     sources: ReadonlyMap<string, Buffer>,
+    luts: ReadonlySet<string>,
   ): Promise<
     | { readonly ok: true; readonly files: ReadonlyMap<string, { readonly src: string; readonly sha256: string; readonly mimeType: string; readonly bytes: Buffer }> }
     | { readonly ok: false; readonly src: string; readonly reason: LensAssetRefusal }
   > {
     const files = new Map<string, { readonly src: string; readonly sha256: string; readonly mimeType: string; readonly bytes: Buffer }>();
     for (const [src, bytes] of sources) {
-      const outcome = await this.normalizeAsset(bytes);
+      const outcome = await (luts.has(src) ? this.normalizeLut(bytes) : this.normalizeAsset(bytes));
       if ('reason' in outcome) return { ok: false, src, reason: outcome.reason };
       const { mimeType } = outcome.image;
       if (!isLensImageMime(mimeType)) return { ok: false, src, reason: 'not-an-image' };
@@ -372,7 +506,9 @@ export class LensPacks {
       detail: async (slug, viewer, installedOf) => {
         const row = await prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
         if (row === null || !isVisible(row, viewer)) return null;
-        return lensPackDetail(row, installedOf(slug), viewer);
+        if (isOwnView(row, viewer)) return lensPackDetail(row, installedOf(slug), viewer);
+        const shelved = isPackShelved(offerOf(row), await context(viewer.userId), { ownedByRow: false, installed: installedOf(slug) });
+        return shelved ? lensPackDetail(row, installedOf(slug), viewer) : null;
       },
       installable: async (slug, userId) => {
         const row = await prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });

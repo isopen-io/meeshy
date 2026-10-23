@@ -6129,7 +6129,7 @@ model LensPack {
   name           String
   author         String
   submitterId    String    @db.ObjectId
-  /// pending · approved · rejected
+  /// pending · approved · rejected · withdrawn (retirée par la modération après publication)
   status         String    @default("pending")
   reviewNote     String?
   reviewerId     String?   @db.ObjectId

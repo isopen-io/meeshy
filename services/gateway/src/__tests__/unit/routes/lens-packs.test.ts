@@ -274,10 +274,10 @@ describe('la boutique des lens et l’installation (#11271)', () => {
 });
 
 describe('le magasin des fichiers (#11271)', () => {
-  it('ne sert les fichiers et le document d’une lens qu’une fois publiée', async () => {
+  it('ne sert les fichiers et le document d’une lens qu’une fois publiée, fenêtre ouverte', async () => {
     const h = await harness();
     await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
-    const packs = new LensPacks({ prisma: { lensPack: h.tables.lensPack, lensPackAsset: h.tables.lensPackAsset } as never });
+    const { packs } = h;
     const asset = String(h.tables.assets[0]!.src);
     expect(await packs.approvedFile(asset)).toBeNull();
     await review(h, 'aurore-polaire', { decision: 'approve' });

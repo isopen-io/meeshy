@@ -44,6 +44,7 @@ public enum PacksEndpoint: MeeshyEndpoint, Sendable {
     case lensBySlugDocument(slug: String)
     case lensBySlugInstall(slug: String)
     case lensBySlugReview(slug: String)
+    case lensBySlugWithdraw(slug: String)
     case lensInstalled
     case lensPending
     case lensSubmissions
@@ -92,6 +93,7 @@ public enum PacksEndpoint: MeeshyEndpoint, Sendable {
         case .lensBySlugDocument(let slug): return "/api/v1/packs/lens/\(slug)/document"
         case .lensBySlugInstall(let slug): return "/api/v1/packs/lens/\(slug)/install"
         case .lensBySlugReview(let slug): return "/api/v1/packs/lens/\(slug)/review"
+        case .lensBySlugWithdraw(let slug): return "/api/v1/packs/lens/\(slug)/withdraw"
         case .lensInstalled: return "/api/v1/packs/lens/installed"
         case .lensPending: return "/api/v1/packs/lens/pending"
         case .lensSubmissions: return "/api/v1/packs/lens/submissions"

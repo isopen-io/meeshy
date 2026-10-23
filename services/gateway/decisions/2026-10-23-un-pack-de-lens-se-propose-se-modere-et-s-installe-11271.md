@@ -28,6 +28,15 @@ MeeshyLens v1 avait son contrat (`lens-format.ts`, #11270) mais aucun circuit : 
    - fichiers en base : quelques centaines de Ko par lens, servis immuables par empreinte, et la passerelle reste sans état ;
    - RGPD : l'export (`packs.lensSubmissions`) et la purge (`PackPrivacy`) les couvrent comme les autres propositions.
 
+### Corrigé après l'audit adversarial de #12293
+
+- **Une lens publiée se RETIRE** (`POST /:slug/withdraw`, `canModerateContent`) : `approved → withdrawn`. Elle quitte la boutique, les lens installées et le magasin des fichiers. La purge d'un compte l'efface comme une proposition.
+- **La modération est journalisée AVANT d'agir** (`AdminAuditLog`, entité `LensPack`) : `LENS_PACK_APPROVE`, `LENS_PACK_REJECT`, `LENS_PACK_WITHDRAW`. Sans journal, rien ne bouge (500 `LENS_AUDIT_UNAVAILABLE`). Une re-proposition après un refus efface la ligne, mais écrit d'abord `LENS_PACK_REJECTION_REPLACED` avec la note, le modérateur et la date du refus.
+- **L'offre gouverne aussi le détail et le document.** Pour un tiers, `GET /:slug` et `GET /:slug/document` exigent que la lens lui soit offerte (fenêtre, communautés) ou qu'il l'ait installée. L'auteur et la modération la lisent toujours. `/pack-assets` (sans authentification) ne sert rien avant l'ouverture de la fenêtre. Après la fin, il sert encore les fichiers aux installés : l'adresse `<sha16>` ne s'apprend que par le détail.
+- **Le document servi ne porte plus ses communautés** : des identifiants de communautés privées n'ont rien à faire dans un fichier public. Le ciblage reste en base (`LensPack.communities`).
+- **La purge réécrit `credits.author`** dans le document publié et le ré-adresse (nouvelle empreinte, nouvelle adresse).
+- **Une LUT passe par sa propre porte, sans perte** (`lensLutImage.ts`) : relue, ré-écrite en PNG, à sa définition. La porte des stickers la ramenait à 512 px et pouvait l'écrire en WebP q90, ce qui fausse une table de couleurs.
+
 ### Laissé absent, à dessein
 
 - **Points « ATTEND » de #11251, jamais tranchés ici** :
