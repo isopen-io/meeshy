@@ -38,7 +38,7 @@ describe('refresh() est borné', () => {
     await expect(overrides.refresh()).rejects.toThrow(/timeout/i);
     await overrides.refresh();
 
-    expect(overrides.snapshot()?.has('banner:aurore')).toBe(true);
+    expect(overrides.snapshot()?.has('banner.aurore')).toBe(true);
   });
 
   it('un résultat tardif n’écrase jamais une lecture plus récente', async () => {
@@ -51,8 +51,8 @@ describe('refresh() est borné', () => {
     releaseLate([{ domain: 'banner', slug: 'ancien', override: { hidden: true }, revision: 1 }]);
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(overrides.snapshot()?.has('banner:recent')).toBe(true);
-    expect(overrides.snapshot()?.has('banner:ancien')).toBe(false);
+    expect(overrides.snapshot()?.has('banner.recent')).toBe(true);
+    expect(overrides.snapshot()?.has('banner.ancien')).toBe(false);
   });
 });
 
