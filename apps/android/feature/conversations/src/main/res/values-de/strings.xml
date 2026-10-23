@@ -55,4 +55,5 @@
     <string name="dashboard_action_search">Globale Suche</string>
     <string name="global_search_empty_subtitle">Nachrichten, Unterhaltungen, Benutzer</string>
     <string name="global_search_hint">Überall suchen…</string>
+    <string name="new_conversation_error_blocked">Du kannst mit diesem Benutzer keine Unterhaltung beginnen.</string>
 </resources>

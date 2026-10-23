@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_delete_confirm_cancel">Annulla</string>
+    <string name="chat_delete_confirm_hint">L\'eliminazione per tutti è disponibile per 2 ore dopo l\'invio.</string>
+    <string name="chat_delete_confirm_title">Eliminare questo messaggio?</string>
     <string name="composer_a11y_addSelection">Aggiungi la selezione</string>
     <string name="composer_a11y_cancelSelection">Annulla la selezione</string>
     <string name="composer_a11y_openFullLibrary">Apri l\'intera libreria foto</string>
