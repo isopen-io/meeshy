@@ -13,6 +13,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.friend.BlockRepository
+import me.meeshy.sdk.friend.BlockedListRepository
+import me.meeshy.sdk.friend.FriendListRepository
+import me.meeshy.sdk.friend.FriendRepository
+import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.friend.ContactList
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
@@ -30,8 +36,16 @@ data class NewConversationUiState(
     val error: NewConversationError? = null,
     val answeredQuery: String? = null,
     val createdConversationId: String? = null,
+    val contacts: List<SelectableUser> = emptyList(),
+    val isLoadingContacts: Boolean = false,
 ) {
     val isGroup: Boolean get() = selected.size >= 2
+
+    /** Before a searchable query, the picker shows « Your contacts » (iOS `NewConversationView`). */
+    val showsContacts: Boolean get() = query.trim().length < NewConversationLogic.MIN_QUERY_LENGTH
+
+    /** « No contacts » once the roster has answered with nobody — never during its first load. */
+    val showsNoContacts: Boolean get() = showsContacts && !isLoadingContacts && contacts.isEmpty()
 
     /**
      * « Aucun utilisateur trouvé » (parity iOS `conversation.new.no-user-found`): only once the
@@ -59,6 +73,10 @@ class NewConversationViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val conversationRepository: ConversationRepository,
     private val sessionRepository: SessionRepository,
+    private val friendListRepository: FriendListRepository,
+    private val friendRepository: FriendRepository,
+    private val blockedListRepository: BlockedListRepository,
+    private val blockRepository: BlockRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NewConversationUiState())
@@ -69,8 +87,11 @@ class NewConversationViewModel @Inject constructor(
     private var rawResults: List<me.meeshy.sdk.net.api.UserSearchResult> = emptyList()
     private var currentQuery: String = ""
     private var nextOffset: Int = 0
+    private var blockedIds: Set<String> = emptySet()
 
     init {
+        viewModelScope.launch { loadContacts() }
+        viewModelScope.launch { loadBlocked() }
         viewModelScope.launch {
             queryFlow
                 .debounce(SEARCH_DEBOUNCE_MS)
@@ -91,7 +112,9 @@ class NewConversationViewModel @Inject constructor(
     fun toggleSelection(userId: String) {
         val existing = selectedById.remove(userId)
         if (existing == null) {
-            val row = _state.value.results.firstOrNull { it.id == userId } ?: return
+            val current = _state.value
+            val row = (current.results + current.contacts).firstOrNull { it.id == userId } ?: return
+            if (row.isBlocked) return
             selectedById[userId] = row.copy(isSelected = true)
         }
         publishSelection()
@@ -196,6 +219,68 @@ class NewConversationViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Cache first, then the network (iOS `NewConversationViewModel.loadContacts`): the persisted
+     * roster paints at once, and only a cold cache shows the loading state. The roster is read,
+     * never written — the contacts screen owns that store.
+     */
+    private suspend fun loadContacts() {
+        val cached = runCatching { friendListRepository.cachedSnapshot() }.getOrNull()
+        if (cached != null) publishContacts(cached) else _state.update { it.copy(isLoadingContacts = true) }
+        val fresh = try {
+            friendRepository.acceptedFriendRequests()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        if (fresh is NetworkResult.Success) {
+            publishContacts(ContactList.fromAcceptedRequests(fresh.data, sessionRepository.currentUserId.orEmpty()))
+        } else {
+            _state.update { it.copy(isLoadingContacts = false) }
+        }
+    }
+
+    /**
+     * The users I blocked, cache first then the gateway (iOS `BlockService.blockedUserIds`):
+     * their rows say « Blocked » and cannot be picked — creating with them would only fail.
+     */
+    private suspend fun loadBlocked() {
+        runCatching { blockedListRepository.cachedSnapshot() }.getOrNull()?.let { publishBlocked(it.map { u -> u.id }) }
+        val fresh = try {
+            blockRepository.listBlocked()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        if (fresh is NetworkResult.Success) publishBlocked(fresh.data.map { it.id })
+    }
+
+    private fun publishBlocked(ids: List<String>) {
+        blockedIds = ids.filter { it.isNotBlank() }.toSet()
+        blockedIds.forEach { selectedById.remove(it) }
+        _state.update {
+            it.copy(
+                results = NewConversationLogic.withBlocked(it.results, blockedIds),
+                contacts = NewConversationLogic.withBlocked(it.contacts, blockedIds),
+                selected = selectedById.values.toList(),
+            )
+        }
+    }
+
+    private fun publishContacts(roster: List<FriendRequestUser>) {
+        _state.update {
+            it.copy(
+                contacts = NewConversationLogic.withBlocked(
+                    NewConversationLogic.contactRows(roster, selectedById.keys.toSet(), sessionRepository.currentUserId),
+                    blockedIds,
+                ),
+                isLoadingContacts = false,
+            )
+        }
+    }
+
     /** A failed search reads like an empty one (parity iOS: `searchResults = []`, no message). */
     private fun answerWithNothing(query: String) {
         _state.update { it.copy(results = emptyList(), isSearching = false, hasMore = false, answeredQuery = query) }
@@ -205,7 +290,10 @@ class NewConversationViewModel @Inject constructor(
         if (code == USER_BLOCKED_CODE) NewConversationError.BLOCKED else NewConversationError.CREATE_FAILED
 
     private fun projectedRows(results: List<me.meeshy.sdk.net.api.UserSearchResult>) =
-        NewConversationLogic.rows(results, selectedById.keys.toSet(), sessionRepository.currentUserId)
+        NewConversationLogic.withBlocked(
+            NewConversationLogic.rows(results, selectedById.keys.toSet(), sessionRepository.currentUserId),
+            blockedIds,
+        )
 
     private fun publishSelection() {
         val selectedIds = selectedById.keys.toSet()
@@ -213,13 +301,14 @@ class NewConversationViewModel @Inject constructor(
             current.copy(
                 selected = selectedById.values.toList(),
                 results = current.results.map { it.copy(isSelected = it.id in selectedIds) },
+                contacts = current.contacts.map { it.copy(isSelected = it.id in selectedIds) },
             )
         }
     }
 
     companion object {
         private const val SEARCH_DEBOUNCE_MS = 300L
-        private const val MIN_QUERY_LENGTH = 2
+        private const val MIN_QUERY_LENGTH = NewConversationLogic.MIN_QUERY_LENGTH
         private const val LOAD_MORE_THRESHOLD = 5
         private const val USER_BLOCKED_CODE = "USER_BLOCKED"
     }

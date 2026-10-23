@@ -78,5 +78,9 @@
       "statements": 86,
       "functions": 83
     }
-  }
+  },
+  "reporters": [
+    "default",
+    "<rootDir>/jest-ci-annotations-reporter.js"
+  ]
 }

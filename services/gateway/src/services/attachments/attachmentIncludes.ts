@@ -113,6 +113,7 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   sampleRate: true,
   codec: true,
   channels: true,
+  loudnessLufs: true,
   fps: true,
   videoCodec: true,
   pageCount: true,

@@ -55,9 +55,9 @@ final class CallWaitingBannerViewTests: XCTestCase {
     func test_scheduleAutoDismiss_usesSleep_notDispatchAfter() throws {
         let source = try bannerSource()
         XCTAssertTrue(
-            source.contains("Task.sleep"),
-            "scheduleAutoDismiss() must await Task.sleep — DispatchQueue.asyncAfter " +
-            "cannot be cancelled after the fact."
+            source.contains("cancellableSleep(") || source.contains("Task.sleep"),
+            "scheduleAutoDismiss() must await a cooperative sleep (cancellableSleep wraps Task.sleep) — " +
+            "DispatchQueue.asyncAfter cannot be cancelled after the fact."
         )
         XCTAssertFalse(
             source.contains("DispatchQueue.main.asyncAfter"),

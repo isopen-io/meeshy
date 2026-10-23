@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { buildApiEndpointsCatalog, type ManifestRouteInput } from '../build-catalog.js';
 import { renderKotlinEndpoints } from '../build-kotlin-endpoints.js';
 import { filterOutOpsOnlyRoutes } from '../ops-only-routes.js';
+import { filterOutWebConsoleRoutes } from '../web-console-routes.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../../..');
@@ -30,7 +31,7 @@ function manifestRoutes(): readonly ManifestRouteInput[] {
   const parsed = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as {
     routes: readonly ManifestRouteInput[];
   };
-  return filterOutOpsOnlyRoutes(parsed.routes);
+  return filterOutWebConsoleRoutes(filterOutOpsOnlyRoutes(parsed.routes));
 }
 
 describe('cliquet — les objets de routes Kotlin suivent le manifeste', () => {

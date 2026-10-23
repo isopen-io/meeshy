@@ -17,21 +17,29 @@ import ImageIO
 ///
 /// Le plafond par tier d'appareil reste à l'appelant (`DecodedBitmapStore`) : la
 /// brique borne ce qu'on lui demande, elle ne décide pas de la taille.
+///
+/// Une seule exception à la transformée, DÉCLARÉE par l'appelant :
+/// `keepsStoredOrientation`, pour un encodeur qui réécrit l'orientation EXIF à
+/// côté des pixels — une photo HDR dont la carte de gain est relative aux
+/// pixels STOCKÉS (#11847). Un affichage ne la demande jamais.
 public enum ImageDownsampler {
-    public static func options(maxPixelSize: CGFloat, decodeImmediately: Bool) -> CFDictionary {
+    public static func options(maxPixelSize: CGFloat, decodeImmediately: Bool,
+                               keepsStoredOrientation: Bool = false) -> CFDictionary {
         [
             kCGImageSourceShouldCache: false,
             kCGImageSourceShouldCacheImmediately: decodeImmediately,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceCreateThumbnailWithTransform: !keepsStoredOrientation,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
         ] as CFDictionary
     }
 
     public static func thumbnail(source: CGImageSource, index: Int = 0,
-                                 maxPixelSize: CGFloat, decodeImmediately: Bool) -> CGImage? {
+                                 maxPixelSize: CGFloat, decodeImmediately: Bool,
+                                 keepsStoredOrientation: Bool = false) -> CGImage? {
         CGImageSourceCreateThumbnailAtIndex(source, index,
-                                            options(maxPixelSize: maxPixelSize, decodeImmediately: decodeImmediately))
+                                            options(maxPixelSize: maxPixelSize, decodeImmediately: decodeImmediately,
+                                                    keepsStoredOrientation: keepsStoredOrientation))
     }
 
     public static func thumbnail(data: Data, maxPixelSize: CGFloat, decodeImmediately: Bool) -> CGImage? {

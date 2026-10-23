@@ -997,16 +997,16 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "settings.privacy.group_invites",
           "androidName": "privacy_group_invites",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
-          "androidName": "privacy_hide_from_search",
-          "status": "android-only"
-        },
-        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.last_seen",
           "androidName": "privacy_last_seen",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "catalog": "app",
@@ -1021,8 +1021,10 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "settings.privacy.save_media",
           "androidName": "privacy_save_media",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "catalog": "app",
@@ -1049,8 +1051,10 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "settings.privacy.share_data",
           "androidName": "privacy_share_data",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "privacy_title",

@@ -22,6 +22,7 @@ import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MediaIndexDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
+import me.meeshy.core.database.dao.PendingIdDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
 import me.meeshy.core.database.dao.StatusBarCacheDao
 import me.meeshy.core.database.dao.StoryDao
@@ -125,6 +126,10 @@ internal object DatabaseModule {
     @Provides
     fun providesKeyedJsonCacheDao(database: MeeshyDatabase): KeyedJsonCacheDao =
         database.keyedJsonCacheDao()
+
+    @Provides
+    fun providesPendingIdDao(database: MeeshyDatabase): PendingIdDao =
+        database.pendingIdDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 

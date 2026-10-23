@@ -67,11 +67,6 @@
     <!-- Privacy & visibility (§L) -->
     <string name="settings_privacy">Privacy &amp; visibility</string>
     <string name="privacy_title">Privacy &amp; visibility</string>
-    <string name="privacy_last_seen">Last seen</string>
-    <string name="privacy_hide_from_search">Hide from search</string>
-    <string name="privacy_group_invites">Group invites</string>
-    <string name="privacy_save_media">Save media to gallery</string>
-    <string name="privacy_share_data">Share usage data</string>
     <!-- Account deletion (§L) -->
     <string name="delete_account_warning_title">This cannot be undone</string>
     <string name="delete_account_warning_intro">Deleting your account permanently removes:</string>
