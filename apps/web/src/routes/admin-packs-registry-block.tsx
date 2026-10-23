@@ -91,7 +91,7 @@ function RegistryEditor({
             name={field}
             type={inputTypeOf(field)}
             value={form[field]}
-            onChange={(event) => setForm({ ...form, [field]: event.currentTarget.value })}
+            onInput={(event) => setForm({ ...form, [field]: event.currentTarget.value })}
             className="min-h-11 rounded-lg px-3"
             style={{ backgroundColor: 'var(--color-ios-fill)' }}
           />

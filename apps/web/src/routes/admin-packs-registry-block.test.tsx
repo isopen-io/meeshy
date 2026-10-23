@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
-import { createActMounter } from '@/test-support/act-mount';
+import { createActMounter, typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { AdminPacksRegistryPanel } from './admin-packs-registry-block';
@@ -131,5 +131,21 @@ describe('AdminPacksRegistryPanel', () => {
     const host = await mount(deps, '/admin/audit?family=packs');
     await until(() => host.querySelector('[data-packs-registry-audit]') !== null);
     expect(host.querySelector('[data-packs-registry-audit]')?.getAttribute('href')).toBe('/admin/audit?family=packs');
+  });
+  test('modifier : le formulaire saisi part comme correctif, avec la révision lue', async () => {
+    const { calls, deps } = gateway((request) =>
+      request.method === 'PUT' ? { ok: true, data: row('aurore', { revision: 1, override: { price: 40 }, effective: editable({ price: 40 }) }) } : { ok: true, data: [row('aurore')] },
+    );
+    const host = await mount(deps);
+    await until(() => host.querySelector('[data-packs-registry-edit="wallpaper:aurore"]') !== null);
+    await mounter.click(host.querySelector<HTMLElement>('[data-packs-registry-edit="wallpaper:aurore"]'));
+    typeInto(host.querySelector<HTMLInputElement>('[data-packs-registry-editor] input[name="price"]'), '40');
+    await act(settle);
+    await act(async () => {
+      host.querySelector<HTMLFormElement>('[data-packs-registry-editor]')?.requestSubmit();
+    });
+    await until(() => calls.some((call) => call.method === 'PUT'));
+    expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({ expectedRevision: 0, order: 10, price: 40, availability: null, targeting: null });
+    await until(() => host.querySelector('[data-packs-registry-editor]') === null);
   });
 });
