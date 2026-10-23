@@ -115,10 +115,12 @@ final class LensPlanTests: XCTestCase {
         return url.appendingPathComponent(path)
     }
 
+    private struct SharedVector: Decodable { let input: LensJSONValue }
+    private struct SharedVectors: Decodable { let vectors: [SharedVector] }
+
     private static func sharedLens() -> LensDocument {
-        struct Vectors: Decodable { struct Vector: Decodable { let input: LensJSONValue }; let vectors: [Vector] }
         guard let data = try? Data(contentsOf: repoFile("packages/shared/fixtures/lens-v1/vectors.json")),
-              let first = try? JSONDecoder().decode(Vectors.self, from: data).vectors.first,
+              let first = try? JSONDecoder().decode(SharedVectors.self, from: data).vectors.first,
               case let .ok(lens, _, _) = LensFormat.parse(first.input) else {
             preconditionFailure("le premier vecteur partagé est la lens aurore-polaire")
         }
