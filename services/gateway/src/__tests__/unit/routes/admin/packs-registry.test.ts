@@ -263,3 +263,119 @@ describe('revue adversariale (#11275)', () => {
     expect(findMany).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('audit adversarial de #12293', () => {
+  const del = (app: FastifyInstance, path: string, revision: number) => app.inject({ method: 'DELETE', url: `/registry/${path}?expectedRevision=${revision}` });
+
+  it('D1 — un pack rendu GRATUIT par surcharge ne redevient payant ni par un prix, ni par un retour au dépôt (422)', async () => {
+    const db = fakeDb();
+    const h = await build(db);
+    expect((await put(h.app, 'wallpaper/savane', { expectedRevision: 0, price: null })).statusCode).toBe(200);
+
+    expect((await put(h.app, 'wallpaper/savane', { expectedRevision: 1, price: 300 })).statusCode).toBe(422);
+    expect((await del(h.app, 'wallpaper/savane', 1)).statusCode).toBe(422);
+
+    expect(db.rows).toEqual([expect.objectContaining({ slug: 'savane', revision: 1, override: { price: null } })]);
+    expect(served(h).find((entry) => entry.slug === 'savane')?.price).toBeUndefined();
+    expect(db.audit.map((line) => line.action)).toEqual([
+      'PACK_REGISTRY_UPDATE',
+      'PACK_REGISTRY_UPDATE',
+      'PACK_REGISTRY_UPDATE_REFUSED',
+      'PACK_REGISTRY_RESET',
+      'PACK_REGISTRY_RESET_REFUSED',
+    ]);
+  });
+
+  it('D1 — un pack payant le reste, et son prix se change librement', async () => {
+    const db = fakeDb();
+    const h = await build(db);
+    expect((await put(h.app, 'wallpaper/savane', { expectedRevision: 0, price: 300 })).statusCode).toBe(200);
+    expect((await del(h.app, 'wallpaper/savane', 1)).statusCode).toBe(200);
+  });
+
+  it('D6 — les surcharges sont lues AVANT de servir : la route les charge au démarrage', async () => {
+    const db = fakeDb();
+    db.rows.push({ domain: 'wallpaper', slug: 'dunes', override: { hidden: true }, revision: 1 });
+    const h = await build(db);
+
+    expect(served(h).find((entry) => entry.slug === 'dunes')?.hidden).toBe(true);
+  });
+
+  it('D6 — tant que les surcharges ne sont pas connues, chaque pack du registre est servi MASQUÉ (fail-closed)', async () => {
+    const db = fakeDb();
+    db.rows.push({ domain: 'wallpaper', slug: 'dunes', override: { hidden: true }, revision: 1 });
+    const findMany = db.prisma.packRegistryEntry.findMany as jest.Mock<any>;
+    findMany.mockRejectedValueOnce(new Error('db down'));
+    const index = baseIndex();
+    const overrides = new PackRegistryOverrides({ prisma: db.prisma as never, now: () => NOW });
+    await expect(overrides.refresh()).rejects.toThrow('db down');
+
+    expect(overlayPackIndex(index, () => overrides.snapshot()).entries('wallpaper').map((entry) => entry.hidden)).toEqual([true, true, true]);
+
+    await overrides.refresh();
+    expect(overlayPackIndex(index, () => overrides.snapshot()).entries('wallpaper').map((entry) => [entry.slug, entry.hidden])).toEqual([
+      ['dunes', true],
+      ['savane', false],
+      ['essentiels', false],
+    ]);
+  });
+
+  it('D7 — une écriture réussie dont la relecture échoue reste un succès, journalisé comme tel, et sert ce qu’elle a écrit', async () => {
+    const db = fakeDb();
+    const h = await build(db);
+    (db.prisma.packRegistryEntry.findMany as jest.Mock<any>).mockRejectedValue(new Error('db down'));
+
+    const res = await put(h.app, 'wallpaper/dunes', { expectedRevision: 0, hidden: true });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ revision: 1, override: { hidden: true }, effective: { hidden: true } });
+    expect(db.audit.map((line) => line.action)).toEqual(['PACK_REGISTRY_UPDATE']);
+  });
+
+  it('D7 — la passerelle qui écrit sert sa propre écriture, même si une relecture était déjà en vol', async () => {
+    const db = fakeDb();
+    const h = await build(db);
+    const findMany = db.prisma.packRegistryEntry.findMany as jest.Mock<any>;
+    let release: (rows: Row[]) => void = () => undefined;
+    findMany.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
+    const inflight = h.overrides.refresh();
+
+    const writing = put(h.app, 'wallpaper/dunes', { expectedRevision: 0, hidden: true });
+    await new Promise((resolve) => setImmediate(resolve));
+    release([]);
+    await inflight;
+    expect((await writing).statusCode).toBe(200);
+
+    expect(served(h).find((entry) => entry.slug === 'dunes')?.hidden).toBe(true);
+  });
+
+  it('D7 — un retour au dépôt qui échoue est journalisé comme échec', async () => {
+    const db = fakeDb();
+    const h = await build(db);
+    await put(h.app, 'wallpaper/dunes', { expectedRevision: 0, hidden: true });
+    (db.prisma.packRegistryEntry.deleteMany as jest.Mock<any>).mockRejectedValueOnce(new Error('db down'));
+
+    expect((await del(h.app, 'wallpaper/dunes', 1)).statusCode).toBe(500);
+    expect(db.audit.map((line) => line.action)).toContain('PACK_REGISTRY_RESET_FAILED');
+  });
+
+  it('D8 — le détail ne révèle ni un pack masqué ni un pack dont la fenêtre n’est pas ouverte à qui ne l’a pas', async () => {
+    const { appearancePrisma } = await import('../appearance-packs.harness');
+    const { PackCatalog } = await import('../../../../services/packs/PackCatalog');
+    const { appearancePackSpec } = await import('../../../../services/packs/appearancePackSpec');
+    const db = fakeDb();
+    const h = await build(db);
+    const shopDb = appearancePrisma();
+    const catalog = new PackCatalog({ prisma: shopDb.prisma, now: () => NOW, spec: appearancePackSpec({ index: overlayPackIndex(h.index, () => h.overrides.snapshot()), domain: 'wallpaper' }) });
+    const viewer = { userId: ADMIN, canModerate: false };
+
+    expect(await catalog.detail('dunes', viewer)).not.toBeNull();
+    await put(h.app, 'wallpaper/dunes', { expectedRevision: 0, hidden: true });
+    expect(await catalog.detail('dunes', viewer)).toBeNull();
+
+    await put(h.app, 'wallpaper/savane', { expectedRevision: 0, availability: { startsAt: '2026-12-24T00:00:00.000Z' } });
+    expect(await catalog.detail('savane', viewer)).toBeNull();
+    expect(await catalog.detail('essentiels', viewer)).not.toBeNull();
+  });
+});
+
