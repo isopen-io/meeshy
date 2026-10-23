@@ -514,7 +514,7 @@ internal struct _FullscreenRenderer: View {
         switch player.availability {
         case .ready:         return ""
         case .needsDownload: return String(localized: "media.video.downloadToPlay", defaultValue: "Téléchargez pour lire la vidéo", bundle: .module)
-        case .downloading:   return String(localized: "media.video.downloadingHint", defaultValue: "La lecture démarrera après le téléchargement", bundle: .module)
+        case .downloading:   return String(localized: "media.video.downloadingHint", defaultValue: "Préparation de la lecture…", bundle: .module)
         }
     }
 
