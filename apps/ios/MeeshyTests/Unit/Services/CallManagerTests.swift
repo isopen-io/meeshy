@@ -3272,29 +3272,34 @@ final class DTLSSRTPEnforcementTests: XCTestCase {
         )
     }
 
+    #if canImport(WebRTC)
     /// The bundle policy must be `.maxBundle` to minimize the number of transport
     /// sockets and DTLS handshakes. With fewer transports, there is less surface
     /// for downgrade attacks and the DTLS connection is established faster.
-    func test_peerConnection_useMaxBundlePolicy() throws {
-        let source = try p2pClientSource()
-        XCTAssertTrue(
-            source.contains("bundlePolicy = .maxBundle"),
-            "P2PWebRTCClient must set bundlePolicy = .maxBundle to multiplex all tracks " +
-            "onto a single DTLS transport — fewer handshakes, smaller attack surface."
-        )
+    /// Every call connection is configured by `WebRTCPeerConfiguration` (#11296).
+    func test_peerConnection_useMaxBundlePolicy() {
+        for transport in [CallIceTransport.all, .relayOnly] {
+            XCTAssertEqual(
+                WebRTCPeerConfiguration.make(iceServers: [], transport: transport).bundlePolicy, .maxBundle,
+                "Every call connection must set bundlePolicy = .maxBundle to multiplex all tracks " +
+                "onto a single DTLS transport — fewer handshakes, smaller attack surface."
+            )
+        }
     }
 
     /// RTCP must be multiplexed onto the RTP port (rtcpMuxPolicy = .require).
     /// Without mux, a separate DTLS transport is opened for RTCP — doubling the
     /// number of ports that need to be traversed and firewalled.
-    func test_peerConnection_requiresRTCPMux() throws {
-        let source = try p2pClientSource()
-        XCTAssertTrue(
-            source.contains("rtcpMuxPolicy = .require"),
-            "P2PWebRTCClient must set rtcpMuxPolicy = .require to avoid opening a separate " +
-            "RTCP transport — extra ports increase NAT traversal complexity and attack surface."
-        )
+    func test_peerConnection_requiresRTCPMux() {
+        for transport in [CallIceTransport.all, .relayOnly] {
+            XCTAssertEqual(
+                WebRTCPeerConfiguration.make(iceServers: [], transport: transport).rtcpMuxPolicy, .require,
+                "Every call connection must set rtcpMuxPolicy = .require to avoid opening a separate " +
+                "RTCP transport — extra ports increase NAT traversal complexity and attack surface."
+            )
+        }
     }
+    #endif
 }
 
 // MARK: - Settle-token race guard
