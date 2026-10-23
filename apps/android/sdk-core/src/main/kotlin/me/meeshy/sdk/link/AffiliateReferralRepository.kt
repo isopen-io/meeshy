@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.CreateAffiliateTokenRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AffiliateReferralApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.apiCallUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,7 +31,7 @@ class AffiliateReferralRepository @Inject constructor(
     suspend fun createToken(name: String, maxUses: Int? = null, expiresAt: String? = null): NetworkResult<AffiliateToken> =
         apiCall { api.createToken(CreateAffiliateTokenRequest(name, maxUses, expiresAt)) }
 
-    suspend fun deleteToken(id: String): NetworkResult<Unit> = apiCall { api.deleteToken(id) }
+    suspend fun deleteToken(id: String): NetworkResult<Unit> = apiCallUnit { api.deleteToken(id) }
 
     suspend fun register(token: String, referredUserId: String, sessionKey: String? = null): NetworkResult<JsonElement> =
         apiCall { api.register(AffiliateRegisterRequest(token, referredUserId, sessionKey)) }

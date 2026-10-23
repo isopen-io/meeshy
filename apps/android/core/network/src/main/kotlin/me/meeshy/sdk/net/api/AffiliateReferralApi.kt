@@ -46,9 +46,3 @@ interface AffiliateReferralApi {
     @GET("affiliate/{token}/og")
     suspend fun openGraph(@Path("token") token: String): Response<ResponseBody>
 }
-
-/** Communautés administrées, lues comme des liens de partage — port de `CommunityLinkService`. */
-interface CommunityLinksApi {
-    @GET("communities/mine")
-    suspend fun mine(@Query("role") role: String): ApiResponse<List<CommunityMini>>
-}
