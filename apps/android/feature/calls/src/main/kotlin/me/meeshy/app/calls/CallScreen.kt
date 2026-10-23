@@ -28,6 +28,8 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.call.CallChromeElement
+import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import me.meeshy.ui.theme.hexColor
@@ -86,7 +88,8 @@ fun CallScreen(
     val accent = hexColor(DynamicColorGenerator.colorForName(config.peerId.ifBlank { config.peerName }))
     val extensions = viewModel.extensions
     val overlayContext = CallOverlayContext(state = state, accent = accent)
-    val extraActions = remember(state) { extensions.actions.offered(state) }
+    val chrome = remember { CallChromeController() }
+    val chromeVisibility = rememberCallChromeVisibility(chrome, state)
     val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
     val reduceMotion = rememberCallReduceMotion()
     val avatarUrl = config.peerAvatarUrl
@@ -144,14 +147,11 @@ fun CallScreen(
                 state.showsConnectedLayout || state.status == CallStatus.IDLE -> CallConnectedColumn(
                     state = state,
                     accent = accent,
-                    extraActions = extraActions,
-                    permissionGate = permissionGate,
-                    config = config,
                     viewModel = viewModel,
                     overlayContext = overlayContext,
+                    chrome = chrome,
                     videoStage = videoStage,
                     avatarUrl = avatarUrl,
-                    onClose = close,
                     modifier = content,
                 )
                 state.status == CallStatus.INCOMING -> IncomingCallScreen(
@@ -212,18 +212,18 @@ fun CallScreen(
             // Minimise affordance — parity with iOS's collapse-to-pill: offered only for a live,
             // non-incoming call; the Activity-scoped CallViewModel keeps the call alive.
             if (CallPillPresenter.isMinimizable(state.status)) {
-                IconButton(
-                    onClick = onMinimize,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .systemBarsPadding()
-                        .padding(MeeshySpacing.sm),
+                CallChromeFade(
+                    isVisible = chromeVisibility.isVisible(CallChromeElement.Header),
+                    onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
+                    modifier = Modifier.align(Alignment.TopStart).systemBarsPadding().padding(MeeshySpacing.sm),
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.KeyboardArrowDown,
-                        contentDescription = stringResource(R.string.call_action_minimize),
-                        tint = CallPalette.Ink,
-                    )
+                    IconButton(onClick = onMinimize) {
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowDown,
+                            contentDescription = stringResource(R.string.call_action_minimize),
+                            tint = CallPalette.Ink,
+                        )
+                    }
                 }
             }
 
@@ -246,57 +246,5 @@ private fun answerIncoming(viewModel: CallViewModel, answer: IncomingCallAnswer)
             viewModel.accept()
             if (viewModel.state.value.isCameraOn) viewModel.toggleCamera()
         }
-    }
-}
-
-/** La disposition connectée (aussi gardée pendant une reconnexion avec média établi). */
-@Composable
-private fun CallConnectedColumn(
-    state: CallUiState,
-    accent: Color,
-    extraActions: List<OfferedCallAction>,
-    permissionGate: CallPermissionGate,
-    config: CallConfig,
-    viewModel: CallViewModel,
-    overlayContext: CallOverlayContext,
-    videoStage: Boolean,
-    avatarUrl: String?,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val extensions = viewModel.extensions
-    Column(
-        modifier = modifier.padding(MeeshySpacing.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Spacer(Modifier.height(MeeshySpacing.xl))
-
-        if (videoStage) {
-            CallPeerBlock(state = state, accent = accent, videoStage = true)
-        } else {
-            CallAudioStage(state = state, peerAvatarUrl = avatarUrl)
-        }
-
-        state.captionText?.let { caption -> CallCaption(caption) }
-        CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
-        CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
-
-        CallControlsRow(
-            state = state,
-            accent = accent,
-            extraActions = extraActions,
-            onExtraAction = { extensions.actions.dispatch(it) },
-            onAccept = {
-                permissionGate.answerIncoming(config.isVideo) { answer -> answerIncoming(viewModel, answer) }
-            },
-            onDecline = viewModel::decline,
-            onHangUp = viewModel::hangUp,
-            onToggleMute = viewModel::toggleMute,
-            onToggleCamera = viewModel::toggleCamera,
-            onToggleSpeaker = viewModel::toggleSpeaker,
-            onClose = onClose,
-            onRetry = viewModel::retry,
-        )
     }
 }
