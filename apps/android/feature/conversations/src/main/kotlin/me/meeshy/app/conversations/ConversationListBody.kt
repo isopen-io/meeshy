@@ -29,10 +29,14 @@ internal fun ConversationListBody(
     state: ConversationListUiState,
     listState: LazyListState,
     viewModel: ConversationListViewModel,
+    onRefresh: () -> Unit = {},
 ) {
     PullToRefreshBox(
         isRefreshing = state.isUserRefreshing,
-        onRefresh = viewModel::refresh,
+        onRefresh = {
+            viewModel.refresh()
+            onRefresh()
+        },
         modifier = Modifier.fillMaxSize(),
     ) {
         // Sections (parity iOS): Épingles first, then Mes conversations. The split is the
