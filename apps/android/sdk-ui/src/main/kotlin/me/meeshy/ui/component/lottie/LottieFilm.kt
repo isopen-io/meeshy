@@ -31,9 +31,9 @@ public object LottieFilmRaster {
 
     /** Le nombre d'images d'une boucle (au moins une, au plus [MAX_FRAMES]) ; une durée infinie ou NaN donne une image. */
     public fun frameCount(durationSeconds: Double, framesPerSecond: Double): Int {
-        val raw = Math.round(durationSeconds * framesPerSecond).toDouble()
-        if (raw.isNaN() || raw.isInfinite() || raw <= 0.0) return 1
-        return raw.coerceIn(1.0, MAX_FRAMES.toDouble()).toInt()
+        val product = durationSeconds * framesPerSecond
+        if (!product.isFinite() || product <= 0.0) return 1
+        return Math.round(product).coerceIn(1L, MAX_FRAMES.toLong()).toInt()
     }
 
     /** La progression (0..1) de chaque image : la dernière n'atteint pas 1, la boucle revient à 0. */
