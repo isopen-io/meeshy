@@ -68,10 +68,11 @@ data class ContactsListUiState(
  * The friend graph is exactly the current user's accepted friend requests (there
  * is no dedicated `/friends` endpoint), so [load] first paints the last-persisted
  * roster from the Room-backed [FriendListRepository] for an instant cold-start
- * view (the Android analogue of iOS `CacheCoordinator.friends`), then fetches
- * received + sent requests, folds them into the online-first friend list via the
- * pure [ContactList], writes that roster back through to the cache, and keeps the
- * shared [FriendshipCache] hydrated. It then reconciles the shown list against
+ * view (the Android analogue of iOS `CacheCoordinator.friends`), then reads the
+ * friend graph ([FriendRepository.friendshipGraph]: accepted relations in both
+ * directions plus pending requests), folds its accepted rows into the online-first
+ * friend list via the pure [ContactList], writes that roster back through to the
+ * cache, and hydrates the shared [FriendshipCache] from the same graph. It then reconciles the shown list against
  * that cache whenever any other surface (the Requests tab accepting, a profile
  * sheet, a socket event) mutates the friend graph: removals apply locally (and are
  * written through so the cache stays consistent without a refetch), additions
@@ -149,24 +150,19 @@ class ContactsListViewModel @Inject constructor(
     }
 
     private suspend fun revalidate() {
-        val received = friendRepository.receivedRequests(offset = 0, limit = FETCH_LIMIT)
-        val sent = friendRepository.sentRequests(offset = 0, limit = FETCH_LIMIT)
-
-        if (received is NetworkResult.Success && sent is NetworkResult.Success) {
-            friendshipCache.hydrate(sent = sent.data, received = received.data)
-            lastReconciledFriendIds = friendshipCache.currentFriendIds
-            val friends = ContactList.fromAcceptedRequests(
-                received = received.data,
-                sent = sent.data,
-                currentUserId = sessionRepository.currentUserId.orEmpty(),
-            )
-            _state.update { it.copy(friends = friends, isLoading = false, errorMessage = null) }
-            friendListRepository.persist(friends)
-        } else {
-            _state.update {
+        val currentUserId = sessionRepository.currentUserId.orEmpty()
+        when (val graph = friendRepository.friendshipGraph(currentUserId)) {
+            is NetworkResult.Success -> {
+                friendshipCache.hydrate(sent = graph.data.sent, received = graph.data.received)
+                lastReconciledFriendIds = friendshipCache.currentFriendIds
+                val friends = ContactList.fromAcceptedRequests(graph.data.received + graph.data.sent, currentUserId)
+                _state.update { it.copy(friends = friends, isLoading = false, errorMessage = null) }
+                friendListRepository.persist(friends)
+            }
+            is NetworkResult.Failure -> _state.update {
                 it.copy(
                     isLoading = false,
-                    errorMessage = if (it.friends.isEmpty()) firstError(received, sent) else it.errorMessage,
+                    errorMessage = if (it.friends.isEmpty()) graph.error.message else it.errorMessage,
                 )
             }
         }
@@ -210,12 +206,5 @@ class ContactsListViewModel @Inject constructor(
             viewModelScope.launch { friendListRepository.persist(result.friends) }
         }
         if (result.needsRefetch) refetch()
-    }
-
-    private fun firstError(vararg results: NetworkResult<*>): String? =
-        results.filterIsInstance<NetworkResult.Failure>().firstOrNull()?.error?.message
-
-    private companion object {
-        const val FETCH_LIMIT = 100
     }
 }
