@@ -4,6 +4,7 @@ import type { Box } from '@/lib/calls/face-effects';
 import type { Surface2D } from '@/lib/calls/video-effects-frames';
 
 import type { FrameSize } from './face-anchor';
+import type { LensFiles } from './lens-files';
 import type { LutCube } from './lens-lut';
 import type { LutStage } from './lens-lut-stage';
 import { paintLens, type LensPaintEnv } from './lens-paint';
@@ -22,10 +23,11 @@ import { lensLutOf, planLens, type LensDrawOp, type LensLevel } from './lens-pla
  * sticker. Une image d'appel part TOUJOURS.
  *
  * Les réglages (`LensSettings`) traversent `postMessage` : une lens LUE
- * (`parseLens`), les langues du lecteur et le palier de dégradation — que des
- * données, jamais un fichier.
+ * (`parseLens`), les langues de l'ÉMETTEUR (le texte est incrusté dans la
+ * vidéo envoyée), le palier de dégradation, et les fichiers que l'hôte a lus
+ * et décodés (`files`, #11994) — l'étage n'ouvre jamais rien lui-même.
  */
-export type LensSettings = { readonly lens: Lens; readonly languages: readonly string[]; readonly level: LensLevel };
+export type LensSettings = { readonly lens: Lens; readonly languages: readonly string[]; readonly level: LensLevel; readonly files?: LensFiles };
 
 export type LensStageEnv = {
   readonly face: (source: CanvasImageSource, frame: FrameSize) => Box;
@@ -47,12 +49,18 @@ const FROZEN_T = 0;
 
 export function createLensStage(env: LensStageEnv): LensStage {
   let lut: LutStage | null | undefined;
+  /* Les fichiers des réglages de l'image en cours : `paint` suit `plan` sur la même image. */
+  let files: LensFiles | undefined;
+  const paintEnv: LensPaintEnv = { ...env.paint, assets: (asset) => files?.images[asset] ?? env.paint.assets(asset) };
   return {
-    plan: (settings, source, frame, t) => planLens({ ...settings, frame, face: env.face(source, frame), t: env.reducedMotion?.() === true ? FROZEN_T : t }),
+    plan: (settings, source, frame, t) => {
+      files = settings.files;
+      return planLens({ ...settings, frame, face: env.face(source, frame), t: env.reducedMotion?.() === true ? FROZEN_T : t });
+    },
     grade: (image, settings, frame) => {
       const op = lensLutOf(settings.lens, settings.level);
       if (op === null) return image;
-      const cube = env.cube(op.asset);
+      const cube = settings.files?.cubes[op.asset] ?? env.cube(op.asset);
       if (cube === null) return image;
       lut ??= env.lut?.() ?? null;
       if (lut === null) return image;
@@ -62,7 +70,7 @@ export function createLensStage(env: LensStageEnv): LensStage {
         return image;
       }
     },
-    paint: (context, ops, frame) => paintLens(context, ops, frame, env.paint),
+    paint: (context, ops, frame) => paintLens(context, ops, frame, paintEnv),
     close: () => {
       lut?.release();
       lut = null;
