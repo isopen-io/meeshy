@@ -45,6 +45,8 @@ import { admittedUploadMimeType, audioOnlyContainerMimeType, mayBeAudioOnlyConta
 import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
 import { stripStoredMediaMetadata } from '../../services/attachments/media-metadata-strip';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { mediaDescriptionFields } from '../../services/attachments/mediaDescriptionInput';
+import { triggerMediaAltTranslations } from '../../services/posts/mediaAltWrites';
 import { originIsAllowed } from '../../config/cors-origins';
 import { TUS_COLLECTION_METHODS, TUS_UPLOAD_METHODS } from './tus-methods';
 
@@ -568,6 +570,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       };
       let loudnessLufs: number | null = null;
 
+      // #11329 — la description saisie à l'envoi (métadonnée TUS `alt`).
+      const description = mediaDescriptionFields(upload.metadata?.alt);
       const uploadContext = upload.metadata?.uploadcontext;
       // Les commentaires réutilisent PostMedia (FK `commentId`) — même pipeline
       // d'upload/transcription/traduction que les posts. Le média est créé en
@@ -604,6 +608,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             originalName: filename,
             ...persistedRenditionFields(rendered),
             ...processingFields,
+            ...description,
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
@@ -612,6 +617,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = postMedia.id;
+        if ('alt' in description) triggerMediaAltTranslations([{ id: postMedia.id, text: description.alt }]);
         await scheduleDeferred('postMedia', postMedia.id);
         logger.info(`[TUS] PostMedia created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes, postId=null pending)`);
       } else {
@@ -701,6 +707,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             // ouvre ne garde rien.
             // @see packages/shared/utils/forward-to-publication.ts
             capturedInApp: upload.metadata?.capturedinapp === 'true',
+            ...description,
             ...(clientTranscription ? { metadata: { transcription: clientTranscription } } : {}),
           },
         });

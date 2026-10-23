@@ -32,6 +32,7 @@ import { NORMALIZED_AUDIO, normalizeAudioBuffer, normalizedAudioPath } from './a
 import { audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from './uploadMimeType.js';
 import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
 import { runFfmpeg } from './ffmpeg-run.js';
+import { mediaDescriptionFields } from './mediaDescriptionInput.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -462,6 +463,7 @@ export class UploadProcessor {
         uploadedBy: userId,
         isAnonymous: isAnonymous,
         capturedInApp: declaredCaptureInApp(providedMetadata),
+        ...mediaDescriptionFields(providedMetadata?.alt),
         ...(deferred.length > 0 ? { processingState: 'pending' } : {}),
       },
     });
