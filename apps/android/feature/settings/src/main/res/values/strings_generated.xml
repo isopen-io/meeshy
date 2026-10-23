@@ -36,6 +36,13 @@
     <string name="account_contact_send">Send</string>
     <string name="account_contact_verified">Verified</string>
     <string name="account_contact_verify">Verify</string>
+    <string name="account_delete_button_hint_ready">Tap to confirm deletion</string>
+    <string name="account_delete_button_hint_type_phrase">Type the confirmation phrase first</string>
+    <string name="account_delete_confirmation_value_matched">Correct phrase</string>
+    <string name="account_delete_confirmation_value_pending">Incomplete phrase</string>
+    <string name="account_delete_error">Error deleting the account. Please try again.</string>
+    <string name="account_delete_final_message">Are you absolutely sure? This action can\'t be undone.</string>
+    <string name="account_delete_final_title">Final confirmation</string>
     <string name="change_password_confirm_label">Confirm password</string>
     <string name="change_password_current_label">Current password</string>
     <string name="change_password_error_generic">Something went wrong. Please try again.</string>
@@ -52,6 +59,8 @@
     <string name="change_password_strength_5">Excellent</string>
     <string name="change_password_submit">Change password</string>
     <string name="change_password_title">Change password</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_delete">Delete</string>
     <string name="common_done">Done</string>
     <string name="crash_kind_cpu">CPU</string>
     <string name="crash_kind_crash">Crash</string>
@@ -132,6 +141,9 @@
     <string name="settings_back">Back</string>
     <string name="settings_blocked_users">Blocked users</string>
     <string name="settings_change_password">Change password</string>
+    <string name="settings_data_export_button_done">Export complete</string>
+    <string name="settings_data_export_hint_exporting">Exporting</string>
+    <string name="settings_data_export_hint_start">Starts exporting your data</string>
     <string name="settings_delete_account">Delete account</string>
     <string name="settings_dnd">Do not disturb</string>
     <string name="settings_dnd_day_sun">Sun</string>

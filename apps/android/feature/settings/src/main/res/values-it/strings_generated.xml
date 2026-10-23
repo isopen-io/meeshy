@@ -36,6 +36,13 @@
     <string name="account_contact_send">Invia</string>
     <string name="account_contact_verified">Verificato</string>
     <string name="account_contact_verify">Verifica</string>
+    <string name="account_delete_button_hint_ready">Tocca per confermare l\'eliminazione</string>
+    <string name="account_delete_button_hint_type_phrase">Digita prima la frase di conferma</string>
+    <string name="account_delete_confirmation_value_matched">Frase corretta</string>
+    <string name="account_delete_confirmation_value_pending">Frase incompleta</string>
+    <string name="account_delete_error">Errore durante l\'eliminazione dell\'account. Riprova.</string>
+    <string name="account_delete_final_message">Sei assolutamente sicuro? L\'azione è irreversibile.</string>
+    <string name="account_delete_final_title">Conferma finale</string>
     <string name="change_password_confirm_label">Conferma la password</string>
     <string name="change_password_current_label">Password attuale</string>
     <string name="change_password_error_generic">Si è verificato un errore. Riprova.</string>
@@ -52,6 +59,8 @@
     <string name="change_password_strength_5">Eccellente</string>
     <string name="change_password_submit">Cambia password</string>
     <string name="change_password_title">Cambia password</string>
+    <string name="common_cancel">Annulla</string>
+    <string name="common_delete">Elimina</string>
     <string name="common_done">Fine</string>
     <string name="crash_kind_cpu">CPU</string>
     <string name="crash_kind_crash">Arresto anomalo</string>
@@ -132,6 +141,9 @@
     <string name="settings_back">Indietro</string>
     <string name="settings_blocked_users">Utenti bloccati</string>
     <string name="settings_change_password">Cambia password</string>
+    <string name="settings_data_export_button_done">Esportazione completata</string>
+    <string name="settings_data_export_hint_exporting">Esportazione in corso</string>
+    <string name="settings_data_export_hint_start">Avvia l\'esportazione dei tuoi dati</string>
     <string name="settings_delete_account">Elimina l\'account</string>
     <string name="settings_dnd">Non disturbare</string>
     <string name="settings_dnd_day_sun">Sole</string>

@@ -36,6 +36,13 @@
     <string name="account_contact_send">Senden</string>
     <string name="account_contact_verified">Verifiziert</string>
     <string name="account_contact_verify">Überprüfen</string>
+    <string name="account_delete_button_hint_ready">Zum Bestätigen des Löschens tippen</string>
+    <string name="account_delete_button_hint_type_phrase">Gib zuerst den Bestätigungssatz ein</string>
+    <string name="account_delete_confirmation_value_matched">Satz korrekt</string>
+    <string name="account_delete_confirmation_value_pending">Satz unvollständig</string>
+    <string name="account_delete_error">Fehler beim Löschen des Kontos. Bitte versuche es erneut.</string>
+    <string name="account_delete_final_message">Bist du absolut sicher? Diese Aktion ist unwiderruflich.</string>
+    <string name="account_delete_final_title">Endgültige Bestätigung</string>
     <string name="change_password_confirm_label">Passwort bestätigen</string>
     <string name="change_password_current_label">Aktuelles Passwort</string>
     <string name="change_password_error_generic">Ein Fehler ist aufgetreten. Bitte versuche es erneut.</string>
@@ -52,6 +59,8 @@
     <string name="change_password_strength_5">Ausgezeichnet</string>
     <string name="change_password_submit">Passwort ändern</string>
     <string name="change_password_title">Passwort ändern</string>
+    <string name="common_cancel">Abbrechen</string>
+    <string name="common_delete">Löschen</string>
     <string name="common_done">Fertig</string>
     <string name="crash_kind_cpu">CPU</string>
     <string name="crash_kind_crash">Absturz</string>
@@ -132,6 +141,9 @@
     <string name="settings_back">Zurück</string>
     <string name="settings_blocked_users">Blockierte Benutzer</string>
     <string name="settings_change_password">Passwort ändern</string>
+    <string name="settings_data_export_button_done">Export abgeschlossen</string>
+    <string name="settings_data_export_hint_exporting">Export läuft</string>
+    <string name="settings_data_export_hint_start">Startet den Export deiner Daten</string>
     <string name="settings_delete_account">Konto löschen</string>
     <string name="settings_dnd">Nicht stören</string>
     <string name="settings_dnd_day_sun">Sonne</string>
