@@ -138,10 +138,8 @@ private fun LocalizedContent(
     }
 
     val localizedContext = remember(tag, baseContext, baseConfiguration) {
-        val locale = Locale.forLanguageTag(tag)
-        Locale.setDefault(locale)
-        val configuration = Configuration(baseConfiguration).apply { setLocale(locale) }
-        baseContext.createConfigurationContext(configuration)
+        Locale.setDefault(Locale.forLanguageTag(tag))
+        localizedContext(baseContext, tag, baseConfiguration)
     }
     val localizedConfiguration = remember(tag, baseConfiguration) {
         Configuration(baseConfiguration).apply { setLocale(Locale.forLanguageTag(tag)) }
