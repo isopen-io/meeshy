@@ -141,6 +141,10 @@
     <string name="my_share_links_title">Freigabelinks</string>
     <string name="my_share_links_toggle">Aktiv</string>
     <string name="new_conversation_back">Zurück</string>
+    <string name="new_conversation_contacts_empty_subtitle">Suche nach einer Person, um eine Unterhaltung zu beginnen.</string>
+    <string name="new_conversation_contacts_empty_title">Keine Kontakte</string>
+    <string name="new_conversation_contacts_loading">Kontakte werden geladen</string>
+    <string name="new_conversation_contacts_section">Deine Kontakte</string>
     <string name="new_conversation_create">Erstellen</string>
     <string name="new_conversation_error_create">Unterhaltung konnte nicht erstellt werden</string>
     <string name="new_conversation_group_title">Gruppenname</string>

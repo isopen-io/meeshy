@@ -143,6 +143,10 @@
     <string name="my_share_links_title">Links de compartilhamento</string>
     <string name="my_share_links_toggle">Ativos</string>
     <string name="new_conversation_back">Voltar</string>
+    <string name="new_conversation_contacts_empty_subtitle">Busque um usuário para iniciar uma conversa.</string>
+    <string name="new_conversation_contacts_empty_title">Nenhum contato</string>
+    <string name="new_conversation_contacts_loading">Carregando os contatos</string>
+    <string name="new_conversation_contacts_section">Seus contatos</string>
     <string name="new_conversation_create">Criar</string>
     <string name="new_conversation_error_create">Não foi possível criar a conversa</string>
     <string name="new_conversation_group_title">Nome do grupo</string>

@@ -962,6 +962,30 @@
         },
         {
           "catalog": "app",
+          "iosKey": "new_conversation.contacts.empty.subtitle",
+          "androidName": "new_conversation_contacts_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "new_conversation.contacts.empty.title",
+          "androidName": "new_conversation_contacts_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "new_conversation.contacts.loading",
+          "androidName": "new_conversation_contacts_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "new_conversation.contacts.section",
+          "androidName": "new_conversation_contacts_section",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "common.create",
           "androidName": "new_conversation_create",
           "status": "adopted"

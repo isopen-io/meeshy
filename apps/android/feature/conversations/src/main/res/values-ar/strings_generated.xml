@@ -149,6 +149,10 @@
     <string name="my_share_links_title">روابط المشاركة</string>
     <string name="my_share_links_toggle">النشطون</string>
     <string name="new_conversation_back">رجوع</string>
+    <string name="new_conversation_contacts_empty_subtitle">ابحث عن مستخدم لبدء محادثة.</string>
+    <string name="new_conversation_contacts_empty_title">لا توجد جهات اتصال</string>
+    <string name="new_conversation_contacts_loading">جارٍ تحميل جهات الاتصال</string>
+    <string name="new_conversation_contacts_section">جهات اتصالك</string>
     <string name="new_conversation_create">إنشاء</string>
     <string name="new_conversation_error_create">تعذّر إنشاء المحادثة</string>
     <string name="new_conversation_group_title">اسم المجموعة</string>
