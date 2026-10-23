@@ -383,9 +383,6 @@ struct CallView: View {
                 if isOutgoing {
                     outgoingRingingView
                 } else {
-                    // Audit P1-16 — pass our own @ObservedObject down so
-                    // SwiftUI reuses the same subscription instead of
-                    // re-creating it on each parent body reval.
                     IncomingCallView(callManager: callManager, peerProfile: remoteProfile)
                 }
             case .offering:
