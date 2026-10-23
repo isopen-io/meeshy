@@ -180,6 +180,15 @@ private fun CommentRow(
     onDelete: (String) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
+    val timeText = comment.createdAtIso?.let { detailRelativeTime(it) }
+    val replyLabelFormat = stringResource(R.string.post_comments_reply_a11y_label)
+    val textBlockSemantics = if (comment.isReply) {
+        Modifier.semantics(mergeDescendants = true) {
+            contentDescription = comment.accessibilityLabel(replyLabelFormat, timeText.orEmpty(), unknownAuthor)
+        }
+    } else {
+        Modifier
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -199,6 +208,7 @@ private fun CommentRow(
         }
         Spacer(Modifier.width(MeeshySpacing.sm))
         Column(Modifier.weight(1f)) {
+            Column(textBlockSemantics) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = comment.authorName ?: unknownAuthor,
@@ -218,10 +228,10 @@ private fun CommentRow(
                             .padding(horizontal = 6.dp, vertical = 1.dp),
                     )
                 }
-                comment.createdAtIso?.let {
+                timeText?.let {
                     Spacer(Modifier.width(MeeshySpacing.xs))
                     Text(
-                        text = detailRelativeTime(it),
+                        text = it,
                         style = MaterialTheme.typography.labelSmall,
                         color = MeeshyTheme.tokens.textSecondary,
                     )
@@ -235,6 +245,7 @@ private fun CommentRow(
                     linkColor = MeeshyPalette.Indigo500,
                     mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
                 )
+            }
             }
             if (comment.languageStrip.isNotEmpty()) {
                 Spacer(Modifier.height(2.dp))
@@ -356,7 +367,7 @@ private fun ReplyThread(
     val isPreview = thread?.isPreview == true
     if (comment.replyCount <= 0 && !isExpanded && !isPreview) return
 
-    Column(modifier = Modifier.padding(start = 40.dp, top = MeeshySpacing.xs)) {
+    Column(modifier = Modifier.padding(start = CommentThreadLayout.replyIndentDp(depth = 1).dp, top = MeeshySpacing.xs)) {
         if (isPreview && thread != null) {
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 thread.replies.forEach { reply ->
@@ -375,8 +386,16 @@ private fun ReplyThread(
 
         val showToggle = isExpanded || !isPreview || (thread?.hiddenReplyCount ?: 0) > 0
         if (showToggle) {
+            val accent = if (MeeshyTheme.isDark) MeeshyPalette.Indigo400 else MeeshyPalette.Indigo500
+            val moreRepliesHint = stringResource(R.string.post_comments_load_more_replies_hint)
+            val remaining = thread?.hiddenReplyCount ?: 0
             val label = when {
                 isExpanded -> stringResource(R.string.post_comments_hide_replies)
+                isPreview && remaining > 0 -> pluralStringResource(
+                    R.plurals.post_comments_load_more_replies,
+                    remaining,
+                    remaining,
+                )
                 isPreview -> pluralStringResource(
                     R.plurals.post_comments_view_all_replies,
                     comment.replyCount,
@@ -393,21 +412,22 @@ private fun ReplyThread(
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
                 modifier = Modifier
                     .clip(RoundedCornerShape(MeeshyRadius.pill))
-                    .clickable { onToggleReplies(comment.id) }
+                    .clickable(onClickLabel = moreRepliesHint) { onToggleReplies(comment.id) }
                     .semantics { role = Role.Button; contentDescription = label }
+                    .heightIn(min = 48.dp)
                     .padding(vertical = 2.dp, horizontal = 2.dp),
             ) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MeeshyPalette.Indigo500,
+                    color = accent,
                 )
                 if (thread?.isLoading == true) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
                         strokeWidth = 2.dp,
-                        color = MeeshyPalette.Indigo500,
+                        color = accent,
                     )
                 }
             }
