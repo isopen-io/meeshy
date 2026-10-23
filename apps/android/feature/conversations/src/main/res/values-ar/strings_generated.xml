@@ -1,5 +1,9 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="accessibility_conversation_with">محادثة مع %s</string>
+    <string name="accessibility_last_message_preview">آخر رسالة: %s</string>
+    <string name="accessibility_muted">مكتومة</string>
+    <string name="accessibility_pinned">مثبَّتة</string>
     <string name="accessibility_search_list_hint">يفتح بحث المحادثات ومجتمعاتك</string>
     <string name="common_active">نشط</string>
     <string name="common_cancel">إلغاء</string>

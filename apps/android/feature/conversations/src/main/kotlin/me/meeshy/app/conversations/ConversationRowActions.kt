@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.avatar.ConversationHere
 import me.meeshy.ui.component.StoryRingState
 
 /**
@@ -76,4 +77,12 @@ internal data class ConversationRowModel(
     val isLocked: Boolean,
     /** The list's minute clock: relative time, preview countdowns and heat age with it. */
     val nowMillis: Long,
+    /** Tablette: la rangée ouverte porte une barre d'accent, jamais un fond. */
+    val isSelected: Boolean = false,
+    /** Rangée tenue à la main pour un glisser-déposer. */
+    val isDragging: Boolean = false,
+    /** Le pair a l'écran de CETTE conversation ouvert (point « ici »). */
+    val here: ConversationHere = ConversationHere.ABSENT,
+    /** La phrase des points d'engagement, déjà localisée, lue par TalkBack. */
+    val spokenPoints: String? = null,
 )
