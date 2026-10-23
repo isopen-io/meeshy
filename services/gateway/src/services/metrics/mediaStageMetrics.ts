@@ -36,6 +36,19 @@ export function mediaKindOf(mimeType: string | null | undefined): MediaKind {
   return 'other';
 }
 
+const EXTENSION_KIND: Readonly<Record<string, MediaKind>> = {
+  jpg: 'image', jpeg: 'image', png: 'image', webp: 'image', gif: 'image', heic: 'image', heif: 'image', avif: 'image',
+  mp4: 'video', mov: 'video', m4v: 'video', webm: 'video', mkv: 'video',
+  m4a: 'audio', mp3: 'audio', aac: 'audio', ogg: 'audio', opus: 'audio', wav: 'audio', flac: 'audio',
+  pdf: 'document', txt: 'document',
+};
+
+/** Le genre d'un fichier par son extension, quand l'étape ne connaît que son chemin. */
+export function mediaKindOfPath(filePath: string): MediaKind {
+  const extension = filePath.split('.').pop()?.toLowerCase() ?? '';
+  return EXTENSION_KIND[extension] ?? 'other';
+}
+
 export type MediaStageMetrics = {
   readonly registry: Registry;
   readonly time: <T>(stage: MediaStage, kind: MediaKind, run: () => Promise<T>) => Promise<T>;
