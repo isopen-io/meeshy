@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.model.UnreadUpdateEvent
 import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.UserUpdatedEvent
 import me.meeshy.sdk.model.MessageDeletedEvent
 import me.meeshy.sdk.model.MessageExpiredEvent
 import me.meeshy.sdk.model.MessagePinnedEvent
@@ -85,6 +86,7 @@ class MessageSocketManager @Inject constructor(
     private val _conversationRestored = SocketInboundRoute.subject<ConversationRestoredSocketEvent>()
     private val _conversationClosed = SocketInboundRoute.subject<ConversationClosedSocketEvent>()
     private val _userStatus = SocketInboundRoute.subject<UserStatusEvent>()
+    private val _userUpdated = SocketInboundRoute.subject<UserUpdatedEvent>()
     private val _presenceSnapshot = SocketInboundRoute.subject<PresenceSnapshotEvent>()
     private val _participantLeft = SocketInboundRoute.subject<ParticipantLeftEvent>()
     private val _participantBanned = SocketInboundRoute.subject<ParticipantBannedEvent>()
@@ -134,6 +136,11 @@ class MessageSocketManager @Inject constructor(
     val conversationRestored: SharedFlow<ConversationRestoredSocketEvent> = _conversationRestored.asSharedFlow()
     val conversationClosed: SharedFlow<ConversationClosedSocketEvent> = _conversationClosed.asSharedFlow()
     val userStatus: SharedFlow<UserStatusEvent> = _userStatus.asSharedFlow()
+    /**
+     * `user:updated` — un contact a changé son nom ou sa photo ; chaque copie qui le garde est repeinte par
+     * `UserUpdatedEvent.repainted(...)` (loi unique, miroir de `UserProfileRepaint`). Sans replay, comme `user:status`.
+     */
+    val userUpdated: SharedFlow<UserUpdatedEvent> = _userUpdated.asSharedFlow()
     val presenceSnapshot: SharedFlow<PresenceSnapshotEvent> = _presenceSnapshot.asSharedFlow()
     val participantLeft: SharedFlow<ParticipantLeftEvent> = _participantLeft.asSharedFlow()
     val participantBanned: SharedFlow<ParticipantBannedEvent> = _participantBanned.asSharedFlow()
@@ -200,6 +207,7 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.CONVERSATION_RESTORED, _conversationRestored)
         route(SocketEventNames.CONVERSATION_CLOSED, _conversationClosed)
         route(SocketEventNames.USER_STATUS, _userStatus)
+        route(SocketEventNames.USER_UPDATED, _userUpdated)
         route(SocketEventNames.PRESENCE_SNAPSHOT, _presenceSnapshot)
         route(SocketEventNames.CONVERSATION_PARTICIPANT_LEFT, _participantLeft)
         route(SocketEventNames.CONVERSATION_PARTICIPANT_BANNED, _participantBanned)

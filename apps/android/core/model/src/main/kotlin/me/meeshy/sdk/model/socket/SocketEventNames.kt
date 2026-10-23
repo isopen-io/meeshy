@@ -175,6 +175,7 @@ object SocketEventNames {
     // user
     const val USER_PREFERENCES_UPDATED = "user:preferences-updated"
     const val USER_STATUS = "user:status"
+    const val USER_UPDATED = "user:updated"
 
     /** Tous les noms du catalogue, dans l'ordre de déclaration. */
     val all: List<String> = listOf(
@@ -304,5 +305,6 @@ object SocketEventNames {
         TYPING_STOP,
         USER_PREFERENCES_UPDATED,
         USER_STATUS,
+        USER_UPDATED,
     )
 }
