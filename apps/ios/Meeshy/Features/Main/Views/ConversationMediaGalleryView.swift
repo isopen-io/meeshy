@@ -186,8 +186,7 @@ struct ConversationMediaGalleryView: View {
     /// dit où ils sont peints. `internal` : `+Geometry.swift` l'écrit.
     @State var cadreRegionSize: CGSize = .zero
 
-    /// #10352 — le viewport RÉEL de la galerie, mesuré sur son fond : le solveur
-    /// le lit (`stageViewport`), la fenêtre n'étant qu'un repli avant la mesure.
+    /// #10352 — le viewport RÉEL de la galerie, mesuré sur son fond (`stageViewport`), la fenêtre en repli.
     @State var measuredViewport: CGSize = .zero
 
     /// `id → position`, construite une fois à la présentation. Remplace les
@@ -200,8 +199,9 @@ struct ConversationMediaGalleryView: View {
     @Environment(\.dismiss) private var dismiss
     /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
     @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
-    /// Les marges de la fenêtre qui porte la galerie, la fenêtre clé en repli.
-    var galleryInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
+    /// Publiées par la racine, sinon MESURÉES hors de `body` (`GallerySafeArea`, #12422).
+    var galleryInsets: EdgeInsets { GallerySafeArea.resolve(published: sceneSafeAreaInsets, measured: measuredSafeArea) }
+    @State var measuredSafeArea: EdgeInsets?
     /// `internal` — le couloir bas du plateau le PILOTE depuis
     /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
     /// celui payé par les pages, et pour la même raison.
@@ -336,7 +336,7 @@ struct ConversationMediaGalleryView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { measuredViewport = $0 }
+                .modifier(GalleryMeasurement(viewport: $measuredViewport, safeArea: $measuredSafeArea))
 
             // **LE SOL d'une page scène** : on préserve le même fond que pour la story.
             // Le noir ci-dessus reste le sol des pages image et vidéo ; une page
