@@ -1,4 +1,5 @@
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
+import type { ListedObject } from './mediaBucketSweep';
 import { Readable } from 'node:stream';
 import { assertSafeStorageKey, isSafeStorageKey, type ByteRange, type MediaObjectStore, type ObjectBody, type StoredObjectHead } from './MediaObjectStore';
 
@@ -7,6 +8,7 @@ export type S3Like = { send(command: unknown): Promise<unknown> };
 
 type HeadOutput = { ContentLength?: number; ETag?: string; LastModified?: Date; ContentType?: string };
 type GetOutput = { Body?: unknown };
+type ListOutput = { Contents?: ReadonlyArray<{ Key?: string; LastModified?: Date }>; IsTruncated?: boolean; NextContinuationToken?: string };
 
 const isNotFound = (error: unknown): boolean => {
   const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
@@ -72,5 +74,19 @@ export class S3ObjectStore implements MediaObjectStore {
   async remove(key: string): Promise<void> {
     if (!isSafeStorageKey(key)) return;
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  /** Toutes les clés du seau, page après page — pour le balayage des effacements. */
+  async *list(): AsyncIterable<ListedObject> {
+    let token: string | undefined;
+    do {
+      const output = (await this.client.send(
+        new ListObjectsV2Command({ Bucket: this.bucket, ...(token === undefined ? {} : { ContinuationToken: token }) }),
+      )) as ListOutput;
+      for (const entry of output.Contents ?? []) {
+        if (typeof entry.Key === 'string') yield { key: entry.Key, lastModified: entry.LastModified ?? null };
+      }
+      token = output.IsTruncated === true ? output.NextContinuationToken : undefined;
+    } while (token !== undefined);
   }
 }
