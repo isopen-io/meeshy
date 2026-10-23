@@ -37,6 +37,7 @@ export const AUDIT_FAMILIES = [
   'reports',
   'communities',
   'settings',
+  'packs',
 ] as const;
 
 export type AuditFamily = (typeof AUDIT_FAMILIES)[number];
@@ -147,6 +148,20 @@ export const AUDIT_ACTIONS = {
   GAME_SEASON_PROPOSAL_DISCARDED: entry('settings', 'prohibit', 'warning'),
   GAME_SEASON_PROPOSAL_APPROVE: entry('settings', 'checkCircle', 'success'),
   GAME_SEASON_PROPOSAL_REJECT: entry('settings', 'prohibit', 'neutral'),
+  // ── Registre des packs (#11275) et modération des lens (#11271) ─────────────
+  PACK_REGISTRY_UPDATE: entry('packs', 'pencilSimple', 'warning'),
+  PACK_REGISTRY_UPDATE_REFUSED: entry('packs', 'prohibit', 'neutral'),
+  PACK_REGISTRY_UPDATE_FAILED: entry('packs', 'warningCircle', 'danger'),
+  PACK_REGISTRY_RESET: entry('packs', 'arrowClockwise', 'warning'),
+  PACK_REGISTRY_RESET_REFUSED: entry('packs', 'prohibit', 'neutral'),
+  PACK_REGISTRY_RESET_FAILED: entry('packs', 'warningCircle', 'danger'),
+  LENS_PACK_APPROVE: entry('packs', 'checkCircle', 'success'),
+  LENS_PACK_APPROVE_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
+  LENS_PACK_REJECT: entry('packs', 'prohibit', 'warning'),
+  LENS_PACK_REJECT_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
+  LENS_PACK_REJECTION_REPLACED: entry('packs', 'pencilSimple', 'neutral'),
+  LENS_PACK_WITHDRAW: entry('packs', 'trash', 'danger'),
+  LENS_PACK_WITHDRAW_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
 } as const satisfies Readonly<Record<string, ActionEntry>>;
 
 export type AuditActionCode = keyof typeof AUDIT_ACTIONS;

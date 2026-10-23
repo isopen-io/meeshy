@@ -6,9 +6,12 @@ import { AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
 import { AdminEngagementScalePanel } from '@/routes/admin-engagement-scale-parts';
+import { adminListRoute } from '@/lib/admin/admin-routes';
+import { href } from '@/routes/route-table';
 
 /* Le calendrier des saisons (#10232) : un bloc, chargé à la demande, jamais une route neuve (budget du module d'entrée). */
 const GameSeasonsBlock = lazy(() => import('@/routes/admin-game-seasons-lazy'));
+const PacksRegistryBlock = lazy(() => import('@/routes/admin-packs-registry-block'));
 
 /**
  * **LE BARÈME DE POINTS** (#8906, rangé dans « Plateforme » par #8876, servi en quatre langues — D-162) —
@@ -42,6 +45,14 @@ export default function AdminEngagementScaleScreen() {
           {reach.can('canManageGame') ? (
             <Suspense fallback={<AdminSkeleton rows={4} />}>
               <GameSeasonsBlock language={language} />
+            </Suspense>
+          ) : null}
+          {reach.can('canManageGame') ? (
+            <Suspense fallback={<AdminSkeleton rows={4} />}>
+              <PacksRegistryBlock
+                language={language}
+                auditHref={reach.can('canViewAuditLogs') ? `${href(adminListRoute('audit', reach.space))}?family=packs` : null}
+              />
             </Suspense>
           ) : null}
         </div>

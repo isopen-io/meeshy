@@ -301,7 +301,6 @@ class CallRecordTest {
         assertThat(group("A", "B").participantsLabel).isEqualTo("A, B")
         assertThat(group("A", "B", "C", "D").participantsLabel).isEqualTo("A, B +2")
     }
-    }
 
     @Test
     fun `a long call past 2 GB in one direction still decodes and labels its data`() {

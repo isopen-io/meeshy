@@ -1,5 +1,6 @@
 package me.meeshy.sdk.lang
 
+import kotlinx.coroutines.CancellationException
 import me.meeshy.sdk.model.LanguageData
 
 /**
@@ -22,6 +23,11 @@ object ComposeLanguageDetector {
 
     /** Below this many Unicode letters the text is too short to trust. */
     private const val MIN_ALPHA: Int = 4
+
+    /** Confiance minimale de la langue reconnue par l'identifieur (iOS `LanguageDetection.minConfidence`). */
+    const val MIN_CONFIDENCE: Double = 0.65
+
+    private const val UNDETERMINED: String = "und"
 
     private val URL: Regex = Regex("""https?://\S+""")
     private val LETTER: Regex = Regex("""\p{L}""")
@@ -130,5 +136,25 @@ object ComposeLanguageDetector {
 
         val detected = best ?: return fallback
         return if (LanguageData.info(detected) != null) detected else fallback
+    }
+
+    /**
+     * Détection à l'envoi par [identifier] (ML Kit) : au moins 4 lettres une fois les URL retirées
+     * et une confiance d'au moins [MIN_CONFIDENCE], sinon [fallback] (la langue de l'expéditeur).
+     * Un identifieur indisponible (`null`, échec) laisse l'heuristique JVM décider.
+     */
+    suspend fun detect(text: String, fallback: String, identifier: LanguageIdentifying): String {
+        val cleaned = URL.replace(text, " ")
+        if (LETTER.findAll(cleaned).count() < MIN_ALPHA) return fallback
+        val identification = try {
+            identifier.identify(cleaned.trim())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: return detect(text, fallback)
+        if (identification.confidence < MIN_CONFIDENCE) return fallback
+        if (identification.code.equals(UNDETERMINED, ignoreCase = true)) return fallback
+        return LanguageCodeNormalizer.normalize(identification.code) ?: fallback
     }
 }

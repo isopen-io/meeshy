@@ -30,6 +30,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
 import me.meeshy.sdk.mention.MentionSearch
@@ -99,6 +100,7 @@ class ChatViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     contributedControllers: Set<@JvmSuppressWildcards ChatController> = emptySet(),
     recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
+    languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -179,6 +181,7 @@ class ChatViewModel @Inject constructor(
         pendingTray = { controllers.find<ComposerTrayController>() },
         composerText = composerTextHolder,
         recentEmojis = recentEmojiStore,
+        languageIdentifier = languageIdentifier,
     )
 
     private val reactions = ChatReactionController(

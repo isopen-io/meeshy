@@ -28,8 +28,9 @@ const ring = (over: Record<string, unknown> = {}) =>
   entry({ slug: 'contours', domain: 'avatar-ring', usage: { kind: 'free', surfaces: ['avatar'] }, ...over });
 
 describe('les trois domaines de la boutique unifiée', () => {
-  it('PACK_DOMAINS gagne wallpaper, avatar-ring, banner, puis banner-frame (#10932)', () => {
-    expect([...PACK_DOMAINS]).toEqual(['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner', 'banner-frame']);
+  it('PACK_DOMAINS gagne wallpaper, avatar-ring, banner, banner-frame (#10932), puis lens (#11271)', () => {
+    expect([...PACK_DOMAINS]).toEqual(['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner', 'banner-frame', 'lens']);
+    expect(parsePackChoiceKey('lens.aurore-polaire')).toEqual({ domain: 'lens', slug: 'aurore-polaire' });
   });
 
   it('les clés de choix des nouveaux domaines se préfixent et se relisent', () => {

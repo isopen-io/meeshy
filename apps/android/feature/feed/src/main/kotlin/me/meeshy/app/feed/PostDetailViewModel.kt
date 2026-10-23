@@ -29,6 +29,13 @@ import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.PostReactionPick
+import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
 import javax.inject.Inject
 
 /**
@@ -79,9 +86,16 @@ class PostDetailViewModel @Inject constructor(
     private val privacyPreferencesStore: PrivacyPreferencesStore,
     private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
+    private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
+
+    /** Les émojis de la palette : les mêmes, dans le même ordre que messages et stories (récents d'abord). */
+    val quickEmojis: StateFlow<List<String>> = emojiUsageStore.usage
+        .map { emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size))
+
 
     /**
      * Dwell bookkeeping for the post-detail surface. Held outside [_state] because it is an
@@ -356,6 +370,22 @@ class PostDetailViewModel @Inject constructor(
             it.copy(isLiked = liked, likeCount = (shown.likeCount + if (liked) 1 else -1).coerceAtLeast(0))
         }
         sendEngagement(revertTo = previous) { postRepository.setLiked(shown.id, liked) }
+    }
+
+    /**
+     * Le choix d'un émoji dans la palette du cœur. Le cœur garde [toggleLike] — lui seul porte
+     * « aimé » et le compteur. Tout autre émoji est ADDITIF : envoyé tel quel, sans état local à
+     * réconcilier (iso `sendDetailReaction`), échec silencieux comme `try?` côté iOS.
+     */
+    fun react(pick: PostReactionPick) {
+        val postId = _state.value.post?.id ?: return
+        when (pick) {
+            PostReactionPick.Heart -> toggleLike()
+            is PostReactionPick.Other -> viewModelScope.launch {
+                emojiUsageStore.record(pick.emoji)
+                postRepository.react(postId, pick.emoji)
+            }
+        }
     }
 
     /** The bookmark analogue of [toggleLike]. */

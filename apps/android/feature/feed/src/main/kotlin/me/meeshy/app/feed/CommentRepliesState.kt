@@ -34,6 +34,23 @@ data class CommentRepliesState(
 
     fun repliesFor(id: String): List<ApiPostComment> = repliesByParent[id] ?: emptyList()
 
+    /**
+     * Profondeur de [id] dans le fil : 0 pour un commentaire de premier niveau (ou inconnu), +1 par
+     * parent traversé dans [repliesByParent]. Le garde de cycle borne la remontée.
+     */
+    fun depthOf(id: String, topLevelIds: Set<String>): Int {
+        var current = id
+        var depth = 0
+        val seen = HashSet<String>()
+        while (current !in topLevelIds && seen.add(current)) {
+            val parent = repliesByParent.entries.firstOrNull { (_, rows) -> rows.any { it.id == current } }?.key
+                ?: break
+            current = parent
+            depth++
+        }
+        return depth
+    }
+
     /** Open the thread [id]; inert if already open. */
     fun expanded(id: String): CommentRepliesState =
         if (id in expandedIds) this else copy(expandedIds = expandedIds + id)

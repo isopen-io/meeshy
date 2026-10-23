@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.search.SearchIndexSchema
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -31,7 +32,7 @@ class DurableTablesGuardTest {
         val tables = room.openHelper.writableDatabase.userTables()
         room.close()
 
-        val unclassified = tables - DurableTables.names - CacheTables.names
+        val unclassified = (tables - DurableTables.names - CacheTables.names).filterNot(SearchIndexSchema::owns)
         assertThat(unclassified).isEmpty()
         assertThat(DurableTables.names intersect CacheTables.names).isEmpty()
         assertThat(tables).containsAtLeastElementsIn(DurableTables.names + CacheTables.names)
