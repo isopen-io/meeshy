@@ -7,6 +7,8 @@
     <string name="stories_action_translations">Translations</string>
     <string name="stories_add">Add</string>
     <string name="stories_cancel">Cancel</string>
+    <string name="stories_caption_see_less">see less</string>
+    <string name="stories_caption_see_more">see more</string>
     <plurals name="stories_comments_count">
         <item quantity="one">%d comment</item>
         <item quantity="other">%d comments</item>
@@ -60,11 +62,14 @@
     <string name="stories_reposted">Reposted</string>
     <string name="stories_translated">Translation available</string>
     <string name="stories_viewer_close">Close</string>
+    <string name="stories_viewer_mute">Mute background sound</string>
     <string name="stories_viewer_next">Next story</string>
     <string name="stories_viewer_not_found_description">This story couldn\'t be loaded. Try again or close.</string>
     <string name="stories_viewer_not_found_title">Story not found</string>
     <string name="stories_viewer_previous">Previous story</string>
+    <string name="stories_viewer_profile_of">Profile of %s</string>
     <string name="stories_viewer_retry">Retry</string>
+    <string name="stories_viewer_unmute">Unmute background sound</string>
     <plurals name="stories_viewers_count">
         <item quantity="one">%d view</item>
         <item quantity="other">%d views</item>

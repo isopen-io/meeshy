@@ -289,4 +289,15 @@ class CommentThreadStateTest {
         assertThat(base.replaced(ApiPostComment(id = "zzz", content = "edited")))
             .isSameInstanceAs(base)
     }
+
+    @Test
+    fun confirmed_afterTheSocketEchoAlreadyLanded_neverShowsTheCommentTwice() {
+        val state = CommentThreadState()
+            .optimistic(comment("pending-0"))
+            .received(comment("real"))
+            .confirmed("pending-0", comment("real"))
+
+        assertThat(state.comments.map { it.id }).containsExactly("real")
+        assertThat(state.pendingIds).isEmpty()
+    }
 }

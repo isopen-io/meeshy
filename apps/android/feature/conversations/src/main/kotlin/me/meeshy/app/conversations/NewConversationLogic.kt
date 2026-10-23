@@ -59,18 +59,27 @@ object NewConversationLogic {
     fun displayName(result: UserSearchResult): String =
         result.displayName?.takeIf { it.isNotBlank() } ?: result.username
 
-    /** Project search results into selectable rows, flagging already-picked users. */
+    /**
+     * Project search results into selectable rows, flagging already-picked users. A user
+     * served twice (offset pages shifting between two requests) keeps one row — the list
+     * is keyed by id, a repeated key crashes Compose — and the signed-in user is never
+     * offered (parity iOS `NewConversationViewModel`: `filter { $0.id != currentUserId }`).
+     */
     fun rows(
         results: List<UserSearchResult>,
         selectedIds: Set<String>,
-    ): List<SelectableUser> = results.map { result ->
-        SelectableUser(
-            id = result.id,
-            displayName = displayName(result),
-            username = result.username,
-            avatarUrl = result.avatar,
-            isOnline = result.isOnline == true,
-            isSelected = result.id in selectedIds,
-        )
-    }
+        signedInUserId: String? = null,
+    ): List<SelectableUser> = results
+        .distinctBy { it.id }
+        .filterNot { it.id == signedInUserId }
+        .map { result ->
+            SelectableUser(
+                id = result.id,
+                displayName = displayName(result),
+                username = result.username,
+                avatarUrl = result.avatar,
+                isOnline = result.isOnline == true,
+                isSelected = result.id in selectedIds,
+            )
+        }
 }

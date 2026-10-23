@@ -94,8 +94,10 @@ fun ConversationListScreen(
             previousScrollPosition = currentScrollPosition
         }
     }
+    var isSearchFocused by remember { mutableStateOf(false) }
     val searchBarVisible = ConversationSearchBarVisibility.isVisible(
-        isSearchActive = state.searchText.isNotBlank(),
+        hasQuery = state.searchText.isNotBlank(),
+        isFocused = isSearchFocused,
         isScrollingDown = isScrollingDown,
     )
 
@@ -119,6 +121,7 @@ fun ConversationListScreen(
                 ConversationSearchBar(
                     query = state.searchText,
                     onQueryChange = viewModel::setSearch,
+                    onFocusChange = { isSearchFocused = it },
                     onDashboard = onDashboard,
                     onGlobalSearch = onGlobalSearch,
                 )

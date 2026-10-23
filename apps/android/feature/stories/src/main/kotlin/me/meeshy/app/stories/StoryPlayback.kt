@@ -8,6 +8,7 @@ data class StoryGroupSlides(
     val userId: String,
     val authorName: String,
     val slides: List<StorySlideView>,
+    val avatarUrl: String? = null,
 )
 
 /**
