@@ -22,7 +22,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ifNoneMatchMatches } from '../../utils/etag';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
-import { locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
+import { diskBytes, hasBucket, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
 
@@ -319,8 +319,9 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
         }
         if (located.kind === 'hidden') return sendNotFound(reply, 'File not found');
 
-        const stored = await locateStoredBytes(located.filePath, bytesSource);
-        if (!stored) return sendNotFound(reply, 'File not found');
+        // Un fichier absent du disque n'interroge la base que si un seau peut l'avoir.
+        const onDisk = await diskBytes(located.filePath);
+        if (!onDisk && !hasBucket(bytesSource)) return sendNotFound(reply, 'File not found');
 
         // #9315 — le même cycle de vie que les routes par identifiant. La clé
         // est relue sur le chemin RÉSOLU : double barre, `./`, remontée ou
@@ -334,6 +335,13 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
         if (verdict.kind === 'gone') {
           return sendNotFound(reply, 'File not found');
         }
+
+        // #11267 — le seau n'est consulté que pour une clé qu'une pièce jointe
+        // VIVANTE porte : une clé sans porteur (message purgé, compte effacé,
+        // avatar) ne se cherche que sur le disque, sinon sa copie la
+        // ressusciterait.
+        const stored = onDisk ?? (verdict.kind === 'serve' ? await locateBucketBytes(located.filePath, bytesSource) : null);
+        if (!stored) return sendNotFound(reply, 'File not found');
 
         // #9600 — l'adresse NUE d'un fichier dont tous les porteurs vivants
         // disparaissent : comptée pendant la transition, refusée après.

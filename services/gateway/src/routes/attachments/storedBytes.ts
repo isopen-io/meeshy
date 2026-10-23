@@ -55,8 +55,11 @@ function strongETag(etag: string): string {
  * octets passent par la route, sous les gardes que la route a déjà appliquées.
  */
 export async function locateStoredBytes(filePath: string, source: StoredBytesSource): Promise<StoredBytes | null> {
-  const onDisk = await diskBytes(filePath);
-  if (onDisk) return onDisk;
+  return (await diskBytes(filePath)) ?? locateBucketBytes(filePath, source);
+}
+
+/** Le seau seul, pour l'appelant qui a déjà cherché sur le disque et jugé que la clé peut s'y chercher. */
+export async function locateBucketBytes(filePath: string, source: StoredBytesSource): Promise<StoredBytes | null> {
   const mirror = mirrorOf(source);
   if (!mirror) return null;
   const key = bucketKeyOf(filePath, uploadRootOf(source));
@@ -64,7 +67,11 @@ export async function locateStoredBytes(filePath: string, source: StoredBytesSou
   return bucketBytes(mirror, key);
 }
 
-async function diskBytes(filePath: string): Promise<StoredBytes | null> {
+export function hasBucket(source: StoredBytesSource): boolean {
+  return mirrorOf(source) !== null;
+}
+
+export async function diskBytes(filePath: string): Promise<StoredBytes | null> {
   try {
     const stats = await stat(filePath);
     return {
