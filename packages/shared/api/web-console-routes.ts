@@ -31,4 +31,25 @@ export const WEB_CONSOLE_ROUTES: readonly WebConsoleRoute[] = [
       'Qualité de lecture agrégée (#11280) : temps jusqu’à la première image et rebuffer, p50/p95 par surface et tier. ' +
       'Lue par l’onglet « Lecture » des statistiques de la console web ; aucun écran d’administration natif.',
   },
+  {
+    method: 'GET',
+    path: '/api/v1/admin/packs/registry',
+    reason:
+      'Registre des packs (#11275) : lecture, publication et retrait des entrées du registre, réservés à l’administration. ' +
+      'Lu par la console web (W17) ; aucun écran d’administration natif.',
+  },
+  {
+    method: 'PUT',
+    path: '/api/v1/admin/packs/registry/:domain/:slug',
+    reason:
+      'Registre des packs (#11275) : lecture, publication et retrait des entrées du registre, réservés à l’administration. ' +
+      'Lu par la console web (W17) ; aucun écran d’administration natif.',
+  },
+  {
+    method: 'DELETE',
+    path: '/api/v1/admin/packs/registry/:domain/:slug',
+    reason:
+      'Registre des packs (#11275) : lecture, publication et retrait des entrées du registre, réservés à l’administration. ' +
+      'Lu par la console web (W17) ; aucun écran d’administration natif.',
+  },
 ];
