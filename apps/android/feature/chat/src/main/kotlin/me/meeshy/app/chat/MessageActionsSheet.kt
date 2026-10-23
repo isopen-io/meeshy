@@ -23,7 +23,12 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Mood
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Share
@@ -102,6 +107,12 @@ internal fun MessageActionsSheet(
     onOpenFile: () -> Unit,
     onShareFile: () -> Unit,
     onDismiss: () -> Unit,
+    hostedEntries: Set<MessageAction> = emptySet(),
+    onViews: () -> Unit = {},
+    onHistory: () -> Unit = {},
+    onSentiment: () -> Unit = {},
+    onSelect: () -> Unit = {},
+    onExportCard: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
     var confirmingDelete by remember { mutableStateOf(false) }
@@ -117,6 +128,9 @@ internal fun MessageActionsSheet(
         canDeleteForEveryone = canDeleteForEveryone,
         pinAction = pinAction,
         hasOpenableFile = !bubble.isDeleted && bubble.files.isNotEmpty(),
+        isEdited = bubble.isEdited,
+        hasText = bubble.text.isNotBlank(),
+        hostedEntries = hostedEntries,
     )
     // The vertical drag on the grabber is resolved by the pure [MessageOverlayDragLaw]
     // SSOT: a strong swipe up expands the compact action sheet into the full language
@@ -266,6 +280,31 @@ internal fun MessageActionsSheet(
                         label = stringResource(R.string.chat_action_delete_for_me),
                         tint = MeeshyPalette.Error,
                         onClick = { confirmingDelete = true },
+                    )
+                    MessageAction.Views -> SheetAction(
+                        icon = Icons.Filled.Visibility,
+                        label = stringResource(R.string.chat_action_views),
+                        onClick = { onViews(); onDismiss() },
+                    )
+                    MessageAction.History -> SheetAction(
+                        icon = Icons.Filled.History,
+                        label = stringResource(R.string.chat_action_history),
+                        onClick = { onHistory(); onDismiss() },
+                    )
+                    MessageAction.Sentiment -> SheetAction(
+                        icon = Icons.Filled.Mood,
+                        label = stringResource(R.string.chat_action_sentiment),
+                        onClick = { onSentiment(); onDismiss() },
+                    )
+                    MessageAction.Select -> SheetAction(
+                        icon = Icons.Filled.CheckCircle,
+                        label = stringResource(R.string.chat_action_select),
+                        onClick = { onSelect(); onDismiss() },
+                    )
+                    MessageAction.ExportCard -> SheetAction(
+                        icon = Icons.Filled.Image,
+                        label = stringResource(R.string.chat_action_export_card),
+                        onClick = { onExportCard(); onDismiss() },
                     )
                     MessageAction.Report -> SheetAction(
                         icon = Icons.Outlined.Flag,

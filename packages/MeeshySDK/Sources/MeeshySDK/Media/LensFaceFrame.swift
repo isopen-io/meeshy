@@ -16,17 +16,25 @@ public struct LensFaceFrame: Sendable, Equatable {
     public let leftEye: [CGPoint]
     public let rightEye: [CGPoint]
     public let innerLips: [CGPoint]
+    /// Le contour extérieur des lèvres : sa largeur dit le sourire (#11301).
+    public let outerLips: [CGPoint]
+    public let leftEyebrow: [CGPoint]
+    public let rightEyebrow: [CGPoint]
     public let yaw: Double?
     public let roll: Double?
     public let pitch: Double?
 
     public init(boundingBox: CGRect, points: [CGPoint], leftEye: [CGPoint], rightEye: [CGPoint],
-                innerLips: [CGPoint], yaw: Double?, roll: Double?, pitch: Double?) {
+                innerLips: [CGPoint], outerLips: [CGPoint] = [], leftEyebrow: [CGPoint] = [], rightEyebrow: [CGPoint] = [],
+                yaw: Double?, roll: Double?, pitch: Double?) {
         self.boundingBox = boundingBox
         self.points = points
         self.leftEye = leftEye
         self.rightEye = rightEye
         self.innerLips = innerLips
+        self.outerLips = outerLips
+        self.leftEyebrow = leftEyebrow
+        self.rightEyebrow = rightEyebrow
         self.yaw = yaw
         self.roll = roll
         self.pitch = pitch

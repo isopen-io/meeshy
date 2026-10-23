@@ -27,7 +27,7 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
         }
 """), "la fenêtre principale publie sa taille sur MainWindowGate, après tout ce qu'il porte")
         XCTAssertTrue(app.contains("""
-                .preferredColorScheme(theme.preferredColorScheme)
+                .meeshyThemeRoot(theme)
                 .publishingSceneWindowSize()
         }
         .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.account.PhoneChangeFlow
+import me.meeshy.sdk.model.auth.PhonePlausibility
 import me.meeshy.sdk.model.auth.MagicLinkCountdown
 import me.meeshy.sdk.model.auth.SignupFieldValidation
 import me.meeshy.sdk.net.ApiError
@@ -66,6 +67,9 @@ data class AccountContactUiState(
     val newPhone: String get() = phone.number
     val phoneSent: Boolean get() = phone.isCodeSent
     val phoneCode: String get() = phone.code
+
+    /** Le motif du refus du numéro SAISI, `null` tant qu'il est vide ou plausible. */
+    val phoneRefusal: PhonePlausibility.Refusal? get() = phone.numberRefusal
 
     val canSubmitPhone: Boolean
         get() = phone.canSendCode && !phoneLoading

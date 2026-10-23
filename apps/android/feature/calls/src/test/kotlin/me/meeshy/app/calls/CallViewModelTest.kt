@@ -140,7 +140,9 @@ class CallViewModelTest {
     /** Records the exact sequence of telecom connection reports the VM makes. */
     private class RecordingTelecomReporter : TelecomCallReporter {
         val updates = mutableListOf<TelecomConnectionUpdate>()
+        val begun = mutableListOf<TelecomCallInfo>()
         var releaseCount = 0
+        override fun begin(call: TelecomCallInfo) { begun += call }
         override fun report(update: TelecomConnectionUpdate) { updates += update }
         override fun release() { releaseCount += 1 }
     }
@@ -1268,6 +1270,21 @@ class CallViewModelTest {
 
         assertThat(telecom.updates)
             .containsExactly(TelecomConnectionUpdate(TelecomConnectionState.Dialing))
+    }
+
+    @Test
+    fun `a call tells the system who is calling before its first report`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        assertThat(telecom.begun).containsExactly(
+            TelecomCallInfo(
+                peerId = incomingAudio.peerId,
+                peerName = incomingAudio.peerName,
+                isVideo = incomingAudio.isVideo,
+                isOutgoing = false,
+            ),
+        )
     }
 
     @Test

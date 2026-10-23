@@ -7,18 +7,17 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { EventEmitter } from 'events';
 
-type FakeFfmpegOutcome = { exitCode: number };
-const ffmpegOutcome: FakeFfmpegOutcome = { exitCode: 0 };
-const spawnCalls: string[][] = [];
+type FakeNormalization = { result: { buffer: Buffer; plan: 'copy' | 'transcode'; loudnessLufs: number | null } | null };
+const normalization: FakeNormalization = { result: null };
+const normalizedSources: string[] = [];
+const normalized = () => ({ buffer: Buffer.from('normalized-m4a'), plan: 'transcode' as const, loudnessLufs: -16.2 });
 
-jest.mock('child_process', () => ({
-  spawn: jest.fn((_cmd: string, args: string[]) => {
-    spawnCalls.push(args);
-    const proc = Object.assign(new EventEmitter(), { stderr: new EventEmitter(), kill: jest.fn() });
-    setImmediate(() => proc.emit('close', ffmpegOutcome.exitCode));
-    return proc;
+jest.mock('../../../services/attachments/audio-normalization', () => ({
+  ...(jest.requireActual('../../../services/attachments/audio-normalization') as object),
+  normalizeAudioBuffer: jest.fn(async (_buffer: Buffer, source: string) => {
+    normalizedSources.push(source);
+    return normalization.result;
   }),
 }));
 
@@ -85,8 +84,8 @@ function webVoiceNote() {
 describe('UploadProcessor — un vocal web se normalise en M4A (#8039)', () => {
   beforeEach(() => {
     probedStreams.value = null;
-    ffmpegOutcome.exitCode = 0;
-    spawnCalls.length = 0;
+    normalization.result = normalized();
+    normalizedSources.length = 0;
     writtenPaths.length = 0;
     jest.clearAllMocks();
   });
@@ -106,18 +105,27 @@ describe('UploadProcessor — un vocal web se normalise en M4A (#8039)', () => {
     expect(writtenPaths.some((p) => p.startsWith('/uploads/') && p.endsWith('.webm'))).toBe(false);
   });
 
-  it('demande à ffmpeg un conteneur M4A, jamais celui de la source', async () => {
-    const { processor } = makeProcessor();
+  it('persiste et rend la sonie MESURÉE par la normalisation (#11259)', async () => {
+    const { processor, create } = makeProcessor();
+
+    const result = await processor.uploadFile(webVoiceNote(), 'user-1');
+
+    expect(normalizedSources).toHaveLength(1);
+    expect(create.mock.calls[0][0].data.loudnessLufs).toBe(-16.2);
+    expect(result.loudnessLufs).toBe(-16.2);
+  });
+
+  it('ne persiste aucune sonie quand elle n’a pas été mesurée (silence)', async () => {
+    normalization.result = { ...normalized(), loudnessLufs: null };
+    const { processor, create } = makeProcessor();
 
     await processor.uploadFile(webVoiceNote(), 'user-1');
 
-    const args = spawnCalls[0];
-    expect(args[args.indexOf('-f') + 1]).toBe('ipod');
-    expect(args[args.indexOf('-c:a') + 1]).toBe('aac');
+    expect(create.mock.calls[0][0].data.loudnessLufs).toBeUndefined();
   });
 
-  it('garde le WebM d’origine, fichier et type, quand ffmpeg échoue', async () => {
-    ffmpegOutcome.exitCode = 1;
+  it('garde le WebM d’origine, fichier et type, quand la normalisation échoue', async () => {
+    normalization.result = null;
     const { processor, create } = makeProcessor();
 
     await processor.uploadFile(webVoiceNote(), 'user-1');
@@ -136,6 +144,7 @@ describe('UploadProcessor — un vocal web se normalise en M4A (#8039)', () => {
     expect(encrypted.mimeType).toBe('audio/mp4');
     expect(encrypted.fileBuffer.toString()).toBe('normalized-m4a');
     expect(create.mock.calls[0][0].data.mimeType).toBe('audio/mp4');
+    expect(create.mock.calls[0][0].data.loudnessLufs).toBe(-16.2);
   });
 });
 
@@ -147,8 +156,8 @@ function mp4File(filename: string) {
 
 describe('UploadProcessor — un MP4 sans image est un son (#9693)', () => {
   beforeEach(() => {
-    ffmpegOutcome.exitCode = 0;
-    spawnCalls.length = 0;
+    normalization.result = normalized();
+    normalizedSources.length = 0;
     writtenPaths.length = 0;
     jest.clearAllMocks();
   });

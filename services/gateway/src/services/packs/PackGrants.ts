@@ -27,6 +27,7 @@ import {
   type PackEligibilityRule,
 } from '@meeshy/shared/types/pack-ownership';
 import { gloryStanding } from '@meeshy/shared/utils/game/glory';
+import { NO_PACK_UNLOCK_FACTS, type PackUnlockFacts } from '@meeshy/shared/types/pack-unlock';
 import { gloryTotalFromLedger } from '../game/GloryService';
 import { MythicSeatService } from '../game/MythicSeatService';
 
@@ -73,6 +74,34 @@ export class PackGrants {
     }
   }
 
+  /**
+   * Les faits que des règles consultent, lus UNE fois pour toutes (#11276) — la
+   * boutique les montre avant le geste. Sans règle de rang, ni Gloire ni place
+   * de Mythe ; sans trophée ni saison, aucune lecture.
+   */
+  async unlockFacts(userId: string, rules: readonly PackEligibilityRule[]): Promise<PackUnlockFacts> {
+    const trophyKeys = [...new Set(rules.flatMap((rule) => (rule.kind === 'trophy' ? [rule.key] : [])))];
+    const seasonNumbers = [...new Set(rules.flatMap((rule) => (rule.kind === 'season' ? [rule.number] : [])))];
+    const [standing, trophies, seasons] = await Promise.all([
+      rules.some((rule) => rule.kind === 'rank') ? this.standingOf(userId) : Promise.resolve(null),
+      trophyKeys.length > 0 ? this.prisma.gameTrophy.findMany({ where: { userId, key: { in: trophyKeys } }, select: { key: true } }) : Promise.resolve([]),
+      seasonNumbers.length > 0
+        ? this.prisma.gameSeason.findMany({ where: { userId, number: { in: seasonNumbers }, stars: { gt: 0 } }, select: { number: true } })
+        : Promise.resolve([]),
+    ]);
+    return {
+      ...NO_PACK_UNLOCK_FACTS,
+      ...(standing ?? {}),
+      trophyKeys: new Set(trophies.map((row) => row.key)),
+      seasonNumbers: new Set(seasons.map((row) => row.number)),
+    };
+  }
+
+  private async standingOf(userId: string): Promise<Pick<PackUnlockFacts, 'rank' | 'glory'>> {
+    const [glory, seat] = await Promise.all([gloryTotalFromLedger(this.prisma, userId), new MythicSeatService(this.prisma).seatOf(userId)]);
+    return { rank: gloryStanding({ glory, mythicSeat: seat }).rank, glory };
+  }
+
   private async eligible(userId: string, rule: PackEligibilityRule): Promise<boolean> {
     return isPackEligible(rule, await this.factsFor(userId, rule));
   }
@@ -81,10 +110,8 @@ export class PackGrants {
   private async factsFor(userId: string, rule: PackEligibilityRule): Promise<PackEligibilityFacts> {
     const none: PackEligibilityFacts = { rank: 'murmure', trophyKeys: new Set(), seasonNumbers: new Set() };
     switch (rule.kind) {
-      case 'rank': {
-        const [glory, seat] = await Promise.all([gloryTotalFromLedger(this.prisma, userId), new MythicSeatService(this.prisma).seatOf(userId)]);
-        return { ...none, rank: gloryStanding({ glory, mythicSeat: seat }).rank };
-      }
+      case 'rank':
+        return { ...none, rank: (await this.standingOf(userId)).rank };
       case 'trophy': {
         const rows = await this.prisma.gameTrophy.findMany({ where: { userId, key: rule.key }, select: { key: true } });
         return { ...none, trophyKeys: new Set(rows.map((row) => row.key)) };

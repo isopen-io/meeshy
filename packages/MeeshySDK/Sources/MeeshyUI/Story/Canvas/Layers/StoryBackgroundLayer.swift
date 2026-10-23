@@ -778,7 +778,7 @@ extension StoryBackgroundLayer {
                                        fitOverride: self.transform3D.videoFitMode)
                 break
             }
-            storyMediaLog.info("bg video path=cache-miss → stream remote + cache bg")
+            storyMediaLog.info("bg video path=cache-miss → readable cache transfer")
 
             // Cache miss : placeholder ThumbHash dans un sublayer si dispo,
             // sinon on garde le layer transparent (le parent porte le fond
@@ -796,27 +796,14 @@ extension StoryBackgroundLayer {
             }
             backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
 
-            // Stream l'URL distante IMMÉDIATEMENT : `AVPlayer` fait du
-            // progressive/range loading (l'endpoint sert `Accept-Ranges: bytes`
-            // / 206), donc la 1ère frame arrive en ~centaines de ms quelle que
-            // soit la taille du fichier. L'AVPlayerLayer s'ajoute par-dessus le
-            // placeholder ThumbHash, qui disparaît visuellement quand la vidéo
-            // joue. Bloquer sur un download INTÉGRAL (`videoLocalFileURLAwait`)
-            // rendrait les grosses stories injouables sur réseau device
-            // (cellulaire/wifi) : un clip de 30+ Mo ne finirait pas de descendre
-            // avant l'auto-advance de la slide → la vidéo n'apparaîtrait jamais
-            // (ne marcherait que sur le réseau rapide du simulateur, et le failsafe
-            // 2s ferait avancer la barre sur le flou).
-            let fitOverride = self.transform3D.videoFitMode
+            // UN transfert, lu pendant sa course (#9881) : l'asset lit le
+            // fichier que le cache écrit — la 1ère frame arrive dès la tête,
+            // quelle que soit la taille du clip, et une revisite joue le
+            // fichier local. Bloquer sur un téléchargement INTÉGRAL rendrait
+            // les grosses stories injouables sur réseau d'appareil ; streamer
+            // l'URL ET la télécharger à part en coûtait deux.
             attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
-                                   fitOverride: fitOverride)
-            // Peuple le cache disque HORS du chemin de lecture pour qu'une
-            // revisite joue depuis un fichier local. Détaché + priorité utility
-            // pour ne jamais concurrencer le stream live.
-            let cacheKey = remoteURL.absoluteString
-            Task.detached(priority: .utility) {
-                _ = try? await CacheCoordinator.shared.video.data(for: cacheKey)
-            }
+                                   fitOverride: self.transform3D.videoFitMode)
         }
 
         // **Le remplissage de bande se pose ICI, une seule fois pour les cinq

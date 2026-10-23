@@ -4,12 +4,15 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /** Bottom bar layer: the pending attachments and the @mention suggestions strips stacked over the composer. */
 @Composable
 internal fun ChatBottomBarHost(host: ChatHostContext) {
     val state = host.state
+    val composerText by host.composerText.collectAsStateWithLifecycle()
     val pending = host.pending
     val actions = host.actions
     val accentColor = host.accentColor
@@ -31,9 +34,9 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             onSelect = actions.onMentionSelected,
         )
         ChatComposer(
-            draft = state.draft,
-            draftRevision = state.draftRevision,
-            canSend = state.canSend || (!pending.isEmpty && !pending.hasPreparing),
+            draft = composerText.text,
+            draftRevision = composerText.revision,
+            canSend = composerText.hasText || state.clipboardContent != null || (!pending.isEmpty && !pending.hasPreparing),
             hasPendingAttachments = !pending.isEmpty,
             onPickUris = actions.stagePendingUris,
             isEditing = state.isEditing,
@@ -45,7 +48,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             onStageCapturedUris = actions.stageCapturedUris,
             hasEffects = state.hasPendingEffects,
             clipboardContent = state.clipboardContent,
-            sentiment = state.composerSentiment,
+            sentiment = composerText.sentiment,
             languageCode = state.composerLanguageCode,
             accentColor = accentColor,
             onDraftChange = actions.onDraftChange,
