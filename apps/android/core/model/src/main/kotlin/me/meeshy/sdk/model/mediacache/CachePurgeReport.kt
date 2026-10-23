@@ -4,8 +4,8 @@ package me.meeshy.sdk.model.mediacache
 public data class CachePurgeCellId(val kind: CacheDataKind, val domain: CacheDomain)
 
 public data class CachePurgeCell(val id: CachePurgeCellId, val availability: CachePurgeAvailability) {
-    val kind: CacheDataKind get() = id.kind
-    val domain: CacheDomain get() = id.domain
+    public val kind: CacheDataKind get() = id.kind
+    public val domain: CacheDomain get() = id.domain
 }
 
 /**
