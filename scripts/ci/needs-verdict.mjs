@@ -5,8 +5,9 @@
 // un job a échoué : le tableau dit la vérité, la case à cocher non. Ici, l'agrégateur lit
 // `toJSON(needs)` et sort 1 en nommant les jobs rouges.
 //
-// `failure` et `cancelled` sont rouges. `skipped` est vert : un job sauté par sa zone n'a rien
-// à prouver, et le sauter parce qu'un amont a échoué rougit déjà cet amont.
+// Seuls `success` et `skipped` sont verts. `skipped` l'est parce qu'un job sauté par sa zone n'a
+// rien à prouver, et le sauter parce qu'un amont a échoué rougit déjà cet amont. Tout le reste
+// est rouge : `failure`, `cancelled`, et un résultat absent ou inconnu (fail-closed).
 //
 // Usage (dans le job, NEEDS_JSON posé) :
 //   node scripts/ci/needs-verdict.mjs
@@ -14,9 +15,11 @@
 
 import assert from 'node:assert/strict';
 
+const VERTS = new Set(['success', 'skipped']);
+
 export const rouges = (needs) =>
   Object.entries(needs)
-    .filter(([, job]) => job?.result === 'failure' || job?.result === 'cancelled')
+    .filter(([, job]) => !VERTS.has(job?.result))
     .map(([nom]) => nom)
     .sort();
 
@@ -31,11 +34,12 @@ const autoTest = () => {
   assert.deepEqual(rouges({}), []);
   assert.deepEqual(rouges({ a: { result: 'success' }, b: { result: 'skipped' } }), []);
   assert.deepEqual(rouges({ b: { result: 'failure' }, a: { result: 'cancelled' }, c: { result: 'success' } }), ['a', 'b']);
-  assert.deepEqual(rouges({ a: null, b: {} }), []);
+  assert.deepEqual(rouges({ a: null, b: {} }), ['a', 'b']);
+  assert.deepEqual(rouges({ a: { result: 'neutral' }, b: { result: 'success' } }), ['a']);
   assert.equal(verdict({ prisma: { result: 'failure' }, build: { result: 'skipped' } }).code, 1);
   assert.match(verdict({ prisma: { result: 'failure' } }).message, /prisma/);
   assert.equal(verdict({ x: { result: 'success' }, y: { result: 'skipped' } }).code, 0);
-  console.log('needs-verdict --self-test : 7 cas tenus');
+  console.log('needs-verdict --self-test : 8 cas tenus');
 };
 
 const main = () => {

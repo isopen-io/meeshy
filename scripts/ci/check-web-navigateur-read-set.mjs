@@ -17,7 +17,8 @@
 //   node scripts/ci/check-web-navigateur-read-set.mjs             # le cliquet
 //   node scripts/ci/check-web-navigateur-read-set.mjs --self-test # prouve qu'il tombe
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,6 +43,11 @@ const EXTENSIONS = ['', '.mjs', '.ts', '.js', '.tsx', '.json'];
 const sansCommentaires = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[\s;,(])\/\/.*$/gm, '$1');
 
+// `node`/`bun`, des drapeaux éventuels, puis un chemin qui passe par un dossier `scripts/` :
+// `node scripts/x.mjs` après `cd apps/web`, `node apps/web/scripts/x.mjs` depuis la racine,
+// `node --no-warnings scripts/x.mjs`, `bun ../../scripts/x.ts`.
+const INVOCATION = /\b(?:node|bun)\s+(?:--?[\w-]+(?:=\S+)?\s+)*((?:[\w.-]+\/)*scripts\/[\w./-]+)/g;
+
 /** Les scripts que les étapes du job lancent, relatifs à la racine du dépôt. */
 export const scriptsDuJob = (workflow) => {
   const job = jobsOf(workflow).find((candidat) => candidat.name === JOB);
@@ -49,10 +55,13 @@ export const scriptsDuJob = (workflow) => {
   const scripts = stepsOf(job).flatMap((etape) => {
     const run = etape.run ?? '';
     const base = /^\s*cd\s+(\S+)/m.exec(run)?.[1] ?? etape.workingDirectory ?? '.';
-    return [...run.matchAll(/(?:node|bun)\s+(scripts\/[A-Za-z0-9_./-]+)/g)].map((m) => join(base, m[1]));
+    return [...run.matchAll(INVOCATION)].map((m) => join(base, m[1]));
   });
   return [...new Set(scripts)].sort();
 };
+
+/** Les fichiers dont le cliquet suit les imports et relève les chemins : les scripts d'apps/web et ceux de la racine. */
+const estUnScriptLu = (chemin) => chemin.startsWith(`${WEB}/scripts/`) || chemin.startsWith('scripts/');
 
 const resoudre = (fichier, specifieur) => {
   const cible = resolve(dirname(fichier), specifieur);
@@ -67,7 +76,7 @@ export const fichiersLus = (racine, scripts) => {
     const fichier = aVisiter.pop();
     if (vus.has(fichier) || !existsSync(fichier)) continue;
     vus.add(fichier);
-    if (!relative(racine, fichier).startsWith(`${WEB}/scripts/`)) continue;
+    if (!estUnScriptLu(relative(racine, fichier))) continue;
     const source = sansCommentaires(readFileSync(fichier, 'utf8'));
     for (const m of source.matchAll(/(?:from|import|require)\s*\(?\s*['"](\.{1,2}\/[^'"]+)['"]/g)) {
       const suite = resoudre(fichier, m[1]);
@@ -135,11 +144,12 @@ export const mesurer = (racine) => {
   const noter = (chemin, lecteur) => {
     lectures[chemin] = [...(lectures[chemin] ?? []), lecteur];
   };
+  const relatifAWeb = (fichier, chemin) => fichier.startsWith(`${WEB}/`) && existsSync(join(racine, WEB, chemin));
   fichiers
-    .filter((fichier) => fichier.startsWith(`${WEB}/scripts/`))
+    .filter((fichier) => estUnScriptLu(fichier) && existsSync(join(racine, fichier)))
     .forEach((fichier) =>
       cheminsExternes(readFileSync(join(racine, fichier), 'utf8'), { fichier })
-        .filter((chemin) => !existsSync(join(racine, WEB, chemin)))
+        .filter((chemin) => !relatifAWeb(fichier, chemin))
         .forEach((chemin) => noter(chemin, fichier)),
     );
   paquetsDuDepot(racine).forEach((paquet) => noter(paquet, `${WEB}/package.json`));
@@ -152,6 +162,54 @@ const planchers = ({ fichiers, lectures }) => [
   ...CHEMINS_EXTERNES_CONNUS.filter((connu) => !Object.keys(lectures).some((chemin) => chemin === connu || chemin.startsWith(`${connu}/`)))
     .map((connu) => `le chemin connu « ${connu} » n'a pas été retrouvé : la lecture est aveugle`),
 ];
+
+const JOB_SYNTHETIQUE = [
+  'jobs:',
+  `  ${JOB}:`,
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - name: depuis la racine',
+  `        run: node ${WEB}/scripts/racine.mjs`,
+  '      - name: avec un drapeau',
+  '        run: |',
+  `          cd ${WEB}`,
+  '          node --no-warnings scripts/drapeau.mjs',
+  '      - name: un outil de la racine',
+  '        run: node scripts/outil.mjs',
+  '',
+].join('\n');
+
+/** Un script lancé depuis la racine, avec un drapeau, ou un outil de la racine reste LU, imports compris. */
+const invocationsAutoTest = () => {
+  const echecs = [];
+  const attendus = [`${WEB}/scripts/drapeau.mjs`, `${WEB}/scripts/racine.mjs`, 'scripts/outil.mjs'];
+  const invoques = scriptsDuJob(JOB_SYNTHETIQUE);
+  if (!attendus.every((script) => invoques.includes(script))) {
+    echecs.push(`les invocations ne sont pas toutes relevées : ${JSON.stringify(invoques)}`);
+  }
+  const depot = mkdtempSync(join(tmpdir(), 'zone-web-navigateur-'));
+  const ecrire = (chemin, contenu) => {
+    mkdirSync(dirname(join(depot, chemin)), { recursive: true });
+    writeFileSync(join(depot, chemin), contenu);
+  };
+  try {
+    ecrire('.github/workflows/ci.yml', JOB_SYNTHETIQUE);
+    ecrire(`${WEB}/package.json`, '{"name":"@meeshy/web"}');
+    ecrire(`${WEB}/scripts/racine.mjs`, "import { lire } from './lib/aide.mjs';\n");
+    ecrire(`${WEB}/scripts/lib/aide.mjs`, "export const lire = () => '../../../../packages/MeeshySDK/Sources/X.swift';\n");
+    ecrire(`${WEB}/scripts/drapeau.mjs`, '');
+    ecrire('scripts/outil.mjs', "import { lire } from './lib/outil-aide.mjs';\n");
+    ecrire('scripts/lib/outil-aide.mjs', "export const lire = () => readFileSync('apps/ios/Meeshy/Loi.swift');\n");
+    mkdirSync(join(depot, 'packages'), { recursive: true });
+    const { lectures } = mesurer(depot);
+    ['packages/MeeshySDK/Sources/X.swift', 'apps/ios/Meeshy/Loi.swift', 'scripts/outil.mjs', 'scripts/lib/outil-aide.mjs']
+      .filter((chemin) => !(chemin in lectures))
+      .forEach((chemin) => echecs.push(`« ${chemin} » n'est pas relevé dans un dépôt synthétique : ${JSON.stringify(Object.keys(lectures))}`));
+  } finally {
+    rmSync(depot, { recursive: true, force: true });
+  }
+  return echecs;
+};
 
 const autoTest = (racine) => {
   const mesure = mesurer(racine);
@@ -172,6 +230,7 @@ const autoTest = (racine) => {
   if (!synthetique.includes('docs/product/x.md') || synthetique.some((chemin) => chemin.startsWith('packages/morte'))) {
     echecs.push(`l'extraction ne tient pas ses cas : ${JSON.stringify(synthetique)}`);
   }
+  echecs.push(...invocationsAutoTest());
   if (echecs.length > 0) {
     echecs.forEach((echec) => console.error(`ÉCHEC : ${echec}`));
     return 1;
