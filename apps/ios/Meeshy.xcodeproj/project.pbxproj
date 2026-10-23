@@ -1802,6 +1802,7 @@
 		75F07B692CCE27EDFD2652C8 /* MockGameArchiveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32D430A02712BF43C4808A38 /* MockGameArchiveService.swift */; };
 		75F826F63989CD3C69FA633D /* MediaChromeRailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBD3BCF94A992D7C665B69C /* MediaChromeRailTests.swift */; };
 		75FD40E091090AAC101CD778 /* VoicePlaybackActivityLaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2396D2D7E18889C55968E880 /* VoicePlaybackActivityLaw.swift */; };
+		760B0CDB569F83C4B13AA12E /* StoryImageUploadEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C8E1BEA1029B67727AE723 /* StoryImageUploadEncoder.swift */; };
 		760F10FA3400F2166B24DA7D /* ConversationMediaGalleryView+Rules.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5667C58AF6F6381266D003E /* ConversationMediaGalleryView+Rules.swift */; };
 		7618F68F4582A2B9CC99E37D /* MessageViewsDetailAttachmentStatusRefreshTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7937BABF1E0E88F9BB66E339 /* MessageViewsDetailAttachmentStatusRefreshTests.swift */; };
 		761D4DC1988A5ADF4F70B089 /* ConversationLinkCardActionsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE4421949D2BA2ECFF2EA5A4 /* ConversationLinkCardActionsRow.swift */; };
@@ -2435,6 +2436,7 @@
 		A0F49D1DDBA6D0A7D3072982 /* MintCeremonyScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C0BC5C56867DFF359F5A8B /* MintCeremonyScene.swift */; };
 		A0F66BA03A7EAF06C9A29D7A /* FeedPostCardCarousel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0222DE93DACB3BD275451246 /* FeedPostCardCarousel.swift */; };
 		A0FA688FBDD21A9371192420 /* NotificationService+Detail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ADEB42F50C98212C5891322 /* NotificationService+Detail.swift */; };
+		A0FE2854AFAB6B5DC379E03A /* StoryImageUploadEncoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9B3E701635CB521BDEBD336 /* StoryImageUploadEncoderTests.swift */; };
 		A117AE0E77D39FF6E6E70DCD /* FeedCaptionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90FDA72334FC5A23488F4E50 /* FeedCaptionOverlay.swift */; };
 		A1229C26BE281707DE27BD56 /* Indirect.swift in Sources */ = {isa = PBXBuildFile; fileRef = E095CB1D12A239A62C7EFEBC /* Indirect.swift */; };
 		A12A194E82D98967B6FE87F1 /* CallManagerNetworkReconnectionSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3A864F5C75E83A7B6D222E6 /* CallManagerNetworkReconnectionSourceTests.swift */; };
@@ -6808,6 +6810,7 @@
 		B9B65404049C6234FBB5B21E /* ConversationViewValueSizeGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewValueSizeGuardTests.swift; sourceTree = "<group>"; };
 		B9B8A02FB433A893CEF0BD04 /* ComposerTextFormatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextFormatTests.swift; sourceTree = "<group>"; };
 		B9B9FF0D70A3444A4DCC921F /* ComposerAudienceReach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAudienceReach.swift; sourceTree = "<group>"; };
+		B9C8E1BEA1029B67727AE723 /* StoryImageUploadEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryImageUploadEncoder.swift; sourceTree = "<group>"; };
 		B9E43926B2404FD1C5C65DE8 /* GameDeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameDeepLinkTests.swift; sourceTree = "<group>"; };
 		BA038E5BC464BB6919943876 /* StoryReaderContentRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryReaderContentRules.swift; sourceTree = "<group>"; };
 		BA114E5D3F081F3F59BCA59B /* ConversationReadReceiptSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationReadReceiptSender.swift; sourceTree = "<group>"; };
@@ -7751,6 +7754,7 @@
 		F980122D9DBC96CB93EC7C24 /* ImagineWorkshopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagineWorkshopTests.swift; sourceTree = "<group>"; };
 		F990291936548DC02B25C2E3 /* TwoFactorViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwoFactorViewModelTests.swift; sourceTree = "<group>"; };
 		F9A4F0C40F743C9F4E0CC3B2 /* SceneCaption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneCaption.swift; sourceTree = "<group>"; };
+		F9B3E701635CB521BDEBD336 /* StoryImageUploadEncoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryImageUploadEncoderTests.swift; sourceTree = "<group>"; };
 		F9CF2EDDAB39452F33712535 /* ComposerSoundDispositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSoundDispositionTests.swift; sourceTree = "<group>"; };
 		F9F6D1B0AD31ADECE266D422 /* CanvasV3SceneObjectDecodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasV3SceneObjectDecodeTests.swift; sourceTree = "<group>"; };
 		F9F8461F1180448EA4E2A63F /* CallRefusalMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRefusalMessage.swift; sourceTree = "<group>"; };
@@ -9886,6 +9890,7 @@
 				F698E1CC6ACABA801DBD7907 /* StickerSendPipelineTests.swift */,
 				EEF9D1240213C915BF496DF1 /* StoryExportDressingTests.swift */,
 				A66E16E8EA352BC3F587D3AF /* StoryExportPreflightTests.swift */,
+				F9B3E701635CB521BDEBD336 /* StoryImageUploadEncoderTests.swift */,
 				ECF82BB3461D0F3AA3CBDEEA /* StoryInteractionServiceTests.swift */,
 				A085031233CD70BEC16C6D93 /* StoryPhotoSaveServiceTests.swift */,
 				810493FD644618DE44BFFA9E /* StoryPublishServiceTests.swift */,
@@ -12020,6 +12025,7 @@
 				64B0B8AF379864F058F20DB7 /* StickerSendPipeline.swift */,
 				67FE01DF2FEE62806B629956 /* StoryExportDressing.swift */,
 				CD0CBDD05F71644C8AF2BCC9 /* StoryExportPreflight.swift */,
+				B9C8E1BEA1029B67727AE723 /* StoryImageUploadEncoder.swift */,
 				98E974B54CC33C354DF829D8 /* StoryInteractionService.swift */,
 				663F024B84C81785BBF5D86D /* StoryPhotoSaveService.swift */,
 				775F426642CE8CEA8A515A49 /* StoryPublishService.swift */,
@@ -15113,6 +15119,7 @@
 				5AB6ECBA6694691554619CF7 /* StoryGestureOverlayView.swift in Sources */,
 				BB4FFC85F07B380FA6D249A5 /* StoryGroupIntroOverlay.swift in Sources */,
 				1CD3021D3D42EEE1E11A5BA7 /* StoryGroupIntroPolicy.swift in Sources */,
+				760B0CDB569F83C4B13AA12E /* StoryImageUploadEncoder.swift in Sources */,
 				16266489C4838D4E7686EE78 /* StoryIndexResolver.swift in Sources */,
 				657C5FB2A2522966940179C2 /* StoryInteractionService.swift in Sources */,
 				64D8715282D267A52D248B67 /* StoryLanguageDetailView.swift in Sources */,
@@ -16912,6 +16919,7 @@
 				BDFC18895F34220664A2527A /* StoryGroupIntroPolicyTests.swift in Sources */,
 				F12495B00155354F329464EC /* StoryGroupIntroRevealOverlapTests.swift in Sources */,
 				C9DA2CB20A0367BCEBB503A3 /* StoryHeaderMetaGuardTests.swift in Sources */,
+				A0FE2854AFAB6B5DC379E03A /* StoryImageUploadEncoderTests.swift in Sources */,
 				9DFA0330518A3239DEF8F685 /* StoryIndexResolverTests.swift in Sources */,
 				008FEF2B30C8379573FA818E /* StoryInteractionServiceTests.swift in Sources */,
 				15933AC1BBB45ECB1A14429F /* StoryLanguageDetailRetranslateTests.swift in Sources */,

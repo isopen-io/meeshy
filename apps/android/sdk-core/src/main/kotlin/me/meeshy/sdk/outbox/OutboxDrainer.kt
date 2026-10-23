@@ -18,8 +18,20 @@ public sealed interface SendResult {
     /** A retryable failure — network down, 5xx, timeout. */
     public data object TransientFailure : SendResult
 
-    /** A non-retryable failure — 4xx (other than 404), validation. */
-    public data class PermanentFailure(val reason: String) : SendResult
+    /**
+     * A non-retryable failure — 4xx (other than 404), validation.
+     *
+     * @property unreadable the row's own payload cannot be decoded: it can never succeed, so the
+     *   drainer deletes it once the outcome is published instead of keeping a dead row.
+     */
+    public data class PermanentFailure(val reason: String, val unreadable: Boolean = false) : SendResult
+
+    /**
+     * Not ready yet and not at fault — e.g. the origin of a transfer is not delivered. Costs no
+     * attempt: the row waits (bounded by [OutboxDrainer.DEFERRED_MAX_WAIT_MS]) and is exhausted
+     * cleanly beyond it.
+     */
+    public data class Deferred(val reason: String) : SendResult
 }
 
 /** Delivers a single [OutboxEntity] over the network; transient vs permanent is in the [SendResult]. */
@@ -41,7 +53,7 @@ public data class DrainReport(
  * A transient failure stops the lane immediately so message ordering holds —
  * a later message is never delivered ahead of an earlier, still-failing one.
  * A permanent failure (or a kind with no registered sender) exhausts that row
- * and the drain continues.
+ * and the drain continues; an unreadable payload is deleted after its outcome is published.
  *
  * A row with a `dependsOn` prerequisite is gated on that prerequisite
  * ([OutboxDependencies]): a still-queued prerequisite **stops** the lane (the
@@ -54,6 +66,10 @@ public data class DrainReport(
  * grafted into every still-queued dependent's payload via [graftProducedId]
  * (placeholder = the prerequisite's own `cmid`) **before** the row is deleted, so
  * a publish queued offline with a placeholder media id delivers with the real one.
+ *
+ * [currentOwner], when set, enforces [OutboxAuthorGuard]: a row never leaves under another
+ * account than its author — it is skipped (no attempt charged) until its author is signed in.
+ * A [SendResult.Deferred] row costs no attempt either: it is rescheduled and holds its lane.
  */
 public class OutboxDrainer(
     private val outbox: OutboxRepository,
@@ -61,6 +77,8 @@ public class OutboxDrainer(
     private val onExhausted: suspend (OutboxEntity) -> Unit = {},
     private val graftProducedId: (payload: String, placeholder: String, realId: String) -> String? =
         { _, _, _ -> null },
+    private val currentOwner: (() -> String?)? = null,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     public suspend fun drainLane(lane: String): DrainReport {
         var delivered = 0
@@ -68,17 +86,25 @@ public class OutboxDrainer(
         val pending = outbox.deliverable(lane).filter { it.stateEnum == OutboxState.PENDING }
 
         for (row in pending) {
+            val kind = row.kindEnum ?: continue
+            if (currentOwner != null) {
+                when (OutboxAuthorGuard.verdict(row.ownerId, currentOwner.invoke())) {
+                    AuthorVerdict.SEND -> Unit
+                    AuthorVerdict.WAIT -> continue
+                    AuthorVerdict.EXHAUST_NO_AUTHOR -> {
+                        outbox.markExhausted(row.cmid, OutboxAuthorGuard.REASON_NO_AUTHOR)
+                        onExhausted(row)
+                        exhausted++
+                        continue
+                    }
+                }
+            }
+            if ((row.nextAttemptAt ?: 0L) > now()) return blocked(delivered, exhausted)
             val prerequisites = OutboxDependencyKey.decode(row.dependsOn)
             if (prerequisites.isNotEmpty()) {
                 val states = prerequisites.map { outbox.stateOf(it) }
                 when (OutboxDependencies.verdictAll(states)) {
-                    DependencyVerdict.BLOCKED ->
-                        return DrainReport(
-                            delivered,
-                            exhausted,
-                            stoppedOnTransientFailure = false,
-                            stoppedOnBlockedDependency = true,
-                        )
+                    DependencyVerdict.BLOCKED -> return blocked(delivered, exhausted)
                     DependencyVerdict.FAILED -> {
                         val failed = prerequisites.filterIndexed { i, _ ->
                             states[i] == OutboxState.EXHAUSTED
@@ -91,7 +117,7 @@ public class OutboxDrainer(
                     DependencyVerdict.SATISFIED -> Unit
                 }
             }
-            val sender = senders[row.kindEnum]
+            val sender = senders[kind]
             if (sender == null) {
                 outbox.markExhausted(row.cmid, "No sender registered for ${row.kind}")
                 onExhausted(row)
@@ -112,19 +138,45 @@ public class OutboxDrainer(
                     delivered++
                 }
                 SendResult.TransientFailure -> {
-                    if (outbox.markFailed(row.cmid) == OutboxState.EXHAUSTED) {
+                    if (outbox.markFailed(row.cmid, "Transient delivery failure") == OutboxState.EXHAUSTED) {
                         onExhausted(row)
                         exhausted++
                     }
                     return DrainReport(delivered, exhausted, stoppedOnTransientFailure = true)
                 }
+                is SendResult.Deferred -> {
+                    if (outbox.defer(row.cmid, result.reason, DEFERRED_RETRY_MS, DEFERRED_MAX_WAIT_MS)) {
+                        return blocked(delivered, exhausted)
+                    }
+                    onExhausted(row)
+                    exhausted++
+                }
                 is SendResult.PermanentFailure -> {
-                    outbox.markExhausted(row.cmid, result.reason)
+                    if (result.unreadable) {
+                        outbox.discardUnreadable(row.cmid, result.reason)
+                    } else {
+                        outbox.markExhausted(row.cmid, result.reason)
+                    }
                     onExhausted(row)
                     exhausted++
                 }
             }
         }
         return DrainReport(delivered, exhausted, stoppedOnTransientFailure = false)
+    }
+
+    private fun blocked(delivered: Int, exhausted: Int) = DrainReport(
+        delivered,
+        exhausted,
+        stoppedOnTransientFailure = false,
+        stoppedOnBlockedDependency = true,
+    )
+
+    public companion object {
+        /** How long a deferred row waits before the drainer looks at it again. */
+        public const val DEFERRED_RETRY_MS: Long = 15_000L
+
+        /** Beyond this, a row that is still deferred gives up (an origin that never arrives). */
+        public const val DEFERRED_MAX_WAIT_MS: Long = 60 * 60 * 1000L
     }
 }

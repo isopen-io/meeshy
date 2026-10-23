@@ -4,9 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.report.ReportReason
@@ -14,6 +17,12 @@ import me.meeshy.sdk.model.report.ReportRequestBuilder
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.report.ReportRepository
 import javax.inject.Inject
+
+/** Effets ponctuels : le toast de succès, puis la fermeture de la feuille. */
+sealed interface ReportUserEffect {
+    data object ShowSentToast : ReportUserEffect
+    data object Close : ReportUserEffect
+}
 
 /** Immutable UI state for the "report a user" sheet (feature-parity §K). */
 data class ReportUserUiState(
@@ -55,6 +64,9 @@ class ReportUserViewModel @Inject constructor(
     private val _state = MutableStateFlow(ReportUserUiState())
     val state: StateFlow<ReportUserUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<ReportUserEffect>(Channel.BUFFERED)
+    val effects: Flow<ReportUserEffect> = _effects.receiveAsFlow()
+
     fun selectReason(reason: ReportReason) {
         _state.update { it.copy(selectedReason = reason, hasError = false) }
     }
@@ -76,6 +88,10 @@ class ReportUserViewModel @Inject constructor(
                 } else {
                     it.copy(isSubmitting = false, hasError = true)
                 }
+            }
+            if (result is NetworkResult.Success) {
+                _effects.send(ReportUserEffect.ShowSentToast)
+                _effects.send(ReportUserEffect.Close)
             }
         }
     }

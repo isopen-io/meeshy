@@ -325,6 +325,7 @@ public enum StoryExporter {
         videoComposition.customVideoCompositorClass = StoryAVCompositor.self
         let storyTrackID = composition.tracks(withMediaType: .video)
             .first?.trackID ?? kCMPersistentTrackID_Invalid
+        let overlayTracks = await StoryOverlayVideoTracks.compose(slide: slide, into: composition, storyStart: storyStart)
 
         // Segmentation de la timeline. Une instruction unique couvrant tout
         // laisserait `requiredSourceTrackIDs` à nil, et AVFoundation décoderait
@@ -344,10 +345,9 @@ public enum StoryExporter {
                 outroTrackID: brandVideoTracks.outro,
                 introFade: branding?.introFade,
                 outroFade: outroFade,
-                requiredSourceTrackIDs: tracks.map { NSNumber(value: $0) },
-                stickerImageURLs: stickerImageURLs,
-                images: images,
-                animations: animations
+                requiredSourceTrackIDs: StoryOverlayVideoTracks.requiredTrackIDs(tracks, overlays: overlayTracks).map { NSNumber(value: $0) },
+                stickerImageURLs: stickerImageURLs, images: images,
+                animations: animations, overlayTracks: overlayTracks
             )
         }
 

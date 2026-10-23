@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.VerifyEmailChangeResponse
 import me.meeshy.sdk.model.VerifyPhoneChangeRequest
 import me.meeshy.sdk.model.VerifyPhoneChangeResponse
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
@@ -77,7 +78,37 @@ data class AccountDeletionOpenedResponse(
     val tokenExpiresAt: String? = null,
 )
 
+/** Un appareil enregistre pour les notifications (`GET users/me/devices`). */
+@Serializable
+data class RegisteredDevice(
+    val id: String,
+    val type: String? = null,
+    val platform: String? = null,
+    val deviceId: String? = null,
+    val deviceName: String? = null,
+    val appVersion: String? = null,
+    val isActive: Boolean = true,
+    val lastUsedAt: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+)
+
+@Serializable
+data class DeviceRevokedResponse(val message: String? = null)
+
 interface UserApi {
+    /** Les appareils de l'utilisateur. */
+    @GET("users/me/devices")
+    suspend fun listDevices(): ApiResponse<List<RegisteredDevice>>
+
+    /** Revoque un appareil par l'id de SA LIGNE (pas le `deviceId` materiel). */
+    @DELETE("users/me/devices/{id}")
+    suspend fun revokeDevice(@Path("id") id: String): ApiResponse<DeviceRevokedResponse>
+
+    /** Profil public par pseudo (alias `/u/{username}` des liens partages). */
+    @GET("u/{username}")
+    suspend fun getProfileByUsername(@Path("username") username: String): ApiResponse<MeeshyUser>
+
     @GET("users/search")
     suspend fun search(
         @Query("q") query: String,

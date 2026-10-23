@@ -140,6 +140,26 @@ class GuestJoinViewModelTest {
     }
 
     @Test
+    fun theDefaultLanguageFollowsTheDevice() = runTest {
+        val vm = viewModel(FakeShareLinkApi(linkInfoResponse = ApiResponse(success = true, data = ShareLinkInfo(id = "l1"))))
+        vm.deviceLanguages = { listOf("sw-KE", "pt-BR", "en-US") }
+
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.form.language).isEqualTo("pt")
+    }
+
+    @Test
+    fun theDefaultLanguageFallsBackToFrenchWhenTheDeviceIsNotOffered() = runTest {
+        val vm = viewModel(FakeShareLinkApi(linkInfoResponse = ApiResponse(success = true, data = ShareLinkInfo(id = "l1"))))
+        vm.deviceLanguages = { listOf("sw-KE") }
+
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.form.language).isEqualTo("fr")
+    }
+
+    @Test
     fun submit_failure_keepsEveryEditForRetryAndSurfacesTheError() = runTest {
         val api = FakeShareLinkApi(
             linkInfoResponse = ApiResponse(success = true, data = ShareLinkInfo(id = "l1")),

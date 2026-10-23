@@ -37,8 +37,6 @@
     <string name="bubble_file_size_bytes">%1$s o</string>
     <string name="bubble_file_size_kb">%1$s Ko</string>
     <string name="bubble_file_size_mb">%1$s Mo</string>
-    <string name="image_viewer_close">Fermer</string>
-    <string name="image_viewer_save">Enregistrer dans la galerie</string>
     <string name="bubble_blur_tap_to_reveal">Toucher pour révéler</string>
     <string name="bubble_blur_view_once">Vue unique</string>
     <string name="bubble_blur_reveal_action">Révéler le message masqué</string>

@@ -521,6 +521,27 @@ class SignupViewModelTest {
             .isEqualTo(SignupFieldMessage.Local(SignupFieldIssue.PASSWORD_TOO_SHORT))
     }
 
+    @Test
+    fun aFillerPhoneShowsItsReasonAndBlocksSubmit_whileAnEmptyOneNeverDoes() {
+        val vm = scenario().viewModel
+        vm.fillValid()
+        assertThat(vm.state.value.canSubmit).isTrue()
+
+        vm.onPhoneEntryChange("12345678")
+        assertThat(vm.state.value.messageFor(SignupField.PHONE))
+            .isEqualTo(SignupFieldMessage.Local(SignupFieldIssue.PHONE_TOO_SHORT))
+        assertThat(vm.state.value.canSubmit).isFalse()
+
+        vm.onPhoneEntryChange("1111100000")
+        assertThat(vm.state.value.messageFor(SignupField.PHONE))
+            .isEqualTo(SignupFieldMessage.Local(SignupFieldIssue.PHONE_IMPLAUSIBLE))
+        assertThat(vm.state.value.canSubmit).isFalse()
+
+        vm.onPhoneEntryChange("")
+        assertThat(vm.state.value.messageFor(SignupField.PHONE)).isNull()
+        assertThat(vm.state.value.canSubmit).isTrue()
+    }
+
     // ---- langue de lecture ---------------------------------------------------
 
     @Test

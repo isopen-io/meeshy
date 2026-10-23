@@ -94,6 +94,8 @@ import * as TranslationNonBlocking from './routes/translation-non-blocking';
 import * as TranslationBlocking from './routes/translation';
 import { translationJobsRoutes } from './routes/translation-jobs';
 import { geoIpDatabaseStatus } from './services/GeoIPService';
+import { attachMetricsServer, metricsServerConfig } from './services/metrics/metricsServer';
+import { processMediaStageMetrics } from './services/metrics/mediaStageMetrics';
 
 // API versioning
 // #4324 — la version d'API vient de la CONFIGURATION, jamais d'une constante :
@@ -120,6 +122,9 @@ export interface RouteRegistrationDeps {
  */
 export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegistrationDeps): Promise<void> {
     logger.info('Configuring REST API routes...');
+
+    // #11257 — les mesures de la chaîne média, sur un port INTERNE et opt-in (`METRICS_PORT`), jamais sur l'API routée.
+    attachMetricsServer(server, metricsServerConfig(process.env), processMediaStageMetrics.registry);
 
     // Health check endpoint
     server.get('/health', async (_request, reply) => {
