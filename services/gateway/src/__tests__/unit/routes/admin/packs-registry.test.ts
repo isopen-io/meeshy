@@ -379,3 +379,34 @@ describe('audit adversarial de #12293', () => {
   });
 });
 
+describe('contre-audit de #12293', () => {
+  it('N1 — une base lente ne bloque pas le démarrage : la lecture initiale est bornée, le registre reste masqué, puis se charge en tâche de fond', async () => {
+    const db = fakeDb();
+    db.rows.push({ domain: 'wallpaper', slug: 'dunes', override: { hidden: true }, revision: 1 });
+    const findMany = db.prisma.packRegistryEntry.findMany as jest.Mock<any>;
+    let release: () => void = () => undefined;
+    findMany.mockImplementationOnce(() => new Promise((resolve) => (release = () => resolve(db.rows.map((row) => ({ ...row }))))));
+    const index = baseIndex();
+    const overrides = new PackRegistryOverrides({ prisma: db.prisma as never, now: () => NOW });
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', db.prisma as never);
+    app.decorate('authenticate', async () => undefined);
+    await app.register(packsRegistryAdminRoutes, { index, overrides, initialLoadTimeoutMs: 20 });
+
+    const startedAt = Date.now();
+    await app.ready();
+
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
+    expect(overlayPackIndex(index, () => overrides.snapshot()).entries('wallpaper').every((entry) => entry.hidden)).toBe(true);
+
+    release();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(overlayPackIndex(index, () => overrides.snapshot()).entries('wallpaper').map((entry) => [entry.slug, entry.hidden])).toEqual([
+      ['dunes', true],
+      ['savane', false],
+      ['essentiels', false],
+    ]);
+    await app.close();
+  });
+});
+
