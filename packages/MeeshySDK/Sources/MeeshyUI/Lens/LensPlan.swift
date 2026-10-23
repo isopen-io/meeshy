@@ -87,14 +87,18 @@ public nonisolated struct LensPlanInput: Sendable {
     public let languages: [String]
     public let level: LensLevel
     public let milliseconds: Double
+    /// Les couches que les déclencheurs ont masquées (`LensTriggerEngine.hiddenLayers`).
+    public let hidden: Set<String>
 
-    public init(lens: LensDocument, frame: CGSize, face: CGRect?, languages: [String], level: LensLevel, milliseconds: Double) {
+    public init(lens: LensDocument, frame: CGSize, face: CGRect?, languages: [String], level: LensLevel, milliseconds: Double,
+                hidden: Set<String> = []) {
         self.lens = lens
         self.frame = frame
         self.face = face
         self.languages = languages
         self.level = level
         self.milliseconds = milliseconds
+        self.hidden = hidden
     }
 }
 
@@ -134,7 +138,7 @@ public nonisolated enum LensPlan {
     }
 
     public static func plan(_ input: LensPlanInput) -> [LensDrawOp] {
-        let hidden = hiddenIds(input.lens, level: input.level)
+        let hidden = hiddenIds(input.lens, level: input.level).union(input.hidden)
         let ops = input.lens.layers.filter { !hidden.contains($0.id) }.compactMap { op(of: $0, input: input) }
         return ops.filter(isLut) + ops.filter { !isLut($0) }
     }
