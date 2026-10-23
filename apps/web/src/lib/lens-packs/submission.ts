@@ -12,7 +12,7 @@ import type { LensSubmission } from '@/lib/api/lens-packs';
  * un fichier nommé absent, un coût déclaré sous le coût mesuré, une limite de
  * `LENS_PACK_LIMITS`. Le serveur reste juge (ré-encodage, 422).
  */
-export type Digest = (bytes: Uint8Array) => Promise<string>;
+export type Digest = (bytes: Uint8Array<ArrayBuffer>) => Promise<string>;
 
 export type SubmissionRefusal =
   | 'invalid'
@@ -45,7 +45,7 @@ const parseJson = (text: string): unknown => {
   }
 };
 
-type Named = { readonly address: string; readonly bytes: Uint8Array };
+type Named = { readonly address: string; readonly bytes: Uint8Array<ArrayBuffer> };
 
 async function addressed(files: readonly File[], digest: Digest): Promise<readonly Named[]> {
   return Promise.all(

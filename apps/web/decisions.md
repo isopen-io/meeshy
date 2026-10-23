@@ -5701,3 +5701,17 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Ce que ce lot ne fait pas.** La modération des packs COMMUNAUTAIRES (stickers, fonds, contours, bannières) garde ses routes de revue par domaine, qu'aucun écran web ne lit encore. Celle des lens est le lot W16 (#11322).
 
 **Gardes.** `lib/api/admin-packs-registry.test.ts`, `lib/admin/packs-registry-form.test.ts`, `routes/admin-packs-registry-block.test.tsx`, `lib/admin/audit-vocabulary.test.ts`, `routes/admin-audit.test.tsx`.
+
+## D-223 — Les lens se proposent depuis la boutique et se modèrent sous les signalements : chaque route de S16 a son écran web, la revue et le retrait pour `canModerateContent` (2026-10-23, #11322 ; consomme S16 #11271)
+
+**Contexte.** S16 sert les packs de lens des partenaires (`/api/v1/packs/lens…`), et aucune surface web ne les lisait. Leurs onze entrées du catalogue TS étaient sans lecteur, et le cliquet `check-ts-catalog-dead-entries` rougissait. La décision du 2026-10-23 sur #12288 fait du web leur seul lecteur, jusqu'à ce que le composer iOS les lise.
+
+**Décision.**
+- **La boutique** : le domaine `lens` de la vitrine unique (`lib/api/packs-shop.ts`) lit la boutique, les installées, le détail et l'installation (PUT et DELETE) comme les autres domaines.
+- **Proposer** (`components/lens-submit.tsx`, montée par la boutique quand le domaine « Lens » est choisi) : le document MeeshyLens et les fichiers que ses couches nomment. `prepareLensSubmission` (`lib/lens-packs/submission.ts`) relit le document par `parseLens`, la même loi que le serveur. Chaque fichier y prend son adresse `<sha16>.<ext>`. Un fichier manquant, un coût déclaré sous le coût mesuré ou une limite dépassée sont refusés avant le réseau ; un refus du serveur se dit par sa cause. « Mes propositions » relit l'état et le mot de la modération. Textes dans les sept langues, dans le module.
+- **Modérer** (`routes/admin-lens-moderation-block.tsx`, chargé à la demande sous l'écran des signalements, pour `canModerateContent` seulement) : la file, le document servi résumé par `parseLens`, publier en fixant la fenêtre (UTC, entière) et les communautés (`reviewOfApproval`), refuser avec un mot, retirer une lens publiée. Une auto-revue, une fenêtre refusée ou un journal indisponible se disent. Les gestes vont à la famille « Packs » du journal (D-222).
+- **Ce qui n'existe pas ici** : prix, crédit, géo-créneau, tous points « ATTEND » de #11251. Une lens est gratuite ; la revue n'envoie aucun géo.
+
+**Ce que ce lot ne fait pas.** L'éditeur sans code avec aperçu caméra du critère de #11322 attend le rendu web des lens (W14, #11320) : cette tranche propose un document déjà composé.
+
+**Gardes.** `lib/api/lens-packs.test.ts`, `lib/api/packs-shop-lens.test.ts`, `lib/lens-packs/submission.test.ts`, `lib/lens-packs/review-form.test.ts`, `components/lens-submit.test.tsx`, `routes/admin-lens-moderation-block.test.tsx`.
