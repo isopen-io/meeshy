@@ -56,6 +56,8 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.socketio)
     implementation(libs.timber)
+    implementation(libs.mlkit.translate)
+    implementation(libs.mlkit.language.id)
     ksp(libs.hilt.compiler)
     ksp(libs.hilt.work.compiler)
 

@@ -222,6 +222,29 @@ export function attachmentSrcSet(variants: readonly ImageVariant[] | undefined):
   return variants.map((variant) => `${attachmentSrc(variant.url)} ${variant.width}w`).join(', ');
 }
 
+/** Les deux `srcset` d'une `<picture>` ; une clé absente n'a aucune variante. */
+export type PictureSrcSets = { readonly avif?: string; readonly webp?: string };
+
+const ofFormat = (variants: readonly ImageVariant[] | undefined, format: ImageVariant['format']): readonly ImageVariant[] =>
+  (Array.isArray(variants) ? variants : []).filter((variant) => variant.format === format);
+
+/**
+ * `attachmentPictureSrcSets` (W12, #11318) — AVIF d'abord, WebP ensuite.
+ * `avifVariants` (S7, #11262) alimente la `<source type="image/avif">`, que seul
+ * un navigateur qui décode l'AVIF retient ; `imageVariants` reste le `srcset` de
+ * l'`<img>`, lu par tous. Les deux listes sont tenues SÉPARÉES par la passerelle
+ * (un ancien client lit `imageVariants` sans filtrer le format) ; le filtre
+ * ci-dessous l'exige aussi de ce côté, jamais un AVIF dans la liste WebP.
+ */
+export function attachmentPictureSrcSets(attachment: {
+  readonly avifVariants?: readonly ImageVariant[];
+  readonly imageVariants?: readonly ImageVariant[];
+}): PictureSrcSets {
+  const avif = attachmentSrcSet(ofFormat(attachment.avifVariants, 'avif'));
+  const webp = attachmentSrcSet(ofFormat(attachment.imageVariants, 'webp'));
+  return { ...(avif !== undefined ? { avif } : {}), ...(webp !== undefined ? { webp } : {}) };
+}
+
 /** `sizes` d'une tuile de largeur d'affichage fixe — la case ne redimensionne jamais selon le viewport. */
 export function sizesFor(widthPx: number): string {
   return `${widthPx}px`;

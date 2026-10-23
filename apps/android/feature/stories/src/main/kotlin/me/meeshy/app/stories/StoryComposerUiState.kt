@@ -83,6 +83,8 @@ data class StoryComposerUiState(
     val errorMessage: String? = null,
     val canvasWidthPx: Float = 0f,
     val canvasHeightPx: Float = 0f,
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text

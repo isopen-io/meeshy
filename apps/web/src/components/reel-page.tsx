@@ -1,4 +1,5 @@
 import { usePlaybackTelemetry } from '@/lib/telemetry/playback-session';
+import { useElectedVideoSrc } from '@/lib/media/served-video';
 import { useRememberSeenMedia } from '@/lib/media/use-remember-seen-media';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -133,6 +134,8 @@ function ReelPlayable({
   const active = mode === 'active';
   const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active: active && !held, soundOn, onSoundBlocked });
   const poster = media.thumbnailSrc ?? media.placeholder;
+  /* #12316 — un réel HEVC joue son rendu H.264 là où le navigateur ou le tier le demandent. */
+  const videoSrc = useElectedVideoSrc(media);
   const preload = reelPreloadOf(mode);
   /* L'ATTENTE SE DIT (#9277) : l'élément lié est aussi écouté pour son buffer. */
   const [element, setElement] = useState<HTMLMediaElement | null>(null);
@@ -151,16 +154,16 @@ function ReelPlayable({
   /* VU, DONC RELISIBLE HORS LIGNE (#11326) — un réel n'est jamais une vue
      unique ni un éphémère : la loi du seau « récents » décide du reste
      (Wi-Fi, budget, ce que la passerelle déclare). */
-  useRememberSeenMedia({ element, src: media.src, protection: 'none', active: active && !held });
+  useRememberSeenMedia({ element, src: tag === 'video' ? videoSrc : media.src, protection: 'none', active: active && !held });
 
   return (
     <>
       {tag === 'video' ? (
         /* `key` — une source qui change REMONTE l'élément (motif `VideoTile`). */
         <video
-          key={media.src}
+          key={videoSrc}
           ref={attach}
-          src={media.src}
+          src={videoSrc}
           {...(poster !== undefined ? { poster } : {})}
           preload={preload}
           playsInline

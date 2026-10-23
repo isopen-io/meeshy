@@ -1,7 +1,7 @@
 import { forwardMessages } from '@/lib/api/forward';
 import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
 import { createDirectConversation, createGroupConversation, type ConversationsDeps } from '@/lib/api/conversations';
-import { uploadAttachments } from '@/lib/api/attachments';
+import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { servedMediaFile } from '@/lib/media/served-media';
@@ -41,11 +41,11 @@ const browserOnline = (): boolean => typeof navigator === 'undefined' || navigat
  * amputé (même réconciliation que `perform-send.ts`).
  */
 async function uploadFiles(deps: ConversationsDeps, prepare: ImagePreparer, files: readonly File[]): Promise<ApiResult<{ readonly attachmentIds: readonly string[] }>> {
-  const result = await uploadAttachments({ ...deps, pending: await prepare.prepareUploads(files.map((file) => ({ file }))) });
+  const pending = await prepare.prepareUploads(files.map((file) => ({ file })));
+  const result = await uploadAttachments({ ...deps, pending });
+  const failure = uploadShortfall(pending.map((piece) => piece.file), result);
+  if (failure !== null) return failure;
   if (!result.ok) return result;
-  if (result.data.attachments.length < files.length) {
-    return { ok: false, status: 200, error: 'Lot de pièces jointes incomplet', code: 'UPLOAD_PARTIAL' };
-  }
   return { ok: true, data: { attachmentIds: result.data.attachments.map((attachment) => attachment.id) } };
 }
 

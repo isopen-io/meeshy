@@ -79,7 +79,13 @@
     <string name="post_comments_delete_error">Kommentar konnte nicht gelöscht werden</string>
     <string name="post_comments_deleted">Kommentar gelöscht</string>
     <string name="post_comments_load_error">Fehler beim Laden der Kommentare</string>
+    <plurals name="post_comments_load_more_replies">
+        <item quantity="one">%d weitere Antwort anzeigen</item>
+        <item quantity="other">%d weitere Antworten anzeigen</item>
+    </plurals>
+    <string name="post_comments_load_more_replies_hint">Zeigt die restlichen Antworten in diesem Thread</string>
     <string name="post_comments_more_options">Weitere Optionen</string>
+    <string name="post_comments_reply_a11y_label">%1$s, Antwort. %2$s. %3$s</string>
     <string name="post_comments_reply_action">Antworten</string>
     <string name="post_comments_reply_badge">Antworten</string>
     <string name="post_comments_reply_error">Fehler beim Senden der Antwort</string>
