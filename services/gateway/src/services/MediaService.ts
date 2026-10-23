@@ -3,6 +3,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import type { MediaStorage, MediaDuplicateResult, MediaDuplicatePlan } from './storage/MediaStorage';
 import { storageKeyFromMediaUrl } from './attachments/mediaStorageKey';
+import { eraseMirroredCopy } from './storage/objects/mirroredErasure';
 
 // Re-export for backwards compatibility with call sites that imported the
 // type from `MediaService` rather than from the new `storage/MediaStorage`
@@ -127,6 +128,7 @@ export class MediaService implements MediaStorage {
 
     const fullPath = path.join(this.uploadBasePath, relativePath);
     await fs.unlink(fullPath).catch(() => {});
+    await eraseMirroredCopy(fullPath, this.uploadBasePath);
   }
 
   // MARK: - MediaStorage interface conformance

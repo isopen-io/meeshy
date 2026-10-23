@@ -1,10 +1,9 @@
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
-import { relative as pathRelative, resolve as pathResolve, sep as pathSep } from 'path';
 import type { Readable } from 'stream';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { storedFileETag } from '../../utils/etag';
-import { isSafeStorageKey, type ByteRange, type MediaObjectStore } from '../../services/storage/objects/MediaObjectStore';
+import { storageKeyUnder, type ByteRange, type MediaObjectStore } from '../../services/storage/objects/MediaObjectStore';
 import { processMediaObjectStores } from '../../services/storage/objects/mediaObjectStoreFactory';
 
 const log = enhancedLogger.child({ module: 'storedBytes' });
@@ -35,15 +34,6 @@ function mirrorOf(source: StoredBytesSource): MediaObjectStore | null {
   return source.mirror !== undefined ? source.mirror : processMediaObjectStores().mirror;
 }
 
-/** La clé d'un chemin dans le seau : relative aux dépôts, jamais au-dehors, jamais cachée. */
-export function bucketKeyOf(filePath: string, uploadRoot: string): string | null {
-  const baseAbs = pathResolve(uploadRoot);
-  const fileAbs = pathResolve(filePath);
-  if (!fileAbs.startsWith(baseAbs + pathSep)) return null;
-  const key = pathRelative(baseAbs, fileAbs).split(pathSep).join('/');
-  return isSafeStorageKey(key) ? key : null;
-}
-
 function strongETag(etag: string): string {
   return etag.startsWith('"') ? etag : `"${etag}"`;
 }
@@ -62,7 +52,7 @@ export async function locateStoredBytes(filePath: string, source: StoredBytesSou
 export async function locateBucketBytes(filePath: string, source: StoredBytesSource): Promise<StoredBytes | null> {
   const mirror = mirrorOf(source);
   if (!mirror) return null;
-  const key = bucketKeyOf(filePath, uploadRootOf(source));
+  const key = storageKeyUnder(filePath, uploadRootOf(source));
   if (!key) return null;
   return bucketBytes(mirror, key);
 }

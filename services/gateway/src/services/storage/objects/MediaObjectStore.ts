@@ -14,6 +14,7 @@
  * jamais par une adresse du seau. Aucune implémentation ne pose d'ACL publique.
  */
 import type { Readable } from 'node:stream';
+import path from 'node:path';
 
 export type StoredObjectHead = {
   readonly size: number;
@@ -54,4 +55,13 @@ export function isSafeStorageKey(key: string): boolean {
 
 export function assertSafeStorageKey(key: string): void {
   if (!isSafeStorageKey(key)) throw new Error('unsafe storage key');
+}
+
+/** La clé d'un chemin dans le seau : relative aux dépôts, jamais au-dehors, jamais cachée. */
+export function storageKeyUnder(filePath: string, uploadRoot: string): string | null {
+  const baseAbs = path.resolve(uploadRoot);
+  const fileAbs = path.resolve(filePath);
+  if (!fileAbs.startsWith(baseAbs + path.sep)) return null;
+  const key = path.relative(baseAbs, fileAbs).split(path.sep).join('/');
+  return isSafeStorageKey(key) ? key : null;
 }

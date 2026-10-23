@@ -27,6 +27,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
 import { derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
+import { eraseMirroredCopy } from '../storage/objects/mirroredErasure';
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
@@ -483,6 +484,7 @@ export class AttachmentService {
     } catch (error) {
       logger.error('Erreur suppression fichiers', error as Error);
     }
+    await eraseMirroredCopy(fullPath, this.uploadBasePath);
   }
 
   /**
