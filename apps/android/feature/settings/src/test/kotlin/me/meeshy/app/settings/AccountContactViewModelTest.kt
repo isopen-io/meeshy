@@ -1,6 +1,7 @@
 package me.meeshy.app.settings
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.auth.PhonePlausibility
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -341,6 +342,23 @@ class AccountContactViewModelTest {
         sut.onNewPhoneChange("123")
 
         assertThat(sut.state.value.canSubmitPhone).isFalse()
+    }
+
+    @Test
+    fun phoneRefusal_exposesTheReasonAndDisablesSubmit() = runTest(dispatcher) {
+        val sut = vm()
+
+        sut.onNewPhoneChange("12345678")
+        assertThat(sut.state.value.phoneRefusal).isEqualTo(PhonePlausibility.Refusal.TOO_SHORT)
+        assertThat(sut.state.value.canSubmitPhone).isFalse()
+
+        sut.onNewPhoneChange("1111100000")
+        assertThat(sut.state.value.phoneRefusal).isEqualTo(PhonePlausibility.Refusal.IDENTICAL_RUN)
+        assertThat(sut.state.value.canSubmitPhone).isFalse()
+
+        sut.onNewPhoneChange("+33642424242")
+        assertThat(sut.state.value.phoneRefusal).isNull()
+        assertThat(sut.state.value.canSubmitPhone).isTrue()
     }
 
     @Test

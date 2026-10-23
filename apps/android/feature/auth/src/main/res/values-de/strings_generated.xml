@@ -44,8 +44,14 @@
     <string name="guest_join_back">Zurück</string>
     <string name="guest_join_birthday">Geburtstag</string>
     <string name="guest_join_email">E-Mail</string>
+    <string name="guest_join_email_optional">E-Mail (optional)</string>
+    <string name="guest_join_error_join_failed">Fehler beim Beitreten zur Unterhaltung</string>
+    <string name="guest_join_error_link_not_found">Dieser Unterhaltungslink wurde nicht gefunden</string>
+    <string name="guest_join_error_too_many_users">Zu viele Benutzer verbunden</string>
     <string name="guest_join_first_name">Vorname</string>
     <string name="guest_join_last_name">Nachname</string>
+    <string name="guest_join_optional_section">Optional</string>
+    <string name="guest_join_required_section">Pflichtangaben</string>
     <string name="guest_join_retry">Erneut versuchen</string>
     <string name="guest_join_sign_in">Anmelden</string>
     <string name="guest_join_submit">Beitreten</string>
@@ -64,8 +70,14 @@
     <string name="login_signup_prompt">Kein Konto?</string>
     <string name="login_username_label">Benutzername</string>
     <string name="logout_in_progress">Abmeldung läuft...</string>
+    <string name="onboarding_friends_badge">je +%d</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d Funken bis Level 1</string>
     <string name="onboarding_gauge_reached">Level 1 erreicht 🎉</string>
+    <string name="onboarding_global_sample_1">Hallo aus São Paulo 👋</string>
+    <string name="onboarding_global_sample_2">Wer hört Nova Club? 🎧</string>
+    <string name="onboarding_global_sample_3">Willkommen!</string>
+    <string name="onboarding_languages_demo_translated">Hallo, wie geht\'s?</string>
+    <string name="onboarding_notifications_sample">Lina hat dir in Meeshy Global geantwortet</string>
     <plurals name="onboarding_points_a11y">
         <item quantity="one">%d Funke gesammelt</item>
         <item quantity="other">%d Funken gesammelt</item>
@@ -80,6 +92,7 @@
         <item quantity="other">Plus %d Funken</item>
     </plurals>
     <string name="onboarding_skipAll">Alles überspringen</string>
+    <string name="onboarding_story_badge">24 Std.</string>
     <string name="registration_back">Zurück</string>
     <string name="session_closed_continue">Erneut anmelden</string>
     <string name="session_closed_signed_out_message">Diese Sitzung wurde beendet. Melde dich erneut an, um fortzufahren.</string>
@@ -104,7 +117,9 @@
     <string name="signup_password_hide">Passwort ausblenden</string>
     <string name="signup_password_label">Passwort</string>
     <string name="signup_password_show">Passwort anzeigen</string>
+    <string name="signup_phone_implausible">Diese Nummer scheint nicht echt zu sein – bitte prüfe sie.</string>
     <string name="signup_phone_label">Telefon</string>
+    <string name="signup_phone_too_short">Diese Nummer ist zu kurz: mindestens %d Ziffern.</string>
     <string name="signup_sign_in">Anmelden</string>
     <string name="signup_subtitle">Du liest alle in deiner Sprache.</string>
     <string name="signup_title">Erstelle dein Konto</string>

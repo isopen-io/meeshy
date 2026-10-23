@@ -360,4 +360,61 @@ class ChatReactionControllerTest {
 
         assertThat(r.mine("m2")).containsExactly("👏")
     }
+
+    @Test
+    fun `adding from the quick strip records the usage and flips the sheet at once`() = runTest {
+        val r = rig()
+        coEvery { r.reactions.fetchDetails("m1") } returns NetworkResult.Success(
+            ReactionSyncResponse(messageId = "m1"),
+        )
+        r.controller.openDetails("m1")
+        advanceUntilIdle()
+
+        r.controller.addFromDetails("m1", "🔥")
+        advanceUntilIdle()
+
+        assertThat(r.emojiUsage.usage.value["🔥"]).isEqualTo(1)
+        coVerify(exactly = 1) { r.repo.toggleReactionOptimistic("m1", "🔥", true) }
+        val tabs = r.state.reactionDetails!!.breakdown.tabs
+        assertThat(tabs.first().count).isEqualTo(1)
+        assertThat(r.state.reactionDetails!!.quickEmojis.first()).isEqualTo("🔥")
+    }
+
+    @Test
+    fun `the quick strip never takes back a reaction the viewer already has`() = runTest {
+        val r = rig()
+        r.controller.toggle("m1", "🔥")
+        advanceUntilIdle()
+
+        r.controller.addFromDetails("m1", "🔥")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.toggleReactionOptimistic("m1", "🔥", true) }
+        assertThat(r.mine("m1")).containsExactly("🔥")
+    }
+
+    @Test
+    fun `a refused add from the sheet rolls its row back`() = runTest {
+        val r = rig()
+        coEvery { r.repo.toggleReactionOptimistic("m1", "🔥", true) } returns false
+        r.controller.openDetails("m1")
+        advanceUntilIdle()
+
+        r.controller.addFromDetails("m1", "🔥")
+        advanceUntilIdle()
+
+        assertThat(r.state.reactionDetails!!.breakdown.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `the sheet opens with the twelve most used emojis for its strip`() = runTest {
+        val r = rig()
+        repeat(3) { r.emojiUsage.record("🎉") }
+
+        r.controller.openDetails("m1")
+
+        val strip = r.state.reactionDetails!!.quickEmojis
+        assertThat(strip.first()).isEqualTo("🎉")
+        assertThat(strip.size).isAtMost(12)
+    }
 }
