@@ -1499,6 +1499,7 @@ model MessageAttachment {
   // index, ce comptage balaie la collection entière à chaque suppression.
   @@index([filePath])
   @@index([thumbnailPath])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 // =====================================================
@@ -4281,6 +4282,7 @@ model PostMedia {
   /// Sert le rattrapage et la garde de revendication (filtre sur uploadeur
   /// parmi les médias en attente).
   @@index([uploaderId, postId])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)

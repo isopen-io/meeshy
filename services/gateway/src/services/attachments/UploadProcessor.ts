@@ -25,7 +25,7 @@ import { MetadataManager } from './MetadataManager';
 import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson, renditionsJson } from './media-renditions.js';
 import { UnconvertibleImageError, convertHeifBuffer, isServerConvertedImage } from './heif-conversion.js';
 import { mediaJobQueueFromEnv, type MediaJobQueue } from './media-processing/queue.js';
-import { deferrableKinds, scheduleOrRender } from './media-processing/dispatch.js';
+import { deferrableKinds, scheduleDeferred } from './media-processing/dispatch.js';
 import { isMediaMetadataStrippable, stripMediaMetadataBuffer } from './media-metadata-strip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizeAudioBuffer, normalizedAudioPath } from './audio-normalization.js';
@@ -431,7 +431,7 @@ export class UploadProcessor {
       ? { audioEffectsTimeline: metadata.audioEffectsTimeline } as any
       : undefined;
 
-    const created = await this.prisma.messageAttachment.create({
+    const attachment = await this.prisma.messageAttachment.create({
       data: {
         messageId: finalMessageId,
         fileName: path.basename(storedFilePath),
@@ -465,17 +465,8 @@ export class UploadProcessor {
         ...(deferred.length > 0 ? { processingState: 'pending' } : {}),
       },
     });
-    // File muette : le rendu se fait ici, et la réponse sert la ligne rendue.
-    const dispatched = await scheduleOrRender({
-      queue: this.mediaQueue,
-      deps: { prisma: this.prisma as never, uploadBasePath: this.uploadBasePath, metadataManager: this.metadataManager, runFfmpeg },
-      target: 'messageAttachment',
-      recordId: created.id,
-      kinds: deferred,
-    });
-    const attachment = dispatched === 'rendered' || dispatched === 'failed'
-      ? (await this.prisma.messageAttachment.findUnique({ where: { id: created.id } })) ?? created
-      : created;
+    // File muette : la pièce reste `pending`, le balayage du worker la reprend.
+    await scheduleDeferred({ queue: this.mediaQueue, target: 'messageAttachment', recordId: attachment.id, kinds: deferred });
 
     return {
       id: attachment.id,

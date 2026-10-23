@@ -79,6 +79,16 @@ describe('emitAttachmentUpdated — the live audience', () => {
     expect(payload.attachment.translations).toEqual({ en: { url: 'https://cdn/en.mp3' } });
   });
 
+  it('carries `attachmentId` at the top level — the native Android decoder requires it (#11264)', async () => {
+    const { emitted, deps } = makeDeps();
+
+    await emitAttachmentUpdated({ ...deps, conversationId: 'conv-1', messageId: 'msg-1', attachment: ATTACHMENT });
+
+    const payload = emitted[0].payload as { attachmentId?: string; attachment: { id: string } };
+    expect(payload.attachmentId).toBe(payload.attachment.id);
+    expect(typeof payload.attachmentId).toBe('string');
+  });
+
   it('reaches the personal room of every participant, not only the conversation room', async () => {
     const { emitted, deps } = makeDeps();
 

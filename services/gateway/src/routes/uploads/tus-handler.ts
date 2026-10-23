@@ -19,7 +19,7 @@ import { runFfmpeg } from '../../services/attachments/ffmpeg-run';
 import { UnconvertibleImageError } from '../../services/attachments/heif-conversion';
 import type { MediaJobTarget } from '../../services/attachments/media-processing/jobs';
 import { mediaJobQueueFromEnv, type MediaJobQueue } from '../../services/attachments/media-processing/queue';
-import { deferrableKinds, scheduleOrRender, type DispatchOutcome } from '../../services/attachments/media-processing/dispatch';
+import { deferrableKinds, scheduleDeferred as scheduleMediaJob } from '../../services/attachments/media-processing/dispatch';
 import { normalizeStoredAudio } from '../../services/attachments/audio-normalization';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
 import {
@@ -532,14 +532,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
       });
       const processingFields = deferred.length > 0 ? { processingState: 'pending' } : {};
-      const scheduleDeferred = (target: MediaJobTarget, id: string): Promise<DispatchOutcome> =>
-        scheduleOrRender({
-          queue: mediaQueue,
-          deps: { prisma: prisma as never, uploadBasePath: UPLOAD_PATH, metadataManager, runFfmpeg },
-          target,
-          recordId: id,
-          kinds: deferred,
-        });
+      // File muette : la pièce reste `pending`, le balayage du worker la reprend.
+      const scheduleDeferred = (target: MediaJobTarget, id: string) =>
+        scheduleMediaJob({ queue: mediaQueue, target, recordId: id, kinds: deferred });
       //
       // #11259 — un audio est normalisé en M4A ICI, après les gardes, comme
       // sur la porte multipart (`UploadProcessor.saveFile`) : AAC mono remuxé
@@ -580,8 +575,6 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       const isPostMedia = isPostMediaUploadContext(uploadContext);
 
       let recordId: string;
-      let dispatched: DispatchOutcome = 'none';
-      let servedThumbnail: string | null = null;
       let rendered: MediaRenditions;
       if (isPostMedia) {
         // Upload destiné à un post/story/status : créer PostMedia directement (postId=null = pending)
@@ -619,10 +612,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = postMedia.id;
-        dispatched = await scheduleDeferred('postMedia', postMedia.id);
-        if (dispatched === 'rendered') {
-          servedThumbnail = (await prisma.postMedia.findUnique({ where: { id: postMedia.id }, select: { thumbnailUrl: true } }))?.thumbnailUrl ?? null;
-        }
+        await scheduleDeferred('postMedia', postMedia.id);
         logger.info(`[TUS] PostMedia created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes, postId=null pending)`);
       } else {
         // Upload destiné à un message : créer MessageAttachment
@@ -715,10 +705,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = attachment.id;
-        dispatched = await scheduleDeferred('messageAttachment', attachment.id);
-        if (dispatched === 'rendered') {
-          servedThumbnail = (await prisma.messageAttachment.findUnique({ where: { id: attachment.id }, select: { thumbnailUrl: true } }))?.thumbnailUrl ?? null;
-        }
+        await scheduleDeferred('messageAttachment', attachment.id);
         logger.info(`[TUS] MessageAttachment created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes)`);
       }
 
@@ -735,9 +722,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
               mimeType: rendered.storedMimeType,
               fileSize: rendered.storedSize,
               fileUrl: rendered.storedPath,
-              thumbnailUrl: rendered.thumbnailPath ?? servedThumbnail ?? undefined,
+              thumbnailUrl: rendered.thumbnailPath ?? undefined,
               // #11264 — `pending` : la vignette et les rendus arrivent par `attachment:ready`.
-              processingState: dispatched === 'scheduled' ? 'pending' : dispatched === 'failed' ? 'failed' : undefined,
+              processingState: deferred.length > 0 ? 'pending' : undefined,
               thumbHash: rendered.thumbHash,
               width: metadata.width,
               height: metadata.height,

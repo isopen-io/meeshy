@@ -26,7 +26,7 @@ import {
   type QueueLike,
 } from '../queue';
 import { processMediaJob } from '../process-job';
-import { deferrableKinds, scheduleOrRender } from '../dispatch';
+import { deferrableKinds, scheduleDeferred } from '../dispatch';
 import { handleMediaReady, readMediaReadyNotice, type MediaReadyPorts } from '../ready-notifier';
 import { listenerLease, type LeaseClient } from '../listener-lease';
 import { sweepPendingMedia } from '../sweep';
@@ -174,27 +174,26 @@ describe('dispatch — ne différer que si un worker bat ; file muette ⇒ rendu
     await expect(deferrableKinds(recordingQueue(true), { attachmentType: 'video', fileSize: 1, compatRenditionEnabled: true })).resolves.toEqual(['thumb', 'transcode']);
   });
 
-  it('une file qui lève après le battement : la pièce est rendue DANS la requête, et passe `ready`', async () => {
-    const base = await uploadRoot();
-    await fs.writeFile(path.join(base, 'p.jpg'), await smallPhoto());
-    const { rows, prisma } = rowsStore([{ id: ID(1), filePath: 'p.jpg', mimeType: 'image/jpeg', fileSize: 1, thumbHash: null, renditions: null, processingState: 'pending' }]);
+  it('une mise en file qui dépasse son délai PUIS aboutit : rien n’est rendu sur place, une seule tâche (contre-audit N1)', async () => {
+    const added: MediaJob[] = [];
+    const late = bullmqMediaJobQueue({
+      add: (_name, job) => new Promise((resolve) => setTimeout(() => { added.push(job); resolve(undefined); }, 100)),
+      client: Promise.resolve({ get: async () => String(Date.now()) }),
+    }, { timeoutMs: 50 });
+    const render = jest.spyOn(MetadataManager.prototype, 'generateThumbnail');
+
+    const outcome = await scheduleDeferred({ queue: late, target: 'messageAttachment', recordId: ID(1), kinds: ['thumb'] });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    expect(outcome).toBe('left-to-sweep');
+    expect(added).toHaveLength(1);
+    expect(render).not.toHaveBeenCalled();
+    render.mockRestore();
+  });
+
+  it('une file qui lève : la pièce reste `pending` pour le balayage, la requête rend la main', async () => {
     const queue: MediaJobQueue = { workerAlive: async () => true, schedule: async () => { throw new Error('redis down'); } };
-
-    const outcome = await scheduleOrRender({ queue, deps: depsFor(base, prisma), target: 'messageAttachment', recordId: ID(1), kinds: ['thumb'] });
-
-    expect(outcome).toBe('rendered');
-    expect(rows.get(ID(1))?.processingState).toBe('ready');
-    expect(rows.get(ID(1))?.thumbnailPath).toBe('p_thumb.webp');
-  }, 120_000);
-
-  it('file muette ET rendu impossible : la pièce passe `failed`, jamais `pending` sans tâche', async () => {
-    const { rows, prisma } = rowsStore([{ id: ID(1), filePath: 'absent.jpg', mimeType: 'image/jpeg', fileSize: 1, thumbHash: null, renditions: null, processingState: 'pending' }]);
-    const queue: MediaJobQueue = { workerAlive: async () => true, schedule: async () => { throw new Error('redis down'); } };
-
-    const outcome = await scheduleOrRender({ queue, deps: depsFor(await uploadRoot(), prisma), target: 'messageAttachment', recordId: ID(1), kinds: ['thumb'] });
-
-    expect(outcome).toBe('failed');
-    expect(rows.get(ID(1))?.processingState).toBe('failed');
+    await expect(scheduleDeferred({ queue, target: 'messageAttachment', recordId: ID(1), kinds: ['thumb'] })).resolves.toBe('left-to-sweep');
   });
 });
 
@@ -217,13 +216,13 @@ describe('UploadProcessor — la requête ne fait plus que vérifier et persiste
     expect(queue.jobs).toEqual([{ target: 'messageAttachment', recordId: ID(3), kinds: ['thumb'] }]);
   }, 120_000);
 
-  it('une grande photo, file suspendue : l’envoi se RÉSOUT quand même, rendu sur place (audit S9, défaut 1)', async () => {
+  it('une grande photo, file suspendue : l’envoi se RÉSOUT quand même, la pièce attend le balayage (audit S9, défaut 1 ; N1)', async () => {
     const hung = bullmqMediaJobQueue({ add: () => neverSettles(), client: Promise.resolve({ get: async () => String(Date.now()) }) }, { timeoutMs: 50 });
 
-    const { result } = await upload(await bigPhoto(), hung);
+    const { data, result } = await upload(await bigPhoto(), hung);
 
-    expect(result.processingState).toBe('ready');
-    expect(result.thumbnailUrl).toMatch(/_thumb\.webp$/);
+    expect(data.processingState).toBe('pending');
+    expect(result.processingState).toBe('pending');
   }, 120_000);
 
   it('une petite photo : tout reste dans la requête, aucune tâche, aucun état', async () => {
@@ -314,6 +313,28 @@ describe('processMediaJob — rendre, écrire, relire (#11264, audit S9 défauts
     expect(rows.get(ID(1))?.processingState).toBe('pending');
   });
 
+  it('une variante WebP ou AVIF RATÉE lève en mode strict, est avalée sinon (contre-audit N3)', async () => {
+    const base = await uploadRoot();
+    await fs.writeFile(path.join(base, 'bad.jpg'), Buffer.from('pas une image'));
+    const manager = new MetadataManager(base);
+
+    await expect(manager.generateAvifVariants('bad.jpg', { strict: true })).rejects.toThrow();
+    await expect(manager.generateImageVariants('bad.jpg', { strict: true })).rejects.toThrow();
+    await expect(manager.generateAvifVariants('bad.jpg')).resolves.toEqual([]);
+  });
+
+  it('le worker passe `strict` aux variantes : une AVIF ratée ne finit jamais `ready`', async () => {
+    const base = await uploadRoot();
+    await fs.writeFile(path.join(base, 'p.jpg'), await smallPhoto());
+    const { rows, prisma } = rowsStore([photoRow()]);
+    const avif = jest.spyOn(MetadataManager.prototype, 'generateAvifVariants')
+      .mockImplementation(async (_p, options) => { if (options?.strict) throw new Error('ENOSPC'); return []; });
+
+    await expect(processMediaJob(depsFor(base, prisma), { target: 'messageAttachment', recordId: ID(1), kinds: ['thumb'] })).rejects.toThrow('ENOSPC');
+    expect(rows.get(ID(1))?.processingState).toBe('pending');
+    avif.mockRestore();
+  }, 120_000);
+
   it('une reprise saute les rendus déjà faits, et prévient après chaque rendu intermédiaire', async () => {
     const base = await uploadRoot();
     await fs.writeFile(path.join(base, 'p.jpg'), await smallPhoto());
@@ -347,6 +368,19 @@ describe('runMediaJob — le dernier essai raté passe la pièce `failed` AVANT 
     expect(store.rows.get(ID(1))?.processingState).toBe('pending');
     await expect(runMediaJob(depsFor(base, store.prisma), failingJob(2) as never)).rejects.toThrow();
     expect(store.rows.get(ID(1))?.processingState).toBe('failed');
+  });
+
+  it('au dernier essai, la pièce ET ses copies passent `failed` et sont annoncées (contre-audit N5)', async () => {
+    const base = await uploadRoot();
+    await fs.writeFile(path.join(base, 'p.jpg'), Buffer.from('pas une image'));
+    const row = { filePath: 'p.jpg', mimeType: 'image/jpeg', fileSize: 1, thumbHash: null, renditions: null, processingState: 'pending' };
+    const store = rowsStore([{ id: ID(1), ...row }, { id: ID(5), ...row }]);
+    const progress = jest.fn(async () => undefined);
+
+    await expect(runMediaJob(depsFor(base, store.prisma), { ...failingJob(2), updateProgress: progress } as never)).rejects.toThrow();
+
+    expect(store.rows.get(ID(5))?.processingState).toBe('failed');
+    expect(progress).toHaveBeenCalledWith({ target: 'messageAttachment', recordIds: [ID(1), ID(5)], failed: true });
   });
 
   it('une concurrence mal formée retombe à 1 (jamais `NaN` passé à BullMQ)', () => {

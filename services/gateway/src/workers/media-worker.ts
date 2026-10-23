@@ -60,7 +60,16 @@ export async function runMediaJob(deps: ProcessJobDeps, job: Pick<Job, 'data' | 
     });
   } catch (error) {
     if (job.attemptsMade + 1 >= (job.opts.attempts ?? MEDIA_JOB_ATTEMPTS)) {
-      await markMediaJobFailed(deps, data).catch((err: unknown) => logger.error('processingState=failed non écrit', { err }));
+      // La pièce ET ses copies passent `failed`, et la passerelle les prévient
+      // toutes (`progress`) : l'événement `failed` de la file ne porte que l'id.
+      const recordIds = await markMediaJobFailed(deps, data).catch((err: unknown) => {
+        logger.error('processingState=failed non écrit', { err });
+        return [] as readonly string[];
+      });
+      if (recordIds.length > 0) {
+        await job.updateProgress({ target: data.target, recordIds, failed: true })
+          .catch((err: unknown) => logger.warn('Échec non annoncé aux copies', { err }));
+      }
     }
     throw error;
   }
