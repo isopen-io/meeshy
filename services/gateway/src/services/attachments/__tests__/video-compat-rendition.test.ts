@@ -184,7 +184,7 @@ describe('la fabrique des rendus porte le rendu H.264 à côté de l’original 
 
     expect(out.storedPath).toBe(relPath);
     expect(out.storedMimeType).toBe('video/quicktime');
-    expect(out.renditions).toEqual([{ codec: 'h264', url: 'clip_1_h264.mp4', width: 640, height: 360, size: expect.any(Number) }]);
+    expect(out.renditions).toEqual([{ codec: 'h264', mimeType: 'video/mp4', url: 'clip_1_h264.mp4', width: 640, height: 360, size: expect.any(Number) }]);
   }, 120_000);
 });
 
