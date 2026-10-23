@@ -17,7 +17,7 @@ import { objectIdAtOrAfter, parseMirrorArgs, runMediaMirror } from '../mediaMirr
 
 describe('parseMirrorArgs', () => {
   it('à blanc par défaut, par lots de 500', () => {
-    expect(parseMirrorArgs([], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'run', apply: false, follow: false, batchSize: 500, limit: null, reset: false });
+    expect(parseMirrorArgs([], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'run', apply: false, follow: false, sweep: false, batchSize: 500, limit: null, reset: false });
   });
 
   it('en staging, --apply suffit', () => {
@@ -100,5 +100,16 @@ describe('runMediaMirror — reprise par curseur', () => {
     expect(copied).toEqual([]);
     expect(report.messageAttachment).toMatchObject({ rows: 3, counts: { 'would-copy': 3 } });
     await expect(readFile(stateFile, 'utf8')).rejects.toThrow();
+  });
+});
+
+describe('--sweep — l’effacement des copies que plus rien ne nomme, sous le même régime que la copie', () => {
+  it('à blanc par défaut', () => {
+    expect(parseMirrorArgs(['--sweep'], {})).toMatchObject({ kind: 'run', apply: false, sweep: true });
+  });
+
+  it('appliqué hors staging : refusé sans feu vert du porteur', () => {
+    expect(parseMirrorArgs(['--sweep', '--apply'], { MEESHY_ENV: 'production' })).toEqual({ kind: 'refused', reason: 'production-requires-porteur-approval' });
+    expect(parseMirrorArgs(['--sweep', '--apply'], { MEESHY_ENV: 'staging' })).toMatchObject({ kind: 'run', apply: true, sweep: true });
   });
 });
