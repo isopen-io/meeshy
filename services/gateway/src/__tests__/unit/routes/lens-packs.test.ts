@@ -47,6 +47,8 @@ const ALL_ASSETS = ['aaaaaaaaaaaaaaaa.png', 'bbbbbbbbbbbbbbbb.png', 'ccccccccccc
 function lensTables() {
   const packs: Row[] = [];
   const assets: Row[] = [];
+  const audit: Row[] = [];
+  const auditState = { down: false };
   let seq = 0;
   const nextId = () => `68d00000000000000000${String((seq += 1)).padStart(4, '0')}`;
   const pick = (row: Row | undefined, select?: Record<string, boolean>) =>
@@ -55,6 +57,15 @@ function lensTables() {
   return {
     packs,
     assets,
+    audit,
+    auditState,
+    adminAuditLog: {
+      create: jest.fn(async ({ data }: any) => {
+        if (auditState.down) throw new Error('audit store unavailable');
+        audit.push({ ...data, statusAtWrite: packs.find((row) => row.slug === data.entityId)?.status ?? null });
+        return data;
+      }),
+    },
     lensPack: {
       findUnique: jest.fn(async ({ where, select }: any) => pick(packs.find((row) => row.slug === where.slug), select)),
       findFirst: jest.fn(async ({ where, select }: any) => pick(packs.find((row) => matches(row, where)), select)),
@@ -94,14 +105,31 @@ function lensTables() {
   };
 }
 
-type Harness = { app: FastifyInstance; tables: ReturnType<typeof lensTables> };
+type Harness = { app: FastifyInstance; tables: ReturnType<typeof lensTables>; normalizedAs: { assets: string[]; luts: string[] }; packs: LensPacks };
 
 async function harness(options: { now?: string; communities?: readonly string[] } = {}): Promise<Harness> {
   const db = appearancePrisma();
   const tables = lensTables();
-  const prisma = Object.assign(Object.create(db.prisma as object) as PrismaClient, { lensPack: tables.lensPack, lensPackAsset: tables.lensPackAsset });
+  const prisma = Object.assign(Object.create(db.prisma as object) as PrismaClient, {
+    lensPack: tables.lensPack,
+    lensPackAsset: tables.lensPackAsset,
+    adminAuditLog: tables.adminAuditLog,
+  });
   const now = () => new Date(options.now ?? '2026-11-10T00:00:00Z');
-  const packs = new LensPacks({ prisma, now, normalizeAsset: async (bytes) => ({ ok: true, image: { bytes, mimeType: 'image/png', width: 64, height: 64, animated: false } }) });
+  const normalizedAs = { assets: [] as string[], luts: [] as string[] };
+  const image = (bytes: Buffer) => ({ ok: true as const, image: { bytes, mimeType: 'image/png' as const, width: 64, height: 64, animated: false } });
+  const packs = new LensPacks({
+    prisma,
+    now,
+    normalizeAsset: async (bytes) => {
+      normalizedAs.assets.push(bytes.subarray(PNG.length).toString());
+      return image(bytes);
+    },
+    normalizeLut: async (bytes) => {
+      normalizedAs.luts.push(bytes.subarray(PNG.length).toString());
+      return image(bytes);
+    },
+  });
   const app = Fastify({ logger: false });
   app.decorate('prisma', prisma as never);
   app.decorate('authenticate', async (request: any) => {
@@ -115,7 +143,7 @@ async function harness(options: { now?: string; communities?: readonly string[] 
     audience: async () => ({ communityIds: new Set(options.communities ?? []), country: 'FR', languages: ['fr'] }),
   });
   await app.ready();
-  return { app, tables };
+  return { app, tables, normalizedAs, packs };
 }
 
 const submit = (h: Harness, body: object, user = ALICE) => h.app.inject({ method: 'POST', url: '/submissions', headers: { 'x-user': user }, payload: body });
@@ -187,7 +215,8 @@ describe('modérer une lens (#11271)', () => {
     const row = h.tables.packs[0]!;
     expect(row.communities).toEqual([COMMUNITY]);
     const served = JSON.parse(row.documentJson as string);
-    expect(served.window).toEqual({ ...window, communities: [COMMUNITY] });
+    expect(served.window).toEqual(window);
+    expect(row.documentJson).not.toContain(COMMUNITY);
     expect(row.documentSrc).toBe(`${createHash('sha256').update(row.documentJson as string, 'utf8').digest('hex').slice(0, 16)}.json`);
   });
 
@@ -254,5 +283,135 @@ describe('le magasin des fichiers (#11271)', () => {
     await review(h, 'aurore-polaire', { decision: 'approve' });
     expect(await packs.approvedFile(asset)).toMatchObject({ contentType: 'image/png' });
     expect(await packs.approvedFile(String(h.tables.packs[0]!.documentSrc))).toMatchObject({ contentType: 'application/json; charset=utf-8' });
+  });
+});
+
+describe('une LUT reste sans perte (#11271, audit de #12293)', () => {
+  it('le fichier qu’une couche `lut` nomme passe par la porte sans perte, jamais par celle des stickers', async () => {
+    const h = await harness();
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) });
+
+    expect(h.normalizedAs.luts).toEqual(['aaaaaaaaaaaaaaaa.png']);
+    expect([...h.normalizedAs.assets].sort()).toEqual(['bbbbbbbbbbbbbbbb.png', 'cccccccccccccccc.png']);
+  });
+});
+
+describe('modération journalisée et retrait d’une lens publiée (audit de #12293)', () => {
+  const approved = async (now?: string) => {
+    const h = await harness(now === undefined ? {} : { now });
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    await review(h, 'aurore-polaire', { decision: 'approve', note: 'Belle lens' });
+    return h;
+  };
+  const withdraw = (h: Harness, body: object = { note: 'Contenu signalé' }, user = MODO) =>
+    h.app.inject({ method: 'POST', url: '/aurore-polaire/withdraw', headers: { 'x-user': user }, payload: body });
+
+  it('publier et refuser s’écrivent au journal AVANT d’agir, au nom du modérateur, avec l’auteur de la proposition', async () => {
+    const h = await approved();
+
+    expect(h.tables.audit).toEqual([
+      expect.objectContaining({ adminId: MODO, userId: BOB, action: 'LENS_PACK_APPROVE', entity: 'LensPack', entityId: 'aurore-polaire', statusAtWrite: 'pending' }),
+    ]);
+    expect(JSON.parse(String(h.tables.audit[0]!.metadata))).toMatchObject({ note: 'Belle lens' });
+  });
+
+  it('un journal indisponible ne laisse rien trancher (500), et la lens reste en attente', async () => {
+    const h = await harness();
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    h.tables.auditState.down = true;
+
+    const res = await review(h, 'aurore-polaire', { decision: 'approve' });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ code: 'LENS_AUDIT_UNAVAILABLE' });
+    expect(h.tables.packs[0]!.status).toBe('pending');
+  });
+
+  it('une re-proposition après un refus garde au journal le refus, son auteur et sa note', async () => {
+    const h = await harness();
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    await review(h, 'aurore-polaire', { decision: 'reject', note: 'Texte illisible' });
+
+    expect((await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB)).statusCode).toBe(201);
+
+    expect(h.tables.audit.map((entry) => entry.action)).toEqual(['LENS_PACK_REJECT', 'LENS_PACK_REJECTION_REPLACED']);
+    const replaced = h.tables.audit[1]!;
+    expect(replaced).toMatchObject({ adminId: MODO, userId: BOB, entityId: 'aurore-polaire' });
+    expect(JSON.parse(String(replaced.metadata))).toMatchObject({ reviewNote: 'Texte illisible', reviewerId: MODO });
+  });
+
+  it('un modérateur RETIRE une lens publiée : journalisé d’abord, elle quitte le rayon, les installés et le magasin des fichiers', async () => {
+    const h = await approved();
+    await h.app.inject({ method: 'PUT', url: '/aurore-polaire/install' });
+    const document = String(h.tables.packs[0]!.documentSrc);
+    const asset = String(h.tables.assets[0]!.src);
+
+    const res = await withdraw(h);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ slug: 'aurore-polaire', status: 'withdrawn' });
+    expect(h.tables.audit.at(-1)).toMatchObject({ adminId: MODO, userId: BOB, action: 'LENS_PACK_WITHDRAW', statusAtWrite: 'approved' });
+    expect(JSON.parse(String(h.tables.audit.at(-1)!.metadata))).toMatchObject({ note: 'Contenu signalé' });
+    expect((await h.app.inject({ method: 'GET', url: '/' })).json().data).toEqual([]);
+    expect((await h.app.inject({ method: 'GET', url: '/installed' })).json().data).toEqual([]);
+    expect((await h.app.inject({ method: 'GET', url: '/aurore-polaire' })).statusCode).toBe(404);
+    expect(await h.packs.approvedFile(document)).toBeNull();
+    expect(await h.packs.approvedFile(asset)).toBeNull();
+  });
+
+  it('le retrait est fermé à qui ne modère pas, et ne vise qu’une lens publiée', async () => {
+    const h = await approved();
+    expect((await withdraw(h, {}, BOB)).statusCode).toBe(403);
+    expect(h.tables.packs[0]!.status).toBe('approved');
+
+    const pending = await harness();
+    await submit(pending, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    expect((await withdraw(pending)).statusCode).toBe(404);
+    expect(pending.tables.packs[0]!.status).toBe('pending');
+  });
+
+  it('sans journal, rien n’est retiré', async () => {
+    const h = await approved();
+    h.tables.auditState.down = true;
+    expect((await withdraw(h)).statusCode).toBe(500);
+    expect(h.tables.packs[0]!.status).toBe('approved');
+  });
+});
+
+describe('une lens n’est servie que dans sa fenêtre et à son public (audit de #12293)', () => {
+  const approvedFor = async (options: { now?: string; communities?: readonly string[] }, approval: object) => {
+    const h = await harness(options);
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    await review(h, 'aurore-polaire', approval);
+    return h;
+  };
+  const read = (h: Harness, url: string, user = ALICE) => h.app.inject({ method: 'GET', url, headers: { 'x-user': user } });
+  const FUTURE = { decision: 'approve', window: { startsAt: '2026-12-20T00:00:00Z', endsAt: '2026-12-31T00:00:00Z' } };
+
+  it('avant l’ouverture de sa fenêtre, ni le détail, ni le document, ni ses fichiers ne la révèlent à un tiers', async () => {
+    const h = await approvedFor({}, FUTURE);
+
+    expect((await read(h, '/aurore-polaire')).statusCode).toBe(404);
+    expect((await read(h, '/aurore-polaire/document')).statusCode).toBe(404);
+    expect(await h.packs.approvedFile(String(h.tables.packs[0]!.documentSrc))).toBeNull();
+    expect(await h.packs.approvedFile(String(h.tables.assets[0]!.src))).toBeNull();
+  });
+
+  it('son auteur et la modération la lisent toujours', async () => {
+    const h = await approvedFor({}, FUTURE);
+
+    expect((await read(h, '/aurore-polaire', BOB)).statusCode).toBe(200);
+    expect((await read(h, '/aurore-polaire/document', MODO)).statusCode).toBe(200);
+  });
+
+  it('réservée à une communauté, elle n’est détaillée qu’à ses membres', async () => {
+    const outsider = await approvedFor({}, { decision: 'approve', communities: [COMMUNITY] });
+    expect((await read(outsider, '/aurore-polaire')).statusCode).toBe(404);
+    expect((await read(outsider, '/aurore-polaire/document')).statusCode).toBe(404);
+
+    const member = await approvedFor({ communities: [COMMUNITY] }, { decision: 'approve', communities: [COMMUNITY] });
+    expect((await read(member, '/aurore-polaire')).statusCode).toBe(200);
+    const served = (await read(member, '/aurore-polaire/document')).json().data.documentJson as string;
+    expect(served).not.toContain(COMMUNITY);
   });
 });
