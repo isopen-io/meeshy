@@ -103,7 +103,16 @@ describe('createLensStage — l’étage lit les fichiers remis dans les réglag
     const remis = cube();
     expect(stage.grade(frame, settings({ cubes: { [LUT_ASSET]: remis }, images: {} }), size)).toBe(graded);
     expect(used).toEqual([remis]);
-    expect(stage.grade(frame, settings(), size)).toBe(frame);
+    expect(createLensStage(env(() => graded)).grade(frame, settings(), size)).toBe(frame);
+  });
+
+  test('des réglages sans fichiers gardent ceux déjà remis : un réglage voisin ne les recopie pas', () => {
+    const used: LutCube[] = [];
+    const stage = createLensStage(env((_s, _w, _h, c) => (used.push(c), graded)));
+    const remis = cube();
+    stage.grade(frame, settings({ cubes: { [LUT_ASSET]: remis }, images: {} }), size);
+    expect(stage.grade(frame, settings(), size)).toBe(graded);
+    expect(used).toEqual([remis, remis]);
   });
 
   test('l’image remise d’un sticker est peinte ; un sticker sans image ne l’est pas', () => {
