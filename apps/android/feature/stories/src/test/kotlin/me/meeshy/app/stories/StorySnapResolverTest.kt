@@ -87,7 +87,7 @@ class StorySnapResolverTest {
     fun `a centre just past the threshold from a guide drags free`() {
         val r = StorySnapResolver.resolve(0.5f + StorySnapResolver.SNAP_THRESHOLD + 0.01f, 0.5f)
 
-        assertThat(r.x).isWithin(tol).of(0.535f)
+        assertThat(r.x).isWithin(tol).of(0.5f + StorySnapResolver.SNAP_THRESHOLD + 0.01f)
         assertThat(r.verticalGuide).isNull()
     }
 
