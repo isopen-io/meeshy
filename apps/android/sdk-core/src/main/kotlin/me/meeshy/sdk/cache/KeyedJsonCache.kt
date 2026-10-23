@@ -32,6 +32,10 @@ class KeyedJsonCache(
     fun <T> observe(namespace: String, key: String, serializer: KSerializer<T>): Flow<KeyedJsonDocument<T>?> =
         dao.observe(namespace, key).map { row -> row?.let { decode(it, serializer) } }
 
+    /** The value (`null` when unreadable) and its fetch instant, read from ONE row emission. */
+    fun <T> observeSnapshot(namespace: String, key: String, serializer: KSerializer<T>): Flow<Pair<T?, Long?>> =
+        dao.observe(namespace, key).map { row -> row?.let { decode(it, serializer)?.value } to row?.fetchedAt }
+
     /** The instant the key was last fetched, even when its payload is unreadable. */
     fun observeFetchedAt(namespace: String, key: String): Flow<Long?> =
         dao.observe(namespace, key).map { it?.fetchedAt }
