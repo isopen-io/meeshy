@@ -229,6 +229,7 @@ plus.rectangle.on.rectangle
 qrcode
 questionmark.folder
 quote.opening
+record.circle
 rectangle.2.swap
 rectangle.compress.vertical
 rectangle.expand.vertical
@@ -271,6 +272,7 @@ star.circle
 star.fill
 star.slash
 star.slash.fill
+stop.circle.fill
 stop.fill
 sun.max
 sun.max.fill
