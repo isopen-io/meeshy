@@ -30,6 +30,16 @@ enum class MessageAction {
     DeleteForEveryone,
     DeleteForMe,
     Report,
+    /** Opens the read-status ("Vues") fiche. */
+    Views,
+    /** Opens the edit-history fiche — only for an edited message. */
+    History,
+    /** Opens the sentiment fiche — only for a message carrying text. */
+    Sentiment,
+    /** Enters multi-select mode starting from this message. */
+    Select,
+    /** Exports the message as a shareable card. */
+    ExportCard,
 }
 
 /**
@@ -53,6 +63,12 @@ data class MessageActionContext(
      * independently of [isActionable]: opening/sharing a received file doesn't depend on this
      * message's own send state. */
     val hasOpenableFile: Boolean = false,
+    /** The message was edited after being sent (gates [MessageAction.History]). */
+    val isEdited: Boolean = false,
+    /** The message carries a non-blank text body (gates sentiment and card export). */
+    val hasText: Boolean = false,
+    /** Which of the detail/selection entries the host can actually serve; inert (empty) by default. */
+    val hostedEntries: Set<MessageAction> = emptySet(),
 ) {
     /**
      * A message is "actionable" — eligible for reply / forward / star / edit / delete —
@@ -86,6 +102,10 @@ object MessageActionMenu {
             add(MessageAction.OpenFile)
             add(MessageAction.ShareFile)
         }
+        if (!ctx.isDeleted) {
+            if (MessageAction.Select in ctx.hostedEntries) add(MessageAction.Select)
+            if (MessageAction.ExportCard in ctx.hostedEntries && ctx.hasText) add(MessageAction.ExportCard)
+        }
         when (ctx.pinAction) {
             PinAction.Pin -> add(MessageAction.Pin)
             PinAction.Unpin -> add(MessageAction.Unpin)
@@ -102,6 +122,12 @@ object MessageActionMenu {
         }
         if (ctx.isActionable) {
             add(MessageAction.DeleteForMe)
+        }
+        // Information entries come after every action.
+        if (!ctx.isDeleted) {
+            if (MessageAction.Views in ctx.hostedEntries) add(MessageAction.Views)
+            if (MessageAction.History in ctx.hostedEntries && ctx.isEdited) add(MessageAction.History)
+            if (MessageAction.Sentiment in ctx.hostedEntries && ctx.hasText) add(MessageAction.Sentiment)
         }
         // Report is a moderation action against *someone else's* content — offered last, and only
         // for an incoming, still-present message. Diverges from iOS (which appends `.report`

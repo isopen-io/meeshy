@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="composer_object_editor_adjust_blur">Weichzeichner</string>
+    <string name="composer_object_editor_adjust_brightness">Helligkeit</string>
+    <string name="composer_object_editor_adjust_contrast">Kontrast</string>
+    <string name="composer_object_editor_adjust_exposure">Belichtung</string>
+    <string name="composer_object_editor_adjust_reset">Zurücksetzen</string>
+    <string name="composer_object_editor_adjust_saturation">Sättigung</string>
+    <string name="composer_object_editor_adjust_sharpness">Schärfe</string>
+    <string name="composer_object_editor_adjust_temperature">Temperatur</string>
+    <string name="composer_object_editor_adjust_vibrance">Dynamik</string>
+    <string name="composer_object_editor_adjust_vignette">Vignette</string>
+    <string name="composer_object_editor_effects_bloom">Bloom</string>
+    <string name="composer_object_editor_effects_grain">Körnung</string>
     <string name="stories_action_delete">Löschen</string>
     <string name="stories_action_react">Reagieren</string>
     <string name="stories_action_report">Melden</string>
@@ -107,4 +119,6 @@
     <string name="story_tool_text">Text</string>
     <string name="story_tool_texture">Hintergrund</string>
     <string name="story_tool_timeline">Timeline</string>
+    <string name="story_tray_menu_profile">Profil ansehen</string>
+    <string name="story_tray_menu_viewStories">Storys ansehen</string>
 </resources>

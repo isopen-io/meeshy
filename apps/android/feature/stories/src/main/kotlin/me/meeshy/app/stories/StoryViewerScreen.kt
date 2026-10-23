@@ -96,10 +96,12 @@ import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.story.canvas.SceneLookChain
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.LanguageQuickOption
 import me.meeshy.ui.component.LanguageQuickStrip
@@ -445,6 +447,7 @@ fun StoryViewerScreen(
                     model = imageUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    colorFilter = SceneLookChain.colorFilter(slide.lookRecipe),
                     // Instant blur behind the loading image — no black flash on cold
                     // load (decoded from the slide's ThumbHash; null → plain background).
                     placeholder = rememberThumbHashPainter(slide.backgroundThumbHash),
@@ -687,7 +690,7 @@ fun StoryViewerScreen(
                 hasReacted = state.myReactions.isNotEmpty(),
                 languageBadgeCode = languageBadge,
                 heartBouncePulse = heartBouncePulse,
-                onTapHeart = { sendReaction("❤️", from = heartBounds) },
+                onTapHeart = { sendReaction(EmojiCatalog.DOUBLE_TAP_EMOJI, from = heartBounds) },
                 onTapLanguage = {
                     reactionBarVisible = false
                     hoveredIndex = null
@@ -773,13 +776,24 @@ fun StoryViewerScreen(
     }
 
     if (showFullEmojiPicker) {
-        ModalBottomSheet(onDismissRequest = { showFullEmojiPicker = false }) {
-            EmojiFullPicker(
-                onSelect = { emoji ->
-                    showFullEmojiPicker = false
-                    sendReaction(emoji, from = null)
-                },
-            )
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showFullEmojiPicker = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures { showFullEmojiPicker = false } },
+            ) {
+                me.meeshy.ui.component.ReactionCategorySheet(
+                    onReact = { emoji ->
+                        showFullEmojiPicker = false
+                        sendReaction(emoji, from = null)
+                    },
+                    onDismiss = { showFullEmojiPicker = false },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
     }
 

@@ -37,6 +37,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.purgingDeadStories
@@ -678,6 +679,7 @@ class StoryViewerViewModel @Inject constructor(
                 ?.let { StoryBackgroundValue.parse(it) },
             repostAttribution = StoryRepostAttribution.resolve(this),
             strokes = storyEffects?.drawingStrokes.orEmpty(),
+            lookRecipe = SceneLookRecipe.forEffects(storyEffects),
             stickers = StorySceneObjectsProjection.stickers(storyEffects) { mediaId ->
                 media.firstOrNull { it.id == mediaId }?.url?.let { resolveMediaUrl(it, config.apiBaseUrl) }
             },
@@ -762,7 +764,7 @@ class StoryViewerViewModel @Inject constructor(
             x = x,
             y = y,
             scale = scale,
-            aspectRatio = aspectRatio,
+            aspectRatio = servedAspectRatio,
             startTime = startTime ?: 0.0,
             duration = duration ?: 0.0,
             fadeIn = fadeIn ?: 0.0,

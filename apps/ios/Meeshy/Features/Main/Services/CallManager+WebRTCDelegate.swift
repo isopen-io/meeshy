@@ -217,7 +217,7 @@ extension CallManager: WebRTCServiceDelegate {
                 jitterMs: stats.jitterMs
             )
 
-            // Accumulate quality distribution and RTT/loss running stats.
+            self.analytics.recordMedia(stats.mediaQuality, jitterMs: stats.jitterMs)
             self.analytics.recordSample(
                 level: level,
                 roundTripTimeMs: stats.roundTripTimeMs,

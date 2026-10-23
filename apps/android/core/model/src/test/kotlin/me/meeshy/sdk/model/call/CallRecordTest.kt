@@ -272,6 +272,38 @@ class CallRecordTest {
     }
 
     @Test
+    fun `participants absent from the wire decode to an empty list`() {
+        val rec = json.decodeFromString<CallRecord>(MINIMAL_JSON)
+        assertThat(rec.participants).isEmpty()
+    }
+
+    @Test
+    fun `participants present on the wire are decoded tolerantly`() {
+        val rec = json.decodeFromString<CallRecord>(
+            MINIMAL_JSON.dropLast(1) +
+                ""","participants":[{"participantId":"p1","userId":"u1","username":"ana","displayName":"Ana","avatar":"a.png"},{"displayName":"Bob"}]}""",
+        )
+        assertThat(rec.participants.map { it.displayName }).containsExactly("Ana", "Bob").inOrder()
+        assertThat(rec.participants[0].userId).isEqualTo("u1")
+        assertThat(rec.participants[0].avatar).isEqualTo("a.png")
+    }
+
+    @Test
+    fun `group label gives the first two names then the count of others`() {
+        fun group(vararg names: String) = CallRecord(
+            callId = "g", conversationId = "c", conversationType = "group", mode = "sfu",
+            status = "ended", direction = "incoming", isVideo = false,
+            startedAt = "2026-06-20T10:00:00Z", durationSec = 0,
+            participants = names.mapIndexed { i, n -> CallHistoryParticipant(participantId = "p$i", displayName = n) },
+        )
+        assertThat(group().participantsLabel).isNull()
+        assertThat(group("A").participantsLabel).isEqualTo("A")
+        assertThat(group("A", "B").participantsLabel).isEqualTo("A, B")
+        assertThat(group("A", "B", "C", "D").participantsLabel).isEqualTo("A, B +2")
+    }
+    }
+
+    @Test
     fun `a long call past 2 GB in one direction still decodes and labels its data`() {
         val raw = """{"callId":"c9","conversationId":"conv1","conversationType":"direct","mode":"p2p",
             "status":"ended","direction":"outgoing","isVideo":true,"startedAt":"2026-07-01T10:00:00.000Z",
@@ -294,5 +326,10 @@ class CallRecordTest {
 
         assertThat(nameless.displayName(fallback = "Unknown")).isEqualTo("Unknown")
         assertThat(record(conversationTitle = "Team").displayName(fallback = "Unknown")).isEqualTo("Team")
+    }
+
+    private companion object {
+        const val MINIMAL_JSON =
+            """{"callId":"c1","conversationId":"conv1","conversationType":"group","mode":"sfu","status":"ended","direction":"incoming","isVideo":false,"startedAt":"2026-06-20T10:00:00Z","durationSec":0}"""
     }
 }

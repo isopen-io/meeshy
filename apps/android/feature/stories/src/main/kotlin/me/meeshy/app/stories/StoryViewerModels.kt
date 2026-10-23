@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.scene.StoryClipTransitionResolver
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
+import me.meeshy.sdk.model.scene.SceneLookRecipe
 
 /**
  * A foreground media layer on a slide — a non-background [StoryMediaObject]
@@ -212,6 +213,8 @@ data class StorySlideView(
     val isViewed: Boolean = false,
     /** Instant de publication, pour le « il y a 2 h » de l'en-tête ; `null` si illisible. */
     val createdAtMillis: Long? = null,
+    /** Le look du fond (filtre de slide puis réglages) — neutre : aucun coût de rendu. */
+    val lookRecipe: SceneLookRecipe = SceneLookRecipe.NEUTRAL,
 ) {
     /** La slide fait du son : vidéo de fond ou de premier plan, ou piste audio. */
     val hasSound: Boolean

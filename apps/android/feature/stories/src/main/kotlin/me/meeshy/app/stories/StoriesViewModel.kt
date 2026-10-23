@@ -43,6 +43,7 @@ class StoriesViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val workManager: WorkManager,
     private val socialSocket: SocialSocketManager,
+    private val coverMemo: StoryCoverMemo = StoryCoverMemo(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoriesUiState())
@@ -87,6 +88,7 @@ class StoriesViewModel @Inject constructor(
                         groups = merged.toStoryGroups(currentUserId = currentUserId),
                         currentUserId = currentUserId,
                         mediaBaseUrl = config.apiBaseUrl,
+                        coverOf = { coverMemo.coverUrl(it, currentUserId) { null } },
                     )
                     _state.update {
                         it.copy(
