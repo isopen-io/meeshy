@@ -81,4 +81,19 @@ class PostRepositorySetEngagementTest {
 
         assertThat(mutation.captured.kind).isEqualTo(OutboxKind.UNBOOKMARK_POST)
     }
+
+    @Test
+    fun refreshReporting_returnsTheFailure_soAPullToRefreshNeverSpinsForever() = runTest {
+        val repository = repo()
+        coEvery { api.getFeed(any(), any()) } throws java.io.IOException("offline")
+
+        assertThat(repository.refreshReporting()?.message).isEqualTo("offline")
+    }
+
+    @Test
+    fun refreshReporting_returnsNull_onSuccess() = runTest {
+        val repository = repo()
+
+        assertThat(repository.refreshReporting()).isNull()
+    }
 }

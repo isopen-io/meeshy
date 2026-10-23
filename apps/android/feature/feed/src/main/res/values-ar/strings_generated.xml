@@ -29,9 +29,11 @@
     <string name="feed_delete_cancel">إلغاء</string>
     <string name="feed_delete_confirm">حذف</string>
     <string name="feed_empty">لا توجد منشورات</string>
+    <string name="feed_empty_subtitle">ستظهر منشورات جهات اتصالك هنا</string>
     <string name="feed_header_nearby">المنشورات القريبة</string>
     <string name="feed_like">إعجاب</string>
     <string name="feed_link_copied">تم نسخ الرابط</string>
+    <string name="feed_load_error">تعذّر تحميل التدفق</string>
     <string name="feed_location_shared">موقع تمت مشاركته</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
     <plurals name="feed_new_posts">
@@ -42,6 +44,16 @@
         <item quantity="many">%d منشورات جديدة</item>
         <item quantity="other">%d منشورات جديدة</item>
     </plurals>
+    <string name="feed_notice_bookmark_failed">تعذّر حفظ الإشارة المرجعية</string>
+    <string name="feed_notice_delete_failed">خطأ في حذف المنشور</string>
+    <string name="feed_notice_like_failed">تعذّر الإعجاب بالمنشور</string>
+    <string name="feed_notice_pin_failed">خطأ في تثبيت المنشور</string>
+    <string name="feed_notice_publish_failed">فشل نشر المنشور</string>
+    <string name="feed_notice_published">تم نشر المنشور</string>
+    <string name="feed_notice_report_failed">خطأ في الإبلاغ عن المنشور</string>
+    <string name="feed_notice_reported">تم الإبلاغ عن المنشور</string>
+    <string name="feed_notice_repost_failed">خطأ في إعادة النشر</string>
+    <string name="feed_notice_translation_failed">خطأ في الترجمة</string>
     <string name="feed_quote_cancel">إلغاء</string>
     <string name="feed_quote_submit">إعادة نشر</string>
     <string name="feed_reel">ريل</string>
@@ -63,6 +75,7 @@
     <string name="feed_repost_reposted">تمت إعادة النشر</string>
     <string name="feed_repost_story">قصة</string>
     <string name="feed_reposts">إعادات النشر</string>
+    <string name="feed_retry">إعادة المحاولة</string>
     <string name="feed_translated">الترجمة متاحة</string>
     <string name="feed_unknown_author">غير معروف</string>
     <string name="feed_unlike">إلغاء الإعجاب</string>
