@@ -26,6 +26,13 @@ import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../ser
 import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
 import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from '../../services/attachments/readerAttachmentLifecycle';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
+import { RECIPIENT_LANG_SELECT, recipientLanguages } from '../../utils/recipient-language';
+import {
+  SUBTITLE_LANG_PATTERN,
+  servedSubtitles,
+  subtitleSourceSelect,
+  type SubtitleCarrier,
+} from '../../services/attachments/servedSubtitles';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -137,19 +144,22 @@ export async function registerMetadataRoutes(
   async function attachmentDetailReader(
     request: FastifyRequest,
     attachment: { messageId: string | null; uploadedBy: string | null; isViewOnce?: boolean | null }
-  ): Promise<{ readonly readerParticipantId: string | null } | null> {
+  ): Promise<{ readonly readerParticipantId: string | null; readonly carrier: SubtitleCarrier | null } | null> {
     const authContext = (request as UnifiedAuthRequest).authContext;
 
     if (!attachment.messageId) {
       // Pas encore rattachée à un message (envoi en cours) : seul le
       // déposant y accède. Même repli que `resolveAttachmentReadVerdict`.
       const caller = authContext.isAnonymous ? authContext.participantId : authContext.userId;
-      return Boolean(caller) && caller === attachment.uploadedBy ? { readerParticipantId: null } : null;
+      return Boolean(caller) && caller === attachment.uploadedBy ? { readerParticipantId: null, carrier: null } : null;
     }
 
     const message = await prisma.message.findUnique({
       where: { id: attachment.messageId },
-      select: { id: true, conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT },
+      select: {
+        id: true, conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT,
+        isBlurred: true, isEncrypted: true, encryptionMode: true,
+      },
     });
     if (!message) return null;
 
@@ -201,7 +211,7 @@ export async function registerMetadataRoutes(
       ),
       select: { id: true },
     });
-    return visible !== null ? { readerParticipantId: participant.id } : null;
+    return visible !== null ? { readerParticipantId: participant.id, carrier: message } : null;
   }
 
   /**
@@ -302,6 +312,85 @@ export async function registerMetadataRoutes(
       }
     }
   );
+
+  /**
+   * GET /attachments/:attachmentId/subtitles/:lang — #11329
+   *
+   * La transcription d'une vidéo ou d'un vocal, en WebVTT. `auto` descend le
+   * prisme du LECTEUR (`recipientLanguages` pour un inscrit, la langue de sa
+   * participation pour un invité de lien) ; un code nomme une langue précise.
+   * Mêmes bornes que la fiche ci-dessus, et le même 404 pour une pièce
+   * PROTÉGÉE (`subtitlesMayTravel`) que pour une pièce inexistante.
+   */
+  fastify.get(
+    '/attachments/:attachmentId/subtitles/:lang',
+    {
+      onRequest: [authOptional],
+      schema: {
+        description: 'Serve the transcription of a video or voice attachment as WebVTT subtitles. `auto` resolves the reader\'s language through the Prisme (rank by rank, original when no rank is served); a language code asks for that language. Protected attachments (view-once, blurred, ephemeral, encrypted) never serve subtitles.',
+        tags: ['attachments'],
+        summary: 'Get attachment subtitles (WebVTT)',
+        params: {
+          type: 'object',
+          required: ['attachmentId', 'lang'],
+          properties: {
+            attachmentId: { type: 'string', description: 'Unique attachment identifier' },
+            lang: { type: 'string', pattern: SUBTITLE_LANG_PATTERN, description: '`auto` or a language code' },
+          },
+        },
+        response: {
+          200: { description: 'WebVTT subtitles', type: 'string' },
+          401: { description: 'Authentication required', ...errorResponseSchema },
+          404: { description: 'No subtitles for this caller and language', ...errorResponseSchema },
+          500: { description: 'Internal server error', ...errorResponseSchema },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const authContext = (request as UnifiedAuthRequest).authContext;
+        if (!authContext || !authContext.isAuthenticated) {
+          return sendUnauthorized(reply, 'Authentication required');
+        }
+        const { attachmentId, lang } = request.params as { attachmentId: string; lang: string };
+
+        const source = await prisma.messageAttachment.findUnique({
+          where: { id: attachmentId },
+          select: subtitleSourceSelect,
+        });
+        const reader = source ? await attachmentDetailReader(request, source) : null;
+        const readerLanguages = reader ? await subtitleReaderLanguages(authContext, reader.readerParticipantId) : [];
+        const served = source && reader
+          ? servedSubtitles({ attachment: source, carrier: reader.carrier, requested: lang, readerLanguages })
+          : null;
+        if (!served) {
+          return sendNotFound(reply, 'SUBTITLES_NOT_FOUND', { message: 'Subtitles not found' });
+        }
+
+        reply.header('Cache-Control', 'private, no-cache');
+        reply.header('Content-Language', served.language);
+        reply.header('Vary', 'Authorization, X-Session-Token');
+        return reply.type('text/vtt; charset=utf-8').send(served.vtt);
+      } catch (error: unknown) {
+        logger.error('error serving attachment subtitles', { error });
+        return sendInternalError(reply, 'SUBTITLES_FETCH_FAILED', { message: 'Failed to serve subtitles' });
+      }
+    }
+  );
+
+  async function subtitleReaderLanguages(
+    authContext: UnifiedAuthRequest['authContext'],
+    readerParticipantId: string | null
+  ): Promise<readonly string[]> {
+    if (!authContext.isAnonymous) {
+      const user = await prisma.user.findUnique({ where: { id: authContext.userId }, select: RECIPIENT_LANG_SELECT });
+      return recipientLanguages(user);
+    }
+    const participantId = readerParticipantId ?? authContext.participantId;
+    if (!participantId) return [];
+    const participant = await prisma.participant.findUnique({ where: { id: participantId }, select: { language: true } });
+    return participant?.language ? [participant.language] : [];
+  }
 
   /**
    * DELETE /attachments/:attachmentId

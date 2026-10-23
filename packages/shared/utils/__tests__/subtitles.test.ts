@@ -65,6 +65,21 @@ describe('subtitleCuesFor — les repères (#11329)', () => {
     expect(cues?.every((c) => c.text.length > 0)).toBe(true);
   });
 
+  it('une traduction qui compte autant de phrases que l’original a de segments : phrase pour phrase', () => {
+    expect(subtitleCuesFor({ transcription, translations, language: 'es' })?.map((c) => c.text))
+      .toEqual(['Hola a todos.', 'Nos vemos mañana a las diez.']);
+  });
+
+  it('sinon : les mots au prorata, aucun repère vide', () => {
+    const cues = subtitleCuesFor({
+      transcription,
+      translations: { it: { type: 'audio', transcription: 'Ciao a tutti ci vediamo domani alle dieci', createdAt: 'x' } },
+      language: 'it',
+    });
+    expect(cues?.map((c) => c.text).join(' ')).toBe('Ciao a tutti ci vediamo domani alle dieci');
+    expect(cues?.every((c) => c.text !== '')).toBe(true);
+  });
+
   it('sans segments : un seul repère sur toute la durée', () => {
     expect(subtitleCuesFor({ transcription: { text: 'Salut', language: 'fr', durationMs: 3000 }, translations: {}, language: 'fr' }))
       .toEqual([{ startMs: 0, endMs: 3000, text: 'Salut' }]);

@@ -9,8 +9,9 @@
  *
  * Une traduction n'a pas de chronologie propre qui colle à l'image : ses
  * `segments` éventuels décrivent la piste TTS, pas le média d'origine. Le texte
- * traduit se pose donc sur les segments de l'ORIGINAL, ses mots répartis au
- * prorata de la longueur de chaque segment.
+ * traduit se pose donc sur les segments de l'ORIGINAL : phrase pour phrase
+ * quand la traduction en compte autant que l'original a de segments, sinon
+ * ses mots répartis au prorata de la longueur de chaque segment.
  *
  * Les entrées sortent de colonnes `Json` Prisma : elles sont lues comme
  * `unknown` et gardées ici, pour qu'aucun appelant n'ait à caster.
@@ -80,7 +81,16 @@ export function prismSubtitleLanguage(params: {
   return served?.language ?? transcription.language;
 }
 
+const SENTENCE = /[^.!?…。！？]+[.!?…。！？]+["»”’)\]]*|[^.!?…。！？]+$/gu;
+
+const sentencesOf = (text: string): readonly string[] =>
+  (text.match(SENTENCE) ?? []).map((s) => s.trim()).filter((s) => s !== '');
+
 const spreadOver = (segments: readonly Segment[], text: string): readonly SubtitleCue[] => {
+  const sentences = sentencesOf(text);
+  if (sentences.length === segments.length) {
+    return segments.map((segment, i) => ({ startMs: segment.startMs, endMs: segment.endMs, text: sentences[i] ?? '' }));
+  }
   const words = text.split(/\s+/).filter((w) => w !== '');
   const weights = segments.map((s) => Math.max(1, s.text.length));
   const total = weights.reduce((a, b) => a + b, 0);
