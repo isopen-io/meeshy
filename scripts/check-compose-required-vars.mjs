@@ -308,6 +308,9 @@ const SUBSTITUTIONS = Object.freeze({
 /** `${NOM}` · `${NOM:-defaut}` · `${NOM:?message}` · `${NOM:+autre}` — et leurs variantes sans `:`. */
 const SUBSTITUTION = /\$\{([A-Za-z_][A-Za-z0-9_]*)(:?[-?+])?([^}]*)\}/g;
 
+/** `$$` est l'échappement de Compose (un `$` littéral) : on le retire AVANT de lire, `$${X}` n'est jamais substitué. */
+const COMPOSE_ESCAPE = /\$\$/g;
+
 const NUE = 'nue';
 
 const formOf = (operator) => (operator ? operator : NUE);
@@ -318,7 +321,7 @@ export const substitutionsOf = (source) =>
   source.split('\n').flatMap((line, index) =>
     isComment(line)
       ? []
-      : [...line.matchAll(SUBSTITUTION)].map((match) => ({
+      : [...line.replace(COMPOSE_ESCAPE, '').matchAll(SUBSTITUTION)].map((match) => ({
           line: index + 1,
           name: match[1],
           form: formOf(match[2]),
