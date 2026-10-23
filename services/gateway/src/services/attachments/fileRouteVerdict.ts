@@ -20,7 +20,8 @@
  * lignes par un index :
  *  - l'original et la miniature : `filePath` / `thumbnailPath`, égalité ;
  *  - la variante `<base>_<largeur>w.webp` ou `.avif` (#11262), et le rendu
- *    vidéo `<base>_h264.mp4` (#11261) : `filePath` égal à `<base>`
+ *    vidéo `<base>_h264.mp4` (#11261), et l'original HEIC/AVIF
+ *    `<base>_original.<ext>` (#11263) : `filePath` égal à `<base>`
  *    (original sans extension) ou qui commence par `<base>.` (préfixe ancré,
  *    servi par le même index) ;
  *  - la piste traduite `translated/<attachmentId>_<langue>.<ext>` : la ligne
@@ -102,7 +103,7 @@ export function immutableWhenWriteOnce(storageKey: string, cacheControl: string)
 }
 
 const TRANSLATED_TRACK = /^translated\/([0-9a-f]{24})_[^/]+$/;
-const RESPONSIVE_VARIANT = /^(.+)_(?:\d+w\.(?:webp|avif)|h264\.mp4)$/;
+const RESPONSIVE_VARIANT = /^(.+)_(?:\d+w\.(?:webp|avif)|h264\.mp4|original\.(?:heic|heif|avif))$/;
 
 type OwnerRow = {
   readonly messageId: string | null;

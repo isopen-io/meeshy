@@ -126,7 +126,8 @@ export const messageAttachmentSchema = {
       items: {
         type: 'object',
         properties: {
-          codec: { type: 'string', description: 'Video codec of the rendition (h264)' },
+          codec: { type: 'string', description: 'Codec of the rendition: h264 (video compatibility, #11261), heic / avif (image original, #11263)' },
+          mimeType: { type: 'string', description: 'Media type of the rendition file' },
           url: { type: 'string', description: 'Rendition file URL' },
           width: { type: 'number', description: 'Rendition width in pixels' },
           height: { type: 'number', description: 'Rendition height in pixels' },

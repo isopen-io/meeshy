@@ -25,7 +25,7 @@
 import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { VideoRendition } from '@meeshy/shared/types/attachment';
+import type { MediaRendition } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'video-compat-rendition' });
@@ -39,7 +39,6 @@ const PROBE_TIMEOUT_MS = 15_000;
 export type VideoColourProbe = { readonly codec: string | null; readonly transfer: string | null };
 export type CompatRenditionPlan = { readonly maxLongSide: number; readonly crf: number; readonly toneMap: boolean };
 
-export type { VideoRendition };
 
 export function planCompatibilityRendition(probe: VideoColourProbe): CompatRenditionPlan | null {
   if (probe.codec === null || !HEVC_CODECS.has(probe.codec.toLowerCase())) return null;
@@ -128,7 +127,7 @@ export type CompatRenditionDeps = {
 export async function produceCompatibilityRendition(
   deps: CompatRenditionDeps,
   source: { readonly relPath: string; readonly fileSize: number },
-): Promise<VideoRendition | null> {
+): Promise<MediaRendition | null> {
   if (process.env.VIDEO_COMPAT_RENDITION !== 'true') return null;
   const maxSync = Number(process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES || 200 * 1024 * 1024);
   if (source.fileSize > maxSync) return null;
@@ -148,7 +147,7 @@ export async function produceCompatibilityRendition(
     await deps.runFfmpeg(buildCompatibilityRenditionArgs(inputAbs, outputAbs, plan));
     const [rendered, stat] = await Promise.all([probeVideo(outputAbs), fs.stat(outputAbs)]);
     if (!rendered?.width || !rendered.height || stat.size === 0) throw new Error('rendu vide');
-    return { codec: 'h264', url: outputRel, width: rendered.width, height: rendered.height, size: stat.size };
+    return { codec: 'h264', mimeType: 'video/mp4', url: outputRel, width: rendered.width, height: rendered.height, size: stat.size };
   } catch (error) {
     logger.error('Rendu H.264 de compatibilité échoué, original servi seul', error as Error);
     await fs.unlink(outputAbs).catch(() => undefined);

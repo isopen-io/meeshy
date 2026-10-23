@@ -14,8 +14,9 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
-import { produceMediaRenditions, imageVariantsJson, videoRenditionsJson, type MediaRenditions } from '../../services/attachments/media-renditions';
+import { produceMediaRenditions, imageVariantsJson, renditionsJson, type MediaRenditions } from '../../services/attachments/media-renditions';
 import { runFfmpeg } from '../../services/attachments/ffmpeg-run';
+import { UnconvertibleImageError } from '../../services/attachments/heif-conversion';
 import { normalizeStoredAudio } from '../../services/attachments/audio-normalization';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
 import {
@@ -195,7 +196,7 @@ function persistedRenditionFields(rendered: MediaRenditions) {
     thumbHash: rendered.thumbHash,
     ...(rendered.imageVariants ? { imageVariants: imageVariantsJson(rendered.imageVariants) } : {}),
     ...(rendered.avifVariants ? { avifVariants: imageVariantsJson(rendered.avifVariants) } : {}),
-    ...(rendered.renditions ? { renditions: videoRenditionsJson(rendered.renditions) } : {}),
+    ...(rendered.renditions ? { renditions: renditionsJson(rendered.renditions) } : {}),
   };
 }
 
@@ -534,10 +535,17 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
               .catch(() => metadata);
             return { relPath: audioRelPath, mimeType: audio.mimeType, fileSize: audio.size, metadata: audioMetadata };
           })();
+        // #11263 — un HEIC/AVIF illisible par le serveur est REFUSÉ (415),
+        // jamais servi tel quel aux lecteurs ; la copie posée est retirée.
         const renditions = await produceMediaRenditions(
           { uploadBasePath: UPLOAD_PATH, metadataManager, runFfmpeg },
           { ...stored, attachmentType, clientThumbHash: upload.metadata?.thumbhash ?? null },
-        );
+        ).catch(async (error: unknown) => {
+          if (!(error instanceof UnconvertibleImageError)) throw error;
+          await fs.unlink(destPath).catch((err) => logger.debug('[TUS] Unconvertible image cleanup failed', { destPath, err }));
+          logger.warn(`[TUS] Upload REFUSED — ${error.message} (userId=${userId})`);
+          throw { status_code: 415, body: 'Image format not supported by the server\n' };
+        });
         return { rendered: renditions, loudnessLufs: audio?.loudnessLufs ?? null };
       };
       let loudnessLufs: number | null = null;
