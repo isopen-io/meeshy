@@ -1,8 +1,8 @@
 import Foundation
 import MeeshySDK
 
-/// QUI peut activer le chiffrement d'une conversation (#12517, directive
-/// porteur 2026-10-23) — miroir de `mayActivateConversationEncryption`
+/// QUI peut activer le chiffrement d'une conversation (#12517, directive du
+/// porteur) — miroir de `mayActivateConversationEncryption`
 /// (`services/gateway/src/utils/encryption-activation-policy.ts`). Tant que
 /// l'E2EE n'est pas opérationnel, seuls ADMIN et BIGBOSS de la plateforme
 /// l'activent ; la passerelle fait foi par son 403. La relâcher se fait ici et
