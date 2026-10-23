@@ -2,6 +2,10 @@ package me.meeshy.app.feed
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -163,6 +167,8 @@ fun PostDetailScreen(
                         onOpenPost = onOpenPost,
                         onRepost = viewModel::repost,
                         onQuote = viewModel::beginQuote,
+                        onLike = viewModel::toggleLike,
+                        onBookmark = viewModel::toggleBookmark,
                     )
                 }
             }
@@ -187,6 +193,8 @@ private fun PostDetailContent(
     onOpenPost: (String) -> Unit,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
+    onLike: () -> Unit,
+    onBookmark: () -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Column(
@@ -290,6 +298,8 @@ private fun PostDetailContent(
                     isReposted = isReposted,
                     onRepost = onRepost,
                     onQuote = onQuote,
+                    onLike = onLike,
+                    onBookmark = onBookmark,
                 )
             }
         }
@@ -341,17 +351,26 @@ private fun DetailStatsRow(
     isReposted: Boolean,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
+    onLike: () -> Unit,
+    onBookmark: () -> Unit,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DetailStat(
             icon = { tint ->
-                Icon(Icons.Filled.Favorite, contentDescription = stringResource(R.string.feed_like), tint = tint, modifier = Modifier.size(18.dp))
+                Icon(
+                    if (post.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    contentDescription = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like),
+                    tint = tint,
+                    modifier = Modifier.size(20.dp),
+                )
             },
             count = post.likeCount,
             active = post.isLiked,
+            activeTint = MeeshyPalette.Error,
+            onClick = onLike,
         )
         DetailStat(
             icon = { tint ->
@@ -368,10 +387,16 @@ private fun DetailStatsRow(
         )
         DetailStat(
             icon = { tint ->
-                Icon(Icons.Outlined.BookmarkBorder, contentDescription = stringResource(R.string.feed_bookmark), tint = tint, modifier = Modifier.size(18.dp))
+                Icon(
+                    if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    contentDescription = stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark),
+                    tint = tint,
+                    modifier = Modifier.size(20.dp),
+                )
             },
             count = post.bookmarkCount,
             active = post.isBookmarked,
+            onClick = onBookmark,
         )
     }
 }
@@ -381,9 +406,18 @@ private fun DetailStat(
     icon: @Composable (Color) -> Unit,
     count: Int,
     active: Boolean,
+    activeTint: Color = MeeshyPalette.Indigo500,
+    onClick: (() -> Unit)? = null,
 ) {
-    val tint = if (active) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val tint = if (active) activeTint else MeeshyTheme.tokens.textSecondary
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .let { base -> if (onClick == null) base else base.clickable(role = Role.Button, onClick = onClick) }
+            .padding(horizontal = MeeshySpacing.xs),
+    ) {
         icon(tint)
         if (count > 0) {
             Spacer(Modifier.width(MeeshySpacing.xs))

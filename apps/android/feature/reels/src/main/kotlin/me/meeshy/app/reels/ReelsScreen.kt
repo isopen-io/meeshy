@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.reels.R
+import me.meeshy.sdk.model.PostShareLink
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
@@ -139,7 +140,7 @@ fun ReelsScreen(
                                 viewModel.recordShare(reel.id)
                                 val send = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, "https://meeshy.me/post/${'$'}{reel.id}")
+                                    putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(reel.id))
                                 }
                                 shareContext.startActivity(Intent.createChooser(send, null))
                             },
