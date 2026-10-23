@@ -82,3 +82,55 @@ def test_a_probe_that_fails_falls_back_to_the_full_diarization():
         raise RuntimeError("encodeur indisponible")
 
     assert asyncio.run(should_diarize("a.wav", mode="auto", probe=broken)) == ProbeDecision.DIARIZE
+
+
+class _Info:
+    language = "fr"
+    language_probability = 0.97
+    duration = 30.0
+
+
+class _Word:
+    def __init__(self, word, start, end):
+        self.word, self.start, self.end, self.probability = word, start, end, 0.9
+
+
+class _Segment:
+    def __init__(self):
+        self.text = "Bonjour à tous"
+        self.start, self.end = 0.0, 1.5
+        self.words = [_Word("Bonjour", 0.0, 0.6), _Word("à", 0.7, 0.8), _Word("tous", 0.9, 1.5)]
+
+
+def _transcribe_with(monkeypatch, several_voices: bool):
+    from unittest.mock import AsyncMock
+
+    from services import transcription_service as module
+
+    service = module.TranscriptionService.__new__(module.TranscriptionService)
+    service._model_id = "stt_whisper_test"
+    monkeypatch.setattr(module, "get_stt_model", lambda _model_id: object())
+    monkeypatch.setattr(module, "probe_multi_speaker", AsyncMock(return_value=several_voices))
+    monkeypatch.setenv("ENABLE_DIARIZATION", "true")
+    monkeypatch.delenv("DIARIZATION_MODE", raising=False)
+    monkeypatch.setattr(service, "_run_whisper", AsyncMock(return_value=([_Segment()], _Info())), raising=False)
+    diarize = AsyncMock(return_value=None)
+    apply = AsyncMock(side_effect=lambda path, result, **kwargs: result)
+    monkeypatch.setattr(service, "_run_diarization", diarize, raising=False)
+    monkeypatch.setattr(service, "_apply_diarization", apply, raising=False)
+    result = asyncio.run(service.transcribe("vocal.wav"))
+    return result, diarize, apply
+
+
+def test_a_one_voice_vocal_is_transcribed_without_any_diarization(monkeypatch):
+    result, diarize, apply = _transcribe_with(monkeypatch, several_voices=False)
+
+    assert result.text == "Bonjour à tous"
+    diarize.assert_not_called()
+    apply.assert_not_called()
+
+
+def test_a_several_voices_vocal_is_diarized(monkeypatch):
+    _, diarize, _ = _transcribe_with(monkeypatch, several_voices=True)
+
+    diarize.assert_awaited_once_with("vocal.wav")
