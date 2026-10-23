@@ -28,7 +28,7 @@ class ConversationRowPreviewTest {
     fun `typing supersedes both draft and last message and paints accent`() {
         val preview = conversationRowPreview(
             typingLine = "Alice écrit…",
-            draftLine = "Brouillon : hi",
+            draft = DraftPreview("Brouillon :", "hi"),
             lastMessage = "Vous : yo",
         )
 
@@ -36,21 +36,21 @@ class ConversationRowPreviewTest {
     }
 
     @Test
-    fun `draft wins over the last message when nobody is typing and paints accent`() {
+    fun `draft wins over the last message, its label apart from a secondary body`() {
         val preview = conversationRowPreview(
             typingLine = null,
-            draftLine = "Brouillon : hi",
+            draft = DraftPreview("Brouillon :", "hi"),
             lastMessage = "Vous : yo",
         )
 
-        assertThat(preview).isEqualTo(RowPreview("Brouillon : hi", isAccent = true))
+        assertThat(preview).isEqualTo(RowPreview("hi", isAccent = false, draftLabel = "Brouillon :"))
     }
 
     @Test
     fun `the last message shows in the secondary colour when there is no typing and no draft`() {
         val preview = conversationRowPreview(
             typingLine = null,
-            draftLine = null,
+            draft = null,
             lastMessage = "Vous : yo",
         )
 

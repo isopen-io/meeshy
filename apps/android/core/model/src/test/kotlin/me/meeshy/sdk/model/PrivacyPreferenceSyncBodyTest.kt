@@ -168,4 +168,32 @@ class PrivacyPreferenceSyncBodyTest {
         assertThat(obj.keys).doesNotContain("notifyContactsOnReturn")
         assertThat(obj.keys).doesNotContain("allowCallsFromNonContacts")
     }
+
+    @Test
+    fun `reading the projection back keeps the encryption leg and extras and carries all thirteen toggles`() {
+        val local = PrivacyPreferences(
+            encryptionPreference = EncryptionPreference.ALWAYS,
+            autoEncryptNewConversations = true,
+            showEncryptionStatus = false,
+            warnOnUnencrypted = true,
+            extras = mapOf("k" to kotlinx.serialization.json.JsonPrimitive(1)),
+        )
+        val remote = PrivacyPreferenceSyncBody.from(
+            PrivacyPreferences(notifyContactsOnReturn = false, blockScreenshots = true, showLastSeen = false),
+        )
+
+        val merged = remote.toPreferences(local)
+
+        assertThat(merged.notifyContactsOnReturn).isFalse()
+        assertThat(merged.blockScreenshots).isTrue()
+        assertThat(merged.showLastSeen).isFalse()
+        assertThat(merged.encryptionPreference).isEqualTo(EncryptionPreference.ALWAYS)
+        assertThat(merged.autoEncryptNewConversations).isTrue()
+        assertThat(merged.showEncryptionStatus).isFalse()
+        assertThat(merged.warnOnUnencrypted).isTrue()
+        assertThat(merged.extras).isEqualTo(local.extras)
+        assertThat(PrivacyPreferenceSyncBody.from(merged)).isEqualTo(
+            PrivacyPreferenceSyncBody.from(PrivacyPreferences(notifyContactsOnReturn = false, blockScreenshots = true, showLastSeen = false)),
+        )
+    }
 }

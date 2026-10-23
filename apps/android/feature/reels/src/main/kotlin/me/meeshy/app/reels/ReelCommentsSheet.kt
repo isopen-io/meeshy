@@ -38,6 +38,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -94,7 +95,7 @@ fun ReelCommentsSheet(
                     text = if (displayCount == 0) {
                         stringResource(R.string.reels_comments_title)
                     } else {
-                        stringResource(R.string.reels_comments_count, displayCount)
+                        pluralStringResource(R.plurals.reels_comments_count, displayCount, displayCount)
                     },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,

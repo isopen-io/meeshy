@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -73,6 +74,7 @@ internal fun StoryRingCell(
     onOpen: () -> Unit,
     onShowProfile: (() -> Unit)?,
     onAppeared: (String?) -> Unit,
+    onAdd: (() -> Unit)? = null,
 ) {
     val haptics = rememberMeeshyHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -112,7 +114,7 @@ internal fun StoryRingCell(
         Box(contentAlignment = Alignment.Center) {
             StoryRingFrame(ring) {
                 StoryAvatar(ring)
-                if (showAddBadge) AddBadge()
+                if (showAddBadge) AddBadge(onClick = onAdd)
                 if (!moodEmoji.isNullOrEmpty()) MoodBadge(moodEmoji) else PresenceDot(ring)
             }
             StoryRingMenu(
@@ -120,6 +122,8 @@ internal fun StoryRingCell(
                 onDismiss = { menuOpen = false },
                 onViewStories = { menuOpen = false; onOpen() },
                 onShowProfile = onShowProfile?.let { open -> { menuOpen = false; open() } },
+                selfActions = if (onAdd != null) StoryTraySelfMenu.actions(ring) else null,
+                onAdd = { menuOpen = false; onAdd?.invoke() },
             )
         }
         StoryCountDotsRow(
@@ -138,8 +142,27 @@ private fun StoryRingMenu(
     onDismiss: () -> Unit,
     onViewStories: () -> Unit,
     onShowProfile: (() -> Unit)?,
+    selfActions: List<StoryTraySelfAction>? = null,
+    onAdd: () -> Unit = {},
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        if (selfActions != null) {
+            selfActions.forEach { action ->
+                when (action) {
+                    StoryTraySelfAction.ViewMyStory -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.stories_tray_view_my_story)) },
+                        leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
+                        onClick = onViewStories,
+                    )
+                    StoryTraySelfAction.AddStory -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.stories_tray_add_story)) },
+                        leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                        onClick = onAdd,
+                    )
+                }
+            }
+            return@DropdownMenu
+        }
         DropdownMenuItem(
             text = { Text(stringResource(R.string.story_tray_menu_viewStories)) },
             leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
@@ -174,11 +197,19 @@ private fun StoryAvatar(ring: StoryRing) {
 }
 
 @Composable
-private fun BoxScope.AddBadge() {
+private fun BoxScope.AddBadge(onClick: (() -> Unit)? = null) {
+    val addLabel = stringResource(R.string.stories_tray_add_story)
     Box(
         modifier = Modifier
             .align(Alignment.BottomEnd)
             .size(StoryEntryMetrics.badge * 0.625f)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(onClick = onClick).semantics { role = Role.Button; contentDescription = addLabel }
+                } else {
+                    Modifier
+                },
+            )
             .clip(CircleShape)
             .background(MeeshyPalette.Indigo500),
         contentAlignment = Alignment.Center,

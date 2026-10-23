@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "avatar.a11y.mood",
+          "androidName": "avatar_a11y_mood",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "presence.here",
+          "androidName": "presence_here",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "presence.online",
+          "androidName": "presence_online",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "presence.away",
+          "androidName": "presence_away",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "presence.idle",
+          "androidName": "presence_idle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "presence.offline",
+          "androidName": "presence_offline",
+          "status": "adopted"
+        },
+        {
+          "androidName": "unread_badge_description",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

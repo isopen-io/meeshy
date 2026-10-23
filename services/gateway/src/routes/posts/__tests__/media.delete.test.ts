@@ -172,7 +172,7 @@ describe('DELETE /posts/media/:mediaId — média en attente de l’appelant', (
     // tout média fraîchement téléversé irréclamable en prod le 2026-07-31.
     expect(findFirst).toHaveBeenCalledWith({
       where: { id: MEDIA_ID, ...claimableMediaWhere(USER_ID) },
-      select: { id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true },
+      select: { id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true, avifVariants: true },
     });
     await app.close();
   });

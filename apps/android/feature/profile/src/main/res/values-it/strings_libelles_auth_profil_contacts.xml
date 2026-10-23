@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_edit_title">Modifica profilo</string>
+    <string name="profile_regional_language_label">Lingua secondaria</string>
+    <string name="profile_custom_language_label">Lingua di traduzione personalizzata</string>
+    <string name="profile_avatar">Avatar</string>
+    <string name="profile_change_avatar">Cambia foto</string>
+    <string name="profile_change_banner">Cambia immagine di copertina</string>
+    <string name="profile_image_error_empty">Questo file è vuoto. Scegli un\'altra foto.</string>
+    <string name="profile_image_error_type">Qui si possono usare solo immagini.</string>
+    <string name="profile_image_error_too_large">Questa immagine è troppo grande. Scegline una più piccola.</string>
+    <string name="profile_image_error_upload">Caricamento non riuscito. Controlla la connessione e riprova.</string>
+    <string name="profile_member_since">Membro da %1$s</string>
+    <string name="profile_last_seen">Ultimo accesso %1$s</string>
+    <string name="profile_completion">Profilo completo al %1$d%%</string>
+    <string name="profile_detail_regional_language">Lingua secondaria</string>
+    <string name="profile_detail_timezone">Fuso orario</string>
+    <string name="profile_stat_member_days">Giorni come membro</string>
+    <string name="profile_achievements_title">Traguardi</string>
+    <string name="profile_achievements_unlocked">%1$d su %2$d sbloccati</string>
+    <string name="profile_activity_average">%1$d / giorno</string>
+    <string name="profile_activity_empty">Nessuna attività negli ultimi 30 giorni</string>
+    <string name="profile_report">Segnala utente</string>
+    <string name="report_title">Segnala @%1$s</string>
+    <string name="report_details_placeholder">Aggiungi del contesto…</string>
+    <string name="profile_share_action">Condividi profilo</string>
+    <string name="profile_share_title">Condividi profilo</string>
+    <string name="profile_share_qr_cd">Codice QR di %1$s</string>
+    <string name="profile_share_via">Condividi il profilo tramite</string>
+    <string name="profile_share_message">%1$s su Meeshy: %2$s</string>
+</resources>

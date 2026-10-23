@@ -16,7 +16,7 @@ class AppLanguageTest {
     @Test
     fun supportedCodes_areTheInterfaceLanguages() {
         assertThat(AppLanguage.supportedCodes)
-            .containsExactly("fr", "en", "es", "ar")
+            .containsExactly("fr", "en", "es", "de", "it", "ar")
             .inOrder()
     }
 
@@ -44,7 +44,7 @@ class AppLanguageTest {
         assertThat(AppLanguage.isSupported(null)).isFalse()
         assertThat(AppLanguage.isSupported("")).isFalse()
         assertThat(AppLanguage.isSupported("   ")).isFalse()
-        assertThat(AppLanguage.isSupported("de")).isFalse()
+        assertThat(AppLanguage.isSupported("ja")).isFalse()
         assertThat(AppLanguage.isSupported("xyz")).isFalse()
     }
 
@@ -66,7 +66,7 @@ class AppLanguageTest {
 
     @Test
     fun fromStorage_unsupportedOrGarbageDecodesToSystem() {
-        assertThat(AppLanguage.fromStorage("de")).isNull()
+        assertThat(AppLanguage.fromStorage("ja")).isNull()
         assertThat(AppLanguage.fromStorage("klingon")).isNull()
     }
 
@@ -83,7 +83,7 @@ class AppLanguageTest {
 
     @Test
     fun storageValue_unsupportedPreferenceEncodesToSystemToken() {
-        assertThat(AppLanguage.storageValue("de")).isEqualTo("system")
+        assertThat(AppLanguage.storageValue("ja")).isEqualTo("system")
         assertThat(AppLanguage.storageValue("")).isEqualTo("system")
     }
 
@@ -108,7 +108,7 @@ class AppLanguageTest {
 
     @Test
     fun resolveInterfaceLocaleTag_unsupportedCodeFollowsDeviceDefensively() {
-        assertThat(AppLanguage.resolveInterfaceLocaleTag("de")).isNull()
+        assertThat(AppLanguage.resolveInterfaceLocaleTag("ja")).isNull()
         assertThat(AppLanguage.resolveInterfaceLocaleTag("")).isNull()
     }
 
@@ -127,6 +127,6 @@ class AppLanguageTest {
     @Test
     fun info_nullForSystemAndUnsupported() {
         assertThat(AppLanguage.info(null)).isNull()
-        assertThat(AppLanguage.info("de")).isNull()
+        assertThat(AppLanguage.info("ja")).isNull()
     }
 }

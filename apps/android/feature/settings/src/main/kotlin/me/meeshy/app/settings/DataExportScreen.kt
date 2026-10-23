@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
@@ -36,12 +37,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -53,6 +58,7 @@ import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.export.ExportArtifact
 import me.meeshy.sdk.model.export.ExportFormat
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -74,6 +80,20 @@ fun DataExportScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val haptics = rememberMeeshyHaptics()
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is DataExportEffect.Haptic -> when (effect.kind) {
+                    DataExportHaptic.MEDIUM -> haptics.medium()
+                    DataExportHaptic.SUCCESS -> haptics.success()
+                    DataExportHaptic.ERROR -> haptics.error()
+                }
+                is DataExportEffect.Share -> runCatching { shareArtifact(context, effect.artifact) }
+            }
+        }
+    }
 
     MeeshyBackground {
         Scaffold(
@@ -116,31 +136,15 @@ fun DataExportScreen(
                 )
 
                 state.error?.let { error ->
-                    Text(
-                        text = stringResource(error.messageRes()),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyPalette.Error,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    ErrorBanner(stringResource(error.messageRes()))
                 }
 
-                Button(
-                    onClick = viewModel::submit,
+                ExportButton(
+                    isExporting = state.isExporting,
+                    isComplete = state.isComplete,
                     enabled = state.canSubmit,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MeeshyPalette.Indigo500),
-                ) {
-                    if (state.isExporting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = MeeshyPalette.White,
-                            strokeWidth = 2.dp,
-                        )
-                        Spacer(Modifier.size(MeeshySpacing.sm))
-                    }
-                    Text(stringResource(R.string.data_export_button))
-                }
+                    onClick = viewModel::submit,
+                )
 
                 state.artifact?.let { artifact ->
                     ExportReadyCard(
@@ -153,6 +157,58 @@ fun DataExportScreen(
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
         }
+    }
+}
+
+@Composable
+private fun ErrorBanner(message: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MeeshyPalette.Error.copy(alpha = 0.10f), RoundedCornerShape(MeeshySpacing.md))
+            .padding(MeeshySpacing.md),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.ErrorOutline, contentDescription = null, tint = MeeshyPalette.Error)
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyPalette.Error,
+        )
+    }
+}
+
+@Composable
+private fun ExportButton(isExporting: Boolean, isComplete: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val stateText = stringResource(
+        if (isExporting) R.string.settings_data_export_hint_exporting else R.string.settings_data_export_hint_start,
+    )
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { stateDescription = stateText },
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isComplete) MeeshyPalette.Success else MeeshyPalette.Indigo500,
+            disabledContainerColor = MeeshyPalette.Indigo500.copy(alpha = 0.6f),
+        ),
+    ) {
+        when {
+            isExporting -> CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                color = MeeshyPalette.White,
+                strokeWidth = 2.dp,
+            )
+            isComplete -> Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+        }
+        if (isExporting || isComplete) Spacer(Modifier.size(MeeshySpacing.sm))
+        Text(
+            stringResource(
+                if (isComplete) R.string.settings_data_export_button_done else R.string.data_export_button,
+            ),
+        )
     }
 }
 
@@ -295,14 +351,14 @@ private fun ExportReadyCard(messagesCount: Int?, contactsCount: Int?, onShare: (
         }
         messagesCount?.let {
             Text(
-                text = stringResource(R.string.data_export_ready_messages, it),
+                text = pluralStringResource(R.plurals.data_export_ready_messages, it, it),
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
             )
         }
         contactsCount?.let {
             Text(
-                text = stringResource(R.string.data_export_ready_contacts, it),
+                text = pluralStringResource(R.plurals.data_export_ready_contacts, it, it),
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
             )

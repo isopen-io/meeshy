@@ -18,13 +18,16 @@ class StoryPlaybackTest {
     private fun group(userId: String, vararg slideIds: String) =
         StoryGroupSlides(userId = userId, authorName = "name-$userId", slides = slideIds.map(::slide))
 
-    private fun playback(vararg groups: StoryGroupSlides, startUserId: String? = null) =
-        StoryPlayback.startingAt(groups.toList(), startUserId)
+    private fun playback(vararg groups: StoryGroupSlides, startUserId: String? = null): StoryPlayback {
+        val author = startUserId ?: groups.firstOrNull { it.slides.isNotEmpty() }?.userId.orEmpty()
+        return StoryPlayback.forAuthor(groups.toList(), author)
+            ?: StoryPlayback(groups = emptyList(), isDismissed = true)
+    }
 
-    // ---- startingAt ---------------------------------------------------------
+    // ---- forAuthor ----------------------------------------------------------
 
     @Test
-    fun `startingAt positions at the requested user's group`() {
+    fun `forAuthor positions at the requested user's group`() {
         val pb = playback(group("a", "a1"), group("b", "b1", "b2"), startUserId = "b")
         assertThat(pb.groupIndex).isEqualTo(1)
         assertThat(pb.slideIndex).isEqualTo(0)
@@ -34,14 +37,13 @@ class StoryPlaybackTest {
     }
 
     @Test
-    fun `startingAt falls back to the first group when the user is unknown`() {
-        val pb = playback(group("a", "a1"), group("b", "b1"), startUserId = "ghost")
-        assertThat(pb.groupIndex).isEqualTo(0)
-        assertThat(pb.currentSlide?.id).isEqualTo("a1")
+    fun `forAuthor never opens another author when the requested one is missing`() {
+        val pb = StoryPlayback.forAuthor(listOf(group("a", "a1"), group("b", "b1")), "ghost")
+        assertThat(pb).isNull()
     }
 
     @Test
-    fun `startingAt drops groups that have no slides and reindexes the rest`() {
+    fun `forAuthor drops groups that have no slides and reindexes the rest`() {
         val pb = playback(group("empty"), group("b", "b1"), startUserId = "b")
         assertThat(pb.groups.map { it.userId }).containsExactly("b")
         assertThat(pb.groupIndex).isEqualTo(0)
@@ -49,13 +51,23 @@ class StoryPlaybackTest {
     }
 
     @Test
-    fun `startingAt with no live groups is immediately dismissed`() {
-        val pb = playback(group("empty"), startUserId = null)
-        assertThat(pb.groups).isEmpty()
-        assertThat(pb.isDismissed).isTrue()
-        assertThat(pb.currentSlide).isNull()
-        assertThat(pb.authorName).isEmpty()
-        assertThat(pb.slides).isEmpty()
+    fun `forAuthor has nothing to play for an author whose group is empty`() {
+        assertThat(StoryPlayback.forAuthor(listOf(group("empty")), "empty")).isNull()
+        assertThat(StoryPlayback.forAuthor(listOf(group("a", "a1")), "")).isNull()
+    }
+
+    @Test
+    fun `forAuthor starts on the first story the reader has not seen`() {
+        val seen = slide("b1").copy(isViewed = true)
+        val group = StoryGroupSlides("b", "name-b", listOf(seen, slide("b2"), slide("b3")))
+        val pb = StoryPlayback.forAuthor(listOf(group("a", "a1"), group), "b")
+        assertThat(pb?.currentSlide?.id).isEqualTo("b2")
+    }
+
+    @Test
+    fun `forAuthor starts on the first story when every story is seen`() {
+        val group = StoryGroupSlides("b", "name-b", listOf(slide("b1").copy(isViewed = true), slide("b2").copy(isViewed = true)))
+        assertThat(StoryPlayback.forAuthor(listOf(group), "b")?.currentSlide?.id).isEqualTo("b1")
     }
 
     // ---- advance ------------------------------------------------------------

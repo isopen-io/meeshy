@@ -56,7 +56,7 @@ class ChromeViewModelTest {
         coEvery { friendRepository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
         every { notificationRepository.notificationsStream(any(), any()) } returns
             MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
-        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager)
+        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager, me.meeshy.sdk.net.MeeshyConfig())
     }
 
     @Test

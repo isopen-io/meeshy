@@ -23,6 +23,7 @@ import MeeshyUI
 /// le shimmer système fait le reste.
 struct LentilleSkeletonRow: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
@@ -51,7 +52,7 @@ struct LentilleSkeletonRow: View {
         }
         .padding(.horizontal, LentilleMetrics.Row.paddingHorizontal)
         .padding(.vertical, LentilleMetrics.Row.paddingVertical)
-        .frame(height: LentilleMetrics.Row.height)
+        .frame(height: LentilleMetrics.Row.height(for: dynamicTypeSize))
         .accessibilityHidden(true)
     }
 

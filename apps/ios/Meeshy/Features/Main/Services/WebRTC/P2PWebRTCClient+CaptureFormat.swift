@@ -12,7 +12,9 @@ nonisolated struct CallCaptureCeiling: Equatable, Sendable {
     let height: Int
     let fps: Int
 
-    static let hd = CallCaptureCeiling(width: 1280, height: 720, fps: 30)
+    static let hd = CallCaptureCeiling(width: Int(VideoConfig.hd720p30.maxResolution.width),
+                                       height: Int(VideoConfig.hd720p30.maxResolution.height),
+                                       fps: VideoConfig.hd720p30.maxFrameRate)
     static let reduced = CallCaptureCeiling(width: 640, height: 480, fps: 24)
 
     /// Réduite dès que l'appareil chauffe (`.serious` et au-delà) ou que

@@ -142,7 +142,10 @@ data class MeEnvelope(
 
 @Serializable
 data class RefreshTokenRequest(
-    val sessionToken: String,
+    /** Le JWT présenté (même échu) : `refreshTokenRequestSchema` l'exige, comme iOS l'envoie. */
+    val token: String,
+    /** Le jeton de session de l'appareil, qui permet de renouveler un JWT échu. */
+    val sessionToken: String? = null,
 )
 
 /**

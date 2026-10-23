@@ -1,0 +1,7 @@
+# Langues dont les textes juridiques (values/legal.xml) attendent un avis juridique signé.
+# Une ligne = « locale legal.xml » : pour cette locale, les clés définies dans legal.xml retombent
+# sur l'anglais (le sélecteur de document reste fr/en/es/pt). Seul legal.xml est exemptable ; la
+# garde refuse toute autre cible, et l'exemption ne retire aucune autre clé du contrôle.
+de legal.xml
+it legal.xml
+ar legal.xml

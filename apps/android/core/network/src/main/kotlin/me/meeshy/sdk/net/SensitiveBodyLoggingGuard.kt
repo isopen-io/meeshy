@@ -97,6 +97,12 @@ class SensitiveBodyLoggingGuard(
             "/auth/phone-transfer/verify",
             "/auth/phone-transfer/verify-registration",
             "/anonymous/refresh",
+            // api-path: inspection, pas emission — un carnet d'adresses entier (noms,
+            // numeros, e-mails) part dans ces corps et revient dans les reponses.
+            "/directory/contacts",
+            "/users/me/contacts/match",
+            "/users/me/contacts/sync",
+            "/contacts/resolve",
         )
 
         /**

@@ -49,9 +49,6 @@ class ConversationListViewModelPrefetchTest {
         var list = listOf(row("c1"), row("c2"))
     }
 
-    private fun row(id: String) =
-        ApiConversation(id = id, lastMessage = ApiConversationLastMessage(id = "m-$id", createdAt = "2026-10-01T10:00:00.000Z"))
-
     @Test
     fun `le chargement de la liste precharge ses premieres conversations`() = runTest {
         val h = Harness(this)
@@ -92,3 +89,6 @@ class ConversationListViewModelPrefetchTest {
         assertThat(h.source.requested).isEmpty()
     }
 }
+
+private fun row(id: String) =
+    ApiConversation(id = id, lastMessage = ApiConversationLastMessage(id = "m-$id", createdAt = "2026-10-01T10:00:00.000Z"))

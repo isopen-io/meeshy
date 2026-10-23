@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -76,28 +77,28 @@ class CallSocialSignalManager @Inject constructor(
     val transcriptionActive: SharedFlow<CallTranscriptionActive> = _transcriptionActive.asSharedFlow()
 
     fun attach() {
-        route("call:participant-invited") { raw -> CallSocialEventParser.participantInvited(raw)?.let(_participantInvited::tryEmit) }
-        route("call:invite-declined") { raw ->
+        route(SocketEventNames.CALL_PARTICIPANT_INVITED) { raw -> CallSocialEventParser.participantInvited(raw)?.let(_participantInvited::tryEmit) }
+        route(SocketEventNames.CALL_INVITE_DECLINED) { raw ->
             CallSocialEventParser.inviteSettled(raw, CallInviteOutcome.DECLINED)?.let(_inviteSettled::tryEmit)
         }
-        route("call:invite-expired") { raw ->
+        route(SocketEventNames.CALL_INVITE_EXPIRED) { raw ->
             CallSocialEventParser.inviteSettled(raw, CallInviteOutcome.EXPIRED)?.let(_inviteSettled::tryEmit)
         }
-        route("call:muted-by-moderator") { raw -> CallSocialEventParser.mutedByModerator(raw)?.let(_mutedByModerator::tryEmit) }
-        route("call:reaction-received") { raw -> CallSocialEventParser.reactionReceived(raw)?.let(_reactions::tryEmit) }
-        route("call:recording-requested") { raw ->
+        route(SocketEventNames.CALL_MUTED_BY_MODERATOR) { raw -> CallSocialEventParser.mutedByModerator(raw)?.let(_mutedByModerator::tryEmit) }
+        route(SocketEventNames.CALL_REACTION_RECEIVED) { raw -> CallSocialEventParser.reactionReceived(raw)?.let(_reactions::tryEmit) }
+        route(SocketEventNames.CALL_RECORDING_REQUESTED) { raw ->
             CallSocialEventParser.recordingRequested(raw)?.let { _recordingEvents.tryEmit(CallRecordingSocketEvent.Requested(it)) }
         }
-        route("call:recording-started") { raw ->
+        route(SocketEventNames.CALL_RECORDING_STARTED) { raw ->
             CallSocialEventParser.recordingStarted(raw)?.let { _recordingEvents.tryEmit(CallRecordingSocketEvent.Started(it)) }
         }
-        route("call:recording-stopped") { raw ->
+        route(SocketEventNames.CALL_RECORDING_STOPPED) { raw ->
             CallSocialEventParser.recordingStopped(raw)?.let { _recordingEvents.tryEmit(CallRecordingSocketEvent.Stopped(it)) }
         }
-        route("call:frame-selected") { raw -> CallSocialEventParser.frameSelected(raw)?.let(_frameSelected::tryEmit) }
-        route("call:preview-requested") { raw -> CallSocialEventParser.previewRequested(raw)?.let(_previewRequested::tryEmit) }
-        route("call:preview-signal") { raw -> CallSocialEventParser.previewSignal(raw)?.let(_previewSignals::tryEmit) }
-        route("call:transcription-active") { raw -> CallSocialEventParser.transcriptionActive(raw)?.let(_transcriptionActive::tryEmit) }
+        route(SocketEventNames.CALL_FRAME_SELECTED) { raw -> CallSocialEventParser.frameSelected(raw)?.let(_frameSelected::tryEmit) }
+        route(SocketEventNames.CALL_PREVIEW_REQUESTED) { raw -> CallSocialEventParser.previewRequested(raw)?.let(_previewRequested::tryEmit) }
+        route(SocketEventNames.CALL_PREVIEW_SIGNAL) { raw -> CallSocialEventParser.previewSignal(raw)?.let(_previewSignals::tryEmit) }
+        route(SocketEventNames.CALL_TRANSCRIPTION_ACTIVE) { raw -> CallSocialEventParser.transcriptionActive(raw)?.let(_transcriptionActive::tryEmit) }
     }
 
     private fun route(event: String, handle: (String) -> Unit) {
@@ -155,15 +156,15 @@ class CallSocialSignalManager @Inject constructor(
     fun emitTranscriptionSegment(callId: String, segment: Map<String, Any?>) {
         val inner = JSONObject()
         segment.forEach { (key, value) -> inner.put(key, value ?: JSONObject.NULL) }
-        socketManager.emit("call:transcription-segment", JSONObject().put("callId", callId).put("segment", inner))
+        socketManager.emit(SocketEventNames.CALL_TRANSCRIPTION_SEGMENT, JSONObject().put("callId", callId).put("segment", inner))
     }
 
     fun emitTranscriptionActive(callId: String, active: Boolean) =
-        socketManager.emit("call:transcription-active", JSONObject().put("callId", callId).put("active", active))
+        socketManager.emit(SocketEventNames.CALL_TRANSCRIPTION_ACTIVE, JSONObject().put("callId", callId).put("active", active))
 
     /** Partage d'écran : accompagne la capture MediaProjection ; les autres le lisent sur `call:media-toggled` (`screen`). */
     fun emitToggleScreen(callId: String, enabled: Boolean) =
-        socketManager.emit("call:toggle-screen", JSONObject().put("callId", callId).put("enabled", enabled))
+        socketManager.emit(SocketEventNames.CALL_TOGGLE_SCREEN, JSONObject().put("callId", callId).put("enabled", enabled))
 
     /** La note d'après-appel (cases + étoiles). */
     fun emitQualityFeedback(feedback: CallQualityFeedback) {
@@ -171,6 +172,6 @@ class CallSocialSignalManager @Inject constructor(
         feedback.socketFields().forEach { (key, value) ->
             payload.put(key, if (value is List<*>) org.json.JSONArray(value) else value)
         }
-        socketManager.emit("call:quality-feedback", payload)
+        socketManager.emit(SocketEventNames.CALL_QUALITY_FEEDBACK, payload)
     }
 }

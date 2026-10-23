@@ -29,6 +29,7 @@ import javax.inject.Inject
 data class SettingsUiState(
     val userId: String? = null,
     val username: String? = null,
+    val displayName: String? = null,
     val email: String? = null,
     val avatar: String? = null,
     val themeMode: AppThemeMode = AppThemeMode.AUTO,
@@ -39,7 +40,13 @@ data class SettingsUiState(
     val notifications: UserNotificationPreferences = UserNotificationPreferences(),
     val notificationTypeQuery: String = "",
     val isLoading: Boolean = false,
-)
+) {
+    /** iOS `SettingsView.profileCard` : le nom affiché en titre, le pseudo à défaut. */
+    val profileTitle: String get() = displayName?.trim()?.takeIf { it.isNotEmpty() } ?: username.orEmpty()
+
+    /** iOS `SettingsView.profileCard` : « @pseudo » sous le titre. */
+    val profileHandle: String? get() = username?.takeIf { it.isNotBlank() }?.let { "@$it" }
+}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -62,6 +69,7 @@ class SettingsViewModel @Inject constructor(
                     it.copy(
                         userId = user?.id,
                         username = user?.username,
+                        displayName = user?.displayName,
                         email = user?.email,
                         avatar = user?.avatar,
                         systemLanguage = user?.systemLanguage,

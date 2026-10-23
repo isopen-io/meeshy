@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -63,14 +64,18 @@ class StoriesViewModel @Inject constructor(
                     },
                 ),
                 storyRepository.publishQueue(),
-            ) { result, queue -> result to queue }
-                .collect { (result, queue) ->
+                // La session peut se résoudre APRÈS la première émission du cache (démarrage
+                // à froid) : la barre se recompose alors, sinon mes stories restent rangées
+                // comme celles d'un autre auteur jusqu'à la prochaine émission.
+                sessionRepository.currentUser,
+            ) { result, queue, user -> Triple(result, queue, user) }
+                .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false) } }
+                .collectEachSafely { (result, queue, user) ->
                     val pending = queue.pending
                     val failed = queue.failed
                     reconcileDeliveredPublishes(pending, failed)
                     rawStories = StoryTrayReducer.stories(result, rawStories)
                     val flags = StoryTrayReducer.flags(result, rawStories.isNotEmpty())
-                    val user = sessionRepository.currentUser.value
                     val currentUserId = user?.id
                     val self = user?.let {
                         StoryOptimisticTray.SelfIdentity(it.id, it.effectiveDisplayName, it.avatar)
@@ -107,7 +112,7 @@ class StoriesViewModel @Inject constructor(
      */
     private fun observeStoryDeletions() {
         viewModelScope.launch {
-            socialSocket.storyDeleted.collect { payload ->
+            socialSocket.storyDeleted.collectEachSafely { payload ->
                 storyRepository.removeCachedStory(payload.storyId)
             }
         }
@@ -123,7 +128,7 @@ class StoriesViewModel @Inject constructor(
      */
     private fun observeStoryUpdates() {
         viewModelScope.launch {
-            socialSocket.storyUpdated.collect { payload ->
+            socialSocket.storyUpdated.collectEachSafely { payload ->
                 storyRepository.applyStoryUpdate(
                     updated = payload.story,
                     engagementReset = payload.engagementReset ?: false,

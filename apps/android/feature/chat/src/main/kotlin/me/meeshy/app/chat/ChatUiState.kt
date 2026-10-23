@@ -14,8 +14,6 @@ import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.SentimentAnalyzer
-import me.meeshy.sdk.model.SentimentLevel
 import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.call.ActiveCallSession
@@ -40,8 +38,6 @@ data class ChatUiState(
      * b69509366 / bulle call-live web) après un crash/relaunch mid-call. Null
      * quand aucun appel n'est en cours ou que la sonde échoue. */
     val activeCall: ActiveCallSession? = null,
-    val draft: String = "",
-    val draftRevision: Int = 0,
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
@@ -135,8 +131,6 @@ data class ChatUiState(
      * `null` when nothing is downloading and nothing needs surfacing. */
     val fileDownload: FileAttachmentDownloadUiState? = null,
 ) {
-    val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
-
     /** The composer's live slow-mode posture at [nowMillis] — whether the send
      * action is allowed and, if not, how many seconds remain. Pure derivation over
      * [SlowModePolicy]; the Compose screen ticks [nowMillis] to animate the
@@ -174,15 +168,6 @@ data class ChatUiState(
 
     /** True when at least one effect is armed — drives the composer's active-effects accent. */
     val hasPendingEffects: Boolean get() = pendingEffects.hasAnyEffect
-
-    /** The composer's live sentiment glyph, derived from the current [draft] via the
-     * pure [SentimentAnalyzer] (parity iOS `TextAnalyzer`/`SmartContextZone`, the
-     * dictionary scorer). Null when the composer is empty — no glyph is shown for a
-     * blank field; a non-blank draft with no sentiment words resolves to
-     * [SentimentLevel.NEUTRAL]. */
-    val composerSentiment: SentimentLevel?
-        get() = draft.takeIf { it.isNotBlank() }
-            ?.let { SentimentLevel.from(SentimentAnalyzer.score(it)) }
 
     /** The language code the composer pill shows — the live detection/override
      * resolved against [composerLanguageSeed]. Drives the pill glyph and the picker's
