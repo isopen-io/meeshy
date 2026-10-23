@@ -44,8 +44,14 @@
     <string name="guest_join_back">Retour</string>
     <string name="guest_join_birthday">Anniversaire</string>
     <string name="guest_join_email">E-mail</string>
+    <string name="guest_join_email_optional">Email (optionnel)</string>
+    <string name="guest_join_error_join_failed">Erreur lors de la connexion</string>
+    <string name="guest_join_error_link_not_found">Ce lien de conversation est introuvable</string>
+    <string name="guest_join_error_too_many_users">Trop d\'utilisateurs connectes</string>
     <string name="guest_join_first_name">Prénom</string>
     <string name="guest_join_last_name">Nom</string>
+    <string name="guest_join_optional_section">Optionnel</string>
+    <string name="guest_join_required_section">Informations requises</string>
     <string name="guest_join_retry">Réessayer</string>
     <string name="guest_join_sign_in">Se connecter</string>
     <string name="guest_join_submit">Rejoindre</string>
