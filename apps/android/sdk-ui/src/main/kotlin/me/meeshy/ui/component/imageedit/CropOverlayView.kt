@@ -1,6 +1,8 @@
 package me.meeshy.ui.component.imageedit
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +20,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -35,7 +38,8 @@ private const val CORNER_ARM = 0.6f
  * ratio), voile sombre hors cadre, grille de tiers, déplacement du cadre entier au centre. Les
  * poignées se dessinent à 24 dp mais se saisissent sur 48 dp. Miroir d'iOS `CropOverlayView`.
  *
- * [onInteraction] se déclenche dès qu'une poignée (ou le cadre) est saisie : l'hôte ne cuit le
+ * [onInteraction] se déclenche dès qu'une poignée (ou le cadre) est saisie — au premier appui, avant
+ * le seuil de glissement, comme iOS `DragGesture(minimumDistance: 0)` : l'hôte ne cuit le
  * recadrage que s'il a été saisi, ouvrir puis fermer l'outil reste un no-op.
  */
 @Composable
@@ -62,11 +66,17 @@ public fun CropOverlayView(
             Modifier
                 .fillMaxSize()
                 .clearAndSetSemantics { }
+                .pointerInput(hitArea) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val grabbed = CropGeometry.detectHandle(rect, down.position.x, down.position.y, ratio, hitArea)
+                        if (grabbed != CropOverlayHandle.NONE) onTouch()
+                    }
+                }
                 .pointerInput(minCrop, hitArea) {
                     detectDragGestures(
                         onDragStart = { start ->
                             active = CropGeometry.detectHandle(rect, start.x, start.y, ratio, hitArea)
-                            if (active != CropOverlayHandle.NONE) onTouch()
                         },
                         onDrag = { change, delta ->
                             change.consume()
