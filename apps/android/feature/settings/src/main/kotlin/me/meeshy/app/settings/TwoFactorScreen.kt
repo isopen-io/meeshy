@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.util.SensitiveClipboard
+import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
@@ -90,35 +91,16 @@ fun TwoFactorScreen(
     }
 
     MeeshyBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                        titleContentColor = MeeshyTheme.tokens.textPrimary,
-                        navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
-                    ),
-                    title = { Text(stringResource(R.string.twofactor_title)) },
-                    navigationIcon = {
-                        IconButton(
-                            onClick = { if (state.stage == TwoFactorStage.STATUS) onBack() else viewModel.cancel() },
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.settings_back),
-                            )
-                        }
-                    },
-                )
-            },
-        ) { padding ->
+        CollapsibleHeaderPage(
+            title = stringResource(R.string.twofactor_title),
+            onBack = { if (state.stage == TwoFactorStage.STATUS) onBack() else viewModel.cancel() },
+            titleColor = MeeshyTheme.tokens.textPrimary,
+            backArrowColor = MeeshyPalette.Indigo500,
+            backgroundColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
                     .formColumnWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
