@@ -30,3 +30,17 @@ object PostShareLink {
             }
         }
 }
+
+/** Le lien à remettre à la feuille de partage : [tracked] vaut `true` pour le lien court suivi. */
+data class PostShareTarget(val url: String, val tracked: Boolean)
+
+/** Le repli d'un partage de post — l'URL brute, jamais « rien à partager ». */
+object PostShareLinkLaw {
+    fun rawUrl(postId: String): String = PostShareLink.webLink(postId)
+
+    /** Le lien suivi quand la passerelle en a frappé un lisible, sinon l'URL brute. */
+    fun resolve(postId: String, shortUrl: String?): PostShareTarget {
+        val minted = shortUrl?.trim()?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+        return if (minted != null) PostShareTarget(minted, tracked = true) else PostShareTarget(rawUrl(postId), tracked = false)
+    }
+}

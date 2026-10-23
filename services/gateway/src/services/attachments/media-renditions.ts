@@ -9,6 +9,7 @@ import type { MediaRendition } from '@meeshy/shared/types/attachment';
 import { produceCompatibilityRendition } from './video-compat-rendition.js';
 import { convertStoredHeif } from './heif-conversion.js';
 import type { MediaJobKind } from './media-processing/jobs.js';
+import { timeMediaStage } from '../metrics/mediaStageMetrics';
 
 const logger = enhancedLogger.child({ module: 'media-renditions' });
 
@@ -291,7 +292,7 @@ export async function transcodeVideoRendition(
   const outputAbs = path.join(deps.uploadBasePath, outputRel);
 
   try {
-    await deps.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan));
+    await timeMediaStage('transcode', 'video', () => deps.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan)));
     const stat = await fs.stat(outputAbs);
     if (stat.size === 0 || stat.size >= source.fileSize) {
       await fs.unlink(outputAbs).catch(() => {});
