@@ -55,7 +55,7 @@ function mirrorWith(objects: Record<string, Buffer>) {
   return { store, reads };
 }
 
-function makePrisma(isViewOnce = false) {
+function makePrisma(isViewOnce = false, ownedKeys: readonly string[] = [KEY]) {
   const row = { id: ID, filePath: KEY, messageId: 'm1', isViewOnce };
   const carrier = { id: 'm1', isViewOnce };
   return {
@@ -63,7 +63,7 @@ function makePrisma(isViewOnce = false) {
       findUnique: jest.fn<any>().mockResolvedValue(row),
       findMany: jest.fn<any>().mockImplementation(async ({ where }: any) => {
         const clauses = (where.OR as Record<string, unknown>[] | undefined) ?? [where];
-        return clauses.some((clause) => clause.filePath === KEY) ? [row] : [];
+        return clauses.some((clause) => typeof clause.filePath === 'string' && ownedKeys.includes(clause.filePath)) ? [row] : [];
       }),
     },
     message: {
@@ -75,12 +75,12 @@ function makePrisma(isViewOnce = false) {
   };
 }
 
-async function buildApp(mirror: MediaObjectStore | null, isViewOnce = false): Promise<FastifyInstance> {
+async function buildApp(mirror: MediaObjectStore | null, isViewOnce = false, ownedKeys: readonly string[] = [KEY]): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as unknown as Record<string, unknown>).authContext = { isAuthenticated: true, isAnonymous: false, userId: 'user-1' };
   });
-  registerDownloadRoutes(app, makePrisma(isViewOnce) as never, { uploadRoot: '/uploads/attachments', mirror });
+  registerDownloadRoutes(app, makePrisma(isViewOnce, ownedKeys) as never, { uploadRoot: '/uploads/attachments', mirror });
   await app.ready();
   return app;
 }
@@ -171,6 +171,29 @@ describe('#11267 — le disque n’a plus le fichier : la passerelle le sert dep
     const res = await app.inject({ method: 'GET', url: `/attachments/file/${encodeURIComponent('../../etc/passwd')}` });
 
     expect([403, 404]).toContain(res.statusCode);
+    expect(mirror.reads).toEqual([]);
+    await app.close();
+  });
+
+  it('une clé qu’aucune pièce jointe vivante ne porte (message purgé, compte effacé) ne ressuscite pas depuis le seau', async () => {
+    const mirror = mirrorWith({ [KEY]: BYTES });
+    const app = await buildApp(mirror.store, false, []);
+
+    const res = await app.inject({ method: 'GET', url: `/attachments/file/${encodeURIComponent(KEY)}` });
+
+    expect(res.statusCode).toBe(404);
+    expect(mirror.reads).toEqual([]);
+    await app.close();
+  });
+
+  it('un avatar absent du disque n’est jamais cherché dans le seau', async () => {
+    const key = 'avatars/user/u1.jpg';
+    const mirror = mirrorWith({ [key]: BYTES });
+    const app = await buildApp(mirror.store);
+
+    const res = await app.inject({ method: 'GET', url: `/attachments/file/${encodeURIComponent(key)}` });
+
+    expect(res.statusCode).toBe(404);
     expect(mirror.reads).toEqual([]);
     await app.close();
   });
