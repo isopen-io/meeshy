@@ -99,7 +99,8 @@ describe('W12 — une image se sert en AVIF puis en WebP, l’original HD en src
   });
 
   test('sans AVIF (pièce d’avant S7) : aucune <picture>, l’<img> d’avant intacte', () => {
-    const el = grid([photo('old', { avifVariants: undefined })]);
+    const { avifVariants: _withoutAvif, ...old } = photo('old');
+    const el = grid([old]);
     const img = el.querySelector('img[data-attachment-image="old"]')!;
     expect(el.querySelector('picture')).toBeNull();
     expect(img.getAttribute('srcset')).toContain('old_640w.webp 640w');

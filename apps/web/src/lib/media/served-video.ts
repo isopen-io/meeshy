@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
+
 import type { MediaRendition } from '@meeshy/shared/types/attachment';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import { currentDeviceTier, type DeviceTier } from '@/lib/device/capability-tier';
 
-import { electVideoSource } from './video-rendition';
+import { compatibilityRendition, electVideoSource } from './video-rendition';
 
 /**
  * **L'ADRESSE DE LA VIDÉO JOUÉE** (W12, #11318) — le pont entre la loi pure
@@ -54,4 +56,23 @@ export function servedVideoSrc(
     tier: env.tier(),
   });
   return attachmentSrc(choice.url);
+}
+
+type ServableVideo = { readonly fileUrl: string; readonly fileSize?: number; readonly renditions?: readonly MediaRendition[] };
+
+/**
+ * L'adresse servie, ÉLUE UNE FOIS par pièce montée : les dépendances sont des
+ * PRIMITIVES (l'identité de `renditions` change à chaque relecture du cache),
+ * et un tier qui bouge en cours de lecture ne recharge pas la vidéo.
+ */
+export function useServedVideoSrc(attachment: ServableVideo): string {
+  const compat = compatibilityRendition(attachment.renditions);
+  const compatUrl = compat?.url;
+  const compatSize = compat?.size;
+  const { fileUrl, fileSize } = attachment;
+  return useMemo(
+    () => servedVideoSrc({ fileUrl, ...(fileSize !== undefined ? { fileSize } : {}), ...(compat !== undefined ? { renditions: [compat] } : {}) }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fileUrl, fileSize, compatUrl, compatSize],
+  );
 }
