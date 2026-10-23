@@ -58,8 +58,11 @@ data class CommentThreadState(
     /** Replace the optimistic [tempId] with the server [confirmed] row; inert if not pending. */
     fun confirmed(tempId: String, confirmed: ApiPostComment): CommentThreadState {
         if (tempId !in pendingIds) return this
+        // The realtime echo (`comment:added`) can land before the REST answer: the server row is
+        // then already shown, so the optimistic one goes instead of becoming its twin.
+        val echoed = comments.any { it.id == confirmed.id }
         return copy(
-            comments = comments.map { if (it.id == tempId) confirmed else it },
+            comments = if (echoed) comments.filterNot { it.id == tempId } else comments.map { if (it.id == tempId) confirmed else it },
             pendingIds = pendingIds - tempId,
         )
     }

@@ -32,12 +32,9 @@ internal fun NavGraphBuilder.settingsNavGraph(
     composable(Routes.SETTINGS) {
         SettingsScreen(
             onBack = { navController.popBackStack() },
-            onLogout = {
-                authViewModel.logout()
-                navController.navigate(Routes.LOGIN) {
-                    popUpTo(Routes.CONVERSATIONS) { inclusive = true }
-                }
-            },
+            // La racine bascule sur LOGIN quand la session est fermée (startDestination) :
+            // naviguer ici, avant la fin de l'appel serveur, renvoyait vers la liste.
+            onLogout = { authViewModel.logout() },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onOpenStarred = { navController.navigate(Routes.STARRED) },
             onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },

@@ -121,6 +121,10 @@ object FeedRealtimeReducer {
      * count — never below zero — so the banner never claims a post that is gone), and is
      * inert for a blank id or a post already tombstoned and absent from the head.
      */
+    /** Lifts the tombstone [remove] set — an optimistic delete the server refused. */
+    fun restore(state: FeedRealtimeHead, postId: String): FeedRealtimeHead =
+        if (postId in state.removedIds) state.copy(removedIds = state.removedIds - postId) else state
+
     fun remove(state: FeedRealtimeHead, postId: String): FeedRealtimeHead {
         if (postId.isBlank()) return state
         val inHead = state.posts.any { it.id == postId }

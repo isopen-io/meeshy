@@ -140,6 +140,8 @@
     <string name="settings_export_data">Exportar meus dados</string>
     <string name="settings_language_dialog_close">Fechar</string>
     <string name="settings_log_out">Sair</string>
+    <string name="settings_logout_confirm_message">Tem certeza de que deseja sair?</string>
+    <string name="settings_logout_confirm_title">Sair</string>
     <string name="settings_media_capture_header">Ao capturar</string>
     <string name="settings_media_capture_original_subtitle">A foto ou o vídeo bruto, sem efeito nem moldura, é salvo no Fotos a cada captura.</string>
     <string name="settings_media_capture_original_title">Salvar o original</string>

@@ -3,15 +3,21 @@ package me.meeshy.app.reels
 import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.displayContent
+import me.meeshy.sdk.model.isTranslated
+import me.meeshy.sdk.lang.LanguageResolver
 
 /** A single reel ready to render: a playable video + its author/caption/counters. */
 data class ReelPresentation(
     val id: String,
     val videoUrl: String,
     val posterUrl: String?,
+    val authorId: String?,
     val authorName: String?,
     val authorAvatarUrl: String?,
+    /** The caption in the reader's language (Prisme), or the original when none is preferred. */
     val caption: String?,
+    val isCaptionTranslated: Boolean = false,
     val likeCount: Int,
     val isLiked: Boolean,
     val commentCount: Int,
@@ -29,7 +35,11 @@ object ReelBuilder {
      * playable video media. Mirrors the Feed's URL resolution ([mediaBaseUrl] = the
      * gateway host).
      */
-    fun build(posts: List<ApiPost>, mediaBaseUrl: String?): List<ReelPresentation> =
+    fun build(
+        posts: List<ApiPost>,
+        mediaBaseUrl: String?,
+        preferences: LanguageResolver.ContentLanguagePreferences? = null,
+    ): List<ReelPresentation> =
         posts.asSequence()
             .filter { it.type?.uppercase() == "REEL" }
             .mapNotNull { post ->
@@ -41,10 +51,12 @@ object ReelBuilder {
                     id = post.id,
                     videoUrl = resolveMediaUrl(video.fileUrl!!, mediaBaseUrl),
                     posterUrl = video.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    authorId = post.author?.id,
                     authorName = (post.author?.displayName ?: post.author?.username)
                         ?.takeIf { it.isNotBlank() },
                     authorAvatarUrl = post.author?.avatar?.let { resolveMediaUrl(it, mediaBaseUrl) },
-                    caption = post.content?.takeIf { it.isNotBlank() },
+                    caption = (preferences?.let(post::displayContent) ?: post.content)?.takeIf { it.isNotBlank() },
+                    isCaptionTranslated = preferences?.let(post::isTranslated) == true,
                     likeCount = post.likeCount ?: 0,
                     isLiked = post.isLikedByMe == true,
                     commentCount = post.commentCount ?: 0,

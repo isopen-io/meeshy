@@ -140,6 +140,8 @@
     <string name="settings_export_data">Export my data</string>
     <string name="settings_language_dialog_close">Close</string>
     <string name="settings_log_out">Log out</string>
+    <string name="settings_logout_confirm_message">Are you sure you want to log out?</string>
+    <string name="settings_logout_confirm_title">Log out</string>
     <string name="settings_media_capture_header">When capturing</string>
     <string name="settings_media_capture_original_subtitle">The raw photo or video, with no effect or frame, is saved to Photos with every shot.</string>
     <string name="settings_media_capture_original_title">Save the original</string>

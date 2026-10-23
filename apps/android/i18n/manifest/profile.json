@@ -13,6 +13,60 @@
           "status": "android-only"
         },
         {
+          "catalog": "ui",
+          "iosKey": "profile.action.acceptConnection",
+          "androidName": "profile_action_accept_connection",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.blockUser",
+          "androidName": "profile_action_block_user",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.cancelRequest",
+          "androidName": "profile_action_cancel_request",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.connectionRequest",
+          "androidName": "profile_action_connection_request",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.declineConnection",
+          "androidName": "profile_action_decline_connection",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.report",
+          "androidName": "profile_action_report",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.resendRequest",
+          "androidName": "profile_action_resend_request",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.sendMessage",
+          "androidName": "profile_action_send_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.unblockUser",
+          "androidName": "profile_action_unblock_user",
+          "status": "adopted"
+        },
+        {
           "androidName": "profile_activity_average",
           "status": "android-only"
         },
@@ -44,6 +98,18 @@
         },
         {
           "catalog": "ui",
+          "iosKey": "profile.blocked.byMe",
+          "androidName": "profile_blocked_by_me",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.blocked.unblock",
+          "androidName": "profile_blocked_unblock",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
           "iosKey": "voiceProfile.manage.cancelDelete",
           "androidName": "profile_cancel",
           "status": "adopted"
@@ -59,6 +125,18 @@
         {
           "androidName": "profile_completion",
           "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.connection.context.received",
+          "androidName": "profile_connection_context_received",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.connection.context.sent",
+          "androidName": "profile_connection_context_sent",
+          "status": "adopted"
         },
         {
           "androidName": "profile_custom_language_label",
@@ -153,6 +231,12 @@
         {
           "androidName": "profile_member_since",
           "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.open.error",
+          "androidName": "profile_open_conversation_error",
+          "status": "adopted"
         },
         {
           "catalog": "ui",
@@ -253,6 +337,12 @@
           "status": "adopted"
         },
         {
+          "catalog": "ui",
+          "iosKey": "profile.status.connected",
+          "androidName": "profile_status_connected",
+          "status": "adopted"
+        },
+        {
           "catalog": "app",
           "iosKey": "profile.language.primary",
           "androidName": "profile_system_language_label",
@@ -262,6 +352,30 @@
           "catalog": "app",
           "iosKey": "profile.title",
           "androidName": "profile_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.blockFailed",
+          "androidName": "profile_toast_block_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.unblockFailed",
+          "androidName": "profile_toast_unblock_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.userBlocked",
+          "androidName": "profile_toast_user_blocked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.userUnblocked",
+          "androidName": "profile_toast_user_unblocked",
           "status": "adopted"
         },
         {
