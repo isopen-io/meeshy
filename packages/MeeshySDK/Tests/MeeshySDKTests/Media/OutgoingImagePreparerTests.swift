@@ -244,7 +244,8 @@ final class OutgoingImagePreparerTests: XCTestCase {
         let data = try HDRPhotoFixture.jpeg(width: 1200, height: 800, orientation: 6)
         let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 600)))
         XCTAssertEqual(out.encodedGenerations, 1)
-        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data), "le HDR d'une prise couchée ne doit pas se perdre")
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data),
+                      HDRPhotoFixture.diagnosis(output: out.data, source: data, maxPixelSize: 600))
         XCTAssertEqual(HDRPhotoFixture.orientation(of: out.data), 6)
         XCTAssertEqual(out.pixelSize, CGSize(width: 400, height: 600))
     }
@@ -254,7 +255,8 @@ final class OutgoingImagePreparerTests: XCTestCase {
         guard #available(iOS 18.0, macOS 15.0, *) else { return }
         let data = try HDRPhotoFixture.jpeg(width: 1200, height: 800)
         let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 600)))
-        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data),
+                      HDRPhotoFixture.diagnosis(output: out.data, source: data, maxPixelSize: 600))
         XCTAssertEqual(HDRPhotoFixture.orientation(of: out.data), 1)
         XCTAssertEqual(out.pixelSize, CGSize(width: 600, height: 400))
     }
@@ -265,8 +267,10 @@ final class OutgoingImagePreparerTests: XCTestCase {
         guard #available(iOS 18.0, macOS 15.0, *) else { return }
         let raw = try HDRPhotoFixture.jpeg(width: 1600, height: 1200, orientation: 6)
         let shot = try XCTUnwrap(PhotoCaptureProcessor().process(encoded: raw, settings: .capture))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(shot.data), "prise : \(HDRPhotoFixture.describe(shot.data))")
         let out = try XCTUnwrap(OutgoingImagePreparer().prepare(shot.data, policy: Self.hd()))
-        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data),
+                      HDRPhotoFixture.diagnosis(output: out.data, source: shot.data, maxPixelSize: 1600))
     }
 
     // MARK: - Fabriques

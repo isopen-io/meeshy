@@ -39,9 +39,9 @@ enum HDRPhotoFixture {
             kCGImageDestinationLossyCompressionQuality: 0.95,
         ]
         CGImageDestinationAddImage(destination, hdr, options as CFDictionary)
-        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        XCTAssertTrue(CGImageDestinationFinalize(destination), "fixture : Finalize refusé, \(system)")
         let encoded = data as Data
-        XCTAssertTrue(hasGainMap(encoded), "la fixture doit porter sa carte de gain, sinon le témoin ne garde rien")
+        XCTAssertTrue(hasGainMap(encoded), "fixture sans carte de gain : \(describe(encoded)) \(system)")
         return encoded
     }
 
@@ -49,6 +49,71 @@ enum HDRPhotoFixture {
     static func hasGainMap(_ data: Data) -> Bool {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
         return gainMapTypes.contains { CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, $0) != nil }
+    }
+
+    /// Ce que le témoin VOIT d'une sortie sans carte de gain, en une ligne
+    /// courte (l'annotation de la CI coupe à 180 caractères) : la sortie, la
+    /// source, et ce que deux autres voies d'ImageIO rendent de la même source.
+    static func diagnosis(output: Data?, source: Data, maxPixelSize: Int) -> String {
+        "out=\(describe(output)) src=\(describe(source)) keep=\(describe(preservedFromSource(source, maxPixelSize: maxPixelSize))) "
+            + "hdr=\(describe(reencodedAsHDR(source, maxPixelSize: maxPixelSize))) \(system)"
+    }
+
+    static func describe(_ data: Data?) -> String {
+        guard let data, let source = CGImageSourceCreateWithData(data as CFData, nil) else { return "nil" }
+        let type = (CGImageSourceGetType(source) as String?)?.split(separator: ".").last.map(String.init) ?? "?"
+        let found = auxiliaryLabels.filter { CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, $0.type) != nil }
+        return "\(type)[\(found.map { $0.label }.joined(separator: ","))]"
+    }
+
+    static var system: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        return "iOS\(version.majorVersion).\(version.minorVersion)"
+    }
+
+    /// Voie 1 : ImageIO réduit lui-même depuis la source, carte de gain gardée.
+    private static func preservedFromSource(_ data: Data, maxPixelSize: Int) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), let type = CGImageSourceGetType(source) else { return nil }
+        let buffer = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type, 1, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageDestinationImageMaxPixelSize: maxPixelSize,
+            kCGImageDestinationPreserveGainMap: true,
+            kCGImageDestinationLossyCompressionQuality: 0.85,
+        ]
+        CGImageDestinationAddImageFromSource(destination, source, 0, options as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? buffer as Data : nil
+    }
+
+    /// Voie 2 : décodage réduit EN HDR, puis une carte de gain ISO recalculée.
+    private static func reencodedAsHDR(_ data: Data, maxPixelSize: Int) -> Data? {
+        guard #available(iOS 18.0, macOS 15.0, *) else { return nil }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), let type = CGImageSourceGetType(source) else { return nil }
+        let decode: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailWithTransform: false,
+            kCGImageSourceDecodeRequest: kCGImageSourceDecodeToHDR,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, decode as CFDictionary) else { return nil }
+        let buffer = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type, 1, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageDestinationEncodeRequest: kCGImageDestinationEncodeToISOGainmap,
+            kCGImageDestinationLossyCompressionQuality: 0.85,
+        ]
+        CGImageDestinationAddImage(destination, image, options as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? buffer as Data : nil
+    }
+
+    private static var auxiliaryLabels: [(type: CFString, label: String)] {
+        let common: [(type: CFString, label: String)] = [
+            (kCGImageAuxiliaryDataTypeHDRGainMap, "apple"),
+            (kCGImageAuxiliaryDataTypeDepth, "depth"),
+            (kCGImageAuxiliaryDataTypePortraitEffectsMatte, "matte"),
+        ]
+        guard #available(iOS 18.0, macOS 15.0, *) else { return common }
+        return common + [(kCGImageAuxiliaryDataTypeISOGainMap, "iso")]
     }
 
     static func orientation(of data: Data) -> Int {
