@@ -5693,7 +5693,7 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 
 **Décision.**
 - **Le décodage** (`lib/api/packs-shop.ts`) valide `requirementPreview` à la frontière et ignore une forme inattendue. Un pack sans prix qui porte un aperçu suit le `owned` servi ; sans aperçu (ancien serveur, pack libre), rien ne change.
-- **Une ligne** (`lib/packs/unlock-line.ts`, `packUnlockLine`) : la Gloire qui manque (et le rang visé dès que le catalogue du jeu est chargé), le trophée, la saison, puis la fenêtre (à partir du…, jusqu'au…, plus proposé). Une récompense remplie ne se redit pas. Sept langues (`catalog-sticker-packs-<langue>.ts`).
+- **Une ligne** (`lib/packs/unlock-line.ts`, `packUnlockLine`) : la Gloire qui manque (et le rang visé dès que le catalogue du jeu est chargé), le trophée, la saison, puis la fenêtre (à partir du…, jusqu'au…, plus proposé). Une récompense remplie ne se redit pas. Sept langues, dans `lib/packs/unlock-texts.ts` — PAS dans `catalog-sticker-packs-<langue>.ts` : les huit clés y portaient `interface_catalogs_sticker_packs` à 13,19 Ko pour un plafond de 13, que ce chantier ne relève pas ; elles voyagent avec la vitrine (chunks `pack-shop` / boutique, chargés à la demande), et le catalogue retombe à 12,19 Ko.
 - **Le geste** : tant que l'aperçu n'est pas rempli (`packIsLocked`), la rangée montre « À débloquer » à la place de « Installer » ou « Acheter ». Un pack payant à fenêtre ouverte reste achetable. Le serveur reste juge.
 
 **Gardes.** `lib/packs/unlock-line.test.ts`, `lib/api/packs-shop-unlock.test.ts`, `components/unified-shop-unlock.test.tsx`.

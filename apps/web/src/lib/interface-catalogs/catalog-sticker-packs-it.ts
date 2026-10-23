@@ -85,14 +85,6 @@ const itStickerPacks = {
   'packs.shop.domains': "Categoria del negozio",
   'packs.shop.hint': "Tutti i pacchetti: sticker, cornici, sfondi, contorni e banner. Ciò che possiedi appare nelle schermate che lo usano.",
   'packs.retry': "Riprova",
-  'packs.locked': "Da sbloccare",
-  'packs.unlock.rank': "Rango {rank} — Gloria mancante: {missing}",
-  'packs.unlock.glory': "Gloria mancante: {missing}",
-  'packs.unlock.trophy': "Si ottiene con un trofeo",
-  'packs.unlock.season': "Ricompensa della stagione {number}",
-  'packs.unlock.upcoming': "Disponibile dal {date}",
-  'packs.unlock.until': "Disponibile fino al {date}",
-  'packs.unlock.closed': "Non più disponibile",
 } satisfies StickerPacksCatalog;
 
 export default itStickerPacks;

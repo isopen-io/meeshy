@@ -85,14 +85,6 @@ const esStickerPacks = {
   'packs.shop.domains': "Categoría de la tienda",
   'packs.shop.hint': "Todos los packs: stickers, marcos, fondos, contornos y banners. Lo que tienes aparece en las pantallas que lo usan.",
   'packs.retry': "Reintentar",
-  'packs.locked': "Por desbloquear",
-  'packs.unlock.rank': "Rango {rank} — Gloria que falta: {missing}",
-  'packs.unlock.glory': "Gloria que falta: {missing}",
-  'packs.unlock.trophy': "Se gana con un trofeo",
-  'packs.unlock.season': "Recompensa de la temporada {number}",
-  'packs.unlock.upcoming': "Disponible desde el {date}",
-  'packs.unlock.until': "Disponible hasta el {date}",
-  'packs.unlock.closed': "Ya no se ofrece",
 } satisfies StickerPacksCatalog;
 
 export default esStickerPacks;
