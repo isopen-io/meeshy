@@ -10,6 +10,7 @@ import { exitProtectedCopy } from './copyExitProtection';
 import type { ForwardImposition } from './forwardAdmission';
 import { declaredReplyProtection } from './replyProtectionContagion';
 import { assertPlaintextAdmitted, type EncryptionRegime } from './e2eePlaintextAdmission';
+import { admitSendUnderRegime } from './e2eeSendAdmission';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
@@ -322,18 +323,15 @@ export class MessageProcessor {
     /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
     attachmentReplyTo?: unknown;
   }): Promise<Message> {
+    // #11216, #12518 — refusé AVANT tout le reste ; `endToEnd` éteint les pipelines serveur.
+    const { regime, carriesCiphertext, endToEnd } = await admitSendUnderRegime(this.prisma, request);
+
     const data = await exitProtectedCopy(this.prisma, await declaredReplyProtection(this.prisma, request));
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
       conversationId: data.conversationId,
       senderId: data.senderId
     };
-
-    // #11216 — le régime est lu AVANT les liens : un clair refusé en e2ee ne
-    // laisse rien derrière lui, pas même un `TrackingLink` minté sur son URL.
-    const carriesCiphertext = Boolean(data.encryptedContent && data.encryptionMetadata);
-    const regime = carriesCiphertext ? null : await this.readEncryptionRegime(data.conversationId);
-    assertPlaintextAdmitted({ encryptionMode: regime?.encryptionMode, plaintext: data.content });
 
     // À qui appartiendront les liens de ce message : le `User.id` DERRIÈRE le
     // participant expéditeur, résolu UNE fois pour les deux chemins de tracking
@@ -348,7 +346,7 @@ export class MessageProcessor {
     //
     // Un expéditeur non inscrit (invité anonyme, participant introuvable) ne
     // voit aucune adresse suivie (#10286) : ni réécriture, ni carte.
-    const linkAuthor = this.containsLinks(data.content)
+    const linkAuthor = !endToEnd && this.containsLinks(data.content)
       ? await this.resolveLinkTrackingAuthor(data.senderId)
       : UNTRACKED_LINK_AUTHOR;
 
@@ -368,10 +366,14 @@ export class MessageProcessor {
       const metadata = data.encryptionMetadata as Record<string, unknown>;
       encryptionContext = {
         isEncrypted: true,
-        mode: (metadata.mode as EncryptionMode) || 'e2ee',
+        mode: endToEnd ? 'e2ee' : (metadata.mode as EncryptionMode) || 'e2ee',
         encryptedContent: data.encryptedContent,
         encryptionMetadata: data.encryptionMetadata
       };
+    } else if (endToEnd) {
+      // Le mode de la ligne est celui de la conversation, quel que soit le
+      // `messageType` déclaré : l'éventail et la traduction le lisent.
+      encryptionContext = { isEncrypted: false, mode: 'e2ee', encryptedContent: null, encryptionMetadata: null };
     } else {
       encryptionContext = await performanceLogger.withTiming(
         'messaging.encryptionContext',
@@ -592,7 +594,7 @@ export class MessageProcessor {
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
     await performanceLogger.withTiming(
       'messaging.handleAttachments',
-      () => this.handleAttachments(data, message),
+      () => this.handleAttachments(data, message, { serverReads: !endToEnd }),
       corrWithMsg
     );
 
@@ -687,7 +689,8 @@ export class MessageProcessor {
       copyAttachmentsFromMessageId?: string;
       conversationId: string;
     },
-    message: Message
+    message: Message,
+    options: { readonly serverReads: boolean }
   ): Promise<void> {
     // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
     // des pièces jointes du message désigné. Volontairement HORS du
@@ -727,8 +730,8 @@ export class MessageProcessor {
       if (data.attachmentIds && data.attachmentIds.length > 0) {
         await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
 
-        // Déclencher le traitement audio si nécessaire
-        if (this.translationService) {
+        // Déclencher le traitement audio si nécessaire — jamais en e2ee (#12518).
+        if (this.translationService && options.serverReads) {
           this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId)
             .catch(err => logger.error('[MessageProcessor] Audio processing failed', err));
         }
