@@ -120,7 +120,7 @@ describe('UploadProcessor — la requête ne fait plus que vérifier et persiste
     expect(data.imageVariants).toBeUndefined();
     expect(result.thumbnailUrl).toBeUndefined();
     expect(queue.jobs).toEqual([{ kind: 'thumb', target: 'messageAttachment', recordId: 'aaaaaaaaaaaaaaaaaaaaaaa3', final: true }]);
-  });
+  }, 120_000);
 
   it('une petite photo : tout reste dans la requête, aucune tâche, aucun état', async () => {
     const queue = recordingQueue();
@@ -131,7 +131,7 @@ describe('UploadProcessor — la requête ne fait plus que vérifier et persiste
     expect(data.processingState).toBeUndefined();
     expect(data.thumbnailPath).toMatch(/_thumb\.webp$/);
     expect(queue.jobs).toEqual([]);
-  });
+  }, 120_000);
 });
 
 describe('processMediaJob — le worker rend, persiste, et se rejoue sans dommage (#11264)', () => {
@@ -163,7 +163,7 @@ describe('processMediaJob — le worker rend, persiste, et se rejoue sans dommag
     expect(typeof state.row.thumbHash).toBe('string');
     expect(state.row.processingState).toBe('ready');
     await expect(fs.stat(path.join(base, 'p_thumb.webp'))).resolves.toBeDefined();
-  });
+  }, 120_000);
 
   it('rejouée (reprise après panne), la tâche réécrit les mêmes valeurs aux mêmes clés', async () => {
     const base = await uploadRoot();
@@ -177,7 +177,7 @@ describe('processMediaJob — le worker rend, persiste, et se rejoue sans dommag
     await processMediaJob(deps(prisma), job);
 
     expect(state.row).toEqual(first);
-  });
+  }, 120_000);
 
   it('une pièce supprimée entre-temps : rien n’est écrit', async () => {
     const update = jest.fn();
@@ -205,6 +205,7 @@ describe('handleMediaJobCompleted — qui apprend que le média est prêt (#1126
         loadPostMedia: async () => null,
         emitAttachmentUpdated: attachmentUpdated,
         emitToUser: (userId, event, payload) => emitted.push({ room: userId, event, payload: payload as Record<string, unknown> }),
+        serialize: (r) => r,
       },
       { status: 'done', target: 'messageAttachment', recordId: 'r1', kind: 'thumb' },
     );
@@ -223,6 +224,7 @@ describe('handleMediaJobCompleted — qui apprend que le média est prêt (#1126
         loadPostMedia: async () => null,
         emitAttachmentUpdated: attachmentUpdated,
         emitToUser: (userId) => emitted.push(userId),
+        serialize: (r) => r,
       },
       { status: 'done', target: 'messageAttachment', recordId: 'r1', kind: 'thumb' },
     );

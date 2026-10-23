@@ -159,6 +159,7 @@ export const sovereignAttachmentSelect = {
   imageVariants: true,
   avifVariants: true,
   renditions: true,
+  processingState: true,
   width: true,
   height: true,
   duration: true,
@@ -424,6 +425,7 @@ export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: 
     imageVariants: protegee ? [] : piece.imageVariants,
     avifVariants: protegee ? [] : piece.avifVariants,
     renditions: protegee ? [] : piece.renditions,
+    processingState: piece.processingState,
     // ABSENTS plutôt que `null` : ces trois-là sont OPTIONNELS au contrat des
     // clients — leur absence dit « rien à restituer », là où le tableau vide
     // des traductions de MESSAGE dit « résolu, rien à servir » sur un champ que
@@ -582,6 +584,7 @@ export const sovereignAttachmentSchema = {
     imageVariants: { type: 'array' },
     avifVariants: { type: 'array' },
     renditions: { type: 'array' },
+    processingState: { type: 'string', nullable: true },
     transcription: objetLibre,
     translations: objetLibre,
     metadata: objetLibre,

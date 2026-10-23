@@ -25,6 +25,8 @@ import {
 import { MetadataManager } from './MetadataManager';
 import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson, renditionsJson } from './media-renditions.js';
 import { UnconvertibleImageError, convertHeifBuffer, isServerConvertedImage } from './heif-conversion.js';
+import { deferredMediaKinds, mediaJobsFor, type MediaJobKind } from './media-processing/jobs.js';
+import { mediaJobQueueFromEnv, type MediaJobQueue } from './media-processing/queue.js';
 import { isMediaMetadataStrippable, stripMediaMetadataBuffer } from './media-metadata-strip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
@@ -65,6 +67,8 @@ export interface UploadResult {
   sampleRate?: number;
   codec?: string;
   channels?: number;
+  /** #11264 — `pending` quand des rendus sont confiés au worker de médias. */
+  processingState?: string;
   metadata?: any;
   fps?: number;
   videoCodec?: string;
@@ -135,8 +139,11 @@ export class UploadProcessor {
   private encryptionService: AttachmentEncryptionService;
   private metadataManager: MetadataManager;
 
-  constructor(prisma: PrismaClient) {
+  private readonly mediaQueue: MediaJobQueue | null;
+
+  constructor(prisma: PrismaClient, options: { readonly mediaQueue?: MediaJobQueue | null } = {}) {
     this.prisma = prisma;
+    this.mediaQueue = options.mediaQueue === undefined ? mediaJobQueueFromEnv() : options.mediaQueue;
     this.encryptionService = getAttachmentEncryptionService(prisma);
     // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
     this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
@@ -264,6 +271,18 @@ export class UploadProcessor {
     } finally {
       await fs.unlink(tempInputPath).catch(() => {});
       await fs.unlink(tempOutputPath).catch(() => {});
+    }
+  }
+
+  /**
+   * #11264 — confie les rendus différés au worker. Une file injoignable ne fait
+   * pas échouer l'envoi : la ligne reste `pending`, le média est servi tel quel.
+   */
+  private async enqueueDeferred(target: 'messageAttachment', recordId: string, kinds: readonly MediaJobKind[]): Promise<void> {
+    if (this.mediaQueue === null || kinds.length === 0) return;
+    for (const job of mediaJobsFor(target, recordId, kinds)) {
+      await this.mediaQueue.enqueue(job).catch((error: unknown) =>
+        logger.error('Rendu différé non mis en file', { recordId, kind: job.kind, error }));
     }
   }
 
@@ -415,6 +434,13 @@ export class UploadProcessor {
     // représentation stockée peut diverger de l'upload après transcodage ;
     // tout ce qui est persisté plus bas (URL, taille, type, dimensions) lit
     // `renditions`, pas l'upload brut.
+    // #11264 — ce qui est différé au worker de médias (file allumée seulement).
+    const deferred = deferredMediaKinds({
+      attachmentType,
+      fileSize: saved.size,
+      queueEnabled: this.mediaQueue !== null,
+      compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
+    });
     const renditions = await produceMediaRenditions(
       { uploadBasePath: this.uploadBasePath, metadataManager: this.metadataManager, runFfmpeg },
       {
@@ -424,7 +450,8 @@ export class UploadProcessor {
         fileSize: saved.size,
         metadata,
         clientThumbHash: providedMetadata?.thumbHash ?? null,
-      }
+      },
+      { defer: deferred }
     ).catch(async (error: unknown) => {
       // #11263 — un HEIC/AVIF que le serveur ne sait pas convertir n'est
       // jamais servi tel quel aux lecteurs : l'upload est refusé.
@@ -478,8 +505,10 @@ export class UploadProcessor {
         uploadedBy: userId,
         isAnonymous: isAnonymous,
         capturedInApp: declaredCaptureInApp(providedMetadata),
+        ...(deferred.length > 0 ? { processingState: 'pending' } : {}),
       },
     });
+    await this.enqueueDeferred('messageAttachment', attachment.id, deferred);
 
     return {
       id: attachment.id,
@@ -497,6 +526,7 @@ export class UploadProcessor {
       sampleRate: attachment.sampleRate || undefined,
       codec: attachment.codec || undefined,
       channels: attachment.channels || undefined,
+      processingState: attachment.processingState ?? undefined,
       metadata: attachment.metadata || undefined,
       fps: attachment.fps || undefined,
       videoCodec: attachment.videoCodec || undefined,

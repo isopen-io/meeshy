@@ -8,6 +8,7 @@ import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-p
 import type { MediaRendition } from '@meeshy/shared/types/attachment';
 import { produceCompatibilityRendition } from './video-compat-rendition.js';
 import { convertStoredHeif } from './heif-conversion.js';
+import type { MediaJobKind } from './media-processing/jobs.js';
 
 const logger = enhancedLogger.child({ module: 'media-renditions' });
 
@@ -93,10 +94,21 @@ export interface MediaRenditions {
   readonly thumbHash: string | null;
 }
 
+export type RenditionOptions = {
+  /**
+   * #11264 — les rendus confiés au worker de médias : `thumb` (vignette,
+   * variantes, thumbhash serveur) et `transcode` (rendu H.264 de
+   * compatibilité). Absent : tout se rend ici, comme avant.
+   */
+  readonly defer?: readonly MediaJobKind[];
+};
+
 export async function produceMediaRenditions(
   deps: RenditionDeps,
-  received: RenditionSource
+  received: RenditionSource,
+  options: RenditionOptions = {}
 ): Promise<MediaRenditions> {
+  const defer = new Set(options.defer ?? []);
   const converted = received.attachmentType === 'image'
     ? await convertStoredHeif(deps.uploadBasePath, received.relPath, received.mimeType)
     : null;
@@ -114,10 +126,10 @@ export async function produceMediaRenditions(
       ),
     };
   const { attachmentType } = source;
-  const visual = await visualRenditions(deps.metadataManager, source);
+  const visual = defer.has('thumb') ? { thumbnailPath: null } : await visualRenditions(deps.metadataManager, source);
 
   const transcoded = attachmentType === 'video' ? await transcodeVideoRendition(deps, source) : null;
-  const compat = attachmentType === 'video' && transcoded === null
+  const compat = attachmentType === 'video' && transcoded === null && !defer.has('transcode')
     ? await attempt('compat rendition', () => produceCompatibilityRendition(deps, source), null)
     : null;
   const storedPath = transcoded?.filePath ?? source.relPath;
@@ -131,6 +143,7 @@ export async function produceMediaRenditions(
     absolutePath: path.join(deps.uploadBasePath, storedPath),
     mimeType: storedMimeType,
     attachmentType,
+    serverFallback: !defer.has('thumb'),
   });
 
   return {
@@ -144,6 +157,32 @@ export async function produceMediaRenditions(
     ...(renditions.length > 0 ? { renditions } : {}),
     thumbHash,
   };
+}
+
+/** Ce qu'une tâche différée écrit sur sa ligne (#11264). */
+export type DeferredRenditionFields =
+  | { readonly kind: 'thumb'; readonly thumbnailPath: string | null; readonly imageVariants?: readonly ImageVariant[]; readonly avifVariants?: readonly ImageVariant[]; readonly thumbHash: string | null }
+  | { readonly kind: 'transcode'; readonly rendition: MediaRendition | null };
+
+/**
+ * Le rendu d'UNE tâche différée, par les MÊMES fonctions que la requête : une
+ * pièce rendue par le worker est identique à une pièce rendue pendant l'upload.
+ */
+export async function renderDeferred(
+  deps: RenditionDeps,
+  source: Pick<RenditionSource, 'relPath' | 'mimeType' | 'attachmentType' | 'fileSize'>,
+  kind: MediaJobKind
+): Promise<DeferredRenditionFields> {
+  if (kind === 'transcode') {
+    return { kind, rendition: await attempt('compat rendition', () => produceCompatibilityRendition(deps, source), null) };
+  }
+  const visual = await visualRenditions(deps.metadataManager, { ...source, metadata: {} });
+  const thumbHash = await resolveThumbHash({
+    absolutePath: path.join(deps.uploadBasePath, source.relPath),
+    mimeType: source.mimeType,
+    attachmentType: source.attachmentType,
+  });
+  return { kind, ...visual, thumbHash };
 }
 
 async function visualRenditions(
@@ -275,12 +314,15 @@ async function resolveThumbHash(params: {
   readonly absolutePath: string;
   readonly mimeType: string;
   readonly attachmentType: string;
+  /** `false` quand la vignette est différée : le worker calculera le thumbhash. */
+  readonly serverFallback?: boolean;
 }): Promise<string | null> {
   const { clientThumbHash } = params;
   if (clientThumbHash && clientThumbHash.length <= MAX_THUMBHASH_LENGTH) return clientThumbHash;
   if (clientThumbHash) {
     logger.warn(`Rejecting oversized client thumbHash (${clientThumbHash.length} chars)`);
   }
+  if (params.serverFallback === false) return null;
   if (params.attachmentType !== 'image' && params.attachmentType !== 'video') return null;
   try {
     return await ThumbHashGenerator.generate(params.absolutePath, params.mimeType);
