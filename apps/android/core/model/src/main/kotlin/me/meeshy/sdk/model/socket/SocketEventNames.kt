@@ -95,7 +95,9 @@ object SocketEventNames {
     const val CONVERSATION_CLOSED = "conversation:closed"
     const val CONVERSATION_DELETED = "conversation:deleted"
     const val CONVERSATION_PARTICIPANT_BANNED = "conversation:participant-banned"
+    const val CONVERSATION_PARTICIPANT_JOINED = "conversation:participant-joined"
     const val CONVERSATION_PARTICIPANT_LEFT = "conversation:participant-left"
+    const val CONVERSATION_PARTICIPANT_UNBANNED = "conversation:participant-unbanned"
     const val CONVERSATION_RESTORED = "conversation:restored"
     const val CONVERSATION_UNREAD_UPDATED = "conversation:unread-updated"
     const val CONVERSATION_UPDATED = "conversation:updated"
@@ -253,7 +255,9 @@ object SocketEventNames {
         CONVERSATION_CLOSED,
         CONVERSATION_DELETED,
         CONVERSATION_PARTICIPANT_BANNED,
+        CONVERSATION_PARTICIPANT_JOINED,
         CONVERSATION_PARTICIPANT_LEFT,
+        CONVERSATION_PARTICIPANT_UNBANNED,
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,

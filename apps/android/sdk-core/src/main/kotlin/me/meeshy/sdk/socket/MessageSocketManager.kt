@@ -30,7 +30,9 @@ import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.AttachmentUpdatedEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
+import me.meeshy.sdk.model.ParticipantJoinedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
+import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.model.ConversationClosedSocketEvent
@@ -93,6 +95,8 @@ class MessageSocketManager @Inject constructor(
     private val _presenceSnapshot = SocketInboundRoute.subject<PresenceSnapshotEvent>()
     private val _participantLeft = SocketInboundRoute.subject<ParticipantLeftEvent>()
     private val _participantBanned = SocketInboundRoute.subject<ParticipantBannedEvent>()
+    private val _participantJoined = SocketInboundRoute.subject<ParticipantJoinedEvent>()
+    private val _participantUnbanned = SocketInboundRoute.subject<ParticipantUnbannedEvent>()
     private val _participantRoleUpdated = SocketInboundRoute.subject<ParticipantRoleUpdatedEvent>()
     private val _readStatusUpdated = SocketInboundRoute.subject<ReadStatusUpdatedEvent>()
     private val _liveLocationStarted = SocketInboundRoute.subject<LiveLocationStartedEvent>()
@@ -150,6 +154,8 @@ class MessageSocketManager @Inject constructor(
     val presenceSnapshot: SharedFlow<PresenceSnapshotEvent> = _presenceSnapshot.asSharedFlow()
     val participantLeft: SharedFlow<ParticipantLeftEvent> = _participantLeft.asSharedFlow()
     val participantBanned: SharedFlow<ParticipantBannedEvent> = _participantBanned.asSharedFlow()
+    val participantJoined: SharedFlow<ParticipantJoinedEvent> = _participantJoined.asSharedFlow()
+    val participantUnbanned: SharedFlow<ParticipantUnbannedEvent> = _participantUnbanned.asSharedFlow()
     val participantRoleUpdated: SharedFlow<ParticipantRoleUpdatedEvent> = _participantRoleUpdated.asSharedFlow()
     val readStatusUpdated: SharedFlow<ReadStatusUpdatedEvent> = _readStatusUpdated.asSharedFlow()
     val liveLocationStarted: SharedFlow<LiveLocationStartedEvent> = _liveLocationStarted.asSharedFlow()
@@ -221,6 +227,8 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.PRESENCE_SNAPSHOT, _presenceSnapshot)
         route(SocketEventNames.CONVERSATION_PARTICIPANT_LEFT, _participantLeft)
         route(SocketEventNames.CONVERSATION_PARTICIPANT_BANNED, _participantBanned)
+        route(SocketEventNames.CONVERSATION_PARTICIPANT_JOINED, _participantJoined)
+        route(SocketEventNames.CONVERSATION_PARTICIPANT_UNBANNED, _participantUnbanned)
         route(SocketEventNames.PARTICIPANT_ROLE_UPDATED, _participantRoleUpdated)
         route(SocketEventNames.READ_STATUS_UPDATED, _readStatusUpdated)
         route(SocketEventNames.LOCATION_LIVE_STARTED, _liveLocationStarted)
