@@ -77,10 +77,17 @@
     <string name="nearby_retry">Reintentar</string>
     <string name="nearby_title">Cerca</string>
     <string name="post_comments_cancel_reply">Cancelar respuesta</string>
+    <string name="post_comments_copy_text">Copiar texto</string>
+    <string name="post_comments_delete_error">No se pudo eliminar el comentario</string>
+    <string name="post_comments_deleted">Comentario eliminado</string>
+    <string name="post_comments_load_error">Error al cargar los comentarios</string>
+    <string name="post_comments_more_options">Más opciones</string>
     <string name="post_comments_reply_action">Responder</string>
     <string name="post_comments_reply_badge">Responder</string>
+    <string name="post_comments_reply_error">Error al enviar la respuesta</string>
     <string name="post_comments_replying_to">En respuesta a %s</string>
     <string name="post_comments_send">Enviar</string>
+    <string name="post_comments_send_error">Error al enviar el comentario</string>
     <string name="post_comments_sending">Enviando…</string>
     <string name="post_comments_title">Comentarios</string>
     <plurals name="post_comments_view_replies">

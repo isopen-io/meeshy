@@ -87,6 +87,48 @@
           "iosKey": "feed.post.translation.error",
           "androidName": "feed_notice_translation_failed",
           "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comment.loadError",
+          "androidName": "post_comments_load_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comment.sendError",
+          "androidName": "post_comments_send_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comment.replyError",
+          "androidName": "post_comments_reply_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comments.deleted",
+          "androidName": "post_comments_deleted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comments.delete_error",
+          "androidName": "post_comments_delete_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.action.copy",
+          "androidName": "post_comments_copy_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.comment.more_options",
+          "androidName": "post_comments_more_options",
+          "status": "adopted"
         }
       ]
     }

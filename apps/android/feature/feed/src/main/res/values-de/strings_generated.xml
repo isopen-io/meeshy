@@ -75,10 +75,17 @@
     <string name="nearby_retry">Erneut versuchen</string>
     <string name="nearby_title">In der Nähe</string>
     <string name="post_comments_cancel_reply">Antwort abbrechen</string>
+    <string name="post_comments_copy_text">Text kopieren</string>
+    <string name="post_comments_delete_error">Kommentar konnte nicht gelöscht werden</string>
+    <string name="post_comments_deleted">Kommentar gelöscht</string>
+    <string name="post_comments_load_error">Fehler beim Laden der Kommentare</string>
+    <string name="post_comments_more_options">Weitere Optionen</string>
     <string name="post_comments_reply_action">Antworten</string>
     <string name="post_comments_reply_badge">Antworten</string>
+    <string name="post_comments_reply_error">Fehler beim Senden der Antwort</string>
     <string name="post_comments_replying_to">Antwort an %s</string>
     <string name="post_comments_send">Senden</string>
+    <string name="post_comments_send_error">Fehler beim Senden des Kommentars</string>
     <string name="post_comments_sending">Wird gesendet…</string>
     <string name="post_comments_title">Kommentare</string>
     <plurals name="post_comments_view_replies">

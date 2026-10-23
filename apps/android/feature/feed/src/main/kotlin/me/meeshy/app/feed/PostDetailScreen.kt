@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -102,6 +103,7 @@ fun PostDetailScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     LaunchedEffect(state.errorMessage) {
         // Sans post, l'echec a son propre ecran (PostDetailAbsenceView) : pas de snackbar doublon.
@@ -169,6 +171,7 @@ fun PostDetailScreen(
                         onQuote = viewModel::beginQuote,
                         onLike = viewModel::toggleLike,
                         onBookmark = viewModel::toggleBookmark,
+                        onCommentNotice = { notice -> snackbar.showSnackbar(context.getString(notice.messageRes)) },
                     )
                 }
             }
@@ -195,6 +198,7 @@ private fun PostDetailContent(
     onQuote: () -> Unit,
     onLike: () -> Unit,
     onBookmark: () -> Unit,
+    onCommentNotice: suspend (CommentNotice) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Column(
@@ -305,7 +309,7 @@ private fun PostDetailContent(
         }
 
         Spacer(Modifier.height(MeeshySpacing.lg))
-        PostCommentsSection()
+        PostCommentsSection(onNotice = onCommentNotice)
     }
 }
 
