@@ -407,6 +407,7 @@ export class AttachmentService {
     thumbnailPath: string | null;
     translations?: unknown;
     imageVariants?: unknown;
+    avifVariants?: unknown;
   }): Promise<void> {
     const candidates = derivedFileCandidates(attachment);
     if (candidates.length === 0) {
@@ -418,11 +419,12 @@ export class AttachmentService {
       thumbnailPath: string | null;
       translations: unknown;
       imageVariants: unknown;
+      avifVariants: unknown;
     }>;
     try {
       survivors = await this.prisma.messageAttachment.findMany({
         where: { filePath: attachment.filePath },
-        select: { filePath: true, thumbnailPath: true, translations: true, imageVariants: true },
+        select: { filePath: true, thumbnailPath: true, translations: true, imageVariants: true, avifVariants: true },
       });
     } catch (error) {
       logger.error('Erreur suppression fichiers', error as Error);

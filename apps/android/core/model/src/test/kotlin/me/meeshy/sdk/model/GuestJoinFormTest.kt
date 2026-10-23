@@ -103,6 +103,8 @@ class GuestJoinFormTest {
         assertThat(blank.isEmailValid).isFalse()
         assertThat(blank.canSubmit).isFalse()
 
+        assertThat(blank.withEmail("ada").isEmailValid).isFalse()
+        assertThat(blank.withEmail("ada@calc").isEmailValid).isFalse()
         val filled = blank.withEmail("ada@calc.org")
         assertThat(filled.isEmailValid).isTrue()
         assertThat(filled.canSubmit).isTrue()
@@ -158,14 +160,29 @@ class GuestJoinFormTest {
         val form = namedForm(GuestJoinForm.from(info(), language = "es"))
             .withUsername("  ada_l  ")
             .withEmail(" ada@calc.org ")
-            .withBirthday(" 1815-12-10 ")
 
         val request = form.toRequest()!!
 
         assertThat(request.username).isEqualTo("ada_l")
         assertThat(request.email).isEqualTo("ada@calc.org")
-        assertThat(request.birthday).isEqualTo("1815-12-10")
         assertThat(request.language).isEqualTo("es")
+    }
+
+    @Test
+    fun toRequest_sendsTheBirthdayOnlyWhenTheLinkRequiresIt() {
+        val required = namedForm(GuestJoinForm.from(info(requireBirthday = true))).withBirthday(" 1815-12-10 ")
+        val notRequired = namedForm(GuestJoinForm.from(info())).withBirthday("1815-12-10")
+
+        assertThat(required.toRequest()!!.birthday).isEqualTo("1815-12-10")
+        assertThat(notRequired.toRequest()!!.birthday).isNull()
+    }
+
+    @Test
+    fun toRequest_omitsBlankEmailAndUsername() {
+        val request = namedForm(GuestJoinForm.from(info())).withEmail("  ").withUsername(" ").toRequest()!!
+
+        assertThat(request.email).isNull()
+        assertThat(request.username).isNull()
     }
 
     @Test

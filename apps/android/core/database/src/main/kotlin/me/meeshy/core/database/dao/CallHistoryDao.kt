@@ -41,4 +41,27 @@ public interface CallHistoryDao {
 
     @Query("DELETE FROM call_history")
     public suspend fun clear()
+
+    /** Every cached row, newest first — the snapshot an optimistic erase restores from. */
+    @Query("SELECT * FROM call_history ORDER BY startedAt DESC")
+    public suspend fun all(): List<CallHistoryEntity>
+
+    @Query("SELECT * FROM call_history WHERE callId = :callId")
+    public suspend fun get(callId: String): CallHistoryEntity?
+
+    /** Erases one line (the reader's own journal). */
+    @Query("DELETE FROM call_history WHERE callId = :callId")
+    public suspend fun deleteById(callId: String)
+
+    /** Ids of the rows started at or after [from] — the fresh window a revalidation may prune. */
+    @Query("SELECT callId FROM call_history WHERE startedAt >= :from")
+    public suspend fun idsSince(from: Long): List<String>
+
+    /** Ids of the rows past the [limit] newest ones — the overflow of the journal cap. */
+    @Query("SELECT callId FROM call_history ORDER BY startedAt DESC LIMIT -1 OFFSET :limit")
+    public suspend fun idsBeyond(limit: Int): List<String>
+
+    /** Drops what left the server's sliding window. */
+    @Query("DELETE FROM call_history WHERE startedAt < :cutoff")
+    public suspend fun deleteOlderThan(cutoff: Long)
 }

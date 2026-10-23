@@ -478,10 +478,13 @@ final class ReelResumeTests: XCTestCase {
     }
 
     /// Le tier média (#11281) entre dans le contexte vivant : la fenêtre des
-    /// réels ne se règle pas sur la seule mémoire.
+    /// réels ne se règle pas sur la seule mémoire. Il y entre avec l'énergie et
+    /// la chaleur par la politique VIVANTE (#9880), celle que lisent les
+    /// lecteurs — `MediaPolicyTests` prouve que le contexte porte son tier.
     func test_liveContext_carriesTheDeviceMediaTier() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ReelPrewarm.swift"))
-        XCTAssertTrue(source.contains("tier: DeviceMediaTier.current"))
+        XCTAssertTrue(source.contains("MediaPolicyMonitor.shared.policy.reelWindowContext("))
+        XCTAssertFalse(source.contains("isLowPowerModeEnabled"), "l'énergie se lit dans la politique, pas une seconde fois")
     }
 
     /// Avec ces distances, le pool garde le réel quitté face à un préchauffage
@@ -523,6 +526,23 @@ final class ReelsCoverTests: XCTestCase {
         XCTAssertNotEqual(CoveredFreeze(isCovered: true) { Text("a") },
                           CoveredFreeze(isCovered: false) { Text("a") },
                           "au découvrement, la liste se remet à jour")
+    }
+
+    /// #12027 — les réels et la galerie jouent dès la tête d'un téléchargement
+    /// lisible, par la même décision que la bulle, sans ouvrir de transfert.
+    func test_reelsAndGallery_playFromTheHead_ofAReadableDownload() throws {
+        let surfaces = [
+            "Meeshy/Features/Main/Views/ReelFeedVideoSurface.swift",
+            "Meeshy/Features/Main/Views/ReelsPlayerView+Video.swift",
+        ]
+        for path in surfaces {
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
+            XCTAssertTrue(source.contains("content(ready: availability.playsNow(fileUrl: attachment.fileUrl))"), path)
+            XCTAssertFalse(source.contains("content(ready: availability == .ready)"), path)
+        }
+        let gallery = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView+Pages.swift"))
+        XCTAssertTrue(gallery.contains("availability.playsNow(fileUrl: attachment.fileUrl)"))
     }
 
     func test_root_freezesTheListAndHidesWhatTheReelsCover() throws {
