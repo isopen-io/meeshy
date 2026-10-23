@@ -60,7 +60,7 @@ class CallStageSemanticsTest {
     @Test
     fun `the audio stage names the peer and shows the weak network pill`() {
         rule.setContent {
-            MeeshyTheme { CallAudioStage(connected(peerQualityDegraded = true), peerAvatarUrl = null) }
+            MeeshyTheme { CallAudioStage(connected(peerQualityDegraded = true), peer = CallPeerVisual.EMPTY) }
         }
         rule.onNodeWithText("Alice").assertExists()
         rule.onNodeWithText("Poor network (contact)").assertExists()
@@ -70,7 +70,7 @@ class CallStageSemanticsTest {
     @Test
     fun `the audio stage shows the server disconnected pill and the muted contact pill`() {
         rule.setContent {
-            MeeshyTheme { CallAudioStage(connected(peerAudio = false), peerAvatarUrl = null, signalingDegraded = true) }
+            MeeshyTheme { CallAudioStage(connected(peerAudio = false), peer = CallPeerVisual.EMPTY, signalingDegraded = true) }
         }
         rule.onNodeWithText("Server disconnected").assertExists()
         rule.onNodeWithText("Contact muted").assertExists()

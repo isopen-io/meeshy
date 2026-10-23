@@ -36,7 +36,7 @@ private const val RING_STAGGER_MILLIS = 200
 @Composable
 internal fun IncomingCallRings(
     name: String,
-    avatarUrl: String?,
+    peer: CallPeerVisual,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -46,7 +46,8 @@ internal fun IncomingCallRings(
         CallAvatarDisc(
             name = name,
             size = 110.dp,
-            avatarUrl = avatarUrl,
+            avatarUrl = peer.avatarUrl,
+            ring = peer.ring,
             modifier = Modifier.scale(bounce),
         )
     }

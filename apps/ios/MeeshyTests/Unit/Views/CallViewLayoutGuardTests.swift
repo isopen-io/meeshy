@@ -179,6 +179,38 @@ final class CallViewLayoutGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Le disque d'avatar du correspondant (#12336)
+
+    /// Le disque d'avatar de l'écran d'appel porte le contour que le correspondant a
+    /// équipé, comme partout ailleurs dans l'app (`MeeshyAvatar`) : dans l'empreinte du
+    /// disque, sans rien décaler. Sans lui, l'appel était le seul écran où le contour
+    /// d'un contact disparaissait.
+    func test_avatarCircle_wearsThePeersEquippedRing() throws {
+        let code = try callViewCode()
+        guard let start = code.range(of: "func avatarCircle(size: CGFloat) -> some View {"),
+              let end = code.range(of: "func callAvatarPair(size: CGFloat)", range: start.upperBound ..< code.endIndex)
+        else {
+            XCTFail("CallView doit garder `avatarCircle(size:)` et `callAvatarPair(size:)`")
+            return
+        }
+        let block = String(code[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(
+            block.contains(".avatarRingWithin(") && block.contains("ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing)"),
+            "Le disque d'avatar doit poser `avatarRingWithin` avec le contour équipé du " +
+            "correspondant (`remoteProfile?.profileDecor?.avatarRing`)."
+        )
+    }
+
+    /// L'appel entrant hérite du même profil résolu que le reste de l'écran d'appel.
+    func test_incomingCall_receivesTheResolvedPeerProfile() throws {
+        let code = try callViewCode()
+        XCTAssertTrue(
+            code.contains("IncomingCallView(callManager: callManager, peerProfile: remoteProfile)"),
+            "CallView doit passer `remoteProfile` à IncomingCallView : sans lui, l'appel " +
+            "entrant n'a ni photo ni contour du correspondant."
+        )
+    }
+
     // MARK: - Bord a bord du fullScreenCover
 
     /// Les lignes de code, commentaires retires.

@@ -181,6 +181,12 @@ object SocketEventNames {
     const val USER_STATUS = "user:status"
     const val USER_UPDATED = "user:updated"
 
+    // viewing
+    const val VIEWING_ACTIVITY = "viewing:activity"
+    const val VIEWING_SNAPSHOT = "viewing:snapshot"
+    const val VIEWING_START = "viewing:start"
+    const val VIEWING_STOP = "viewing:stop"
+
     /** Tous les noms du catalogue, dans l'ordre de déclaration. */
     val all: List<String> = listOf(
         AUDIO_TRANSCRIPTION_READY,
@@ -314,5 +320,9 @@ object SocketEventNames {
         USER_PREFERENCES_UPDATED,
         USER_STATUS,
         USER_UPDATED,
+        VIEWING_ACTIVITY,
+        VIEWING_SNAPSHOT,
+        VIEWING_START,
+        VIEWING_STOP,
     )
 }

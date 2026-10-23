@@ -25,6 +25,7 @@ import os from 'os';
 import path from 'path';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { runFfmpegReadingStderr } from './ffmpeg-run';
+import { timeMediaStage } from '../metrics/mediaStageMetrics';
 
 const logger = enhancedLogger.child({ module: 'audio-normalization' });
 
@@ -131,6 +132,10 @@ async function transcode(input: string, output: string): Promise<number | null> 
 }
 
 async function normalizeFile(input: string, output: string): Promise<{ readonly plan: AudioPlan; readonly loudnessLufs: number | null }> {
+  return timeMediaStage('audio', 'audio', () => normalizeFileUntimed(input, output));
+}
+
+async function normalizeFileUntimed(input: string, output: string): Promise<{ readonly plan: AudioPlan; readonly loudnessLufs: number | null }> {
   const plan = audioNormalizationPlan(await probeAudio(input));
   const loudnessLufs = plan === 'copy' ? await remux(input, output) : await transcode(input, output);
   return { plan, loudnessLufs };

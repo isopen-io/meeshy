@@ -28,18 +28,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import me.meeshy.sdk.model.appearance.AvatarRingDesign
+import me.meeshy.ui.appearance.AvatarRingLayer
 import me.meeshy.ui.theme.MeeshyTypography
 
 private const val PULSE_PEAK = 1.15f
 private const val PULSE_MILLIS = 1_500
 private const val PULSE_STAGGER_MILLIS = 300
 
-/** Le disque d'avatar de l'appel : dégradé indigo + initiale, la photo par-dessus quand on l'a. */
+/**
+ * Le disque d'avatar de l'appel, entouré du contour que le correspondant a équipé (miroir
+ * d'`avatarRingWithin` : le contour se pose DANS l'empreinte, rien ne grandit). `null` = disque nu.
+ */
 @Composable
-internal fun CallAvatarDisc(name: String, size: Dp, avatarUrl: String?, modifier: Modifier = Modifier) {
+internal fun CallAvatarDisc(
+    name: String,
+    size: Dp,
+    avatarUrl: String?,
+    modifier: Modifier = Modifier,
+    ring: AvatarRingDesign? = null,
+) {
+    AvatarRingLayer(design = ring, footprint = size, modifier = modifier.size(size)) {
+        CallAvatarPhoto(name = name, size = size, avatarUrl = avatarUrl)
+    }
+}
+
+/** Le disque nu : dégradé indigo + initiale, la photo par-dessus quand on l'a. */
+@Composable
+private fun CallAvatarPhoto(name: String, size: Dp, avatarUrl: String?) {
     val initialSize = with(LocalDensity.current) { (size * 0.4f).toSp() }
     Box(
-        modifier = modifier
+        modifier = Modifier
             .size(size)
             .clip(CircleShape)
             .background(Brush.linearGradient(listOf(CallPalette.BrandDeep, CallPalette.Brand))),
@@ -71,7 +90,7 @@ internal fun CallAvatarDisc(name: String, size: Dp, avatarUrl: String?, modifier
 @Composable
 internal fun CallPulsingAvatar(
     name: String,
-    avatarUrl: String?,
+    peer: CallPeerVisual,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
     avatarSize: Dp = 100.dp,
@@ -81,7 +100,7 @@ internal fun CallPulsingAvatar(
         contentAlignment = Alignment.Center,
     ) {
         repeat(RING_COUNT) { index -> PulseRing(index = index, avatarSize = avatarSize, reduceMotion = reduceMotion) }
-        CallAvatarDisc(name = name, size = avatarSize, avatarUrl = avatarUrl)
+        CallAvatarDisc(name = name, size = avatarSize, avatarUrl = peer.avatarUrl, ring = peer.ring)
     }
 }
 
