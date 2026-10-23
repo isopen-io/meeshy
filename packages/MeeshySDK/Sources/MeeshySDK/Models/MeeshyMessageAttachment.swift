@@ -151,6 +151,10 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public let fileUrl: String
     public var title: String?
     public var alt: String?
+    /// Langue source de `alt` (#12333).
+    public var altLanguage: String?
+    /// Traductions de `alt`, langue → texte (#12333) ; `servedDescription(preferredLanguages:)` les résout.
+    public var altTranslations: [String: String]?
     public var caption: String?
     public var forwardedFromAttachmentId: String?
     public var isForwarded: Bool = false
@@ -318,10 +322,12 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 downloadedByAllAt: Date? = nil, listenedByAllAt: Date? = nil,
                 watchedByAllAt: Date? = nil, viewedCount: Int? = nil,
                 downloadedCount: Int? = nil, consumedCount: Int? = nil,
-                currentUserConsumption: MeeshyMediaConsumption? = nil) {
+                currentUserConsumption: MeeshyMediaConsumption? = nil,
+                altLanguage: String? = nil, altTranslations: [String: String]? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
+        self.altLanguage = altLanguage; self.altTranslations = altTranslations
         self.forwardedFromAttachmentId = forwardedFromAttachmentId; self.isForwarded = isForwarded
         self.capturedInApp = capturedInApp
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount

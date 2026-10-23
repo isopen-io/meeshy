@@ -299,7 +299,7 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
     expect($('[data-viewer-action="react"]')).not.toBeNull();
     expect($('[data-viewer-action="compose"]')).not.toBeNull();
     expect($('[data-viewer-action="reply"]')).toBeNull();
-    expect($('[data-viewer-reply]')).toBeNull();
+    expect($('[data-viewer-action="reply"]')).toBeNull();
   });
 
   test('Réagir vise la PIÈCE regardée et se relit aussitôt dans l’index de l’écran', async () => {

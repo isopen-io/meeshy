@@ -52,7 +52,7 @@ private val LOCAL_BADGE_MIN = 44.dp
 @Composable
 internal fun CallAudioStage(
     state: CallUiState,
-    peerAvatarUrl: String?,
+    peer: CallPeerVisual,
     modifier: Modifier = Modifier,
     signalingDegraded: Boolean = false,
 ) {
@@ -61,7 +61,7 @@ internal fun CallAudioStage(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
     ) {
-        CallAvatarPair(name = state.peerName, avatarUrl = peerAvatarUrl, size = PAIR_AVATAR_SIZE)
+        CallAvatarPair(name = state.peerName, peer = peer, size = PAIR_AVATAR_SIZE)
         Text(
             text = callPeerTitle(state.peerName),
             style = MaterialTheme.typography.headlineMedium,
@@ -75,10 +75,10 @@ internal fun CallAudioStage(
 
 /** Le correspondant et, en pastille au coin bas-fin, soi : décoratif, le nom est lu par le texte voisin. */
 @Composable
-internal fun CallAvatarPair(name: String, avatarUrl: String?, size: Dp, modifier: Modifier = Modifier) {
+internal fun CallAvatarPair(name: String, peer: CallPeerVisual, size: Dp, modifier: Modifier = Modifier) {
     val badge = maxOf(LOCAL_BADGE_MIN, size * LOCAL_BADGE_RATIO)
     Box(modifier = modifier.clearAndSetSemantics { }) {
-        CallAvatarDisc(name = name, size = size, avatarUrl = avatarUrl)
+        CallAvatarDisc(name = name, size = size, avatarUrl = peer.avatarUrl, ring = peer.ring)
         CallAvatarDisc(
             name = stringResource(R.string.call_avatar_you),
             size = badge,

@@ -103,8 +103,11 @@ object SocketEventNames {
     const val CONVERSATION_UPDATED = "conversation:updated"
 
     // location
+    const val LOCATION_LIVE_START = "location:live-start"
     const val LOCATION_LIVE_STARTED = "location:live-started"
+    const val LOCATION_LIVE_STOP = "location:live-stop"
     const val LOCATION_LIVE_STOPPED = "location:live-stopped"
+    const val LOCATION_LIVE_UPDATE = "location:live-update"
     const val LOCATION_LIVE_UPDATED = "location:live-updated"
 
     // media
@@ -180,6 +183,12 @@ object SocketEventNames {
     const val USER_PREFERENCES_UPDATED = "user:preferences-updated"
     const val USER_STATUS = "user:status"
     const val USER_UPDATED = "user:updated"
+
+    // viewing
+    const val VIEWING_ACTIVITY = "viewing:activity"
+    const val VIEWING_SNAPSHOT = "viewing:snapshot"
+    const val VIEWING_START = "viewing:start"
+    const val VIEWING_STOP = "viewing:stop"
 
     /** Tous les noms du catalogue, dans l'ordre de déclaration. */
     val all: List<String> = listOf(
@@ -261,8 +270,11 @@ object SocketEventNames {
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
+        LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
+        LOCATION_LIVE_STOP,
         LOCATION_LIVE_STOPPED,
+        LOCATION_LIVE_UPDATE,
         LOCATION_LIVE_UPDATED,
         MEDIA_CAPTION_TRANSLATION_UPDATED,
         MESSAGE_ATTACHMENT_UPDATED,
@@ -314,5 +326,9 @@ object SocketEventNames {
         USER_PREFERENCES_UPDATED,
         USER_STATUS,
         USER_UPDATED,
+        VIEWING_ACTIVITY,
+        VIEWING_SNAPSHOT,
+        VIEWING_START,
+        VIEWING_STOP,
     )
 }

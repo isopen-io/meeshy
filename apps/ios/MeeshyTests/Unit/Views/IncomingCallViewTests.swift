@@ -16,6 +16,25 @@ final class IncomingCallViewTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    // MARK: - Photo et contour du correspondant (#12336)
+
+    func test_incomingCallView_showsThePeersPhotoInsideItsEquippedRing() throws {
+        let source = AppSourceGuard.stripComments(try incomingCallViewSource())
+        XCTAssertTrue(
+            source.contains("let peerProfile: MeeshyUser?"),
+            "IncomingCallView doit recevoir le profil résolu du correspondant."
+        )
+        XCTAssertTrue(
+            source.contains("CachedAsyncImage(") && source.contains("peerProfile?.avatar"),
+            "Le disque de l'appel entrant doit montrer la photo du correspondant, " +
+            "l'initiale ne restant que le repli pendant le chargement."
+        )
+        XCTAssertTrue(
+            source.contains(".avatarRingWithin(") && source.contains("ProfileDecorResolver.ring(peerProfile?.profileDecor?.avatarRing)"),
+            "Le disque de l'appel entrant doit porter le contour équipé du correspondant."
+        )
+    }
+
     // MARK: - VoiceOver announcement on appear
 
     func test_incomingCallView_postsScreenChangedOnAppear() throws {

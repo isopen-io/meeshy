@@ -96,7 +96,7 @@ describe('tus-handler — la file de médias (#11264)', () => {
     else process.env.UPLOAD_PATH = ORIGINAL_UPLOAD_PATH;
   });
 
-  async function finishBigPhotoUpload(mediaQueue: unknown) {
+  async function finishBigPhotoUpload(mediaQueue: unknown, extraMetadata: Record<string, string> = {}) {
     process.env.UPLOAD_PATH = uploadDir;
     jest.resetModules();
     const prisma = buildFakePrisma();
@@ -106,7 +106,7 @@ describe('tus-handler — la file de médias (#11264)', () => {
     const bytes = await bigPhoto();
     const created = await captured.onUploadCreate(
       { headers: headersFrom({ authorization: `Bearer ${jwt.sign({ userId: USER_ID, sid: LIVE_SID }, JWT_SECRET)}` }) },
-      { metadata: { filename: 'photo.jpg', filetype: 'image/jpeg', uploadcontext: 'post' }, size: bytes.length },
+      { metadata: { filename: 'photo.jpg', filetype: 'image/jpeg', uploadcontext: 'post', ...extraMetadata }, size: bytes.length },
     );
     const tusTempPath = path.join(uploadDir, '.tus-resumable');
     await fs.mkdir(tusTempPath, { recursive: true });
@@ -134,5 +134,12 @@ describe('tus-handler — la file de médias (#11264)', () => {
     expect(data.thumbnailPath).toMatch(/_thumb\.webp$/);
     expect(schedule).not.toHaveBeenCalled();
     expect(JSON.parse(result.body ?? '{}').data.attachment.processingState).toBeUndefined();
+  }, 120_000);
+
+  it('la description saisie à l’envoi (métadonnée `alt`) est persistée avec sa langue (#11329)', async () => {
+    const { data } = await finishBigPhotoUpload({ workerAlive: async () => false, schedule: async () => undefined }, { alt: 'Un chat roux dort sur le canapé du salon' });
+
+    expect(data.alt).toBe('Un chat roux dort sur le canapé du salon');
+    expect(data.altLanguage).toBe('fr');
   }, 120_000);
 });

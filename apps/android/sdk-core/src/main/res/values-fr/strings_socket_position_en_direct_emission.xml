@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_location_channel_name">Position en direct</string>
+    <string name="live_location_notification_title">Partage de votre position en direct</string>
+    <string name="live_location_notification_stop">Arrêter</string>
+</resources>
