@@ -2,7 +2,7 @@
  "notice": "Classement des routes du manifeste que ni une interface Retrofit ni ops-only-routes.ts ne couvrent. Cliquet : RouteManifestRatchetTest. La liste a-porter ne peut que rétrécir (porter une route = la retirer ici). Fichier de test, jamais lu à l'exécution.",
  "categories": [
   {
-   "status": "hors-perimetre-mobile",
+   "status": "ops-only",
    "reason": "Administration des sockets côté serveur (exploitation), jamais un écran d'app.",
    "routes": [
     "GET /api/socketio/stats",
@@ -43,7 +43,7 @@
    ]
   },
   {
-   "status": "hors-perimetre-mobile",
+   "status": "ops-only",
    "reason": "Console d'administration web : aucun écran mobile ne l'appelle (rôles BIGBOSS/ADMIN, exploitation de la plateforme).",
    "routes": [
     "DELETE /api/v1/admin/agent/configs/:conversationId",
@@ -112,7 +112,6 @@
     "GET /api/v1/admin/languages/stats",
     "GET /api/v1/admin/languages/timeline",
     "GET /api/v1/admin/languages/translation-accuracy",
-    "GET /api/v1/admin/me/permissions",
     "GET /api/v1/admin/messages",
     "GET /api/v1/admin/messages/engagement",
     "GET /api/v1/admin/messages/stats",
@@ -200,7 +199,6 @@
     "POST /api/v1/admin/users/:userId/disable-2fa",
     "POST /api/v1/admin/users/:userId/enable-2fa",
     "POST /api/v1/admin/users/:userId/password-proposals",
-    "POST /api/v1/admin/users/:userId/publications/moderation",
     "POST /api/v1/admin/users/:userId/reset-password",
     "POST /api/v1/admin/users/:userId/restore",
     "POST /api/v1/admin/users/:userId/unlock",
@@ -231,12 +229,11 @@
    ]
   },
   {
-   "status": "hors-perimetre-mobile",
+   "status": "ops-only",
    "reason": "Sonde d'exploitation (santé, métriques) pour l'infrastructure, pas pour un écran.",
    "routes": [
     "GET /api/v1/health/circuit-breakers",
     "GET /api/v1/health/metrics",
-    "GET /api/v1/health/ready",
     "GET /api/v1/status-metrics",
     "GET /health",
     "POST /api/v1/status-metrics/reset"
@@ -304,6 +301,7 @@
     "GET /api/v1/conversations/check-identifier/:identifier",
     "GET /api/v1/directory/availability",
     "GET /api/v1/directory/people",
+    "GET /api/v1/directory/presence",
     "GET /api/v1/hashtags/trending",
     "GET /api/v1/l/:token",
     "GET /api/v1/languages",
@@ -369,8 +367,6 @@
     "GET /api/v1/packs/wallpaper/submissions",
     "GET /api/v1/posts/:postId/media/:mediaId/export",
     "GET /api/v1/posts/:postId/objects/:objectId/responses",
-    "GET /api/v1/posts/hashtag/:tag",
-    "GET /api/v1/posts/nearby/density",
     "GET /api/v1/reactions/user/:userId",
     "GET /api/v1/sounds/:id",
     "GET /api/v1/sounds/:id/posts",
@@ -421,7 +417,6 @@
     "PATCH /api/v1/me/categories/:categoryId",
     "PATCH /api/v1/me/onboarding",
     "PATCH /api/v1/me/preferences",
-    "PATCH /api/v1/posts/:postId/comments/:commentId",
     "PATCH /api/v1/sounds/:id",
     "PATCH /api/v1/tracking-links/:token",
     "PATCH /api/v1/tracking-links/:token/deactivate",
@@ -483,14 +478,10 @@
     "POST /api/v1/packs/wallpaper/:slug/review",
     "POST /api/v1/packs/wallpaper/submissions",
     "POST /api/v1/posts/:postId/anonymous-view",
-    "POST /api/v1/posts/:postId/comments/:commentId/translate",
     "POST /api/v1/posts/:postId/downloads",
     "POST /api/v1/posts/:postId/impression",
     "POST /api/v1/posts/:postId/objects/:objectId/responses",
     "POST /api/v1/posts/engagement/batch",
-    "POST /api/v1/posts/from-attachment",
-    "POST /api/v1/posts/media/:mediaId/caption/translate",
-    "POST /api/v1/social/events",
     "POST /api/v1/sticker-packs/:slug/review",
     "POST /api/v1/sticker-packs/submissions",
     "POST /api/v1/tracking-links/:token/click",

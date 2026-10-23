@@ -13,3 +13,9 @@ iso-21496-gain-map.heic              = libultrahdr tests/data/gainmap_hevc_16x16
 Source : https://github.com/google/libultrahdr, révision 47d9f00726adba87e3f04059a50a8b34492e057a.
 Les quatre JPEG relèvent de la licence CC-BY-4.0 du dossier tests/data de libultrahdr
 (© The libultrahdr Authors). Le HEIC relève de Apache-2.0 OR MIT (GAINMAP_FIXTURE_README.md).
+
+iphone-hdr-gain-map.heic = photo HDR d'iPhone (HEIC 1512×850, image auxiliaire
+                           urn:com:apple:photo:2020:aux:hdrgainmap, marge HDR dans le MakerNote)
+                           tests/data/hdr-sample.heic de https://github.com/johncf/apple-hdr-heic
+                           (objet git-lfs sha256 c690fa4ecc6ae71ee9a926de869a95835a5d41e764ccbc200647e2fb9d0800cc),
+                           licence MIT, © 2024 John Charankattu. Aucune position GPS dans le fichier.
