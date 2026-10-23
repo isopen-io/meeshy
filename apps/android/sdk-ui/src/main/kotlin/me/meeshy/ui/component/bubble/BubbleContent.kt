@@ -207,11 +207,11 @@ public data class BubbleContent(
     /** True when this message is a view-once ("open once, then burn") message. */
     val isViewOnce: Boolean = false,
     /**
-     * How many times the view-once message has been consumed on the server. Once
-     * this is > 0 on a [isViewOnce] message the bubble renders the "Seen and
-     * deleted" burned tombstone (see [me.meeshy.sdk.model.BubbleRenderKind]).
+     * True once THIS reader has opened the view-once message (`consumedByMe`). A view-once
+     * is consumed per person (iOS #7579): what other members open never burns it for me.
+     * Drives the "Seen and deleted" tombstone (see [me.meeshy.sdk.model.BubbleRenderKind]).
      */
-    val viewOnceCount: Int = 0,
+    val isViewOnceOpenedByMe: Boolean = false,
     /**
      * True for a conversation notice about itself (someone joined / left, a legacy
      * call/event summary) rather than a turn at talk. Drives the

@@ -1,9 +1,8 @@
 package me.meeshy.app.settings
 
-import android.content.Intent
 import android.content.pm.PackageInfo
-import android.net.Uri
 import android.os.Build
+import me.meeshy.ui.component.link.openExternalLink
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -257,7 +256,7 @@ private fun LinkRow(link: AboutLink, label: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
+                context.openExternalLink(link.url)
             },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,

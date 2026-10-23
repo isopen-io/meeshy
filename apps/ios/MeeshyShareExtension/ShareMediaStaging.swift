@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import os
 import UniformTypeIdentifiers
 
@@ -338,13 +339,38 @@ nonisolated enum ShareMediaStaging {
             throw (error as? ShareMediaStagingError) ?? .copyFailed(error.localizedDescription)
         }
         budget.release(reserved - written)
+        let kept = try withoutLocation(destination, mime: mime, copied: written, budget: budget)
 
         // Le nom de la copie du système d'abord (`IMG_0111.jpeg`) : le système
         // compose parfois `suggestedName` depuis la description LOCALISÉE du
         // type — même ordre que `ComposerDropResolver.originalFileName`.
         let originalName = sanitizedOriginalName(
             candidates: [source.lastPathComponent, suggestedName], fallbackExt: ext)
-        return ShareStagedMedia(relPath: relPath, ext: ext, mime: mime, bytes: written, originalName: originalName)
+        return ShareStagedMedia(relPath: relPath, ext: ext, mime: mime, bytes: kept, originalName: originalName)
+    }
+
+    /// **Le lieu d'une photo partagée ne quitte pas l'appareil** (#11847,
+    /// défaut validé de #11247) : il est retiré de la COPIE, sans décoder ni
+    /// ré-encoder ses pixels. Une photo dont le lieu résiste n'est pas copiée
+    /// (fail-closed). Rend les octets que la copie pèse désormais.
+    static func withoutLocation(_ destination: URL, mime: String, copied: Int, budget: ShareByteBudget) throws -> Int {
+        guard mime.hasPrefix("image/") else { return copied }
+        switch OutgoingImageLocationRemoval.removeLocation(fromFileAt: destination) {
+        case .untouched:
+            return copied
+        case .removed:
+            let size = ((try? FileManager.default.attributesOfItem(atPath: destination.path))?[.size] as? NSNumber)?.intValue ?? copied
+            if size <= copied {
+                budget.release(copied - size)
+            } else {
+                _ = budget.reserve(size - copied)
+            }
+            return size
+        case .failed:
+            try? FileManager.default.removeItem(at: destination)
+            budget.release(copied)
+            throw ShareMediaStagingError.copyFailed("lieu de la photo non retirable")
+        }
     }
 
     // MARK: - Câblage système

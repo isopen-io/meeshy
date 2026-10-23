@@ -24,6 +24,7 @@ import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -44,6 +45,7 @@ class ChatComposerControllerTest {
         val drafts: InMemoryConversationDraftStore,
         val uploads: MediaUploadQueue,
         val holder: ComposerTextHolder,
+        val recents: InMemoryRecentEmojiStore,
     ) {
         val state: ChatUiState get() = flow.value
         val text: ComposerTextState get() = holder.state
@@ -74,6 +76,7 @@ class ChatComposerControllerTest {
             override fun nowMillis(): Long = NOW
         }
         val holder = ComposerTextHolder(initialText)
+        val recents = InMemoryRecentEmojiStore()
         val controller = ChatComposerController(
             scope = screenScope(),
             state = ChatStateAccess(flow),
@@ -89,8 +92,9 @@ class ChatComposerControllerTest {
             workManager = workManager,
             clock = clock,
             composerText = holder,
+            recentEmojis = recents,
         )
-        return Rig(controller, flow, messages, repo, socket, workManager, draftStore, uploads, holder)
+        return Rig(controller, flow, messages, repo, socket, workManager, draftStore, uploads, holder, recents)
     }
 
     // --- sending -------------------------------------------------------------------------------
@@ -225,6 +229,80 @@ class ChatComposerControllerTest {
         assertThat(r.state.editingMessageId).isNull()
         assertThat(r.text.text).isEmpty()
     }
+
+    @Test
+    fun `cancelling an edit gives back the draft that was being written`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "typo")))
+        r.controller.onDraftChange("un brouillon")
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("typo corrigé")
+        r.controller.cancelEdit()
+
+        assertThat(r.state.editingMessageId).isNull()
+        assertThat(r.text.text).isEqualTo("un brouillon")
+    }
+
+    @Test
+    fun `sending an edit gives back the draft that was being written`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "typo")))
+        r.controller.onDraftChange("un brouillon")
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("fixed")
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.editOptimistic("m1", "fixed") }
+        assertThat(r.text.text).isEqualTo("un brouillon")
+    }
+
+    @Test
+    fun `chaining two edits keeps the draft from before the first one`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "premier"), ownRecent("m2", "second")))
+        r.controller.onDraftChange("mon texte")
+
+        r.controller.startEdit("m1")
+        r.controller.startEdit("m2")
+        r.controller.cancelEdit()
+
+        assertThat(r.text.text).isEqualTo("mon texte")
+    }
+
+    @Test
+    fun `an edit without any change sends nothing and leaves edit mode`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "inchangé")))
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("  inchangé ")
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.editOptimistic(any(), any()) }
+        assertThat(r.state.editingMessageId).isNull()
+        assertThat(r.text.text).isEmpty()
+    }
+
+    @Test
+    fun `the emojis of a sent message join the recent emojis, the last typed first`() = runTest {
+        val r = rig()
+        r.controller.onDraftChange("Bravo 🎉 merci ❤️")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        assertThat(r.recents.history.value).containsExactly("❤️", "🎉").inOrder()
+    }
+
+    private fun ownRecent(id: String, content: String) = LocalMessage(
+        ApiMessage(
+            id = id,
+            conversationId = "c1",
+            senderId = "me",
+            content = content,
+            createdAt = java.time.Instant.ofEpochMilli(NOW - 60_000L).toString(),
+        ),
+    )
 
     @Test
     fun `someone else's message cannot be edited`() = runTest {

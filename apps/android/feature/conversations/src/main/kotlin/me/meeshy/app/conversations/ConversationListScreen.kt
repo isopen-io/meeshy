@@ -1,6 +1,5 @@
 package me.meeshy.app.conversations
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,15 +14,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import me.meeshy.sdk.model.conversationlist.ConversationSearchBarScrollLaw
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.chrome.CollapsibleHeaderDefaults
 import me.meeshy.ui.component.chrome.CollapsibleHeaderMotion
@@ -41,6 +46,10 @@ fun ConversationListScreen(
     onGlobalSearch: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
     header: @Composable () -> Unit = {},
+    searchSyncPill: @Composable () -> Unit = {},
+    searchCommunitiesBand: @Composable () -> Unit = {},
+    searchCommunityCount: Int = 0,
+    onRefresh: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -76,28 +85,33 @@ fun ConversationListScreen(
     }
     val headerActionsVisible = ScrollMotionVisibility.isVisible(listState.isScrollInProgress, headerQuietMillis)
 
-    val searchBarDirectionThresholdPx = remember(density) { with(density) { 8.dp.roundToPx() } }
-    var isScrollingDown by remember { mutableStateOf(false) }
-    LaunchedEffect(listState, searchBarDirectionThresholdPx) {
-        var previousScrollPosition = ConversationScrollPosition(
-            listState.firstVisibleItemIndex,
-            listState.firstVisibleItemScrollOffset,
-        )
-        snapshotFlow {
-            ConversationScrollPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
-        }.collect { currentScrollPosition ->
-            ConversationSearchBarVisibility.scrollDirectionDown(
-                previous = previousScrollPosition,
-                current = currentScrollPosition,
-                thresholdPx = searchBarDirectionThresholdPx,
-            )?.let { isScrollingDown = it }
-            previousScrollPosition = currentScrollPosition
+    val searchFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    var searchFocused by remember { mutableStateOf(false) }
+    var searchLaw by remember { mutableStateOf(ConversationSearchBarScrollLaw.State.Initial) }
+    val searchTyping = ConversationSearchBarVisibility.isTyping(searchFocused, state.searchText)
+    val searchTypingNow by rememberUpdatedState(searchTyping)
+    val searchBarVisible = ConversationSearchBarVisibility.isVisible(searchLaw, searchFocused, state.searchText)
+    val searchScrollConnection = remember(listState, density) {
+        var depthPx = 0f
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                depthPx = if (listState.canScrollBackward) (depthPx - consumed.y).coerceAtLeast(0f) else 0f
+                val previous = searchLaw
+                val depthDp = with(density) { depthPx.toDp().value }
+                searchLaw = ConversationSearchBarScrollLaw.advance(previous, depthDp, searchTypingNow)
+                if (ConversationSearchBarScrollLaw.dropsFocus(previous, searchLaw)) focusManager.clearFocus()
+                return Offset.Zero
+            }
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.Drag && searchFocused && available.y != 0f) {
+                    focusManager.clearFocus()
+                }
+                return Offset.Zero
+            }
         }
     }
-    val searchBarVisible = ConversationSearchBarVisibility.isVisible(
-        isSearchActive = state.searchText.isNotBlank(),
-        isScrollingDown = isScrollingDown,
-    )
 
     MeeshyBackground {
     Scaffold(
@@ -115,10 +129,23 @@ fun ConversationListScreen(
             )
         },
         bottomBar = {
-            AnimatedVisibility(visible = searchBarVisible) {
+            ConversationSearchDock(
+                visible = searchBarVisible,
+                isFocused = searchFocused,
+                query = state.searchText,
+                communityCount = searchCommunityCount,
+                syncPill = searchSyncPill,
+                communitiesBand = searchCommunitiesBand,
+            ) {
                 ConversationSearchBar(
                     query = state.searchText,
                     onQueryChange = viewModel::setSearch,
+                    isFocused = searchFocused,
+                    focusRequester = searchFocusRequester,
+                    onFocusChanged = { searchFocused = it },
+                    onToggleFocus = {
+                        if (searchFocused) focusManager.clearFocus() else searchFocusRequester.requestFocus()
+                    },
                     onDashboard = onDashboard,
                     onGlobalSearch = onGlobalSearch,
                 )
@@ -133,13 +160,13 @@ fun ConversationListScreen(
             ConnectionBannerStrip(state.banner)
             header()
             ConversationFilterBar(selected = state.selectedFilter, onSelect = viewModel::selectFilter)
-            Box(modifier = Modifier.weight(1f)) {
+            Box(modifier = Modifier.weight(1f).nestedScroll(searchScrollConnection)) {
                 ConversationListStateHost(
                     content = ConversationListContent.of(state),
                     onRetry = viewModel::refresh,
                     onNewConversation = onNewConversation,
                 ) {
-                    ConversationListBody(state = state, listState = listState, viewModel = viewModel)
+                    ConversationListBody(state = state, listState = listState, viewModel = viewModel, onRefresh = onRefresh)
                 }
             }
         }

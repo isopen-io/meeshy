@@ -14,10 +14,12 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.ParticipantCacheRepository
 import me.meeshy.sdk.model.MemberModeration
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRoleAction
 import me.meeshy.sdk.model.MemberRoster
+import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.PaginatedParticipant
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.matches
@@ -80,6 +82,7 @@ data class ConversationMembersUiState(
 @HiltViewModel
 class ConversationMembersViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
+    private val participantCache: ParticipantCacheRepository,
     private val sessionRepository: SessionRepository,
     private val messageSocketManager: MessageSocketManager,
 ) : ViewModel() {
@@ -108,7 +111,8 @@ class ConversationMembersViewModel @Inject constructor(
         )
         bindings = observeViewerRole(conversationId) +
             observeSearch(conversationId) +
-            observeRosterEvents(conversationId)
+            observeRosterEvents(conversationId) +
+            observeCachedRoster(conversationId)
         refresh()
     }
 
@@ -137,6 +141,17 @@ class ConversationMembersViewModel @Inject constructor(
 
         _state.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
+            if (current.searchQuery.isBlank()) {
+                val result = participantCache.nextPage(id)
+                _state.update { state ->
+                    when {
+                        result is NetworkResult.Success && state.searchQuery.isBlank() ->
+                            state.copy(roster = result.data, isLoadingMore = false)
+                        else -> state.copy(isLoadingMore = false)
+                    }
+                }
+                return@launch
+            }
             val result = conversationRepository.participants(
                 id = id,
                 search = current.searchQuery,
@@ -174,6 +189,8 @@ class ConversationMembersViewModel @Inject constructor(
             val result = conversationRepository.updateParticipantRole(id, userId, action.target)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
+            } else {
+                participantCache.updateRole(id, userId, action.target.wireValue)
             }
         }
     }
@@ -192,6 +209,8 @@ class ConversationMembersViewModel @Inject constructor(
             val result = conversationRepository.removeParticipant(id, userId)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
+            } else {
+                participantCache.removeParticipant(id, userId)
             }
         }
     }
@@ -212,6 +231,8 @@ class ConversationMembersViewModel @Inject constructor(
             val result = conversationRepository.banParticipant(id, userId)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
+            } else {
+                participantCache.removeParticipant(id, userId)
             }
         }
     }
@@ -219,7 +240,16 @@ class ConversationMembersViewModel @Inject constructor(
     fun dismissActionError() = _state.update { it.copy(actionFailed = false) }
 
     private suspend fun fetchFirstPage(conversationId: String, query: String) {
-        val result = conversationRepository.participants(id = conversationId, search = query)
+        val result = if (query.isBlank()) {
+            participantCache.firstPage(conversationId).let { cached ->
+                when (cached) {
+                    is NetworkResult.Success -> NetworkResult.Success(cached.data.asPage())
+                    is NetworkResult.Failure -> cached
+                }
+            }
+        } else {
+            conversationRepository.participants(id = conversationId, search = query)
+        }
         _state.update { state ->
             // A slower first page for an abandoned query must never overwrite the
             // roster the viewer is now looking at.
@@ -253,6 +283,22 @@ class ConversationMembersViewModel @Inject constructor(
         },
     )
 
+    /**
+     * Follows the cached unfiltered roster so a silent revalidation lands on screen. Ignored while
+     * a search is active (the roster then is a filtered one) and while nothing is cached yet.
+     */
+    private fun observeCachedRoster(conversationId: String): List<Job> = listOf(
+        viewModelScope.launch {
+            participantCache.observe(conversationId).collect { cached ->
+                if (cached == null) return@collect
+                _state.update { state ->
+                    if (state.searchQuery.isNotBlank() || state.status != MembersLoadStatus.Loaded) state
+                    else state.copy(roster = cached)
+                }
+            }
+        },
+    )
+
     private fun observeSearch(conversationId: String): List<Job> = listOf(
         viewModelScope.launch {
             searchQuery
@@ -270,6 +316,7 @@ class ConversationMembersViewModel @Inject constructor(
         viewModelScope.launch {
             messageSocketManager.participantRoleUpdated.collect { event ->
                 if (event.conversationId != conversationId) return@collect
+                participantCache.updateRole(conversationId, event.userId, event.role)
                 _state.update { it.copy(roster = it.roster.withRole(event.userId, MemberRole.from(event.role))) }
             }
         },
@@ -277,6 +324,7 @@ class ConversationMembersViewModel @Inject constructor(
             messageSocketManager.participantLeft.collect { event ->
                 if (event.conversationId != conversationId) return@collect
                 val removedId = event.userId ?: event.participantId ?: return@collect
+                participantCache.removeParticipant(conversationId, removedId)
                 _state.update { it.copy(roster = it.roster.withoutUser(removedId)) }
             }
         },
@@ -284,10 +332,13 @@ class ConversationMembersViewModel @Inject constructor(
             messageSocketManager.participantBanned.collect { event ->
                 if (event.conversationId != conversationId) return@collect
                 val removedId = event.userId ?: event.participantId ?: return@collect
+                participantCache.removeParticipant(conversationId, removedId)
                 _state.update { it.copy(roster = it.roster.withoutUser(removedId)) }
             }
         },
     )
+
+    private fun MemberRoster.asPage() = MemberRosterPage(members, nextCursor, hasMore, totalCount)
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 300L

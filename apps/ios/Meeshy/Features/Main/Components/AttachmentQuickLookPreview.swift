@@ -56,6 +56,7 @@ struct AttachmentQuickLookPreview: View {
                 queue.preventsDisplaySleepDuringVideoPlayback = false
                 let item = AVPlayerItem(url: fileURL)
                 looper = AVPlayerLooper(player: queue, templateItem: item)
+                MediaPolicyMonitor.shared.adopt(queue, role: .watched)
                 player = queue
                 queue.play()
             }

@@ -35,9 +35,11 @@ import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageEffectsEditor
 import me.meeshy.sdk.model.MimeTypeResolver
+import me.meeshy.sdk.model.TypedEmojis
 import me.meeshy.sdk.model.isWorthPersisting
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -68,6 +70,7 @@ internal class ChatComposerController(
     private val clock: CacheClock,
     private val pendingTray: () -> ComposerTrayController? = { null },
     private val composerText: ComposerTextHolder = ComposerTextHolder(),
+    private val recentEmojis: RecentEmojiStore? = null,
 ) {
 
     private var mentionRoster: List<MentionCandidate> = emptyList()
@@ -77,6 +80,12 @@ internal class ChatComposerController(
     private var lastPersistedDraft: ConversationDraft? = null
     private var draftPersistJob: Job? = null
     private var mentionSearchJob: Job? = null
+
+    /** The draft being written when « Modifier » was tapped, given back when the edit ends (iOS `draftBeforeEdit`). */
+    private var draftBeforeEdit: String? = null
+
+    /** The edited message's text, so an unchanged edit is dropped instead of sent (iOS `editingOriginalContent`). */
+    private var editingOriginal: String? = null
 
     /** Replaces the roster the `@mention` panel suggests from (the conversation's participants). */
     fun updateMentionRoster(roster: List<MentionCandidate>) {
@@ -305,6 +314,10 @@ internal class ChatComposerController(
         stopTypingEmission()
         val editingId = state.value.editingMessageId
         if (editingId != null) {
+            if (text == editingOriginal?.trim()) {
+                cancelEdit()
+                return
+            }
             if (text.isNotEmpty() || clipboard != null) applyEdit(editingId, text)
             return
         }
@@ -343,6 +356,7 @@ internal class ChatComposerController(
             )
         }
         persistDraft("", replyToId = null)
+        recordTypedEmojis(text)
         scope.launch {
             try {
                 if (batch != null) {
@@ -419,6 +433,12 @@ internal class ChatComposerController(
         )
     }
 
+    /** Les emojis tapés dans le message rejoignent les récents (iOS `RecentEmojiStore.record`). */
+    private fun recordTypedEmojis(text: String) {
+        val store = recentEmojis ?: return
+        TypedEmojis.extract(text).forEach(store::record)
+    }
+
     /** Chaque famille de pièce en attente doit être permise par la porte d'envoi unique. */
     private fun stagedKindsAllowed(tray: ComposerTrayController?, sentAtMillis: Long): Boolean {
         val items = tray?.state?.value?.items.orEmpty()
@@ -457,6 +477,9 @@ internal class ChatComposerController(
                 originalName = name,
                 mimeType = mime,
                 fileSize = bytes.size,
+                width = item.width,
+                height = item.height,
+                duration = item.durationMs?.toInt(),
             )
         }
         tray.release(batch)
@@ -537,6 +560,7 @@ internal class ChatComposerController(
             )
         }
         persistDraft("", replyToId = null)
+        recordTypedEmojis(text)
         scope.launch {
             try {
                 val uploadCmid = mediaUploadQueue.enqueue(
@@ -618,6 +642,8 @@ internal class ChatComposerController(
             nowMillis = clock.nowMillis(),
         )
         if (!editable) return
+        if (draftBeforeEdit == null) draftBeforeEdit = composerText.text
+        editingOriginal = message.content
         composerText.replace(message.content)
         state.update {
             it.copy(
@@ -633,7 +659,8 @@ internal class ChatComposerController(
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED
         }?.message ?: return
         if (message.deletedAt != null) return
-        if (state.value.isEditing) composerText.clear()
+        val restored = if (state.value.isEditing) takeDraftBeforeEdit() else null
+        if (restored != null) composerText.replace(restored)
         state.update {
             it.copy(
                 replyingToMessageId = messageId,
@@ -650,12 +677,19 @@ internal class ChatComposerController(
     }
 
     fun cancelEdit() {
-        composerText.clear()
+        composerText.replace(takeDraftBeforeEdit())
         state.update { it.copy(editingMessageId = null) }
     }
 
+    private fun takeDraftBeforeEdit(): String {
+        val restored = draftBeforeEdit.orEmpty()
+        draftBeforeEdit = null
+        editingOriginal = null
+        return restored
+    }
+
     private fun applyEdit(messageId: String, content: String) {
-        composerText.clear()
+        composerText.replace(takeDraftBeforeEdit())
         state.update { it.copy(editingMessageId = null) }
         scope.launch {
             try {

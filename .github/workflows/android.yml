@@ -41,6 +41,9 @@ on:
       - 'services/gateway/route-manifest.json'
       - 'packages/shared/api/**'
       - 'packages/shared/scripts/generate-android-endpoints.ts'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
+      - 'packages/design-tokens/**'
   pull_request:
     branches: [main, dev]
     paths:
@@ -55,6 +58,9 @@ on:
       - 'services/gateway/route-manifest.json'
       - 'packages/shared/api/**'
       - 'packages/shared/scripts/generate-android-endpoints.ts'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
+      - 'packages/design-tokens/**'
   workflow_dispatch:
 
 concurrency:
@@ -135,6 +141,28 @@ jobs:
       - name: Generated Kotlin routes are up to date (generate-android-endpoints.ts --check)
         working-directory: packages/shared
         run: npx --yes tsx@4.20.6 scripts/generate-android-endpoints.ts --check
+
+  # Jetons : MeeshyPaletteGenerated.kt (Android) et ios.css (web) sont GÉNÉRÉS depuis
+  # MeeshyColors.swift par le même parseur strict. Une couleur modifiée côté Swift sans
+  # régénération fait échouer ce contrôle.
+  tokens:
+    name: Design tokens (generation check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: ios.css is up to date (generate-from-ios.mjs --check)
+        run: node packages/design-tokens/scripts/generate-from-ios.mjs --check
+
+      - name: MeeshyPaletteGenerated.kt is up to date (generate-android-from-ios.mjs --check)
+        run: node packages/design-tokens/scripts/generate-android-from-ios.mjs --check
 
   android:
     name: Android (assemble + unit tests)

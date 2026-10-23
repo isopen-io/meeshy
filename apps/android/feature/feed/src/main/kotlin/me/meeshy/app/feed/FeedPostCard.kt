@@ -28,6 +28,7 @@ internal fun PostCard(
     onPin: () -> Unit = {},
     onReport: () -> Unit = {},
     onDelete: () -> Unit = {},
+    onComments: () -> Unit = onClick,
 ) {
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
@@ -50,7 +51,14 @@ internal fun PostCard(
             )
             FeedPostCardBody(post = post, onFlagTap = onFlagTap)
             FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost)
-            FeedPostCardFooter(post = post, onLike = onLike, onBookmark = onBookmark)
+            FeedPostCardFooter(
+                post = post,
+                onLike = onLike,
+                onBookmark = onBookmark,
+                onComments = onComments,
+                onRepost = onRepost,
+                onQuote = onQuote,
+            )
         }
     }
 }

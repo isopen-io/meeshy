@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreImage
 import Foundation
+import MeeshyUI
 import Metal
 
 /// **Ce qui identifie une scène cuite** (#9347) : le look, la toile, et ce que
@@ -127,11 +128,22 @@ nonisolated enum ComposerLookPainter {
     /// L'effet de l'appel (#10311) se pose sur la source tonifiée, avant le
     /// cadrage : le visage se lit là où il est. `still` : une photo, dont le
     /// visage se cherche sur elle ; `faces` : le suivi d'un aperçu ou d'un export.
+    /// Les étages sont ceux du peintre de lens unique (#11298) : étalonnage,
+    /// effet du visage, puis cadrage et cadre.
     static func paint(_ source: CIImage, look: ComposerPhotoLook, framing: ComposerFraming,
                       scene: CallLiveFrameScene?, canvas: CGSize, declared: CGColorSpace? = nil,
                       faces: ComposerFaceEffects = .live, still: Bool = false) -> CIImage {
-        let tonifiee = ComposerLiveLookRule.graded(source, filter: look.filter, declared: declared)
-        let graded = faces.apply(look.effect, to: tonifiee, probing: source, still: still)
+        let couches = [
+            LensPass(.lut) { image, _ in ComposerLiveLookRule.graded(image, filter: look.filter, declared: declared) },
+            LensPass(.face) { tonifiee, _ in faces.apply(look.effect, to: tonifiee, probing: source, still: still) },
+            LensPass(.frame) { image, _ in framed(image, framing: framing, scene: scene, canvas: canvas) },
+        ]
+        return LensPainter.paint(source, passes: couches, input: LensFrameInput())
+    }
+
+    /// Le cadrage, puis la case du cadre quand la scène en a une.
+    private static func framed(_ graded: CIImage, framing: ComposerFraming,
+                               scene: CallLiveFrameScene?, canvas: CGSize) -> CIImage {
         guard let scene, let slot = scene.slots.first, slot.photo.height > 0 else {
             return filled(graded, framing: framing, into: CGRect(origin: .zero, size: canvas))
         }

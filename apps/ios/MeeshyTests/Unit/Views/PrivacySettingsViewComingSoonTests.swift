@@ -90,7 +90,7 @@ final class CallAddressPrivacyTests: XCTestCase {
     private func defaults() -> UserDefaults {
         let suite = "CallAddressPrivacyTests.\(UUID().uuidString)"
         let store = UserDefaults(suiteName: suite)!
-        addTeardownBlock { store.removePersistentDomain(forName: suite) }
+        addTeardownBlock { UserDefaults().removePersistentDomain(forName: suite) }
         return store
     }
 
@@ -105,6 +105,7 @@ final class CallAddressPrivacyTests: XCTestCase {
     }
 
     #if canImport(WebRTC)
+    @MainActor
     func test_configuration_relaisSeul_poseLaPolitiqueRelay() {
         XCTAssertEqual(WebRTCPeerConfiguration.make(iceServers: [], transport: .relayOnly).iceTransportPolicy, .relay)
         XCTAssertEqual(WebRTCPeerConfiguration.make(iceServers: [], transport: .all).iceTransportPolicy, .all)

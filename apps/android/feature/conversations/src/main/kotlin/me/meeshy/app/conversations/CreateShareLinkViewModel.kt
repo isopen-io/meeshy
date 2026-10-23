@@ -5,7 +5,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -41,6 +44,11 @@ data class CreateShareLinkUiState(
     val createdJoinUrl: String? get() = created?.joinUrl(webOrigin)
 }
 
+/** One-shot effects of the creation screen. */
+sealed interface CreateShareLinkEffect {
+    data object SuccessHaptic : CreateShareLinkEffect
+}
+
 /**
  * Orchestrates share-link creation on top of the pure [CreateShareLinkForm] SSOT
  * and [ShareLinkRepository]. Threads every field edit through the form and submits
@@ -53,9 +61,8 @@ class CreateShareLinkViewModel @Inject constructor(
     config: MeeshyConfig,
 ) : ViewModel() {
 
-    private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
-        "CreateShareLinkViewModel requires a '$CONVERSATION_ID_ARG' navigation argument"
-    }
+    /** Seeded when launched from a chat; absent when the owner picks the conversation in the form. */
+    private val conversationId: String? = savedStateHandle[CONVERSATION_ID_ARG]
 
     /** Public web origin (e.g. `https://meeshy.me`) for the created link's join URL. */
     private val webOrigin: String =
@@ -65,11 +72,14 @@ class CreateShareLinkViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(
         CreateShareLinkUiState(
-            form = CreateShareLinkForm.from(conversationId),
+            form = conversationId?.let(CreateShareLinkForm::from) ?: CreateShareLinkForm.empty(),
             webOrigin = webOrigin,
         ),
     )
     val state: StateFlow<CreateShareLinkUiState> = _state.asStateFlow()
+
+    private val _effects = Channel<CreateShareLinkEffect>(Channel.BUFFERED)
+    val effects: Flow<CreateShareLinkEffect> = _effects.receiveAsFlow()
 
     /** Injectable at the edge so the built `expiresAt` stays deterministic in tests. */
     @VisibleForTesting
@@ -104,6 +114,12 @@ class CreateShareLinkViewModel @Inject constructor(
 
     fun onMaxUsesChange(value: Int) = updateForm { it.withMaxUses(value) }
 
+    fun onMaxUsesIncrement() = updateForm { it.incrementMaxUses() }
+
+    fun onMaxUsesDecrement() = updateForm { it.decrementMaxUses() }
+
+    fun onConversationSelected(id: String) = updateForm { it.withConversation(id) }
+
     fun onExpirationChange(value: ShareLinkExpiration) = updateForm { it.withExpiration(value) }
 
     fun submit() {
@@ -112,13 +128,13 @@ class CreateShareLinkViewModel @Inject constructor(
         val request = current.form.toRequest(now()) ?: return
         _state.update { it.copy(isSubmitting = true, errorMessage = null) }
         viewModelScope.launch {
-            _state.update {
-                when (val result = repository.create(request)) {
-                    is NetworkResult.Success -> it.copy(isSubmitting = false, created = result.data)
-                    is NetworkResult.Failure -> it.copy(
-                        isSubmitting = false,
-                        errorMessage = result.error.message,
-                    )
+            when (val result = repository.create(request)) {
+                is NetworkResult.Success -> {
+                    _state.update { it.copy(isSubmitting = false, created = result.data) }
+                    _effects.trySend(CreateShareLinkEffect.SuccessHaptic)
+                }
+                is NetworkResult.Failure -> _state.update {
+                    it.copy(isSubmitting = false, errorMessage = result.error.message)
                 }
             }
         }

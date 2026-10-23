@@ -263,14 +263,12 @@ public struct MeeshyVideoThumbnail: View {
         try data.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
-        let asset = AVURLAsset(url: tempURL)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxDimension, height: maxDimension)
-
-        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
-        let (cgImage, _) = try await generator.image(at: time)
-        return UIImage(cgImage: cgImage)
+        guard let image = await VideoThumbnailGenerator.shared.image(for: VideoThumbnailRequest(
+            url: tempURL, instants: .start(atMost: 0.1),
+            maximumSize: CGSize(width: maxDimension, height: maxDimension), cachesResult: false)) else {
+            throw VideoThumbnailError.undecodable
+        }
+        return image
     }
 
     // MARK: - Duration formatting

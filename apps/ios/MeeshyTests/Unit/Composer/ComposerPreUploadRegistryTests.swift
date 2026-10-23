@@ -215,4 +215,84 @@ final class ComposerPreUploadRegistryTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
     }
+
+    // MARK: - #9912 — la vidéo pré-montée part compressée, sous le type de son conteneur
+
+    /// Retient ce que le monteur a reçu, et si le fichier existait à cet instant.
+    private final class MonteurTemoin: ComposerPreUploadProviding, @unchecked Sendable {
+        private let verrou = NSLock()
+        private var recus: [(url: URL, mime: String, existait: Bool)] = []
+
+        var envois: [(url: URL, mime: String, existait: Bool)] { verrou.withLock { recus } }
+
+        func upload(fileURL: URL, mimeType: String) async throws
+            -> (postMediaId: String, remoteURL: String) {
+            let existe = FileManager.default.fileExists(atPath: fileURL.path)
+            verrou.withLock { recus.append((fileURL, mimeType, existe)) }
+            return ("pm-\(fileURL.lastPathComponent)", "https://cdn/\(fileURL.lastPathComponent)")
+        }
+    }
+
+    private func fichierCompresse() throws -> URL {
+        let compresse = FileManager.default.temporaryDirectory
+            .appendingPathComponent("compressed_\(UUID().uuidString).mp4")
+        try Data([0, 0, 0, 0x18]).write(to: compresse)
+        return compresse
+    }
+
+    /// La prise brute (`.mov` caméra, 10–15 Mb/s) ne part plus telle quelle :
+    /// le monteur reçoit la sortie de la compression, sous le type de SON
+    /// conteneur, et ce fichier temporaire ne survit pas à l'envoi.
+    func test_compressingPreUploader_video_sendsTheCompressedFileUnderItsContainerType() async throws {
+        let compresse = try fichierCompresse()
+        let monteur = MonteurTemoin()
+        let sut = ComposerCompressingPreUploader(inner: monteur, compress: { _ in compresse })
+
+        _ = try await sut.upload(fileURL: url("prise.mov"), mimeType: "video/quicktime")
+
+        XCTAssertEqual(monteur.envois.map(\.url), [compresse])
+        XCTAssertEqual(monteur.envois.first?.mime, "video/mp4")
+        XCTAssertEqual(monteur.envois.first?.existait, true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: compresse.path), "le fichier compressé est temporaire")
+    }
+
+    func test_compressingPreUploader_image_travelsUntouched() async throws {
+        let monteur = MonteurTemoin()
+        let sut = ComposerCompressingPreUploader(inner: monteur, compress: { source in
+            XCTFail("une image n'a rien à faire dans l'encodeur vidéo")
+            return source
+        })
+
+        _ = try await sut.upload(fileURL: url("photo.jpg"), mimeType: "image/jpeg")
+
+        XCTAssertEqual(monteur.envois.map(\.url), [url("photo.jpg")])
+        XCTAssertEqual(monteur.envois.first?.mime, "image/jpeg")
+    }
+
+    /// Une compression ratée fait échouer la PRÉ-montée, jamais l'envoi : le
+    /// registre marque l'asset `failed` et la publication le compresse elle-même.
+    func test_compressingPreUploader_compressionFails_sendsNothing() async {
+        let monteur = MonteurTemoin()
+        let sut = ComposerCompressingPreUploader(inner: monteur, compress: { _ in throw URLError(.cannotDecodeContentData) })
+
+        do {
+            _ = try await sut.upload(fileURL: url("prise.mov"), mimeType: "video/quicktime")
+            XCTFail("la pré-montée doit échouer")
+        } catch {
+            XCTAssertTrue(monteur.envois.isEmpty, "la prise brute ne part jamais à la place")
+        }
+    }
+
+    /// Le composer monte par CE monteur, au budget de la story — le seul format
+    /// dont la publication référence ce qui a été pré-monté.
+    func test_composerHost_preUploadsThroughTheCompressingUploader_atTheStoryBudget() throws {
+        let host = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(host.contains("returnComposerCompressingPreUploader.story(baseURL:base,token:jeton)"))
+        let monteur = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerPreUploadRegistry.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(monteur.contains("inner:ComposerTusPreUploader(baseURL:baseURL,token:token)"))
+        XCTAssertTrue(monteur.contains("compressVideo($0,context:.story)"))
+    }
 }

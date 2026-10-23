@@ -1,5 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_composer_edit_title">Modifica il messaggio</string>
+    <string name="chat_composer_reply_a11y">Risposta a %1$s: %2$s</string>
+    <string name="chat_composer_reply_file">File</string>
+    <string name="chat_composer_reply_location">Posizione</string>
+    <string name="chat_composer_reply_photo">Foto</string>
+    <string name="chat_composer_reply_unknown">un messaggio</string>
+    <string name="chat_composer_reply_video">Video</string>
+    <string name="chat_composer_reply_voice">Messaggio vocale</string>
+    <string name="chat_composer_reply_you">Tu</string>
+    <string name="chat_delete_confirm_cancel">Annulla</string>
+    <string name="chat_delete_confirm_hint">L\'eliminazione per tutti è disponibile per 2 ore dopo l\'invio.</string>
+    <string name="chat_delete_confirm_title">Eliminare questo messaggio?</string>
+    <string name="common_cancel">Annulla</string>
+    <string name="common_send">Invia</string>
+    <string name="common_unknown">Sconosciuto</string>
     <string name="composer_a11y_addSelection">Aggiungi la selezione</string>
     <string name="composer_a11y_cancelSelection">Annulla la selezione</string>
     <string name="composer_a11y_openFullLibrary">Apri l\'intera libreria foto</string>
@@ -17,6 +32,14 @@
     <string name="composer_recent_grantAccess">Consenti l\'accesso alle foto</string>
     <string name="composer_recent_grantAccess_hint">Per ritrovare qui i tuoi contenuti recenti</string>
     <string name="composer_recent_select">Seleziona</string>
+    <string name="message_detail_reactions_count_a11y">%d reazione/i</string>
+    <string name="message_detail_reactions_empty">Nessuna reazione</string>
+    <string name="message_detail_report_confirm_message">Il messaggio sarà inviato alla moderazione.</string>
+    <string name="message_detail_report_confirm_title">Segnalare questo messaggio?</string>
     <string name="recentMedia_resolveFailed">Impossibile preparare questo contenuto — usa la libreria foto completa</string>
     <string name="recentMedia_resolveFailed_multiple">Non è stato possibile preparare %d media — usa l\'intera libreria foto</string>
+    <string name="starred_more_options">Altre opzioni</string>
+    <string name="starred_remove">Rimuovi dai preferiti</string>
+    <string name="starred_remove_all">Rimuovi tutto</string>
+    <string name="starred_row_hint">Apre la conversazione</string>
 </resources>

@@ -17,6 +17,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
 
 /**
  * The conversation screen: an assembly of five hosts drawn in layer order — background,
@@ -36,6 +39,7 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
 
     // Re-probe the server for a still-active call each time the screen resumes
     // (returning from the call itself, an app relaunch mid-call) so the
@@ -64,6 +68,7 @@ fun ChatScreen(
             onRejoinCall = onRejoinCall,
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
+            callEntry = callEntry,
         ),
     )
 
@@ -93,14 +98,16 @@ internal data class PickedAttachment(
 /**
  * Reads a document/photo the user picked from the system picker into memory,
  * resolving its display name and the platform's declared content-type. Returns
- * `null` when the stream cannot be opened (a revoked grant / deleted document) so
- * the composer silently ignores the pick rather than crashing. The byte read and
- * cursor query are the Android-framework glue behind the pure send pipeline.
+ * `null` when the stream cannot be opened (a revoked grant / deleted document) or
+ * when the file is above the upload ceiling ([ComposerAttachmentLimits.MAX_UPLOAD_BYTES]):
+ * a long video is never pulled whole into memory. The byte read and cursor query are
+ * the Android-framework glue behind the pure send pipeline.
  */
 internal fun readPickedAttachment(context: Context, uri: Uri): PickedAttachment? {
     val resolver = context.contentResolver
-    val bytes = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }
-        .getOrNull() ?: return null
+    val bytes = runCatching {
+        resolver.openInputStream(uri)?.use { readWithin(it, ComposerAttachmentLimits.MAX_UPLOAD_BYTES) }
+    }.getOrNull() ?: return null
     val fileName = queryDisplayName(resolver, uri) ?: uri.lastPathSegment ?: "attachment"
     return PickedAttachment(bytes = bytes, fileName = fileName, mimeType = resolver.getType(uri))
 }
@@ -114,3 +121,18 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
         }
     }.getOrNull()
 
+/** Reads [input] whole, or `null` as soon as it runs past [maxBytes] — never more than the ceiling. */
+internal fun readWithin(input: InputStream, maxBytes: Long): ByteArray? {
+    val out = ByteArrayOutputStream()
+    val buffer = ByteArray(READ_BUFFER_BYTES)
+    var total = 0L
+    while (true) {
+        val read = input.read(buffer)
+        if (read < 0) return out.toByteArray()
+        total += read
+        if (total > maxBytes) return null
+        out.write(buffer, 0, read)
+    }
+}
+
+private const val READ_BUFFER_BYTES = 64 * 1024
