@@ -153,6 +153,8 @@ public fun MessageBubble(
             content.isOutgoing -> outgoingColor
             else -> MeeshyTheme.tokens.backgroundTertiary
         }
+        Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
+        if (content.pinnedAtIso != null && !content.isDeleted) BubblePinnedIndicator()
         BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
         Column(
             modifier = Modifier
@@ -342,6 +344,7 @@ public fun MessageBubble(
             }
 
             BubbleFooterRow(content = content, onColor = onColor)
+        }
         }
         }
     }
