@@ -282,7 +282,7 @@ services:
       # Production : le script de l'hôte y publie chaque nuit ; contrôle armé par défaut.
       - BACKUP_STATUS_FILE=/backup-status/etat.json
       - BACKUP_STATUS_ALERTS_ENABLED=${BACKUP_STATUS_ALERTS_ENABLED:-true}
-      - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS absente sur l hote. Poser la liste d origines separees par des virgules. Vide, la passerelle refuse TOUTE origine de navigateur}
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:?ALLOWED_ORIGINS absente sur l hote. C est le repli de CORS_ORIGINS. Vide, il ne rattrape rien}
       - FRONTEND_URL=${FRONTEND_URL:?FRONTEND_URL absente sur l hote. Sans elle les liens de reinitialisation et de confirmation partent brises}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET absente sur l hote. Vide, la passerelle signerait avec un secret publie dans le depot}
