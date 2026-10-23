@@ -22,10 +22,12 @@ function sansCommentaires(source: string): string {
 }
 
 describe('la coque est bord à bord à toute version (#12447)', () => {
-  test('l’activité enregistre le pont et passe bord à bord avant de construire le pont', () => {
+  test('l’activité enregistre le pont et passe bord à bord une fois le thème sans barre d’action posé', () => {
     const activite = sansCommentaires(readFileSync(join(JAVA, 'MainActivity.java'), 'utf8'));
     expect(activite).toContain('registerPlugin(MeeshySystemBarsPlugin.class);');
-    expect(activite).toMatch(/EdgeToEdge\.enable\(this\);\s*super\.onCreate\(savedInstanceState\);/);
+    // Avant `super.onCreate`, `enable` installerait la fenêtre avec la barre
+    // d'action du thème de l'application (`BridgeActivity` pose le thème après).
+    expect(activite).toMatch(/super\.onCreate\(savedInstanceState\);\s*EdgeToEdge\.enable\(this\);/);
   });
 
   test('aucune source de la coque n’appelle les API de barres obsolètes', () => {
