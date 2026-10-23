@@ -80,7 +80,7 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
         Bundle extras = intent == null ? null : intent.getExtras();
         Map<String, String> data = NotificationFunnelStore.extrasOf(extras);
         boolean inForeground = MainActivity.isInForeground();
-        boolean displayed = inForeground || !withheldCorrection(data);
+        boolean displayed = inForeground || !withheld(data);
         if (displayed) super.handleIntent(intent);
         try {
             NotificationFunnelStore.noteShown(this, data, inForeground, displayed && (inForeground || systemShows(data)));
@@ -109,17 +109,21 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
     /**
      * #10989 — une correction dont la banniere a ete balayee, ou remplacee par
      * un message plus recent du fil, ou qui dit deja ce texte : FCM ne
-     * l'affiche pas ({@link NotificationCorrectionRules}).
+     * l'affiche pas. #12479 — un push livre deux fois non plus, comme sur le
+     * web ({@link NotificationCorrectionRules}).
      */
-    private boolean withheldCorrection(Map<String, String> data) {
-        if (!NotificationCorrectionRules.isCorrection(data)) return false;
+    private boolean withheld(Map<String, String> data) {
+        String tag = NotificationFunnelRules.bannerTag(data);
+        if (tag.isEmpty() || !NotificationFunnelRules.fcmDisplays(data)) return false;
         try {
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager == null) return false;
-            Notification shown = NotificationVoiceBanner.find(manager, NotificationFunnelRules.bannerTag(data));
-            return !NotificationCorrectionRules.shows(data, shown == null ? null : shownOf(shown.extras));
+            Notification found = NotificationVoiceBanner.find(manager, tag);
+            NotificationCorrectionRules.Shown shown = found == null ? null : shownOf(found.extras);
+            if (NotificationCorrectionRules.isCorrection(data)) return !NotificationCorrectionRules.shows(data, shown);
+            return NotificationCorrectionRules.repeats(data, shown);
         } catch (RuntimeException failure) {
-            Log.w(TAG, "correction affichee sans verification", failure);
+            Log.w(TAG, "push affiche sans verification", failure);
             return false;
         }
     }
