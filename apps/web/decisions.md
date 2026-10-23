@@ -5697,3 +5697,30 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 - **Le geste** : tant que l'aperçu n'est pas rempli (`packIsLocked`), la rangée montre « À débloquer » à la place de « Installer » ou « Acheter ». Un pack payant à fenêtre ouverte reste achetable. Le serveur reste juge.
 
 **Gardes.** `lib/packs/unlock-line.test.ts`, `lib/api/packs-shop-unlock.test.ts`, `components/unified-shop-unlock.test.tsx`.
+
+## D-224 — Les Web Vitals et les longues images voyagent avec le résumé de lecture, et se lisent dans la coque par une trace Chrome distante (2026-10-23, #11317 ; consomme S25 #11280 et W10 #11316)
+
+**Ce qui manquait.** Aucun `PerformanceObserver` ne tournait en production. Un rebuffer se mesurait, mais pas une image perdue pendant la lecture. Le tier d'appareil existait (`lib/device/capability-tier.ts`) sans jamais accompagner le résumé `playback/session`, alors que la passerelle le lit depuis S25.
+
+**Ce qui change.**
+- `lib/telemetry/page-vitals.ts` contient un accumulateur PUR et le seul site qui touche au navigateur. Il ne dépend d'aucun paquet (pas de `web-vitals` : aucun lockfile ne bouge).
+  - **LCP** : la dernière plus grande peinture.
+  - **CLS** : la pire fenêtre de session (1 s de calme ou 5 s de durée la ferment). Les décalages qui suivent une saisie sont exclus.
+  - **INP** : la pire interaction tant qu'il y en a moins de 50, puis le 98e centile. Une interaction est comptée une fois par `interactionId`, et le seuil d'observation est de 40 ms.
+  - **Longues images** (`long-animation-frame`) : le nombre, le temps bloquant et la pire image. Les durées récentes sont gardées en mémoire BORNÉE (256).
+- L'observation ne s'ouvre qu'à la première séance de lecture (`pageVitals()`). Elle ne porte que sur les types que le moteur annonce (`supportedEntryTypes`), et un type refusé n'en empêche aucun autre. Un WebView au plancher 111 n'a pas LoAF (Chromium 123) : il ne l'envoie simplement pas.
+- `bindPlaybackQoe` reçoit une sonde (`playbackPageProbe`), ouverte avec la séance et fermée avec elle. Le résumé gagne ainsi :
+  - `deviceTier`, lu à l'ouverture. Le `pro` du web se range sous `high`, le plus haut tier que la télémétrie connaisse.
+  - `lcpMs`, `cls`, `inpMs` de la page.
+  - `longFrames`, `longFramesBlockingMs`, `longFrameWorstMs` survenues PENDANT la séance seulement.
+  - La sonde ne réécrit jamais un champ de la séance.
+- **Rétrocompatible.** La passerelle accepte `deviceTier` (S25) et, son schéma Zod n'étant pas strict, ignore les autres champs. Les recevoir, les agréger et les servir à l'onglet Lecture appartient à la chaîne serveur. Rien ne part en dehors du résumé existant, sous le consentement existant.
+
+**La trace Chrome distante de la coque** (`me.meeshy.app`, Capacitor 8). La coque de DÉBOGAGE expose son WebView aux DevTools : `webContentsDebuggingEnabled` suit `debuggable`, qui est vrai en debug. Une coque de publication ne l'expose pas, et ne doit pas l'exposer.
+1. Construire la coque de débogage et l'installer : `bun run build`, puis `bun run cap:sync`, puis `./gradlew installDebug` dans `android/`. Activer le débogage USB et brancher l'appareil, ou lancer l'AVD.
+2. Sur le poste, ouvrir `chrome://inspect/#devices`. Le WebView `me.meeshy.app` apparaît : « inspect ».
+3. Dans l'onglet **Performance**, enregistrer, puis faire défiler les réels ou lancer une vidéo, puis arrêter. Les pistes « Interactions » et « Long animation frames » montrent ce que l'accumulateur compte, et « Timings » montre le LCP.
+4. En console, `performance.getEntriesByType('long-animation-frame')` et `PerformanceObserver.supportedEntryTypes` disent ce que ce WebView sait observer.
+5. Pour une trace scriptée sans écran, comme dans `targets/story.scene-sound.md`, utiliser `adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>`. Le protocole CDP s'y parle par WebSocket (`Tracing.start` / `Tracing.end`, catégories `devtools.timeline`, `loading`).
+
+**Gardes.** `lib/telemetry/page-vitals.test.ts` et `lib/telemetry/playback-qoe.test.ts` (séance ouverte puis fermée une fois, aucun champ réécrit, résumé inchangé sans sonde).
