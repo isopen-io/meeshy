@@ -31,7 +31,9 @@
     <string name="account_contact_phone_code_label">رمز من 6 أرقام</string>
     <string name="account_contact_phone_code_sent">تم إرسال الرمز برسالة نصية</string>
     <string name="account_contact_phone_current_label">الهاتف الحالي</string>
+    <string name="account_contact_phone_implausible">لا يبدو هذا الرقم حقيقيًا، يُرجى التحقق منه.</string>
     <string name="account_contact_phone_section">الهاتف</string>
+    <string name="account_contact_phone_too_short">هذا الرقم قصير جدًا: %d أرقام على الأقل.</string>
     <string name="account_contact_phone_verify">تحقُّق</string>
     <string name="account_contact_send">إرسال</string>
     <string name="account_contact_verified">موثّق</string>

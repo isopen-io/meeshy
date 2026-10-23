@@ -110,7 +110,9 @@
     <string name="signup_password_hide">Passwort ausblenden</string>
     <string name="signup_password_label">Passwort</string>
     <string name="signup_password_show">Passwort anzeigen</string>
+    <string name="signup_phone_implausible">Diese Nummer scheint nicht echt zu sein – bitte prüfe sie.</string>
     <string name="signup_phone_label">Telefon</string>
+    <string name="signup_phone_too_short">Diese Nummer ist zu kurz: mindestens %d Ziffern.</string>
     <string name="signup_sign_in">Anmelden</string>
     <string name="signup_subtitle">Du liest alle in deiner Sprache.</string>
     <string name="signup_title">Erstelle dein Konto</string>
