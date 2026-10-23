@@ -81,6 +81,22 @@ final class ProgressivePlaybackWiringTests: XCTestCase {
         XCTAssertEqual(asked, ["https://gate.meeshy.me/api/v1/attachments/file/key.mp4"])
     }
 
+    /// #12027 — le plein écran passe au lecteur dès que le téléchargement est
+    /// lisible, au lieu de garder l'écran d'attente jusqu'à la fin du fichier.
+    func test_fullscreen_branchesOnPlaysNow_notOnReady() throws {
+        let source = try String(contentsOf: Self.sourceURL("Media/MeeshyVideoPlayer+Renderers.swift"), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("player.availability.playsNow(fileUrl: player.attachment.fileUrl)"))
+        XCTAssertFalse(source.contains("case .needsDownload, .downloading:\n                downloadOverlay"),
+                       "un téléchargement lisible ne garde plus l'écran d'attente")
+    }
+
+    private static func sourceURL(_ relative: String) -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI").appendingPathComponent(relative)
+    }
+
     func test_bubbleWithoutReadableTransfer_leavesNoPlayer() {
         let manager = SharedAVPlayerManager.shared
         manager.stop()

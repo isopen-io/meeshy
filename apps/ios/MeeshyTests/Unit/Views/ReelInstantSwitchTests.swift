@@ -528,6 +528,23 @@ final class ReelsCoverTests: XCTestCase {
                           "au découvrement, la liste se remet à jour")
     }
 
+    /// #12027 — les réels et la galerie jouent dès la tête d'un téléchargement
+    /// lisible, par la même décision que la bulle, sans ouvrir de transfert.
+    func test_reelsAndGallery_playFromTheHead_ofAReadableDownload() throws {
+        let surfaces = [
+            "Meeshy/Features/Main/Views/ReelFeedVideoSurface.swift",
+            "Meeshy/Features/Main/Views/ReelsPlayerView+Video.swift",
+        ]
+        for path in surfaces {
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
+            XCTAssertTrue(source.contains("content(ready: availability.playsNow(fileUrl: attachment.fileUrl))"), path)
+            XCTAssertFalse(source.contains("content(ready: availability == .ready)"), path)
+        }
+        let gallery = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView+Pages.swift"))
+        XCTAssertTrue(gallery.contains("availability.playsNow(fileUrl: attachment.fileUrl)"))
+    }
+
     func test_root_freezesTheListAndHidesWhatTheReelsCover() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
         XCTAssertTrue(source.contains("CoveredFreeze(isCovered: reelsCoverScreen) { ConversationListView("))
