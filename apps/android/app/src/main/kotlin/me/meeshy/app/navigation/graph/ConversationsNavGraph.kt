@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -25,6 +26,7 @@ import me.meeshy.app.conversations.ShareLinkPickerScreen
 import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.stories.StoriesViewModel
 import me.meeshy.app.stories.StoryTray
 
 /** Liste, recherche, tableau de bord, liens de partage, fil de discussion et messages favoris. */
@@ -39,6 +41,9 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             navDeepLink { uriPattern = Routes.CONVERSATIONS_DEEP_LINK },
         ),
     ) {
+        // Une seule instance pour la barre et le geste « tirer » : tirer la liste recharge
+        // aussi les stories (iOS `ConversationListView` : pullToRefresh + loadStories).
+        val storiesViewModel: StoriesViewModel = hiltViewModel()
         ConversationListScreen(
             onConversationClick = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
@@ -52,8 +57,10 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 StoryTray(
                     onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
                     onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
+                    viewModel = storiesViewModel,
                 )
             },
+            onRefresh = storiesViewModel::refresh,
         )
     }
     composable(Routes.SHARE_LINK_PICKER) {
