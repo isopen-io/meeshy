@@ -6,6 +6,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
 import { flag } from '@/lib/languages';
 import type { CarryProvider } from '@/lib/view/audio-carry-on-close';
 import { spokenLanguageName } from '@/lib/view/language-name';
@@ -178,6 +179,7 @@ export default function ViewerAudioPage({
     },
     [bind],
   );
+  useRememberSeenAttachment({ element: audioElement, attachmentId: attachment.id, src: track.url === '' ? '' : attachmentSrc(track.url), active: isActive });
 
   /* La reprise se lit sur ce qui jouait au DERNIER rendu : la fermeture
      démonte la page sans la re-rendre, et l'élément peut déjà être arrêté. */

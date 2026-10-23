@@ -9,6 +9,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { reportAttachmentStatus } from '@/lib/api/attachments';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { RecentMediaScopeContext, messagesRecentMediaScope, useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
 import { coqueCourante } from '@/lib/native-shell';
 import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
 import { fileBadgeOf } from '@/lib/view/file-badge';
@@ -230,6 +231,7 @@ function VoiceAttachment({
     },
     [bind],
   );
+  useRememberSeenAttachment({ element: audioElement, attachmentId: attachment.id, src: track.url === '' ? '' : attachmentSrc(track.url), active: true });
   const playingElement = carried?.element ?? audioElement;
   const activeSegment = useKaraokeIndex(playingElement, segments, status === 'playing');
 
@@ -607,6 +609,21 @@ export function Attachments({
         );
   const veil = useContext(VeilRevealContext);
   const viewing = openIndex !== null || openAudioIndex !== null;
+  /* CE QUI SE RELIT HORS LIGNE (#12052) : seul le fil connaît le message ET
+     le régime de sa conversation ; ailleurs, la portée héritée (fail-closed). */
+  const outerRecent = useContext(RecentMediaScopeContext);
+  const recentScope = useMemo(
+    () =>
+      message === undefined || thread === null
+        ? outerRecent
+        : messagesRecentMediaScope({
+            outer: outerRecent,
+            entries: attachments.map((attachment) => ({ message, attachment })),
+            conversationEncrypted: thread.conversationEncryptionMode != null,
+            now: Date.now(),
+          }),
+    [outerRecent, message, thread, attachments],
+  );
   useEffect(() => {
     if (veil === null || !viewing) return;
     veil.onViewer(true);
@@ -614,7 +631,7 @@ export function Attachments({
   }, [veil, viewing]);
 
   return (
-    <>
+    <RecentMediaScopeContext.Provider value={recentScope}>
       {visual.length > 0 ? (
         <MediaGrid
           items={visual}
@@ -725,6 +742,6 @@ export function Attachments({
           />
         </Suspense>
       ) : null}
-    </>
+    </RecentMediaScopeContext.Provider>
   );
 }

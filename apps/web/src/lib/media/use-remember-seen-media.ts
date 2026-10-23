@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import type { RecentMediaProtection } from './recent-media-policy';
 
-type Remember = (media: { readonly src: string; readonly protection: RecentMediaProtection }) => Promise<unknown>;
+export type Remember = (media: { readonly src: string; readonly protection: RecentMediaProtection }) => Promise<unknown>;
 
 /** Chargée À LA DEMANDE : un lecteur qui ne lit rien ne paie pas la garde. */
 const rememberLazily: Remember = (media) => import('./recent-media-store').then(({ rememberRecentMedia }) => rememberRecentMedia(media));

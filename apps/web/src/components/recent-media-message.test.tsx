@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
@@ -7,6 +7,7 @@ import { attachmentDefaults, message } from '@/lib/api/fixtures-base';
 import type { Attachment, Message } from '@/lib/api/types';
 import { RecentMediaScopeContext, type RecentMediaScope } from '@/lib/media/recent-media-scope';
 import { CARDED_STAGE } from '@/lib/view/media-stage';
+import { ThreadMediaContext, type ThreadMediaContextValue } from '@/lib/view/thread-media-context';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { Attachments } from './attachment-blocks';
@@ -70,11 +71,19 @@ const clip = (partial: Partial<Attachment> = {}): Attachment => ({
 const voice = (): Attachment => ({ ...clip({ id: 'a-voice', fileName: 'voice.m4a', originalName: 'voice.m4a', mimeType: 'audio/mp4', fileUrl: VOICE_URL }) });
 
 const sent = (partial: Partial<Message> = {}): Message =>
-  message({ id: 'm-1', senderId: 'u-amina', content: '', originalLanguage: 'fr', createdAt: new Date('2026-10-23T09:00:00.000Z'), ...partial });
+  message({
+    ...partial,
+    id: partial.id ?? 'm-1',
+    senderId: 'u-amina',
+    content: '',
+    originalLanguage: 'fr',
+    translations: partial.translations ?? [],
+    createdAt: new Date('2026-10-23T09:00:00.000Z'),
+  });
 
 type Seen = { readonly src: string; readonly protection: string };
 
-function mount(node: (scope: RecentMediaScope) => JSX.Element, seen: Seen[]): HTMLElement {
+function mount(node: (scope: RecentMediaScope) => ReactElement, seen: Seen[]): HTMLElement {
   const scope: RecentMediaScope = {
     protectionOf: () => 'protected',
     remember: async (media) => void seen.push(media),
@@ -93,7 +102,13 @@ const play = async (element: Element | null) => {
   });
 };
 
-const bubble = (msg: Message) => () => <Attachments attachments={msg.attachments ?? []} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" message={msg} />;
+const THREAD: ThreadMediaContextValue = { viewerId: 'u-lea', onReplyToMedia: () => {}, conversationEncryptionMode: null };
+
+const bubble = (msg: Message, thread: ThreadMediaContextValue = THREAD) => () => (
+  <ThreadMediaContext.Provider value={thread}>
+    <Attachments attachments={msg.attachments ?? []} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" message={msg} />
+  </ThreadMediaContext.Provider>
+);
 
 describe('la vidéo d’un message (`VideoTile`)', () => {
   test('un message standard sollicite la garde au premier `playing`, une fois', async () => {
@@ -104,7 +119,7 @@ describe('la vidéo d’un message (`VideoTile`)', () => {
     expect(seen).toEqual([{ src: CLIP_URL, protection: 'none' }]);
   });
 
-  test('éphémère, vue unique, flouté, chiffré : la garde n’est jamais sollicitée', async () => {
+  test('éphémère, vue unique, flouté, chiffré, conversation chiffrée : la garde n’est jamais sollicitée', async () => {
     const cases = [
       sent({ ephemeralDuration: 30, attachments: [clip()] }),
       sent({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ, attachments: [clip()] }),
@@ -113,9 +128,10 @@ describe('la vidéo d’un message (`VideoTile`)', () => {
       sent({ attachments: [clip({ isBlurred: true })] }),
       sent({ isEncrypted: true, attachments: [clip()] }),
     ];
-    for (const msg of cases) {
+    const rendered = [...cases.map((msg) => bubble(msg)), bubble(sent({ attachments: [clip()] }), { ...THREAD, conversationEncryptionMode: 'e2ee' })];
+    for (const node of rendered) {
       const seen: Seen[] = [];
-      const host = mount(bubble(msg), seen);
+      const host = mount(node, seen);
       await play(host.querySelector('video'));
       expect(seen).toEqual([]);
       act(() => root.unmount());

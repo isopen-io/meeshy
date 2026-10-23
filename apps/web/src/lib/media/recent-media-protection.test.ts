@@ -3,8 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import { attachmentDefaults, message } from '@/lib/api/fixtures-base';
 import type { Attachment, Message } from '@/lib/api/types';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import type { AttachmentProtectionFlags } from '@meeshy/shared/utils/attachment-protection';
 
 import { recentMediaProtectionOf } from './recent-media-protection';
+import { messagesRecentMediaScope } from './recent-media-scope';
 
 /**
  * #12052 — SEUL UN MESSAGE STANDARD, EN CLAIR, PEUT GARDER SON MÉDIA HORS
@@ -29,9 +31,17 @@ const clip = (partial: Partial<Attachment> = {}): Attachment => ({
 });
 
 const sent = (partial: Partial<Message> = {}): Message =>
-  message({ id: 'm-1', senderId: 'u-amina', content: '', originalLanguage: 'fr', createdAt: new Date('2026-10-23T09:00:00.000Z'), ...partial });
+  message({
+    ...partial,
+    id: partial.id ?? 'm-1',
+    senderId: 'u-amina',
+    content: '',
+    originalLanguage: 'fr',
+    translations: partial.translations ?? [],
+    createdAt: new Date('2026-10-23T09:00:00.000Z'),
+  });
 
-const verdict = (msg: Message | undefined, attachment: Attachment = clip(), conversationEncrypted = false) =>
+const verdict = (msg: Message | undefined, attachment: AttachmentProtectionFlags = clip(), conversationEncrypted = false) =>
   recentMediaProtectionOf({ message: msg, attachment, conversationEncrypted, now: NOW });
 
 describe('recentMediaProtectionOf', () => {
@@ -59,12 +69,29 @@ describe('recentMediaProtectionOf', () => {
   test('la PIÈCE porte sa propre protection, indépendante de celle du message', () => {
     expect(verdict(sent(), clip({ isViewOnce: true }))).toBe('protected');
     expect(verdict(sent(), clip({ isBlurred: true }))).toBe('protected');
-    expect(verdict(sent(), clip({ effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE }))).toBe('protected');
+    expect(verdict(sent(), { ...clip(), effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE })).toBe('protected');
   });
 
   test('un message chiffré, ou une conversation sous un régime de chiffrement : protégés', () => {
     expect(verdict(sent({ isEncrypted: true }))).toBe('protected');
     expect(verdict(sent({ encryptionMode: 'e2ee' }))).toBe('protected');
     expect(verdict(sent(), clip(), true)).toBe('protected');
+  });
+});
+
+describe('messagesRecentMediaScope — la visionneuse du fil juge chaque page sur SON message', () => {
+  test('une pellicule mêlant un message standard et un éphémère ne garde que le premier ; une pièce inconnue n’est pas gardée', () => {
+    const scope = messagesRecentMediaScope({
+      outer: { protectionOf: () => 'protected' },
+      entries: [
+        { message: sent({ id: 'm-1' }), attachment: clip({ id: 'a-1' }) },
+        { message: sent({ id: 'm-2', ephemeralDuration: 30 }), attachment: clip({ id: 'a-2' }) },
+      ],
+      conversationEncrypted: false,
+      now: NOW,
+    });
+    expect(scope.protectionOf('a-1')).toBe('none');
+    expect(scope.protectionOf('a-2')).toBe('protected');
+    expect(scope.protectionOf('a-inconnue')).toBe('protected');
   });
 });
