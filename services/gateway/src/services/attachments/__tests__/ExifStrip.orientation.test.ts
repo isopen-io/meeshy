@@ -128,3 +128,50 @@ describe('stripExifFromImageBuffer — rotation JPEG sans perte (#11841)', () =>
     expect(stripped.toString('latin1')).not.toContain(SECRET);
   });
 });
+
+/**
+ * #12278 — ce qui reste réencodé UNE fois (JPEG hors de la grille des blocs,
+ * WebP avec perte : aucune rotation sans perte n'existe) l'est au plus près de
+ * la source. Mesuré (PSNR contre l'original redressé) : JPEG q92 4:4:4 →
+ * 43,2 dB, q95 au sous-échantillonnage de la source → 45,5 dB ; WebP q90 →
+ * 40,8 dB, q95 → 44,3 dB. Le WebP sans perte (∞ dB) pèserait 6,5 fois la
+ * source : écarté.
+ */
+function psnr(a: Buffer, b: Buffer): number {
+  const squared = a.reduce((sum, value, i) => sum + (value - b[i]) ** 2, 0);
+  return 10 * Math.log10((255 * 255) / (squared / a.length));
+}
+
+function texture(width: number, height: number): Buffer {
+  return Buffer.from(
+    Array.from({ length: width * height * 3 }, (_, i) => {
+      const pixel = Math.floor(i / 3);
+      const [x, y] = [pixel % width, Math.floor(pixel / width)];
+      return Math.round(Math.sin(x / 7 + (i % 3)) * 60 + Math.cos(y / 5) * 50 + 128 + ((x * y) % 17)) & 255;
+    }),
+  );
+}
+
+describe('stripExifFromImageBuffer — le réencodage inévitable perd le moins possible (#12278)', () => {
+  it('un JPEG hors grille ressort à plus de 45 dB de l’original redressé, au sous-échantillonnage de sa source', async () => {
+    const original = await sharp(texture(301, 203), { raw: { width: 301, height: 203, channels: 3 } })
+      .jpeg({ quality: 80 }).withMetadata({ orientation: 6 }).toBuffer();
+    const reference = await sharp(original).autoOrient().raw().toBuffer();
+
+    const stripped = await stripExifFromImageBuffer(original, 'image/jpeg');
+
+    expect(psnr(await decoded(stripped), reference)).toBeGreaterThan(45);
+    expect((await sharp(stripped).metadata()).chromaSubsampling).toBe((await sharp(original).metadata()).chromaSubsampling);
+  });
+
+  it('un WebP avec perte orienté ressort à plus de 44 dB de l’original redressé', async () => {
+    const original = await sharp(texture(301, 203), { raw: { width: 301, height: 203, channels: 3 } })
+      .webp({ quality: 80 }).withMetadata({ orientation: 6 }).toBuffer();
+    const reference = await sharp(original).autoOrient().raw().toBuffer();
+
+    const stripped = await stripExifFromImageBuffer(original, 'image/webp');
+
+    expect((await sharp(stripped).metadata()).orientation).toBeUndefined();
+    expect(psnr(await decoded(stripped), reference)).toBeGreaterThan(44);
+  });
+});
