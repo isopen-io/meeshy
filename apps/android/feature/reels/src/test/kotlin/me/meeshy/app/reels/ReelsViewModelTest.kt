@@ -93,6 +93,7 @@ class ReelsViewModelTest {
         allowAnalytics: Boolean = true,
     ): ReelsViewModel {
         every { session.currentUserId } returns currentUserId
+        every { session.currentUser } returns kotlinx.coroutines.flow.MutableStateFlow(null)
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked

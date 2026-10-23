@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +60,12 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyRadius
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 
 /** How many reels from the end of the thread trigger the next cursor page. */
 private const val LOAD_MORE_THRESHOLD = 3
@@ -74,6 +81,7 @@ fun ReelsScreen(
     seed: String? = null,
     onClose: () -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: (String) -> Unit = {},
     viewModel: ReelsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -136,6 +144,7 @@ fun ReelsScreen(
                             onComments = { commentsReelId = reel.id },
                             onRepost = { viewModel.repost(reel.id) },
                             onBookmark = { viewModel.toggleBookmark(reel.id) },
+                            onOpenAuthor = reel.authorId?.let { id -> { onOpenProfile(id) } },
                             onShare = {
                                 viewModel.recordShare(reel.id)
                                 val send = Intent(Intent.ACTION_SEND).apply {
@@ -204,6 +213,7 @@ private fun ReelOverlay(
     onRepost: () -> Unit,
     onBookmark: () -> Unit,
     onShare: () -> Unit,
+    onOpenAuthor: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.padding(MeeshySpacing.lg)) {
@@ -213,8 +223,15 @@ private fun ReelOverlay(
                 .align(Alignment.BottomStart)
                 .fillMaxWidth(0.72f),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MeeshyAvatar(name = reel.authorName ?: "?", size = 36.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MeeshyRadius.pill))
+                    .let { base -> if (onOpenAuthor == null) base else base.clickable(role = Role.Button, onClick = onOpenAuthor) }
+                    .heightIn(min = 44.dp)
+                    .padding(end = MeeshySpacing.sm),
+            ) {
+                MeeshyAvatar(name = reel.authorName ?: "?", size = 36.dp, imageUrl = reel.authorAvatarUrl)
                 Spacer(Modifier.width(MeeshySpacing.sm))
                 Text(
                     text = reel.authorName ?: "",
@@ -230,6 +247,17 @@ private fun ReelOverlay(
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // Prisme : un indicateur discret dit que la légende est traduite.
+                if (reel.isCaptionTranslated) {
+                    Icon(
+                        imageVector = Icons.Filled.Translate,
+                        contentDescription = stringResource(R.string.reels_caption_translated),
+                        tint = MeeshyPalette.White.copy(alpha = 0.7f),
+                        modifier = Modifier
+                            .padding(top = MeeshySpacing.xs)
+                            .size(14.dp),
+                    )
+                }
             }
         }
 
