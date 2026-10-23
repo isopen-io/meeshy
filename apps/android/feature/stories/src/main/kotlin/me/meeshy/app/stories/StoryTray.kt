@@ -2,7 +2,6 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,12 +11,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -38,8 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -47,22 +45,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import me.meeshy.feature.stories.R
-import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
-import me.meeshy.ui.theme.hexColor
 
-private val RING_SIZE = 64.dp
-private val AVATAR_SIZE = 56.dp
-private val ITEM_WIDTH = 72.dp
 
 /**
  * Horizontal story-ring carousel rendered atop the conversation list — the
@@ -74,7 +65,10 @@ fun StoryTray(
     onOpenStory: (String) -> Unit,
     modifier: Modifier = Modifier,
     onAddStory: () -> Unit = {},
+    onShowProfile: ((String) -> Unit)? = null,
+    moodEmojiOf: (String) -> String? = { null },
     viewModel: StoriesViewModel = hiltViewModel(),
+    impressions: StoryTrayImpressionsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val tray = state.tray
@@ -94,34 +88,52 @@ fun StoryTray(
         }
         if (!tray.isEmpty) {
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-                contentPadding = PaddingValues(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                modifier = Modifier.heightIn(min = StoryEntryMetrics.height),
+                horizontalArrangement = Arrangement.spacedBy(StoryEntryMetrics.itemSpacing),
+                contentPadding = PaddingValues(
+                    horizontal = StoryEntryMetrics.paddingHorizontal,
+                    vertical = StoryEntryMetrics.paddingVertical,
+                ),
             ) {
-                tray.self?.let { self ->
-                    item(key = "self") {
-                        SelfStoryRingItem(
-                            ring = self,
-                            onOpen = { onOpenStory(self.userId) },
+                val selfRing = tray.self
+                if (selfRing != null) {
+                    item(key = "self", contentType = RING_CONTENT_TYPE) {
+                        StoryRingCell(
+                            ring = selfRing,
+                            label = stringResource(R.string.stories_my_story),
+                            cascadeIndex = 0,
+                            moodEmoji = moodEmojiOf(selfRing.userId),
+                            showAddBadge = true,
+                            onOpen = { onOpenStory(selfRing.userId) },
+                            onShowProfile = onShowProfile?.let { open -> { open(selfRing.userId) } },
                             onAdd = onAddStory,
+                            onAppeared = impressions::onRingAppeared,
                         )
                     }
-                }
-                if (tray.self == null) {
-                    item(key = "add") {
+                } else {
+                    item(key = "add", contentType = ADD_CONTENT_TYPE) {
                         AddStoryItem(onClick = onAddStory)
                     }
                 }
-                items(tray.others, key = { it.userId }) { ring ->
-                    StoryRingItem(
+                itemsIndexed(tray.others, key = { _, ring -> ring.userId }, contentType = { _, _ -> RING_CONTENT_TYPE }) { index, ring ->
+                    StoryRingCell(
                         ring = ring,
                         label = ring.displayName,
-                        onClick = { onOpenStory(ring.userId) },
+                        cascadeIndex = index + 1,
+                        moodEmoji = moodEmojiOf(ring.userId),
+                        showAddBadge = false,
+                        onOpen = { onOpenStory(ring.userId) },
+                        onShowProfile = onShowProfile?.let { open -> { open(ring.userId) } },
+                        onAppeared = impressions::onRingAppeared,
                     )
                 }
             }
         }
     }
 }
+
+private const val RING_CONTENT_TYPE = "ring"
+private const val ADD_CONTENT_TYPE = "add"
 
 /**
  * The "failed to post" strip shown above the tray when one or more story
@@ -232,8 +244,8 @@ private fun StoryTraySkeleton(modifier: Modifier = Modifier) {
         items(SKELETON_PLACEHOLDER_COUNT) {
             Box(
                 modifier = Modifier
-                    .width(ITEM_WIDTH)
-                    .size(RING_SIZE)
+                    .width(StoryEntryMetrics.labelWidth)
+                    .size(StoryEntryMetrics.ring)
                     .clip(CircleShape)
                     .background(MeeshyTheme.tokens.backgroundTertiary),
             )
@@ -243,140 +255,19 @@ private fun StoryTraySkeleton(modifier: Modifier = Modifier) {
 
 private const val SKELETON_PLACEHOLDER_COUNT = 4
 
-/**
- * L'anneau « Ma story » : le toucher lit sa story, le badge « + » est une VRAIE cible qui
- * ouvre le composer, et l'appui long propose « Voir ma story » / « Ajouter une story »
- * (iOS `StoryTrayView` : badge 44 pt permanent + menu contextuel de l'avatar).
- */
-@Composable
-private fun SelfStoryRingItem(ring: StoryRing, onOpen: () -> Unit, onAdd: () -> Unit) {
-    var menuOpen by remember { mutableStateOf(false) }
-    val addLabel = stringResource(R.string.stories_tray_add_story)
-    Box {
-        StoryRingItem(
-            ring = ring,
-            label = stringResource(R.string.stories_my_story),
-            onClick = onOpen,
-            onLongClick = { menuOpen = true },
-            badge = {
-                // La cible déborde du disque vers le bas et la droite, jamais vers son
-                // centre : toucher l'avatar lit la story, toucher le « + » compose.
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .offset(x = ADD_BADGE_OUTSET_X, y = ADD_BADGE_OUTSET_Y)
-                        .size(ADD_BADGE_TARGET)
-                        .clickable(onClick = onAdd)
-                        .semantics { role = Role.Button; contentDescription = addLabel },
-                    contentAlignment = Alignment.TopStart,
-                ) {
-                    Box(Modifier.padding(start = ADD_BADGE_TARGET - ADD_BADGE_OUTSET_X - ADD_BADGE_SIZE, top = ADD_BADGE_TARGET - ADD_BADGE_OUTSET_Y - ADD_BADGE_SIZE)) {
-                        AddBadge()
-                    }
-                }
-            },
-        )
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            StoryTraySelfMenu.actions(ring).forEach { action ->
-                val (text, run) = when (action) {
-                    StoryTraySelfAction.ViewMyStory -> stringResource(R.string.stories_tray_view_my_story) to onOpen
-                    StoryTraySelfAction.AddStory -> addLabel to onAdd
-                }
-                DropdownMenuItem(text = { Text(text) }, onClick = { menuOpen = false; run() })
-            }
-        }
-    }
-}
-
-@Composable
-private fun AddBadge() {
-    Box(
-        modifier = Modifier
-            .size(ADD_BADGE_SIZE)
-            .clip(CircleShape)
-            .background(MeeshyPalette.Indigo500),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            Icons.Filled.Add,
-            contentDescription = null,
-            tint = MeeshyPalette.White,
-            modifier = Modifier.size(14.dp),
-        )
-    }
-}
-
-private val ADD_BADGE_SIZE = 20.dp
-private val ADD_BADGE_TARGET = 32.dp
-private val ADD_BADGE_OUTSET_X = 8.dp
-private val ADD_BADGE_OUTSET_Y = 8.dp
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun StoryRingItem(
-    ring: StoryRing,
-    label: String,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-    badge: @Composable BoxScope.() -> Unit = {},
-) {
-    val openDescription = stringResource(R.string.stories_open, label)
-    Column(
-        modifier = Modifier
-            .width(ITEM_WIDTH)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .semantics { role = Role.Button; contentDescription = openDescription },
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(modifier = Modifier.size(RING_SIZE)) {
-            StoryRingAvatar(ring)
-            badge()
-        }
-        StoryCountDotsRow(
-            dots = StoryCountDots.from(ring.storyCount, ring.unviewedCount),
-            accentHex = ring.accentHex,
-            unviewedCount = ring.unviewedCount,
-            storyCount = ring.storyCount,
-        )
-        StoryLabel(label)
-    }
-}
-
-@Composable
-private fun StoryRingAvatar(ring: StoryRing) {
-    StoryRingFrame(accentHex = ring.accentHex, active = ring.hasUnviewed) {
-        if (ring.avatarUrl != null) {
-            AsyncImage(
-                model = ring.avatarUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(AVATAR_SIZE)
-                    .clip(CircleShape),
-            )
-        } else {
-            MeeshyAvatar(
-                name = ring.displayName,
-                size = AVATAR_SIZE,
-                containerColor = hexColor(ring.accentHex),
-            )
-        }
-    }
-}
-
 @Composable
 private fun AddStoryItem(onClick: () -> Unit) {
     val addLabel = stringResource(R.string.stories_my_story)
     Column(
         modifier = Modifier
-            .width(ITEM_WIDTH)
+            .width(StoryEntryMetrics.labelWidth)
             .clickable(onClick = onClick)
             .semantics { role = Role.Button; contentDescription = addLabel },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             modifier = Modifier
-                .size(RING_SIZE)
+                .size(StoryEntryMetrics.ring)
                 .clip(CircleShape)
                 .background(MeeshyTheme.tokens.backgroundTertiary),
             contentAlignment = Alignment.Center,
@@ -388,93 +279,6 @@ private fun AddStoryItem(onClick: () -> Unit) {
                 modifier = Modifier.size(26.dp),
             )
         }
-        StoryLabel(addLabel)
+        StoryLabel(addLabel, unread = false)
     }
-}
-
-@Composable
-private fun StoryRingFrame(
-    accentHex: String,
-    active: Boolean,
-    content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
-) {
-    val ringBrush = if (active) {
-        Brush.linearGradient(
-            listOf(hexColor(accentHex), MeeshyPalette.Indigo500, hexColor(accentHex)),
-        )
-    } else {
-        Brush.linearGradient(
-            listOf(MeeshyTheme.tokens.backgroundTertiary, MeeshyTheme.tokens.backgroundTertiary),
-        )
-    }
-    Box(
-        modifier = Modifier
-            .size(RING_SIZE)
-            .clip(CircleShape)
-            .border(width = 2.5.dp, brush = ringBrush, shape = CircleShape),
-        contentAlignment = Alignment.Center,
-        content = content,
-    )
-}
-
-/**
- * Segmented unviewed-count dots under a story ring. Active (unseen) dots use the
- * ring's accent; seen dots fade to a muted token — a precise "how many new" read
- * that surpasses iOS's group-level all-or-nothing dimming. Single-story rings
- * render an empty slot of the same height so every tray item — and its label —
- * stays vertically aligned (no off-by-a-row jitter across the carousel).
- */
-@Composable
-private fun StoryCountDotsRow(
-    dots: StoryCountDots?,
-    accentHex: String,
-    unviewedCount: Int,
-    storyCount: Int,
-) {
-    val activeColor = hexColor(accentHex)
-    val inactiveColor = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.35f)
-    val description = stringResource(R.string.stories_count_dots, unviewedCount, storyCount)
-    Row(
-        modifier = Modifier
-            .padding(top = 3.dp)
-            .height(DOT_SIZE)
-            .semantics { if (dots != null) contentDescription = description },
-        horizontalArrangement = Arrangement.spacedBy(DOT_SPACING),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (dots == null) return@Row
-        repeat(dots.dotCount) { index ->
-            Box(
-                modifier = Modifier
-                    .size(DOT_SIZE)
-                    .clip(CircleShape)
-                    .background(if (dots.isActive(index)) activeColor else inactiveColor),
-            )
-        }
-        if (dots.hasOverflow) {
-            Text(
-                text = "+",
-                style = MaterialTheme.typography.labelSmall,
-                color = inactiveColor,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-    }
-}
-
-private val DOT_SIZE = 4.dp
-private val DOT_SPACING = 3.dp
-
-@Composable
-private fun StoryLabel(label: String) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelSmall,
-        color = MeeshyTheme.tokens.textSecondary,
-        fontWeight = FontWeight.Medium,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.width(ITEM_WIDTH),
-    )
 }

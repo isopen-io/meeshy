@@ -4,6 +4,7 @@ import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.audioedit.AudioEditError
@@ -59,7 +60,7 @@ public class AudioEditEngine(
     }
 
     private suspend fun render(source: File, plan: AudioEditPlan, directory: File): File {
-        ensureActive()
+        currentCoroutineContext().ensureActive()
         if (!source.isFile) throw AudioEditError.SourceUnreadable
         when (probe.status(source)) {
             AudioSourceStatus.UNREADABLE -> throw AudioEditError.SourceUnreadable
@@ -69,7 +70,7 @@ public class AudioEditEngine(
         if (!directory.isDirectory && !directory.mkdirs()) throw AudioEditError.CompositionFailed
         val output = File(directory, "v_${UUID.randomUUID()}.m4a")
         try {
-            ensureActive()
+            currentCoroutineContext().ensureActive()
             runner.run(AudioTransformRequest(source, output, plan))
         } catch (cancelled: CancellationException) {
             output.delete()
