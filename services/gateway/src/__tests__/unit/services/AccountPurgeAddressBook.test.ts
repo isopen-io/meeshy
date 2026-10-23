@@ -92,6 +92,10 @@ function base() {
     postEngagement: table([]),
     postView: table([]),
     contentEvent: table([]),
+    // L'annuaire E2EE (#12543) : aucun appareil chiffré.
+    e2EEDevice: table([]),
+    e2EEOneTimePreKey: table([]),
+    messageEnvelope: table([]),
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, table([])]),

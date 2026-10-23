@@ -59,3 +59,84 @@ export async function retireDevicesOfEndedSessions(
   const devices = await prisma.e2EEDevice.findMany({ where: { userId: params.userId, retiredAt: null }, select: ACTIVE_ROW });
   return retireOrphans(prisma, devices, params.now);
 }
+
+/** Retire l'appareil de cette session si elle n'est plus vivante. */
+export async function retireDevicesOfSession(
+  prisma: RetirementPrisma,
+  params: { readonly sessionId: string; readonly now: Date },
+): Promise<number> {
+  const devices = await prisma.e2EEDevice.findMany({ where: { sessionId: params.sessionId, retiredAt: null }, select: ACTIVE_ROW });
+  return retireOrphans(prisma, devices, params.now);
+}
+
+const SWEEP_BATCH = 500;
+
+/**
+ * Le filet : retire, sur tous les comptes, l'appareil de toute session finie
+ * par un chemin qui ne l'a pas fait lui-même (expiration, clôture d'équipe,
+ * session effacée). Parcours par lots, curseur sur `id`.
+ */
+export async function sweepDevicesOfEndedSessions(
+  prisma: RetirementPrisma,
+  params: { readonly now: Date; readonly batchSize?: number },
+): Promise<number> {
+  const take = params.batchSize ?? SWEEP_BATCH;
+  let retired = 0;
+  let after: string | null = null;
+  for (;;) {
+    const batch: ActiveRow[] = await prisma.e2EEDevice.findMany({
+      where: { retiredAt: null, ...(after ? { id: { gt: after } } : {}) },
+      select: ACTIVE_ROW,
+      orderBy: { id: 'asc' },
+      take,
+    });
+    if (batch.length === 0) return retired;
+    retired += await retireOrphans(prisma, batch, params.now);
+    after = batch[batch.length - 1].id;
+  }
+}
+
+/** La purge du compte : ses appareils, ses pré-clés et les enveloppes qui lui sont adressées disparaissent. */
+export async function eraseE2EEDataOfUser(
+  prisma: RowsPrisma,
+  userId: string,
+): Promise<{ devices: number; preKeys: number; envelopes: number }> {
+  const [devices, preKeys, envelopes] = await Promise.all([
+    prisma.e2EEDevice.deleteMany({ where: { userId } }),
+    prisma.e2EEOneTimePreKey.deleteMany({ where: { userId } }),
+    prisma.messageEnvelope.deleteMany({ where: { recipientUserId: userId } }),
+  ]);
+  return { devices: devices.count, preKeys: preKeys.count, envelopes: envelopes.count };
+}
+
+/** `sessionToken` : le condensat stocké dans `UserSession.sessionToken`, jamais le jeton. */
+export type SessionEndScope = { readonly userId: string } | { readonly sessionId: string } | { readonly sessionToken: string };
+
+async function sessionIdsOf(prisma: RetirementPrisma, scope: SessionEndScope): Promise<readonly string[]> {
+  if ('sessionId' in scope) return [scope.sessionId];
+  if (!('sessionToken' in scope)) return [];
+  const sessions = await prisma.userSession.findMany({ where: { sessionToken: scope.sessionToken }, select: { id: true } });
+  return sessions.map((session) => session.id);
+}
+
+/**
+ * Pour les sites qui FERMENT une session : le retrait suit, sans jamais faire
+ * échouer la fermeture — un retrait manqué est rattrapé par le balayage et par
+ * le prochain enrôlement du compte.
+ */
+export async function retireDevicesAfterSessionEnd(
+  prisma: RetirementPrisma,
+  scope: SessionEndScope,
+  onError: (error: unknown) => void,
+): Promise<void> {
+  const now = new Date();
+  try {
+    if ('userId' in scope) {
+      await retireDevicesOfEndedSessions(prisma, { userId: scope.userId, now });
+      return;
+    }
+    for (const sessionId of await sessionIdsOf(prisma, scope)) await retireDevicesOfSession(prisma, { sessionId, now });
+  } catch (error) {
+    onError(error);
+  }
+}

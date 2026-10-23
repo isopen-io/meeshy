@@ -19,6 +19,7 @@ import { GamePhotoMomentsJob } from './game-photo-moments';
 import { BackupStatusCheckJob } from './backup-status-check';
 import { MediaMirrorFollowJob, processMediaMirrorFollowJob } from './media-mirror-follow';
 import { createE2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
+import { sweepDevicesOfEndedSessions } from '../services/e2ee/device-retirement';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -120,10 +121,15 @@ export class BackgroundJobsManager {
     // Toutes les six heures : une session dont l'échéance est passée cesse de
     // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
     // — 140 lignes le faisaient en production, dont depuis mars (#5712).
+    // #12543 — puis l'appareil chiffré de toute session finie est retiré : le
+    // filet des chemins qui ne l'ont pas fait eux-mêmes (expiration, clôture).
     const balayerLesSessions = () => {
       sweepExpiredSessions(this.prismaClient)
         .then((n) => { if (n > 0) logger.info(`${n} expired session(s) invalidated`); })
-        .catch((err) => logger.error('Session expiry sweep failed', err));
+        .catch((err) => logger.error('Session expiry sweep failed', err))
+        .then(() => sweepDevicesOfEndedSessions(this.prismaClient, { now: new Date() }))
+        .then((n) => { if (n > 0) logger.info(`${n} e2ee device(s) of ended sessions retired`); })
+        .catch((err) => logger.error('E2EE device retirement sweep failed', err));
     };
     balayerLesSessions();
     this.sessionSweepInterval = guardedInterval({ name: 'session-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesSessions });

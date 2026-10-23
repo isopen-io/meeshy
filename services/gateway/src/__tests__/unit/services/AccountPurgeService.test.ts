@@ -28,6 +28,9 @@ function fakePrisma(overrides: Record<string, any> = {}) {
   return {
     userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
+    ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope'].map((model) =>
+      [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
     conversationShareLink: shareLinkTable([]),
     notification: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -110,6 +113,19 @@ describe('purgeAccountIsolatedData', () => {
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.sessionsDeleted).toBe(3);
+  });
+
+  it("efface ses appareils chiffrés, leurs pré-clés et les enveloppes qui lui sont adressées (#12543)", async () => {
+    const prisma = fakePrisma({
+      e2EEDevice: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
+      e2EEOneTimePreKey: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 150 }) },
+      messageEnvelope: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 4 }) },
+    });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.e2EEDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.e2EEOneTimePreKey.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.messageEnvelope.deleteMany).toHaveBeenCalledWith({ where: { recipientUserId: USER_ID } });
+    expect(summary.e2eeErased).toEqual({ devices: 2, preKeys: 150, envelopes: 4 });
   });
 
   it('deletes the UserVoiceModel row for the account', async () => {
