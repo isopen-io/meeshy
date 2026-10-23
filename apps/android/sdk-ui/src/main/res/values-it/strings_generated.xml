@@ -55,4 +55,15 @@
     <string name="time_lastSeen_online">In linea</string>
     <string name="time_lastSeen_seen">Visto %s</string>
     <string name="time_lastSeen_yesterdayAt">Visto ieri alle %s</string>
+    <string name="viewer_caption_see_less">mostra meno</string>
+    <string name="viewer_caption_see_less_hint">Comprime la didascalia</string>
+    <string name="viewer_caption_see_more">mostra di più</string>
+    <string name="viewer_caption_see_more_hint">Mostra la didascalia completa</string>
+    <string name="viewer_media_unavailable">Questo contenuto non è più disponibile</string>
+    <string name="viewer_more">Altro</string>
+    <string name="viewer_position">Contenuto %1$d di %2$d</string>
+    <string name="viewer_retry">Riprova</string>
+    <string name="viewer_save">Salva</string>
+    <string name="viewer_saving">Salvataggio…</string>
+    <string name="viewer_share_outside">Condividi fuori da Meeshy</string>
 </resources>
