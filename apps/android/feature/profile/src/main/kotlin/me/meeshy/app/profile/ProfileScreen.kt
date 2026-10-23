@@ -208,6 +208,7 @@ fun ProfileScreen(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
             val header = state.user?.let { ProfileHeaderBuilder.build(it, System.currentTimeMillis()) }
+            state.user?.takeIf { !state.isEditing }?.let { ProfileBanner(user = it) }
 
             // Avatar — completion ring + presence dot when viewing (not editing).
             Box(contentAlignment = Alignment.Center) {
