@@ -18,7 +18,7 @@ class ConversationSearchBarScrollLawTest {
 
     @Test
     fun `la barre se masque quand la profondeur augmente de 12 dp ou plus`() {
-        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 31f, 43f)
+        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 30f, 43f)
 
         assertThat(next.hidden).isTrue()
         assertThat(next.anchor).isEqualTo(43f)
@@ -26,15 +26,15 @@ class ConversationSearchBarScrollLawTest {
 
     @Test
     fun `une descente de moins de 12 dp ne masque pas la barre`() {
-        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 31f, 42f)
+        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 30f, 41f)
 
         assertThat(next.hidden).isFalse()
-        assertThat(next.anchor).isEqualTo(31f)
+        assertThat(next.anchor).isEqualTo(30f)
     }
 
     @Test
     fun `masquee la barre revient quand la profondeur diminue de 12 dp ou plus`() {
-        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 31f, 100f, 88f)
+        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 30f, 100f, 88f)
 
         assertThat(next.hidden).isFalse()
         assertThat(next.anchor).isEqualTo(88f)
@@ -42,7 +42,7 @@ class ConversationSearchBarScrollLawTest {
 
     @Test
     fun `un rebond de moins de 12 dp ne fait pas clignoter la barre masquee`() {
-        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 31f, 100f, 95f, 99f, 90f)
+        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 30f, 100f, 95f, 99f, 90f)
 
         assertThat(next.hidden).isTrue()
         assertThat(next.anchor).isEqualTo(100f)
@@ -50,7 +50,7 @@ class ConversationSearchBarScrollLawTest {
 
     @Test
     fun `masquee la barre revient toujours en zone haute`() {
-        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 31f, 400f, 20f)
+        val next = settle(ConversationSearchBarScrollLaw.State.Initial, 30f, 400f, 20f)
 
         assertThat(next.hidden).isFalse()
         assertThat(next.anchor).isEqualTo(20f)

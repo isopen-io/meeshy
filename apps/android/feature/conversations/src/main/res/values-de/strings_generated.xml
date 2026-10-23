@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="accessibility_search_list_hint">Öffnet die Unterhaltungssuche und deine Communitys</string>
     <string name="common_active">Aktiv</string>
     <string name="common_cancel">Abbrechen</string>
     <string name="common_inactive">Inaktiv</string>

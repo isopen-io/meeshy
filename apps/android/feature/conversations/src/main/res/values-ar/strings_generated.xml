@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="accessibility_search_list_hint">يفتح بحث المحادثات ومجتمعاتك</string>
     <string name="common_active">نشط</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_inactive">غير نشط</string>
