@@ -151,10 +151,13 @@ final class LentilleSceneActivityTests: XCTestCase {
         for door in ["case .findMembers: router.push(.peopleDiscovery(.discover))", "case .myContacts: router.push(.contacts(.contacts))",
                      "case .myAffiliates: router.push(.affiliate)",
                      "case .newMessage: onNewConversation?()", "case .story: storyViewModel.showStoryComposer = true",
-                     "case .mood: showStatusComposer = true", "case .post: router.pendingOpenFeedComposer = true",
+                     "case .mood: showStatusComposer = true", "case .post: router.requestFeedComposer()",
                      "case .invite: showCreateAffiliate = true", "case .shortcutLink: showCreateTrackingLink = true"] {
             XCTAssertTrue(code.contains(door), "Chaque accès rapide route vers une porte EXISTANTE : \(door)")
         }
+        let commands = try normalizedUnit("Meeshy/Features/Main/Navigation/RouterCommands.swift")
+        XCTAssertTrue(commands.contains("func requestFeedComposer() { router?.pendingOpenFeedComposer = true }"),
+                      "« Publier » lève le drapeau que le flux consomme")
     }
 
     func test_quickActionsView_exposesTheNineDoors_inOrder_heroesFirst() {
