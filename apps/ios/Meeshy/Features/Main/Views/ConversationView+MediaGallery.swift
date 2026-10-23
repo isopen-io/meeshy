@@ -26,6 +26,9 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     @Binding var scrollState: ConversationScrollState
     @Binding var composerState: ConversationComposerState
     let accentColor: String
+    /// La loi du menu de l'écran : « Transférer » ne s'offre que là où le menu
+    /// d'une pièce l'offre (#12420).
+    let authority: ConversationMenuAuthority
 
     /// Le chemin de citation de l'hôte, passé en closure : `triggerReply` vit
     /// dans `ConversationView+MessageRow` et compose la `ReplyReference`
@@ -47,11 +50,13 @@ struct ConversationMediaGalleryLayer: ViewModifier {
          scrollState: Binding<ConversationScrollState>,
          composerState: Binding<ConversationComposerState>,
          accentColor: String,
+         authority: ConversationMenuAuthority,
          onReply: @escaping (Message) -> Void) {
         self.viewModel = viewModel
         self._scrollState = scrollState
         self._composerState = composerState
         self.accentColor = accentColor
+        self.authority = authority
         self.onReply = onReply
         self._catalog = StateObject(wrappedValue: ConversationMediaCatalog(conversationId: viewModel.conversationId))
     }
@@ -140,13 +145,15 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             onSendReplyToMedia: sendReplyToMedia,
             replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id, carrier: carrier(of: $0)) },
             onReactToMedia: reactToMedia,
+            onForwardMedia: forwardFromGallery,
             // « Composer » n'existe que si l'armer produit une cible (loi 4) :
             // la règle d'offre lit la loi de sortie (#9573), donc la pièce d'une
             // flamme ou d'une vue unique n'a pas ce bouton.
             composableMedia: { carrier(of: $0).map(ComposableAttachment.offers(message:)) ?? false },
             // #9910 — toute pièce dont le porteur est connu se réagit : la
             // fenêtre par le ViewModel, l'index par le catalogue qui la repeint.
-            reactableMedia: { catalog.snapshot.carrier(ofAttachment: $0.id) != nil }
+            reactableMedia: { catalog.snapshot.carrier(ofAttachment: $0.id) != nil },
+            forwardableMedia: offersForward
         )
         .onAppear(perform: openCatalog)
         .onReceive(viewModel.$messages) { messages in
@@ -315,6 +322,34 @@ struct ConversationMediaGalleryLayer: ViewModifier {
         )
     }
 
+    /// **« Transférer » suit le menu d'une pièce** (#12420) : même loi
+    /// (`MessagePieceMenu.actions`), donc jamais une pièce protégée, ni un message
+    /// que la loi de transfert retient (E2EE, avis, envoi raté).
+    private func offersForward(_ attachment: MessageAttachment) -> Bool {
+        guard let porteur = carrier(of: attachment) else { return false }
+        let menu = MessageMenuContext.make(message: porteur, viewModel: viewModel, authority: authority)
+        let context = MessagePieceMenu.Context(
+            isProtected: MessagePieceTarget.isProtected(attachment, in: porteur), menu: menu)
+        return MessagePieceMenu.actions(context).contains(.forwardPiece)
+    }
+
+    /// **Armer, puis fermer** — comme `armCompose` : l'écran de partage est une
+    /// feuille de l'hôte, qui ne se présente pas sous le plein écran.
+    private func forwardFromGallery(_ attachment: MessageAttachment) {
+        guard let porteur = carrier(of: attachment) else { return }
+        composerState.pendingForward = (porteur, attachment.id)
+        scrollState.galleryStartAttachment = nil
+    }
+
+    /// La galerie est DÉMONTÉE : l'écran de partage prend la pièce transférée.
+    private func promotePendingForward() {
+        guard let attendu = composerState.pendingForward else { return }
+        composerState.pendingForward = nil
+        composerState.forwardAdditionalMessages = []
+        composerState.forwardPieceId = attendu.pieceId
+        composerState.forwardMessage = attendu.message
+    }
+
     /// La galerie est DÉMONTÉE : le meuble peut prendre sa place.
     private func promotePendingCompose() {
         guard let attendue = composerState.pendingComposeTarget else { return }
@@ -350,6 +385,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     private func handleGalleryDismiss() {
         consumeOpenedViewOnce()
         promotePendingCompose()
+        promotePendingForward()
     }
 }
 

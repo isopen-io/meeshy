@@ -454,7 +454,7 @@ struct CallView: View {
                 // expulsé hors écran à x≈-475). Bug repro simu 2026-07-03.
                 Color.clear
                     .overlay {
-                        CachedAsyncImage(url: backdrop, thumbHash: remoteBackdropThumbHash) {
+                        CachedAsyncImage(url: backdrop, thumbHash: remoteBackdropThumbHash, showsStatusOverlays: false, autoLoad: true) {
                             Color.clear
                         }
                         .scaledToFill()
@@ -479,7 +479,6 @@ struct CallView: View {
                     .accessibilityHidden(true)
             }
 
-            // Animated ambient orbs — decorative only
             Circle()
                 .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
                 .frame(width: 300, height: 300)

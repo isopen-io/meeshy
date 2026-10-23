@@ -211,6 +211,38 @@ final class CallViewLayoutGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - L'identité du correspondant ne dépend pas de la politique média (#12442)
+
+    /// La bannière en fond et les photos des disques sont l'IDENTITÉ du correspondant,
+    /// comme `CachedAvatarImage` / `CachedBannerImage`, qui ne passent pas par
+    /// `MediaDownloadPolicy`. Avec un `CachedAsyncImage` soumis à cette politique, un
+    /// utilisateur qui règle les images sur « jamais » (ou « Wi-Fi seulement » en
+    /// cellulaire) voyait le fond et le disque rester vides : aucune requête ne partait.
+    func test_everyCallScreenImage_bypassesTheMediaDownloadPolicy() throws {
+        let sources = [try callViewCode(), AppSourceGuard.stripComments(try incomingCallViewSource())]
+        let calls = sources.flatMap { source in
+            source.components(separatedBy: "CachedAsyncImage(").dropFirst().map { String($0.prefix(260)) }
+        }
+        XCTAssertGreaterThanOrEqual(calls.count, 4, "fond, disque du correspondant, pastille locale, appel entrant")
+        for call in calls {
+            XCTAssertTrue(
+                call.contains("autoLoad: true"),
+                "Chaque image de l'écran d'appel doit passer `autoLoad: true` : sans lui, la " +
+                "politique de téléchargement retient la bannière et la photo du correspondant.\n\(call)"
+            )
+        }
+    }
+
+    private func incomingCallViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/IncomingCallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
     // MARK: - Bord a bord du fullScreenCover
 
     /// Les lignes de code, commentaires retires.
