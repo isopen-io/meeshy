@@ -76,3 +76,33 @@ export function useServedVideoSrc(attachment: ServableVideo): string {
     [fileUrl, fileSize, compatUrl, compatSize],
   );
 }
+
+/** Une vidéo du FIL ou d'un RÉEL : ses adresses sont déjà résolues par le modèle de carte (`card-model.ts`). */
+type ResolvedVideo = { readonly src: string; readonly fileSize?: number; readonly compatSrc?: string; readonly compatSize?: number };
+
+/** #12316 — la même loi (`electVideoSource`) sur des adresses déjà résolues. */
+export function electedVideoSrc(media: ResolvedVideo, env: VideoServingEnv = browserVideoServingEnv): string {
+  if (media.src === '' || media.compatSrc === undefined) return media.src;
+  return electVideoSource({
+    fileUrl: media.src,
+    fileSize: media.fileSize,
+    renditions: [{ codec: 'h264', url: media.compatSrc, width: 0, height: 0, size: media.compatSize ?? Number.NaN }],
+    decodesHevc: env.decodesHevc(),
+    tier: env.tier(),
+  }).url;
+}
+
+/** Élue UNE fois par média monté, sur des primitives — comme `useServedVideoSrc`. */
+export function useElectedVideoSrc(media: ResolvedVideo): string {
+  const { src, fileSize, compatSrc, compatSize } = media;
+  return useMemo(
+    () =>
+      electedVideoSrc({
+        src,
+        ...(fileSize !== undefined ? { fileSize } : {}),
+        ...(compatSrc !== undefined ? { compatSrc } : {}),
+        ...(compatSize !== undefined ? { compatSize } : {}),
+      }),
+    [src, fileSize, compatSrc, compatSize],
+  );
+}

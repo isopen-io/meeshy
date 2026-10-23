@@ -55,6 +55,6 @@ describe('ReelImages — les images d’un réel, AVIF puis WebP', () => {
     const html = renderToStaticMarkup(
       <ReelImages images={[media({ srcSet: `${GATE}p_640w.webp 640w`, avifSrcSet: `${GATE}p_640w.avif 640w` })]} language="fr" />,
     );
-    expect(html).toMatch(/<picture><source type="image\/avif" srcSet="[^"]*p_640w\.avif 640w"/);
+    expect(html).toMatch(/<picture class="contents"><source type="image\/avif" srcSet="[^"]*p_640w\.avif 640w"/);
   });
 });
