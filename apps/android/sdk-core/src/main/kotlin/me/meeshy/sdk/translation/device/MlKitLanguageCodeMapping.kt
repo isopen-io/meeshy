@@ -14,9 +14,11 @@ object MlKitLanguageCodeMapping {
 
     /** Le code ML Kit d'une langue Meeshy (`pt-BR` -> `pt`, `fil` -> `tl`), ou `null` si non traduite. */
     fun toMlKit(code: String): String? {
-        val two = when (val normalized = LanguageCodeNormalizer.normalize(code) ?: return null) {
-            "fil" -> "tl"
-            else -> normalized.substringBefore('-').lowercase()
+        val primary = code.trim().substringBefore('-').substringBefore('_').lowercase()
+        val two = if (primary == "fil") {
+            "tl"
+        } else {
+            (LanguageCodeNormalizer.normalize(code) ?: return null).substringBefore('-').lowercase()
         }
         return two.takeIf { it in SUPPORTED }
     }
