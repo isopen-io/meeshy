@@ -32,7 +32,7 @@ const wallpaper = (slug: string, over: Record<string, unknown> = {}) => ({
 
 const baseIndex = () =>
   buildPackIndex({
-    registries: [[wallpaper('dunes', { order: 1 }), wallpaper('savane', { order: 2 }), wallpaper('essentiels', { origin: 'builtin', installedByDefault: true, removable: false, order: 3 })]],
+    registries: [[wallpaper('dunes', { order: 1 }), wallpaper('savane', { order: 2, price: 50 }), wallpaper('essentiels', { origin: 'builtin', installedByDefault: true, removable: false, order: 3 })]],
     retained: [],
     contractItemKeys: () => ['fond'],
   });
@@ -233,5 +233,33 @@ describe('la boutique suit une surcharge sans redémarrer', () => {
     expect(await slugs()).not.toContain('dunes');
     await put(h.app, 'wallpaper/dunes', { expectedRevision: 1, hidden: false });
     expect(await slugs()).toContain('dunes');
+  });
+});
+
+describe('revue adversariale (#11275)', () => {
+  it('sans authentification : 401, ni journal ni écriture', async () => {
+    const db = fakeDb();
+    const { app } = await build(db, null);
+    expect((await put(app, 'wallpaper/dunes', { expectedRevision: 0, hidden: true })).statusCode).toBe(401);
+    expect(db.rows).toEqual([]);
+    expect(db.audit).toEqual([]);
+  });
+
+  it('un pack GRATUIT au dépôt ne devient jamais payant par surcharge : ceux qui l’ont installé le perdraient (422)', async () => {
+    const db = fakeDb();
+    const h = await build(db);
+    expect((await put(h.app, 'wallpaper/dunes', { expectedRevision: 0, price: 30 })).statusCode).toBe(422);
+    expect(db.rows).toEqual([]);
+  });
+
+  it('une base injoignable n’est pas relue à chaque accès : la relecture suivante attend un délai', async () => {
+    const db = fakeDb();
+    const findMany = db.prisma.packRegistryEntry.findMany as jest.Mock<any>;
+    findMany.mockRejectedValue(new Error('db down'));
+    const overrides = new PackRegistryOverrides({ prisma: db.prisma as never, now: () => NOW });
+    await expect(overrides.refresh()).rejects.toThrow('db down');
+    overrides.snapshot();
+    overrides.snapshot();
+    expect(findMany).toHaveBeenCalledTimes(1);
   });
 });

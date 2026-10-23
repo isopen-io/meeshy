@@ -100,6 +100,10 @@ export class PackRegistryOverrides {
           }),
         );
         this.loadedAt = this.now().getTime();
+      } catch (error) {
+        // Une base injoignable garde la dernière lecture ET attend un délai : jamais une relecture par accès.
+        this.loadedAt = this.now().getTime();
+        throw error;
       } finally {
         this.inflight = null;
       }
@@ -129,6 +133,8 @@ export class PackRegistryOverrides {
     const existing = await this.read(params.domain, params.slug);
     if ((existing?.revision ?? 0) !== params.expectedRevision) return { kind: 'revision-conflict' };
     const override = mergePackOverrides(existing?.override ?? {}, params.patch);
+    // Un pack gratuit au dépôt ne devient jamais payant : qui l'a installé gratuitement le perdrait (le rendu exige la possession).
+    if (entry.price === undefined && override.price !== undefined && override.price !== null) return { kind: 'unlawful' };
     const effective = applyPackOverride(entry, override);
     if (effective === null) return { kind: 'unlawful' };
     const data = { override: override as object, updatedBy: params.actorId };
