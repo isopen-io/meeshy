@@ -135,7 +135,6 @@ extension PostDetailView {
                     accentColor: accentColor,
                     frame: .card,
                     availability: availability,
-                    performance: .inline,
                     // WS3.7 / D2 / F2 — detail media is a focused view: autoplay
                     // the PRIMARY video (with sound) on appear. The feed and every
                     // other call site keep the default (tap-to-play, muted). Only

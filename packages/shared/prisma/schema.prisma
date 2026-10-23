@@ -1337,6 +1337,8 @@ model MessageAttachment {
   thumbnailUrl  String?
   thumbHash     String?   // ThumbHash base64 (~33 chars) — placeholder image instantane
   imageVariants Json?     // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
+  avifVariants  Json?     // Variantes AVIF responsive (#11262), MÊME forme, format 'avif' — à CÔTÉ des WebP, jamais dedans (anciens clients)
+  renditions    Json?     // Rendus vidéo ADDITIONNELS (#11261) : [{ codec: 'h264', url, width, height, size }] — l'original reste servi à iOS
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)
@@ -1344,6 +1346,7 @@ model MessageAttachment {
   sampleRate Int? // Fréquence d'échantillonnage en Hz (ex: 44100, 48000)
   codec      String? // Codec audio (ex: "opus", "aac", "vorbis", "mp3")
   channels   Int? // Nombre de canaux audio (1: mono, 2: stereo)
+  loudnessLufs Float? // Sonie intégrée EBU R128 du fichier STOCKÉ (LUFS), mesurée à l'ingestion (#11259) — null si non mesurée
 
   // Métadonnées spécifiques vidéo
   fps        Float? // Frames per second pour vidéos
@@ -4157,6 +4160,12 @@ model PostMedia {
   /// chemin résumable et le multipart partagent (#11260). OPTIONNEL : une ligne héritée n'en
   /// porte pas, et une image déjà petite non plus. Images non chiffrées uniquement.
   imageVariants Json?
+  /// #11262 — les mêmes largeurs en AVIF, à CÔTÉ des WebP (jamais dans `imageVariants`,
+  /// que les anciens clients lisent sans filtrer le format). OPTIONNEL.
+  avifVariants Json?
+  /// #11261 — rendus vidéo ADDITIONNELS (H.264 de compatibilité d'une vidéo HEVC) :
+  /// [{ codec, url, width, height, size }]. OPTIONNEL ; l'original n'est jamais remplacé.
+  renditions Json?
 
   // Metadata audio/vidéo
   duration     Int?     // ms

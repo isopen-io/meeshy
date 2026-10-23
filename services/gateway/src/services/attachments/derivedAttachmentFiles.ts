@@ -10,7 +10,8 @@ import { storageKeyFromMediaUrl } from './mediaStorageKey';
  *   `translations[langue]` avec `path` (absolu, au moment de l'écriture) et
  *   `url` (`/api/v1/attachments/file/translated/<id>_<langue>.<ext>`) ;
  * - les variantes WebP de `MetadataManager.generateImageVariants`, rangées dans
- *   `imageVariants[].url` sous leur clé de stockage.
+ *   `imageVariants[].url` sous leur clé de stockage, et leurs jumelles AVIF
+ *   (`generateAvifVariants`, `avifVariants[].url`, #11262).
  *
  * Les deux colonnes sont du JSON que la base n'a jamais validé : tout ce qui
  * n'a pas la forme attendue est ignoré, jamais deviné. Ce module ne lit que la
@@ -19,8 +20,15 @@ import { storageKeyFromMediaUrl } from './mediaStorageKey';
 export function derivedFileCandidates(row: {
   readonly translations?: unknown;
   readonly imageVariants?: unknown;
+  readonly avifVariants?: unknown;
+  readonly renditions?: unknown;
 }): readonly string[] {
-  return [...translationTrackCandidates(row.translations), ...variantCandidates(row.imageVariants)];
+  return [
+    ...translationTrackCandidates(row.translations),
+    ...variantCandidates(row.imageVariants),
+    ...variantCandidates(row.avifVariants),
+    ...variantCandidates(row.renditions),
+  ];
 }
 
 /**

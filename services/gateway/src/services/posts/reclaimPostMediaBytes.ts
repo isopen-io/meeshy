@@ -88,6 +88,8 @@ export interface PostMediaFileRow {
   readonly fileUrl: string | null;
   readonly thumbnailUrl?: string | null;
   readonly imageVariants?: unknown;
+  readonly avifVariants?: unknown;
+  readonly renditions?: unknown;
 }
 
 /**
@@ -99,6 +101,8 @@ export const POST_MEDIA_FILE_COLUMNS = {
   fileUrl: true,
   thumbnailUrl: true,
   imageVariants: true,
+  avifVariants: true,
+  renditions: true,
 } as const satisfies Record<keyof PostMediaFileRow, true>;
 
 /**
@@ -128,7 +132,7 @@ export async function reclaimMediaRowBytes(
   const urls = [
     ...new Set(
       rows
-        .flatMap((row) => [row.fileUrl, row.thumbnailUrl, ...imageVariantKeys(row.imageVariants)])
+        .flatMap((row) => [row.fileUrl, row.thumbnailUrl, ...imageVariantKeys(row.imageVariants), ...imageVariantKeys(row.avifVariants), ...imageVariantKeys(row.renditions)])
         .filter((url): url is string => !!url),
     ),
   ];

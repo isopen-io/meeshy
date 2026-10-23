@@ -1,6 +1,6 @@
 package me.meeshy.sdk.model.account
 
-import me.meeshy.sdk.model.auth.SignupFieldValidation
+import me.meeshy.sdk.model.auth.PhonePlausibility
 
 enum class PhoneChangeStage { IDLE, EDIT, CODE_ENVOYE, VERIFIE }
 
@@ -18,7 +18,10 @@ data class PhoneChangeFlow(
     val isEditing: Boolean get() = stage == PhoneChangeStage.EDIT
     val isCodeSent: Boolean get() = stage == PhoneChangeStage.CODE_ENVOYE
 
-    val canSendCode: Boolean get() = SignupFieldValidation.isPhoneValidLocally(number)
+    val canSendCode: Boolean get() = PhonePlausibility.isSubmittable(number)
+
+    /** Le motif pour lequel le numéro SAISI est refusé, `null` s'il est plausible ou vide. */
+    val numberRefusal: PhonePlausibility.Refusal? get() = PhonePlausibility.refusal(number)
     val canVerify: Boolean get() = isCodeSent && code.length == CODE_LENGTH
 
     fun beginEdit(current: String?): PhoneChangeFlow =

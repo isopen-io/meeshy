@@ -38,6 +38,8 @@ export interface SourceAttachment {
   readonly thumbnailUrl?: string | null;
   readonly thumbHash?: string | null;
   readonly imageVariants?: unknown;
+  readonly avifVariants?: unknown;
+  readonly renditions?: unknown;
   readonly duration?: number | null;
   readonly bitrate?: number | null;
   readonly sampleRate?: number | null;
@@ -99,6 +101,8 @@ export function copiedAttachmentFields<A extends SourceAttachment>(att: A) {
     metadata: (att.metadata ?? undefined) as Json<A, 'metadata'>,
     thumbHash: att.thumbHash,
     imageVariants: (att.imageVariants ?? undefined) as Json<A, 'imageVariants'>,
+    avifVariants: (att.avifVariants ?? undefined) as Json<A, 'avifVariants'>,
+    renditions: (att.renditions ?? undefined) as Json<A, 'renditions'>,
     isEncrypted: att.isEncrypted,
     encryptionMode: att.encryptionMode,
     encryptionIv: att.encryptionIv,

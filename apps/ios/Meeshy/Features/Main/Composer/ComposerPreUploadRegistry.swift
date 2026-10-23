@@ -229,3 +229,39 @@ struct ComposerTusPreUploader: ComposerPreUploadProviding {
         return (result.id, result.fileUrl)
     }
 }
+
+/// **Une vidéo pré-montée part COMPRESSÉE** (#9912).
+///
+/// La pré-montée remplit `postMediaId`, et la publication saute alors l'objet :
+/// sans cette étape, la prise brute (`.mov` caméra, 10 à 15 Mb/s) partait telle
+/// quelle, alors que la même vidéo montée par la publication passait par
+/// `compressVideo`. La compression a lieu ICI, juste avant l'envoi, et le
+/// registre reste indexé par le fichier LOCAL : la clé d'adoption ne change pas.
+///
+/// Le type envoyé est celui du conteneur réellement écrit (`.mp4`). Une
+/// compression qui échoue fait échouer la pré-montée, jamais l'envoi : la
+/// publication montera et compressera l'asset elle-même.
+struct ComposerCompressingPreUploader: ComposerPreUploadProviding {
+    let inner: any ComposerPreUploadProviding
+    let compress: @Sendable (URL) async throws -> URL
+
+    /// Le monteur du composer : TUS, après `compressVideo` au budget de la
+    /// story — le seul format dont la publication référence ce qui a été pré-monté.
+    static func story(baseURL: URL, token: String) -> ComposerCompressingPreUploader {
+        ComposerCompressingPreUploader(
+            inner: ComposerTusPreUploader(baseURL: baseURL, token: token),
+            compress: { try await MediaCompressor.shared.compressVideo($0, context: .story) })
+    }
+
+    func upload(fileURL: URL, mimeType: String) async throws
+        -> (postMediaId: String, remoteURL: String) {
+        guard mimeType.hasPrefix("video/") else {
+            return try await inner.upload(fileURL: fileURL, mimeType: mimeType)
+        }
+        let compressed = try await compress(fileURL)
+        defer {
+            if compressed != fileURL { try? FileManager.default.removeItem(at: compressed) }
+        }
+        return try await inner.upload(fileURL: compressed, mimeType: MimeTypeResolver.mimeType(forURL: compressed))
+    }
+}
