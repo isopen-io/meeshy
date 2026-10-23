@@ -23,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.app.auth.AuthViewModel
+import me.meeshy.app.auth.LoggingOutVeil
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
@@ -129,7 +130,7 @@ fun MeeshyApp(
     // se reconnecter. La deconnexion vide la session, donc `startDestination`
     // bascule sur LOGIN.
     LaunchedEffect(Unit) {
-        sessionExpiry.expirations.collect { authViewModel.logout() }
+        sessionExpiry.expirations.collect { authViewModel.logout(closedByServer = true) }
     }
 
     LaunchedEffect(Unit) {
@@ -221,6 +222,10 @@ fun MeeshyApp(
         )
 
         AppOverlayStack(extensions.overlays, navController)
+
+        NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
+
+        LoggingOutVeil(visible = authState.isLoggingOut)
 
         SplashOverlay()
     }

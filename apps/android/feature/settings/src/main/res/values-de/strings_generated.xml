@@ -140,6 +140,8 @@
     <string name="settings_export_data">Meine Daten exportieren</string>
     <string name="settings_language_dialog_close">Schließen</string>
     <string name="settings_log_out">Abmelden</string>
+    <string name="settings_logout_confirm_message">Möchtest du dich wirklich abmelden?</string>
+    <string name="settings_logout_confirm_title">Abmelden</string>
     <string name="settings_media_capture_header">Bei der Aufnahme</string>
     <string name="settings_media_capture_original_subtitle">Das unbearbeitete Foto oder Video, ohne Effekt oder Rahmen, wird bei jeder Aufnahme in Fotos gesichert.</string>
     <string name="settings_media_capture_original_title">Original sichern</string>

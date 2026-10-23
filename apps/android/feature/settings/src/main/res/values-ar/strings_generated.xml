@@ -140,6 +140,8 @@
     <string name="settings_export_data">تصدير بياناتي</string>
     <string name="settings_language_dialog_close">إغلاق</string>
     <string name="settings_log_out">تسجيل الخروج</string>
+    <string name="settings_logout_confirm_message">هل تريد فعلاً تسجيل الخروج؟</string>
+    <string name="settings_logout_confirm_title">تسجيل الخروج</string>
     <string name="settings_media_capture_header">عند التصوير</string>
     <string name="settings_media_capture_original_subtitle">تُحفظ الصورة أو الفيديو الخام، دون تأثيرات أو إطار، في الصور مع كل لقطة.</string>
     <string name="settings_media_capture_original_title">حفظ الأصل</string>
