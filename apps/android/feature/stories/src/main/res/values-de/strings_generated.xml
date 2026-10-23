@@ -119,4 +119,6 @@
     <string name="story_tool_text">Text</string>
     <string name="story_tool_texture">Hintergrund</string>
     <string name="story_tool_timeline">Timeline</string>
+    <string name="story_tray_menu_profile">Profil ansehen</string>
+    <string name="story_tray_menu_viewStories">Storys ansehen</string>
 </resources>
