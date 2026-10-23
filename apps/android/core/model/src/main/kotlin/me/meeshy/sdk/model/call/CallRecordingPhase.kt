@@ -13,7 +13,7 @@ sealed interface CallRecordingPhase {
     /** [mustAnswer] : ce lecteur est un consentant requis qui n'a pas encore répondu. */
     data class Pending(
         val callId: String,
-        val recordingId: String,
+        override val recordingId: String,
         val requesterId: String,
         val mine: Boolean,
         val mustAnswer: Boolean,
@@ -21,17 +21,12 @@ sealed interface CallRecordingPhase {
 
     data class Recording(
         val callId: String,
-        val recordingId: String,
+        override val recordingId: String,
         val recorderId: String,
         val mine: Boolean,
     ) : CallRecordingPhase
 
-    val recordingId: String?
-        get() = when (this) {
-            is Pending -> recordingId
-            is Recording -> recordingId
-            Idle, is Asking -> null
-        }
+    val recordingId: String? get() = null
 
     val isActive: Boolean get() = this != Idle
 

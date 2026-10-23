@@ -1,0 +1,28 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_recording_accept">Aceitar</string>
+    <string name="call_recording_active">Gravação em curso</string>
+    <string name="call_recording_ask">%s quer gravar a chamada</string>
+    <string name="call_recording_askDetail">A gravação só começa se todos aceitarem e depois é adicionada à conversa.</string>
+    <string name="call_recording_askDetail_video">A tela da chamada e todo o seu som só são gravados se todos aceitarem e, depois, são adicionados à conversa.</string>
+    <string name="call_recording_ask_video">%s quer gravar a chamada em vídeo</string>
+    <string name="call_recording_cancel">Cancelar</string>
+    <string name="call_recording_caption">Gravar</string>
+    <string name="call_recording_close">Fechar</string>
+    <string name="call_recording_hint">Pede o consentimento de cada participante antes de gravar</string>
+    <string name="call_recording_kind_audio">Somente áudio</string>
+    <string name="call_recording_kind_hint">Escolha o que será gravado; depois, cada participante precisa aceitar</string>
+    <string name="call_recording_kind_video">Áudio e vídeo</string>
+    <string name="call_recording_refuse">Recusar</string>
+    <string name="call_recording_saveFailed">Não foi possível adicionar a gravação</string>
+    <string name="call_recording_saved">A gravação foi adicionada à conversa</string>
+    <string name="call_recording_someone">Um participante</string>
+    <string name="call_recording_start">Gravar a chamada</string>
+    <string name="call_recording_stop">Parar a gravação</string>
+    <string name="call_recording_stopped_joined">Alguém entrou na chamada: gravação parada</string>
+    <string name="call_recording_stopped_other">Gravação parada</string>
+    <string name="call_recording_stopped_refused">Gravação recusada</string>
+    <string name="call_recording_stopped_timeout">Nem todos responderam: sem gravação</string>
+    <string name="call_recording_unavailable">Gravação indisponível de momento</string>
+    <string name="call_recording_waiting">À espera do consentimento de todos…</string>
+</resources>
