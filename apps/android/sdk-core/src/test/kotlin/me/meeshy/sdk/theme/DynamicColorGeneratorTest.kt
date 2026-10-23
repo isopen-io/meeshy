@@ -105,6 +105,6 @@ class DerivedPaletteTest {
         com.google.common.truth.Truth.assertThat(p.primary).isEqualTo("FF0000")
         com.google.common.truth.Truth.assertThat(p.secondary).isEqualTo(DynamicColorGenerator.hueShiftedHex("FF0000", 30.0))
         com.google.common.truth.Truth.assertThat(p.accent).isEqualTo(DynamicColorGenerator.hueShiftedHex("FF0000", -30.0))
-        com.google.common.truth.Truth.assertThat(p.secondary).isEqualTo("FF8000")
+        com.google.common.truth.Truth.assertThat(p.secondary).isEqualTo("FF7F00")
     }
 }

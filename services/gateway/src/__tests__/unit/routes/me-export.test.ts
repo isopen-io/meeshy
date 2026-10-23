@@ -194,6 +194,8 @@ function makePrisma(opts: PrismaOpts = {}) {
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
       ),
     ),
+    // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
+    callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   };
 }
 

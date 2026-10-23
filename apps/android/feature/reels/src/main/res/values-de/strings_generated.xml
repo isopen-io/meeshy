@@ -1,0 +1,20 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="reels_caption_translated">Übersetzung verfügbar</string>
+    <string name="reels_close">Schließen</string>
+    <string name="reels_comments">Kommentare</string>
+    <plurals name="reels_comments_count">
+        <item quantity="one">%d Kommentar</item>
+        <item quantity="other">%d Kommentare</item>
+    </plurals>
+    <string name="reels_comments_empty_subtitle">Sei der Erste, der kommentiert!</string>
+    <string name="reels_comments_empty_title">Noch keine Kommentare</string>
+    <string name="reels_comments_send">Senden</string>
+    <string name="reels_comments_title">Kommentare</string>
+    <string name="reels_empty">Derzeit keine Reels</string>
+    <string name="reels_like">Gefällt mir</string>
+    <string name="reels_mute">Stumm</string>
+    <string name="reels_repost">Erneut posten</string>
+    <string name="reels_share">Teilen</string>
+    <string name="reels_unmute">Stummschaltung aufheben</string>
+</resources>

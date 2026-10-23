@@ -12,6 +12,7 @@ import javax.inject.Inject
  */
 public class MutationSenderRegistry @Inject constructor(
     private val handlers: Map<OutboxKind, @JvmSuppressWildcards OutboxKindHandler>,
+    private val ownerSource: OutboxOwnerSource? = null,
 ) {
     /** The kinds that have a registered handler. */
     public val registeredKinds: Set<OutboxKind> get() = handlers.keys
@@ -25,7 +26,7 @@ public class MutationSenderRegistry @Inject constructor(
 
     /** Rolls back the optimistic effect of an exhausted [row] through its kind's handler. */
     public suspend fun onExhausted(row: OutboxEntity) {
-        handlers[row.kindEnum]?.onExhausted(row)
+        row.kindEnum?.let { handlers[it] }?.onExhausted(row)
     }
 
     /**
@@ -36,6 +37,7 @@ public class MutationSenderRegistry @Inject constructor(
         OutboxDrainer(
             outbox = outbox,
             senders = handlers,
+            currentOwner = ownerSource?.let { source -> { source.currentOwnerId() } },
             onExhausted = { row -> this.onExhausted(row) },
             graftProducedId = OutboxPayloadGrafts.firstOf(
                 *handlers.values.mapNotNull { it.payloadGraft }.toTypedArray(),

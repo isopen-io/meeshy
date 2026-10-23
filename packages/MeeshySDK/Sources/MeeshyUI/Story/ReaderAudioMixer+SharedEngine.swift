@@ -13,7 +13,7 @@ import MeeshySDK
 /// `effectiveVolume`, `cancelVolumeAutomation`) sont `internal` pour cette
 /// raison — jamais `public`.
 extension ReaderAudioMixer: ReaderAudioEngineClient {
-    var claimsRunningEngine: Bool { isPlaying }
+    var claimsRunningEngine: Bool { isPlaying && holdsEngineNodes }
 
     var holdsEngineNodes: Bool { !entries.isEmpty || backgroundEntry != nil }
 

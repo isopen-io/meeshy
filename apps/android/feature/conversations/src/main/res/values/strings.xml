@@ -31,7 +31,6 @@
     <string name="conversations_delete_for_all_confirm_message">\"%1$s\" will be closed for every participant. No one will be able to write anymore.</string>
     <string name="new_conversation_search_hint">Search people</string>
     <string name="share_link_field_slug">Custom URL slug (optional)</string>
-    <string name="share_link_access_birthday">Birthday required</string>
     <string name="share_link_field_max_uses">Maximum uses</string>
     <string name="share_link_created_title">Link created</string>
     <string name="share_link_created_subtitle">Share it to invite people to the conversation.</string>
@@ -61,7 +60,9 @@
     <string name="conversations_no_results">No conversations match</string>
     <string name="conversations_open_global_search">Global search</string>
     <string name="conversations_section_all">My conversations</string>
+    <string name="conversations_section_pinned">Pinned</string>
     <string name="dashboard_action_search">Global search</string>
     <string name="global_search_empty_subtitle">Messages, conversations, users</string>
     <string name="global_search_hint">Search everywhere…</string>
+    <string name="new_conversation_error_blocked">You can\'t start a conversation with this user.</string>
 </resources>

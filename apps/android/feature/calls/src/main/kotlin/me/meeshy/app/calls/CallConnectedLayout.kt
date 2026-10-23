@@ -129,6 +129,8 @@ internal fun CallConnectedColumn(
     viewModel: CallViewModel,
     overlayContext: CallOverlayContext,
     chrome: CallChromeController,
+    videoStage: Boolean,
+    avatarUrl: String?,
     modifier: Modifier = Modifier,
 ) {
     val extensions = viewModel.extensions
@@ -170,7 +172,11 @@ internal fun CallConnectedColumn(
         ) {
             Spacer(Modifier.height(MeeshySpacing.xl))
 
-            CallPeerBlock(state = state, accent = accent)
+            if (videoStage) {
+                CallPeerBlock(state = state, accent = accent, videoStage = true)
+            } else {
+                CallAudioStage(state = state, peerAvatarUrl = avatarUrl)
+            }
 
             state.captionText?.let { caption -> CallCaption(caption) }
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)

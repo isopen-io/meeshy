@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "ui", "iosKey": "story.textEdit.finish.short", "androidName": "stories_composer_text_finish", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "story.textEdit.finish", "androidName": "stories_composer_text_finish_a11y", "status": "adopted" }
+      ]
+    }
+  }
+}

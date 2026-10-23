@@ -13,10 +13,62 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "conversation.engagement.a11y.streak_days.one",
+          "catalog": "ui",
+          "iosKey": "profile.action.acceptConnection",
+          "androidName": "profile_action_accept_connection",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.blockUser",
+          "androidName": "profile_action_block_user",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.cancelRequest",
+          "androidName": "profile_action_cancel_request",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.connectionRequest",
+          "androidName": "profile_action_connection_request",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.declineConnection",
+          "androidName": "profile_action_decline_connection",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.report",
+          "androidName": "profile_action_report",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.resendRequest",
+          "androidName": "profile_action_resend_request",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.sendMessage",
+          "androidName": "profile_action_send_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.unblockUser",
+          "androidName": "profile_action_unblock_user",
+          "status": "adopted"
+        },
+        {
           "androidName": "profile_activity_average",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
           "androidName": "profile_activity_empty",
@@ -26,7 +78,7 @@
           "catalog": "app",
           "iosKey": "dashboard.section.activity",
           "androidName": "profile_activity_title",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_avatar",
@@ -36,19 +88,31 @@
           "catalog": "app",
           "iosKey": "a11y.back",
           "androidName": "profile_back",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "profile.bio",
           "androidName": "profile_bio_label",
-          "status": "candidate"
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.blocked.byMe",
+          "androidName": "profile_blocked_by_me",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.blocked.unblock",
+          "androidName": "profile_blocked_unblock",
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "voiceProfile.manage.cancelDelete",
           "androidName": "profile_cancel",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_change_avatar",
@@ -63,6 +127,18 @@
           "status": "android-only"
         },
         {
+          "catalog": "ui",
+          "iosKey": "profile.connection.context.received",
+          "androidName": "profile_connection_context_received",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.connection.context.sent",
+          "androidName": "profile_connection_context_sent",
+          "status": "adopted"
+        },
+        {
           "androidName": "profile_custom_language_label",
           "status": "android-only"
         },
@@ -70,7 +146,7 @@
           "catalog": "app",
           "iosKey": "participantProfile.country",
           "androidName": "profile_detail_country",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_detail_regional_language",
@@ -80,7 +156,7 @@
           "catalog": "app",
           "iosKey": "profile.language.primary",
           "androidName": "profile_detail_system_language",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_detail_timezone",
@@ -90,31 +166,29 @@
           "catalog": "app",
           "iosKey": "profile.display_name",
           "androidName": "profile_display_name_label",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "preview.e2ee.a11y",
           "androidName": "profile_e2ee",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "profile.edit",
           "androidName": "profile_edit",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "a11y.floating.menu.profile-action",
           "androidName": "profile_edit_title",
-          "status": "candidate"
+          "status": "android-only"
         },
         {
           "catalog": "app",
           "iosKey": "profile.first_name",
           "androidName": "profile_first_name_label",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_image_error_empty",
@@ -129,8 +203,10 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "profile.avatar.error",
           "androidName": "profile_image_error_update",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "profile_image_error_upload",
@@ -140,13 +216,13 @@
           "catalog": "app",
           "iosKey": "settings.security.not_set",
           "androidName": "profile_language_unset",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "profile.last_name",
           "androidName": "profile_last_name_label",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_last_seen",
@@ -157,16 +233,22 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "conversation.open.error",
+          "androidName": "profile_open_conversation_error",
+          "status": "adopted"
+        },
+        {
           "catalog": "ui",
           "iosKey": "presence.away",
           "androidName": "profile_presence_away",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "presence.online",
           "androidName": "profile_presence_online",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_regional_language_label",
@@ -180,7 +262,7 @@
           "catalog": "app",
           "iosKey": "profile.save",
           "androidName": "profile_save",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_share_action",
@@ -190,7 +272,7 @@
           "catalog": "app",
           "iosKey": "share.links.copy.a11y",
           "androidName": "profile_share_copy",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_share_message",
@@ -204,7 +286,7 @@
           "catalog": "app",
           "iosKey": "action.share",
           "androidName": "profile_share_send",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_share_title",
@@ -218,19 +300,19 @@
           "catalog": "app",
           "iosKey": "profile.stats.conversations",
           "androidName": "profile_stat_conversations",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "profile.friend_requests",
           "androidName": "profile_stat_friend_requests",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "profile.stats.languagesShort",
           "androidName": "profile_stat_languages",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "profile_stat_member_days",
@@ -240,105 +322,137 @@
           "catalog": "app",
           "iosKey": "dashboard.stat.messages",
           "androidName": "profile_stat_messages",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "profile.stats.translationsShort",
           "androidName": "profile_stat_translations",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "route.title.stats",
           "androidName": "profile_stats_title",
-          "status": "candidate"
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.status.connected",
+          "androidName": "profile_status_connected",
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "profile.language.primary",
           "androidName": "profile_system_language_label",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "profile.title",
           "androidName": "profile_title",
-          "status": "candidate"
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.blockFailed",
+          "androidName": "profile_toast_block_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.unblockFailed",
+          "androidName": "profile_toast_unblock_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.userBlocked",
+          "androidName": "profile_toast_user_blocked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.userUnblocked",
+          "androidName": "profile_toast_user_unblocked",
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "a11y.message.unknown_sender",
           "androidName": "profile_unknown",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "profile.posts.stat.posts",
           "androidName": "profile_view_posts",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "2fa_close",
           "androidName": "report_close",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "message-detail.report.details",
           "androidName": "report_details_header",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "report_details_placeholder",
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "report.user.error",
           "androidName": "report_error",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.harassment",
           "androidName": "report_reason_harassment",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason",
           "androidName": "report_reason_header",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.impersonation",
           "androidName": "report_reason_impersonation",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.inappropriate",
           "androidName": "report_reason_inappropriate",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.other",
           "androidName": "report_reason_other",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.reason.spam",
           "androidName": "report_reason_spam",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "report.user.submit",
           "androidName": "report_submit",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "report_title",
@@ -348,7 +462,7 @@
           "catalog": "app",
           "iosKey": "report.message.nav.title",
           "androidName": "report_title_generic",
-          "status": "candidate"
+          "status": "adopted"
         }
       ]
     }

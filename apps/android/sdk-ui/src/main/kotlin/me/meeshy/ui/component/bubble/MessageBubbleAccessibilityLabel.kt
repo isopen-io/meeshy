@@ -127,7 +127,7 @@ public object MessageBubbleAccessibilityLabel {
     }
 
     private val BubbleContent.isSealedViewOnce: Boolean
-        get() = isViewOnce && viewOnceCount == 0
+        get() = isViewOnce && !isViewOnceOpenedByMe
 
     private fun contactCardLabel(
         card: BubbleContactCard,

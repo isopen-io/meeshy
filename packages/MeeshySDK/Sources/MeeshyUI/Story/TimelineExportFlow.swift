@@ -478,6 +478,7 @@ struct TimelineExportPreviewSheet: View {
         }
         .onAppear {
             let player = self.player ?? AVPlayer(url: url)
+            MediaPolicyMonitor.shared.adopt(player, role: .watched)
             self.player = player
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,

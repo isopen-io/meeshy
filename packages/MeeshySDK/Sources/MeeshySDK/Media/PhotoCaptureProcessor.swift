@@ -92,7 +92,9 @@ public final class PhotoCaptureProcessor: PhotoCaptureProcessorProviding, @unche
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let image = CIImage(data: data, options: [.applyOrientationProperty: true]) else { return nil }
         let format = settings.format ?? PhotoCaptureFormat(typeIdentifier: type as String) ?? .jpeg
-        return render(image, metadata: PhotoCaptureMetadata.carried(from: properties), format: format, settings: settings)
+        let metadata = PhotoCaptureMetadata.carried(from: properties)
+        return renderHDR(data, source: source, metadata: metadata, format: format, settings: settings)
+            ?? render(image, metadata: metadata, format: format, settings: settings)
     }
 
     public func process(image: CGImage, settings: PhotoCaptureSettings) -> ProcessedPhoto? {
@@ -100,16 +102,42 @@ public final class PhotoCaptureProcessor: PhotoCaptureProcessorProviding, @unche
     }
 
     private func render(_ input: CIImage, metadata: [CFString: Any], format: PhotoCaptureFormat, settings: PhotoCaptureSettings) -> ProcessedPhoto? {
+        guard let prepared = Self.prepared(input, settings: settings) else { return nil }
+        let colorSpace = input.colorSpace.flatMap { $0.model == .rgb ? $0 : nil }
+            ?? CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        guard let rendered = context.createCGImage(prepared.image, from: prepared.frame, format: .RGBA8, colorSpace: colorSpace),
+              let encoded = PhotoCaptureEncoder.encode(rendered, as: format, quality: settings.quality, metadata: metadata) else { return nil }
+        return ProcessedPhoto(data: encoded.data, image: rendered, format: encoded.format)
+    }
+
+    /// **Le HDR de la prise survit au traitement** (verdict #11247, #11847).
+    /// L'image est lue AVEC sa carte de gain (pixels au-delà du blanc de
+    /// référence), redressée, réduite et nettoyée comme une prise SDR, rendue en
+    /// demi-flottants PQ, puis écrite en UNE génération : une base SDR et une
+    /// carte de gain ISO recalculée sur les pixels redressés. Avant iOS 18, ou
+    /// sans carte de gain dans la source, la prise reste SDR (`nil`).
+    private func renderHDR(_ data: Data, source: CGImageSource, metadata: [CFString: Any],
+                           format: PhotoCaptureFormat, settings: PhotoCaptureSettings) -> ProcessedPhoto? {
+        guard #available(iOS 18.0, macOS 15.0, *) else { return nil }
+        guard OutgoingImageGainMap.isPresent(in: source),
+              let input = CIImage(data: data, options: [.applyOrientationProperty: true, .expandToHDR: true]),
+              let prepared = Self.prepared(input, settings: settings),
+              let space = CGColorSpace(name: CGColorSpace.displayP3_PQ),
+              let rendered = context.createCGImage(prepared.image, from: prepared.frame, format: .RGBAh, colorSpace: space),
+              let encoded = PhotoCaptureEncoder.encode(rendered, as: format, quality: settings.quality,
+                                                       metadata: metadata, gainMap: true),
+              let shown = PhotoCaptureEncoder.base(of: encoded.data) else { return nil }
+        return ProcessedPhoto(data: encoded.data, image: shown, format: encoded.format)
+    }
+
+    /// Redressée, ancrée à l'origine, réduite au plafond et nettoyée — la même
+    /// chaîne pour une prise SDR et une prise HDR.
+    private static func prepared(_ input: CIImage, settings: PhotoCaptureSettings) -> (frame: CGRect, image: CIImage)? {
         let origin = input.extent.origin
         let anchored = input.transformed(by: CGAffineTransform(translationX: -origin.x, y: -origin.y))
         guard let target = PhotoCaptureGeometry.targetSize(for: anchored.extent.size, maxPixelDimension: settings.maxPixelDimension) else { return nil }
-        let frame = CGRect(origin: .zero, size: target)
-        let enhanced = PhotoCaptureEnhancementChain.apply(settings.enhancement, to: Self.scaled(anchored, to: target))
-        let colorSpace = input.colorSpace.flatMap { $0.model == .rgb ? $0 : nil }
-            ?? CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        guard let rendered = context.createCGImage(enhanced, from: frame, format: .RGBA8, colorSpace: colorSpace),
-              let encoded = PhotoCaptureEncoder.encode(rendered, as: format, quality: settings.quality, metadata: metadata) else { return nil }
-        return ProcessedPhoto(data: encoded.data, image: rendered, format: encoded.format)
+        let enhanced = PhotoCaptureEnhancementChain.apply(settings.enhancement, to: scaled(anchored, to: target))
+        return (frame: CGRect(origin: .zero, size: target), image: enhanced)
     }
 
     private static func scaled(_ image: CIImage, to target: CGSize) -> CIImage {
@@ -146,21 +174,23 @@ enum PhotoCaptureMetadata {
         ]
     }
 
-    static func carried(from source: [CFString: Any]) -> [CFString: Any] {
+    /// `orientation` : celle des pixels écrits — 1 quand ils ont été redressés,
+    /// celle de la source quand ils restent stockés tels quels.
+    static func carried(from source: [CFString: Any], orientation: Int = 1) -> [CFString: Any] {
         let kept = source
             .filter { carriedKeys.contains($0.key) }
-            .map { ($0.key, rewritten($0.value, under: $0.key)) }
+            .map { ($0.key, rewritten($0.value, under: $0.key, orientation: orientation)) }
         return Dictionary(uniqueKeysWithValues: kept)
-            .merging([kCGImagePropertyOrientation: 1]) { _, upright in upright }
+            .merging([kCGImagePropertyOrientation: orientation]) { _, written in written }
     }
 
-    private static func rewritten(_ value: Any, under key: CFString) -> Any {
+    private static func rewritten(_ value: Any, under key: CFString, orientation: Int) -> Any {
         guard let dictionary = value as? [CFString: Any] else { return value }
         if key == kCGImagePropertyExifDictionary {
             return dictionary.filter { $0.key != kCGImagePropertyExifPixelXDimension && $0.key != kCGImagePropertyExifPixelYDimension }
         }
         if key == kCGImagePropertyTIFFDictionary {
-            return dictionary.merging([kCGImagePropertyTIFFOrientation: 1]) { _, upright in upright }
+            return dictionary.merging([kCGImagePropertyTIFFOrientation: orientation]) { _, written in written }
         }
         return dictionary
     }
@@ -202,18 +232,35 @@ enum PhotoCaptureEncoder {
 
     /// HEIC n'est pas encodable partout (certains simulateurs) : JPEG en repli,
     /// et le format rendu dit TOUJOURS ce que sont les octets.
-    static func encode(_ image: CGImage, as format: PhotoCaptureFormat, quality: CGFloat, metadata: [CFString: Any]) -> Encoded? {
-        if let data = encoded(image, as: format, quality: quality, metadata: metadata) {
+    /// `gainMap` : l'image est HDR, l'encodeur en écrit une base SDR et la
+    /// carte de gain ISO qui la ramène au HDR.
+    static func encode(_ image: CGImage, as format: PhotoCaptureFormat, quality: CGFloat,
+                       metadata: [CFString: Any], gainMap: Bool = false) -> Encoded? {
+        let options = metadata
+            .merging([kCGImageDestinationLossyCompressionQuality: quality]) { _, requested in requested }
+            .merging(gainMap ? gainMapRequest : [:]) { _, requested in requested }
+        if let data = encoded(image, as: format, options: options) {
             return Encoded(data: data, format: format)
         }
-        guard format == .heic, let data = encoded(image, as: .jpeg, quality: quality, metadata: metadata) else { return nil }
+        guard format == .heic, let data = encoded(image, as: .jpeg, options: options) else { return nil }
         return Encoded(data: data, format: .jpeg)
     }
 
-    private static func encoded(_ image: CGImage, as format: PhotoCaptureFormat, quality: CGFloat, metadata: [CFString: Any]) -> Data? {
+    /// La base SDR des octets écrits : ce que l'écran montre tout de suite,
+    /// identique à ce qui part.
+    static func base(of data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
+    }
+
+    private static var gainMapRequest: [CFString: Any] {
+        guard #available(iOS 18.0, macOS 15.0, *) else { return [:] }
+        return [kCGImageDestinationEncodeRequest: kCGImageDestinationEncodeToISOGainmap]
+    }
+
+    private static func encoded(_ image: CGImage, as format: PhotoCaptureFormat, options: [CFString: Any]) -> Data? {
         let buffer = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(buffer, format.typeIdentifier, 1, nil) else { return nil }
-        let options = metadata.merging([kCGImageDestinationLossyCompressionQuality: quality]) { _, requested in requested }
         CGImageDestinationAddImage(destination, image, options as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return buffer as Data

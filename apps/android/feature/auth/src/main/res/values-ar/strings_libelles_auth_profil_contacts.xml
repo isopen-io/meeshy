@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_welcome_back">مرحبًا بعودتك</string>
+    <string name="login_error_required">اسم المستخدم وكلمة المرور مطلوبان</string>
+    <string name="login_custom_host_label">مضيف مخصص</string>
+    <string name="login_apply_custom_host">تطبيق المضيف المخصص</string>
+    <string name="guest_join_subtitle">أنشئ هوية مؤقتة للانضمام</string>
+    <string name="guest_join_language">اللغة التي تتحدثها</string>
+    <string name="guest_join_joining">جارٍ الانضمام…</string>
+    <string name="guest_join_preview_error">تعذّر فتح هذا الرابط</string>
+    <string name="guest_join_requires_account">يتطلب هذا الرابط حسابًا.</string>
+    <string name="share_link_entry_resolving">جارٍ فتح الرابط…</string>
+    <string name="share_link_choose_title">كيف تريد الانضمام؟</string>
+    <string name="share_link_choose_subtitle">انضم إلى %1$s بحسابك أو كضيف.</string>
+    <string name="share_link_choose_subtitle_generic">انضم بحسابك أو كضيف.</string>
+    <string name="share_link_continue_with_account">المتابعة بحسابي</string>
+    <string name="auth_back_to_login">العودة إلى تسجيل الدخول</string>
+    <string name="auth_magic_sent">افتح الرابط المرسل إلى %1$s</string>
+    <string name="auth_magic_countdown">الرابط صالح لمدة %1$s</string>
+    <string name="auth_magic_validating">جارٍ تسجيل دخولك…</string>
+    <string name="signup_display_name_required">أدخل حرفًا واحدًا على الأقل.</string>
+    <string name="signup_display_name_too_long">هذا الاسم طويل جدًا.</string>
+    <string name="signup_display_name_taken">هذا الاسم مستخدم بالفعل. جرّب اسمًا آخر.</string>
+    <string name="signup_email_invalid">يبدو أن عنوان البريد الإلكتروني هذا غير مكتمل.</string>
+    <string name="signup_phone_invalid">لا يمكن الاتصال بهذا الرقم.</string>
+    <string name="signup_phone_conflict">هذا الرقم مرتبط بحساب بالفعل. اترك الحقل فارغًا للمتابعة.</string>
+    <string name="signup_choose_country">اختر البلد</string>
+    <string name="signup_country_picker_title">اختر بلدًا</string>
+    <string name="signup_password_too_short">6 أحرف على الأقل.</string>
+    <string name="signup_submit">إنشاء حسابي</string>
+    <string name="signup_error_invalid_field">تم رفض هذه القيمة.</string>
+</resources>

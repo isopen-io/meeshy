@@ -194,6 +194,8 @@ class ConversationListViewModelEmptyTest {
         repo, messageRepo, socket, relay, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
         storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
+        me.meeshy.sdk.network.InMemoryNetworkMonitor(),
+        io.mockk.mockk(relaxed = true),
     )
 
     @Test
