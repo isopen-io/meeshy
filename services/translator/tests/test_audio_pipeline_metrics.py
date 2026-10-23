@@ -98,5 +98,17 @@ def test_the_pipeline_stages_are_decorated_where_they_run():
 
     assert timed_stage(transcription_service.TranscriptionService._run_whisper) == "whisper"
     assert timed_stage(translation_stage.TranslationStage._translate_text) == "nllb"
-    assert timed_stage(tts_service.TTSService.synthesize_with_voice) == "tts"
+    assert timed_stage(tts_service.UnifiedTTSService.synthesize_with_voice) == "tts"
     assert inspect.iscoroutinefunction(translation_stage.TranslationStage._translate_text)
+
+
+def test_the_translator_api_serves_the_process_registry_on_get_metrics():
+    from unittest.mock import MagicMock
+
+    from api.translation_api import TranslationAPI
+
+    api = TranslationAPI(translation_service=MagicMock())
+    response = TestClient(api.app).get("/metrics")
+
+    assert response.status_code == 200
+    assert "audio_pipeline_seconds" in response.text
