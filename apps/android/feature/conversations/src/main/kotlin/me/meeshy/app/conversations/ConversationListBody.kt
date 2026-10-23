@@ -15,6 +15,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -33,7 +34,9 @@ internal fun ConversationListBody(
     listState: LazyListState,
     viewModel: ConversationListViewModel,
     onRefresh: () -> Unit = {},
+    rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
 ) {
+    val signals by viewModel.rowSignals.collectAsStateWithLifecycle()
     PullToRefreshBox(
         isRefreshing = state.isUserRefreshing,
         onRefresh = {
@@ -51,7 +54,7 @@ internal fun ConversationListBody(
             if (!ConversationSections.showsHeaders(sections)) {
                 sections.forEach { section ->
                     items(section.items, key = { "row-${it.id}" }) { conversation ->
-                        ConversationListRow(state, conversation, viewModel, nowMillis)
+                        ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
                     }
                 }
                 return@LazyColumn
@@ -74,7 +77,7 @@ internal fun ConversationListBody(
                         },
                     ) {
                         section.items.forEach { conversation ->
-                            ConversationListRow(state, conversation, viewModel, nowMillis)
+                            ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
                         }
                     }
                 }
@@ -89,9 +92,13 @@ private fun ConversationListRow(
     conversation: ApiConversation,
     viewModel: ConversationListViewModel,
     now: Long,
+    signals: ConversationRowSignals,
+    rowNavigation: ConversationRowNavigation,
 ) {
-    val actions = remember(viewModel, conversation.id) {
+    val currentUserId = state.currentUserId
+    val actions = remember(viewModel, conversation, currentUserId, rowNavigation) {
         ConversationRowActions.forConversation(viewModel, conversation.id)
+            .withNavigation(rowNavigation, conversation, currentUserId)
     }
     ConversationRow(
         model = ConversationRowModel(
@@ -107,6 +114,9 @@ private fun ConversationListRow(
             previewMessages = state.previewFor(conversation.id),
             isLocked = state.isLocked(conversation.id),
             nowMillis = now,
+            hasPendingSync = signals.hasPendingSync(conversation.id),
+            peerHere = signals.peerHere(conversation, currentUserId),
+            callInProgress = signals.hasCallInProgress(conversation.id),
         ),
         actions = actions,
     )
