@@ -229,10 +229,12 @@ class AccessScreensFormWidthTest {
 
     private fun refusedLinkViewModel(): MagicLinkValidateViewModel {
         val repository = authRepository()
-        coEvery { repository.loginWithMagicLink(any()) } returns
+        coEvery { repository.verifyMagicLink(any()) } returns
             NetworkResult.Failure(ApiError(message = EXPIRED_LINK_MESSAGE))
         return MagicLinkValidateViewModel(
             repository,
+            mockk(relaxed = true),
+            SessionOpeningGate(),
             SavedStateHandle(mapOf(MagicLinkValidateViewModel.TOKEN_ARG to "expired-token")),
         )
     }

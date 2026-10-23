@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.friend.FriendshipPages
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -76,11 +77,15 @@ class ChromeViewModel @Inject constructor(
         warmedUp = true
         notificationRepository.notificationsStream(onSyncError = {}).launchIn(viewModelScope)
         viewModelScope.launch {
-            val received = friendRepository.receivedRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
-            val sent = friendRepository.sentRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
-            if (received is NetworkResult.Success && sent is NetworkResult.Success) {
-                friendshipCache.hydrate(sent = sent.data, received = received.data)
-            }
+            friendshipCache.hydrateCoalesced(fetch = {
+                val received = friendRepository.receivedRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
+                val sent = friendRepository.sentRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
+                if (received is NetworkResult.Success && sent is NetworkResult.Success) {
+                    FriendshipPages(sent = sent.data, received = received.data)
+                } else {
+                    null
+                }
+            })
         }
     }
 

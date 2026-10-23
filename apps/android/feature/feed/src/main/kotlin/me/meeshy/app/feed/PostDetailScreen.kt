@@ -201,6 +201,8 @@ private fun PostDetailContent(
     onCommentNotice: suspend (CommentNotice) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
+    var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }
+    gallery?.let { opened -> FeedImageViewerHost(gallery = opened, onDismiss = { gallery = null }) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -270,7 +272,13 @@ private fun PostDetailContent(
 
                 if (post.images.isNotEmpty()) {
                     Spacer(Modifier.height(MeeshySpacing.md))
-                    PostImageLayout(images = post.images, layout = post.layout, onImageTap = null)
+                    PostImageLayout(
+                        images = post.images,
+                        layout = post.layout,
+                        onImageTap = { index ->
+                            gallery = FeedMediaGallery.of(post, index).takeUnless(FeedGallery::isEmpty)
+                        },
+                    )
                 }
 
                 post.repostEmbed?.let { embed ->

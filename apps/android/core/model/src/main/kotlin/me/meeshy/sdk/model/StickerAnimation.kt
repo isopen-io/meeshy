@@ -77,6 +77,20 @@ enum class StickerAnimation(val wireName: String) {
         return poseAtPhase(phase)
     }
 
+    /**
+     * La pose d'un sticker APPARU à [appearedAtMillis] (`null` = hors écran : la lecture est en
+     * pause, immobile). Une fonction pure de l'horloge reçue : un coup unique joue une fois par
+     * affichage, une boucle continue tant que le sticker est à l'écran.
+     */
+    fun poseSince(appearedAtMillis: Long?, nowMillis: Long): Pose {
+        if (appearedAtMillis == null) return Pose.IDENTITY
+        return pose((nowMillis - appearedAtMillis) / 1000.0)
+    }
+
+    /** Vrai quand plus aucune image ne change : l'horloge d'affichage peut s'arrêter. */
+    fun isSettled(secondsSinceAppearance: Double): Boolean =
+        settlesAfter?.let { secondsSinceAppearance >= it } ?: false
+
     private fun poseAtPhase(p: Double): Pose {
         val tour = 2 * PI * p
         return when (this) {

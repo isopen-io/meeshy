@@ -12,7 +12,9 @@
  *   rotation est appliquée aux pixels (`autoOrient`) avant que l'EXIF ne
  *   parte, le profil ICC gardé (`keepIccProfile`), dans un encodage aussi
  *   fidèle que le format le permet (JPEG q92 4:4:4, WebP sans perte si la
- *   source l'était, PNG à palette si la source l'était) ;
+ *   source l'était, PNG à palette si la source l'était) ; un JPEG HDR y
+ *   garde sa carte de gain, pivotée avec lui (`keepGainMap`, que les typages
+ *   de sharp 0.35.5 omettent — d'où `GainMapAware`, #11840) ;
  * - une structure illisible (JPEG avant toute donnée d'image, WebP sans image,
  *   PNG sans pixels) : ré-encodage plutôt que de laisser partir l'original.
  * Une rotation qui échoue (pixels tronqués) retombe sur le retrait des octets :
@@ -29,7 +31,7 @@
 import sharp, { type Metadata, type Sharp } from 'sharp';
 import { stripGifMetadataBlocks } from './metadata-strip/gif-blocks';
 import { blankIsobmffMetadataItems } from './metadata-strip/isobmff-items';
-import { stripJpegMetadataSegments } from './metadata-strip/jpeg-segments';
+import { stripJpegKeepingGainMap } from './metadata-strip/jpeg-gain-map';
 import { hasPngPixels, isAnimatedPng, readPngChunks, stripPngMetadataChunks } from './metadata-strip/png-chunks';
 import { isLosslessWebp, stripWebpMetadataChunks } from './metadata-strip/webp-chunks';
 
@@ -58,16 +60,18 @@ export function isExifStrippable(mimeType: string): boolean {
 }
 
 type ReencodableFormat = 'jpeg' | 'png' | 'webp';
-type ImageFacts = Partial<Pick<Metadata, 'isPalette' | 'pages' | 'orientation'>>;
+type ImageFacts = Partial<Pick<Metadata, 'isPalette' | 'pages' | 'orientation' | 'gainMap'>>;
+type GainMapAware = Sharp & { readonly keepGainMap: () => Sharp };
 
 function encode(image: Sharp, format: ReencodableFormat, source: Buffer, metadata: ImageFacts): Promise<Buffer> {
+  if (format === 'jpeg' && metadata.gainMap) return (image as GainMapAware).keepGainMap().jpeg(JPEG_REENCODE).toBuffer();
   if (format === 'jpeg') return image.jpeg(JPEG_REENCODE).toBuffer();
   if (format === 'png') return image.png({ palette: metadata.isPalette === true }).toBuffer();
   return image.webp(isLosslessWebp(source) ? { lossless: true } : WEBP_LOSSY_REENCODE).toBuffer();
 }
 
 function stripBytes(format: ReencodableFormat, buffer: Buffer): Buffer | null {
-  if (format === 'jpeg') return stripJpegMetadataSegments(buffer);
+  if (format === 'jpeg') return stripJpegKeepingGainMap(buffer);
   if (format === 'png') {
     const read = readPngChunks(buffer);
     return hasPngPixels(read) ? stripPngMetadataChunks(buffer, read) : null;
@@ -96,6 +100,9 @@ async function stripStillOrReencode(buffer: Buffer, format: ReencodableFormat): 
 }
 
 /**
+ * Un JPEG HDR garde sa carte de gain (`metadata-strip/jpeg-gain-map.ts`,
+ * #11840).
+ *
  * Rend `buffer` sans métadonnées. Rend `buffer` INCHANGÉ si `mimeType` n'est
  * pas couvert — l'appelant décide via `isExifStrippable`, la fonction reste
  * sans risque à appeler sur un type non couvert.

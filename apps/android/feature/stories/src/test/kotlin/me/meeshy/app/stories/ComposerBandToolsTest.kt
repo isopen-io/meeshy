@@ -21,4 +21,11 @@ class ComposerBandToolsTest {
         assertThat(badges[StoryToolMode.DRAWING]).isEqualTo(0)
         assertThat(badges[StoryToolMode.TEXTURE]).isEqualTo(1)
     }
+
+    @Test
+    fun `the tool panel steps aside while a text is edited or a stroke drawn, so their settings stay in view`() {
+        assertThat(ComposerBandTools.showsPanel(isDrawing = false, isEditingText = false)).isTrue()
+        assertThat(ComposerBandTools.showsPanel(isDrawing = false, isEditingText = true)).isFalse()
+        assertThat(ComposerBandTools.showsPanel(isDrawing = true, isEditingText = false)).isFalse()
+    }
 }

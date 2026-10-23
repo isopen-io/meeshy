@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.ui.component.bubble.BubbleBlurRevealSpec
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleImage
 import org.junit.Test
@@ -17,6 +18,9 @@ class ConversationMediaGalleryTest {
         text: String = "",
         senderName: String? = null,
         createdAtIso: String? = null,
+        isViewOnce: Boolean = false,
+        isViewOnceOpenedByMe: Boolean = false,
+        isBlurred: Boolean = false,
     ) = BubbleContent(
         messageId = id,
         text = text,
@@ -29,6 +33,10 @@ class ConversationMediaGalleryTest {
         isDeleted = isDeleted,
         createdAtIso = createdAtIso,
         images = images,
+        isViewOnce = isViewOnce,
+        isViewOnceOpenedByMe = isViewOnceOpenedByMe,
+        isBlurred = isBlurred,
+        blurReveal = if (isViewOnce || isBlurred) BubbleBlurRevealSpec(isViewOnce = isViewOnce) else null,
     )
 
     @Test
@@ -612,5 +620,77 @@ class ConversationMediaGalleryTest {
         val gallery = ConversationMediaGallery.of(emptyList(), messageId = "m1", imageIndex = 0)
 
         assertThat(gallery.altTexts).isEmpty()
+    }
+
+    @Test
+    fun a_view_once_neighbour_never_joins_the_series_opened_from_another_photo() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1"))),
+                bubble("m2", listOf(img("a2", "secret")), isViewOnce = true),
+                bubble("m3", listOf(img("a3", "u3"))),
+            ),
+            messageId = "m3",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "u3").inOrder()
+        assertThat(gallery.startIndex).isEqualTo(1)
+    }
+
+    @Test
+    fun a_blurred_neighbour_never_joins_the_series_opened_from_another_photo() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "blurred")), isBlurred = true),
+                bubble("m2", listOf(img("a2", "u2"))),
+            ),
+            messageId = "m2",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u2")
+        assertThat(gallery.startIndex).isEqualTo(0)
+    }
+
+    @Test
+    fun the_protected_photo_opened_from_its_own_bubble_is_in_the_series_and_not_exportable() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1"))),
+                bubble("m2", listOf(img("a2", "secret")), isViewOnce = true),
+            ),
+            messageId = "m2",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "secret").inOrder()
+        assertThat(gallery.startIndex).isEqualTo(1)
+        assertThat(gallery.exportable).containsExactly(true, false).inOrder()
+    }
+
+    @Test
+    fun a_view_once_already_opened_by_me_never_opens_again() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1"))),
+                bubble("m2", listOf(img("a2", "burnt")), isViewOnce = true, isViewOnceOpenedByMe = true),
+            ),
+            messageId = "m2",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1")
+    }
+
+    @Test
+    fun ordinary_photos_are_all_exportable() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1"), img("a2", "u2")))),
+            messageId = "m1",
+            imageIndex = 1,
+        )
+
+        assertThat(gallery.exportable).containsExactly(true, true)
     }
 }
