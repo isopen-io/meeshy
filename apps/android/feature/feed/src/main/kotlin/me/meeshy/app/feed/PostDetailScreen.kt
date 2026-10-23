@@ -69,6 +69,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.PostReactionPaletteState
+import me.meeshy.sdk.model.PostReactionPick
+import me.meeshy.ui.component.reaction.PostReactionPalette
+import me.meeshy.ui.component.reaction.PostReactionPaletteAnchor
+import me.meeshy.ui.modifier.reactionPaletteTrigger
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.sdk.model.PostAbsenceReason
@@ -102,6 +107,7 @@ fun PostDetailScreen(
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
 
@@ -170,6 +176,8 @@ fun PostDetailScreen(
                         onRepost = viewModel::repost,
                         onQuote = viewModel::beginQuote,
                         onLike = viewModel::toggleLike,
+                        quickEmojis = quickEmojis,
+                        onReact = viewModel::react,
                         onBookmark = viewModel::toggleBookmark,
                         onCommentNotice = { notice -> snackbar.showSnackbar(context.getString(notice.messageRes)) },
                     )
@@ -197,6 +205,8 @@ private fun PostDetailContent(
     onRepost: () -> Unit,
     onQuote: () -> Unit,
     onLike: () -> Unit,
+    quickEmojis: List<String>,
+    onReact: (PostReactionPick) -> Unit,
     onBookmark: () -> Unit,
     onCommentNotice: suspend (CommentNotice) -> Unit,
 ) {
@@ -311,6 +321,8 @@ private fun PostDetailContent(
                     onRepost = onRepost,
                     onQuote = onQuote,
                     onLike = onLike,
+                    quickEmojis = quickEmojis,
+                    onReact = onReact,
                     onBookmark = onBookmark,
                 )
             }
@@ -364,12 +376,16 @@ private fun DetailStatsRow(
     onRepost: () -> Unit,
     onQuote: () -> Unit,
     onLike: () -> Unit,
+    quickEmojis: List<String>,
+    onReact: (PostReactionPick) -> Unit,
     onBookmark: () -> Unit,
 ) {
+    var palette by remember { mutableStateOf(PostReactionPaletteState()) }
     Row(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box {
         DetailStat(
             icon = { tint ->
                 Icon(
@@ -383,7 +399,20 @@ private fun DetailStatsRow(
             active = post.isLiked,
             activeTint = MeeshyPalette.Error,
             onClick = onLike,
+            triggerModifier = Modifier.reactionPaletteTrigger(onOpen = { palette = palette.opened() }),
         )
+        PostReactionPalette(
+            isOpen = palette.isOpen,
+            onDismiss = { palette = palette.dismissed() },
+            onPick = { emoji ->
+                val (next, pick) = palette.picked(emoji)
+                palette = next
+                pick?.let(onReact)
+            },
+            emojis = quickEmojis,
+            anchor = PostReactionPaletteAnchor.Start,
+        )
+        }
         DetailStat(
             icon = { tint ->
                 Icon(Icons.Filled.ChatBubbleOutline, contentDescription = stringResource(R.string.feed_comments), tint = tint, modifier = Modifier.size(18.dp))
@@ -420,11 +449,12 @@ private fun DetailStat(
     active: Boolean,
     activeTint: Color = MeeshyPalette.Indigo500,
     onClick: (() -> Unit)? = null,
+    triggerModifier: Modifier = Modifier,
 ) {
     val tint = if (active) activeTint else MeeshyTheme.tokens.textSecondary
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = triggerModifier
             .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
             .clip(RoundedCornerShape(MeeshyRadius.sm))
             .let { base -> if (onClick == null) base else base.clickable(role = Role.Button, onClick = onClick) }

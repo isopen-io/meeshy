@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { uploadProfileImage } from '@/lib/profile/image-upload';
+import type { UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 
 import type { AccountVault } from './accounts';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
@@ -206,7 +207,7 @@ export type ImageUpdateOutcome =
   | { readonly status: 'offline' }
   | { readonly status: 'cancelled' }
   | { readonly status: 'unreadable' }
-  | { readonly status: 'refused'; readonly error: string };
+  | { readonly status: 'refused'; readonly error: string; readonly code?: typeof UPLOAD_FORMAT_REFUSED };
 
 export type ImageUpdateDeps = ProfileActionDeps & {
   readonly recompress?: (file: Blob, kind: ProfileImageKind) => Promise<Blob>;

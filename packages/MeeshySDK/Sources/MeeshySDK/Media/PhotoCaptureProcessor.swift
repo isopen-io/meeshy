@@ -140,7 +140,7 @@ public final class PhotoCaptureProcessor: PhotoCaptureProcessorProviding, @unche
         return (frame: CGRect(origin: .zero, size: target), image: enhanced)
     }
 
-    private static func scaled(_ image: CIImage, to target: CGSize) -> CIImage {
+    static func scaled(_ image: CIImage, to target: CGSize) -> CIImage {
         let size = image.extent.size
         guard target != size else { return image }
         let scale = target.height / size.height

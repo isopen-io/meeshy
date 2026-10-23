@@ -124,6 +124,7 @@ import { adminModerationActRoutes } from './admin/moderation-acts';
 import { agentAdminRoutes } from './admin/agent';
 import { agentTopicsRoutes } from './admin/agent-topics';
 import { gameSeasonsAdminRoutes } from './admin/game-seasons';
+import { packsRegistryAdminRoutes } from './admin/packs-registry';
 import { routeUsageAdminRoutes } from './admin/route-usage';
 import { adminOversightRoutes } from './admin/oversight';
 import { adminOpsRoutes } from './admin/ops';
@@ -143,6 +144,7 @@ import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
 import { gloryFramePacksRoutes } from './packs-glory-frame';
+import { lensPacksRoutes } from './packs-lens';
 import { packAssetsRoutes } from './pack-assets';
 import { avatarRingPacksRoutes, bannerFramePacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
 import { packsShopRoutes } from './packs-shop';
@@ -297,6 +299,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-agent', prefix: `${API_PREFIX}/admin/agent`, module: agentAdminRoutes },
   { name: 'admin-agent-topics', prefix: `${API_PREFIX}/admin/agent`, module: agentTopicsRoutes },
   { name: 'admin-game-seasons', prefix: `${API_PREFIX}/admin/game`, module: gameSeasonsAdminRoutes },
+  // Le registre des packs, surchargé sans déploiement (#11275) : `canManageGame`, journal avant d'agir.
+  { name: 'admin-packs-registry', prefix: `${API_PREFIX}/admin/packs`, module: packsRegistryAdminRoutes },
   { name: 'admin-route-usage', prefix: `${API_PREFIX}/admin`, module: routeUsageAdminRoutes },
   // La « vue de dieu » (#8876) : journal d'audit, liens de suivi, fiche de
   // communauté et supervision, sous le MÊME préfixe que `admin-content` /
@@ -365,6 +369,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'packs-avatar-ring', prefix: `${API_PREFIX}/packs/avatar-ring`, module: avatarRingPacksRoutes },
   { name: 'packs-banner', prefix: `${API_PREFIX}/packs/banner`, module: bannerPacksRoutes },
   { name: 'packs-banner-frame', prefix: `${API_PREFIX}/packs/banner-frame`, module: bannerFramePacksRoutes },
+  // Les lens des partenaires (#11271, MeeshyLens v1) : proposer, modérer, installer, sur le MÊME moteur.
+  { name: 'packs-lens', prefix: `${API_PREFIX}/packs/lens`, module: lensPacksRoutes },
   { name: 'packs-shop', prefix: `${API_PREFIX}/packs/shop`, module: packsShopRoutes },
   // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
   // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune

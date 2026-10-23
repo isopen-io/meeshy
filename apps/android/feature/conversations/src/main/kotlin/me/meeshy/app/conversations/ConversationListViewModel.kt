@@ -9,7 +9,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -59,10 +61,19 @@ class ConversationListViewModel @Inject constructor(
     messagePrefetch: ConversationListMessagePrefetchTriggers,
     networkMonitor: NetworkMonitor,
     statusRepository: StatusRepository,
+    rowSignalsSource: ConversationListRowSignals,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
     val state: StateFlow<ConversationListUiState> = _state.asStateFlow()
+
+    /**
+     * Les signaux vivants des lignes (synchro en attente, pair a l'ecran, appel en cours) : un
+     * flux a part, pour ne pas grossir [ConversationListUiState] ni recomposer la liste a chaque
+     * battement de ces sources.
+     */
+    val rowSignals: StateFlow<ConversationRowSignals> = rowSignalsSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ConversationRowSignals())
 
     /**
      * Demandes de navigation a usage unique (tap direct ou code accepte) : un

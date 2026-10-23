@@ -87,6 +87,8 @@ export type CommunityInstallTarget<D> = {
   /** Le prix en Meeshes (#10709) ; absent = gratuit. Lu en base à chaque geste, jamais reçu d'un client. */
   readonly price?: number;
   readonly version?: number;
+  /** Offert à CE lecteur maintenant (#11271) ; `false` : installer est refusé à qui ne l'a pas déjà. Absent = toujours offert. */
+  readonly offered?: boolean;
   /** `owned` : la loi de possession pour ce lecteur ; les domaines sans prix l'ignorent. */
   readonly project: (installed: boolean, installCount: number, owned?: boolean) => D;
 };
@@ -99,13 +101,13 @@ export interface CommunityPackStore<D> {
    */
   readonly priced?: boolean;
   /** Les packs publiés, dans l'ordre de la boutique. */
-  catalogue(installedOf: (slug: string) => boolean, ownedKeys?: ReadonlySet<string>): Promise<readonly D[]>;
+  catalogue(installedOf: (slug: string) => boolean, ownedKeys?: ReadonlySet<string>, userId?: string): Promise<readonly D[]>;
   /** Les packs publiés parmi `slugs`, installés, dans l'ordre de `slugs`. */
   installed(slugs: readonly string[], ownedKeys?: ReadonlySet<string>): Promise<readonly D[]>;
   /** Un pack, publié pour tous ; en attente ou refusé pour son auteur et les modérateurs seulement. */
   detail(slug: string, viewer: PackViewer, installedOf: (slug: string) => boolean, ownedKeys?: ReadonlySet<string>): Promise<D | null>;
   /** `null` pour un pack qu'on ne peut pas installer (inconnu, non publié). */
-  installable(slug: string): Promise<CommunityInstallTarget<D> | null>;
+  installable(slug: string, userId?: string): Promise<CommunityInstallTarget<D> | null>;
   /** Ajoute `delta` au compteur, atomiquement (`{ increment }`), et rend la nouvelle valeur. */
   addInstalls(id: string, delta: number): Promise<number>;
 }
@@ -222,7 +224,7 @@ export class PackCatalog<S, D extends S> {
       const requirementPreview = owned ? null : previewOf(pack);
       return requirementPreview === null ? summary : { ...summary, requirementPreview };
     });
-    const community = this.spec.community === null ? [] : await this.spec.community.catalogue(installedOf, await this.communityOwnedKeys(userId));
+    const community = this.spec.community === null ? [] : await this.spec.community.catalogue(installedOf, await this.communityOwnedKeys(userId), userId);
     return [...official, ...community.map(this.spec.toSummary)];
   }
 
@@ -237,12 +239,19 @@ export class PackCatalog<S, D extends S> {
     return [...official, ...(await this.spec.community.installed(chosen, await this.communityOwnedKeys(userId)))];
   }
 
-  /** Un pack — du registre (masqué compris, en lecture), sinon communautaire et visible de ce lecteur. */
+  /**
+   * Un pack — du registre s'il est EN RAYON pour ce lecteur ou s'il l'a installé
+   * (un pack masqué ou dont la fenêtre n'est pas ouverte ne se lit pas par son
+   * slug, audit de #12293), sinon communautaire et visible de ce lecteur.
+   */
   async detail(slug: string, viewer: PackViewer): Promise<D | null> {
     const choices = await this.choices(viewer.userId);
     const installedOf = this.installedOf(choices);
     const pack = this.registryPack(slug);
-    if (pack !== undefined) return pack.project(installedOf(slug), (await this.ownedOf(viewer.userId))(pack));
+    if (pack !== undefined) {
+      const readable = installedOf(slug) || (!pack.hidden && (await this.shelvedOf(viewer.userId, installedOf))(pack));
+      return readable ? pack.project(installedOf(slug), (await this.ownedOf(viewer.userId))(pack)) : null;
+    }
     return this.spec.community === null ? null : this.spec.community.detail(slug, viewer, installedOf, await this.communityOwnedKeys(viewer.userId));
   }
 
@@ -253,8 +262,9 @@ export class PackCatalog<S, D extends S> {
    */
   async setInstalled(userId: string, slug: string, installed: boolean): Promise<SetInstalledOutcome<S>> {
     const pack = this.registryPack(slug);
-    const target = pack === undefined && this.spec.community !== null ? await this.spec.community.installable(slug) : null;
+    const target = pack === undefined && this.spec.community !== null ? await this.spec.community.installable(slug, userId) : null;
     if (pack === undefined && target === null) return { kind: 'not-found' };
+    if (installed && target?.offered === false && !this.installedOf(await this.choices(userId))(slug)) return { kind: 'not-found' };
     if (pack?.hidden === true && installed && !(await this.isInstalledNow(userId, pack))) return { kind: 'not-found' };
     if (installed && pack !== undefined && !(await this.shelvedOf(userId, () => false))(pack) && !(await this.isInstalledNow(userId, pack))) return { kind: 'not-found' };
     if (installed && pack !== undefined && !(await this.ownedOf(userId))(pack)) return { kind: 'not-owned' };

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "ui", "iosKey": "story.composer.undo", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "story.composer.redo", "status": "adopted" }
+      ]
+    }
+  }
+}

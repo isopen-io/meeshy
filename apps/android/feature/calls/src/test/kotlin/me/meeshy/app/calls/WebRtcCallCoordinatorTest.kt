@@ -50,6 +50,7 @@ class WebRtcCallCoordinatorTest {
     private val engine: WebRtcEngine = mockk(relaxed = true) {
         every { iceConnectionState } returns iceState
         every { localIceCandidates } returns localCandidates
+        every { dataChannelMessages } returns MutableSharedFlow()
         coEvery { createOffer() } returns SessionDescription(SessionDescription.Type.OFFER, "v=0-restart")
         coEvery { createAnswer() } returns SessionDescription(SessionDescription.Type.ANSWER, "v=0-answer")
         coEvery { setLocalDescription(any()) } returns Unit

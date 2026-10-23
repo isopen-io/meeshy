@@ -93,6 +93,33 @@ export const gloryFrameBySlugInstall = (slug: string): string => `/api/v1/packs/
 /** GET /api/v1/packs/glory-frame/installed */
 export const gloryFrameInstalled = '/api/v1/packs/glory-frame/installed';
 
+/** GET /api/v1/packs/lens */
+export const lens = '/api/v1/packs/lens';
+
+/** GET /api/v1/packs/lens/:slug */
+export const lensBySlug = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}`;
+
+/** GET /api/v1/packs/lens/:slug/document */
+export const lensBySlugDocument = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}/document`;
+
+/** PUT · DELETE /api/v1/packs/lens/:slug/install */
+export const lensBySlugInstall = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}/install`;
+
+/** POST /api/v1/packs/lens/:slug/review */
+export const lensBySlugReview = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}/review`;
+
+/** POST /api/v1/packs/lens/:slug/withdraw */
+export const lensBySlugWithdraw = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}/withdraw`;
+
+/** GET /api/v1/packs/lens/installed */
+export const lensInstalled = '/api/v1/packs/lens/installed';
+
+/** GET /api/v1/packs/lens/pending */
+export const lensPending = '/api/v1/packs/lens/pending';
+
+/** GET · POST /api/v1/packs/lens/submissions */
+export const lensSubmissions = '/api/v1/packs/lens/submissions';
+
 /** GET /api/v1/packs/shop */
 export const shop = '/api/v1/packs/shop';
 
