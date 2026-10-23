@@ -70,6 +70,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -220,6 +221,22 @@ internal fun StoryTextObjectLayer(
                 .storyTextBacking(animated.background)
                 .padding(horizontal = 6.dp, vertical = 2.dp),
         ) {
+            val outline = animated.outline
+            if (outline.isVisible) {
+                // The author's glyph outline, stroked beneath the fill at the composer's
+                // thickness (#12324) — the composer draws the same underlay.
+                Text(
+                    text = animated.text,
+                    color = hexColor(outline.color.orEmpty(), color),
+                    textAlign = textAlign,
+                    fontWeight = FontWeight(typography.fontWeight),
+                    fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                    fontFamily = typography.family.toFontFamily(),
+                    letterSpacing = typography.letterSpacingEm.em,
+                    fontSize = with(density) { fontSizePx.toSp() },
+                    style = LocalTextStyle.current.copy(drawStyle = Stroke(width = animated.outlinePx(canvasWidthPx))),
+                )
+            }
             Text(
                 text = animated.text,
                 color = color,

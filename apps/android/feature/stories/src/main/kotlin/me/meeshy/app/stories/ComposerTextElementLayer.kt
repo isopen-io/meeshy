@@ -174,7 +174,7 @@ internal fun TextElementLayer(
                     fontFamily = typography.family.toFontFamily(),
                     letterSpacing = typography.letterSpacingEm.em,
                     textAlign = element.align.toTextAlign(),
-                    style = baseStyle.copy(drawStyle = Stroke(width = outline.width)),
+                    style = baseStyle.copy(drawStyle = Stroke(width = element.previewOutlinePx(canvasWidthPx))),
                 )
             }
             if (editing) {
