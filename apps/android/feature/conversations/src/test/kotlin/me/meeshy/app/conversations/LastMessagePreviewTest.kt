@@ -16,7 +16,8 @@ class LastMessagePreviewTest {
         none = "Aucun message",
         you = "Vous",
         senderFormat = "%1\$s : %2\$s",
-        draftPrefix = "Brouillon : ",
+        draftPrefix = "Brouillon :",
+        draftLabel = "Brouillon",
     )
 
     private fun message(
@@ -141,16 +142,16 @@ class LastMessagePreviewTest {
     }
 
     @Test
-    fun `a text draft is previewed with the draft prefix and trimmed text`() {
+    fun `a text draft is previewed as its prefix label and its trimmed text, apart`() {
         val draft = ConversationDraft(conversationId = "c1", text = "  à finir  ")
 
-        assertThat(draftPreview(draft, labels)).isEqualTo("Brouillon : à finir")
+        assertThat(draftPreview(draft, labels)).isEqualTo(DraftPreview(label = "Brouillon :", body = "à finir"))
     }
 
     @Test
-    fun `a reply-only draft is previewed as the prefix with an ellipsis`() {
+    fun `a reply-only draft is previewed as the bare draft label, without an ellipsis`() {
         val draft = ConversationDraft(conversationId = "c1", text = "", replyToId = "m9")
 
-        assertThat(draftPreview(draft, labels)).isEqualTo("Brouillon : …")
+        assertThat(draftPreview(draft, labels)).isEqualTo(DraftPreview(label = "Brouillon", body = null))
     }
 }
