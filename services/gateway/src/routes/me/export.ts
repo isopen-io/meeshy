@@ -245,6 +245,19 @@ const packsExportSchema = {
         },
       },
     },
+    // #11271 — les lens PROPOSÉES par le compte : métadonnées et document servi.
+    lensSubmissions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' }, name: { type: 'string' }, author: { type: 'string' }, status: { type: 'string' },
+          reviewNote: { type: 'string', nullable: true }, reviewedAt: { type: 'string', nullable: true }, installCount: { type: 'integer' },
+          cost: { type: 'string' }, surfaces: { type: 'array', items: { type: 'string' } }, startsAt: { type: 'string' }, endsAt: { type: 'string' },
+          communities: { type: 'array', items: { type: 'string' } }, createdAt: { type: 'string' }, documentJson: { type: 'string' },
+        },
+      },
+    },
     // #10632, #11272 — les packs POSSÉDÉS : domaine, slug, voie (purchase|game|grant|event), raison, prix payé (0 hors achat), date.
     ownerships: {
       type: 'array',
@@ -262,11 +275,11 @@ const packsExportSchema = {
     },
     counts: {
       type: 'object',
-      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' }, ownerships: { type: 'integer' }, appearanceSubmissions: { type: 'integer' } },
+      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' }, ownerships: { type: 'integer' }, appearanceSubmissions: { type: 'integer' }, lensSubmissions: { type: 'integer' } },
     },
     hasMore: {
       type: 'object',
-      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' }, ownerships: { type: 'boolean' }, appearanceSubmissions: { type: 'boolean' } },
+      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' }, ownerships: { type: 'boolean' }, appearanceSubmissions: { type: 'boolean' }, lensSubmissions: { type: 'boolean' } },
     },
   },
 } as const;
@@ -805,8 +818,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             submissions: sections.submissions.items,
             ownerships: sections.ownerships.items,
             appearanceSubmissions: sections.appearanceSubmissions.items,
-            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total, ownerships: sections.ownerships.total, appearanceSubmissions: sections.appearanceSubmissions.total },
-            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore, ownerships: sections.ownerships.hasMore, appearanceSubmissions: sections.appearanceSubmissions.hasMore },
+            lensSubmissions: sections.lensSubmissions.items,
+            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total, ownerships: sections.ownerships.total, appearanceSubmissions: sections.appearanceSubmissions.total, lensSubmissions: sections.lensSubmissions.total },
+            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore, ownerships: sections.ownerships.hasMore, appearanceSubmissions: sections.appearanceSubmissions.hasMore, lensSubmissions: sections.lensSubmissions.hasMore },
           };
         }
 
@@ -878,9 +892,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
 
           // Les packs : une table par liste ; les éléments d'une proposition voyagent en JSON dans leur cellule.
           const packs = exportData.packs as Record<string, unknown> | undefined;
-          for (const childKey of ['choices', 'library', 'submissions', 'ownerships', 'appearanceSubmissions'] as const) {
+          for (const childKey of ['choices', 'library', 'submissions', 'ownerships', 'appearanceSubmissions', 'lensSubmissions'] as const) {
             const rows = (packs?.[childKey] ?? []) as Record<string, unknown>[];
-            const flat = rows.map((row) => ('items' in row ? { ...row, items: JSON.stringify(row.items) } : row));
+            const flat = rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Array.isArray(value) ? JSON.stringify(value) : value])));
             if (flat.length > 0) csvSections[`packs.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
           }
 

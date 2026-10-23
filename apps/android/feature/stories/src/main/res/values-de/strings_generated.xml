@@ -105,6 +105,8 @@
     <string name="story_composer_grabber">Griff der Werkzeugleiste</string>
     <string name="story_composer_grabber_hint_dismiss">Nach unten ziehen zum Verkleinern oder Schließen.</string>
     <string name="story_composer_grabber_hint_resize">Nach oben ziehen zum Vergrößern, nach unten zum Verkleinern oder Schließen.</string>
+    <string name="story_composer_redo">Wiederholen</string>
+    <string name="story_composer_undo">Rückgängig</string>
     <string name="story_send_caption_hint">Nachricht hinzufügen…</string>
     <string name="story_send_loading">Unterhaltungen werden geladen …</string>
     <plurals name="story_send_members">

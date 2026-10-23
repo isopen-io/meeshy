@@ -225,8 +225,20 @@ function isPlausibleWebpFourCc(buffer: Buffer): boolean {
 }
 
 /**
+ * Marques `ftyp` d'une image HEIF (#11263) : HEIC d'iPhone (`heic`, `heix`,
+ * `mif1`…), séquences (`msf1`, `hevc`…) et AVIF (`avif`, `avis`). La marque
+ * majeure suffit, la box elle-même devant être plausible.
+ */
+const HEIF_IMAGE_BRANDS = new Set(['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'hevm', 'hevs', 'mif1', 'msf1', 'avif', 'avis']);
+
+function isHeifImage(buffer: Buffer): boolean {
+  return startsWithAscii(buffer, 'ftyp', 4) && isPlausibleFtypBox(buffer) && HEIF_IMAGE_BRANDS.has(buffer.toString('latin1', 8, 12));
+}
+
+/**
  * Signatures des formats acceptés par `isImageMimeType`
- * (`ACCEPTED_MIME_TYPES.IMAGE` : jpeg/jpg, png, gif, webp).
+ * (`ACCEPTED_MIME_TYPES.IMAGE` : jpeg/jpg, png, gif, webp, et HEIC/HEIF/AVIF
+ * depuis #11263).
  *
  * GIF : NON renforcé au-delà de sa signature officielle (6 octets) — voir
  * « Formats volontairement laissés au magic number nu » dans la docstring
@@ -237,6 +249,7 @@ export function matchesImageSignature(buffer: Buffer): boolean {
   if (startsWithBytes(buffer, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) && isPlausiblePngIhdr(buffer)) return true; // PNG
   if (startsWithAscii(buffer, 'GIF87a') || startsWithAscii(buffer, 'GIF89a')) return true; // GIF
   if (startsWithAscii(buffer, 'RIFF') && startsWithAscii(buffer, 'WEBP', 8) && isPlausibleWebpFourCc(buffer)) return true; // WEBP
+  if (isHeifImage(buffer)) return true; // HEIC / HEIF / AVIF (#11263)
   return false;
 }
 

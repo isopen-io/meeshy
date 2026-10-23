@@ -104,6 +104,7 @@ class ConversationLockFlowViewModelTest {
         messagePrefetch = mockk(relaxed = true),
         networkMonitor = me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         statusRepository = mockk(relaxed = true),
+        rowSignalsSource = idleRowSignalsSource(),
     )
 
     private fun ConversationListViewModel.enter(digits: String) {

@@ -626,6 +626,24 @@ jobs:
           # recréé, en nommant la variable à retirer.
           printf '%s\n' "$SORTIE" | node infrastructure/scripts/staging-deploy-verdict.mjs --services "$CIBLES"
 
+          # #11264 — le worker de médias partage l'image de la passerelle et se
+          # déploie avec elle, par un SECOND appel tolérant : une copie hôte du
+          # script antérieure à #11264 le refuse (rc=64), et ce refus ne doit
+          # pas faire échouer la livraison de la passerelle. Sans worker vivant,
+          # la passerelle ne diffère rien (battement de cœur absent) : tout
+          # reste synchrone, comme avant la file.
+          if printf '%s' " $CIBLES " | grep -q " gateway-staging "; then
+            set +e
+            SORTIE_WORKER=$(ssh $SSH_OPTS -i ~/.ssh/id_deploy -o ConnectTimeout=20 \
+              "${SSH_USER:-root}@$SSH_HOST" "media-worker-staging" 2>&1)
+            RC_WORKER=$?
+            set -e
+            echo "$SORTIE_WORKER"
+            if [ "$RC_WORKER" -ne 0 ] || echo "$SORTIE_WORKER" | grep -qiE "restarting|exited"; then
+              echo "::warning::media-worker-staging non déployé (rc=$RC_WORKER) — réinstaller infrastructure/scripts/meeshy-deploy-staging.sh sur l'hôte ; la passerelle reste synchrone d'ici là"
+            fi
+          fi
+
           {
             echo "## Staging déployé"
             echo ""

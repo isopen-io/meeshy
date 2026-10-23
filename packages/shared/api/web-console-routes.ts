@@ -11,9 +11,9 @@
  * `check-ts-catalog-dead-entries.mjs` exige qu'elle ait son lecteur.
  *
  * Même patron que `ops-only-routes.ts` : une liste EXPLICITE de couples
- * (méthode, chemin), chacun avec sa raison. Le manifeste ne change pas ; seuls
- * les générateurs natifs (`scripts/generate-ios-endpoints.ts`,
- * `scripts/generate-android-endpoints.ts`) et leurs cliquets filtrent.
+ * (méthode, chemin), chacun avec sa raison. Le manifeste ne change pas : ces
+ * routes sont déclarées lues par le web seul dans `route-readers.ts` (#11271),
+ * le filtre UNIQUE des générateurs natifs et de leurs cliquets.
  * Une route qu'un écran natif se met à lire quitte cette liste.
  */
 import type { ManifestRouteInput } from './ops-only-routes.js';
@@ -31,15 +31,25 @@ export const WEB_CONSOLE_ROUTES: readonly WebConsoleRoute[] = [
       'Qualité de lecture agrégée (#11280) : temps jusqu’à la première image et rebuffer, p50/p95 par surface et tier. ' +
       'Lue par l’onglet « Lecture » des statistiques de la console web ; aucun écran d’administration natif.',
   },
+  {
+    method: 'GET',
+    path: '/api/v1/admin/packs/registry',
+    reason:
+      'Registre des packs (#11275) : lecture, publication et retrait des entrées du registre, réservés à l’administration. ' +
+      'Lu par la console web (W17) ; aucun écran d’administration natif.',
+  },
+  {
+    method: 'PUT',
+    path: '/api/v1/admin/packs/registry/:domain/:slug',
+    reason:
+      'Registre des packs (#11275) : lecture, publication et retrait des entrées du registre, réservés à l’administration. ' +
+      'Lu par la console web (W17) ; aucun écran d’administration natif.',
+  },
+  {
+    method: 'DELETE',
+    path: '/api/v1/admin/packs/registry/:domain/:slug',
+    reason:
+      'Registre des packs (#11275) : lecture, publication et retrait des entrées du registre, réservés à l’administration. ' +
+      'Lu par la console web (W17) ; aucun écran d’administration natif.',
+  },
 ];
-
-const KEYS: ReadonlySet<string> = new Set(WEB_CONSOLE_ROUTES.map((route) => `${route.method} ${route.path}`));
-
-export function isWebConsoleRoute(route: ManifestRouteInput): boolean {
-  return KEYS.has(`${route.method} ${route.path}`);
-}
-
-/** Retire les routes de la seule console web d'une liste issue du manifeste — pour les catalogues natifs. */
-export function filterOutWebConsoleRoutes<T extends ManifestRouteInput>(routes: readonly T[]): readonly T[] {
-  return routes.filter((route) => !isWebConsoleRoute(route));
-}

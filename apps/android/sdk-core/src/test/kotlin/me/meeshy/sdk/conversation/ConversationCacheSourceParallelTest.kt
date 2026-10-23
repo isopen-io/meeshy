@@ -9,12 +9,14 @@ import java.io.IOException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.dao.SearchIndexDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.sync.SyncOwnership
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.sync.SyncAccountProvider
 import org.junit.After
 import org.junit.Before
@@ -75,7 +77,7 @@ class ConversationCacheSourceParallelTest {
     }
 
     private fun source(api: ConversationApi, account: SyncAccountProvider = SyncAccountProvider.None) =
-        ConversationCacheSource(db, db.conversationDao(), db.syncMetaDao(), api, clock, account)
+        ConversationCacheSource(db, db.conversationDao(), db.syncMetaDao(), api, clock, LocalSearchIndex(SearchIndexDao(db)), account)
 
     @Test
     fun `every page lands and the sweep is proven complete so stale rows are pruned`() = runTest {
@@ -128,7 +130,7 @@ class ConversationCacheSourceParallelTest {
         val src = ConversationCacheSource(
             db, db.conversationDao(), db.syncMetaDao(),
             api(total = 300) { ownership.claim("bob") },
-            clock, SyncAccountProvider { "alice" }, ownership = ownership,
+            clock, LocalSearchIndex(SearchIndexDao(db)), SyncAccountProvider { "alice" }, ownership = ownership,
         )
         src.revalidate()
         assertThat(db.conversationDao().allIds()).isEmpty()

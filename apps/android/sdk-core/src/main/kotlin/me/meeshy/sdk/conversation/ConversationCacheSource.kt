@@ -33,6 +33,7 @@ import me.meeshy.sdk.sync.SyncCheckpointStore
 import me.meeshy.sdk.sync.fetchPageWithRetry
 import me.meeshy.sdk.sync.fetchPagesInParallel
 import kotlinx.coroutines.CancellationException
+import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a conversation revalidation fails; carries the API error message. */
@@ -49,6 +50,7 @@ internal class ConversationCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val conversationApi: ConversationApi,
     private val clock: CacheClock,
+    private val searchIndex: LocalSearchIndex,
     private val accountProvider: SyncAccountProvider = SyncAccountProvider.None,
     private val checkpoints: SyncCheckpointStore = SyncCheckpointStore(syncMetaDao),
     private val ownership: SyncOwnership<Unit> = SyncOwnership(),
@@ -378,8 +380,10 @@ internal class ConversationCacheSource(
         }
         val watermarkToStore = receivedMax ?: currentWatermark
         database.withTransaction {
-            val rows = conversations.map { entityOf(carryingKnownPeers(it), now) }
+            val carried = conversations.map { carryingKnownPeers(it) }
+            val rows = carried.map { entityOf(it, now) }
             conversationDao.upsertAll(rows)
+            carried.forEach(searchIndex::indexConversation)
             if (prune) pruneMissing(rows.map { it.id })
             syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermarkToStore, etag, etagScope))
         }
@@ -393,7 +397,9 @@ internal class ConversationCacheSource(
     suspend fun remember(conversation: ApiConversation) {
         val now = clock.nowMillis()
         database.withTransaction {
-            conversationDao.upsertAll(listOf(entityOf(carryingKnownPeers(conversation), now)))
+            val carried = carryingKnownPeers(conversation)
+            conversationDao.upsertAll(listOf(entityOf(carried, now)))
+            searchIndex.indexConversation(carried)
         }
     }
 

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "comments.reply.a11yLabel",
+          "androidName": "post_comments_reply_a11y_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comments.load-more-replies",
+          "androidName": "post_comments_load_more_replies",
+          "status": "adopted",
+          "kind": "plurals", "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comments.load-more-replies.hint",
+          "androidName": "post_comments_load_more_replies_hint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

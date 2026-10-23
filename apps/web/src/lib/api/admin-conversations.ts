@@ -461,7 +461,7 @@ export type AdminSovereignMediaPage = {
 };
 
 /** Ce que la passerelle RETIENT d'une pièce protégée — retiré ici aussi, quoi que la charge porte. */
-const SECRETS_DUNE_PIECE = { fileUrl: null, thumbnailUrl: null, thumbHash: null, imageVariants: null, transcription: null, translations: null, metadata: null } as const;
+const SECRETS_DUNE_PIECE = { fileUrl: null, thumbnailUrl: null, thumbHash: null, imageVariants: null, avifVariants: null, renditions: null, transcription: null, translations: null, metadata: null } as const;
 
 function decodeMediaItem(entree: unknown): MediaHubAttachmentItem | null {
   const ligne = asRecord(entree);
