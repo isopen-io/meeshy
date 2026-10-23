@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.crypto.keys.E2eeIdentityUnreadableException
+import me.meeshy.core.crypto.primitives.CryptoException
 import me.meeshy.sdk.model.signal.SignalPreKeyBundle
 import me.meeshy.sdk.model.signal.SignalPreKeyUploadResult
 import me.meeshy.sdk.net.ApiError
@@ -50,10 +51,12 @@ class E2eeBundlePublisherTest {
         forgotten: MutableList<String> = mutableListOf(),
         resets: MutableList<String> = mutableListOf(),
         unreadable: Boolean = false,
+        vaultRefusesWrites: Boolean = false,
     ) = E2eeBundlePublisher(
         local = object : LocalBundleSource {
             override fun bundleFor(userId: String): SignalPreKeyBundle {
                 if (unreadable && resets.isEmpty()) throw E2eeIdentityUnreadableException()
+                if (vaultRefusesWrites) throw CryptoException("Clé E2EE non persistée")
                 return bundle()
             }
             override fun forget(userId: String) { forgotten += userId }
@@ -183,5 +186,24 @@ class E2eeBundlePublisherTest {
         assertThat(publisher.resetIdentity()).isEqualTo(BundlePublishOutcome.Published)
         assertThat(publisher(owned, enabled = false).resetIdentity()).isEqualTo(BundlePublishOutcome.Disabled)
         assertThat(publisher(owned, user = null).resetIdentity()).isEqualTo(BundlePublishOutcome.NoAccount)
+    }
+
+    @Test
+    fun `un coffre qui refuse l'ecriture ne laisse pas la publication en cours`() = runTest {
+        val gateway = FakeGateway(fail(404))
+        val publisher = publisher(gateway, vaultRefusesWrites = true)
+        assertThat(publisher.publish()).isEqualTo(BundlePublishOutcome.GaveUp)
+        assertThat(publisher.state.value).isEqualTo(E2eeBundleState.UNAVAILABLE)
+        assertThat(gateway.reads).isEqualTo(0)
+        assertThat(gateway.uploads).isEqualTo(0)
+    }
+
+    @Test
+    fun `une reinitialisation dont le coffre refuse l'ecriture ne reste pas en cours`() = runTest {
+        val gateway = FakeGateway(fail(404))
+        val publisher = publisher(gateway, vaultRefusesWrites = true)
+        assertThat(publisher.resetIdentity()).isEqualTo(BundlePublishOutcome.GaveUp)
+        assertThat(publisher.state.value).isEqualTo(E2eeBundleState.UNAVAILABLE)
+        assertThat(gateway.uploads).isEqualTo(0)
     }
 }
