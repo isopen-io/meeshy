@@ -144,11 +144,11 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
     });
   };
 
-  test('une page qui offre tout (#12424) : Répondre · Réagir · Enregistrer · Créer dans le rail, Enregistrer AUSSI dans « … », aucune capsule en bas', async () => {
+  test('une page qui offre tout (#12424) : Réagir · Répondre · Créer · Enregistrer dans le rail, l’ordre d’iOS (#12420), Enregistrer AUSSI dans « … », aucune capsule en bas', async () => {
     const items = photos(['a']);
     mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, ALL, () => {}) });
     await settle();
-    expect(railOf()).toEqual(['reply', 'react', 'save', 'compose']);
+    expect(railOf()).toEqual(['react', 'reply', 'compose', 'save']);
     expect(dialog().querySelector('[data-viewer-action="reply"]')?.getAttribute('aria-label')).toBe('Répondre');
     expect(dialog().querySelector('[data-viewer-action="save"]')?.getAttribute('aria-label')).toBe('Enregistrer');
     expect(dialog().querySelector('[data-viewer-action="compose"]')?.getAttribute('aria-label')).toBe('Créer avec ce média');
@@ -165,7 +165,7 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
     };
     mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...ALL, share: true }, () => {}, forward) });
     await settle();
-    expect(railOf()).toEqual(['reply', 'react', 'share', 'save', 'compose']);
+    expect(railOf()).toEqual(['react', 'reply', 'compose', 'save', 'share']);
     expect(dialog().querySelector('[data-viewer-action="share"]')?.getAttribute('aria-label')).toBe('Transférer');
     openMenu();
     const item = dialog().querySelector<HTMLElement>('[data-viewer-menu-item="share"]')!;
@@ -278,14 +278,14 @@ describe('MediaViewer — « Partager » ouvre la feuille d’envoi commune (#88
     });
   };
 
-  test('le bouton d’une publication s’appelle « Partager », sa place est le rail entre Réagir et Créer, et il remet la demande de l’hôte à la feuille', async () => {
+  test('le bouton d’une publication s’appelle « Partager », sa place est le rail après Créer, en dernier comme sur iOS, et il remet la demande de l’hôte à la feuille', async () => {
     const items = photos(['a']);
     mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...SHARE, react: true, compose: true }, undefined, REQUEST) });
     await settle();
     expect(Array.from(dialog().querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'))).toEqual([
       'react',
-      'share',
       'compose',
+      'share',
     ]);
     expect(dialog().querySelector('[data-viewer-action="share"]')?.getAttribute('aria-label')).toBe('Partager');
     press();

@@ -27,9 +27,10 @@ import { ViewerMenu, ViewerReactionTray } from './viewer-chrome-menu';
  * médias sur une pièce protégée n'en paie rien.
  *
  * Disposition demandée par le porteur le 2026-10-23 (#12424, jumelles iOS
- * #12420 et #12421) : le rail vertical à droite de la légende porte
- * Répondre · Réagir · Transférer · Enregistrer · Créer avec ce média, 40 de
- * verre dans 44 de cible (`viewer-chrome.tsx`, #8879). Enregistrer et
+ * #12420 et #12421) : le rail vertical à droite de la légende porte, de haut
+ * en bas et dans l'ordre d'iOS (`cadreActionColumn`), Réagir · Répondre ·
+ * Créer avec ce média · Enregistrer · Transférer, 40 de verre dans 44 de cible
+ * (`viewer-chrome.tsx`, #8879) ; une vidéo y ajoute dessous le son et « … ». Enregistrer et
  * Transférer restent AUSSI dans le menu « … » de la barre haute. Transférer
  * ouvre la feuille d'envoi commune (`openSendSheet`), que l'hôte a déjà
  * remplie (`page.share`) ; il s'appelle « Partager » quand la pièce n'est pas
@@ -183,12 +184,6 @@ function ActionRail({
   const forwards = share?.intent === 'forward';
   const actions: readonly ViewerAction[] = [
     {
-      action: 'reply',
-      label: translate(language, 'media.viewer.reply'),
-      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.arrowUUpLeft} size={GLYPH_SIZE.lg} />,
-      onPress: offers.reply ? page.onReply : undefined,
-    },
-    {
       action: 'react',
       label: translate(language, 'media.viewer.react'),
       glyph: <Glyph name="smiley" size={GLYPH_SIZE.lg} />,
@@ -197,10 +192,17 @@ function ActionRail({
       buttonRef: reactButton,
     },
     {
-      action: 'share',
-      label: share === undefined ? '' : sendVerbOf(language, share),
-      glyph: <GlyphSvg glyph={forwards ? THREAD_MENU_GLYPHS.arrowBendUpRight : FEED_GLYPHS.shareNetwork} size={GLYPH_SIZE.lg} />,
-      onPress: sendOf(page),
+      action: 'reply',
+      label: translate(language, 'media.viewer.reply'),
+      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.arrowUUpLeft} size={GLYPH_SIZE.lg} />,
+      onPress: offers.reply ? page.onReply : undefined,
+    },
+    {
+      action: 'compose',
+      label: translate(language, 'media.viewer.compose'),
+      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={GLYPH_SIZE.lg} />,
+      busy: composing,
+      onPress: offers.compose ? compose : undefined,
     },
     {
       action: 'save',
@@ -209,11 +211,10 @@ function ActionRail({
       onPress: save,
     },
     {
-      action: 'compose',
-      label: translate(language, 'media.viewer.compose'),
-      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={GLYPH_SIZE.lg} />,
-      busy: composing,
-      onPress: offers.compose ? compose : undefined,
+      action: 'share',
+      label: share === undefined ? '' : sendVerbOf(language, share),
+      glyph: <GlyphSvg glyph={forwards ? THREAD_MENU_GLYPHS.arrowBendUpRight : FEED_GLYPHS.shareNetwork} size={GLYPH_SIZE.lg} />,
+      onPress: sendOf(page),
     },
   ];
 
