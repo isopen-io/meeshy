@@ -39,4 +39,7 @@
     <string name="report_reason_spam">Spam</string>
     <string name="report_submit">Meldung senden</string>
     <string name="report_title_generic">Melden</string>
+    <string name="report_user_details_a11y">Details der Meldung</string>
+    <string name="report_user_submit_hint">Meldung senden für</string>
+    <string name="report_user_success">Meldung gesendet</string>
 </resources>

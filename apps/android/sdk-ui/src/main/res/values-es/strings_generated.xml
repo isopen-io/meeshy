@@ -4,6 +4,8 @@
     <string name="avatar_a11y_mood">estado de ánimo %s</string>
     <string name="common_clearSearch">Borrar búsqueda</string>
     <string name="common_close">Cerrar</string>
+    <string name="common_selected">Seleccionado</string>
+    <string name="components_characterCount_a11y">%1$d de %2$d caracteres</string>
     <string name="emoji_category_activities">Actividades</string>
     <string name="emoji_category_animals">Animales</string>
     <string name="emoji_category_flags">Banderas</string>

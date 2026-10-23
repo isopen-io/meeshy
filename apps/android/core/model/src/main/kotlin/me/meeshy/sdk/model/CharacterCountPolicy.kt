@@ -15,7 +15,7 @@ public object CharacterCountPolicy {
     public fun visibleText(count: Int, limit: Int, formatNumber: (Int) -> String): String =
         "${formatNumber(count)}/${formatNumber(limit)}"
 
-    /** [template] porte `%1$s` (compte) et `%2$s` (limite) : l'ordre des mots reste celui de la langue. */
+    /** [template] porte `%1$d` (compte) et `%2$d` (limite) : l'ordre des mots reste celui de la langue. */
     public fun accessibilityText(count: Int, limit: Int, template: String, formatNumber: (Int) -> String): String =
-        template.replace("%1\$s", formatNumber(count)).replace("%2\$s", formatNumber(limit))
+        template.replace("%1\$d", formatNumber(count)).replace("%2\$d", formatNumber(limit))
 }

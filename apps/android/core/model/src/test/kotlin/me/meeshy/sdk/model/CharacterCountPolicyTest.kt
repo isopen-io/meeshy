@@ -31,9 +31,9 @@ class CharacterCountPolicyTest {
 
     @Test
     fun `le texte d'accessibilite lit N sur M caracteres avec les nombres de la locale`() {
-        assertThat(CharacterCountPolicy.accessibilityText(158, 500, "%1\$s sur %2\$s caractères") { it.toString() })
+        assertThat(CharacterCountPolicy.accessibilityText(158, 500, "%1\$d sur %2\$d caractères") { it.toString() })
             .isEqualTo("158 sur 500 caractères")
-        assertThat(CharacterCountPolicy.accessibilityText(1500, 2000, "%1\$s of %2\$s") { "n$it" })
+        assertThat(CharacterCountPolicy.accessibilityText(1500, 2000, "%1\$d of %2\$d") { "n$it" })
             .isEqualTo("n1500 of n2000")
     }
 

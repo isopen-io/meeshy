@@ -39,4 +39,7 @@
     <string name="report_reason_spam">رسائل مزعجة</string>
     <string name="report_submit">إرسال البلاغ</string>
     <string name="report_title_generic">إبلاغ</string>
+    <string name="report_user_details_a11y">تفاصيل البلاغ</string>
+    <string name="report_user_submit_hint">إرسال بلاغ عن</string>
+    <string name="report_user_success">تم إرسال البلاغ</string>
 </resources>
