@@ -20,9 +20,6 @@ import type { Message, MessageTranslation, Participant } from './types';
 /** `minutesAgo(90)` = il y a 90 minutes. Le fil se lit donc toujours comme aujourd'hui. */
 export const minutesAgo = (minutes: number): Date => new Date(Date.now() - minutes * 60_000);
 
-/** Instant où les fixtures ont été datées : le module se charge une fois par processus, `bun test` le partage entre fichiers. */
-export const FIXTURES_LOADED_AT = Date.now();
-
 /**
  * `daysAgo` jours avant AUJOURD'HUI (calendrier LOCAL), à `hour:minute` —
  * DÉPLACÉ depuis `fixtures-catchup.ts` (#5696, étape 4b) plutôt que recopié :
