@@ -72,6 +72,7 @@ class CallRecordingConsentCardSemanticsTest {
     @Test
     fun `a notice pill can be closed`() {
         var dismissed = 0
+        rule.mainClock.autoAdvance = false
         rule.setContent {
             MeeshyTheme { CallRecordingNoticePill(CallRecordingNotice.Stopped("refused", false), onDismiss = { dismissed++ }) }
         }
