@@ -89,6 +89,8 @@ export * from './content-pack.js';
 export * from './content-pack-index.js';
 export * from './glory-frame-pack.js';
 export * from './pack-ownership.js';
+export * from './pack-availability.js';
+export * from './pack-unlock.js';
 export * from './pack-presence.js';
 export * from './lens-format.js';
 
