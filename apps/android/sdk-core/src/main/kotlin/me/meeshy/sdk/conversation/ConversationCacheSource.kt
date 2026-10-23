@@ -25,6 +25,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.listConditionalResult
 import me.meeshy.sdk.net.pagedApiCall
+import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a conversation revalidation fails; carries the API error message. */
@@ -41,6 +42,7 @@ internal class ConversationCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val conversationApi: ConversationApi,
     private val clock: CacheClock,
+    private val searchIndex: LocalSearchIndex,
 ) : SwrCacheSource<List<ApiConversation>> {
 
     override fun observe(): Flow<List<ApiConversation>?> =
@@ -314,8 +316,10 @@ internal class ConversationCacheSource(
         }
         val watermarkToStore = receivedMax ?: currentWatermark
         database.withTransaction {
-            val rows = conversations.map { entityOf(carryingKnownPeers(it), now) }
+            val carried = conversations.map { carryingKnownPeers(it) }
+            val rows = carried.map { entityOf(it, now) }
             conversationDao.upsertAll(rows)
+            carried.forEach(searchIndex::indexConversation)
             if (prune) pruneMissing(rows.map { it.id })
             syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermarkToStore, etag, etagScope))
         }
@@ -329,7 +333,9 @@ internal class ConversationCacheSource(
     suspend fun remember(conversation: ApiConversation) {
         val now = clock.nowMillis()
         database.withTransaction {
-            conversationDao.upsertAll(listOf(entityOf(carryingKnownPeers(conversation), now)))
+            val carried = carryingKnownPeers(conversation)
+            conversationDao.upsertAll(listOf(entityOf(carried, now)))
+            searchIndex.indexConversation(carried)
         }
     }
 

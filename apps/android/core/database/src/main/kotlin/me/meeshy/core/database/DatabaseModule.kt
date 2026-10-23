@@ -30,6 +30,7 @@ import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
 import me.meeshy.core.database.migration.MeeshyMigrations
+import me.meeshy.core.database.search.SearchIndexSchema
 import javax.inject.Singleton
 
 @Module
@@ -45,6 +46,7 @@ internal object DatabaseModule {
     fun meeshyDatabaseBuilder(context: Context, name: String = DATABASE_NAME): RoomDatabase.Builder<MeeshyDatabase> =
         Room.databaseBuilder(context, MeeshyDatabase::class.java, name)
             .addMigrations(*MeeshyMigrations.all)
+            .addCallback(SearchIndexSchema.callback)
             .fallbackToDestructiveMigrationFrom(*PRE_BASELINE_VERSIONS)
 
     @Provides

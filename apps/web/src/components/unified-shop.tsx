@@ -66,6 +66,7 @@ const DOMAIN_KEYS: Readonly<Record<PackDomain, PlainStickerPacksKey>> = {
   'avatar-ring': 'packs.domain.avatar-ring',
   banner: 'packs.domain.banner',
   'banner-frame': 'packs.domain.banner-frame',
+  lens: 'packs.domain.lens',
 };
 
 

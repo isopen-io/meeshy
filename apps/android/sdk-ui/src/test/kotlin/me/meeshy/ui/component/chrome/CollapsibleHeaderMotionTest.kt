@@ -78,4 +78,10 @@ class CollapsibleHeaderMotionTest {
         assertThat(CollapsibleHeaderMotion.isTitleBold(0.5f)).isFalse()
         assertThat(CollapsibleHeaderMotion.isTitleBold(1f)).isFalse()
     }
+
+    @Test
+    fun `reveal slide is dropped under reduce motion so only the fade remains`() {
+        assertThat(CollapsibleHeaderMotion.revealSlideDp(6f, reduceMotion = false)).isEqualTo(6f)
+        assertThat(CollapsibleHeaderMotion.revealSlideDp(6f, reduceMotion = true)).isEqualTo(0f)
+    }
 }

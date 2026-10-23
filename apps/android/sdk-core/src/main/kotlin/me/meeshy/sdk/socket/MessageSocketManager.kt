@@ -13,12 +13,15 @@ import me.meeshy.sdk.notification.NotificationDeletedSocketEvent
 import me.meeshy.sdk.notification.NotificationReadBulkSocketEvent
 import me.meeshy.sdk.notification.NotificationReadSocketEvent
 import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.model.profile.ProfileDecorUpdatedEvent
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
+import me.meeshy.sdk.model.MessageTranslationSharedEvent
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.model.UnreadUpdateEvent
 import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.UserUpdatedEvent
 import me.meeshy.sdk.model.MessageDeletedEvent
 import me.meeshy.sdk.model.MessageExpiredEvent
 import me.meeshy.sdk.model.MessagePinnedEvent
@@ -27,7 +30,9 @@ import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.AttachmentUpdatedEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
+import me.meeshy.sdk.model.ParticipantJoinedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
+import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.model.ConversationClosedSocketEvent
@@ -77,6 +82,7 @@ class MessageSocketManager @Inject constructor(
     private val _reactionRemoved = SocketInboundRoute.subject<ReactionUpdateEvent>()
     private val _unreadUpdated = SocketInboundRoute.subject<UnreadUpdateEvent>()
     private val _translationReceived = SocketInboundRoute.subject<TranslationEvent>()
+    private val _translationShared = SocketInboundRoute.subject<MessageTranslationSharedEvent>()
     private val _transcriptionReady = SocketInboundRoute.subject<TranscriptionReadyEvent>()
     private val _audioTranslationReady = SocketInboundRoute.subject<AudioTranslationEvent>()
     private val _attachmentUpdated = SocketInboundRoute.subject<AttachmentUpdatedEvent>()
@@ -85,9 +91,12 @@ class MessageSocketManager @Inject constructor(
     private val _conversationRestored = SocketInboundRoute.subject<ConversationRestoredSocketEvent>()
     private val _conversationClosed = SocketInboundRoute.subject<ConversationClosedSocketEvent>()
     private val _userStatus = SocketInboundRoute.subject<UserStatusEvent>()
+    private val _userUpdated = SocketInboundRoute.subject<UserUpdatedEvent>()
     private val _presenceSnapshot = SocketInboundRoute.subject<PresenceSnapshotEvent>()
     private val _participantLeft = SocketInboundRoute.subject<ParticipantLeftEvent>()
     private val _participantBanned = SocketInboundRoute.subject<ParticipantBannedEvent>()
+    private val _participantJoined = SocketInboundRoute.subject<ParticipantJoinedEvent>()
+    private val _participantUnbanned = SocketInboundRoute.subject<ParticipantUnbannedEvent>()
     private val _participantRoleUpdated = SocketInboundRoute.subject<ParticipantRoleUpdatedEvent>()
     private val _readStatusUpdated = SocketInboundRoute.subject<ReadStatusUpdatedEvent>()
     private val _liveLocationStarted = SocketInboundRoute.subject<LiveLocationStartedEvent>()
@@ -99,6 +108,7 @@ class MessageSocketManager @Inject constructor(
     private val _notificationDeleted = SocketInboundRoute.subject<NotificationDeletedSocketEvent>()
     private val _notificationDeletedBulk = SocketInboundRoute.subject<NotificationDeletedBulkSocketEvent>()
     private val _notificationCounts = SocketInboundRoute.subject<NotificationCountsSocketEvent>()
+    private val _profileDecorUpdated = SocketInboundRoute.subject<ProfileDecorUpdatedEvent>()
 
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.asSharedFlow()
     val messageEdited: SharedFlow<ApiMessage> = _messageEdited.asSharedFlow()
@@ -126,6 +136,8 @@ class MessageSocketManager @Inject constructor(
      * contrat le déclarait, personne ne le produisait (cycle 77).
      */
     val translationReceived: SharedFlow<TranslationEvent> = _translationReceived.asSharedFlow()
+    /** `message:translation-shared` : la traduction (enveloppe scellée) qu'un autre membre vient de partager. */
+    val translationShared: SharedFlow<MessageTranslationSharedEvent> = _translationShared.asSharedFlow()
     val transcriptionReady: SharedFlow<TranscriptionReadyEvent> = _transcriptionReady.asSharedFlow()
     val audioTranslationReady: SharedFlow<AudioTranslationEvent> = _audioTranslationReady.asSharedFlow()
     val attachmentUpdated: SharedFlow<AttachmentUpdatedEvent> = _attachmentUpdated.asSharedFlow()
@@ -134,9 +146,16 @@ class MessageSocketManager @Inject constructor(
     val conversationRestored: SharedFlow<ConversationRestoredSocketEvent> = _conversationRestored.asSharedFlow()
     val conversationClosed: SharedFlow<ConversationClosedSocketEvent> = _conversationClosed.asSharedFlow()
     val userStatus: SharedFlow<UserStatusEvent> = _userStatus.asSharedFlow()
+    /**
+     * `user:updated` — un contact a changé son nom ou sa photo ; chaque copie qui le garde est repeinte par
+     * `UserUpdatedEvent.repainted(...)` (loi unique, miroir de `UserProfileRepaint`). Sans replay, comme `user:status`.
+     */
+    val userUpdated: SharedFlow<UserUpdatedEvent> = _userUpdated.asSharedFlow()
     val presenceSnapshot: SharedFlow<PresenceSnapshotEvent> = _presenceSnapshot.asSharedFlow()
     val participantLeft: SharedFlow<ParticipantLeftEvent> = _participantLeft.asSharedFlow()
     val participantBanned: SharedFlow<ParticipantBannedEvent> = _participantBanned.asSharedFlow()
+    val participantJoined: SharedFlow<ParticipantJoinedEvent> = _participantJoined.asSharedFlow()
+    val participantUnbanned: SharedFlow<ParticipantUnbannedEvent> = _participantUnbanned.asSharedFlow()
     val participantRoleUpdated: SharedFlow<ParticipantRoleUpdatedEvent> = _participantRoleUpdated.asSharedFlow()
     val readStatusUpdated: SharedFlow<ReadStatusUpdatedEvent> = _readStatusUpdated.asSharedFlow()
     val liveLocationStarted: SharedFlow<LiveLocationStartedEvent> = _liveLocationStarted.asSharedFlow()
@@ -170,6 +189,9 @@ class MessageSocketManager @Inject constructor(
     val notificationDeletedBulk: SharedFlow<NotificationDeletedBulkSocketEvent> = _notificationDeletedBulk.asSharedFlow()
     val notificationCounts: SharedFlow<NotificationCountsSocketEvent> = _notificationCounts.asSharedFlow()
 
+    /** `profile:decor-updated` : le décor d'un compte a changé ; le filtrage par compte est celui du consommateur. */
+    val profileDecorUpdated: SharedFlow<ProfileDecorUpdatedEvent> = _profileDecorUpdated.asSharedFlow()
+
     /**
      * Déclare les routes de la famille messagerie. Gelé (socket-routage-evenements-ordre-arrivee) :
      * une nouvelle famille d'événements ajoute sa propre classe et enregistre ses routes par
@@ -192,6 +214,7 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.REACTION_REMOVED, _reactionRemoved)
         route(SocketEventNames.CONVERSATION_UNREAD_UPDATED, _unreadUpdated)
         route(SocketEventNames.MESSAGE_TRANSLATION, _translationReceived)
+        route(SocketEventNames.MESSAGE_TRANSLATION_SHARED, _translationShared)
         route(SocketEventNames.AUDIO_TRANSCRIPTION_READY, _transcriptionReady)
         route(SocketEventNames.AUDIO_TRANSLATION_READY, _audioTranslationReady)
         route(SocketEventNames.MESSAGE_ATTACHMENT_UPDATED, _attachmentUpdated)
@@ -200,9 +223,12 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.CONVERSATION_RESTORED, _conversationRestored)
         route(SocketEventNames.CONVERSATION_CLOSED, _conversationClosed)
         route(SocketEventNames.USER_STATUS, _userStatus)
+        route(SocketEventNames.USER_UPDATED, _userUpdated)
         route(SocketEventNames.PRESENCE_SNAPSHOT, _presenceSnapshot)
         route(SocketEventNames.CONVERSATION_PARTICIPANT_LEFT, _participantLeft)
         route(SocketEventNames.CONVERSATION_PARTICIPANT_BANNED, _participantBanned)
+        route(SocketEventNames.CONVERSATION_PARTICIPANT_JOINED, _participantJoined)
+        route(SocketEventNames.CONVERSATION_PARTICIPANT_UNBANNED, _participantUnbanned)
         route(SocketEventNames.PARTICIPANT_ROLE_UPDATED, _participantRoleUpdated)
         route(SocketEventNames.READ_STATUS_UPDATED, _readStatusUpdated)
         route(SocketEventNames.LOCATION_LIVE_STARTED, _liveLocationStarted)
@@ -223,6 +249,7 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.NOTIFICATION_DELETED, _notificationDeleted)
         route(SocketEventNames.NOTIFICATION_DELETED_BULK, _notificationDeletedBulk)
         route(SocketEventNames.NOTIFICATION_COUNTS, _notificationCounts)
+        route(SocketEventNames.PROFILE_DECOR_UPDATED, _profileDecorUpdated)
     }
 
     /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */

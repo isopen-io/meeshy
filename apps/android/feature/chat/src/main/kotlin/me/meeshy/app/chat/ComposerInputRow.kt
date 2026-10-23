@@ -1,6 +1,10 @@
 package me.meeshy.app.chat
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.unit.dp
+import me.meeshy.ui.theme.MeeshyGradients
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Box
@@ -40,6 +44,8 @@ import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.SentimentLevel
+import androidx.compose.ui.focus.FocusRequester
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -65,6 +71,9 @@ internal fun ComposerInputRow(
     onFieldChange: (TextFieldValue) -> Unit,
     onRequestVoice: () -> Unit,
     onSend: () -> Unit,
+    secondaryColor: Color = MeeshyPalette.Indigo600,
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    onFocusChange: (Boolean) -> Unit = {},
 ) {
     Row(
         modifier = Modifier
@@ -95,30 +104,15 @@ internal fun ComposerInputRow(
                 onPick = onPickLanguage,
             )
         }
-        OutlinedTextField(
+        ComposerInputCapsule(
             value = fieldValue,
             onValueChange = onFieldChange,
+            accentColor = accentColor,
+            sentiment = sentiment,
+            onSend = { if (!showMic && sendEnabled) onSend() },
             modifier = Modifier.weight(1f),
-            placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
-            maxLines = 4,
-            // The keyboard's action key reads « Send » and sends, like iOS (`ComposerReturnKey`):
-            // the field empties on send through the controller's draft reset.
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Sentences,
-                imeAction = ImeAction.Send,
-            ),
-            keyboardActions = KeyboardActions(onSend = { if (!showMic && sendEnabled) onSend() }),
-            trailingIcon = if (sentiment != null) {
-                {
-                    val description = stringResource(R.string.chat_composer_sentiment)
-                    Text(
-                        text = sentiment.emoji,
-                        modifier = Modifier.semantics { contentDescription = description },
-                    )
-                }
-            } else {
-                null
-            },
+            focusRequester = focusRequester,
+            onFocusChange = onFocusChange,
         )
         if (showMic) {
             IconButton(onClick = onRequestVoice) {
@@ -129,69 +123,46 @@ internal fun ComposerInputRow(
                 )
             }
         } else {
-            IconButton(onClick = onSend, enabled = sendEnabled) {
-                Icon(
-                    imageVector = if (isEditing) Icons.Filled.Check else Icons.AutoMirrored.Filled.Send,
-                    contentDescription = stringResource(R.string.chat_send),
-                    tint = when {
-                        !sendEnabled -> MeeshyTheme.tokens.textSecondary.copy(alpha = 0.5f)
-                        isEditing -> MeeshyTheme.tokens.warning
-                        else -> accentColor
-                    },
-                )
-            }
+            ComposerSendButton(
+                isEditing = isEditing,
+                enabled = sendEnabled,
+                accentColor = accentColor,
+                secondaryColor = secondaryColor,
+                onSend = onSend,
+            )
         }
     }
 }
 
 /**
- * The composer's live language pill — the "smart context zone" affordance. Shows
- * the flag of the resolved source language ([ChatUiState.composerLanguageCode]),
- * following on-device detection as the viewer types, and opens a picker so they can
- * override it (long messages lock the detection, exactly like iOS). Thin,
- * coverage-exempt Compose glue over the pure [me.meeshy.sdk.model.ComposerLanguageState];
- * the picker offers the curated [LanguageData.commonLanguageCodes] set.
+ * Le bouton d'envoi : pastille au dégradé accent -> secondaire de la conversation. Le point
+ * d'accroche [protectionTint] recevra la couleur de protection (lot composer-protections) ; il est
+ * inerte ici.
  */
 @Composable
-internal fun ComposerLanguagePill(
-    languageCode: String,
+internal fun ComposerSendButton(
+    isEditing: Boolean,
+    enabled: Boolean,
     accentColor: Color,
-    onPick: (String) -> Unit,
+    secondaryColor: Color,
+    onSend: () -> Unit,
+    protectionTint: Color? = null,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val description = stringResource(R.string.chat_composer_language)
-    Box {
-        Text(
-            text = ComposerLanguage.flag(languageCode),
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshySpacing.sm))
-                .clickable { expanded = true }
-                .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs)
-                .semantics { contentDescription = description },
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LanguageData.commonLanguageCodes.forEach { code ->
-                val info = LanguageData.info(code) ?: return@forEach
-                DropdownMenuItem(
-                    text = { Text("${info.flag}  ${info.nativeName}") },
-                    onClick = {
-                        expanded = false
-                        onPick(code)
-                    },
-                    trailingIcon = if (code == languageCode) {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = accentColor,
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                )
-            }
+    val fill = when {
+        !enabled -> Modifier.background(MeeshyTheme.tokens.textSecondary.copy(alpha = 0.25f), CircleShape)
+        isEditing -> Modifier.background(MeeshyTheme.tokens.warning, CircleShape)
+        protectionTint != null -> Modifier.background(protectionTint, CircleShape)
+        else -> Modifier.background(MeeshyGradients.conversationAccent(accentColor, secondaryColor), CircleShape)
+    }
+    val label = stringResource(R.string.chat_send)
+    IconButton(onClick = onSend, enabled = enabled, modifier = Modifier.size(44.dp)) {
+        Box(modifier = Modifier.size(36.dp).then(fill), contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = if (isEditing) Icons.Filled.Check else Icons.AutoMirrored.Filled.Send,
+                contentDescription = label,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }
-

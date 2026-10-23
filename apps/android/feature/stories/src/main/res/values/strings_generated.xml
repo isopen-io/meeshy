@@ -105,6 +105,8 @@
     <string name="story_composer_grabber">Toolbar handle</string>
     <string name="story_composer_grabber_hint_dismiss">Drag down to shrink or close.</string>
     <string name="story_composer_grabber_hint_resize">Drag up to enlarge, down to shrink or close.</string>
+    <string name="story_composer_redo">Redo</string>
+    <string name="story_composer_undo">Undo</string>
     <string name="story_send_caption_hint">Add a message…</string>
     <string name="story_send_loading">Loading conversations…</string>
     <plurals name="story_send_members">

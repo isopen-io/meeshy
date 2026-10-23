@@ -110,6 +110,9 @@ internal fun ConversationContextMenu(
     onCreateCategory: (String) -> Unit,
     isLocked: Boolean,
     onLockToggle: () -> Unit,
+    onViewInfo: (() -> Unit)? = null,
+    onViewProfile: (() -> Unit)? = null,
+    onCreateShareLink: (() -> Unit)? = null,
 ) {
     var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
@@ -132,6 +135,33 @@ internal fun ConversationContextMenu(
             labels = previewLabels,
         )
         HorizontalDivider()
+        onViewInfo?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.row_menu_info)) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
+        onViewProfile?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.row_menu_view_profile)) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
+        onCreateShareLink?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_create_share_link)) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
         DropdownMenuItem(
             text = {
                 Text(
