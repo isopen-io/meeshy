@@ -60,7 +60,11 @@ function headroomTags(tiff: Buffer, makerNoteOffset: number): readonly AppleHead
 export function appleHeadroomTags(segment: Buffer): readonly AppleHeadroomTag[] {
   const payload = segment.subarray(4);
   if (!payload.subarray(0, EXIF_HEADER.length).equals(EXIF_HEADER)) return [];
-  const tiff = payload.subarray(EXIF_HEADER.length);
+  return appleHeadroomTagsOfTiff(payload.subarray(EXIF_HEADER.length));
+}
+
+/** Les balises de marge HDR d'Apple portées par un TIFF EXIF, ou `[]`. */
+export function appleHeadroomTagsOfTiff(tiff: Buffer): readonly AppleHeadroomTag[] {
   if (tiff.length < 8) return [];
   const order = tiff.toString('latin1', 0, 2);
   if (order !== 'MM' && order !== 'II') return [];

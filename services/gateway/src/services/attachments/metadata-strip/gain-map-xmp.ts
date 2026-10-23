@@ -83,7 +83,7 @@ function containerDirectory(items: readonly ContainerItem[]): string {
  * Un paquet XMP neuf : les propriétés de carte de gain gardées, et, pour
  * l'image principale d'un Ultra HDR, son répertoire `GContainer` recalculé.
  */
-export function gainMapXmpSegment(properties: readonly GainMapProperty[], container?: readonly ContainerItem[]): Buffer {
+export function gainMapXmpPacket(properties: readonly GainMapProperty[], container?: readonly ContainerItem[]): string {
   const used = [...new Set(properties.map((property) => property.prefix))];
   const namespaces = used.map((prefix) => ` xmlns:${prefix}="${NAMESPACES[prefix]}"`).join('');
   const containerNamespaces = container
@@ -99,7 +99,12 @@ export function gainMapXmpSegment(properties: readonly GainMapProperty[], contai
     .join('');
   const body = `${elements}${container ? containerDirectory(container) : ''}`;
   const description = `<rdf:Description rdf:about=""${namespaces}${containerNamespaces}${attributes}>${body}</rdf:Description>`;
-  const payload = Buffer.concat([XMP_SIGNATURE, Buffer.from(`${XMP_PROPERTY_HEADER}${description}${XMP_PROPERTY_FOOTER}`, 'utf8')]);
+  return `${XMP_PROPERTY_HEADER}${description}${XMP_PROPERTY_FOOTER}`;
+}
+
+/** Le même paquet, dans un segment APP1 JPEG. */
+export function gainMapXmpSegment(properties: readonly GainMapProperty[], container?: readonly ContainerItem[]): Buffer {
+  const payload = Buffer.concat([XMP_SIGNATURE, Buffer.from(gainMapXmpPacket(properties, container), 'utf8')]);
   const header = Buffer.from([0xff, 0xe1, 0, 0]);
   header.writeUInt16BE(payload.length + 2, 2);
   return Buffer.concat([header, payload]);
