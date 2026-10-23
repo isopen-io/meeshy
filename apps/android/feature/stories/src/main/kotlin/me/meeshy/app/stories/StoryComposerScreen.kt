@@ -262,7 +262,7 @@ fun StoryComposerScreen(
                     }
                 },
                 panel = {
-                    if (!state.isDrawingActive) {
+                    if (ComposerBandTools.showsPanel(state.isDrawingActive, state.isEditingTextElement)) {
                         ComposerToolPanel(
                             band = state.band,
                             visibility = state.draft.visibility,
