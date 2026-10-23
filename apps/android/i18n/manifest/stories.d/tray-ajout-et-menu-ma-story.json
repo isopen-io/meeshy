@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "story.tray.addStory", "androidName": "stories_tray_add_story", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.tray.menu.viewMyStory", "androidName": "stories_tray_view_my_story", "status": "adopted" }
+      ]
+    }
+  }
+}

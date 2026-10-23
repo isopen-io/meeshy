@@ -9,13 +9,13 @@ class PostShareLinkLawTest {
     fun `un lien court frappe est rendu tel quel et suivi`() {
         val link = PostShareLinkLaw.resolve("p1", "https://meeshy.me/l/abc")
 
-        assertThat(link).isEqualTo(PostShareLink("https://meeshy.me/l/abc", tracked = true))
+        assertThat(link).isEqualTo(PostShareTarget("https://meeshy.me/l/abc", tracked = true))
     }
 
     @Test
     fun `sans lien court l URL brute du post est rendue`() {
         assertThat(PostShareLinkLaw.resolve("p1", null))
-            .isEqualTo(PostShareLink("https://meeshy.me/feeds/post/p1", tracked = false))
+            .isEqualTo(PostShareTarget("https://meeshy.me/feeds/post/p1", tracked = false))
     }
 
     @Test

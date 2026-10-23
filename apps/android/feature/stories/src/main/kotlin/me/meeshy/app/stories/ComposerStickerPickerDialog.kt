@@ -1,105 +1,63 @@
 package me.meeshy.app.stories
 
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.sticker.StickerSheetChoice
+import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.sticker.StickerUsageStore
+import me.meeshy.ui.sticker.StickerCapabilities
+import me.meeshy.ui.sticker.StickerEmojiCategory
+import me.meeshy.ui.sticker.StickerPlacementDestination
+import me.meeshy.ui.sticker.StickerSheetHost
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface StickerSheetEntryPoint {
+    fun stickerUsageStore(): StickerUsageStore
+    fun sessionRepository(): SessionRepository
+}
 
 /**
- * The emoji sticker picker — category tabs ([StickerCategory]) plus a live search field,
- * both driven by the pure [StickerPickerState] so the "what is visible" decision is
- * unit-tested in one place (a non-blank query searches across every category and the tab
- * row is hidden). Tapping an emoji forwards it to [onPick] (which adds it to the canvas
- * and closes the dialog). Pure glue.
+ * The composer's sticker sheet: the single tabbed sheet of `:sdk-ui` (Search, Favorites, Recents, Smileys)
+ * hosted for the story scene. The composer's *destination* turns an emoji choice into a canvas sticker;
+ * the emoji catalogue and its keyword search ([StickerCatalog]) are injected as capabilities. Pure glue.
  */
 @Composable
 internal fun StickerPickerDialog(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var picker by remember { mutableStateOf(StickerPickerState()) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.stories_composer_cancel))
-            }
-        },
-        title = { Text(stringResource(R.string.stories_composer_add_sticker)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = picker.query,
-                    onValueChange = { picker = picker.withQuery(it) },
-                    singleLine = true,
-                    placeholder = { Text(stringResource(R.string.stories_composer_sticker_search)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (!picker.isSearching) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(StickerCategory.values().toList()) { category ->
-                            FilterChip(
-                                selected = picker.category == category,
-                                onClick = { picker = picker.withCategory(category) },
-                                label = { Text(category.label()) },
-                            )
-                        }
-                    }
-                }
-                val visible = picker.visibleEmojis
-                if (visible.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.stories_composer_sticker_no_results),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(vertical = 16.dp),
-                    )
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(STICKER_PICKER_COLUMNS),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        gridItems(visible) { emoji ->
-                            Text(
-                                text = emoji,
-                                fontSize = STICKER_PICKER_FONT_SIZE,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { onPick(emoji) }
-                                    .padding(8.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        },
+    val context: Context = LocalContext.current
+    val entryPoint = remember(context) {
+        EntryPointAccessors.fromApplication(context.applicationContext, StickerSheetEntryPoint::class.java)
+    }
+    val categories = StickerCategory.values().map { category ->
+        StickerEmojiCategory(category.name, category.label(), StickerCatalog.inCategory(category))
+    }
+    val capabilities = remember(categories) {
+        StickerCapabilities(
+            emojiCategories = categories,
+            emojiSearch = { query -> StickerCatalog.search(query) },
+        )
+    }
+    val destination = remember(onPick) {
+        StickerPlacementDestination { choice -> if (choice is StickerSheetChoice.Emoji) onPick(choice.glyph) }
+    }
+    StickerSheetHost(
+        capabilities = capabilities,
+        usage = entryPoint.stickerUsageStore(),
+        destination = destination,
+        onDismiss = onDismiss,
+        accountId = entryPoint.sessionRepository().currentUserId,
     )
 }
 

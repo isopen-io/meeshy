@@ -129,6 +129,17 @@ class PostRepository @Inject constructor(
     suspend fun refresh() = revalidateFeed()
 
     /**
+     * A user-driven refresh (pull to refresh, « Réessayer ») that reports its outcome:
+     * the failure, or `null` on success. [refresh] swallows it, which left the caller's
+     * spinner turning forever when the feed could not load.
+     */
+    suspend fun refreshReporting(): Throwable? {
+        var failure: Throwable? = null
+        revalidateFeed { failure = it }
+        return failure
+    }
+
+    /**
      * Optimistic, durable like toggle (ARCHITECTURE.md §4-5). The viewer's own like
      * state (`isLikedByMe`) flips instantly with the count; the mutation is then
      * handed to the outbox rather than sent directly, so it survives an offline tap
@@ -153,6 +164,46 @@ class PostRepository @Inject constructor(
             ),
         )
         return true
+    }
+
+    /** The post as the feed cache holds it, or `null` when it is not there. */
+    fun cachedPost(postId: String): ApiPost? = _feedCache.value?.firstOrNull { it.id == postId }
+
+    /**
+     * The explicit-state twin of [toggleLike], for a surface that owns the post itself (the
+     * post detail opened from a link, a notification or a profile — the post may be absent
+     * from the feed cache, where [toggleLike] would refuse). Enqueues the same durable
+     * outbox mutation, and mirrors the feed cache when the post sits there and differs.
+     */
+    suspend fun setLiked(postId: String, liked: Boolean) {
+        cachedPost(postId)
+            ?.takeIf { (it.isLikedByMe == true) != liked }
+            ?.let { applyLike(postId, liked = liked, likeCount = adjustedCount(it.likeCount, wasSet = !liked)) }
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = if (liked) OutboxKind.LIKE_POST else OutboxKind.UNLIKE_POST,
+                lane = OutboxLanes.SOCIAL,
+                targetId = postId,
+                payload = "",
+            ),
+        )
+    }
+
+    /** The bookmark analogue of [setLiked]. */
+    suspend fun setBookmarked(postId: String, bookmarked: Boolean) {
+        cachedPost(postId)
+            ?.takeIf { (it.isBookmarkedByMe == true) != bookmarked }
+            ?.let {
+                applyBookmark(postId, bookmarked = bookmarked, bookmarkCount = adjustedCount(it.bookmarkCount, wasSet = !bookmarked))
+            }
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = if (bookmarked) OutboxKind.BOOKMARK_POST else OutboxKind.UNBOOKMARK_POST,
+                lane = OutboxLanes.SOCIAL,
+                targetId = postId,
+                payload = "",
+            ),
+        )
     }
 
     /**

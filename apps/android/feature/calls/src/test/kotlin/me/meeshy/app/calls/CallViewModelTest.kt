@@ -140,7 +140,9 @@ class CallViewModelTest {
     /** Records the exact sequence of telecom connection reports the VM makes. */
     private class RecordingTelecomReporter : TelecomCallReporter {
         val updates = mutableListOf<TelecomConnectionUpdate>()
+        val begun = mutableListOf<TelecomCallInfo>()
         var releaseCount = 0
+        override fun begin(call: TelecomCallInfo) { begun += call }
         override fun report(update: TelecomConnectionUpdate) { updates += update }
         override fun release() { releaseCount += 1 }
     }
@@ -1271,6 +1273,21 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `a call tells the system who is calling before its first report`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        assertThat(telecom.begun).containsExactly(
+            TelecomCallInfo(
+                peerId = incomingAudio.peerId,
+                peerName = incomingAudio.peerName,
+                isVideo = incomingAudio.isVideo,
+                isOutgoing = false,
+            ),
+        )
+    }
+
+    @Test
     fun `an incoming call registers a ringing telecom connection`() {
         val vm = vm()
         vm.start(incomingAudio)
@@ -1452,6 +1469,16 @@ class CallViewModelTest {
         vm.accept()
 
         coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-77") }
+    }
+
+    @Test
+    fun `the re-presented waiting call keeps its conversation so minimising has a destination`() = runTest {
+        val vm = vm().connect()
+
+        incomingOffers.emit(offer(callId = "call-77").copy(conversationId = "conv-77"))
+        vm.acceptWaitingSwap()
+
+        assertThat(vm.activeConfig.conversationId).isEqualTo("conv-77")
     }
 
     @Test

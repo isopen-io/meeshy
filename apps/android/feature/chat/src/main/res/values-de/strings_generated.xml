@@ -1,5 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_composer_edit_title">Nachricht bearbeiten</string>
+    <string name="chat_composer_reply_a11y">Antwort an %1$s: %2$s</string>
+    <string name="chat_composer_reply_file">Datei</string>
+    <string name="chat_composer_reply_location">Standort</string>
+    <string name="chat_composer_reply_photo">Foto</string>
+    <string name="chat_composer_reply_unknown">eine Nachricht</string>
+    <string name="chat_composer_reply_video">Video</string>
+    <string name="chat_composer_reply_voice">Sprachnachricht</string>
+    <string name="chat_composer_reply_you">Du</string>
+    <string name="chat_delete_confirm_cancel">Abbrechen</string>
+    <string name="chat_delete_confirm_hint">„Für alle löschen“ ist 2 Std. nach dem Senden möglich.</string>
+    <string name="chat_delete_confirm_title">Diese Nachricht löschen?</string>
+    <string name="common_cancel">Abbrechen</string>
+    <string name="common_send">Senden</string>
+    <string name="common_unknown">Unbekannt</string>
     <string name="composer_a11y_addSelection">Auswahl hinzufügen</string>
     <string name="composer_a11y_cancelSelection">Auswahl abbrechen</string>
     <string name="composer_a11y_openFullLibrary">Gesamte Fotomediathek öffnen</string>
@@ -17,6 +32,14 @@
     <string name="composer_recent_grantAccess">Zugriff auf Fotos erlauben</string>
     <string name="composer_recent_grantAccess_hint">Damit deine neuesten Medien hier erscheinen</string>
     <string name="composer_recent_select">Auswählen</string>
+    <string name="message_detail_reactions_count_a11y">%d Reaktion(en)</string>
+    <string name="message_detail_reactions_empty">Keine Reaktionen</string>
+    <string name="message_detail_report_confirm_message">Die Nachricht wird an die Moderation weitergeleitet.</string>
+    <string name="message_detail_report_confirm_title">Diese Nachricht melden?</string>
     <string name="recentMedia_resolveFailed">Dieses Medium konnte nicht vorbereitet werden — nutze die vollständige Mediathek</string>
     <string name="recentMedia_resolveFailed_multiple">%d Medien konnten nicht vorbereitet werden – nutze die gesamte Fotomediathek</string>
+    <string name="starred_more_options">Weitere Optionen</string>
+    <string name="starred_remove">Aus Favoriten entfernen</string>
+    <string name="starred_remove_all">Alle entfernen</string>
+    <string name="starred_row_hint">Öffnet die Unterhaltung</string>
 </resources>

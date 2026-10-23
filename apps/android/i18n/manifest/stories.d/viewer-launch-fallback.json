@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.notFound.title",
+          "androidName": "stories_viewer_not_found_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.notFound.description",
+          "androidName": "stories_viewer_not_found_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.retry",
+          "androidName": "stories_viewer_retry",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

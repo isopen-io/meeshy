@@ -60,6 +60,10 @@ data class PostCommentsUiState(
     val canLoadMore: Boolean = false,
     val isEmpty: Boolean = false,
     val errorMessage: String? = null,
+    /** The first page could not load: the section draws « Error loading comments » + Try again. */
+    val loadFailed: Boolean = false,
+    /** A one-shot localized feedback, cleared by [PostCommentsViewModel.consumeNotice]. */
+    val notice: CommentNotice? = null,
     val translatingLanguages: Set<String> = emptySet(),
 )
 
@@ -287,6 +291,18 @@ class PostCommentsViewModel @Inject constructor(
         fetch(cursor = null, loadingMore = false)
     }
 
+    /** « Try again » of the error state: replays the first page. */
+    fun retryLoad() {
+        if (postId.isBlank() || status.value.isLoading || thread.value.hasLoaded) return
+        status.update { it.copy(isLoading = true, error = null) }
+        fetch(cursor = null, loadingMore = false)
+    }
+
+    /** The toast for [PostCommentsUiState.notice] has been shown. */
+    fun consumeNotice() {
+        status.update { it.copy(notice = null) }
+    }
+
     /** Fetch the next page — inert when there is no next page or a fetch is already in flight. */
     fun loadMore() {
         if (status.value.isLoadingMore || !thread.value.canLoadMore) return
@@ -307,15 +323,12 @@ class PostCommentsViewModel @Inject constructor(
                         status.update { it.copy(isLoading = false, isLoadingMore = false, error = null) }
                         preloadReplyPreviews()
                     }
-                    is NetworkResult.Failure ->
-                        status.update {
-                            it.copy(isLoading = false, isLoadingMore = false, error = result.error.message)
-                        }
+                    is NetworkResult.Failure -> status.update { it.fetchFailed(result.error.message, loadingMore) }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                status.update { it.copy(isLoading = false, isLoadingMore = false, error = e.message) }
+                status.update { it.fetchFailed(e.message, loadingMore) }
             }
         }
     }
@@ -381,8 +394,8 @@ class PostCommentsViewModel @Inject constructor(
         val content = composerDraft.value.text.trim()
         if (content.isEmpty() || postId.isBlank() || status.value.isSubmitting) return
         composer.value?.let { target ->
-            sendReply(target.parentId, content)
             clearDraft()
+            sendReply(target.parentId, content)
             return
         }
         val tempId = "pending-${pendingSeq++}"
@@ -398,14 +411,14 @@ class PostCommentsViewModel @Inject constructor(
                     }
                     is NetworkResult.Failure -> {
                         thread.update { it.failed(tempId) }
-                        status.update { it.copy(isSubmitting = false, error = result.error.message) }
+                        sendFailed(result.error.message, content, CommentNotice.SEND_FAILED)
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 thread.update { it.failed(tempId) }
-                status.update { it.copy(isSubmitting = false, error = e.message) }
+                sendFailed(e.message, content, CommentNotice.SEND_FAILED)
             }
         }
     }
@@ -526,7 +539,7 @@ class PostCommentsViewModel @Inject constructor(
                     is NetworkResult.Failure -> {
                         replies.update { it.failedReply(parentId, tempId) }
                         thread.update { it.bumpReplyCount(parentId, -1) }
-                        status.update { it.copy(isSubmitting = false, error = result.error.message) }
+                        sendFailed(result.error.message, content, CommentNotice.REPLY_FAILED)
                     }
                 }
             } catch (e: CancellationException) {
@@ -534,9 +547,18 @@ class PostCommentsViewModel @Inject constructor(
             } catch (e: Exception) {
                 replies.update { it.failedReply(parentId, tempId) }
                 thread.update { it.bumpReplyCount(parentId, -1) }
-                status.update { it.copy(isSubmitting = false, error = e.message) }
+                sendFailed(e.message, content, CommentNotice.REPLY_FAILED)
             }
         }
+    }
+
+    /**
+     * A send the server refused: the localized notice, and the text goes back to the composer
+     * (when the author has not started another one) — never lost (iOS `CommentUnsentBadge`).
+     */
+    private fun sendFailed(message: String?, content: String, notice: CommentNotice) {
+        status.update { it.copy(isSubmitting = false, error = message, notice = notice) }
+        if (composerDraft.value.text.isBlank()) composerDraft.update { it.copy(text = content) }
     }
 
     private fun findComment(id: String): ApiPostComment? =
@@ -596,11 +618,11 @@ class PostCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 when (val result = postRepository.deleteComment(postId, commentId)) {
-                    is NetworkResult.Success -> Unit
+                    is NetworkResult.Success -> status.update { it.copy(notice = CommentNotice.DELETED) }
                     is NetworkResult.Failure -> {
                         thread.value = threadSnapshot
                         replies.value = repliesSnapshot
-                        status.update { it.copy(error = result.error.message) }
+                        status.update { it.copy(error = result.error.message, notice = CommentNotice.DELETE_FAILED) }
                     }
                 }
             } catch (e: CancellationException) {
@@ -608,7 +630,7 @@ class PostCommentsViewModel @Inject constructor(
             } catch (e: Exception) {
                 thread.value = threadSnapshot
                 replies.value = repliesSnapshot
-                status.update { it.copy(error = e.message) }
+                status.update { it.copy(error = e.message, notice = CommentNotice.DELETE_FAILED) }
             }
         }
     }
@@ -693,7 +715,7 @@ class PostCommentsViewModel @Inject constructor(
             CommentProjection.build(
                 it,
                 prefs,
-                config.socketUrl,
+                config.apiBaseUrl,
                 isPending = it.id in thread.pendingIds,
                 likeState = likeState,
                 activeLanguageCode = activeLanguages[it.id],
@@ -713,7 +735,7 @@ class PostCommentsViewModel @Inject constructor(
                         CommentProjection.build(
                             it,
                             prefs,
-                            config.socketUrl,
+                            config.apiBaseUrl,
                             isPending = replyState.isPendingReply(it.id),
                             likeState = likeState,
                             activeLanguageCode = activeLanguages[it.id],
@@ -742,6 +764,8 @@ class PostCommentsViewModel @Inject constructor(
             canLoadMore = thread.canLoadMore,
             isEmpty = thread.hasLoaded && thread.comments.isEmpty(),
             errorMessage = st.error,
+            loadFailed = st.error != null && !st.isLoading && !thread.hasLoaded && thread.comments.isEmpty(),
+            notice = st.notice,
             translatingLanguages = translatingLanguages,
         )
     }
@@ -767,7 +791,17 @@ private data class Status(
     val isLoadingMore: Boolean = false,
     val isSubmitting: Boolean = false,
     val error: String? = null,
-)
+    val notice: CommentNotice? = null,
+) {
+    /** A first page that failed is drawn as the error state; a next page that failed is a toast. */
+    fun fetchFailed(message: String?, loadingMore: Boolean): Status =
+        copy(
+            isLoading = false,
+            isLoadingMore = false,
+            error = message,
+            notice = if (loadingMore) CommentNotice.LOAD_FAILED else notice,
+        )
+}
 
 /** The composer's live text and its @-mention autocomplete panel, folded into the projection. */
 private data class ComposerDraft(

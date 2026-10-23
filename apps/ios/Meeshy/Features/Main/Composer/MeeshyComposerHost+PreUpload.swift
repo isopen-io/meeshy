@@ -112,7 +112,7 @@ extension MeeshyComposerHost {
               let jeton = APIClient.shared.authToken else {
             return ComposerInertPreUploader()
         }
-        return ComposerTusPreUploader(baseURL: base, token: jeton)
+        return ComposerCompressingPreUploader.story(baseURL: base, token: jeton)
     }
 }
 

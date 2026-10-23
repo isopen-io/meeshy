@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.auth.EmailVerificationWatchStatus
 import me.meeshy.sdk.model.auth.LoginOutcome
 import me.meeshy.sdk.model.auth.LoginResponse
 import me.meeshy.sdk.model.auth.ResendVerificationRequest
+import me.meeshy.sdk.model.auth.SessionOrigin
 import me.meeshy.sdk.model.auth.ResetPasswordRequest
 import me.meeshy.sdk.model.auth.ResetTokenVerification
 import me.meeshy.sdk.model.auth.ResetTokenVerificationRequest
@@ -112,9 +113,49 @@ class AuthRepository @Inject constructor(
      * sur preuve ; elle ne vérifie rien — l'appelant ne la passe qu'à une session que
      * la passerelle vient de rendre.
      */
-    fun adoptSession(session: AuthSession) {
-        storeSession(session)
+    fun adoptSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
+        storeSession(session, origin)
     }
+
+    /**
+     * Valide le lien magique SANS poser la session : l'ouverture passe par le
+     * `ProvenSessionOpener` (fenêtre d'adoption, garde de changement de compte), jamais
+     * par un stockage direct. Mêmes arguments et mêmes issues que [magicLinkOutcome].
+     */
+    suspend fun verifyMagicLink(
+        token: String,
+        linkDeviceSecret: String? = null,
+        confirmed: Boolean = false,
+    ): NetworkResult<LoginOutcome> =
+        when (
+            val result = apiCall {
+                authApi.validateMagicLink(
+                    me.meeshy.sdk.net.api.MagicLinkValidateRequest(
+                        token = token,
+                        linkDeviceSecret = linkDeviceSecret?.takeIf { it.isNotBlank() },
+                        confirm = if (confirmed) true else null,
+                    ),
+                )
+            }
+        ) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.asOutcome()
+        }
+
+    /**
+     * Ferme côté passerelle une session prouvée qu'on n'a pas posée (refusée, hors fenêtre,
+     * écartée) : la preuve a consommé le jeton et ouvert une session serveur qui ne doit pas
+     * lui survivre. Rien ne change sur l'appareil. `true` quand la passerelle a répondu.
+     */
+    suspend fun closeProvenServerSession(jwt: String, sessionToken: String?): Boolean =
+        try {
+            authApi.logout(authorization = "Bearer $jwt", sessionToken = sessionToken)
+            true
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (ignored: Exception) {
+            false
+        }
 
     /**
      * Crée le compte. Le `200` de la passerelle porte DEUX issues distinctes —
@@ -383,10 +424,10 @@ class AuthRepository @Inject constructor(
         else -> NetworkResult.Failure(AuthFailureCode.forNonSession(this))
     }
 
-    private fun storeSession(session: AuthSession) {
+    private fun storeSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
         tokenStore.jwt = session.token
         tokenStore.sessionToken = session.sessionToken
-        sessionRepository.adopt(session.user)
+        sessionRepository.adopt(session.user, origin)
     }
 
     private companion object {

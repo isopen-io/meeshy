@@ -16,8 +16,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +42,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import me.meeshy.ui.R as UiR
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -117,18 +126,34 @@ fun NewConversationScreen(
                 onValueChange = viewModel::onQueryChange,
                 singleLine = true,
                 label = { Text(stringResource(R.string.new_conversation_search_hint)) },
+                trailingIcon = {
+                    if (state.query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.onQueryChange("") }) {
+                            Icon(
+                                Icons.Filled.Cancel,
+                                contentDescription = stringResource(R.string.conversations_search_clear),
+                                tint = MeeshyTheme.tokens.textMuted,
+                            )
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
             )
 
-            state.errorMessage?.let { message ->
+            state.error?.let { error ->
                 Text(
-                    text = message,
+                    text = stringResource(error.messageRes()),
                     color = MeeshyPalette.Error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
                 )
+            }
+
+            if (state.showsContacts) {
+                ContactsSection(state = state, onToggle = viewModel::toggleSelection)
+                return@Column
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
@@ -145,6 +170,9 @@ fun NewConversationScreen(
                         }
                     }
                 }
+                if (state.showsNoResults) {
+                    NoUserFound(modifier = Modifier.align(Alignment.TopCenter))
+                }
                 if (state.isSearching && state.results.isEmpty()) {
                     CircularProgressIndicator(
                         modifier = Modifier
@@ -154,6 +182,109 @@ fun NewConversationScreen(
                 }
             }
         }
+    }
+}
+
+private fun NewConversationError.messageRes(): Int = when (this) {
+    NewConversationError.BLOCKED -> R.string.new_conversation_error_blocked
+    NewConversationError.CREATE_FAILED -> R.string.new_conversation_error_create
+}
+
+/**
+ * The surface the picker opens on (iOS `NewConversationView.contactsSection`): « Your contacts »,
+ * served from the cache first; a loading state only on a cold cache; « No contacts » with a hint
+ * to search once the roster answered with nobody.
+ */
+@Composable
+private fun ContactsSection(state: NewConversationUiState, onToggle: (String) -> Unit) {
+    val loadingLabel = stringResource(R.string.new_conversation_contacts_loading)
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item(key = "contacts-header") {
+            Text(
+                text = stringResource(R.string.new_conversation_contacts_section),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier
+                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm)
+                    .semantics { heading() },
+            )
+        }
+        items(state.contacts, key = { "contact-${it.id}" }) { user ->
+            UserRow(user = user, onClick = { onToggle(user.id) })
+        }
+        if (state.isLoadingContacts && state.contacts.isEmpty()) {
+            item(key = "contacts-loading") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(MeeshySpacing.xl)
+                        .semantics { contentDescription = loadingLabel },
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).size(24.dp))
+                }
+            }
+        }
+        if (state.showsNoContacts) {
+            item(key = "contacts-empty") { NoContacts() }
+        }
+    }
+}
+
+@Composable
+private fun NoContacts() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 48.dp, start = MeeshySpacing.xl, end = MeeshySpacing.xl)
+            .semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(
+            Icons.Filled.PersonOff,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textMuted.copy(alpha = 0.5f),
+            modifier = Modifier.size(36.dp),
+        )
+        Text(
+            text = stringResource(R.string.new_conversation_contacts_empty_title),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.new_conversation_contacts_empty_subtitle),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textMuted,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** « Aucun utilisateur trouvé » (parity iOS `NewConversationView.emptyState`). */
+@Composable
+private fun NoUserFound(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 60.dp)
+            .semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        Icon(
+            Icons.Filled.PersonOff,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textMuted.copy(alpha = 0.5f),
+            modifier = Modifier.size(36.dp),
+        )
+        Text(
+            text = stringResource(R.string.new_conversation_no_user_found),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyTheme.tokens.textMuted,
+        )
     }
 }
 
@@ -192,11 +323,16 @@ private fun UserRow(
     user: SelectableUser,
     onClick: () -> Unit,
 ) {
+    val blockedLabel = stringResource(UiR.string.connection_badge_blocked)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .semantics { role = Role.Button }
+            .alpha(if (user.isBlocked) 0.5f else 1f)
+            .clickable(enabled = !user.isBlocked, onClick = onClick)
+            .semantics {
+                role = Role.Button
+                if (user.isBlocked) stateDescription = blockedLabel
+            }
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -231,7 +367,20 @@ private fun UserRow(
                 color = MeeshyTheme.tokens.textSecondary,
             )
         }
-        if (user.isSelected) {
+        if (user.isBlocked) {
+            Text(
+                text = blockedLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyPalette.Error.copy(alpha = 0.8f),
+            )
+            Icon(
+                Icons.Filled.Block,
+                contentDescription = null,
+                tint = MeeshyPalette.Error.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp),
+            )
+        } else if (user.isSelected) {
             Box(
                 modifier = Modifier
                     .size(24.dp)

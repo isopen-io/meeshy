@@ -348,12 +348,25 @@ if (__SHELL__) {
  * (`vite.config.ts` § `injectRegister`), et que le legacy
  * (`ServiceWorkerInitializer`, monté dans son layout).
  *
- * `__SHELL__` : la coque Capacitor n'émet AUCUN service worker
- * (`scripts/check-shell-dist.mjs`) — elle embarque ses actifs et reçoit une
+ * `__SHELL__` : la coque Capacitor n'émet AUCUN service worker de bundle
+ * (`scripts/check-shell-dist.mjs`) — seulement celui des médias récents, ci-dessus — elle embarque ses actifs et reçoit une
  * version neuve par son magasin d'applications. `import.meta.env.PROD` : en
  * développement, `vite` ne sert pas de `/sw.js` (les `devOptions` de VitePWA
  * sont désactivées), et l'inscription échouerait à chaque rechargement.
  */
+/**
+ * LA COQUE N'INSCRIT QU'UN WORKER : celui des médias vus récemment (#11326),
+ * qui ne précache rien du bundle et ne resert que l'audio et la vidéo gardés.
+ * Même horloge que le worker du web : après le `load`.
+ */
+if (__SHELL__ && 'serviceWorker' in navigator) {
+  const inscrireMediasRecents = (): void => {
+    void import('@/lib/shell/recent-media-worker').then(({ registerShellRecentMediaWorker }) => registerShellRecentMediaWorker());
+  };
+  if (document.readyState === 'complete') inscrireMediasRecents();
+  else window.addEventListener('load', inscrireMediasRecents, { once: true });
+}
+
 if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
   const inscrire = (): void => {
     void import('@/lib/app-update/service-worker').then(({ appUpdateController }) =>

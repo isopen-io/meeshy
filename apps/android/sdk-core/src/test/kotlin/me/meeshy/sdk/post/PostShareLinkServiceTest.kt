@@ -9,7 +9,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
-import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.PostShareTarget
 import me.meeshy.sdk.model.PostShareResult
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.SharePostRequest
@@ -28,7 +28,7 @@ class PostShareLinkServiceTest {
 
         val link = PostShareLinkService(api).resolve("p1", "copy")
 
-        assertThat(link).isEqualTo(PostShareLink("https://meeshy.me/l/abc", tracked = true))
+        assertThat(link).isEqualTo(PostShareTarget("https://meeshy.me/l/abc", tracked = true))
     }
 
     @Test
@@ -37,7 +37,7 @@ class PostShareLinkServiceTest {
 
         val link = PostShareLinkService(api).resolve("p1", "system")
 
-        assertThat(link).isEqualTo(PostShareLink("https://meeshy.me/feeds/post/p1", tracked = false))
+        assertThat(link).isEqualTo(PostShareTarget("https://meeshy.me/feeds/post/p1", tracked = false))
     }
 
     @Test
