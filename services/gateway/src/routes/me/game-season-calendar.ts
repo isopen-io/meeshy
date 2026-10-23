@@ -28,6 +28,7 @@ const definitionSchema = {
     status: { type: 'string', enum: ['scheduled', 'paused'] },
     themeKey: { type: 'string' },
     stepPoints: { type: 'integer' },
+    rewardPack: { type: 'string' },
     copy: {
       anyOf: [
         { type: 'null' },
