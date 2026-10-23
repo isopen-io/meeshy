@@ -127,7 +127,7 @@ final class LensPlanTests: XCTestCase {
         return lens
     }
 
-    private static func input(layers: [LensLayer]? = nil, face: CGRect? = Self.face,
+    private static func input(layers: [LensLayer]? = nil, face: CGRect? = LensPlanTests.face,
                               languages: [String] = ["fr"], level: LensLevel = .full, time: Double = 0) -> LensPlanInput {
         let lens = sharedLens()
         let document = layers.map { LensDocument(id: lens.id, name: lens.name, names: lens.names, credits: lens.credits, surfaces: lens.surfaces,

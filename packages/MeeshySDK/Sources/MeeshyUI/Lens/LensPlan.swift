@@ -214,9 +214,9 @@ public nonisolated enum LensPlan {
 
     private static func particlesOp(_ layer: LensParticlesLayer, input: LensPlanInput) -> LensDrawOp? {
         let count = particleCount(layer.density, level: input.level)
-        guard count > 0, let field = field(of: layer.anchor, frame: input.frame, face: input.face) else { return nil }
+        guard count > 0, let area = field(of: layer.anchor, frame: input.frame, face: input.face) else { return nil }
         return .particles(LensParticlesOp(id: layer.id, preset: layer.preset,
-                                          dots: dots(preset: layer.preset, count: count, field: field, milliseconds: input.milliseconds)))
+                                          dots: dots(preset: layer.preset, count: count, field: area, milliseconds: input.milliseconds)))
     }
 
     private static func servedText(_ text: [String: String], languages: [String]) -> (text: String, language: String) {
