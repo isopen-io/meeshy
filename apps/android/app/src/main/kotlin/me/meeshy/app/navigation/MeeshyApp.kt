@@ -148,7 +148,7 @@ fun MeeshyApp(
             // insets, ce qui laisse le fond de marque plein ecran (edge-to-edge).
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize().rootPresentationContent()) {
                 val showsCallPill = CallPillPresenter.shouldShow(callState.status, onCallScreen)
                 // The minimised-call pill PUSHES the destination down instead of floating
                 // over it: pinned under the status bar, it would lie under the system status
@@ -223,6 +223,8 @@ fun MeeshyApp(
 
         AppOverlayStack(extensions.overlays, navController)
 
+        ArrivalCelebrationHost()
+
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
 
         LoggingOutVeil(visible = authState.isLoggingOut)
@@ -230,3 +232,4 @@ fun MeeshyApp(
         SplashOverlay()
     }
 }
+

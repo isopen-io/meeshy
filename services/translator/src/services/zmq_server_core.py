@@ -6,6 +6,7 @@ Architecture: PUB/SUB + REQ/REP avec pool de connexions et traitement asynchrone
 """
 
 import asyncio
+import os
 import json
 import logging
 import uuid
@@ -29,6 +30,7 @@ from .zmq_voice_handler import VoiceHandler
 # Import du service de base de données
 from .database_service import DatabaseService
 from .audio_fetcher import get_audio_fetcher
+from utils.audio_admission import AudioAdmission, audio_process_concurrency, audio_request_priority
 
 
 class ZMQTranslationServer:
@@ -94,6 +96,8 @@ class ZMQTranslationServer:
 
         # ✨ Tracking des tâches asynchrones en cours (pour métriques et cleanup)
         self.active_tasks: set[asyncio.Task] = set()
+        # #11268 — le vocal d'un message passe avant le média d'un post, à concurrence bornée.
+        self.audio_admission = AudioAdmission(audio_process_concurrency(os.environ))
         self.task_counters = {
             'translation': 0,
             'audio_process': 0,
@@ -364,7 +368,10 @@ class ZMQTranslationServer:
             self._inject_binary_frames(request_data, binary_frames)
             # ✨ Lancer en tâche asynchrone trackée (peut prendre 5-10s)
             self._create_tracked_task(
-                self.audio_handler._handle_audio_process_request(request_data),
+                self.audio_admission.run(
+                    audio_request_priority(request_data),
+                    lambda: self.audio_handler._handle_audio_process_request(request_data),
+                ),
                 'audio_process'
             )
             logger.debug(f"🚀 [NON-BLOCKING] Audio process task créée ({len(self.active_tasks)} actives)")

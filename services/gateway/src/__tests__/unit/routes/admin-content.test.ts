@@ -796,6 +796,7 @@ describe('Admin content routes — #4384 : la charge d’une pièce jointe prot�
     transcription: null, translations: null,
     imageVariants: [{ width: 320, height: 240, url: '2026/08/x/p-320.webp', format: 'webp' }],
     avifVariants: [{ width: 320, height: 240, url: '2026/08/x/p-320.avif', format: 'avif' }],
+    renditions: [{ codec: 'h264', url: '2026/08/x/p_h264.mp4', width: 320, height: 240, size: 1 }],
     thumbHash: 'YTQGDYSFeYh/d3iId3eYhw==', metadata: null,
   };
 
@@ -841,6 +842,7 @@ describe('Admin content routes — #4384 : la charge d’une pièce jointe prot�
     expect(photo.thumbnailUrl).toBeNull();
     expect(photo.imageVariants).toBeNull();
     expect(photo.avifVariants).toBeNull();
+    expect(photo.renditions).toBeNull();
     expect(photo.thumbHash).toBeNull();
     expect(JSON.stringify(photo)).not.toContain('p-320.webp');
   });
