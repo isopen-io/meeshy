@@ -11,11 +11,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asAndroidBitmap
+import android.view.View
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import coil.Coil
@@ -30,6 +29,7 @@ import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.sdk.model.appearance.AvatarRingStroke
 import me.meeshy.sdk.model.appearance.RingStrokeStyle
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.OutgoingRingingLabel
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.After
 import org.junit.Before
@@ -134,7 +134,9 @@ class CallPeerVisualRenderTest {
     }
 
     private fun capture(name: String, visual: CallPeerVisual, content: @Composable () -> Unit): Bitmap {
+        var host: View? = null
         rule.setContent {
+            host = LocalView.current
             MeeshyTheme(darkTheme = true) {
                 Box(Modifier.size(411.dp, 891.dp).testTag(SCREEN), contentAlignment = Alignment.Center) {
                     CallBackdrop(imageUrl = visual.backdropUrl)
@@ -143,7 +145,10 @@ class CallPeerVisualRenderTest {
             }
         }
         rule.waitForIdle()
-        val bitmap = rule.onNodeWithTag(SCREEN).captureToImage().asAndroidBitmap()
+        val bitmap = rule.runOnIdle {
+            val view = checkNotNull(host)
+            Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888).also { view.draw(Canvas(it)) }
+        }
         val dir = File("build/call-peer-visual").apply { mkdirs() }
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         return bitmap

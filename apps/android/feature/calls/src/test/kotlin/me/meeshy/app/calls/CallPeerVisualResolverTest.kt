@@ -135,7 +135,7 @@ class CallPeerVisualResolverTest {
     fun `an address the media policy refuses never reaches the screen`() = runTest {
         coEvery { conversations.cachedById(CONVERSATION) } returns direct(peerAvatar = "http://10.0.0.5/bob.jpg")
         coEvery { users.getProfile(PEER) } returns NetworkResult.Success(
-            bob(decor = null).copy(avatar = "javascript:alert(1)", banner = "http://192.168.1.2/b.jpg"),
+            bob(decor = null).copy(avatar = "http://evil.example/bob.jpg", banner = "http://192.168.1.2/b.jpg"),
         )
 
         resolver().visualFor(outgoingAudio).test {
