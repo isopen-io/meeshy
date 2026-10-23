@@ -11,7 +11,7 @@ class AppearanceTilePlanTest {
     private fun patterns(): List<AppearanceDesign> = catalog.wallpaperPacks.flatMap { it.designs }.filter { it.tile != null }
 
     private fun pattern(): AppearanceDesign =
-        Json.decodeFromString(AppearanceDesign.serializer(), AppearanceFixtures.patternJson("motif").toString())
+        Json { ignoreUnknownKeys = true }.decodeFromString(AppearanceDesign.serializer(), AppearanceFixtures.patternJson("motif").toString())
 
     @Test
     fun `every tile stroke of the catalog is a faint whisper between 0,06 and 0,32`() {
