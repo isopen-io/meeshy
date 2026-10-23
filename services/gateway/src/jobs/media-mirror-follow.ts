@@ -13,9 +13,13 @@ import { guardedInterval, type TimerErrorLogger } from '../utils/guarded-timer.j
 import { processMediaObjectStores } from '../services/storage/objects/mediaObjectStoreFactory';
 import { followMediaMirrorOnce, mediaMirrorFollowMode, type MediaMirrorFollowMode } from '../services/storage/objects/mediaMirrorFollow';
 import { mediaMirrorSources } from '../services/storage/objects/mediaMirrorCli';
+import { processMediaBucketMetrics, recordSweepReport } from '../services/metrics/mediaBucketMetrics';
 
 type Env = Readonly<Record<string, string | undefined>>;
-type JobLogger = TimerErrorLogger & { info: (message: string, context?: Record<string, unknown>) => void };
+type JobLogger = TimerErrorLogger & {
+  info: (message: string, context?: Record<string, unknown>) => void;
+  warn: (message: string, context?: Record<string, unknown>) => void;
+};
 
 const DEFAULT_APPLY_INTERVAL_MS = 60_000;
 const DRY_RUN_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -88,6 +92,12 @@ export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLog
         now: new Date(),
         lastSweepAt,
         log: (line) => logger.info(line),
+        onSweepReport: (report) => {
+          recordSweepReport(processMediaBucketMetrics, report, new Date());
+          if (report.kind === 'refused') {
+            logger.warn('Media bucket sweep refused — nothing erased; see mediaMirrorCli --sweep --allow-mass-removal', { reason: report.reason });
+          }
+        },
       });
       lastSweepAt = next.lastSweepAt;
     },

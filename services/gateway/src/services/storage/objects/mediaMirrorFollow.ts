@@ -1,7 +1,7 @@
 import { isStagingEnvironment } from '../../email/staging-marker';
 import type { LocalObjectStore } from './LocalObjectStore';
 import type { MediaObjectStore } from './MediaObjectStore';
-import { collectReferencedKeys, sweepBucket, type ObjectLister } from './mediaBucketSweep';
+import { collectReferencedKeys, sweepBucket, type ObjectLister, type SweepReport } from './mediaBucketSweep';
 import { FOLLOW_WINDOW_MS, objectIdAtOrAfter, runMediaMirror } from './mediaMirrorCli';
 import type { MirrorRowSource } from './mediaMirror';
 import { isPorteurApproval } from './mediaObjectStoreConfig';
@@ -39,6 +39,8 @@ export async function followMediaMirrorOnce(params: {
   readonly now: Date;
   readonly lastSweepAt: Date | null;
   readonly log: (line: string) => void;
+  /** Le compte rendu du balayage, pour qui doit le signaler : un refus ne se rejoue pas en silence. */
+  readonly onSweepReport?: (report: SweepReport) => void;
 }): Promise<{ readonly lastSweepAt: Date | null }> {
   const options = { apply: params.apply, batchSize: BATCH_SIZE, limit: null, reset: false };
   const run = (startAfter?: string) =>
@@ -51,5 +53,6 @@ export async function followMediaMirrorOnce(params: {
   const referenced = await collectReferencedKeys({ sources: params.sources, uploadRoot: params.uploadRoot, pageSize: BATCH_SIZE });
   const report = await sweepBucket({ lister: params.mirror, remover: params.mirror, referenced, now: params.now, graceMs: SWEEP_GRACE_MS, apply: params.apply, log: params.log });
   params.log(`balayage du seau : ${JSON.stringify(report)}`);
+  params.onSweepReport?.(report);
   return { lastSweepAt: params.now };
 }

@@ -23,7 +23,10 @@
  * - `--sweep` : retire du seau les copies qu'aucune ligne vivante ne nomme plus
  *   (message purgé, compte effacé), plus vieilles que 24 h. C'est une PURGE :
  *   même régime que `--apply`, et il refuse (code 2) sur une base qui ne nomme
- *   rien ou s'il devait effacer plus de la moitié du seau.
+ *   rien ou s'il devait effacer plus de la moitié du seau. Sortie documentée de
+ *   ce second refus (jauge `media_bucket_sweep_refused{reason="too-many-removals"}`
+ *   à 1) : vérifier que la base est la bonne, puis
+ *   `--sweep --apply --allow-mass-removal`.
  * - `--batch=<1..5000>` (500), `--limit=<lignes par collection>`.
  *
  * Code de sortie : 0 = terminé sans échec ; 4 = des copies ont échoué (relancer
@@ -44,8 +47,8 @@ import type { S3ObjectStore } from './S3ObjectStore';
 export type MirrorOptions = { readonly apply: boolean; readonly batchSize: number; readonly limit: number | null; readonly reset: boolean };
 
 export type ParsedMirrorArgs =
-  | ({ readonly kind: 'run'; readonly follow: boolean; readonly sweep: boolean } & MirrorOptions)
-  | { readonly kind: 'refused'; readonly reason: 'unknown-argument' | 'invalid-batch' | 'invalid-limit' | 'follow-requires-apply' | 'production-requires-porteur-approval' };
+  | ({ readonly kind: 'run'; readonly follow: boolean; readonly sweep: boolean; readonly allowMassRemoval: boolean } & MirrorOptions)
+  | { readonly kind: 'refused'; readonly reason: 'unknown-argument' | 'invalid-batch' | 'invalid-limit' | 'follow-requires-apply' | 'mass-removal-requires-sweep-apply' | 'production-requires-porteur-approval' };
 
 const MAX_BATCH = 5_000;
 export const FOLLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -53,7 +56,7 @@ export const FOLLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
 export function parseMirrorArgs(argv: readonly string[], env: Readonly<Record<string, string | undefined>>): ParsedMirrorArgs {
   const flag = (name: string) => argv.includes(`--${name}`);
   const valueOf = (name: string) => argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
-  const known = ['--apply', '--follow', '--reset', '--sweep'];
+  const known = ['--apply', '--follow', '--reset', '--sweep', '--allow-mass-removal'];
   const knownPrefixes = ['--batch=', '--limit=', '--porteur-approval='];
   if (argv.some((arg) => !known.includes(arg) && !knownPrefixes.some((prefix) => arg.startsWith(prefix)))) return { kind: 'refused', reason: 'unknown-argument' };
   const batchRaw = valueOf('batch');
@@ -68,7 +71,8 @@ export function parseMirrorArgs(argv: readonly string[], env: Readonly<Record<st
     return { kind: 'refused', reason: 'production-requires-porteur-approval' };
   }
   if (flag('follow') && !apply) return { kind: 'refused', reason: 'follow-requires-apply' };
-  return { kind: 'run', apply, follow: flag('follow'), sweep: flag('sweep'), batchSize, limit, reset: flag('reset') };
+  if (flag('allow-mass-removal') && !(apply && flag('sweep'))) return { kind: 'refused', reason: 'mass-removal-requires-sweep-apply' };
+  return { kind: 'run', apply, follow: flag('follow'), sweep: flag('sweep'), allowMassRemoval: flag('allow-mass-removal'), batchSize, limit, reset: flag('reset') };
 }
 
 /** Le plus petit ObjectId créé à `instant` ou après : 4 octets de secondes, puis des zéros. */
@@ -163,9 +167,15 @@ export function mediaMirrorSources(prisma: PrismaClient): readonly MirrorRowSour
   ];
 }
 
-async function sweepOnce(sources: readonly MirrorRowSource[], mirror: S3ObjectStore, uploadRoot: string, apply: boolean, log: (line: string) => void): Promise<SweepReport> {
+async function sweepOnce(
+  sources: readonly MirrorRowSource[],
+  mirror: S3ObjectStore,
+  uploadRoot: string,
+  options: { readonly apply: boolean; readonly allowMassRemoval: boolean },
+  log: (line: string) => void,
+): Promise<SweepReport> {
   const referenced = await collectReferencedKeys({ sources, uploadRoot, pageSize: 500 });
-  const report = await sweepBucket({ lister: mirror, remover: mirror, referenced, now: new Date(), graceMs: FOLLOW_WINDOW_MS, apply, log });
+  const report = await sweepBucket({ lister: mirror, remover: mirror, referenced, now: new Date(), graceMs: FOLLOW_WINDOW_MS, ...options, log });
   log(`balayage du seau : ${JSON.stringify(report)}`);
   return report;
 }
@@ -193,7 +203,7 @@ export async function runMediaMirrorCli(argv: readonly string[], env: Readonly<R
     const run = (startAfter?: string) =>
       runMediaMirror({ sources, local: stores.local, mirror: stores.mirror, uploadRoot, stateFile, options: parsed, log, ...(startAfter === undefined ? {} : { startAfter }) });
     const reports = await run();
-    const sweep = parsed.sweep ? await sweepOnce(sources, stores.mirror, uploadRoot, parsed.apply, log) : null;
+    const sweep = parsed.sweep ? await sweepOnce(sources, stores.mirror, uploadRoot, { apply: parsed.apply, allowMassRemoval: parsed.allowMassRemoval }, log) : null;
     if (sweep?.kind === 'refused') return 2;
     if (!parsed.follow) return failedCount(reports) > 0 || (sweep?.kind === 'swept' && sweep.counts.failed > 0) ? 4 : 0;
     const intervalMs = Number(env.MEDIA_MIRROR_INTERVAL_MS) > 0 ? Number(env.MEDIA_MIRROR_INTERVAL_MS) : 60_000;

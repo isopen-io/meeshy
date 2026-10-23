@@ -50,6 +50,8 @@ export async function sweepBucket(params: {
   readonly now: Date;
   readonly graceMs: number;
   readonly apply: boolean;
+  /** La sortie documentée du refus « plus de la moitié » : une purge massive se demande, elle ne se devine pas. */
+  readonly allowMassRemoval?: boolean;
   readonly log?: (line: string) => void;
 }): Promise<SweepReport> {
   if (params.referenced.size === 0) return { kind: 'refused', reason: 'no-referenced-key' };
@@ -61,7 +63,7 @@ export async function sweepBucket(params: {
   const isYoung = (object: ListedObject) => object.lastModified === null || object.lastModified.getTime() > cutoff;
   const unreferenced = listed.filter((object) => !params.referenced.has(object.key));
   const doomed = unreferenced.filter((object) => !isYoung(object));
-  if (doomed.length > listed.length * MAX_REMOVAL_SHARE) return { kind: 'refused', reason: 'too-many-removals' };
+  if (params.allowMassRemoval !== true && doomed.length > listed.length * MAX_REMOVAL_SHARE) return { kind: 'refused', reason: 'too-many-removals' };
 
   const base = { kept: listed.length - unreferenced.length, young: unreferenced.length - doomed.length };
   if (!params.apply) return { kind: 'swept', counts: { ...base, removed: 0, 'would-remove': doomed.length, failed: 0 } };
