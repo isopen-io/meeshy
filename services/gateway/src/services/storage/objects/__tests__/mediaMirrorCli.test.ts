@@ -17,7 +17,7 @@ import { objectIdAtOrAfter, parseMirrorArgs, runMediaMirror } from '../mediaMirr
 
 describe('parseMirrorArgs', () => {
   it('à blanc par défaut, par lots de 500', () => {
-    expect(parseMirrorArgs([], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'run', apply: false, follow: false, sweep: false, allowMassRemoval: false, batchSize: 500, limit: null, reset: false });
+    expect(parseMirrorArgs([], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'run', apply: false, follow: false, sweep: false, allowMassRemoval: null, batchSize: 500, limit: null, reset: false });
   });
 
   it('en staging, --apply suffit', () => {
@@ -113,11 +113,14 @@ describe('--sweep — l’effacement des copies que plus rien ne nomme, sous le 
     expect(parseMirrorArgs(['--sweep', '--apply'], { MEESHY_ENV: 'staging' })).toMatchObject({ kind: 'run', apply: true, sweep: true });
   });
 
-  it('--allow-mass-removal n’a de sens qu’avec --sweep --apply, et lève le refus « plus de la moitié »', () => {
-    expect(parseMirrorArgs(['--sweep', '--allow-mass-removal'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'mass-removal-requires-sweep-apply' });
-    expect(parseMirrorArgs(['--apply', '--allow-mass-removal'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'mass-removal-requires-sweep-apply' });
-    expect(parseMirrorArgs(['--sweep', '--apply', '--allow-mass-removal'], { MEESHY_ENV: 'staging' })).toMatchObject({ kind: 'run', sweep: true, allowMassRemoval: true });
+  it('--allow-mass-removal=<N> n’a de sens qu’avec --sweep --apply, et N est le compte annoncé à blanc (contre-audit C5)', () => {
+    expect(parseMirrorArgs(['--sweep', '--allow-mass-removal=12'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'mass-removal-requires-sweep-apply' });
+    expect(parseMirrorArgs(['--apply', '--allow-mass-removal=12'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'mass-removal-requires-sweep-apply' });
+    expect(parseMirrorArgs(['--sweep', '--apply', '--allow-mass-removal'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'mass-removal-requires-count' });
+    expect(parseMirrorArgs(['--sweep', '--apply', '--allow-mass-removal=0'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'mass-removal-requires-count' });
+    expect(parseMirrorArgs(['--sweep', '--apply', '--allow-mass-removal=12'], { MEESHY_ENV: 'staging' })).toMatchObject({ kind: 'run', sweep: true, allowMassRemoval: 12 });
   });
+
 });
 
 describe('#11267, audit D5 — le fichier d’état s’écrit sous un nom temporaire UNIQUE', () => {

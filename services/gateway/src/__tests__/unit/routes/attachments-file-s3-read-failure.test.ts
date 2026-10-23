@@ -93,4 +93,34 @@ describe('#11267, audit D1 — le seau répond au HEAD puis échoue au GET', () 
     expect(res.headers['content-length']).not.toBe(String(BYTES.length));
     await app.close();
   });
+
+  it('un objet effacé entre le HEAD et le GET rend 404, sans rien décrire', async () => {
+    const vanished: MediaObjectStore = {
+      head: async () => ({ size: BYTES.length, etag: MIRROR_ETAG, lastModified: null, contentType: null }),
+      read: async () => null,
+      write: async () => undefined,
+      remove: async () => undefined,
+    };
+    const app = await buildApp(vanished);
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ID}` });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers['etag']).toBeUndefined();
+    expect(res.headers['content-disposition']).toBeUndefined();
+    await app.close();
+  });
+
+  it('contre-audit C4 — un seau injoignable dès le HEAD rend 503 no-store, jamais 404', async () => {
+    const unreachable: MediaObjectStore = {
+      head: async () => { throw Object.assign(new Error('connect ETIMEDOUT'), { $metadata: { httpStatusCode: 503 } }); },
+      read: async () => null,
+      write: async () => undefined,
+      remove: async () => undefined,
+    };
+    const app = await buildApp(unreachable);
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ID}` });
+    expect(res.statusCode).toBe(503);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers['etag']).toBeUndefined();
+    await app.close();
+  });
 });

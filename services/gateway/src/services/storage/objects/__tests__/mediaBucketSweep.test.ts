@@ -103,9 +103,31 @@ describe('sweepBucket — le seau ne garde que ce qu’une ligne vivante nomme',
     expect(report.kind === 'swept' && report.counts.failed).toBe(1);
   });
 
-  it('la sortie documentée du refus : une purge massive se demande explicitement, et passe', async () => {
+  it('la sortie documentée du refus : une purge massive se demande avec le COMPTE exact annoncé à blanc (contre-audit C5)', async () => {
+    const doomed = ['x', 'y', 'z', 'w'].map((name) => ({ key: `2026/01/u0/${name}.jpg`, lastModified: OLD }));
+    const b = bucket([...live(), ...doomed]);
+    const report = await sweepBucket({ ...b, referenced: new Set(LIVE), now: NOW, graceMs: GRACE_MS, apply: true, allowMassRemoval: 4 });
+    expect(report.kind === 'swept' && report.counts.removed).toBe(4);
+  });
+
+  it('un compte qui ne correspond pas à celui de la première passe refuse, sans rien effacer', async () => {
     const b = bucket([...live(), ...['x', 'y', 'z', 'w'].map((name) => ({ key: `2026/01/u0/${name}.jpg`, lastModified: OLD }))]);
-    const report = await sweepBucket({ ...b, referenced: new Set(LIVE), now: NOW, graceMs: GRACE_MS, apply: true, allowMassRemoval: true });
+    const report = await sweepBucket({ ...b, referenced: new Set(LIVE), now: NOW, graceMs: GRACE_MS, apply: true, allowMassRemoval: 3 });
+    expect(report).toEqual({ kind: 'refused', reason: 'mass-removal-count-mismatch' });
+    expect(b.removed).toEqual([]);
+  });
+
+  it('la seconde passe s’arrête au compte autorisé, même si le seau a changé entre-temps', async () => {
+    const removed: string[] = [];
+    let pass = 0;
+    const first = ['a', 'b', 'c', 'd'].map((name) => ({ key: `2026/01/u0/${name}.jpg`, lastModified: OLD }));
+    const second = [...first, ...['e', 'f'].map((name) => ({ key: `2026/01/u0/${name}.jpg`, lastModified: OLD }))];
+    const report = await sweepBucket({
+      lister: { list: async function* () { pass += 1; yield* [...live(), ...(pass === 1 ? first : second)]; } },
+      remover: { remove: async (key: string) => { removed.push(key); } },
+      referenced: new Set(LIVE), now: NOW, graceMs: GRACE_MS, apply: true, allowMassRemoval: 4,
+    });
+    expect(removed).toHaveLength(4);
     expect(report.kind === 'swept' && report.counts.removed).toBe(4);
   });
 

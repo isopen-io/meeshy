@@ -39,7 +39,7 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 }));
 
 const removed: string[] = [];
-let bucketDown = false;
+let failingKeys: ReadonlySet<string> = new Set();
 let bucketConfigured = true;
 
 jest.mock('../../../services/storage/objects/mediaObjectStoreFactory', () => ({
@@ -47,7 +47,7 @@ jest.mock('../../../services/storage/objects/mediaObjectStoreFactory', () => ({
     mirror: bucketConfigured
       ? {
           remove: async (key: string) => {
-            if (bucketDown) throw new Error('seau indisponible');
+            if (failingKeys.has(key)) throw new Error('seau indisponible');
             removed.push(key);
           },
         }
@@ -107,7 +107,7 @@ function makeStore(rows: Array<Record<string, any>>) {
 
 beforeEach(() => {
   removed.length = 0;
-  bucketDown = false;
+  failingKeys = new Set();
   bucketConfigured = true;
   process.env.UPLOAD_PATH = ROOT;
   mockFsUnlink.mockReset();
@@ -123,20 +123,21 @@ describe('deleteAttachment efface aussi la copie du seau', () => {
     expect([...removed].sort()).toEqual(['2024/01/user/file.jpg', '2024/01/user/file_thumb.webp', `translated/${ATTACH_ID}_en.mp3`].sort());
   });
 
-  it('un fichier encore référencé par une autre ligne garde sa copie, comme il garde son disque', async () => {
-    const prisma = makeStore([makeRow(), makeRow({ id: COPY_ID })]);
+  it('un fichier encore référencé par une autre ligne garde sa copie ; ce qui n’est qu’à elle part', async () => {
+    const prisma = makeStore([makeRow({ thumbnailPath: '2024/01/user/own_thumb.webp' }), makeRow({ id: COPY_ID })]);
 
     await new AttachmentService(prisma).deleteAttachment(ATTACH_ID);
 
-    expect(removed).toEqual([]);
+    expect(removed).toEqual(['2024/01/user/own_thumb.webp']);
   });
 
-  it('un seau en panne ne fait pas échouer l’effacement', async () => {
-    bucketDown = true;
-    const prisma = makeStore([makeRow()]);
+  it('une copie que le seau refuse n’empêche ni l’effacement du disque ni celui des autres copies', async () => {
+    failingKeys = new Set(['2024/01/user/file.jpg']);
+    const prisma = makeStore([makeRow({ thumbnailPath: '2024/01/user/file_thumb.webp' })]);
 
     await expect(new AttachmentService(prisma).deleteAttachment(ATTACH_ID)).resolves.toBeUndefined();
     expect(mockFsUnlink).toHaveBeenCalledWith(`${ROOT}/2024/01/user/file.jpg`);
+    expect(removed).toEqual(['2024/01/user/file_thumb.webp']);
   });
 
   it('sans seau configuré, seul le disque est touché', async () => {
