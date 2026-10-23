@@ -52,6 +52,7 @@
     <string name="conversations_no_results">لا توجد محادثات مطابقة</string>
     <string name="conversations_open_global_search">بحث شامل</string>
     <string name="conversations_section_all">محادثاتي</string>
+    <string name="conversations_section_pinned">المثبّتة</string>
     <string name="dashboard_action_search">بحث شامل</string>
     <string name="global_search_empty_subtitle">الرسائل والمحادثات والمستخدمون</string>
     <string name="global_search_hint">ابحث في كل مكان…</string>

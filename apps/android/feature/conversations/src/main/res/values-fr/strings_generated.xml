@@ -26,7 +26,9 @@
     <string name="conversations_badge_locked">verrouillé</string>
     <string name="conversations_badge_muted">Muet</string>
     <string name="conversations_badge_pinned">épinglé</string>
+    <string name="conversations_banner_connecting">Connexion en cours</string>
     <string name="conversations_banner_offline">Hors ligne</string>
+    <string name="conversations_banner_online">En ligne</string>
     <string name="conversations_banner_reconnecting">Reconnexion en cours…</string>
     <string name="conversations_banner_syncing">Synchronisation</string>
     <string name="conversations_contacts">Contacts</string>
@@ -75,6 +77,7 @@
     <string name="conversations_logout">Se déconnecter</string>
     <string name="conversations_new">Nouvelle conversation</string>
     <string name="conversations_open_dashboard">Tableau de bord</string>
+    <string name="conversations_preview_draft_label">Brouillon</string>
     <string name="conversations_preview_draft_prefix">Brouillon :</string>
     <string name="conversations_preview_ephemeral_content_description">Message éphémère</string>
     <string name="conversations_preview_expired">Message expiré</string>
@@ -91,7 +94,6 @@
     <string name="conversations_search_clear">Effacer la recherche</string>
     <string name="conversations_search_close">Fermer la recherche</string>
     <string name="conversations_search_hint">Rechercher des conversations</string>
-    <string name="conversations_section_pinned">épinglé</string>
     <string name="conversations_tags_dialog_title">Étiquettes</string>
     <string name="conversations_tags_field_hint">Ajouter un tag…</string>
     <string name="conversations_tags_remove_content_description">Retirer le tag %s</string>
@@ -141,6 +143,10 @@
     <string name="my_share_links_title">Liens de partage</string>
     <string name="my_share_links_toggle">Actifs</string>
     <string name="new_conversation_back">Retour</string>
+    <string name="new_conversation_contacts_empty_subtitle">Recherchez un utilisateur pour démarrer une conversation.</string>
+    <string name="new_conversation_contacts_empty_title">Aucun contact</string>
+    <string name="new_conversation_contacts_loading">Chargement des contacts</string>
+    <string name="new_conversation_contacts_section">Vos contacts</string>
     <string name="new_conversation_create">Créer</string>
     <string name="new_conversation_error_create">Impossible de créer la conversation</string>
     <string name="new_conversation_group_title">Nom du groupe</string>
