@@ -55,6 +55,7 @@ class CallViewModel @Inject constructor(
     /** The seams capabilities plug into; the call screen reads the UI ones from here. */
     val extensions: CallExtensionPoints,
     private val ongoing: CallOngoingController,
+    private val peerVisuals: CallPeerVisualSource,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -105,6 +106,14 @@ class CallViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
+
+    private val _peerVisual = MutableStateFlow(CallPeerVisual.EMPTY)
+
+    /** La photo, le contour équipé et la bannière du correspondant ([CallPeerVisualSource]), cache d'abord. */
+    val peerVisual: StateFlow<CallPeerVisual> = _peerVisual.asStateFlow()
+
+    /** Résout le visuel de l'appel en cours ; remplacé à chaque [start]. */
+    private var peerVisualJob: Job? = null
 
     /**
      * The inputs of the call in flight — read by the app shell to rebuild the call
@@ -215,7 +224,17 @@ class CallViewModel @Inject constructor(
         stopQuality()
         watchdogs.reset()
         peers.clear()
+        resolvePeerVisual(config)
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
+    }
+
+    /** Le visuel d'un appel précédent ne survit jamais : vide d'abord, puis ce que la source résout. */
+    private fun resolvePeerVisual(config: CallConfig) {
+        peerVisualJob?.cancel()
+        _peerVisual.value = CallPeerVisual.EMPTY
+        peerVisualJob = viewModelScope.launch {
+            peerVisuals.visualFor(config).collect { _peerVisual.value = it }
+        }
     }
 
     /**
