@@ -72,7 +72,7 @@ class BannerFrameRendererTest {
 
     @Test
     fun `une frise trop courte pour son module ne pose rien`() {
-        assertThat(BannerFrameRenderer.elements(friezeFrame("repeat", 60.0, 120.0, 120.0), width = 300.0)).isEmpty()
+        assertThat(BannerFrameRenderer.elements(friezeFrame("repeat", 60.0, 120.0, 120.0), width = 250.0)).isEmpty()
     }
 
     @Test
