@@ -13,7 +13,8 @@ import UniformTypeIdentifiers
 ///
 /// Building block opaque : la source rend le téléchargement à lire, et
 /// l'appelant seul décide si elle peut en ouvrir un.
-public final class ProgressiveURLAsset: AVURLAsset {
+// unchecked: hérité d'AVURLAsset ; ses deux propriétés sont immuables et Sendable.
+public final class ProgressiveURLAsset: AVURLAsset, @unchecked Sendable {
     public static let scheme = "meeshy-cache"
 
     /// L'URL d'origine du média — clé de cache et repli de type de contenu.
@@ -23,7 +24,7 @@ public final class ProgressiveURLAsset: AVURLAsset {
     public init(remoteURL: URL, source: @escaping ProgressiveAssetLoader.Source) {
         self.remoteURL = remoteURL
         self.loader = ProgressiveAssetLoader(remoteURL: remoteURL, source: source)
-        super.init(url: Self.loaderURL(for: remoteURL), options: nil)
+        super.init(url: ProgressiveURLAsset.loaderURL(for: remoteURL), options: nil)
         resourceLoader.setDelegate(loader, queue: loader.queue)
     }
 
