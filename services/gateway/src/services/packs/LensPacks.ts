@@ -44,6 +44,9 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'LensPacks' });
 
+/** Les lens retirées qu'une page de modération liste au plus. */
+export const LENS_WITHDRAWN_LIST_LIMIT = 200;
+
 export type LensPackDetail = PackSummary & {
   readonly cost: LensCost;
   readonly surfaces: readonly string[];
@@ -391,6 +394,16 @@ export class LensPacks {
   async submissions(userId: string): Promise<readonly LensPackDetail[]> {
     const rows = await this.prisma.lensPack.findMany({ where: { submitterId: userId }, orderBy: { createdAt: 'desc' }, select: ROW_SELECT });
     return rows.map((row) => lensPackDetail(row, false, { userId, canModerate: false }));
+  }
+
+  /**
+   * Les lens RETIRÉES, la plus récemment retirée d'abord, avec le mot du
+   * retrait (#12321) : l'écran de modération les rétablit sans avoir à
+   * connaître leur nom. Lecture bornée.
+   */
+  async withdrawn(moderatorId: string): Promise<readonly LensPackDetail[]> {
+    const rows = await this.prisma.lensPack.findMany({ where: { status: 'withdrawn' }, orderBy: { reviewedAt: 'desc' }, take: LENS_WITHDRAWN_LIST_LIMIT, select: ROW_SELECT });
+    return rows.map((row) => lensPackDetail(row, false, { userId: moderatorId, canModerate: true }));
   }
 
   /** La file de modération, la plus ancienne proposition d'abord. */

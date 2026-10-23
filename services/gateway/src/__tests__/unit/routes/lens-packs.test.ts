@@ -564,3 +564,47 @@ describe('une lens retirée par erreur se rétablit par la modération (#12321)'
     expect(h.tables.packs[0]!.status).toBe('withdrawn');
   });
 });
+
+describe('la liste des lens retirées, pour les rétablir sans connaître leur nom (#12321)', () => {
+  const withdrawnLens = async () => {
+    const h = await harness();
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    await review(h, 'aurore-polaire', { decision: 'approve' });
+    await h.app.inject({ method: 'POST', url: '/aurore-polaire/withdraw', headers: { 'x-user': MODO }, payload: { note: 'Contenu signalé' } });
+    return h;
+  };
+  const list = (h: Harness, user = MODO) => h.app.inject({ method: 'GET', url: '/withdrawn', headers: { 'x-user': user } });
+
+  it('fermée à qui ne modère pas (403)', async () => {
+    const h = await withdrawnLens();
+    expect((await list(h, BOB)).statusCode).toBe(403);
+    expect((await list(h, ALICE)).statusCode).toBe(403);
+  });
+
+  it('ne liste que les lens retirées, avec le mot du retrait', async () => {
+    const h = await withdrawnLens();
+    await submit(h, { document: lensDocument({ slug: 'brume-matinale', name: 'Brume' }), assets: assetsOf(ALL_ASSETS) }, BOB);
+
+    const res = await list(h);
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data as Array<{ slug: string; status: string; reviewNote?: string | null }>;
+    expect(data.map((pack) => pack.slug)).toEqual(['aurore-polaire']);
+    expect(data[0]).toMatchObject({ status: 'withdrawn', reviewNote: 'Contenu signalé' });
+  });
+
+  it('la plus récemment retirée d’abord, en lecture bornée', async () => {
+    const h = await withdrawnLens();
+    await list(h);
+    const call = h.tables.lensPack.findMany.mock.calls.find(([args]: any) => args?.where?.status === 'withdrawn')?.[0] as any;
+    expect(call).toMatchObject({ where: { status: 'withdrawn' }, orderBy: { reviewedAt: 'desc' } });
+    expect(call.take).toBeGreaterThan(0);
+    expect(call.take).toBeLessThanOrEqual(500);
+  });
+
+  it('une lens rétablie quitte la liste', async () => {
+    const h = await withdrawnLens();
+    await h.app.inject({ method: 'POST', url: '/aurore-polaire/restore', headers: { 'x-user': MODO }, payload: {} });
+    expect((await list(h)).json().data).toEqual([]);
+  });
+});

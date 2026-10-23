@@ -123,6 +123,9 @@ export const lensPending = '/api/v1/packs/lens/pending';
 /** GET · POST /api/v1/packs/lens/submissions */
 export const lensSubmissions = '/api/v1/packs/lens/submissions';
 
+/** GET /api/v1/packs/lens/withdrawn */
+export const lensWithdrawn = '/api/v1/packs/lens/withdrawn';
+
 /** GET /api/v1/packs/shop */
 export const shop = '/api/v1/packs/shop';
 
