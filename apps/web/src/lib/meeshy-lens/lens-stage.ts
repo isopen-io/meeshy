@@ -49,18 +49,20 @@ const FROZEN_T = 0;
 
 export function createLensStage(env: LensStageEnv): LensStage {
   let lut: LutStage | null | undefined;
-  /* Les fichiers des réglages de l'image en cours : `paint` suit `plan` sur la même image. */
+  /* Les derniers fichiers remis : l'hôte ne les renvoie pas à chaque réglage (`video-effects-pipeline.ts`),
+     et leurs noms sont adressés par contenu — un fichier gardé ne sert jamais une autre image que la sienne. */
   let files: LensFiles | undefined;
+  const filesOf = (settings: LensSettings): LensFiles | undefined => (files = settings.files ?? files);
   const paintEnv: LensPaintEnv = { ...env.paint, assets: (asset) => files?.images[asset] ?? env.paint.assets(asset) };
   return {
     plan: (settings, source, frame, t) => {
-      files = settings.files;
+      filesOf(settings);
       return planLens({ ...settings, frame, face: env.face(source, frame), t: env.reducedMotion?.() === true ? FROZEN_T : t });
     },
     grade: (image, settings, frame) => {
       const op = lensLutOf(settings.lens, settings.level);
       if (op === null) return image;
-      const cube = settings.files?.cubes[op.asset] ?? env.cube(op.asset);
+      const cube = filesOf(settings)?.cubes[op.asset] ?? env.cube(op.asset);
       if (cube === null) return image;
       lut ??= env.lut?.() ?? null;
       if (lut === null) return image;
@@ -74,6 +76,7 @@ export function createLensStage(env: LensStageEnv): LensStage {
     close: () => {
       lut?.release();
       lut = null;
+      files = undefined;
     },
   };
 }
