@@ -35,5 +35,10 @@
             android:name="me.meeshy.app.calls.ScreenShareService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+        <!-- lot: calls-media-projection-service — la brique commune partage d'écran / enregistrement. -->
+        <service
+            android:name="me.meeshy.app.calls.MediaProjectionService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
     </application>
 </manifest>
