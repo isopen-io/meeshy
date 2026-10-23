@@ -152,7 +152,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       });
     });
 
-    it('selects exactly 30 documented fields — guards against silent omission', () => {
+    it('selects exactly 31 documented fields — guards against silent omission', () => {
       const expectedKeys = [
         'id',
         'messageId',
@@ -187,7 +187,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'reactions',
       ];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(30);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(31);
     });
   });
 
