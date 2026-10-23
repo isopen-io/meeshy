@@ -40,9 +40,8 @@ import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
 import { normalizeStickerImage, type StickerImageOutcome } from '../stickers/stickerImage';
 import { normalizeLensLut } from './lensLutImage';
 import { isUniqueViolation, type CommunityPackStore, type PackViewer } from './PackCatalog';
-import { enhancedLogger } from '../../utils/logger-enhanced';
+import { logError } from '../../utils/logger';
 
-const logger = enhancedLogger.child({ module: 'LensPacks' });
 
 export type LensPackDetail = PackSummary & {
   readonly cost: LensCost;
@@ -125,7 +124,9 @@ export type LensPacksDeps = {
   readonly log?: LensPacksLog;
 };
 
-type LensPacksLog = { readonly error: (message: string, context?: Record<string, unknown>) => void };
+type LensPacksLog = { readonly error: (line: string) => void };
+
+const JOURNAL_GAP = 'lens moderation journal incomplete: a gesture is journaled without its outcome';
 
 type NotAppliedReason = 'concurrent-review' | 'write-failed';
 
@@ -262,10 +263,10 @@ export class LensPacks {
   private readonly now: () => Date;
   private readonly normalizeAsset: (bytes: Buffer) => Promise<StickerImageOutcome>;
   private readonly normalizeLut: (bytes: Buffer) => Promise<StickerImageOutcome>;
-  private readonly log: LensPacksLog;
+  private readonly log: LensPacksLog | undefined;
 
   constructor(deps: LensPacksDeps) {
-    this.log = deps.log ?? logger;
+    this.log = deps.log;
     this.prisma = deps.prisma;
     this.now = deps.now ?? (() => new Date());
     this.normalizeAsset = deps.normalizeAsset ?? normalizeStickerImage;
@@ -280,7 +281,7 @@ export class LensPacks {
   private async recordNotApplied(entry: NotAppliedEntry & { readonly reason: NotAppliedReason }): Promise<void> {
     const journaled = await this.journal({ adminId: entry.moderatorId, submitterId: entry.submitterId, action: entry.action, slug: entry.slug, metadata: { reason: entry.reason } });
     if (!journaled) {
-      this.log.error('lens moderation journal incomplete: a gesture is journaled without its outcome', { action: entry.action, slug: entry.slug, reason: entry.reason });
+      logError(this.log, JOURNAL_GAP, JSON.stringify({ action: entry.action, slug: entry.slug, reason: entry.reason }));
     }
   }
 
@@ -518,7 +519,7 @@ export class LensPacks {
       return { kind: 'not-found' };
     }
     const applied = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE_APPLIED', slug, metadata: { installationsReset: reset.count } });
-    if (!applied) this.log.error('lens moderation journal incomplete: a gesture is journaled without its outcome', { action: 'LENS_PACK_RESTORE_APPLIED', slug });
+    if (!applied) logError(this.log, JOURNAL_GAP, JSON.stringify({ action: 'LENS_PACK_RESTORE_APPLIED', slug }));
     const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
     return row === null ? { kind: 'not-found' } : { kind: 'restored', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }), installationsReset: reset.count };
   }
