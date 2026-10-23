@@ -89,10 +89,52 @@ class E2eeKeyStoreTest {
     }
 
     @Test
-    fun `une valeur corrompue du coffre est remplacee`() {
+    fun `une valeur indecodable du coffre n'est jamais remplacee`() {
         val vault = InMemorySecureStore()
         vault.put("me.meeshy.e2ee.identityKey", "pas-du-base64!", "u1")
-        assertThat(keyStore(vault).getOrGenerateIdentityKey().publicKey).hasLength(32)
+        assertThrows(E2eeIdentityUnreadableException::class.java) { keyStore(vault).getOrGenerateIdentityKey() }
+        assertThat(vault.get("me.meeshy.e2ee.identityKey", "u1")).isEqualTo("pas-du-base64!")
+    }
+
+    @Test
+    fun `une valeur de taille inattendue n'est jamais remplacee`() {
+        val vault = InMemorySecureStore()
+        vault.put("me.meeshy.e2ee.signedPreKey", "AAAA", "u1")
+        assertThrows(E2eeIdentityUnreadableException::class.java) { keyStore(vault).getOrGenerateSignedPreKey() }
+        assertThat(vault.get("me.meeshy.e2ee.signedPreKey", "u1")).isEqualTo("AAAA")
+    }
+
+    @Test
+    fun `une entree illisible du coffre bloque la generation de chaque cle et ne touche a rien`() {
+        val vault = InMemorySecureStore(unreadableKeys = setOf("u1.me.meeshy.e2ee.identityKey"))
+        val keys = keyStore(vault)
+        assertThrows(E2eeIdentityUnreadableException::class.java) { keys.getOrGenerateIdentityKey() }
+        assertThat(vault.keys("u1")).isEmpty()
+    }
+
+    @Test
+    fun `un coffre recree apres echec d'ouverture bloque aussi les cles et les identifiants`() {
+        val vault = InMemorySecureStore(allUnreadable = true)
+        val keys = keyStore(vault)
+        assertThrows(E2eeIdentityUnreadableException::class.java) { keys.getOrGenerateSigningKey() }
+        assertThrows(E2eeIdentityUnreadableException::class.java) { keys.registrationId() }
+        assertThat(vault.keys("u1")).isEmpty()
+    }
+
+    @Test
+    fun `resetIdentity est la sortie explicite et regenere une identite neuve`() {
+        val vault = InMemorySecureStore(allUnreadable = true)
+        val keys = keyStore(vault)
+        keys.resetIdentity()
+        val fresh = keys.getOrGenerateIdentityKey()
+        assertThat(fresh.publicKey).hasLength(32)
+        assertThat(keyStore(vault).getOrGenerateIdentityKey().publicKey).isEqualTo(fresh.publicKey)
+    }
+
+    @Test
+    fun `un compte vide ou absent est refuse`() {
+        assertThrows(IllegalArgumentException::class.java) { E2eeKeyStore(InMemorySecureStore(), null) }
+        assertThrows(IllegalArgumentException::class.java) { E2eeKeyStore(InMemorySecureStore(), " ") }
     }
 
     @Test

@@ -6,7 +6,14 @@ import me.meeshy.core.crypto.primitives.Ed25519Signer
 import me.meeshy.core.crypto.primitives.RandomSource
 import me.meeshy.core.crypto.primitives.SecureRandomSource
 import me.meeshy.core.crypto.primitives.X25519Agreement
+import me.meeshy.sdk.model.security.SecureRead
 import me.meeshy.sdk.model.security.SecureStore
+
+/**
+ * Le coffre porte (ou a pu porter) une identité E2EE qu'on ne sait pas relire. Rien n'est régénéré
+ * ni écrasé : la publication est bloquée jusqu'à [E2eeKeyStore.resetIdentity], décision consciente.
+ */
+public class E2eeIdentityUnreadableException : Exception("Identité E2EE illisible : réinitialisation explicite requise")
 
 /** Une paire X25519. [toString] n'imprime rien : la clé privée ne doit jamais atteindre un journal. */
 public class X25519KeyPair(internal val privateKey: ByteArray, public val publicKey: ByteArray) {
@@ -19,6 +26,9 @@ public class X25519KeyPair(internal val privateKey: ByteArray, public val public
  * dans le coffre, puis relue à l'identique. Une clé qu'on ne peut pas persister n'est jamais
  * rendue — la publier ferait un bundle dont la clé privée est perdue.
  *
+ * Seul un coffre qui répond « absent » autorise la naissance d'une clé : une valeur illisible,
+ * indécodable ou de taille inattendue lève [E2eeIdentityUnreadableException] sans rien écrire.
+ *
  * La clé de signature Ed25519 est DISTINCTE des clés d'accord X25519.
  */
 public class E2eeKeyStore(
@@ -28,6 +38,10 @@ public class E2eeKeyStore(
     private val ids: StableIdSource = RandomStableIdSource(random),
 ) {
     private val lock = Any()
+
+    init {
+        require(!account.isNullOrBlank()) { "Un compte est requis : une clé nue sortirait de l'espace du compte" }
+    }
 
     public fun getOrGenerateIdentityKey(): X25519KeyPair = agreementKey(IDENTITY_KEY)
 
@@ -49,6 +63,12 @@ public class E2eeKeyStore(
 
     public fun signedPreKeyId(): Int = stableId(SIGNED_PRE_KEY_ID)
 
+    /** Sortie CONSENTIE d'une identité illisible ou revendiquée ailleurs : efface tout et reconnaît le coffre. */
+    public fun resetIdentity() {
+        clearAll()
+        vault.acknowledgeRecovery(account)
+    }
+
     /** Efface toutes les clés E2EE de ce compte — sans toucher au reste du coffre. */
     public fun clearAll() {
         synchronized(lock) { ALL_KEYS.forEach { vault.remove(it, account) } }
@@ -63,14 +83,22 @@ public class E2eeKeyStore(
     }
 
     private fun stableId(name: String): Int = synchronized(lock) {
-        vault.get(name, account)?.let(StableIdCodec::decode)?.let { return it }
+        when (val stored = vault.read(name, account)) {
+            SecureRead.Unreadable -> throw E2eeIdentityUnreadableException()
+            is SecureRead.Present -> StableIdCodec.decode(stored.value)?.let { return it }
+            SecureRead.Absent -> Unit
+        }
         val fresh = ids.nextId()
         if (!vault.put(name, StableIdCodec.encode(fresh), account)) throw CryptoException("Identifiant E2EE non persisté")
         fresh
     }
 
-    private fun readSeed(name: String): ByteArray? =
-        vault.get(name, account)?.let(CanonicalBase64::decode)?.takeIf { it.size == SEED_LENGTH }
+    private fun readSeed(name: String): ByteArray? = when (val stored = vault.read(name, account)) {
+        SecureRead.Absent -> null
+        SecureRead.Unreadable -> throw E2eeIdentityUnreadableException()
+        is SecureRead.Present -> CanonicalBase64.decode(stored.value)?.takeIf { it.size == SEED_LENGTH }
+            ?: throw E2eeIdentityUnreadableException()
+    }
 
     private fun persist(name: String, bytes: ByteArray) {
         if (!vault.put(name, CanonicalBase64.encode(bytes), account)) throw CryptoException("Clé E2EE non persistée")

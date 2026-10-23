@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import me.meeshy.core.common.IoDispatcher
+import me.meeshy.core.crypto.keys.E2eeIdentityUnreadableException
 import me.meeshy.sdk.model.signal.BundlePublicationDecision
 import me.meeshy.sdk.model.signal.BundlePublicationPolicy
 import me.meeshy.sdk.model.signal.BundlePublishRetryPolicy
@@ -20,6 +21,9 @@ import javax.inject.Singleton
 /** Le bundle PUBLIC local d'un compte (les clés privées ne sortent jamais du coffre). */
 interface LocalBundleSource {
     fun bundleFor(userId: String): SignalPreKeyBundle
+
+    /** Réinitialisation CONSENTIE : efface l'identité locale et reconnaît le coffre (aucune lecture distante). */
+    fun resetIdentity(userId: String)
 
     /** Déconnexion : efface les clés E2EE de ce compte. */
     fun forget(userId: String)
@@ -40,7 +44,7 @@ fun interface E2eeBundlePublishScheduler {
 }
 
 /** Ce que l'interface dit de l'E2EE de cet appareil. */
-enum class E2eeBundleState { IDLE, PUBLISHING, PUBLISHED, OWNED_BY_ANOTHER_DEVICE, WAITING_TO_RETRY, UNAVAILABLE }
+enum class E2eeBundleState { IDLE, PUBLISHING, PUBLISHED, OWNED_BY_ANOTHER_DEVICE, WAITING_TO_RETRY, UNAVAILABLE, IDENTITY_UNREADABLE }
 
 sealed interface BundlePublishOutcome {
     data object Disabled : BundlePublishOutcome
@@ -51,6 +55,7 @@ sealed interface BundlePublishOutcome {
     data object CannotVerify : BundlePublishOutcome
     data object RetryLater : BundlePublishOutcome
     data object GaveUp : BundlePublishOutcome
+    data object IdentityUnreadable : BundlePublishOutcome
 }
 
 /**
@@ -74,9 +79,14 @@ class E2eeBundlePublisher @Inject constructor(
     /** Déclencheur paresseux : non bloquant, sans effet si désactivé ou déjà publié. */
     fun onEncryptedConversationActive() {
         if (!flag.isEnabled()) return
-        if (_state.value == E2eeBundleState.PUBLISHED || _state.value == E2eeBundleState.OWNED_BY_ANOTHER_DEVICE) return
+        if (_state.value == E2eeBundleState.PUBLISHED || _state.value == E2eeBundleState.OWNED_BY_ANOTHER_DEVICE ||
+            _state.value == E2eeBundleState.IDENTITY_UNREADABLE
+        ) return
         scheduler.schedule()
     }
+
+    /** Réinitialisation CONSENTIE : efface l'identité locale et reconnaît le coffre (aucune lecture distante). */
+    fun resetIdentity(userId: String)
 
     /** Déconnexion : efface les clés du compte et l'état. */
     suspend fun onSignedOut(userId: String) {
@@ -88,7 +98,11 @@ class E2eeBundlePublisher @Inject constructor(
         if (!flag.isEnabled()) return BundlePublishOutcome.Disabled
         val userId = accounts.activeUserId()?.takeIf { it.isNotBlank() } ?: return BundlePublishOutcome.NoAccount
         _state.value = E2eeBundleState.PUBLISHING
-        val bundle = withContext(io) { local.bundleFor(userId) }
+        val bundle = try {
+            withContext(io) { local.bundleFor(userId) }
+        } catch (_: E2eeIdentityUnreadableException) {
+            return settle(E2eeBundleState.IDENTITY_UNREADABLE, BundlePublishOutcome.IdentityUnreadable)
+        }
         val lookup = when (val remote = gateway.fetchBundle(userId)) {
             is NetworkResult.Success -> RemoteBundleLookup.of(remote.data)
             is NetworkResult.Failure -> lookupFor(remote.error) ?: return failed(remote.error, attempt)
@@ -102,6 +116,27 @@ class E2eeBundlePublisher @Inject constructor(
                 is NetworkResult.Success -> settle(E2eeBundleState.PUBLISHED, BundlePublishOutcome.Published)
                 is NetworkResult.Failure -> failed(upload.error, attempt)
             }
+        }
+    }
+
+    /**
+     * Sortie explicite et CONSENTIE d'une identité illisible ou revendiquée par un autre appareil :
+     * l'identité locale est refaite et publiée sans comparaison avec le bundle distant, ce qui remplace
+     * celui de l'autre appareil. L'interface doit l'avoir demandé à l'utilisateur.
+     */
+    suspend fun resetIdentity(attempt: Int = 0): BundlePublishOutcome {
+        if (!flag.isEnabled()) return BundlePublishOutcome.Disabled
+        val userId = accounts.activeUserId()?.takeIf { it.isNotBlank() } ?: return BundlePublishOutcome.NoAccount
+        _state.value = E2eeBundleState.PUBLISHING
+        withContext(io) { local.resetIdentity(userId) }
+        val bundle = try {
+            withContext(io) { local.bundleFor(userId) }
+        } catch (_: E2eeIdentityUnreadableException) {
+            return settle(E2eeBundleState.IDENTITY_UNREADABLE, BundlePublishOutcome.IdentityUnreadable)
+        }
+        return when (val upload = gateway.uploadBundle(bundle)) {
+            is NetworkResult.Success -> settle(E2eeBundleState.PUBLISHED, BundlePublishOutcome.Published)
+            is NetworkResult.Failure -> failed(upload.error, attempt)
         }
     }
 

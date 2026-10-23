@@ -28,6 +28,8 @@ internal class VaultLocalBundleSource @Inject constructor(
     override fun bundleFor(userId: String): SignalPreKeyBundle =
         synchronized(lock) { PreKeyBundleFactory(E2eeKeyStore(vault, userId)).create() }
 
+    override fun resetIdentity(userId: String) = synchronized(lock) { E2eeKeyStore(vault, userId).resetIdentity() }
+
     override fun forget(userId: String) = synchronized(lock) { E2eeKeyStore(vault, userId).clearAll() }
 }
 

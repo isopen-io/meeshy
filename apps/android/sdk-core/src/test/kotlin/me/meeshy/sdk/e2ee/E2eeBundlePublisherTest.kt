@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import me.meeshy.core.crypto.keys.E2eeIdentityUnreadableException
 import me.meeshy.sdk.model.signal.SignalPreKeyBundle
 import me.meeshy.sdk.model.signal.SignalPreKeyUploadResult
 import me.meeshy.sdk.net.ApiError
@@ -47,10 +48,16 @@ class E2eeBundlePublisherTest {
         user: String? = "u1",
         scheduler: Scheduler = Scheduler(),
         forgotten: MutableList<String> = mutableListOf(),
+        resets: MutableList<String> = mutableListOf(),
+        unreadable: Boolean = false,
     ) = E2eeBundlePublisher(
         local = object : LocalBundleSource {
-            override fun bundleFor(userId: String) = bundle()
+            override fun bundleFor(userId: String): SignalPreKeyBundle {
+                if (unreadable && resets.isEmpty()) throw E2eeIdentityUnreadableException()
+                return bundle()
+            }
             override fun forget(userId: String) { forgotten += userId }
+            override fun resetIdentity(userId: String) { resets += userId }
         },
         gateway = gateway,
         flag = E2eeBundlePublicationFlag { enabled },
@@ -140,5 +147,41 @@ class E2eeBundlePublisherTest {
         publisher.onSignedOut("u1")
         assertThat(forgotten).containsExactly("u1")
         assertThat(publisher.state.value).isEqualTo(E2eeBundleState.IDLE)
+    }
+
+    @Test
+    fun `une identite illisible ne publie rien et ne se reessaie pas`() = runTest {
+        val gateway = FakeGateway(fail(404))
+        val scheduler = Scheduler()
+        val publisher = publisher(gateway, scheduler = scheduler, unreadable = true)
+        assertThat(publisher.publish()).isEqualTo(BundlePublishOutcome.IdentityUnreadable)
+        assertThat(publisher.state.value).isEqualTo(E2eeBundleState.IDENTITY_UNREADABLE)
+        assertThat(gateway.reads).isEqualTo(0)
+        assertThat(gateway.uploads).isEqualTo(0)
+        publisher.onEncryptedConversationActive()
+        assertThat(scheduler.scheduled).isEqualTo(0)
+    }
+
+    @Test
+    fun `la reinitialisation consentie remplace l'identite et publie sans lire le bundle distant`() = runTest {
+        val gateway = FakeGateway(NetworkResult.Success(bundle(identity = "autre")))
+        val resets = mutableListOf<String>()
+        val publisher = publisher(gateway, resets = resets, unreadable = true)
+        publisher.publish()
+        assertThat(publisher.resetIdentity()).isEqualTo(BundlePublishOutcome.Published)
+        assertThat(resets).containsExactly("u1")
+        assertThat(gateway.uploads).isEqualTo(1)
+        assertThat(publisher.state.value).isEqualTo(E2eeBundleState.PUBLISHED)
+    }
+
+    @Test
+    fun `la reinitialisation sort aussi de l'etat autre appareil mais jamais drapeau coupe ni sans compte`() = runTest {
+        val owned = FakeGateway(NetworkResult.Success(bundle(identity = "autre")))
+        val publisher = publisher(owned)
+        publisher.publish()
+        assertThat(publisher.state.value).isEqualTo(E2eeBundleState.OWNED_BY_ANOTHER_DEVICE)
+        assertThat(publisher.resetIdentity()).isEqualTo(BundlePublishOutcome.Published)
+        assertThat(publisher(owned, enabled = false).resetIdentity()).isEqualTo(BundlePublishOutcome.Disabled)
+        assertThat(publisher(owned, user = null).resetIdentity()).isEqualTo(BundlePublishOutcome.NoAccount)
     }
 }
