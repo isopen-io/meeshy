@@ -48,7 +48,8 @@ const readSegment = (raw: unknown): Segment | null => {
 
 const readTranscription = (raw: unknown): Transcription | null => {
   if (!raw || typeof raw !== 'object') return null;
-  const { text, language, durationMs, segments } = raw as Record<string, unknown>;
+  const { text: plain, transcribedText, language, durationMs, segments } = raw as Record<string, unknown>;
+  const text = typeof plain === 'string' ? plain : transcribedText;
   if (typeof text !== 'string' || text.trim() === '') return null;
   if (typeof language !== 'string' || language.trim() === '') return null;
   const parsed = Array.isArray(segments)
