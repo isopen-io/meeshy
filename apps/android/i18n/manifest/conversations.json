@@ -1025,10 +1025,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "share_link_access_birthday",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "share.link.create.access.email_required",
           "androidName": "share_link_access_email",
