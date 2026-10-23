@@ -762,7 +762,7 @@ class StoryViewerViewModel @Inject constructor(
             x = x,
             y = y,
             scale = scale,
-            aspectRatio = aspectRatio,
+            aspectRatio = servedAspectRatio,
             startTime = startTime ?: 0.0,
             duration = duration ?: 0.0,
             fadeIn = fadeIn ?: 0.0,
