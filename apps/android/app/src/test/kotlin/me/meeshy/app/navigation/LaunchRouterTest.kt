@@ -118,6 +118,16 @@ class LaunchRouterTest {
     }
 
     @Test
+    fun `a socket incoming offer carries its conversation into the call screen`() {
+        val route = LaunchRouter.routeIncomingSocketOffer(
+            offer = WaitingCall(callId = "call-c", callerId = "u1", callerName = "Bob", isVideo = false, conversationId = "conv-7"),
+            currentRoute = Routes.CONVERSATIONS,
+        )!!
+
+        assertThat(configOf(route).conversationId).isEqualTo("conv-7")
+    }
+
+    @Test
     fun `a socket incoming offer while already on the call screen yields no route`() {
         val route = LaunchRouter.routeIncomingSocketOffer(
             offer = WaitingCall(callId = "call-2", callerId = "u2", callerName = "Carol", isVideo = false),

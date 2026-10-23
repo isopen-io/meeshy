@@ -35,9 +35,11 @@ import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageEffectsEditor
 import me.meeshy.sdk.model.MimeTypeResolver
+import me.meeshy.sdk.model.TypedEmojis
 import me.meeshy.sdk.model.isWorthPersisting
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -67,6 +69,8 @@ internal class ChatComposerController(
     private val workManager: WorkManager,
     private val clock: CacheClock,
     private val pendingTray: () -> ComposerTrayController? = { null },
+    private val composerText: ComposerTextHolder = ComposerTextHolder(),
+    private val recentEmojis: RecentEmojiStore? = null,
 ) {
 
     private var mentionRoster: List<MentionCandidate> = emptyList()
@@ -76,6 +80,12 @@ internal class ChatComposerController(
     private var lastPersistedDraft: ConversationDraft? = null
     private var draftPersistJob: Job? = null
     private var mentionSearchJob: Job? = null
+
+    /** The draft being written when « Modifier » was tapped, given back when the edit ends (iOS `draftBeforeEdit`). */
+    private var draftBeforeEdit: String? = null
+
+    /** The edited message's text, so an unchanged edit is dropped instead of sent (iOS `editingOriginalContent`). */
+    private var editingOriginal: String? = null
 
     /** Replaces the roster the `@mention` panel suggests from (the conversation's participants). */
     fun updateMentionRoster(roster: List<MentionCandidate>) {
@@ -108,35 +118,29 @@ internal class ChatComposerController(
     suspend fun restoreStoredDraft() {
         val stored = draftStore.load(conversationId)
         lastPersistedDraft = stored?.takeIf { it.isWorthPersisting }
+        val restored = DraftAutosave.restore(stored, composerText.text, state.value.isEditing) ?: return
+        composerText.replace(restored.text)
         state.update { current ->
-            val restored = DraftAutosave.restore(stored, current.draft, current.isEditing)
-            if (restored != null) {
-                current.copy(
-                    draft = restored.text,
-                    draftRevision = current.draftRevision + 1,
-                    replyingToMessageId = restored.replyToId,
-                    pendingEffects = restored.effects,
-                    composerLanguage = restored.selectedLanguage
-                        ?.let { current.composerLanguage.withManualPick(it) }
-                        ?: current.composerLanguage,
-                )
-            } else {
-                current
-            }
+            current.copy(
+                replyingToMessageId = restored.replyToId,
+                pendingEffects = restored.effects,
+                composerLanguage = restored.selectedLanguage
+                    ?.let { current.composerLanguage.withManualPick(it) }
+                    ?: current.composerLanguage,
+            )
         }
     }
 
     fun onDraftChange(value: String) {
         val detection = LargePasteDetector.detect(
-            previous = state.value.draft,
+            previous = composerText.text,
             current = value,
             nowMillis = clock.nowMillis(),
         )
         if (detection is PasteDetection.Captured) {
+            composerText.clear()
             state.update {
                 it.copy(
-                    draft = "",
-                    draftRevision = it.draftRevision + 1,
                     clipboardContent = detection.content,
                     mention = it.mention.onTextChange("", mentionRoster),
                     composerLanguage = it.composerLanguage.onDraftChanged(""),
@@ -147,9 +151,9 @@ internal class ChatComposerController(
             persistDraft("", state.value.replyingToMessageId)
             return
         }
+        composerText.typed(value)
         state.update {
             it.copy(
-                draft = value,
                 mention = it.mention.onTextChange(value, mentionRoster),
                 composerLanguage = it.composerLanguage.onDraftChanged(value),
             )
@@ -175,7 +179,7 @@ internal class ChatComposerController(
      */
     fun onComposerLanguagePicked(code: String) {
         state.update { it.copy(composerLanguage = it.composerLanguage.withManualPick(code)) }
-        persistDraft(state.value.draft, state.value.replyingToMessageId)
+        persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
     /**
@@ -232,10 +236,9 @@ internal class ChatComposerController(
      */
     fun onMentionSelected(candidate: MentionCandidate) {
         mentionSearchJob?.cancel()
-        state.update { current ->
-            val (newDraft, newMention) = current.mention.select(candidate, current.draft)
-            current.copy(draft = newDraft, draftRevision = current.draftRevision + 1, mention = newMention)
-        }
+        val (newDraft, newMention) = state.value.mention.select(candidate, composerText.text)
+        composerText.replace(newDraft)
+        state.update { it.copy(mention = newMention) }
     }
 
     /**
@@ -303,7 +306,7 @@ internal class ChatComposerController(
     }
 
     fun send() {
-        val text = state.value.draft.trim()
+        val text = composerText.text.trim()
         val clipboard = state.value.clipboardContent
         val tray = pendingTray()
         val hasStaged = tray?.state?.value?.isEmpty == false
@@ -311,6 +314,10 @@ internal class ChatComposerController(
         stopTypingEmission()
         val editingId = state.value.editingMessageId
         if (editingId != null) {
+            if (text == editingOriginal?.trim()) {
+                cancelEdit()
+                return
+            }
             if (text.isNotEmpty() || clipboard != null) applyEdit(editingId, text)
             return
         }
@@ -336,10 +343,9 @@ internal class ChatComposerController(
         val languageCode = state.value.composerLanguage.display(
             fallback = LanguageResolver.resolveUserLanguage(user),
         )
+        composerText.clear()
         state.update {
             it.copy(
-                draft = "",
-                draftRevision = it.draftRevision + 1,
                 clipboardContent = null,
                 replyingToMessageId = null,
                 mention = it.mention.reset(),
@@ -350,6 +356,7 @@ internal class ChatComposerController(
             )
         }
         persistDraft("", replyToId = null)
+        recordTypedEmojis(text)
         scope.launch {
             try {
                 if (batch != null) {
@@ -426,6 +433,12 @@ internal class ChatComposerController(
         )
     }
 
+    /** Les emojis tapés dans le message rejoignent les récents (iOS `RecentEmojiStore.record`). */
+    private fun recordTypedEmojis(text: String) {
+        val store = recentEmojis ?: return
+        TypedEmojis.extract(text).forEach(store::record)
+    }
+
     /** Chaque famille de pièce en attente doit être permise par la porte d'envoi unique. */
     private fun stagedKindsAllowed(tray: ComposerTrayController?, sentAtMillis: Long): Boolean {
         val items = tray?.state?.value?.items.orEmpty()
@@ -464,6 +477,9 @@ internal class ChatComposerController(
                 originalName = name,
                 mimeType = mime,
                 fileSize = bytes.size,
+                width = item.width,
+                height = item.height,
+                duration = item.durationMs?.toInt(),
             )
         }
         tray.release(batch)
@@ -525,17 +541,16 @@ internal class ChatComposerController(
             state.value.slowModeState(sentAtMillis),
         )
         if (!gate.allowed) return
-        val text = state.value.draft.trim()
+        val text = composerText.text.trim()
         val replyToId = state.value.replyingToMessageId
         val effects = state.value.pendingEffects
         val languageCode = state.value.composerLanguage.display(
             fallback = LanguageResolver.resolveUserLanguage(user),
         )
         stopTypingEmission()
+        composerText.clear()
         state.update {
             it.copy(
-                draft = "",
-                draftRevision = it.draftRevision + 1,
                 replyingToMessageId = null,
                 mention = it.mention.reset(),
                 pendingEffects = MessageEffects(),
@@ -545,6 +560,7 @@ internal class ChatComposerController(
             )
         }
         persistDraft("", replyToId = null)
+        recordTypedEmojis(text)
         scope.launch {
             try {
                 val uploadCmid = mediaUploadQueue.enqueue(
@@ -597,7 +613,7 @@ internal class ChatComposerController(
      */
     fun toggleEffect(flag: Long) {
         state.update { it.copy(pendingEffects = MessageEffectsEditor.toggle(it.pendingEffects, flag)) }
-        persistDraft(state.value.draft, state.value.replyingToMessageId)
+        persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
     /** Record the chosen ephemeral self-destruct [duration] on the armed selection. */
@@ -605,13 +621,13 @@ internal class ChatComposerController(
         state.update {
             it.copy(pendingEffects = MessageEffectsEditor.withEphemeralDuration(it.pendingEffects, duration))
         }
-        persistDraft(state.value.draft, state.value.replyingToMessageId)
+        persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
     /** The picker's "clear all" — reset the armed selection to no effects. */
     fun clearEffects() {
         state.update { it.copy(pendingEffects = MessageEffectsEditor.cleared()) }
-        persistDraft(state.value.draft, state.value.replyingToMessageId)
+        persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
     fun startEdit(messageId: String) {
@@ -626,11 +642,12 @@ internal class ChatComposerController(
             nowMillis = clock.nowMillis(),
         )
         if (!editable) return
+        if (draftBeforeEdit == null) draftBeforeEdit = composerText.text
+        editingOriginal = message.content
+        composerText.replace(message.content)
         state.update {
             it.copy(
                 editingMessageId = messageId,
-                draft = message.content,
-                draftRevision = it.draftRevision + 1,
                 actionMessageId = null,
                 replyingToMessageId = null,
             )
@@ -642,30 +659,38 @@ internal class ChatComposerController(
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED
         }?.message ?: return
         if (message.deletedAt != null) return
+        val restored = if (state.value.isEditing) takeDraftBeforeEdit() else null
+        if (restored != null) composerText.replace(restored)
         state.update {
-            val clearsEdit = it.isEditing
             it.copy(
                 replyingToMessageId = messageId,
                 actionMessageId = null,
                 editingMessageId = null,
-                draft = if (clearsEdit) "" else it.draft,
-                draftRevision = if (clearsEdit) it.draftRevision + 1 else it.draftRevision,
             )
         }
-        persistDraft(state.value.draft, replyToId = messageId)
+        persistDraft(composerText.text, replyToId = messageId)
     }
 
     fun cancelReply() {
         state.update { it.copy(replyingToMessageId = null) }
-        persistDraft(state.value.draft, replyToId = null)
+        persistDraft(composerText.text, replyToId = null)
     }
 
     fun cancelEdit() {
-        state.update { it.copy(editingMessageId = null, draft = "", draftRevision = it.draftRevision + 1) }
+        composerText.replace(takeDraftBeforeEdit())
+        state.update { it.copy(editingMessageId = null) }
+    }
+
+    private fun takeDraftBeforeEdit(): String {
+        val restored = draftBeforeEdit.orEmpty()
+        draftBeforeEdit = null
+        editingOriginal = null
+        return restored
     }
 
     private fun applyEdit(messageId: String, content: String) {
-        state.update { it.copy(draft = "", draftRevision = it.draftRevision + 1, editingMessageId = null) }
+        composerText.replace(takeDraftBeforeEdit())
+        state.update { it.copy(editingMessageId = null) }
         scope.launch {
             try {
                 if (messageRepository.editOptimistic(messageId, content)) {

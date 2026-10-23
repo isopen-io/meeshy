@@ -1,4 +1,5 @@
 import { usePlaybackTelemetry } from '@/lib/telemetry/playback-session';
+import { useRememberSeenMedia } from '@/lib/media/use-remember-seen-media';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -22,7 +23,7 @@ import type { PostToggleKind } from '@/lib/feed/interactions';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { reelStageOf } from '@/lib/reels/scene';
-import type { ReelPageMode } from '@/lib/reels/thread';
+import { reelPreloadOf, type ReelPageMode } from '@/lib/reels/thread';
 import { useFrameProgress } from '@/lib/view/frame-progress';
 import type { ViewAttribution } from '@/lib/view/content-open';
 import { readingTelemetry, useReadingSession } from '@/lib/view/reading-telemetry';
@@ -51,7 +52,8 @@ const ReelImages = lazy(() => import('./reel-images'));
  *   #9702) : le réel visible monte et JOUE son `<video>` ; ses voisins N±1 le
  *   montent en `preload="auto"` — leur première image est décodée par le
  *   navigateur avant le balayage, qui n'attend donc pas le réseau ; N±2 le
- *   montent en attente de métadonnées (un retour en arrière ne recrée rien) ;
+ *   montent sans rien charger ni décoder (`reelPreloadOf`, #11308 : un retour
+ *   en arrière ne recrée rien, et le décodeur reste aux trois réels proches) ;
  *   les autres ne portent que leur affiche, leurs octets de tête étant amorcés
  *   à part tant qu'ils restent dans la fenêtre (`lib/reels/media-primer.ts`).
  * - **La vidéo n'est pas recadrée** : `.resizeAspect` côté iOS
@@ -131,7 +133,7 @@ function ReelPlayable({
   const active = mode === 'active';
   const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active: active && !held, soundOn, onSoundBlocked });
   const poster = media.thumbnailSrc ?? media.placeholder;
-  const preload = mode === 'warm' ? 'metadata' : 'auto';
+  const preload = reelPreloadOf(mode);
   /* L'ATTENTE SE DIT (#9277) : l'élément lié est aussi écouté pour son buffer. */
   const [element, setElement] = useState<HTMLMediaElement | null>(null);
   const [stalled, setStalled] = useState(false);
@@ -146,6 +148,10 @@ function ReelPlayable({
   const bar = useRef<HTMLSpanElement | null>(null);
   useFrameProgress({ media: element, playing: status === 'playing', bar });
   usePlaybackTelemetry({ element, active, target: { kind: 'reel', id: postId }, mediaId: media.id, surface: 'reels' });
+  /* VU, DONC RELISIBLE HORS LIGNE (#11326) — un réel n'est jamais une vue
+     unique ni un éphémère : la loi du seau « récents » décide du reste
+     (Wi-Fi, budget, ce que la passerelle déclare). */
+  useRememberSeenMedia({ element, src: media.src, protection: 'none', active: active && !held });
 
   return (
     <>

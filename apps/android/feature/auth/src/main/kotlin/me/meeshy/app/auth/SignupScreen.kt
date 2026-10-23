@@ -43,7 +43,9 @@ import androidx.compose.ui.autofill.AutofillType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -57,6 +59,7 @@ import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.SignupField
+import me.meeshy.sdk.model.auth.PhonePlausibility
 import me.meeshy.sdk.model.auth.SignupFieldIssue
 import me.meeshy.sdk.model.auth.SignupFieldMessage
 import me.meeshy.sdk.model.auth.SignupRefusal
@@ -452,7 +455,11 @@ private fun fieldSupportingText(
     val actionLabel = if (action != null) stringResource(R.string.signup_sign_in) else null
     return {
         Column {
-            Text(text = text, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
             if (actionLabel != null) {
                 Text(
                     text = actionLabel,
@@ -480,7 +487,11 @@ private fun fieldSupportingText(
 @Composable
 private fun fieldMessageText(message: SignupFieldMessage?): String? = when (message) {
     null -> null
-    is SignupFieldMessage.Local -> stringResource(message.issue.labelRes())
+    is SignupFieldMessage.Local -> when (message.issue) {
+        SignupFieldIssue.PHONE_TOO_SHORT ->
+            stringResource(R.string.signup_phone_too_short, PhonePlausibility.MIN_DIGITS)
+        else -> stringResource(message.issue.labelRes())
+    }
     is SignupFieldMessage.Refused -> when (message.refusal) {
         SignupRefusal.PHONE_OWNERSHIP_CONFLICT -> stringResource(R.string.signup_phone_conflict)
         SignupRefusal.PHONE_INVALID -> stringResource(R.string.signup_phone_invalid)
@@ -495,4 +506,6 @@ private fun SignupFieldIssue.labelRes(): Int = when (this) {
     SignupFieldIssue.DISPLAY_NAME_TOO_LONG -> R.string.signup_display_name_too_long
     SignupFieldIssue.EMAIL_INVALID -> R.string.signup_email_invalid
     SignupFieldIssue.PASSWORD_TOO_SHORT -> R.string.signup_password_too_short
+    SignupFieldIssue.PHONE_TOO_SHORT -> R.string.signup_phone_implausible
+    SignupFieldIssue.PHONE_IMPLAUSIBLE -> R.string.signup_phone_implausible
 }

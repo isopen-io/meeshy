@@ -138,6 +138,7 @@ internal class MessageSendCoordinator(
         database.withTransaction {
             messageDao.deleteByIds(listOf(cmid))
             messageDao.upsertAll(listOf(MessageEntityFactory.cached(serverMessage, now)))
+            MessageIdReconciliation.recordAck(database, cmid, serverMessage.id, serverMessage.conversationId, now)
         }
     }
 

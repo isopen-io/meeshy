@@ -76,6 +76,7 @@ const f = {
   'admin.gameSeasons.refusal.invalid-theme': 'Ce thème n’est pas dans le catalogue.',
   'admin.gameSeasons.refusal.rewards-out-of-bounds': 'Points hors bornes : de 50 à 200, par pas de 10.',
   'admin.gameSeasons.refusal.copy-invalid': 'Textes invalides : sept langues, trois textes chacune, dans les limites 30 / 50 / 120.',
+  'admin.gameSeasons.refusal.invalid-reward-pack': 'Pack récompense illisible : une clé `<domaine>.<slug>` est attendue.',
   'admin.gameSeasons.refusal.revision-conflict': 'Quelqu’un a enregistré entre-temps : rechargez le calendrier avant de recommencer.',
   'admin.gameSeasons.refusal.proposal-not-pending': 'Cette proposition a déjà été traitée.',
   'admin.gameSeasons.refusal.proposal-not-found': 'Cette proposition n’existe plus.',

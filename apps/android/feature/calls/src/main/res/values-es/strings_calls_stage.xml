@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_stage_remote_off">Cámara desactivada</string>
+    <string name="call_stage_remote_connecting">Conectando video…</string>
+    <string name="call_stage_remote_live">Vídeo en directo</string>
+    <string name="call_stage_peer_muted">Contacto silenciado</string>
+    <string name="call_stage_peer_network">Red débil (contacto)</string>
+    <string name="call_stage_signaling">Servidor desconectado</string>
+    <string name="call_stage_tile_swap">Cambiar videos</string>
+    <string name="call_stage_tile_swap_hint">Toca para intercambiar el video pequeño y grande; arrastra para mover</string>
+    <string name="call_stage_tile_small">Miniatura pequeña</string>
+    <string name="call_stage_tile_medium">Miniatura mediana</string>
+    <string name="call_stage_tile_large">Miniatura grande</string>
+    <string name="call_stage_video_paused">Vídeo en pausa</string>
+    <string name="call_stage_video_paused_hint">Conexión débil, el vídeo se reanudará automáticamente</string>
+    <string name="call_stage_video_paused_short">Reanudación automática</string>
+    <string name="call_stage_tile_larger">Agrandar la miniatura</string>
+    <string name="call_stage_tile_smaller">Reducir la miniatura</string>
+</resources>

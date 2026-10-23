@@ -78,7 +78,7 @@ describe('sweepPendingPostMedia', () => {
     // Le prédicat de « libre » ne se réécrit pas ici : il vient du site UNIQUE
     // que la réclamation utilise.
     expect(args.where).toEqual({ ...unclaimedMediaWhere(), createdAt: { lt: CUTOFF } });
-    expect(args.select).toEqual({ id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true });
+    expect(args.select).toEqual({ id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true, avifVariants: true });
   });
 
   it('détruit un média abandonné : les OCTETS d’abord, la LIGNE ensuite', async () => {

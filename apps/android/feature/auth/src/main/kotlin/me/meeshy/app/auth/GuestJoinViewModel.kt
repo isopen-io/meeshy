@@ -1,5 +1,6 @@
 package me.meeshy.app.auth
 
+import android.os.LocaleList
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -11,11 +12,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.AnonymousSessionContext
+import me.meeshy.sdk.model.GuestJoinError
 import me.meeshy.sdk.model.GuestJoinForm
+import me.meeshy.sdk.model.GuestJoinLanguages
 import me.meeshy.sdk.model.ShareLinkInfo
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.AnonymousSessionRepository
 import javax.inject.Inject
+import java.util.Locale
 import kotlin.random.Random
 
 /**
@@ -28,8 +33,8 @@ data class GuestJoinUiState(
     val info: ShareLinkInfo? = null,
     val form: GuestJoinForm = GuestJoinForm(),
     val isSubmitting: Boolean = false,
-    val previewErrorMessage: String? = null,
-    val submitErrorMessage: String? = null,
+    val previewError: GuestJoinError? = null,
+    val submitError: GuestJoinError? = null,
     val session: AnonymousSessionContext? = null,
 ) {
     /** True once the link forbids anonymous joins — steer the visitor to sign in. */
@@ -38,6 +43,10 @@ data class GuestJoinUiState(
     val canSubmit: Boolean get() = info != null && !isSubmitting && form.canSubmit
 
     val isJoined: Boolean get() = session != null
+
+    val previewErrorMessage: String? get() = (previewError as? GuestJoinError.ServerMessage)?.text
+
+    val submitErrorMessage: String? get() = (submitError as? GuestJoinError.ServerMessage)?.text
 }
 
 /**
@@ -64,23 +73,30 @@ class GuestJoinViewModel @Inject constructor(
     @VisibleForTesting
     internal var usernameSuffix: () -> Int = { Random.nextInt(1000) }
 
+    /** The device's preferred languages, read when the preview lands; injectable for tests. */
+    @VisibleForTesting
+    internal var deviceLanguages: () -> List<String> = ::systemLanguageTags
+
     init {
         loadPreview()
     }
 
     fun loadPreview() {
-        _state.update { it.copy(isLoadingPreview = true, previewErrorMessage = null) }
+        _state.update { it.copy(isLoadingPreview = true, previewError = null) }
         viewModelScope.launch {
             _state.update {
                 when (val result = repository.preview(identifier)) {
                     is NetworkResult.Success -> it.copy(
                         isLoadingPreview = false,
                         info = result.data,
-                        form = GuestJoinForm.from(result.data),
+                        form = GuestJoinForm.from(
+                            result.data,
+                            GuestJoinLanguages.defaultFor(deviceLanguages()),
+                        ),
                     )
                     is NetworkResult.Failure -> it.copy(
                         isLoadingPreview = false,
-                        previewErrorMessage = result.error.message,
+                        previewError = result.error.toGuestJoinError(),
                     )
                 }
             }
@@ -107,14 +123,14 @@ class GuestJoinViewModel @Inject constructor(
         val info = current.info ?: return
         val request = current.form.toRequest() ?: return
         val linkId = info.linkId.ifBlank { info.id }.ifBlank { identifier }
-        _state.update { it.copy(isSubmitting = true, submitErrorMessage = null) }
+        _state.update { it.copy(isSubmitting = true, submitError = null) }
         viewModelScope.launch {
             _state.update {
                 when (val result = repository.join(linkId, request)) {
                     is NetworkResult.Success -> it.copy(isSubmitting = false, session = result.data)
                     is NetworkResult.Failure -> it.copy(
                         isSubmitting = false,
-                        submitErrorMessage = result.error.message,
+                        submitError = result.error.toGuestJoinError(),
                     )
                 }
             }
@@ -122,10 +138,18 @@ class GuestJoinViewModel @Inject constructor(
     }
 
     private fun updateForm(transform: (GuestJoinForm) -> GuestJoinForm) {
-        _state.update { it.copy(form = transform(it.form), submitErrorMessage = null) }
+        _state.update { it.copy(form = transform(it.form), submitError = null) }
     }
 
     companion object {
         const val IDENTIFIER_ARG: String = "identifier"
     }
 }
+
+private fun ApiError.toGuestJoinError(): GuestJoinError = GuestJoinError.from(httpStatus, message)
+
+private fun systemLanguageTags(): List<String> =
+    runCatching {
+        val locales = LocaleList.getDefault()
+        List(locales.size()) { locales[it].toLanguageTag() }
+    }.getOrElse { listOf(Locale.getDefault().toLanguageTag()) }
