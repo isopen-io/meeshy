@@ -156,10 +156,28 @@ describe('les clés vivantes sont TOUTES nommées — le balayage efface ce qu�
         return [];
       },
     });
-    const prisma = { messageAttachment: delegate('messageAttachment'), postMedia: delegate('postMedia') };
+    const prisma = { messageAttachment: delegate('messageAttachment'), postMedia: delegate('postMedia'), sound: delegate('sound') };
     for (const source of mediaMirrorSources(prisma as never)) await source.page(null, 1);
-    const columns = ['filePath', 'fileUrl', 'thumbnailPath', 'thumbnailUrl', 'imageVariants', 'translations'];
-    expect(Object.keys(selects).sort()).toEqual(['messageAttachment', 'postMedia']);
-    for (const select of Object.values(selects)) expect(Object.keys(select)).toEqual(expect.arrayContaining(columns));
+    const columns = ['filePath', 'fileUrl', 'thumbnailPath', 'thumbnailUrl', 'imageVariants', 'avifVariants', 'renditions', 'translations'];
+    expect(Object.keys(selects).sort()).toEqual(['messageAttachment', 'postMedia', 'sound']);
+    expect(Object.keys(selects.messageAttachment!)).toEqual(expect.arrayContaining(columns));
+    expect(Object.keys(selects.postMedia!)).toEqual(expect.arrayContaining(columns));
+    expect(Object.keys(selects.sound!)).toEqual(expect.arrayContaining(['fileUrl', 'coverUrl']));
+  });
+
+  it('les variantes AVIF et les rendus vidéo sont des clés (#11262, #11261)', () => {
+    const keys = mediaRowStorageKeys(
+      {
+        filePath: '2026/10/u1/v.mp4',
+        avifVariants: [{ width: 640, url: '/api/v1/attachments/file/2026%2F10%2Fu1%2Fv_640w.avif' }],
+        renditions: [{ height: 720, url: '/api/v1/attachments/file/2026%2F10%2Fu1%2Fv_720p.mp4' }],
+      },
+      '/srv/uploads',
+    );
+    expect(keys).toEqual(expect.arrayContaining(['2026/10/u1/v_640w.avif', '2026/10/u1/v_720p.mp4']));
+  });
+
+  it('la couverture qu’un son vise est une clé vivante, même quand le post qui l’a posée est purgé', () => {
+    expect(mediaRowStorageKeys({ fileUrl: '/api/v1/static/s.mp3', coverUrl: '/api/v1/attachments/file/2026%2F10%2Fu1%2Fcover.jpg' }, '/srv/uploads')).toContain('2026/10/u1/cover.jpg');
   });
 });

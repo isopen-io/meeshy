@@ -138,4 +138,31 @@ describe('recordSweepReport — la jauge qu’une alerte peut lire', () => {
     expect(text).toMatch(/media_bucket_sweep_refused\{reason="too-many-removals"\} 0/);
     expect(text).toMatch(new RegExp(`media_bucket_sweep_last_success_timestamp_seconds ${NOW.getTime() / 1000}`));
   });
+
+describe('la réconciliation complète — un fichier écrit après la fenêtre de 24 h est rattrapé', () => {
+  async function lateFile() {
+    const env = await setup({ '2026/01/u1/old.jpg': 'old', 'translated/1_en.mp3': 'tts' }, [{ id: '000000000000000000000001', filePath: '2026/01/u1/old.jpg' }]);
+    const late = { ...env.sources[0]!, page: async (after: string | null, take: number) => (after === null || after < '000000000000000000000001' ? [{ id: '000000000000000000000001', filePath: '2026/01/u1/old.jpg', translations: { en: { url: '/api/v1/attachments/file/translated%2F1_en.mp3' } } }].slice(0, take) : []) };
+    return { ...env, sources: [late] };
+  }
+
+  it('dû : la passe complète repart du début sans toucher au curseur, et recopie la piste tardive', async () => {
+    const env = await lateFile();
+    const bucket = memoryBucket({ '2026/01/u1/old.jpg': { bytes: 'old', lastModified: OLD } });
+
+    const next = await followMediaMirrorOnce({ ...env, mirror: bucket, uploadRoot: env.root, apply: true, now: NOW, lastSweepAt: NOW, lastFullScanAt: null, log: () => undefined });
+
+    expect(bucket.objects.has('translated/1_en.mp3')).toBe(true);
+    expect(next.lastFullScanAt).toEqual(NOW);
+  });
+
+  it('pas dû : une seule passe complète par jour', async () => {
+    const env = await lateFile();
+    const bucket = memoryBucket({ '2026/01/u1/old.jpg': { bytes: 'old', lastModified: OLD } });
+    const lastFullScanAt = new Date(NOW.getTime() - 2 * HOUR);
+
+    const next = await followMediaMirrorOnce({ ...env, mirror: bucket, uploadRoot: env.root, apply: true, now: NOW, lastSweepAt: NOW, lastFullScanAt, log: () => undefined });
+
+    expect(next.lastFullScanAt).toEqual(lastFullScanAt);
+  });
 });
