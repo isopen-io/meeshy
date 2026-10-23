@@ -1,5 +1,10 @@
 package me.meeshy.app.contacts
 
+import androidx.compose.foundation.clickable
+import kotlinx.coroutines.flow.map
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastHost
+import me.meeshy.ui.component.FeedbackToastRequest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -47,12 +52,21 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @Composable
 fun BlockedTab(
+    onOpenProfile: (String) -> Unit = {},
     viewModel: BlockedListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var confirmTarget by remember { mutableStateOf<BlockedUser?>(null) }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    val toasts = remember(viewModel) {
+        viewModel.feedback.map {
+            when (it) {
+                BlockedFeedback.Unblocked -> FeedbackToastRequest(R.string.contacts_blocked_unblock_success, FeedbackKind.Success)
+                BlockedFeedback.UnblockFailed -> FeedbackToastRequest(R.string.contacts_blocked_unblock_error, FeedbackKind.Error)
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
@@ -75,10 +89,12 @@ fun BlockedTab(
                         user = user,
                         pending = user.id in state.pendingIds,
                         onUnblock = { confirmTarget = user },
+                        onOpenProfile = { onOpenProfile(user.id) },
                     )
                 }
             }
         }
+        FeedbackToastHost(toasts = toasts)
     }
 
     confirmTarget?.let { target ->
@@ -109,11 +125,13 @@ private fun BlockedRow(
     user: BlockedUser,
     pending: Boolean,
     onUnblock: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
     val name = user.blockedDisplayName()
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = user.id.isNotBlank(), onClick = onOpenProfile)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -121,6 +139,7 @@ private fun BlockedRow(
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(user.id.ifBlank { name })),
+            imageUrl = user.avatar,
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {

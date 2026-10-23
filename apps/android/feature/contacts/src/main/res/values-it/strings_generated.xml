@@ -6,7 +6,9 @@
     <string name="contacts_blocked_unblock_a11y">Sblocca %s</string>
     <string name="contacts_blocked_unblock_cancel">Annulla</string>
     <string name="contacts_blocked_unblock_confirm">Sblocca</string>
+    <string name="contacts_blocked_unblock_error">Impossibile sbloccare</string>
     <string name="contacts_blocked_unblock_message">Sbloccare %s?</string>
+    <string name="contacts_blocked_unblock_success">Utente sbloccato</string>
     <string name="contacts_blocked_unblock_title">Sbloccare?</string>
     <string name="contacts_discover_blocked">Bloccati</string>
     <string name="contacts_discover_email_error">Impossibile inviare l\'invito</string>
@@ -30,7 +32,11 @@
     <string name="contacts_request_accept">Accetta</string>
     <string name="contacts_request_cancel">Annulla</string>
     <string name="contacts_request_decline">Rifiuta</string>
+    <string name="contacts_requests_accept_a11y">Accetta la richiesta di %s</string>
+    <string name="contacts_requests_cancel_a11y">Annulla la richiesta inviata a %s</string>
     <string name="contacts_requests_received">Ricevute</string>
+    <string name="contacts_requests_received_intent">Desidera mettersi in contatto con te</string>
+    <string name="contacts_requests_reject_a11y">Rifiuta la richiesta di %s</string>
     <string name="contacts_requests_sent">Inviate</string>
     <string name="contacts_search_hint">Cerca un contatto</string>
     <string name="contacts_tab_blocked">Bloccati</string>

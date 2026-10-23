@@ -6,7 +6,9 @@
     <string name="contacts_blocked_unblock_a11y">إلغاء حظر %s</string>
     <string name="contacts_blocked_unblock_cancel">إلغاء</string>
     <string name="contacts_blocked_unblock_confirm">إلغاء الحظر</string>
+    <string name="contacts_blocked_unblock_error">تعذر إلغاء الحظر</string>
     <string name="contacts_blocked_unblock_message">إلغاء حظر %s؟</string>
+    <string name="contacts_blocked_unblock_success">تم إلغاء حظر المستخدم</string>
     <string name="contacts_blocked_unblock_title">إلغاء الحظر؟</string>
     <string name="contacts_discover_blocked">المحظورون</string>
     <string name="contacts_discover_email_error">تعذر إرسال الدعوة</string>
@@ -30,7 +32,11 @@
     <string name="contacts_request_accept">قبول</string>
     <string name="contacts_request_cancel">إلغاء</string>
     <string name="contacts_request_decline">رفض</string>
+    <string name="contacts_requests_accept_a11y">قبول طلب %s</string>
+    <string name="contacts_requests_cancel_a11y">إلغاء الطلب المُرسل إلى %s</string>
     <string name="contacts_requests_received">الواردة</string>
+    <string name="contacts_requests_received_intent">يرغب في التواصل معك</string>
+    <string name="contacts_requests_reject_a11y">رفض طلب %s</string>
     <string name="contacts_requests_sent">المُرسَلة</string>
     <string name="contacts_search_hint">البحث عن جهة اتصال</string>
     <string name="contacts_tab_blocked">المحظورون</string>

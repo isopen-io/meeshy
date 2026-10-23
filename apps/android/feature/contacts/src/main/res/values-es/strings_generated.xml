@@ -6,7 +6,9 @@
     <string name="contacts_blocked_unblock_a11y">Desbloquear a %s</string>
     <string name="contacts_blocked_unblock_cancel">Cancelar</string>
     <string name="contacts_blocked_unblock_confirm">Desbloquear</string>
+    <string name="contacts_blocked_unblock_error">No se pudo desbloquear</string>
     <string name="contacts_blocked_unblock_message">¿Desbloquear a %s?</string>
+    <string name="contacts_blocked_unblock_success">Usuario desbloqueado</string>
     <string name="contacts_blocked_unblock_title">¿Desbloquear?</string>
     <string name="contacts_discover_blocked">Bloqueados</string>
     <string name="contacts_discover_email_error">No se pudo enviar la invitación</string>
@@ -30,7 +32,11 @@
     <string name="contacts_request_accept">Aceptar</string>
     <string name="contacts_request_cancel">Cancelar</string>
     <string name="contacts_request_decline">Rechazar</string>
+    <string name="contacts_requests_accept_a11y">Aceptar la solicitud de %s</string>
+    <string name="contacts_requests_cancel_a11y">Cancelar la solicitud enviada a %s</string>
     <string name="contacts_requests_received">Recibidas</string>
+    <string name="contacts_requests_received_intent">Quiere conectar contigo</string>
+    <string name="contacts_requests_reject_a11y">Rechazar la solicitud de %s</string>
     <string name="contacts_requests_sent">Enviadas</string>
     <string name="contacts_search_hint">Buscar un contacto</string>
     <string name="contacts_tab_blocked">Bloqueados</string>
