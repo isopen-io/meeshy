@@ -115,7 +115,7 @@ public fun MessageBubble(
         isDeleted = content.isDeleted,
         expiresAtIso = content.expiresAtIso,
         isViewOnce = content.isViewOnce,
-        viewOnceCount = content.viewOnceCount,
+        isViewOnceOpenedByMe = content.isViewOnceOpenedByMe,
         isSystem = content.isSystem,
     )
     AnimatedVisibility(

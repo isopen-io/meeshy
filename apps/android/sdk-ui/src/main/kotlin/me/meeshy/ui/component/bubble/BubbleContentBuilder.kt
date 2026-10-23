@@ -252,11 +252,11 @@ public object BubbleContentBuilder {
             // deleted (a tombstone never glows). The played-appearance gate is resolved
             // later at render time by `MessageEffectRenderPlanner.plan`.
             effects = MessageEffectRenderPlanner.renderEffects(message.effects, isDeleted),
-            // View-once burned tombstone inputs — mirror iOS gating burned on
-            // `message.isViewOnce && message.viewOnceCount > 0`. A deleted tombstone
-            // takes precedence (its own path), so zero these out when deleted.
+            // View-once burned tombstone inputs — consumed PER READER, like iOS
+            // `isViewOnceOpened` (#7579): never the global `viewOnceCount`, which another
+            // member's opening raises. A deleted tombstone takes precedence (its own path).
             isViewOnce = !isDeleted && message.effects.has(MessageEffectFlags.VIEW_ONCE),
-            viewOnceCount = if (isDeleted) 0 else message.viewOnceCount,
+            isViewOnceOpenedByMe = !isDeleted && message.isViewOnceOpenedByMe,
             // A conversation notice (join/leave/legacy summary) renders as a centered
             // notice, never a signed bubble — resolved FIRST in `BubbleRenderKind`.
             isSystem = message.isSystemMessage,
