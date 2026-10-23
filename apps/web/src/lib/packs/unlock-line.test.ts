@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { PackRequirementPreview } from '@meeshy/shared/types/pack-unlock';
+import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
 
 import { loadStickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
@@ -24,13 +25,14 @@ const rank = (missing: number): PackRequirementPreview => ({
   window: null,
 });
 
-const line = (preview: PackRequirementPreview, rankName?: (key: string) => string) =>
+const line = (preview: PackRequirementPreview, rankName?: (key: GloryRankKey) => string) =>
   packUnlockLine({ preview, language: 'fr', ...(rankName !== undefined ? { rankName } : {}) });
 
 describe('packUnlockLine — ce qui reste, et comment', () => {
   test('un rang : la Gloire qui manque, et le rang quand son nom est connu', () => {
-    expect(line(rank(3_500))).toBe('Gloire manquante : 3 500');
-    expect(line(rank(3_500), () => 'Conteur')).toBe('Rang Conteur — Gloire manquante : 3 500');
+    const amount = new Intl.NumberFormat('fr-FR').format(3_500);
+    expect(line(rank(3_500))).toBe(`Gloire manquante : ${amount}`);
+    expect(line(rank(3_500), () => 'Conteur')).toBe(`Rang Conteur — Gloire manquante : ${amount}`);
   });
 
   test('un trophée, une saison', () => {
