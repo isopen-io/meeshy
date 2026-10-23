@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_action_views">Vistas</string>
+    <string name="chat_action_history">Historial</string>
+    <string name="chat_action_sentiment">Sentimiento</string>
+    <string name="chat_action_select">Seleccionar</string>
+    <string name="chat_action_export_card">Exportar como tarjeta</string>
+</resources>
