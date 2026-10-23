@@ -17,7 +17,7 @@ import { objectIdAtOrAfter, parseMirrorArgs, runMediaMirror } from '../mediaMirr
 
 describe('parseMirrorArgs', () => {
   it('à blanc par défaut, par lots de 500', () => {
-    expect(parseMirrorArgs([], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'run', apply: false, follow: false, sweep: false, batchSize: 500, limit: null, reset: false });
+    expect(parseMirrorArgs([], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'run', apply: false, follow: false, sweep: false, allowMassRemoval: false, batchSize: 500, limit: null, reset: false });
   });
 
   it('en staging, --apply suffit', () => {
@@ -111,5 +111,11 @@ describe('--sweep — l’effacement des copies que plus rien ne nomme, sous le 
   it('appliqué hors staging : refusé sans feu vert du porteur', () => {
     expect(parseMirrorArgs(['--sweep', '--apply'], { MEESHY_ENV: 'production' })).toEqual({ kind: 'refused', reason: 'production-requires-porteur-approval' });
     expect(parseMirrorArgs(['--sweep', '--apply'], { MEESHY_ENV: 'staging' })).toMatchObject({ kind: 'run', apply: true, sweep: true });
+  });
+
+  it('--allow-mass-removal n’a de sens qu’avec --sweep --apply, et lève le refus « plus de la moitié »', () => {
+    expect(parseMirrorArgs(['--sweep', '--allow-mass-removal'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'mass-removal-requires-sweep-apply' });
+    expect(parseMirrorArgs(['--apply', '--allow-mass-removal'], { MEESHY_ENV: 'staging' })).toEqual({ kind: 'refused', reason: 'mass-removal-requires-sweep-apply' });
+    expect(parseMirrorArgs(['--sweep', '--apply', '--allow-mass-removal'], { MEESHY_ENV: 'staging' })).toMatchObject({ kind: 'run', sweep: true, allowMassRemoval: true });
   });
 });

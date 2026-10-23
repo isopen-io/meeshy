@@ -17,6 +17,7 @@ import type { ObjectBody } from '../MediaObjectStore';
 import type { ListedObject } from '../mediaBucketSweep';
 import type { MirrorRowSource } from '../mediaMirror';
 import { followMediaMirrorOnce, mediaMirrorFollowMode } from '../mediaMirrorFollow';
+import { mediaBucketMetrics, recordSweepReport } from '../../../metrics/mediaBucketMetrics';
 
 const APPROVAL = 'https://github.com/isopen-io/meeshy/issues/9232#issuecomment-1';
 const NOW = new Date('2026-10-23T12:00:00Z');
@@ -113,5 +114,28 @@ describe('followMediaMirrorOnce — un passage du miroir continu', () => {
     await followMediaMirrorOnce({ ...env, mirror: bucket, uploadRoot: env.root, apply: false, now: NOW, lastSweepAt: null, log: () => undefined });
 
     expect([...bucket.objects.keys()].sort()).toEqual(['2026/09/u9/purged.jpg', '2026/10/u1/y.jpg', '2026/10/u1/z.jpg']);
+  });
+
+  it('remet le compte rendu du balayage à son appelant — un refus se voit, il ne se répète pas en silence', async () => {
+    const env = await setup({ '2026/10/u1/a.jpg': 'aaa' }, [{ id: '1', filePath: '2026/10/u1/a.jpg' }]);
+    const bucket = memoryBucket({ '2026/10/u1/a.jpg': { bytes: 'aaa', lastModified: OLD }, ...Object.fromEntries(['x', 'y', 'z'].map((n) => [`2026/01/u0/${n}.jpg`, { bytes: n, lastModified: OLD }])) });
+    const reports: unknown[] = [];
+
+    await followMediaMirrorOnce({ ...env, mirror: bucket, uploadRoot: env.root, apply: true, now: NOW, lastSweepAt: null, log: () => undefined, onSweepReport: (report) => reports.push(report) });
+
+    expect(reports).toEqual([{ kind: 'refused', reason: 'too-many-removals' }]);
+  });
+});
+
+describe('recordSweepReport — la jauge qu’une alerte peut lire', () => {
+  it('un refus lève la jauge de sa raison ; un balayage réussi la rabaisse et date le succès', async () => {
+    const metrics = mediaBucketMetrics();
+    recordSweepReport(metrics, { kind: 'refused', reason: 'too-many-removals' }, NOW);
+    expect(await metrics.registry.metrics()).toMatch(/media_bucket_sweep_refused\{reason="too-many-removals"\} 1/);
+
+    recordSweepReport(metrics, { kind: 'swept', counts: { kept: 1, removed: 0, 'would-remove': 0, young: 0, failed: 0 } }, NOW);
+    const text = await metrics.registry.metrics();
+    expect(text).toMatch(/media_bucket_sweep_refused\{reason="too-many-removals"\} 0/);
+    expect(text).toMatch(new RegExp(`media_bucket_sweep_last_success_timestamp_seconds ${NOW.getTime() / 1000}`));
   });
 });

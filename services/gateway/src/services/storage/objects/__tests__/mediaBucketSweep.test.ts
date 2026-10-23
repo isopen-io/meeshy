@@ -102,4 +102,10 @@ describe('sweepBucket — le seau ne garde que ce qu’une ligne vivante nomme',
     });
     expect(report.kind === 'swept' && report.counts.failed).toBe(1);
   });
+
+  it('la sortie documentée du refus : une purge massive se demande explicitement, et passe', async () => {
+    const b = bucket([...live(), ...['x', 'y', 'z', 'w'].map((name) => ({ key: `2026/01/u0/${name}.jpg`, lastModified: OLD }))]);
+    const report = await sweepBucket({ ...b, referenced: new Set(LIVE), now: NOW, graceMs: GRACE_MS, apply: true, allowMassRemoval: true });
+    expect(report.kind === 'swept' && report.counts.removed).toBe(4);
+  });
 });
