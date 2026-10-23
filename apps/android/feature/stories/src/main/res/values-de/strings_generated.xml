@@ -63,6 +63,8 @@
     <string name="stories_report_reason_violence">Gewalt</string>
     <string name="stories_reposted">Erneut gepostet</string>
     <string name="stories_translated">Übersetzung verfügbar</string>
+    <string name="stories_tray_add_story">Story hinzufügen</string>
+    <string name="stories_tray_view_my_story">Meine Story ansehen</string>
     <string name="stories_viewer_close">Schließen</string>
     <string name="stories_viewer_mute">Hintergrundton stummschalten</string>
     <string name="stories_viewer_next">Nächste Story</string>

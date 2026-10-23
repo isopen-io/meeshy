@@ -61,6 +61,7 @@
     <string name="conversations_no_results">No conversations match</string>
     <string name="conversations_open_global_search">Global search</string>
     <string name="conversations_section_all">My conversations</string>
+    <string name="conversations_section_pinned">Pinned</string>
     <string name="dashboard_action_search">Global search</string>
     <string name="global_search_empty_subtitle">Messages, conversations, users</string>
     <string name="global_search_hint">Search everywhere…</string>

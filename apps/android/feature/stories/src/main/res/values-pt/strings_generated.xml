@@ -64,6 +64,8 @@
     <string name="stories_report_reason_violence">Violência</string>
     <string name="stories_reposted">Republicado</string>
     <string name="stories_translated">Tradução disponível</string>
+    <string name="stories_tray_add_story">Adicionar uma story</string>
+    <string name="stories_tray_view_my_story">Ver meu story</string>
     <string name="stories_viewer_close">Fechar</string>
     <string name="stories_viewer_mute">Silenciar som de fundo</string>
     <string name="stories_viewer_next">Próxima story</string>

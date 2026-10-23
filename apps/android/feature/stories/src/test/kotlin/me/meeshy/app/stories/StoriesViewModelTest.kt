@@ -442,4 +442,39 @@ class StoriesViewModelTest {
         assertThat(vm.state.value.tray.others.single().hasUnviewed).isTrue()
         assertThat(vm.state.value.tray.others.single().unviewedCount).isEqualTo(1)
     }
+    @Test
+    fun `my cached stories land on my own ring once the session resolves after the cache`() = runTest(dispatcher) {
+        val user = MutableStateFlow<MeeshyUser?>(null)
+        val session = mockk<SessionRepository>(relaxed = true).also {
+            every { it.currentUser } returns user
+            every { it.currentUserId } answers { user.value?.id }
+        }
+        val vm = viewModel(
+            repositoryReturning(
+                flowOf(CacheResult.Fresh(listOf(story("s1", "me", "demo"), story("s2", "u1", "alice")), ageMillis = 0)),
+            ),
+            session = session,
+        )
+        advanceUntilIdle()
+
+        user.value = MeeshyUser(id = "me", username = "demo")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.tray.self?.userId).isEqualTo("me")
+        assertThat(vm.state.value.tray.others.map { it.userId }).containsExactly("u1")
+    }
+
+    @Test
+    fun `a pull to refresh revalidates the stories from the network`() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(story("s1", "u1", "alice")), ageMillis = 0)),
+        )
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.refresh() }
+    }
 }

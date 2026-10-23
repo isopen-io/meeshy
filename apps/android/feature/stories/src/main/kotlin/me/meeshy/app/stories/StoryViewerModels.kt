@@ -204,6 +204,10 @@ data class StorySlideView(
      * so the viewer must be able to show what was drawn.
      */
     val strokes: List<StoryDrawingStroke> = emptyList(),
+    /** Les stickers posés sur la scène (iOS `StoryStickerLayer`), du plus bas au plus haut. */
+    val stickers: List<StoryStickerView> = emptyList(),
+    /** Les puces des sons de premier plan (iOS `AudioForegroundChip`). */
+    val audioChips: List<StoryAudioChipView> = emptyList(),
     /** Déjà vue par le lecteur à l'ouverture : la lecture commence à la première non vue. */
     val isViewed: Boolean = false,
     /** Instant de publication, pour le « il y a 2 h » de l'en-tête ; `null` si illisible. */
