@@ -15,6 +15,8 @@ import { promises as fs, readFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
+import { spawnSync } from 'child_process';
+import { SDR_WHITE_NITS, pqEncode } from '../hdr-avif';
 import { AVIF_VARIANT_QUALITY, avifVariantPathFor, createAvifVariants } from '../thumbnail';
 import { MetadataManager } from '../MetadataManager';
 import { produceMediaRenditions } from '../media-renditions';
@@ -156,11 +158,17 @@ describe('createAvifVariants — une photo HDR garde son HDR en AVIF (#12290)', 
 
   it('ses hautes lumières dépassent le blanc SDR (203 cd/m² en PQ) : l’effet HDR survit', async () => {
     const [variant] = await createAvifVariants(HDR, { widths: [256] });
-    const pixels = await sharp(variant.buffer).toColourspace('rgb16').raw().toBuffer();
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hdr-avif-check-'));
+    dirs.push(dir);
+    await fs.writeFile(path.join(dir, 'v.avif'), variant.buffer);
+    const decoded = spawnSync('avifdec', ['-d', '16', path.join(dir, 'v.avif'), path.join(dir, 'v.png')]);
+    expect(decoded.status).toBe(0);
+    const pixels = await sharp(path.join(dir, 'v.png')).toColourspace('rgb16').raw({ depth: 'ushort' }).toBuffer();
     const codes = new Uint16Array(pixels.buffer, pixels.byteOffset, pixels.length / 2);
-    const sdrWhite = 0.5807 * 65535;
+    const peak = codes.reduce((max, code) => (code > max ? code : max), 0);
+    const sdrWhite = pqEncode(SDR_WHITE_NITS) * 65535;
 
-    expect(Math.max(...codes)).toBeGreaterThan(sdrWhite * 1.1);
+    expect(peak).toBeGreaterThan(sdrWhite * 1.1);
   });
 
   it('sans encodeur HDR, AUCUN AVIF n’est servi pour une source HDR (jamais un AVIF délavé)', async () => {
