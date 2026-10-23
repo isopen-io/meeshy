@@ -291,4 +291,15 @@ class CallRouteTest {
         durationSec = 42,
         peer = peer,
     )
+
+    @Test
+    fun `minimising a call that knows its conversation opens that chat`() {
+        assertThat(CallRoute.minimize("conv-1")).isEqualTo(Routes.chat("conv-1"))
+    }
+
+    @Test
+    fun `minimising a call without conversation returns to the list, never an unmatched chat route`() {
+        assertThat(CallRoute.minimize("")).isEqualTo(Routes.CONVERSATIONS)
+        assertThat(CallRoute.minimize("   ")).isEqualTo(Routes.CONVERSATIONS)
+    }
 }

@@ -130,4 +130,13 @@ object CallRoute {
             peerName = record.displayName,
             isVideo = record.isVideo,
         )
+
+    /**
+     * Where « Réduire » lands: the call's chat when its conversation is known, the
+     * conversation list otherwise. A blank id must never reach [Routes.chat] — `chat/`
+     * matches no destination and `navigate` throws (an offer, a swap or a push that
+     * carries no room used to crash the app on the chevron).
+     */
+    fun minimize(conversationId: String): String =
+        if (conversationId.isBlank()) Routes.CONVERSATIONS else Routes.chat(conversationId)
 }
