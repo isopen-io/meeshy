@@ -273,6 +273,7 @@
     "GET /api/v1/attachments/:attachmentId",
     "GET /api/v1/attachments/:attachmentId/analysis",
     "GET /api/v1/attachments/:attachmentId/metadata",
+    "GET /api/v1/attachments/:attachmentId/subtitles/:lang",
     "GET /api/v1/attachments/:attachmentId/thumbnail",
     "GET /api/v1/attachments/file/*",
     "GET /api/v1/attachments/search",
