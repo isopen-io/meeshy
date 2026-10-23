@@ -29,6 +29,7 @@ class RouteManifestRatchetTest {
     private companion object {
         /** 286 : la dette de dev (280) plus les six routes de lecture et d'installation des lens (#11271). */
         const val TO_PORT_CEILING = 286
+        val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
     private data class Route(val verb: String, val path: String) {
