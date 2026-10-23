@@ -41,6 +41,27 @@ nonisolated struct IceServer: Sendable, Equatable {
     ]
 }
 
+// MARK: - Masquer son adresse IP (#11296)
+
+/// Les routes qu'une connexion d'appel peut prendre : toutes, ou le relais TURN
+/// seul — alors le correspondant ne voit que l'adresse du relais Meeshy.
+nonisolated enum CallIceTransport: Equatable, Sendable {
+    case all
+    case relayOnly
+}
+
+/// **« Masquer mon adresse IP dans les appels »** (Confidentialité). Réglage de
+/// l'APPAREIL : l'adresse à cacher est la sienne, et il s'applique avant même
+/// qu'une préférence de compte soit chargée. Coupé par défaut. Fail-closed : sans
+/// serveur TURN, un appel masqué ne se connecte pas plutôt que de révéler l'adresse.
+nonisolated enum CallAddressPrivacySetting {
+    static let key = "me.meeshy.calls.hideIPAddress"
+
+    static func transport(in defaults: UserDefaults = .standard) -> CallIceTransport {
+        defaults.bool(forKey: key) ? .relayOnly : .all
+    }
+}
+
 enum CallMediaType: Sendable {
     case audioOnly
     case audioVideo

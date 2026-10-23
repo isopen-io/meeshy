@@ -647,7 +647,11 @@ public struct DocumentPreferences: Codable, Equatable, Sendable {
     public var storageQuota: Int
     public var autoDeleteOldFiles: Bool
     public var fileRetentionDays: Int
+    /// La **compression forte**, choisie pour économiser des données : chaque photo
+    /// est réduite au budget de son contexte. `false` (défaut) n'est PAS « sans
+    /// compression » : la photo part en HD, en une génération perceptuelle (#9885).
     public var compressImagesOnUpload: Bool
+    /// La qualité (0–100) de la compression forte seulement.
     public var imageCompressionQuality: Int
     public var allowedFileTypes: [String]
     public var scanFilesForMalware: Bool

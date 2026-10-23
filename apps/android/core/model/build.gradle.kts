@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+apply(from = rootProject.file("gradle/call-frames-catalogue.gradle.kts"))
+
 android {
     namespace = "me.meeshy.core.model"
     compileSdk = 37
@@ -28,6 +30,15 @@ android {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.java?.addGeneratedSourceDirectory(
+            tasks.named<Task>("generateCallFrameCatalogue"),
+            { task: Task -> task.property("outputDir") as org.gradle.api.file.DirectoryProperty },
+        )
     }
 }
 

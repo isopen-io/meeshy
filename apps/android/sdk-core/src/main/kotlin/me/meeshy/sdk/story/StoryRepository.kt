@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.StoryViewer
 import me.meeshy.sdk.model.toStoryViewer
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.PagedResult
+import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.net.api.CreateCommentRequest
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
@@ -50,6 +52,7 @@ class StoryRepository @Inject constructor(
     syncMetaDao: SyncMetaDao,
     private val outboxRepository: OutboxRepository,
     private val translationApi: TranslationApi,
+    private val archiveCache: MyStoriesArchiveCache = InMemoryMyStoriesArchiveCache(),
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -109,6 +112,53 @@ class StoryRepository @Inject constructor(
 
     suspend fun list(cursor: String? = null, limit: Int = 50): NetworkResult<List<ApiPost>> =
         apiCall { storyApi.list(cursor, limit) }
+
+    /** One cursor page of the caller's own stories (`GET posts/stories/mine`), pagination kept. */
+    suspend fun listMine(cursor: String? = null, limit: Int = 50): NetworkResult<PagedResult<List<ApiPost>>> =
+        pagedApiCall { storyApi.listMine(cursor, limit) }
+
+    /** The last drained « Mes stories » archive, served instantly while a drain revalidates. */
+    suspend fun cachedMyStories(): List<ApiPost>? = archiveCache.read()
+
+    /**
+     * Drains the caller's whole story archive page by page and caches it ([MyStoriesArchiveCache.KEY]).
+     * Stops on exhaustion (`hasMore` false or no `nextCursor`) or on stagnation — an empty page
+     * or a page bringing no new id — and after [maxPages] as a hard stop. A failure on the first
+     * page is a [NetworkResult.Failure]; a failure on a later page keeps what was already
+     * drained. A drain that returned nothing never overwrites a non-empty cache.
+     */
+    suspend fun drainMyStories(limit: Int = 50, maxPages: Int = MAX_ARCHIVE_PAGES): NetworkResult<List<ApiPost>> {
+        val collected = LinkedHashMap<String, ApiPost>()
+        var cursor: String? = null
+        repeat(maxPages) { page ->
+            val result = listMine(cursor, limit)
+            val paged = when (result) {
+                is NetworkResult.Success -> result.data
+                is NetworkResult.Failure ->
+                    return if (page == 0) result else finishDrain(collected)
+            }
+            val before = collected.size
+            paged.data.forEach { collected.putIfAbsent(it.id, it) }
+            val stagnant = paged.data.isEmpty() || collected.size == before
+            val next = paged.pagination?.nextCursor
+            if (stagnant || paged.pagination?.hasMore != true || next.isNullOrEmpty()) return finishDrain(collected)
+            cursor = next
+        }
+        return finishDrain(collected)
+    }
+
+    private suspend fun finishDrain(collected: Map<String, ApiPost>): NetworkResult<List<ApiPost>> {
+        val posts = collected.values.toList()
+        if (posts.isNotEmpty()) archiveCache.write(posts)
+        return NetworkResult.Success(posts)
+    }
+
+    /** Persists the screen's current « Mes stories » list so a delete or republish survives a restart. */
+    suspend fun persistMyStories(posts: List<ApiPost>) = archiveCache.write(posts)
+
+    /** `POST posts/{id}/republish` — the same story, fresh dates, zeroed engagement. */
+    suspend fun republish(storyId: String): NetworkResult<ApiPost> =
+        apiCall { storyApi.republish(storyId) }
 
     suspend fun markViewed(storyId: String): NetworkResult<Unit> =
         apiCall { storyApi.markViewed(storyId) }
@@ -323,6 +373,8 @@ class StoryRepository @Inject constructor(
     }
 
     private companion object {
+        const val MAX_ARCHIVE_PAGES = 10
+
         /** Outbox states that still represent an un-rolled-back publish. */
         val LIVE_PUBLISH_STATES = setOf(OutboxState.PENDING, OutboxState.INFLIGHT)
     }

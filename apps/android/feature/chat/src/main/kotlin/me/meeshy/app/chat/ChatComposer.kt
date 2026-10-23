@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import android.Manifest
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -115,15 +116,21 @@ internal fun ChatComposer(
     onCancelReply: () -> Unit,
     onRemoveClipboard: () -> Unit,
     onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
+    hasPendingAttachments: Boolean = false,
+    onPickUris: ((List<Uri>) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val ioScope = rememberCoroutineScope()
     val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        ActivityResultContracts.GetMultipleContents(),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        if (onPickUris != null) {
+            onPickUris(uris)
+            return@rememberLauncherForActivityResult
+        }
         ioScope.launch {
-            val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uri) } ?: return@launch
+            val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uris.first()) } ?: return@launch
             onPickFile(picked.bytes, picked.fileName, picked.mimeType)
         }
     }
@@ -218,6 +225,7 @@ internal fun ChatComposer(
     val ladderTiles = remember(affordances) {
         ComposerAttachmentLadder.tiles(
             affordances = affordances,
+            hasRecentMediaStrip = true,
             showCamera = true,
             showLocation = false,
             showEmoji = true,
@@ -251,6 +259,9 @@ internal fun ChatComposer(
             if (attachmentTrayOpen && ladderTiles.isNotEmpty() && !recording.isRecording && !affordances.isReadOnly) {
                 ComposerAttachmentTray(
                     tiles = ladderTiles,
+                    recentMedia = {
+                        ComposerRecentMedia(affordances.canSendImages || affordances.canSendVideos, accentColor, onPickFile)
+                    },
                     onTileClick = { kind ->
                         attachmentTrayOpen = false
                         when (kind) {
@@ -273,70 +284,8 @@ internal fun ChatComposer(
                     onDismiss = { cameraChooserOpen = false },
                 )
             }
-            if (replyingToLabel != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = MeeshySpacing.lg, end = MeeshySpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Reply,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.chat_replying_to, replyingToLabel),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = MeeshySpacing.xs),
-                    )
-                    IconButton(onClick = onCancelReply) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = stringResource(R.string.chat_cancel_reply),
-                            tint = MeeshyTheme.tokens.textSecondary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            }
-            if (isEditing) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = MeeshySpacing.lg, end = MeeshySpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Edit,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.chat_editing_label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = MeeshySpacing.xs),
-                    )
-                    IconButton(onClick = onCancelEdit) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = stringResource(R.string.chat_cancel_edit),
-                            tint = MeeshyTheme.tokens.textSecondary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            }
+            if (replyingToLabel != null) ComposerReplyRow(replyingToLabel, accentColor, onCancelReply)
+            if (isEditing) ComposerEditRow(accentColor, onCancelEdit)
             if (clipboardContent != null) {
                 ClipboardContentPreview(
                     clip = clipboardContent,
@@ -379,75 +328,28 @@ internal fun ChatComposer(
                             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
                     )
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (!isEditing) {
-                        if (ladderTiles.isNotEmpty()) {
-                            IconButton(onClick = { attachmentTrayOpen = !attachmentTrayOpen }) {
-                                Icon(
-                                    imageVector = if (attachmentTrayOpen) Icons.Filled.Close else Icons.Filled.Add,
-                                    contentDescription = stringResource(R.string.chat_attach_open),
-                                    tint = if (attachmentTrayOpen) accentColor else MeeshyTheme.tokens.textSecondary,
-                                )
-                            }
-                        }
-                        IconButton(onClick = onOpenEffects) {
-                            Icon(
-                                imageVector = Icons.Filled.AutoAwesome,
-                                contentDescription = stringResource(R.string.chat_effects_open),
-                                tint = if (hasEffects) accentColor else MeeshyTheme.tokens.textSecondary,
-                            )
-                        }
-                        ComposerLanguagePill(
-                            languageCode = languageCode,
-                            accentColor = accentColor,
-                            onPick = onPickLanguage,
-                        )
-                    }
-                    OutlinedTextField(
-                        value = fieldValue,
-                        onValueChange = { newValue ->
-                            fieldValue = newValue
-                            onDraftChange(newValue.text)
-                        },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
-                        maxLines = 4,
-                        trailingIcon = if (sentiment != null) {
-                            {
-                                val description = stringResource(R.string.chat_composer_sentiment)
-                                Text(
-                                    text = sentiment.emoji,
-                                    modifier = Modifier.semantics { contentDescription = description },
-                                )
-                            }
-                        } else {
-                            null
-                        },
-                    )
-                    if (!isEditing && draft.isBlank() && clipboardContent == null &&
-                        affordances.canSendAudios
-                    ) {
-                        IconButton(onClick = ::requestVoiceRecording) {
-                            Icon(
-                                imageVector = Icons.Filled.Mic,
-                                contentDescription = stringResource(R.string.chat_record_voice),
-                                tint = MeeshyTheme.tokens.textSecondary,
-                            )
-                        }
-                    } else {
-                        IconButton(onClick = onSend, enabled = canSend && (isEditing || slowMode.canSend)) {
-                            Icon(
-                                imageVector = if (isEditing) Icons.Filled.Check else Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.chat_send),
-                            )
-                        }
-                    }
-                }
+                ComposerInputRow(
+                    isEditing = isEditing,
+                    hasAttachmentTiles = ladderTiles.isNotEmpty(),
+                    attachmentTrayOpen = attachmentTrayOpen,
+                    hasEffects = hasEffects,
+                    languageCode = languageCode,
+                    fieldValue = fieldValue,
+                    sentiment = sentiment,
+                    showMic = !isEditing && draft.isBlank() && clipboardContent == null && !hasPendingAttachments &&
+                        affordances.canSendAudios,
+                    sendEnabled = canSend && (isEditing || slowMode.canSend),
+                    accentColor = accentColor,
+                    onToggleTray = { attachmentTrayOpen = !attachmentTrayOpen },
+                    onOpenEffects = onOpenEffects,
+                    onPickLanguage = onPickLanguage,
+                    onFieldChange = { newValue ->
+                        fieldValue = newValue
+                        onDraftChange(newValue.text)
+                    },
+                    onRequestVoice = ::requestVoiceRecording,
+                    onSend = onSend,
+                )
             }
         }
     }
@@ -474,197 +376,3 @@ internal fun ChatComposer(
     }
 }
 
-/**
- * The composer's live language pill — the "smart context zone" affordance. Shows
- * the flag of the resolved source language ([ChatUiState.composerLanguageCode]),
- * following on-device detection as the viewer types, and opens a picker so they can
- * override it (long messages lock the detection, exactly like iOS). Thin,
- * coverage-exempt Compose glue over the pure [me.meeshy.sdk.model.ComposerLanguageState];
- * the picker offers the curated [LanguageData.commonLanguageCodes] set.
- */
-@Composable
-private fun ComposerLanguagePill(
-    languageCode: String,
-    accentColor: Color,
-    onPick: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val description = stringResource(R.string.chat_composer_language)
-    Box {
-        Text(
-            text = ComposerLanguage.flag(languageCode),
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshySpacing.sm))
-                .clickable { expanded = true }
-                .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs)
-                .semantics { contentDescription = description },
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LanguageData.commonLanguageCodes.forEach { code ->
-                val info = LanguageData.info(code) ?: return@forEach
-                DropdownMenuItem(
-                    text = { Text("${info.flag}  ${info.nativeName}") },
-                    onClick = {
-                        expanded = false
-                        onPick(code)
-                    },
-                    trailingIcon = if (code == languageCode) {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = accentColor,
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                )
-            }
-        }
-    }
-}
-
-/**
- * Read-only composer state for a participant whose permissions deny sending text
- * (a share-link guest with `canSendMessages = false`). The thin, coverage-exempt
- * Compose glue over [ComposerAffordances.isReadOnly] — a muted lock row that
- * replaces the input entirely so the guest can read but never post.
- */
-@Composable
-private fun ComposerReadOnlyNotice(modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Lock,
-            contentDescription = null,
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(16.dp),
-        )
-        Text(
-            text = stringResource(R.string.chat_composer_read_only),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.padding(start = MeeshySpacing.xs),
-        )
-    }
-}
-
-/**
- * The live slow-mode posture for the composer, ticked once a second while a
- * cooldown is running. The ViewModel's [ChatViewModel.send] gate is authoritative;
- * this is the thin, coverage-exempt Compose glue that animates the countdown so the
- * send button re-enables the instant the interval clears. The ticker only spins
- * while slow mode is active for the viewer, so a normal conversation never pays for
- * a recomposition loop.
- */
-@Composable
-internal fun rememberComposerSlowMode(state: ChatUiState): SlowModeState {
-    val throttled = (state.slowModeSeconds ?: 0) > 0 && !state.slowModeExempt
-    val now by produceState(
-        initialValue = System.currentTimeMillis(),
-        throttled,
-        state.lastSelfSentAtMillis,
-    ) {
-        value = System.currentTimeMillis()
-        while (throttled) {
-            delay(500)
-            value = System.currentTimeMillis()
-        }
-    }
-    return state.slowModeState(now)
-}
-
-/**
- * A subtle countdown row shown above the composer while slow mode blocks the next
- * send — an hourglass and the remaining seconds. Prisme discretion: it informs
- * without a modal or a banner, and self-clears when [remainingSeconds] reaches the
- * cleared window. SOTA over iOS, which never surfaces the cooldown at all.
- */
-@Composable
-private fun ComposerSlowModeNotice(remainingSeconds: Int, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.HourglassEmpty,
-            contentDescription = null,
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(14.dp),
-        )
-        Text(
-            text = stringResource(R.string.chat_slow_mode_wait, remainingSeconds),
-            style = MaterialTheme.typography.labelSmall,
-            color = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.padding(start = MeeshySpacing.xs),
-        )
-    }
-}
-
-/**
- * Preview chip for a large paste captured into a clipboard-content attachment —
- * the thin, coverage-exempt Compose glue over the pure [ClipboardContent] (parité
- * iOS `clipboardContentPreview`: doc glyph, title, truncated body, char count, and
- * an accent-tinted remove button).
- */
-@Composable
-private fun ClipboardContentPreview(
-    clip: ClipboardContent,
-    accentColor: Color,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(MeeshyRadius.md))
-            .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.5f))
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Description,
-            contentDescription = null,
-            tint = accentColor,
-            modifier = Modifier.size(20.dp),
-        )
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = MeeshySpacing.sm),
-        ) {
-            Text(
-                text = stringResource(R.string.chat_clipboard_title),
-                style = MaterialTheme.typography.labelMedium,
-                color = MeeshyTheme.tokens.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = clip.truncatedPreview,
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(R.string.chat_clipboard_char_count, clip.charCount),
-                style = MaterialTheme.typography.labelSmall,
-                color = accentColor,
-            )
-        }
-        IconButton(onClick = onRemove) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = stringResource(R.string.chat_clipboard_remove),
-                tint = MeeshyTheme.tokens.textSecondary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}

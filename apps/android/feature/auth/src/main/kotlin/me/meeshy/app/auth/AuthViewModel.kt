@@ -36,6 +36,12 @@ data class AuthUiState(
     val selectedEnvironment: ServerEnvironment = ServerEnvironment.PRODUCTION,
     val customHostInput: String = "",
     val showEnvironmentSelector: Boolean = false,
+    /**
+     * Le serveur choisi n'est pas celui du client réseau en cours, construit une fois par
+     * processus : l'écran redémarre l'app pour l'appliquer — sinon la connexion partirait vers
+     * l'ancien serveur sous l'étiquette du nouveau.
+     */
+    val restartToApplyEnvironment: Boolean = false,
 ) {
     val canSubmit: Boolean get() = username.isNotBlank() && password.isNotBlank() && !isSubmitting
 
@@ -148,7 +154,12 @@ class AuthViewModel @Inject constructor(
         if (env != ServerEnvironment.CUSTOM) {
             serverEnvironmentStore.select(env)
         }
+        _state.update { it.copy(restartToApplyEnvironment = selectionDiffersFromRunningServer()) }
     }
+
+    private fun selectionDiffersFromRunningServer(): Boolean =
+        ServerEnvironmentResolver.apiBaseUrl(serverEnvironmentStore.selectedEnvironment, serverEnvironmentStore.customHost)
+            .trimEnd('/') != config.apiBaseUrl.trimEnd('/')
 
     /** Custom-host text field binding — iOS `LoginView`'s `$customHost`. */
     fun onCustomHostChange(value: String) {
@@ -163,7 +174,9 @@ class AuthViewModel @Inject constructor(
         val host = _state.value.customHostInput
         if (!ServerEnvironmentResolver.canApplyCustomHost(host)) return
         serverEnvironmentStore.applyCustomHost(host.trim())
-        _state.update { it.copy(selectedEnvironment = ServerEnvironment.CUSTOM) }
+        _state.update {
+            it.copy(selectedEnvironment = ServerEnvironment.CUSTOM, restartToApplyEnvironment = selectionDiffersFromRunningServer())
+        }
     }
 
     fun login() {

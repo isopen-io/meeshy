@@ -41,6 +41,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     // Les traductions partagées (#9899) : un compte sans participant.
     participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
     sharedTranslation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
+    callParticipant: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }), findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), count: jest.fn<any>().mockResolvedValue(0) }]),
@@ -90,6 +92,19 @@ function packTables(db: ReturnType<typeof fakePackDb>) {
 const NO_FILES = { packFiles: fakeFileStore([]).store };
 
 describe('purgeAccountIsolatedData', () => {
+  it('efface la télémétrie et la note de chacun de ses appels, sur tous ses participants, sans supprimer les lignes (#11277)', async () => {
+    const prisma = fakePrisma({
+      participant: { findMany: jest.fn<any>().mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]) },
+      callParticipant: { updateMany: jest.fn<any>().mockResolvedValue({ count: 4 }) },
+    });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.callParticipant.updateMany).toHaveBeenCalledWith({
+      where: { participantId: { in: ['p1', 'p2'] } },
+      data: { analytics: null, feedback: null },
+    });
+    expect(summary.callTelemetryErased).toBe(4);
+  });
+
   it('deletes every UserSession row for the account', async () => {
     const prisma = fakePrisma({ userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }) } });
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);

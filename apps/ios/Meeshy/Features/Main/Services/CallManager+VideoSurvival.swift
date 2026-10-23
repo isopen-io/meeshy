@@ -104,11 +104,8 @@ extension CallManager: VideoSurvivalActuating {
     ///   raises no alert), an accepted trade: a frame without a pill beats a
     ///   false "camera off".
     private func actuateSurvivalVideoSend(enabled: Bool, callId: String) async -> Bool {
-        if enabled {
-            webRTCService.unfreezeVideoAfterSurvival()
-        } else {
-            webRTCService.freezeVideoForSurvival()
-        }
+        if enabled { webRTCService.unfreezeVideoAfterSurvival() } else { webRTCService.freezeVideoForSurvival() }
+        GroupCallMeshCoordinator.shared.setSurvivalFloor(!enabled)
         hasLocalVideoTrack = webRTCService.hasLocalVideoTrack
         Logger.calls.info("[CALL] survival video \(enabled ? "thawed" : "frozen") (callId=\(callId))")
         return true

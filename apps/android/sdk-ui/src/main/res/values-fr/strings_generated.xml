@@ -1,6 +1,9 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_fullscreen_dial">Position dans le vocal</string>
+    <string name="avatar_a11y_mood">humeur %s</string>
     <string name="common_clearSearch">Effacer la recherche</string>
+    <string name="common_close">Fermer</string>
     <string name="emoji_category_activities">Activités</string>
     <string name="emoji_category_animals">Animaux</string>
     <string name="emoji_category_flags">Drapeaux</string>
@@ -11,4 +14,45 @@
     <string name="emoji_category_smileys">Smileys</string>
     <string name="emoji_category_symbols">Symboles</string>
     <string name="emoji_category_travel">Voyages</string>
+    <string name="media_trim_loading">Chargement de l\'aperçu</string>
+    <string name="media_trim_of_total">sur %s</string>
+    <string name="media_trim_window">Portion conservée</string>
+    <string name="notification_date_ago">il y a %s</string>
+    <string name="notification_date_hours">%d h</string>
+    <string name="notification_date_minutes">%d min</string>
+    <string name="notification_date_now">à l’instant</string>
+    <string name="notification_date_yesterdayAt">hier %s</string>
+    <string name="presence_away">Absent</string>
+    <string name="presence_here">Dans la conversation</string>
+    <string name="presence_idle">Inactif</string>
+    <string name="presence_offline">Hors ligne</string>
+    <string name="presence_online">En ligne</string>
+    <string name="settings_info_button_label">En savoir plus sur %s</string>
+    <string name="sticker_sheet_instants_lieu">Lieux</string>
+    <string name="sticker_sheet_instants_message">Messages</string>
+    <string name="sticker_sheet_instants_meteo">Météo</string>
+    <string name="sticker_sheet_instants_moment">Moments</string>
+    <string name="sticker_sheet_intent_amour_hint">Pour un mot doux, un bisou, un câlin ou une déclaration</string>
+    <string name="sticker_sheet_intent_amour_title">Dire je t’aime</string>
+    <string name="sticker_sheet_intent_bonjour_hint">Pour saluer, remercier, dire oui, s’excuser ou souhaiter bonne nuit</string>
+    <string name="sticker_sheet_intent_bonjour_title">Bonjour, merci</string>
+    <string name="sticker_sheet_intent_coup_de_mou_hint">Pour la tristesse, le chagrin, la fatigue ou l’envie de dormir</string>
+    <string name="sticker_sheet_intent_coup_de_mou_title">Coup de mou</string>
+    <string name="sticker_sheet_intent_fete_hint">Pour une bonne nouvelle, un succès, un anniversaire ou un fou rire</string>
+    <string name="sticker_sheet_intent_fete_title">Rire et fêter</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">Pour rire de tout, même du pire : mort de rire, fantômes et pierres tombales</string>
+    <string name="sticker_sheet_intent_humour_noir_title">Humour noir</string>
+    <string name="sticker_sheet_intent_quotidien_hint">Pour dire ce qu’on fait : un café, un repas, le travail, la route, un retard</string>
+    <string name="sticker_sheet_intent_quotidien_title">Le quotidien</string>
+    <string name="sticker_sheet_intent_rale_hint">Pour dire son agacement, sa colère, sa jalousie ou prendre ses distances</string>
+    <string name="sticker_sheet_intent_rale_title">Râler et bouder</string>
+    <string name="sticker_sheet_intent_soutien_hint">Pour encourager, réconforter ou dire « je suis là »</string>
+    <string name="sticker_sheet_intent_soutien_title">Consoler et soutenir</string>
+    <string name="sticker_sheet_intent_surprise_hint">Pour l’étonnement, la peur, la gêne ou un « oups »</string>
+    <string name="sticker_sheet_intent_surprise_title">Surprise et frisson</string>
+    <string name="time_lastSeen_beforeYesterdayAt">Vu avant-hier à %s</string>
+    <string name="time_lastSeen_dateAt">Vu le %1$s à %2$s</string>
+    <string name="time_lastSeen_online">En ligne</string>
+    <string name="time_lastSeen_seen">Vu %s</string>
+    <string name="time_lastSeen_yesterdayAt">Vu hier à %s</string>
 </resources>

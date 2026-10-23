@@ -189,9 +189,25 @@ struct ComposerCaptureChrome: View {
         session.gestureContext(allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
     }
 
-    /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777).
-    private var chromeVeil: Double {
-        ComposerCaptureChromeLegibility.veilOpacity(framed: session.look.frame != ComposerPhotoFrame.none)
+    /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777),
+    /// réglé sur la luminance mesurée de la bande du cadre qu'il couvre.
+    @State private var chromeBands: ComposerCaptureChromeBands?
+
+    private var framed: Bool { session.look.frame != ComposerPhotoFrame.none }
+
+    private var chromeVeilTop: Double {
+        ComposerCaptureChromeLegibility.veilOpacity(framed: framed, bandLuminance: chromeBands?.measuring(session.look.frame)?.top)
+    }
+
+    private var chromeVeilBottom: Double {
+        ComposerCaptureChromeLegibility.veilOpacity(framed: framed, bandLuminance: chromeBands?.measuring(session.look.frame)?.bottom)
+    }
+
+    /// Le cadre de l'aperçu, à sa toile : la scène que la vue Metal peint déjà.
+    private var chromeBandKey: ComposerLookSceneKey? {
+        guard framed else { return nil }
+        return ComposerLookSceneKey(look: session.look, canvas: ComposerLookPainter.previewCanvas(aspect: session.canvasAspect),
+                                    date: session.lookDate, person: session.lookPerson)
     }
 
     /// « Terminé » rend : seule la croix répond encore.
@@ -281,11 +297,11 @@ struct ComposerCaptureChrome: View {
                 if !session.phase.isEditing || session.editChromeShown {
                     ComposerCaptureBottomRow(session: session, context: context)
                         .allowsHitTesting(!finishing)
-                        .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeil))
+                        .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeilBottom))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: chromeVeil)
+            .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop, chromeVeilBottom], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
             if session.isRenderingLook {
                 ProgressView()
                     .progressViewStyle(.circular)
@@ -345,7 +361,7 @@ struct ComposerCaptureChrome: View {
             onDone: { session.finishEditing() },
             saveState: session.takeSaveState,
             onSave: { session.saveTakeToPhotos() })
-        .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeil))
+        .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeilTop))
     }
 
     /// **Lecture et volume d'une vidéo, en haut à droite sous « Terminé »,

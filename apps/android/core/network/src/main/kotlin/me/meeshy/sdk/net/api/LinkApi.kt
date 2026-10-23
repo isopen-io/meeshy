@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.ExtendShareLinkRequest
 import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.MyShareLinkStats
 import me.meeshy.sdk.model.ToggleShareLinkRequest
+import kotlinx.serialization.json.JsonObject
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -30,6 +31,7 @@ interface LinkApi {
     suspend fun listMyLinks(
         @Query("offset") offset: Int,
         @Query("limit") limit: Int,
+        @Query("expand") expand: String? = null,
     ): ApiResponse<List<MyShareLink>>
 
     /** Aggregated stats for the user's links. Port of iOS `fetchMyStats`. */
@@ -52,5 +54,16 @@ interface LinkApi {
     suspend fun extend(
         @Path("linkId") linkId: String,
         @Body body: ExtendShareLinkRequest,
+    ): ApiResponse<Unit>
+
+    /**
+     * Edit a link's configuration (`PATCH /links/:linkId`). The body carries ONLY the changed
+     * fields; a cleared limit or expiry travels as an explicit JSON `null` (the gateway tests
+     * `!== undefined`, so an omitted field would keep the old limit).
+     */
+    @PATCH("links/{linkId}")
+    suspend fun update(
+        @Path("linkId") linkId: String,
+        @Body body: JsonObject,
     ): ApiResponse<Unit>
 }

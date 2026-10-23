@@ -135,6 +135,11 @@ const ar = {
   'export.card.compose.post': 'المنشور في الأعلى',
   'export.card.compose.replies': 'الردود على البطاقة',
   'export.card.compose.folded': '+{count} ردود',
+  'export.card.compose.head': 'الوسائط في الأعلى',
+  'export.card.compose.head.image': 'صورة {position}',
+  'export.card.compose.head.video': 'فيديو {position}',
+  'export.card.compose.head.audio': 'صوت {position}',
+  'export.card.compose.withheld': 'هذا المنشور ليس عامًا: لا يظهر محتواه في الصورة.',
 } satisfies ExportCardCatalog;
 
 export default ar;

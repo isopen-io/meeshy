@@ -57,3 +57,24 @@ class ApiCategoryTest {
         assertThat(emptyList<ApiCategory>().toOptions()).isEmpty()
     }
 }
+
+class ApiCategoryExpansionTest {
+
+    @Test
+    fun `expansionById keeps only the rows that state a fold state`() {
+        val rows = listOf(
+            ApiCategory(id = "a", name = "A", isExpanded = false),
+            ApiCategory(id = "b", name = "B", isExpanded = true),
+            ApiCategory(id = "c", name = "C", isExpanded = null),
+        )
+
+        assertThat(rows.expansionById()).containsExactly("a", false, "b", true)
+    }
+
+    @Test
+    fun `the patch body carries only isExpanded`() {
+        val json = kotlinx.serialization.json.Json.encodeToString(CategoryPatchBody.serializer(), CategoryPatchBody(false))
+
+        assertThat(json).isEqualTo("""{"isExpanded":false}""")
+    }
+}

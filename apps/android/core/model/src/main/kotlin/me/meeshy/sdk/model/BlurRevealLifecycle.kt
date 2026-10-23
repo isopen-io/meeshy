@@ -52,6 +52,31 @@ object BlurRevealLifecycle {
         val animationDurationMillis: Long,
     )
 
+    /** Where a view-once text stands: concealed, read in place, or burned ("Déjà ouvert"). */
+    enum class ViewOnceStage { Sealed, Revealed, Opened }
+
+    /** Result of closing a view-once text: its new [stage] and whether to consume the server counter. */
+    data class Closure(val stage: ViewOnceStage, val consume: Boolean)
+
+    /** The retouch gesture exists only on a revealed view-once text; every other message pays nothing. */
+    fun retouchGestureActive(isViewOnce: Boolean, stage: ViewOnceStage): Boolean =
+        isViewOnce && stage == ViewOnceStage.Revealed
+
+    /** Tapping the concealed text reveals it in place; an opened text never reopens. */
+    fun reveal(stage: ViewOnceStage): ViewOnceStage =
+        if (stage == ViewOnceStage.Opened) stage else ViewOnceStage.Revealed
+
+    /**
+     * Retouch, leaving the screen and dismissing the bubble all close through here: only a
+     * revealed text opens and consumes, so the doors can fire together and consume once.
+     */
+    fun close(stage: ViewOnceStage): Closure =
+        if (stage == ViewOnceStage.Revealed) Closure(ViewOnceStage.Opened, consume = true)
+        else Closure(stage, consume = false)
+
+    /** A view-once text is read until closed; only a plain blurred message re-conceals on a timer. */
+    fun reconcealsOnTimeout(isViewOnce: Boolean): Boolean = !isViewOnce
+
     private const val REVEAL_SPRING_MILLIS: Long = 300
     private const val PHASE_OVERLAP_MILLIS: Long = 50
 

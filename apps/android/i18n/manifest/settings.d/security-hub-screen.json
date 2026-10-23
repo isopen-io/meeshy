@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "androidName": "security_phone_placeholder",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_section_password",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_section_sessions",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_sessions_manage",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_title",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

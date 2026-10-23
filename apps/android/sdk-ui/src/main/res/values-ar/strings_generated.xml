@@ -1,6 +1,9 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_fullscreen_dial">الموضع في الرسالة الصوتية</string>
+    <string name="avatar_a11y_mood">المزاج %s</string>
     <string name="common_clearSearch">مسح البحث</string>
+    <string name="common_close">إغلاق</string>
     <string name="emoji_category_activities">الأنشطة</string>
     <string name="emoji_category_animals">الحيوانات</string>
     <string name="emoji_category_flags">الأعلام</string>
@@ -11,4 +14,45 @@
     <string name="emoji_category_smileys">الوجوه</string>
     <string name="emoji_category_symbols">الرموز</string>
     <string name="emoji_category_travel">السفر</string>
+    <string name="media_trim_loading">جارٍ تحميل المعاينة</string>
+    <string name="media_trim_of_total">من %s</string>
+    <string name="media_trim_window">الجزء المحتفظ به</string>
+    <string name="notification_date_ago">قبل %s</string>
+    <string name="notification_date_hours">%d س</string>
+    <string name="notification_date_minutes">%d د</string>
+    <string name="notification_date_now">الآن</string>
+    <string name="notification_date_yesterdayAt">أمس %s</string>
+    <string name="presence_away">بعيد</string>
+    <string name="presence_here">في المحادثة</string>
+    <string name="presence_idle">غير نشط</string>
+    <string name="presence_offline">غير متصل</string>
+    <string name="presence_online">متصل</string>
+    <string name="settings_info_button_label">معرفة المزيد عن %s</string>
+    <string name="sticker_sheet_instants_lieu">أماكن</string>
+    <string name="sticker_sheet_instants_message">رسائل</string>
+    <string name="sticker_sheet_instants_meteo">الطقس</string>
+    <string name="sticker_sheet_instants_moment">أوقات اليوم</string>
+    <string name="sticker_sheet_intent_amour_hint">لكلمة لطيفة أو قبلة أو عناق أو اعتراف بالحب</string>
+    <string name="sticker_sheet_intent_amour_title">قل أحبك</string>
+    <string name="sticker_sheet_intent_bonjour_hint">للتحية والشكر والموافقة والاعتذار أو لتمنّي ليلة سعيدة</string>
+    <string name="sticker_sheet_intent_bonjour_title">مرحبًا، شكرًا</string>
+    <string name="sticker_sheet_intent_coup_de_mou_hint">للحزن أو الأسى أو التعب أو الرغبة في النوم</string>
+    <string name="sticker_sheet_intent_coup_de_mou_title">إحباط وتعب</string>
+    <string name="sticker_sheet_intent_fete_hint">لخبر سار أو نجاح أو عيد ميلاد أو نوبة ضحك</string>
+    <string name="sticker_sheet_intent_fete_title">اضحك واحتفل</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">للضحك على كل شيء حتى الأسوأ: الموت من الضحك والأشباح وشواهد القبور</string>
+    <string name="sticker_sheet_intent_humour_noir_title">كوميديا سوداء</string>
+    <string name="sticker_sheet_intent_quotidien_hint">لتقول ما تفعله: قهوة، وجبة، عمل، طريق، تأخير</string>
+    <string name="sticker_sheet_intent_quotidien_title">الحياة اليومية</string>
+    <string name="sticker_sheet_intent_rale_hint">للتعبير عن الضيق أو الغضب أو الغيرة أو للابتعاد قليلًا</string>
+    <string name="sticker_sheet_intent_rale_title">تذمّر وزعل</string>
+    <string name="sticker_sheet_intent_soutien_hint">للتشجيع أو المواساة أو لتقول «أنا هنا»</string>
+    <string name="sticker_sheet_intent_soutien_title">واسِ وادعم</string>
+    <string name="sticker_sheet_intent_surprise_hint">للدهشة أو الخوف أو الإحراج أو «أوبس»</string>
+    <string name="sticker_sheet_intent_surprise_title">مفاجأة وقشعريرة</string>
+    <string name="time_lastSeen_beforeYesterdayAt">شوهد أول أمس في %s</string>
+    <string name="time_lastSeen_dateAt">شوهد في %1$s الساعة %2$s</string>
+    <string name="time_lastSeen_online">متصل</string>
+    <string name="time_lastSeen_seen">شوهد %s</string>
+    <string name="time_lastSeen_yesterdayAt">شوهد أمس في %s</string>
 </resources>

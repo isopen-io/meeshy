@@ -1,5 +1,6 @@
 package me.meeshy.sdk.sharelink
 
+import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.model.CreatedShareLink
 import me.meeshy.sdk.model.CreateShareLinkRequest
 import me.meeshy.sdk.model.ExtendShareLinkRequest
@@ -22,12 +23,15 @@ import javax.inject.Singleton
 @Singleton
 public class ShareLinkRepository @Inject constructor(
     private val linkApi: LinkApi,
+    public val cache: ShareLinksCache = ShareLinksCache(),
 ) {
     public suspend fun create(request: CreateShareLinkRequest): NetworkResult<CreatedShareLink> =
-        apiCall { linkApi.create(request) }.map { CreatedShareLink.from(it) }
+        apiCall { linkApi.create(request) }
+            .map { CreatedShareLink.from(it) }
+            .also { if (it is NetworkResult.Success) cache.markStale() }
 
     public suspend fun listMyLinks(offset: Int = 0, limit: Int = 50): NetworkResult<List<MyShareLink>> =
-        apiCall { linkApi.listMyLinks(offset, limit) }
+        apiCall { linkApi.listMyLinks(offset, limit, EXPAND_CONVERSATION_AND_POLICY) }
 
     public suspend fun fetchMyStats(): NetworkResult<MyShareLinkStats> =
         apiCall { linkApi.fetchMyStats() }
@@ -35,9 +39,17 @@ public class ShareLinkRepository @Inject constructor(
     public suspend fun setActive(linkId: String, isActive: Boolean): NetworkResult<Unit> =
         apiCall { linkApi.toggle(linkId, ToggleShareLinkRequest(isActive)) }
 
+    /** `PATCH /links/:linkId` — [patch] ne porte que les champs modifiés (voir `ShareLinkEditDraft.patchAgainst`). */
+    public suspend fun update(linkId: String, patch: JsonObject): NetworkResult<Unit> =
+        apiCall { linkApi.update(linkId, patch) }
+
     public suspend fun delete(linkId: String): NetworkResult<Unit> =
         apiCall { linkApi.delete(linkId) }
 
     public suspend fun extend(linkId: String, expiresAtIso: String): NetworkResult<Unit> =
         apiCall { linkApi.extend(linkId, ExtendShareLinkRequest(expiresAtIso)) }
+
+    private companion object {
+        const val EXPAND_CONVERSATION_AND_POLICY = "conversation,policy"
+    }
 }

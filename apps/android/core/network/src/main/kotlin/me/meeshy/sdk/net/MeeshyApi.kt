@@ -1,6 +1,5 @@
 package me.meeshy.sdk.net
 
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.net.api.ActiveCallApi
@@ -26,7 +25,6 @@ import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.UserApi
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.create
 
@@ -71,76 +69,58 @@ class MeeshyApi private constructor(private val retrofit: Retrofit) {
         }
 
         /**
+         * L'ancienne signature `create(config, tokenStore) { … }` : un lambda final reste le
+         * rappel d'expiration, jamais une liste de contributeurs.
+         */
+        fun create(
+            config: MeeshyConfig,
+            tokenStore: TokenStore,
+            onSessionExpired: () -> Unit,
+        ): MeeshyApi = create(config, tokenStore, onSessionExpired, emptyList())
+
+        /**
          * @param onSessionExpired appele quand la passerelle refuse l'identite
-         *   (401) hors des routes d'authentification. Sans lui, une session
-         *   expiree remontait comme une erreur de chargement et l'utilisateur
-         *   lisait « verifiez votre connexion » alors que le reseau allait bien.
-         *   Un 403 (refus de permission — role insuffisant, non-membre, banni) ne
+         *   (401) hors des routes d'authentification. Un 403 (refus de permission) ne
          *   declenche plus ceci depuis #4862 : ce n'est pas une session expiree.
+         * @param extraContributors intercepteurs / authenticator supplementaires, ordonnes
+         *   par priorite avec le socle ([HttpClientContributor]). Le graphe Hilt n'appelle
+         *   pas cette fonction : il assemble le MEME socle via `HttpClientModule`.
          */
         fun create(
             config: MeeshyConfig,
             tokenStore: TokenStore,
             onSessionExpired: () -> Unit = {},
+            extraContributors: Collection<HttpClientContributor> = emptyList(),
         ): MeeshyApi {
-            // The authenticator needs to call `auth.refresh` on the very instance it
-            // guards; the instance does not exist yet. The refresher closure is only
-            // invoked on a 401 — long after `api` is assigned — so a lateinit binding
-            // safely breaks the cycle. `/auth/refresh` is a handshake endpoint the
-            // policy marks ineligible, so the refresh call never re-enters the
-            // authenticator (no recursion).
+            // L'authenticator appelle `auth.refresh` sur l'instance qu'il garde, qui n'existe
+            // pas encore : le rafraichissement ne s'execute que sur un 401, bien apres
+            // l'affectation, et `/auth/refresh` est une route sans authentification.
             lateinit var api: MeeshyApi
-            val refresher = TokenRefresher {
-                val session = tokenStore.sessionToken ?: return@TokenRefresher null
-                runCatching {
-                    runBlocking { api.auth.refresh(RefreshTokenRequest(session)) }
-                }.getOrNull()
-                    ?.takeIf { it.success }
-                    ?.data
-                    ?.token
-            }
+            val transition = SessionTransitionFlags()
+            val contributors = builtInContributors(
+                config, tokenStore, onSessionExpired, sessionRefresher(tokenStore, transition) { api }, transition,
+            ) + extraContributors
+            api = from(buildRetrofit(config, HttpClientAssembler.build(contributors)))
+            return api
+        }
 
-            val client = OkHttpClient.Builder()
-                .addInterceptor(AuthInterceptor(tokenStore))
-                // Annonce ce que ce binaire sait LIRE. Ne se pose qu'apres que
-                // la lecture v3 existe : l'inverse echangerait une sentinelle
-                // lisible contre un ecran vide.
-                .addInterceptor(ClientCapabilitiesInterceptor())
-                // Signal Prisme 4e priorite : dit a la passerelle la locale de
-                // l'appareil (X-Device-Locale), qu'elle reduit et persiste dans
-                // User.deviceLocale. Sans lui, le 4e rang du resolveur reste mort.
-                .addInterceptor(DeviceLocaleInterceptor())
-                // Apres l'authenticator: si le rafraichissement a pu sauver la
-                // session, la reponse finale n'est plus un 401 et rien ne se
-                // declenche. On ne signale donc que les expirations REELLES.
-                .addInterceptor(AuthExpiryInterceptor(onSessionExpired))
-                .authenticator(RefreshAuthenticator(tokenStore, refresher))
-                .apply {
-                    if (config.enableLogging) {
-                        // Le garde REMPLACE le logger — il n'en precede pas un
-                        // second (#4811). Il en tient deux, a niveaux FIXES, et
-                        // delegue par route : sans mot de passe au corps, le
-                        // niveau demande ; avec, BASIC. Aucun `level` n'est
-                        // ecrit apres construction, donc aucun appel parallele
-                        // ne peut poser le niveau d'un autre — voir la course
-                        // que documente `SensitiveBodyLoggingGuard`.
-                        addInterceptor(
-                            SensitiveBodyLoggingGuard.atLevel(HttpLoggingInterceptor.Level.BODY),
-                        )
-                    }
-                }
-                .build()
+        /** Le MEME `MeeshyApi` sur un Retrofit deja assemble (singleton Hilt). */
+        fun from(retrofit: Retrofit): MeeshyApi = MeeshyApi(retrofit)
 
-            val retrofit = Retrofit.Builder()
+        fun buildRetrofit(config: MeeshyConfig, client: OkHttpClient): Retrofit =
+            Retrofit.Builder()
                 .baseUrl(config.apiBaseUrl)
                 .client(client)
-                .addConverterFactory(
-                    JsonConverterFactory(json, "application/json".toMediaType()),
-                )
+                .addConverterFactory(JsonConverterFactory(json, "application/json".toMediaType()))
                 .build()
 
-            api = MeeshyApi(retrofit)
-            return api
+        internal fun sessionRefresher(
+            tokenStore: TokenStore,
+            transition: SessionTransitionFlags,
+            api: () -> MeeshyApi,
+        ): SessionRefresher = SessionRefresher(tokenStore, transition) { session ->
+            api().auth.refresh(RefreshTokenRequest(token = tokenStore.jwt ?: session, sessionToken = session))
+                .takeIf { it.success }?.data?.token
         }
     }
 }

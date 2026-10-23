@@ -144,4 +144,36 @@ class FileBudgetGuardTest {
 
         assertThat(chatScreen.readLines().size).isAtMost(1000)
     }
+
+    private fun storiesLines(name: String): Int = File(
+        androidRoot(),
+        "feature/stories/src/main/kotlin/me/meeshy/app/stories/$name",
+    ).readLines().size
+
+    @Test
+    fun `no story composer source reaches the split threshold`() {
+        val composer = File(androidRoot(), "feature/stories/src/main/kotlin/me/meeshy/app/stories")
+            .listFiles { file -> file.name.startsWith("StoryComposer") || file.name.startsWith("Composer") }
+            .orEmpty()
+
+        assertThat(composer).isNotEmpty()
+        composer.forEach { assertThat(it.readLines().size).isAtMost(1000) }
+    }
+
+    @Test
+    fun `the composer host screen and view model stay slim`() {
+        assertThat(storiesLines("StoryComposerScreen.kt")).isAtMost(600)
+        assertThat(storiesLines("StoryComposerViewModel.kt")).isAtMost(800)
+    }
+
+    @Test
+    fun `no story source exceeds the hard cap`() {
+        val stories = File(androidRoot(), "feature/stories/src/main")
+            .walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .toList()
+
+        assertThat(stories).isNotEmpty()
+        stories.forEach { assertThat(it.readLines().size).isAtMost(1200) }
+    }
 }

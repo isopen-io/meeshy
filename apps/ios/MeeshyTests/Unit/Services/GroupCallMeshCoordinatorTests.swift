@@ -23,6 +23,7 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         private(set) var videoEnabled: [Bool] = []
         private(set) var iceServerUpdateCount = 0
         private(set) var closeCallCount = 0
+        private(set) var videoBudgets: [CallVideoBudget] = []
 
         init(configuration: GroupPeerLinkConfiguration) {
             self.configuration = configuration
@@ -37,6 +38,7 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         func audioLevel() async -> Double? { audioLevelResult }
         func close() { closeCallCount += 1 }
         func sendControl(_ data: Data) {}
+        func applyVideoBudget(_ budget: CallVideoBudget) { videoBudgets.append(budget) }
     }
 
     @MainActor
@@ -87,6 +89,8 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         func primaryAudioLevel() async -> Double? { primaryAudioLevelResult }
         func groupPrimaryDidVacate() { vacateCallCount += 1 }
         func groupCallTitleDidChange(_ title: String) { titles.append(title) }
+        private(set) var groupVideoCeilings: [CallVideoBudget?] = []
+        func recordVideoCeiling(_ budget: CallVideoBudget?) { groupVideoCeilings.append(budget) }
     }
 
     private final class ActiveCallStub: ActiveCallServiceProviding, @unchecked Sendable {
@@ -110,7 +114,8 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
             signaling: signaling,
             activeCalls: calls,
             now: { Date(timeIntervalSince1970: 100) },
-            samplingInterval: .seconds(3600)
+            samplingInterval: .seconds(3600),
+            primaryVideoCeiling: { [weak host] in host?.recordVideoCeiling($0) }
         )
         if markGroup { sut.markGroupConversation("group1", title: "Équipe") }
         sut.attach(host: host)
@@ -154,6 +159,45 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         XCTAssertEqual(factory.link(to: "c")?.offerCallCount, 1)
         XCTAssertEqual(sut.roster.member("c")?.displayName, "Chloé")
         XCTAssertTrue(sut.isGroupCallActive)
+    }
+
+    // MARK: - Chaque lien encode à sa juste taille (#11292)
+
+    func test_twoMeshMembers_everyEncodeSharesTheUplink() async {
+        let (sut, host, factory, _, _) = makeSUT()
+
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantJoined(joined("d"))
+        await settle()
+
+        let attendu = CallVideoBudget.meshLink(encodes: 3)
+        XCTAssertEqual(factory.link(to: "c")?.videoBudgets.last, attendu, "le principal + deux liens : trois encodages")
+        XCTAssertEqual(factory.link(to: "d")?.videoBudgets.last, attendu)
+        XCTAssertEqual(host.groupVideoCeilings.last ?? nil, attendu, "le principal reçoit le même plafond")
+    }
+
+    func test_memberLeaves_theRemainingEncodesGrowBack() async {
+        let (sut, host, factory, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantJoined(joined("d"))
+        await settle()
+
+        sut.handleParticipantLeft(joined("d"))
+
+        XCTAssertEqual(factory.link(to: "c")?.videoBudgets.last, CallVideoBudget.meshLink(encodes: 2))
+        XCTAssertEqual(host.groupVideoCeilings.last ?? nil, CallVideoBudget.meshLink(encodes: 2))
+    }
+
+    func test_survivalFreeze_floorsEveryMeshLink_andThawRestoresTheirShare() async {
+        let (sut, _, factory, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+        await settle()
+
+        sut.setSurvivalFloor(true)
+        XCTAssertEqual(factory.link(to: "c")?.videoBudgets.last, CallVideoBudget.survivalFloor)
+
+        sut.setSurvivalFloor(false)
+        XCTAssertEqual(factory.link(to: "c")?.videoBudgets.last, CallVideoBudget.meshLink(encodes: 2))
     }
 
     func test_participantJoined_primary_isNeverOfferedByTheMesh() async {

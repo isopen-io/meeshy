@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -30,6 +32,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -42,15 +46,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ExtendShareLinkForm
 import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.MyShareLinkStats
+import me.meeshy.sdk.model.MyShareLinksPhase
+import me.meeshy.sdk.model.ShareLinkDateFormat
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.ShareLinkExpiration
 import me.meeshy.sdk.model.displayName
 import me.meeshy.sdk.model.isExpired
@@ -76,6 +86,8 @@ fun MyShareLinksScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
+
     MeeshyBackground {
         Scaffold(
             containerColor = Color.Transparent,
@@ -99,22 +111,31 @@ fun MyShareLinksScreen(
                 )
             },
         ) { padding ->
-            Box(
+            PullToRefreshBox(
+                isRefreshing = state.isRefreshing,
+                onRefresh = viewModel::refresh,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
             ) {
                 when {
-                    state.showColdSpinner -> CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MeeshyPalette.Indigo500,
-                    )
+                    state.showColdSpinner -> Box(Modifier.fillMaxSize()) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.Center),
+                            color = MeeshyPalette.Indigo500,
+                        )
+                    }
 
                     state.showEmptyState -> EmptyLinks()
+
+                    state.phase == MyShareLinksPhase.Error && state.links.isEmpty() ->
+                        FailedLoad(message = state.errorMessage, onRetry = viewModel::refresh)
 
                     else -> LinksList(
                         links = state.links,
                         stats = state.stats,
+                        showFailureBanner = state.showFailureBanner,
+                        onRetry = viewModel::refresh,
                         joinUrlFor = viewModel::joinUrlFor,
                         onOpen = onOpenLink,
                         onCopy = { link ->
@@ -138,6 +159,7 @@ private fun EmptyLinks() {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(MeeshySpacing.xl),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -158,9 +180,45 @@ private fun EmptyLinks() {
 }
 
 @Composable
+private fun FailedLoad(message: String?, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(MeeshySpacing.xl),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = message ?: stringResource(R.string.sharelinks_list_refresh_failed),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.sharelinks_list_retry)) }
+    }
+}
+
+@Composable
+private fun FailureBanner(onRetry: () -> Unit) {
+    MeeshyCard {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.sharelinks_list_refresh_failed),
+                style = MaterialTheme.typography.labelMedium,
+                color = MeeshyTheme.tokens.warning,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.sharelinks_list_retry)) }
+        }
+    }
+}
+
+@Composable
 private fun LinksList(
     links: List<MyShareLink>,
     stats: MyShareLinkStats?,
+    showFailureBanner: Boolean,
+    onRetry: () -> Unit,
     joinUrlFor: (MyShareLink) -> String,
     onOpen: (MyShareLink) -> Unit,
     onCopy: (MyShareLink) -> Unit,
@@ -175,8 +233,11 @@ private fun LinksList(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(MeeshySpacing.lg),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
+        if (showFailureBanner) {
+            item(key = "failure", contentType = "banner") { FailureBanner(onRetry) }
+        }
         stats?.let {
-            item(key = "stats") { StatsHeader(it) }
+            item(key = "stats", contentType = "stats") { StatsHeader(it) }
         }
         item(key = "section") {
             Text(
@@ -187,11 +248,12 @@ private fun LinksList(
                 modifier = Modifier.padding(vertical = MeeshySpacing.xs),
             )
         }
-        items(links, key = { it.id }) { link ->
+        items(links, key = { it.id }, contentType = { "link" }) { link ->
             ShareLinkRow(
                 link = link,
                 joinUrl = joinUrlFor(link),
                 isExpired = link.isExpired(nowMillis),
+                expiryLine = rowExpiry(link, nowMillis),
                 onOpen = { onOpen(link) },
                 onCopy = { onCopy(link) },
                 onShare = { onShare(link) },
@@ -248,6 +310,7 @@ private fun ShareLinkRow(
     link: MyShareLink,
     joinUrl: String,
     isExpired: Boolean,
+    expiryLine: String?,
     onOpen: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
@@ -276,8 +339,9 @@ private fun ShareLinkRow(
                     maxLines = 1,
                 )
                 Text(
-                    text = "$statusText · " + stringResource(
-                        R.string.my_share_links_joined_count,
+                    text = "$statusText · " + pluralStringResource(
+                        R.plurals.my_share_links_joined_count,
+                        link.currentUses,
                         link.currentUses,
                     ),
                     style = MaterialTheme.typography.labelMedium,
@@ -289,6 +353,14 @@ private fun ShareLinkRow(
                         text = title,
                         style = MaterialTheme.typography.labelSmall,
                         color = MeeshyTheme.tokens.textMuted,
+                        maxLines = 1,
+                    )
+                }
+                expiryLine?.let { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MeeshyTheme.tokens.warning,
                         maxLines = 1,
                     )
                 }
@@ -330,6 +402,14 @@ private fun ShareLinkRow(
             }
         }
     }
+}
+
+/** #10381 — la ligne dit l'échéance choisie ; un lien sans échéance n'ajoute rien à sa ligne. */
+@Composable
+private fun rowExpiry(link: MyShareLink, nowMillis: Long): String? {
+    val expiresAt = isoToEpochMillisOrNull(link.expiresAt) ?: return null
+    if (expiresAt <= nowMillis) return stringResource(R.string.conversationCard_expired)
+    return stringResource(R.string.participantProfile_linkExpires) + " " + ShareLinkDateFormat.day(expiresAt)
 }
 
 @Composable

@@ -1,0 +1,41 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="contacts_back">Indietro</string>
+    <string name="contacts_blocked_empty">Nessun utente bloccato</string>
+    <string name="contacts_blocked_unblock">Sblocca</string>
+    <string name="contacts_blocked_unblock_a11y">Sblocca %s</string>
+    <string name="contacts_blocked_unblock_cancel">Annulla</string>
+    <string name="contacts_blocked_unblock_confirm">Sblocca</string>
+    <string name="contacts_blocked_unblock_message">Sbloccare %s?</string>
+    <string name="contacts_blocked_unblock_title">Sbloccare?</string>
+    <string name="contacts_discover_blocked">Bloccati</string>
+    <string name="contacts_discover_email_error">Impossibile inviare l\'invito</string>
+    <string name="contacts_discover_email_placeholder">Indirizzo email</string>
+    <string name="contacts_discover_email_send">Invia</string>
+    <string name="contacts_discover_email_send_a11y">Invia invito via email</string>
+    <string name="contacts_discover_email_title">Invita via email</string>
+    <string name="contacts_discover_no_results">Nessun utente trovato</string>
+    <string name="contacts_discover_pending">In attesa</string>
+    <string name="contacts_discover_search_hint">Cerca un utente Meeshy</string>
+    <string name="contacts_discover_sms_placeholder">Numero di telefono</string>
+    <string name="contacts_discover_sms_send">Invia</string>
+    <string name="contacts_discover_sms_send_a11y">Invia invito via SMS</string>
+    <string name="contacts_discover_sms_title">Invita via SMS</string>
+    <string name="contacts_filter_all">Tutti</string>
+    <string name="contacts_filter_offline">Non in linea</string>
+    <string name="contacts_filter_online">Online</string>
+    <string name="contacts_list_empty">Nessun contatto</string>
+    <string name="contacts_list_filtered_empty">Nessun risultato</string>
+    <string name="contacts_list_retry">Riprova</string>
+    <string name="contacts_request_accept">Accetta</string>
+    <string name="contacts_request_cancel">Annulla</string>
+    <string name="contacts_request_decline">Rifiuta</string>
+    <string name="contacts_requests_received">Ricevute</string>
+    <string name="contacts_requests_sent">Inviate</string>
+    <string name="contacts_search_hint">Cerca un contatto</string>
+    <string name="contacts_tab_blocked">Bloccati</string>
+    <string name="contacts_tab_contacts">Contatti</string>
+    <string name="contacts_tab_discover">Scopri</string>
+    <string name="contacts_tab_requests">Richieste</string>
+    <string name="contacts_title">Contatti</string>
+</resources>

@@ -69,7 +69,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationMembersSheet(
+internal fun ConversationMembersSheet(
     conversationId: String,
     accentColor: Color,
     onDismiss: () -> Unit,

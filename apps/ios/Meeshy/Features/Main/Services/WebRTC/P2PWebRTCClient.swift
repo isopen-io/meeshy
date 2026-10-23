@@ -23,7 +23,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     var dataProfile: CallDataProfile = .wifi
     var localVideoTrack_: RTCVideoTrack?
     var screenShareFeed: ScreenShareVideoFeed?
-    private var videoCapturer: RTCCameraVideoCapturer?
+    var videoCapturer: RTCCameraVideoCapturer?
+    var captureCeiling = CallCaptureCeiling.hd
     private var videoFilterDelegate: VideoFilterCapturerDelegate?
     /// C3 — observateurs d'interruption de la session de capture de CET appel.
     /// Scopés sur `object: capturer.captureSession` : `CameraView` instancie une
@@ -113,24 +114,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             Logger.webrtc.warning("configure() called with a live peerConnection — disconnecting it before creating a new one")
             disconnect()
         }
-        let config = RTCConfiguration()
-        config.iceServers = iceServers.map { server in
-            RTCIceServer(
-                urlStrings: server.urls,
-                username: server.username,
-                credential: server.credential
-            )
-        }
-        config.sdpSemantics = .unifiedPlan
-        config.continualGatheringPolicy = .gatherContinually
-        config.bundlePolicy = .maxBundle
-        config.rtcpMuxPolicy = .require
-        // PERF-003: pre-warm ICE candidate gathering while the user is still
-        // tapping Answer. With pool size = 4, host/srflx/relay candidates start
-        // resolving as soon as setConfiguration runs, so ICE checks can begin
-        // immediately after the SDP answer is sent — typically shaving 200–400ms
-        // off the connect time on cellular.
-        config.iceCandidatePoolSize = Int32(QualityThresholds.iceCandidatePoolSize)
+        let config = WebRTCPeerConfiguration.make(
+            iceServers: iceServers.map { RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential) },
+            transport: CallAddressPrivacySetting.transport()
+        )
 
         let constraints = RTCMediaConstraints(
             mandatoryConstraints: nil,
@@ -294,13 +281,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             usingFrontCamera = camera.position == .front
 
             Logger.webrtc.info("[WEBRTC] selectFormat begin")
-            guard let selectedFormat = camera.callCaptureFormat else {
+            guard let selectedFormat = camera.callCaptureFormat(within: captureCeiling) else {
                 Logger.webrtc.error("[WEBRTC] no usable camera format — throwing noCameraFormatAvailable")
                 throw WebRTCError.noCameraFormatAvailable
             }
             format = selectedFormat
 
-            fps = format.callFrameRate
+            fps = format.callFrameRate(within: captureCeiling)
             // C3 — armé AVANT `startCapture` : une interruption survenant pendant le
             // warm-up caméra doit être vue. Après les gardes device/format, pour ne
             // pas s'abonner à une session qu'on s'apprête à abandonner (simulateur
@@ -379,14 +366,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         scaleResolutionDownBy: Double = 1.0,
         degradationPreference: VideoDegradationPreference = .maintainFramerate
     ) {
+        adaptCaptureSource(scaleDownBy: scaleResolutionDownBy, framerate: maxFramerate)
         guard let sender = videoTransceiver?.sender else { return }
-        WebRTCSenderEncoding.applyVideo(
-            to: sender,
-            maxBitrateBps: maxBitrateBps,
-            maxFramerate: maxFramerate,
-            scaleResolutionDownBy: scaleResolutionDownBy,
-            degradationPreference: degradationPreference
-        )
+        WebRTCSenderEncoding.applyVideo(to: sender, maxBitrateBps: maxBitrateBps, maxFramerate: maxFramerate,
+                                        scaleResolutionDownBy: scaleResolutionDownBy, degradationPreference: degradationPreference)
     }
 
     /// Adjusts the audio sender's max bitrate at runtime. Called by the
@@ -721,11 +704,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         guard let capturer = videoCapturer else { return }
         let position: AVCaptureDevice.Position = usingFrontCamera ? .front : .back
         guard let camera = Self.pickCaptureDevice(preferring: position),
-              let format = camera.callCaptureFormat else {
+              let format = camera.callCaptureFormat(within: captureCeiling) else {
             Logger.webrtc.warning("[WEBRTC] toggleVideo on — no camera/format available, skipping capturer restart")
             return
         }
-        let fps = format.callFrameRate
+        let fps = format.callFrameRate(within: captureCeiling)
         // Capture the session generation before the async suspension point.
         // If disconnect() is called while startCapture is in flight (0.5–3 s
         // warm-up window), `sessionGeneration` is incremented and the post-await
@@ -761,7 +744,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             throw WebRTCError.noCameraAvailable
         }
 
-        guard let selectedFormat = camera.callCaptureFormat else {
+        guard let selectedFormat = camera.callCaptureFormat(within: captureCeiling) else {
             usingFrontCamera.toggle()
             throw WebRTCError.noCameraFormatAvailable
         }
@@ -773,7 +756,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // and restartCapturerIfStopped.
         let generation = sessionGeneration
         await capturer.stopCapture()
-        let fps = selectedFormat.callFrameRate
+        let fps = selectedFormat.callFrameRate(within: captureCeiling)
         do {
             try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
         } catch {
@@ -821,7 +804,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         guard let camera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.uniqueID == uniqueID }).map(Self.zoomCapable) else {
             throw WebRTCError.noCameraAvailable
         }
-        guard let selectedFormat = camera.callCaptureFormat else {
+        guard let selectedFormat = camera.callCaptureFormat(within: captureCeiling) else {
             throw WebRTCError.noCameraFormatAvailable
         }
         // Same session-generation guard as switchCamera / restartCapturerIfStopped:
@@ -829,7 +812,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // orphan capturer rather than leaving the camera LED on with no shutdown path.
         let generation = sessionGeneration
         await capturer.stopCapture()
-        let fps = selectedFormat.callFrameRate
+        let fps = selectedFormat.callFrameRate(within: captureCeiling)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
         let isStale = await MainActor.run { generation != sessionGeneration }
         if isStale {

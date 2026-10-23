@@ -33,7 +33,13 @@ class WebRtcCallCoordinator @Inject constructor(
 ) {
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
-    private val audio = CallAudioSession(appContext)
+    private val audio = CallAudioSession(appContext) { hasFocus ->
+        interrupted = !hasFocus
+        applyMicrophone()
+    }
+
+    private var userMuted = false
+    private var interrupted = false
 
     private var callScope: CoroutineScope? = null
 
@@ -100,7 +106,7 @@ class WebRtcCallCoordinator @Inject constructor(
         // the earpiece — but the CALLER'S current intent wins over that default when
         // it is already known (e.g. the user toggled the speaker button while
         // `accept()` was still awaiting the join ACK, before this ran).
-        audio.route(speakerOn = speakerOn)
+        audio.route(speakerOn = speakerOn, isVideo = isVideo)
         engine.createConnection(iceServers, enableVideo = isVideo)
         negotiator.observe(cs)
         iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
@@ -112,7 +118,13 @@ class WebRtcCallCoordinator @Inject constructor(
         negotiator.onParticipantJoined(cs, joinerId)
     }
 
-    fun setMuted(muted: Boolean) = engine.setAudioEnabled(!muted)
+    fun setMuted(muted: Boolean) {
+        userMuted = muted
+        applyMicrophone()
+    }
+
+    /** Le micro porte la voix sauf si l'utilisateur l'a coupé ou si une interruption (GSM, alarme) tient le focus. */
+    private fun applyMicrophone() = engine.setAudioEnabled(!userMuted && !interrupted)
 
     fun setCameraEnabled(enabled: Boolean) = engine.setVideoEnabled(enabled)
 
@@ -122,6 +134,8 @@ class WebRtcCallCoordinator @Inject constructor(
     fun end() {
         callScope?.cancel()
         callScope = null
+        interrupted = false
+        userMuted = false
         engine.close()
         iceMonitor.end()
         audio.restore()

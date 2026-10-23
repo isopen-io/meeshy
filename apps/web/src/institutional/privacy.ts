@@ -21,7 +21,7 @@ import type { ContentPage } from './type';
  */
 export const PAGE_PRIVACY: ContentPage = {
   title: 'Politique de Confidentialité',
-  mention: 'Dernière mise à jour : 10 octobre 2026',
+  mention: 'Dernière mise à jour : 22 octobre 2026',
   description: 'Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD.',
   mee: { sticker: 'mee-rougit', caption: 'Mee se cache les yeux : vos conversations ne regardent que vous.' },
   sections: [
@@ -236,13 +236,57 @@ export const PAGE_PRIVACY: ContentPage = {
             'Avec les autres participants de vos conversations (vos messages et traductions)',
             'Avec votre consentement explicite (export de données, partage de profil)',
             'Pour respecter nos obligations légales (réquisitions judiciaires)',
-            'Avec des partenaires techniques de confiance (hébergement de serveurs) sous contrat de confidentialité stricte',
+            'Avec nos sous-traitants techniques (hébergement, e-mails, SMS, notifications, assistant conversationnel), listés dans la section suivante, qui ne traitent vos données que pour notre compte',
             'En cas de fusion ou acquisition (vous serez notifié au préalable)',
           ],
         },
         {
           kind: 'accent',
           body: "Aucune donnée n'est partagée avec des services tiers pour la traduction. Tout est fait en interne sur nos serveurs.",
+        },
+      ],
+    },
+    {
+      title: 'Nos Sous-traitants',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Pour faire fonctionner Meeshy, nous confions certaines données à des prestataires qui les traitent pour notre compte et selon nos instructions. Certains ne sont sollicités que selon la configuration de notre service : nous les citons tous.",
+          ],
+        },
+        {
+          kind: 'cartes',
+          cards: [
+            {
+              title: 'Hébergement',
+              body: "Nos serveurs hébergent votre compte, vos messages et vos fichiers. La traduction, la transcription et la synthèse vocale y sont calculées, sans service tiers.",
+            },
+            {
+              title: 'E-mails',
+              body: "Brevo (France), et selon la configuration SendGrid ou Mailgun (États-Unis), envoient les e-mails de compte et de sécurité. Ils reçoivent votre adresse e-mail, votre nom et le contenu de l'e-mail.",
+            },
+            {
+              title: 'SMS',
+              body: "Brevo (France), Twilio ou Vonage (États-Unis), selon la configuration, envoient les codes de vérification. Ils reçoivent votre numéro de téléphone et le texte du SMS.",
+            },
+            {
+              title: 'Notifications',
+              body: "Google Firebase Cloud Messaging (Android et navigateur) et Apple Push Notification service (iPhone), aux États-Unis, acheminent les notifications. Ils reçoivent le jeton de votre appareil et le contenu de la notification — l'aperçu d'un message, jamais celui d'un message éphémère, à vue unique ou flouté.",
+            },
+            {
+              title: 'Assistant conversationnel',
+              body: "Selon la configuration, OpenAI ou Anthropic (États-Unis) fournissent le modèle de langage de l'assistant de Meeshy. Ils reçoivent le texte des messages des conversations de groupe, des chaînes et des conversations publiques où l'assistant est actif.",
+            },
+            {
+              title: 'Reconnaissance vocale de votre appareil',
+              body: "Pendant un appel sous-titré, votre voix est transcrite par le service de reconnaissance vocale de votre téléphone ou de votre navigateur, souvent fourni par Google ou Apple, qui applique ses propres conditions.",
+            },
+          ],
+        },
+        {
+          kind: 'accent',
+          body: "Votre localisation approximative (ville, pays) est déduite de votre adresse IP sur nos serveurs, à partir d'une base locale : votre adresse IP n'est envoyée à aucun service de géolocalisation.",
         },
       ],
     },
@@ -312,6 +356,7 @@ export const PAGE_PRIVACY: ContentPage = {
           kind: 'paragraphes',
           body: [
             "Vos données sont hébergées en France et dans l'Union Européenne. Si vous accédez à Meeshy depuis l'extérieur de l'UE, vos données peuvent être transférées vers l'UE avec toutes les protections RGPD.",
+            "Certains de nos sous-traitants sont établis aux États-Unis (Google, Apple, OpenAI, Anthropic, Twilio et SendGrid, Mailgun, Vonage) : les données qui leur sont confiées y sont transférées. Ces transferts reposent sur les garanties du chapitre V du RGPD : la décision d'adéquation de la Commission européenne pour les prestataires certifiés au cadre de protection des données UE–États-Unis, ou à défaut les clauses contractuelles types de la Commission. Vous pouvez en obtenir une copie en écrivant à privacy@meeshy.me.",
           ],
         },
       ],
@@ -355,6 +400,7 @@ export const PAGE_PRIVACY: ContentPage = {
       { label: 'À propos', href: '/about' },
       { label: 'Contact', href: '/contact' },
       { label: 'Partenaires', href: '/partners' },
+      { label: 'Sécurité des enfants', href: '/child-safety' },
     ],
   },
 };

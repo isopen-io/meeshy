@@ -6,6 +6,12 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+if (file("google-services.json").exists()) {
+    pluginManager.apply(libs.plugins.google.services.get().pluginId)
+} else {
+    logger.warn("app/google-services.json absent : plugin google-services non appliqué, FCM inactif (voir docs/fcm-setup.md)")
+}
+
 android {
     namespace = "me.meeshy.app"
     compileSdk = 37
@@ -55,6 +61,7 @@ dependencies {
     implementation(project(":feature:stories"))
     implementation(project(":feature:calls"))
     implementation(project(":feature:reels"))
+    implementation(project(":feature:game"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

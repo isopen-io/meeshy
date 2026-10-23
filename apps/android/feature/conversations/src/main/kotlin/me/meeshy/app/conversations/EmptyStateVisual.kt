@@ -1,7 +1,7 @@
 package me.meeshy.app.conversations
 
 /** Icon family for an empty-state card (mapped to a Material glyph in the screen). */
-enum class EmptyStateGlyph { Error, NoResults, NoConversations }
+enum class EmptyStateGlyph { Error, NoResults, NoConversations, SearchNoResults }
 
 /**
  * A resolvable copy slot. Kept enum-keyed (resolved to `R.string` in the screen)
@@ -16,6 +16,9 @@ enum class EmptyStateCopy {
     FilteredSubtitle,
     ColdTitle,
     ColdSubtitle,
+    NewConversation,
+    SearchNoResultsTitle,
+    SearchNoResultsSubtitle,
 }
 
 /**
@@ -43,6 +46,7 @@ data class EmptyStateVisual(
     val title: EmptyStateCopy,
     val subtitle: EmptyStateSubtitle?,
     val cta: EmptyStateCopy?,
+    val compact: Boolean = false,
 ) {
     companion object {
         fun of(content: ConversationListContent): EmptyStateVisual? = when (content) {
@@ -66,7 +70,15 @@ data class EmptyStateVisual(
                 glyph = EmptyStateGlyph.NoConversations,
                 title = EmptyStateCopy.ColdTitle,
                 subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.ColdSubtitle),
+                cta = EmptyStateCopy.NewConversation,
+            )
+
+            ConversationListContent.SearchNoResults -> EmptyStateVisual(
+                glyph = EmptyStateGlyph.SearchNoResults,
+                title = EmptyStateCopy.SearchNoResultsTitle,
+                subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.SearchNoResultsSubtitle),
                 cta = null,
+                compact = true,
             )
 
             ConversationListContent.Populated,

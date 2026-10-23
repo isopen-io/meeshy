@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_banner_label">Profile banner</string>
+    <string name="profile_avatar_view_fullscreen_hint">Opens the photo fullscreen</string>
+</resources>

@@ -48,7 +48,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReportMessageSheet(
+internal fun ReportMessageSheet(
     form: ReportMessageForm,
     accentColor: Color,
     onSelectReason: (ReportReason) -> Unit,

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_audio_bluetooth",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_bluetooth_allow",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_bluetooth_permission",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_button",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_car",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_earpiece",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_hearing_aid",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_other",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_select_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_selected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_sheet_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_speaker",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_usb",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_audio_wired",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

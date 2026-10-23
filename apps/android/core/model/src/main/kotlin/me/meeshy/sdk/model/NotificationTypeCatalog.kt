@@ -27,7 +27,9 @@ public enum class NotificationType {
     COMMENT_REPLY,
     COMMENT_LIKE,
     FRIEND_CONTENT,
+    GAME,
     CONTACT_REQUEST,
+    CONTACT_ACTIVITY,
     GROUP_INVITE,
     MEMBER_JOINED,
     MEMBER_LEFT,
@@ -127,8 +129,16 @@ public object NotificationTypeCatalog {
             { it.friendContentEnabled }, { p, e -> p.copy(friendContentEnabled = e) },
         ),
         NotificationTypeDescriptor(
+            NotificationType.GAME, NotificationCategory.SOCIAL,
+            { it.gameEnabled }, { p, e -> p.copy(gameEnabled = e) },
+        ),
+        NotificationTypeDescriptor(
             NotificationType.CONTACT_REQUEST, NotificationCategory.GROUPS,
             { it.contactRequestEnabled }, { p, e -> p.copy(contactRequestEnabled = e) },
+        ),
+        NotificationTypeDescriptor(
+            NotificationType.CONTACT_ACTIVITY, NotificationCategory.GROUPS,
+            { it.contactActivityEnabled }, { p, e -> p.copy(contactActivityEnabled = e) },
         ),
         NotificationTypeDescriptor(
             NotificationType.GROUP_INVITE, NotificationCategory.GROUPS,
@@ -147,6 +157,12 @@ public object NotificationTypeCatalog {
             { it.systemEnabled }, { p, e -> p.copy(systemEnabled = e) },
         ),
     )
+
+    /**
+     * Les types dont la ligne n'est pas montrée : iOS a retiré « Messages vocaux » (préférence
+     * orpheline, aucun type de notification ne la gouverne). Le champ reste au modèle.
+     */
+    public val hiddenTypes: Set<NotificationType> = setOf(NotificationType.VOICEMAIL)
 
     private val byType: Map<NotificationType, NotificationTypeDescriptor> =
         descriptors.associateBy { it.type }
@@ -174,7 +190,7 @@ public object NotificationTypeCatalog {
         label: (NotificationType) -> String = { it.name },
     ): List<NotificationCategorySection> {
         val normalized = query.trim().lowercase()
-        val matching = descriptors.filter { descriptor ->
+        val matching = descriptors.filter { it.type !in hiddenTypes }.filter { descriptor ->
             normalized.isEmpty() || label(descriptor.type).lowercase().contains(normalized)
         }
         return NotificationCategory.entries.mapNotNull { category ->

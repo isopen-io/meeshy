@@ -12,6 +12,8 @@ import org.junit.Test
  */
 class NotificationTypeCatalogTest {
 
+    private val shownTypes = NotificationType.entries - NotificationTypeCatalog.hiddenTypes
+
     // ---- toggle / isEnabled lenses ---------------------------------------
 
     @Test
@@ -52,7 +54,7 @@ class NotificationTypeCatalogTest {
             NotificationCategory.GROUPS,
             NotificationCategory.SYSTEM,
         ).inOrder()
-        assertThat(sections.flatMap { it.items }).hasSize(NotificationType.entries.size)
+        assertThat(sections.flatMap { it.items }).hasSize(shownTypes.size)
     }
 
     @Test
@@ -70,27 +72,49 @@ class NotificationTypeCatalogTest {
     }
 
     @Test
-    fun sections_callsCategoryPutsIncomingBeforeMissedThenVoicemail() {
+    fun sections_callsCategoryPutsIncomingBeforeMissedAndHidesVoicemail() {
         val calls = NotificationTypeCatalog.sections(UserNotificationPreferences())
             .first { it.category == NotificationCategory.CALLS }
             .items.map { it.type }
 
-        // iOS orders callsEnabled ahead of missedCallEnabled in its notification settings.
+        // iOS orders callsEnabled ahead of missedCallEnabled, et a retiré « Messages vocaux ».
         assertThat(calls).containsExactly(
             NotificationType.INCOMING_CALL,
             NotificationType.MISSED_CALL,
-            NotificationType.VOICEMAIL,
         ).inOrder()
+        assertThat(NotificationTypeCatalog.hiddenTypes).containsExactly(NotificationType.VOICEMAIL)
     }
 
     @Test
-    fun sections_socialCategoryEndsWithFriendContent() {
+    fun sections_socialCategoryEndsWithFriendContentThenGame() {
         val social = NotificationTypeCatalog.sections(UserNotificationPreferences())
             .first { it.category == NotificationCategory.SOCIAL }
             .items.map { it.type }
 
-        // iOS places friendContentEnabled last in its Fil social section.
-        assertThat(social.last()).isEqualTo(NotificationType.FRIEND_CONTENT)
+        // iOS : friendContentEnabled puis gameEnabled ferment la section « Fil social ».
+        assertThat(social.takeLast(2)).containsExactly(NotificationType.FRIEND_CONTENT, NotificationType.GAME).inOrder()
+    }
+
+    @Test
+    fun sections_contactActivityFollowsContactRequestInGroups() {
+        val groups = NotificationTypeCatalog.sections(UserNotificationPreferences())
+            .first { it.category == NotificationCategory.GROUPS }
+            .items.map { it.type }
+
+        assertThat(groups.take(2)).containsExactly(
+            NotificationType.CONTACT_REQUEST,
+            NotificationType.CONTACT_ACTIVITY,
+        ).inOrder()
+    }
+
+    @Test
+    fun toggle_gameAndContactActivityLensesReadAndWriteTheirOwnField() {
+        val off = NotificationTypeCatalog.toggle(UserNotificationPreferences(), NotificationType.GAME, enabled = false)
+        assertThat(off.gameEnabled).isFalse()
+        assertThat(off.contactActivityEnabled).isTrue()
+        val off2 = NotificationTypeCatalog.toggle(off, NotificationType.CONTACT_ACTIVITY, enabled = false)
+        assertThat(off2.contactActivityEnabled).isFalse()
+        assertThat(off2.gameEnabled).isFalse()
     }
 
     @Test
@@ -135,13 +159,13 @@ class NotificationTypeCatalogTest {
     @Test
     fun sections_blankQueryKeepsEveryType() {
         val sections = NotificationTypeCatalog.sections(UserNotificationPreferences(), query = "")
-        assertThat(sections.flatMap { it.items }).hasSize(NotificationType.entries.size)
+        assertThat(sections.flatMap { it.items }).hasSize(shownTypes.size)
     }
 
     @Test
     fun sections_whitespaceOnlyQueryIsTreatedAsNoFilter() {
         val sections = NotificationTypeCatalog.sections(UserNotificationPreferences(), query = "   ")
-        assertThat(sections.flatMap { it.items }).hasSize(NotificationType.entries.size)
+        assertThat(sections.flatMap { it.items }).hasSize(shownTypes.size)
     }
 
     @Test

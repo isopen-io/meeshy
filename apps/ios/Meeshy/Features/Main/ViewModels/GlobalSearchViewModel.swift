@@ -414,10 +414,10 @@ final class GlobalSearchViewModel: ObservableObject {
 
     /// Prisme Linguistique du lecteur, dans l'ordre — systemLanguage,
     /// regionalLanguage, customDestinationLanguage, puis la locale appareil en
-    /// 4e rang. `MeeshyUser.preferredContentLanguages` est la seule autorité
-    /// iOS sur cet ordre : ne jamais le réimplémenter ici.
+    /// 4e rang, sans repli « fr ». `ReaderPrism.resolve(for:)` est la seule
+    /// autorité iOS sur cette descente : ne jamais la réimplémenter ici.
     private var preferredContentLanguages: [String] {
-        authManager.currentUser?.preferredContentLanguages ?? []
+        ReaderPrism.resolve(for: authManager.currentUser)
     }
 
     private func searchLocalConversations(query: String) async -> [GlobalSearchConversationResult] {

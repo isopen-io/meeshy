@@ -2,13 +2,18 @@ package me.meeshy.sdk.net.api
 
 import me.meeshy.sdk.model.ApiCategory
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.CategoryPatchBody
 import me.meeshy.sdk.model.CreateCategoryBody
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
+import me.meeshy.sdk.model.UserPreferences
+import kotlinx.serialization.json.JsonObject
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -69,4 +74,32 @@ interface PreferencesApi {
      */
     @GET("me/preferences/privacy")
     suspend fun getPrivacy(): ApiResponse<PrivacyPreferenceSyncBody>
+
+    /** The whole preference aggregate (`GET /me/preferences`) — the cache-first read of every block at once. */
+    @GET("me/preferences")
+    suspend fun getAll(): ApiResponse<UserPreferences>
+
+    /**
+     * Folds or unfolds a category section (`PATCH /me/preferences/categories/{id}`,
+     * iOS `patchCategory(id:isExpanded:)`); the response row is ignored.
+     */
+    @PATCH("me/preferences/categories/{categoryId}")
+    suspend fun patchCategory(
+        @Path("categoryId") categoryId: String,
+        @Body body: CategoryPatchBody,
+    ): ApiResponse<Unit>
+
+    /**
+     * Partial update of one preference block by its wire name (`privacy`, `audio`, `message`,
+     * `notification`, `video`, `document`, `application`) — iOS `patchPreferences(category:body:)`.
+     */
+    @PATCH("me/preferences/{category}")
+    suspend fun patchBlock(
+        @Path("category") category: String,
+        @Body body: JsonObject,
+    ): ApiResponse<Unit>
+
+    /** Resets one preference block to the gateway defaults (iOS `resetPreferences(category:)`). */
+    @DELETE("me/preferences/{category}")
+    suspend fun resetBlock(@Path("category") category: String): ApiResponse<Unit>
 }

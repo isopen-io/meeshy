@@ -29,6 +29,7 @@ import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.UserApi
+import retrofit2.Retrofit
 import javax.inject.Singleton
 
 /**
@@ -78,12 +79,7 @@ internal object NetworkModule {
 
     @Provides
     @Singleton
-    fun providesMeeshyApi(
-        config: MeeshyConfig,
-        tokenStore: TokenStore,
-        sessionExpiry: SessionExpiryNotifier,
-    ): MeeshyApi =
-        MeeshyApi.create(config, tokenStore, onSessionExpired = sessionExpiry::notifyExpired)
+    fun providesMeeshyApi(retrofit: Retrofit): MeeshyApi = MeeshyApi.from(retrofit)
 
     @Provides
     fun providesAuthApi(api: MeeshyApi): AuthApi = api.auth

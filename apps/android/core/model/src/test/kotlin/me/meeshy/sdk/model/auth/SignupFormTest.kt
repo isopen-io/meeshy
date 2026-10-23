@@ -318,3 +318,87 @@ class SignupFormTest {
         assertThat(SignupForm(phoneDigits = "0").hasPhone).isTrue()
     }
 }
+
+class SignupFormPhasedTest {
+
+    private fun phased(
+        email: String = "ada.lovelace@meeshy.me",
+        phone: String = "0612345678",
+        password: String = "",
+        displayName: String = "",
+        username: String? = null,
+    ) = SignupForm(email = email, phoneDigits = phone, password = password, displayName = displayName, username = username)
+
+    @Test
+    fun `nom et pseudo suivent l'adresse tant qu'ils ne sont pas tapes`() {
+        val form = phased()
+        assertThat(form.effectiveDisplayName).isEqualTo("Ada Lovelace")
+        assertThat(form.effectiveUsername).isEqualTo("ada-lovelace")
+        assertThat(form.isIdentityDefined).isTrue()
+    }
+
+    @Test
+    fun `un pseudo tape gagne et se refuse en direct`() {
+        assertThat(phased(username = "zoe").effectiveUsername).isEqualTo("zoe")
+        assertThat(phased(username = "z").usernameRefusal).isEqualTo(RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+        assertThat(phased(username = "josé").isIdentityDefined).isFalse()
+    }
+
+    @Test
+    fun `une adresse sans rien de slugifiable ne definit pas l'identite`() {
+        val form = phased(email = "a@meeshy.me")
+        assertThat(form.effectiveUsername).isEmpty()
+        assertThat(form.isIdentityDefined).isFalse()
+    }
+
+    @Test
+    fun `le mot de passe est facultatif mais tient six caracteres s'il est fourni`() {
+        assertThat(phased().canSubmitPhased).isTrue()
+        assertThat(phased(password = "abc").canSubmitPhased).isFalse()
+        assertThat(phased(password = "abcdef").canSubmitPhased).isTrue()
+    }
+
+    @Test
+    fun `la charge sans mot de passe ne l'envoie pas`() {
+        val request = phased().toPhasedRegisterRequest()
+        assertThat(request.password).isNull()
+        assertThat(request.displayName).isEqualTo("Ada Lovelace")
+        assertThat(request.username).isEqualTo("ada-lovelace")
+        assertThat(request.phoneNumber).isEqualTo("0612345678")
+        assertThat(phased(password = "secret1").toPhasedRegisterRequest().password).isEqualTo("secret1")
+    }
+
+    @Test
+    fun `le numero est requis par l'ecran mais pas par la requete`() {
+        val form = phased(phone = "")
+        assertThat(form.phoneRefusal).isEqualTo(SignupPhoneRefusal.Missing)
+        assertThat(form.canSubmitPhased).isFalse()
+        val request = form.toPhasedRegisterRequest()
+        assertThat(request.phoneNumber).isNull()
+        assertThat(request.phoneCountryCode).isNull()
+    }
+
+    @Test
+    fun `un numero implausible bloque l'envoi`() {
+        assertThat(phased(phone = "1111100000").canSubmitPhased).isFalse()
+    }
+
+    @Test
+    fun `le parrainage voyage avec sa cle de visite, jamais seule`() {
+        val request = phased().toPhasedRegisterRequest(referralCode = " aff_123 ", referralSessionKey = "v1")
+        assertThat(request.affiliateToken).isEqualTo("aff_123")
+        assertThat(request.affiliateSessionKey).isEqualTo("v1")
+        val none = phased().toPhasedRegisterRequest(referralCode = null, referralSessionKey = "v1")
+        assertThat(none.affiliateToken).isNull()
+        assertThat(none.affiliateSessionKey).isNull()
+    }
+
+    @Test
+    fun `les suggestions de pseudo accompagnent le refus pseudo pris`() {
+        val error = SignupErrorRouter.route(
+            code = "USERNAME_TAKEN",
+            suggestions = listOf("ada-1", "ada-2"),
+        ) as SignupSubmitError.Field
+        assertThat(error.suggestions).containsExactly("ada-1", "ada-2").inOrder()
+    }
+}

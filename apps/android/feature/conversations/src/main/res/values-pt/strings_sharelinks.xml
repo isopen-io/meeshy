@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sharelinks_list_refresh_failed">Não foi possível atualizar seus links. Exibindo a última lista.</string>
+</resources>

@@ -1,0 +1,21 @@
+// GÉNÉRÉ — ne pas éditer à la main.
+//
+// Source : services/gateway/route-manifest.json, via la MÊME dérivation que le
+// catalogue TypeScript (packages/shared/api/build-catalog.ts). Régénérer après
+// tout changement de route :
+//
+//   cd packages/shared && npm run android-endpoints:generate
+//
+// Les chemins sont relatifs au préfixe d'API (/api/v1/) ; les emplacements {nom}
+// sont résolus par @Path. Les routes hors /api/v1 gardent leur chemin complet.
+
+package me.meeshy.sdk.net.routes
+
+public object ApiRoutesUserPreferences {
+    public const val COMMUNITIES: String = "user-preferences/communities"
+    public const val COMMUNITIES_BY_COMMUNITY_ID: String = "user-preferences/communities/{communityId}"
+    public const val COMMUNITIES_REORDER: String = "user-preferences/communities/reorder"
+    public const val CONVERSATIONS: String = "user-preferences/conversations"
+    public const val CONVERSATIONS_BY_CONVERSATION_ID: String = "user-preferences/conversations/{conversationId}"
+    public const val REORDER: String = "user-preferences/reorder"
+}

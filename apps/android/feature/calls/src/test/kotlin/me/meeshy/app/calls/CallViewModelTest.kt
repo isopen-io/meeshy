@@ -182,10 +182,11 @@ class CallViewModelTest {
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, appStatePresence,
         CallPeerIndicatorsController(signalManager, qualityResetTimer, screenRecordingDetector),
-        CallWaitingController(signalManager, waitingTimer),
+        CallWaitingController(signalManager, waitingTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
         CallAnalyticsController(signalManager, clock),
         extensions,
+        mockk(relaxed = true),
     )
 
     @Test

@@ -6,9 +6,13 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.location.LocationSharingPreferencesStore
+import me.meeshy.sdk.model.LocationPrecision
+import me.meeshy.sdk.model.LocationSharingPreferences
+import me.meeshy.sdk.model.SharedMapStyle
 import me.meeshy.sdk.model.PrivacyCatalog
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.PrivacyToggle
@@ -20,6 +24,7 @@ import javax.inject.Inject
 /** Immutable UI state for the privacy & visibility settings screen (feature-parity §L). */
 data class PrivacyUiState(
     val preferences: PrivacyPreferences = PrivacyPreferences(),
+    val locationSharing: LocationSharingPreferences = LocationSharingPreferences(),
 )
 
 /**
@@ -40,16 +45,29 @@ class PrivacySettingsViewModel @Inject constructor(
     private val store: PrivacyPreferencesStore,
     private val syncRepository: PrivacyPreferencesSyncRepository,
     private val workManager: WorkManager,
+    private val locationStore: LocationSharingPreferencesStore,
 ) : ViewModel() {
 
     val state: StateFlow<PrivacyUiState> =
-        store.preferences
-            .map { PrivacyUiState(preferences = it) }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.Eagerly,
-                initialValue = PrivacyUiState(store.preferences.value),
-            )
+        combine(store.preferences, locationStore.preferences) { privacy, location ->
+            PrivacyUiState(preferences = privacy, locationSharing = location)
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = PrivacyUiState(
+                preferences = store.preferences.value,
+                locationSharing = locationStore.preferences.value,
+            ),
+        )
+
+    /** Persists the chosen location-sharing grain; it rounds coordinates before any send. */
+    fun setLocationPrecision(precision: LocationPrecision) {
+        viewModelScope.launch { locationStore.setPrecision(precision) }
+    }
+
+    fun setLocationMapStyle(style: SharedMapStyle) {
+        viewModelScope.launch { locationStore.setMapStyle(style) }
+    }
 
     fun setToggle(toggle: PrivacyToggle, enabled: Boolean) {
         // Read the base *inside* the launch so back-to-back edits on different toggles

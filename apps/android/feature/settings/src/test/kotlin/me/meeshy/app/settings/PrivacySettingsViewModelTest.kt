@@ -18,7 +18,11 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.location.InMemoryLocationSharingPreferencesStore
+import me.meeshy.sdk.location.LocationSharingPreferencesStore
+import me.meeshy.sdk.model.LocationPrecision
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
+import me.meeshy.sdk.model.SharedMapStyle
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.PrivacyToggle
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
@@ -68,7 +72,8 @@ class PrivacySettingsViewModelTest {
         store: PrivacyPreferencesStore = RecordingStore(),
         sync: PrivacyPreferencesSyncRepository = mockk(relaxed = true),
         workManager: WorkManager = mockk(relaxed = true),
-    ) = PrivacySettingsViewModel(store, sync, workManager)
+        locationStore: LocationSharingPreferencesStore = InMemoryLocationSharingPreferencesStore(),
+    ) = PrivacySettingsViewModel(store, sync, workManager, locationStore)
 
     @Test
     fun state_mirrorsThePersistedPreferences() = runTest {
@@ -214,5 +219,38 @@ class PrivacySettingsViewModelTest {
         assertThat(store.preferences.value.blockScreenshots).isTrue()
         coVerify(exactly = 1) { sync.enqueueSync(any()) }
         verify(exactly = 0) { workManager.enqueue(any<WorkRequest>()) }
+    }
+
+    @Test
+    fun locationPrecision_defaultsToExact() = runTest {
+        val vm = vm()
+        advanceUntilIdle()
+        assertThat(vm.state.value.locationSharing.precision).isEqualTo(LocationPrecision.EXACT)
+    }
+
+    @Test
+    fun setLocationPrecision_persistsAndRepaints() = runTest {
+        val location = InMemoryLocationSharingPreferencesStore()
+        val vm = vm(locationStore = location)
+        advanceUntilIdle()
+
+        vm.setLocationPrecision(LocationPrecision.CITY)
+        advanceUntilIdle()
+
+        assertThat(location.preferences.value.precision).isEqualTo(LocationPrecision.CITY)
+        assertThat(vm.state.value.locationSharing.precision).isEqualTo(LocationPrecision.CITY)
+    }
+
+    @Test
+    fun setLocationMapStyle_persistsAndRepaints() = runTest {
+        val location = InMemoryLocationSharingPreferencesStore()
+        val vm = vm(locationStore = location)
+        advanceUntilIdle()
+
+        vm.setLocationMapStyle(SharedMapStyle.IMAGERY)
+        advanceUntilIdle()
+
+        assertThat(location.preferences.value.mapStyle).isEqualTo(SharedMapStyle.IMAGERY)
+        assertThat(vm.state.value.locationSharing.mapStyle).isEqualTo(SharedMapStyle.IMAGERY)
     }
 }

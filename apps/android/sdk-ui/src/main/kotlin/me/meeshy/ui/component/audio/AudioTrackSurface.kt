@@ -3,12 +3,22 @@ package me.meeshy.ui.component.audio
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.exoplayer.ExoPlayer
+import me.meeshy.sdk.model.media.AttachmentStatusBody
+import me.meeshy.sdk.model.media.PlaybackReportSink
+import me.meeshy.sdk.model.media.PlaybackStatusReport
+import me.meeshy.sdk.model.mediacache.MediaCacheCategory
+import me.meeshy.ui.component.media.MeeshyMediaCache
 
 /**
  * SDK-pure headless audio track: an [ExoPlayer] instance with no visual surface,
@@ -37,10 +47,23 @@ fun AudioTrackSurface(
      */
     sourceStartMs: Long? = null,
     sourceEndMs: Long? = null,
+    /**
+     * Pièce jointe dont on mesure l'écoute : avec elle, chaque plage continue lue est
+     * rapportée à [reportSink] avec la raison de sa fin (pause, curseur, son coupé, fin,
+     * écran quitté). `null` = aucune mesure (musique de fond, calques d'une scène).
+     */
+    attachmentId: String? = null,
+    reportSink: PlaybackReportSink = PlaybackReportSink.Inert,
+    reportAction: String = AttachmentStatusBody.ACTION_LISTENED,
+    reportLanguage: String? = null,
 ) {
     val context = LocalContext.current
+    val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
     val player = remember(mediaUrl, sourceStartMs, sourceEndMs) {
-        ExoPlayer.Builder(context).build().apply {
+        // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaCache.mediaSourceFactory(MediaCacheCategory.AUDIO, mediaUrl))
+            .build().apply {
             // La fenêtre est portée par le MediaItem, jamais par un `seekTo`
             // suivi d'une surveillance : ExoPlayer coupe la source lui-même, la
             // position 0 EST le début de la fenêtre, et la boucle reboucle
@@ -79,7 +102,36 @@ fun AudioTrackSurface(
         if (!isActive) player.seekTo(0)
     }
 
+    // Bail de lecture : la ressource jouée est à l'abri de l'éviction LRU tant que le player vit.
     DisposableEffect(player) {
-        onDispose { player.release() }
+        val releaseLease = mediaCache.lease(mediaUrl)
+        onDispose {
+            releaseLease()
+            player.release()
+        }
+    }
+
+    // Déclaré APRÈS la libération : Compose dispose en ordre inverse, la plage ouverte est donc
+    // close avant que le lecteur soit relâché.
+    val sink by rememberUpdatedState(reportSink)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(player, attachmentId, lifecycleOwner) {
+        val id = attachmentId
+        val stretchListener = id?.let { attachment ->
+            PlaybackStretchListener(player) { stretches, positionMs, durationMs ->
+                PlaybackStatusReport.build(reportAction, stretches, positionMs, durationMs, reportLanguage)
+                    ?.let { body -> sink.report(attachment, body) }
+            }
+        }
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) stretchListener?.dismiss()
+        }
+        stretchListener?.let(player::addListener)
+        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+            stretchListener?.dismiss()
+            stretchListener?.let(player::removeListener)
+        }
     }
 }

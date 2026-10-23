@@ -47,7 +47,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddParticipantSheet(
+internal fun AddParticipantSheet(
     conversationId: String,
     existingMemberIds: Set<String>,
     accentColor: Color,

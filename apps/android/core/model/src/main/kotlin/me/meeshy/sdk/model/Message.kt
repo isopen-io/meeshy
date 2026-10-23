@@ -1,18 +1,77 @@
 package me.meeshy.sdk.model
 
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.serialization.TolerantSerializer
 
+/**
+ * Le message CITÉ tel que `GET /messages` et `message:new` le servent — miroir de
+ * `APIMessageReplyTo` (iOS). La passerelle sert depuis toujours la langue d'origine,
+ * les traductions et les champs de protection : sans eux le client ne peut ni descendre
+ * le Prisme sur le texte cité ni savoir qu'une réponse à un message à vue unique
+ * republierait son texte en clair. Tout est facultatif (fil ancien, écho socket allégé).
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ApiMessageReplyPreview(
     val id: String,
     val content: String = "",
     val senderDisplayName: String? = null,
+    val senderId: String? = null,
     val deletedAt: String? = null,
+    @Serializable(with = LossyApiMessageAttachmentListOrNullSerializer::class)
     val attachments: List<ApiMessageAttachment>? = null,
+    @Serializable(with = TolerantMessageSenderSerializer::class)
+    val sender: ApiMessageSender? = null,
+    val originalLanguage: String? = null,
+    /** Une traduction malformée est écartée, la citation garde les autres. */
+    @Serializable(with = LossyApiTextTranslationListOrNullSerializer::class)
+    val translations: List<ApiTextTranslation>? = null,
+    @Serializable(with = ProtectionBooleanSerializer::class)
+    val isViewOnce: Boolean? = null,
+    @Serializable(with = ProtectionBooleanSerializer::class)
+    val isBlurred: Boolean? = null,
+    @Serializable(with = ProtectionFlagsSerializer::class)
+    val effectFlags: Long? = null,
+    val expiresAt: String? = null,
+    val isEncrypted: Boolean? = null,
+    val encryptionMode: String? = null,
+    /** L'instantané FIGÉ de la pièce NOMMÉE par la réponse (#6164) ; malformé ⇒ `null`, la citation survit. */
+    @Serializable(with = TolerantQuotedAttachmentReferenceSerializer::class)
+    val attachmentReplyTo: ApiQuotedAttachmentReference? = null,
+    /** Nombre TOTAL de photos et vidéos du message cité (la passerelle n'en sert que quatre). */
+    val visualAttachmentCount: Int? = null,
+) {
+    /** L'utilisateur cité : la personne avant l'identifiant de participant. */
+    val authorUserId: String? get() = sender?.resolvedUserId ?: senderId
+
+    val authorAvatarUrl: String? get() = sender?.resolvedAvatar
+
+    /**
+     * Le cité ne doit pas republier son texte : vue unique, flouté ou chiffré, par les
+     * champs hérités OU le bitfield. L'éphémère n'en fait PAS partie (lisible dans le fil).
+     */
+    val isProtected: Boolean
+        get() = isViewOnce == true || isBlurred == true || isEncrypted == true ||
+            ((effectFlags ?: 0L) and AttachmentProtection.MASKING_FLAGS) != 0L
+}
+
+/**
+ * Ce que `replyTo.attachmentReplyTo` porte, et RIEN d'autre : l'ancre du saut et la
+ * NATURE du média (`image` · `video` · `audio` · `location` · `file`).
+ */
+@Serializable
+data class ApiQuotedAttachmentReference(
+    val attachmentId: String,
+    val kind: String? = null,
 )
+
+internal object TolerantQuotedAttachmentReferenceSerializer :
+    KSerializer<ApiQuotedAttachmentReference?> by TolerantSerializer(ApiQuotedAttachmentReference.serializer())
 
 /**
  * Frozen snapshot of the post (status/story/reel/post) a message replies to —
@@ -46,8 +105,14 @@ data class ApiTextTranslation(
     val translationModel: String? = null,
     val confidenceScore: Double? = null,
     val cached: Boolean = false,
+    /** `true` quand [translatedContent] est un CRYPTOGRAMME : jamais servi comme texte. `null` ⇒ non chiffré. */
+    val isEncrypted: Boolean? = null,
 ) : LanguageResolver.TranslationLike
 
+/**
+ * L'expéditeur d'un message — miroir de `APIMessageSender` (iOS). Un seul type pour le
+ * message, la citation et le transféré.
+ */
 @Serializable
 data class ApiMessageSender(
     val id: String? = null,
@@ -55,7 +120,32 @@ data class ApiMessageSender(
     val displayName: String? = null,
     val username: String? = null,
     val avatar: String? = null,
-)
+    /** `anonymous` · `user` · `bot` — le TYPE tranche, jamais le pseudo. */
+    val type: String? = null,
+    val firstName: String? = null,
+    val lastName: String? = null,
+    val user: ApiMessageSenderUser? = null,
+) {
+    /** Le nom affiché : surnom, puis nom du compte imbriqué, puis pseudo, puis identifiant. */
+    val name: String
+        get() = displayName.nonBlank() ?: user?.displayName.nonBlank() ?: username.nonBlank()
+            ?: user?.username.nonBlank() ?: id.orEmpty()
+
+    val resolvedAvatar: String? get() = avatar.nonBlank() ?: user?.avatar.nonBlank()
+
+    val resolvedUserId: String? get() = userId ?: user?.id
+
+    /** Visiteur sans compte. Un pseudo `ano_…` ne prouve rien : un compte peut s'appeler ainsi. */
+    val isAnonymous: Boolean get() = type == "anonymous"
+
+    /** Fail-closed : seuls `user` et `bot` prouvent un compte ; absent ou inconnu vaut invité. */
+    val hasAccount: Boolean get() = type == "user" || type == "bot"
+
+    private fun String?.nonBlank(): String? = this?.takeIf { it.isNotBlank() }
+}
+
+/** Ancien nom de l'expéditeur imbriqué d'un transfert — un seul type désormais. */
+typealias ApiMessageSenderDetail = ApiMessageSender
 
 /**
  * The SOURCE conversation of a forwarded message, hoisted onto the payload by
@@ -72,10 +162,18 @@ data class ApiForwardedConversation(
     val avatar: String? = null,
 )
 
-/** Message — port of APIMessage (MessageModels.swift). */
+/**
+ * Message — miroir de `APIMessage` (iOS). Tout ce que la passerelle sert est gardé ;
+ * tout champ nouveau est nullable ou a un défaut, si bien qu'une ancienne ligne de cache
+ * Room (JSON sans ces champs) se relit. Les champs PÉRIPHÉRIQUES (expéditeur, citation,
+ * transfert, lieu, traductions, pièces, mentions) se décodent par élément : un champ
+ * malformé ne coûte que lui-même, jamais le message ni la page qui le porte.
+ */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ApiMessage(
+    /** Repli `_id` pour un document MongoDB brut. */
+    @JsonNames("_id")
     val id: String,
     val conversationId: String,
     val senderId: String? = null,
@@ -88,21 +186,27 @@ data class ApiMessage(
     val replyToId: String? = null,
     val storyReplyToId: String? = null,
     @JsonNames("storyReplyTo")
+    @Serializable(with = TolerantPostReplyTargetSerializer::class)
     val postReplyTo: ApiPostReplyTarget? = null,
     val createdAt: String? = null,
+    @Serializable(with = TolerantMessageSenderSerializer::class)
     val sender: ApiMessageSender? = null,
+    @Serializable(with = LossyApiTextTranslationListSerializer::class)
     val translations: List<ApiTextTranslation> = emptyList(),
     val reactionSummary: Map<String, Int>? = null,
     val deliveredCount: Int = 0,
     val readCount: Int = 0,
     val readByAllAt: String? = null,
+    @Serializable(with = TolerantReplyPreviewSerializer::class)
     val replyTo: ApiMessageReplyPreview? = null,
     val clientMessageId: String? = null,
+    @Serializable(with = LossyApiMessageAttachmentListSerializer::class)
     val attachments: List<ApiMessageAttachment> = emptyList(),
     val pinnedAt: String? = null,
     val pinnedBy: String? = null,
     val forwardedFromId: String? = null,
     val forwardedFromConversationId: String? = null,
+    @Serializable(with = TolerantForwardedConversationSerializer::class)
     val forwardedFromConversation: ApiForwardedConversation? = null,
     val effectFlags: Int? = null,
     val isBlurred: Boolean? = null,
@@ -116,21 +220,81 @@ data class ApiMessage(
      * never groups with a neighbour — see `MessageGrouping` (feature/chat).
      */
     val messageSource: String? = null,
+    val updatedAt: String? = null,
+    /** Le message transféré : sa source, son expéditeur d'origine, ses pièces. */
+    @Serializable(with = TolerantForwardedFromSerializer::class)
+    val forwardedFrom: ApiForwardedFrom? = null,
+    /** Durée d'un éphémère en SECONDES : le décompte part de la réception de chaque lecteur. */
+    val ephemeralDuration: Int? = null,
+    /** Vue unique déjà ouverte par CE lecteur ; `null` (charge antérieure au contrat) ⇒ non ouvert. */
+    val consumedByMe: Boolean? = null,
+    /** Lieu partagé, hissé par la passerelle depuis `metadata.location`. */
+    @Serializable(with = TolerantSharedPlaceSerializer::class)
+    val location: SharedPlace? = null,
+    /** Sticker en RACINE ; voir [servedSticker] pour la forme repliée sur `metadata.sticker`. */
+    @Serializable(with = WireWorthyStickerSerializer::class)
+    val sticker: MessageSticker? = null,
+    val isEncrypted: Boolean? = null,
+    val encryptionMode: String? = null,
+    val reactionCount: Int? = null,
+    val currentUserReactions: List<String>? = null,
+    val deliveredToAllAt: String? = null,
+    val recipientCount: Int? = null,
+    @Serializable(with = LossyMentionedUserListOrNullSerializer::class)
+    val mentionedUsers: List<MentionedUser>? = null,
+    /** Le blob libre `metadata` ; ses familles se lisent par [callSummary], [joinNotice], [arrivalsNotice]. */
+    @Serializable(with = TolerantMetadataSerializer::class)
+    val metadata: JsonObject? = null,
+    @Serializable(with = TolerantSystemEventSerializer::class)
+    val systemEvent: MessageSystemEvent? = null,
+    /** Liens suivis, au PREMIER niveau (socket) ; voir [servedTrackingLinks] pour le repli sur `metadata`. */
+    @Serializable(with = LossyTrackedLinkListOrNullSerializer::class)
+    val trackingLinks: List<TrackedLink>? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,
      * or the original [content] when no translation targets a preferred language —
      * or when the message is already written in one of the reader's languages that
      * ranks above every available translation ([originalLanguage] competes at its
-     * own rank, never as a short-circuit).
+     * own rank, never as a short-circuit). A translation that is a cryptogram is
+     * never served as text.
      */
     fun displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
-        LanguageResolver.preferredTranslation(translations, prefs, originalLanguage)
-            ?.translatedContent ?: content
+        servedTranslation(prefs)?.translatedContent ?: content
 
     /** True when the displayed content is a translation rather than the original. */
     fun isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
-        LanguageResolver.preferredTranslation(translations, prefs, originalLanguage) != null
+        servedTranslation(prefs) != null
+
+    private fun servedTranslation(prefs: LanguageResolver.ContentLanguagePreferences): ApiTextTranslation? =
+        LanguageResolver.preferredTranslation(
+            translations.filter { it.isEncrypted != true },
+            prefs,
+            originalLanguage,
+        )
+
+    /** Le contenu est un cryptogramme : il ne se rend jamais en clair. */
+    val isCiphertext: Boolean get() = isEncrypted == true
+
+    /** `consumedByMe` nul est traité comme non ouvert. */
+    val isViewOnceOpenedByMe: Boolean get() = consumedByMe == true
+
+    /** Le sticker, en racine d'abord (les deux producteurs le hissent), sinon `metadata.sticker`. */
+    val servedSticker: MessageSticker? by lazy { sticker ?: MessageRichMetadata.sticker(metadata) }
+
+    /** Les liens suivis lus au premier niveau ET sous `metadata.trackingLinks`. */
+    val servedTrackingLinks: List<TrackedLink>? by lazy {
+        trackingLinks?.takeIf { it.isNotEmpty() } ?: MessageRichMetadata.trackingLinks(metadata)
+    }
+
+    /** `[url: jeton]` des liens suivis ; vide sans suivi. */
+    val trackedLinkMap: Map<String, String> get() = servedTrackingLinks.orEmpty().trackedLinkMap
+
+    val callSummary: CallSummaryMetadata? by lazy { MessageRichMetadata.callSummary(metadata) }
+
+    val joinNotice: JoinNoticeMetadata? by lazy { MessageRichMetadata.joinNotice(metadata) }
+
+    val arrivalsNotice: ArrivalsNoticeMetadata? by lazy { MessageRichMetadata.arrivalsNotice(metadata) }
 
     /**
      * The resolved visual/lifecycle effects for this message. A positive
@@ -182,3 +346,22 @@ data class SendMessageRequest(
     val expiresAt: String? = null,
     val maxViewOnceCount: Int? = null,
 )
+
+internal object TolerantPostReplyTargetSerializer :
+    KSerializer<ApiPostReplyTarget?> by TolerantSerializer(ApiPostReplyTarget.serializer())
+
+internal object TolerantReplyPreviewSerializer :
+    KSerializer<ApiMessageReplyPreview?> by TolerantSerializer(ApiMessageReplyPreview.serializer())
+
+internal object TolerantForwardedConversationSerializer :
+    KSerializer<ApiForwardedConversation?> by TolerantSerializer(ApiForwardedConversation.serializer())
+
+internal object TolerantForwardedFromSerializer :
+    KSerializer<ApiForwardedFrom?> by TolerantSerializer(ApiForwardedFrom.serializer())
+
+internal object TolerantSharedPlaceSerializer :
+    KSerializer<SharedPlace?> by TolerantSerializer(SharedPlace.serializer())
+
+internal object TolerantMetadataSerializer :
+    KSerializer<JsonObject?> by TolerantSerializer(JsonObject.serializer())
+

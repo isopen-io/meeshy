@@ -82,4 +82,29 @@ class DynamicColorGeneratorTest {
         // White capped at brightness 0.60 → no longer pure white
         assertThat(light).isNotEqualTo("FFFFFF")
     }
+
+    @Test
+    fun profileAccentHex_hashesUserIdWhenPresent() {
+        assertThat(DynamicColorGenerator.profileAccentHex("abc", "Zed"))
+            .isEqualTo(DynamicColorGenerator.colorForName("abc"))
+    }
+
+    @Test
+    fun profileAccentHex_fallsBackToNameWithoutUserId() {
+        assertThat(DynamicColorGenerator.profileAccentHex(null, "Zed"))
+            .isEqualTo(DynamicColorGenerator.colorForName("Zed"))
+        assertThat(DynamicColorGenerator.profileAccentHex("", "Zed"))
+            .isEqualTo(DynamicColorGenerator.colorForName("Zed"))
+    }
+}
+
+class DerivedPaletteTest {
+    @org.junit.Test
+    fun `derived palette shifts secondary by plus 30 and accent by minus 30 degrees`() {
+        val p = DynamicColorGenerator.ColorPalette.derived("FF0000")
+        com.google.common.truth.Truth.assertThat(p.primary).isEqualTo("FF0000")
+        com.google.common.truth.Truth.assertThat(p.secondary).isEqualTo(DynamicColorGenerator.hueShiftedHex("FF0000", 30.0))
+        com.google.common.truth.Truth.assertThat(p.accent).isEqualTo(DynamicColorGenerator.hueShiftedHex("FF0000", -30.0))
+        com.google.common.truth.Truth.assertThat(p.secondary).isEqualTo("FF7F00")
+    }
 }

@@ -101,6 +101,7 @@ class ConversationLockFlowViewModelTest {
         statusBarCache = mockk<me.meeshy.sdk.status.StatusBarCache>(relaxed = true) {
             every { load(any()) } returns CacheResult.Empty
         },
+        messagePrefetch = mockk(relaxed = true),
     )
 
     private fun ConversationListViewModel.enter(digits: String) {

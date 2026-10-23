@@ -16,23 +16,44 @@ sealed interface ConversationListContent {
     /** Empty cache after a sync failure — show [message] with a retry CTA. */
     data class Error(val message: String) : ConversationListContent
 
-    /** A filter/search narrowed the list to nothing (distinct from cold-empty). */
+    /** A category filter narrowed the list to nothing (distinct from cold-empty). */
     data object FilteredEmpty : ConversationListContent
+
+    /** A non-blank search matched nothing — "No results / Try other terms" (iOS `searchNoResults`). */
+    data object SearchNoResults : ConversationListContent
 
     /** An empty account with no filter, no error — the true "no conversations" state. */
     data object ColdEmpty : ConversationListContent
 
     companion object {
         /**
-         * Cache-first (ARCHITECTURE.md §4): a populated list always wins, so a
-         * stale skeleton flag or a background sync error never hides data that is
-         * already on screen. Only once the visible list is empty do the loading /
-         * error / filtered / cold branches apply, in that precedence order.
+         * iOS `groupingAwaitsCorpus`: the sections are produced after the corpus, so a
+         * grouping made on an EMPTY corpus must not be read as "nothing to show" once the
+         * corpus has arrived. An empty grouping made on a NON-empty corpus is definitive
+         * (everything archived, filter matching nothing) and is never a wait.
          */
-        fun of(state: ConversationListUiState): ConversationListContent = when {
+        fun groupingAwaitsCorpus(
+            groupedIsEmpty: Boolean,
+            lastGroupedCorpusCount: Int,
+            corpusCount: Int,
+        ): Boolean = groupedIsEmpty && lastGroupedCorpusCount == 0 && corpusCount > 0
+
+        /**
+         * Cache-first (ARCHITECTURE.md §4), precedence: Populated > Skeleton > Error >
+         * SearchNoResults / FilteredEmpty > ColdEmpty. A populated list always wins, so a
+         * stale skeleton flag or a background sync error never hides rows already on screen.
+         * [sectionsAwaitCorpus] (the rule above) keeps the skeleton while the corpus is
+         * there but its sections are not yet produced — never a fleeting "empty" frame.
+         */
+        fun of(
+            state: ConversationListUiState,
+            sectionsAwaitCorpus: Boolean = false,
+        ): ConversationListContent = when {
+            sectionsAwaitCorpus -> Skeleton
             state.conversations.isNotEmpty() -> Populated
             state.showSkeleton -> Skeleton
             state.errorMessage != null -> Error(state.errorMessage)
+            state.isFilteredEmpty && state.searchText.isNotBlank() -> SearchNoResults
             state.isFilteredEmpty -> FilteredEmpty
             else -> ColdEmpty
         }

@@ -21,6 +21,7 @@ public data class MyShareLinksState(
     val stats: MyShareLinkStats? = null,
     val phase: MyShareLinksPhase = MyShareLinksPhase.Loading,
     val errorMessage: String? = null,
+    val isRefreshing: Boolean = false,
 ) {
     /** No links to show. */
     public val isEmpty: Boolean get() = links.isEmpty()
@@ -33,6 +34,16 @@ public data class MyShareLinksState(
 
     /** The empty-state card shows only once a load settled with nothing to show. */
     public val showEmptyState: Boolean get() = phase == MyShareLinksPhase.Loaded && links.isEmpty()
+
+    /**
+     * Un échec de lecture qui garde la liste d'avant : elle reste affichée sous un bandeau
+     * (« réessayer »), jamais remplacée par un écran d'erreur.
+     */
+    public val showFailureBanner: Boolean get() = phase == MyShareLinksPhase.Error && links.isNotEmpty()
+
+    /** Paint [links] read from the local cache: the list is visible at once, no spinner. */
+    public fun fromCache(links: List<MyShareLink>): MyShareLinksState =
+        copy(links = links, phase = MyShareLinksPhase.Loaded, errorMessage = null)
 
     /** Enter the loading phase, clearing any prior error (existing links are kept). */
     public fun loading(): MyShareLinksState =
@@ -49,11 +60,15 @@ public data class MyShareLinksState(
             stats = stats ?: this.stats,
             phase = MyShareLinksPhase.Loaded,
             errorMessage = null,
+            isRefreshing = false,
         )
 
     /** Settle in an error phase, surfacing [message] while keeping any prior links. */
     public fun failed(message: String?): MyShareLinksState =
-        copy(phase = MyShareLinksPhase.Error, errorMessage = message)
+        copy(phase = MyShareLinksPhase.Error, errorMessage = message, isRefreshing = false)
+
+    /** Un geste de rafraîchissement : l'indicateur de tirage tourne, la liste reste affichée. */
+    public fun refreshing(): MyShareLinksState = copy(isRefreshing = true, errorMessage = null)
 
     /**
      * Optimistically flip one link's active flag (matched by [MyShareLink.linkId],

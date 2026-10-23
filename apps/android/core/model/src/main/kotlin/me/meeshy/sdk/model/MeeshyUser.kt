@@ -44,12 +44,22 @@ data class MeeshyUser(
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val signalIdentityKeyPublic: String? = null,
+    val voicePublic: Boolean? = null,
+    val voiceSampleUrl: String? = null,
+    val voiceSampleDurationMs: Int? = null,
+    val voiceQuality: Double? = null,
+    /** L'etat d'activation du compte (#8239) — servi pour SOI seulement. */
+    val activation: UserActivation? = null,
+    /** Le decor equipe (#10632) ; `null` = ancien serveur ou profil sans decor, voir [servedDecor]. */
+    val profileDecor: ServedProfileDecor? = null,
 ) : LanguageResolver.ContentLanguagePreferences {
 
     val effectiveDisplayName: String
         get() = displayName?.takeIf { it.isNotBlank() }
             ?: listOfNotNull(firstName, lastName).joinToString(" ").takeIf { it.isNotBlank() }
             ?: username
+
+    val servedDecor: ServedProfileDecor get() = profileDecor ?: ServedProfileDecor.EMPTY
 
     val resolvedRole: UserRole get() = UserRole.from(role)
 }

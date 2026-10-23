@@ -134,18 +134,12 @@ fun ConversationListScreen(
             header()
             ConversationFilterBar(selected = state.selectedFilter, onSelect = viewModel::selectFilter)
             Box(modifier = Modifier.weight(1f)) {
-                when (val content = ConversationListContent.of(state)) {
-                    ConversationListContent.Skeleton -> SkeletonList()
-
-                    is ConversationListContent.Error,
-                    ConversationListContent.FilteredEmpty,
-                    ConversationListContent.ColdEmpty ->
-                        EmptyStateVisual.of(content)?.let { visual ->
-                            EmptyStateCard(visual = visual, onRetry = viewModel::refresh)
-                        }
-
-                    ConversationListContent.Populated ->
-                        ConversationListBody(state = state, listState = listState, viewModel = viewModel)
+                ConversationListStateHost(
+                    content = ConversationListContent.of(state),
+                    onRetry = viewModel::refresh,
+                    onNewConversation = onNewConversation,
+                ) {
+                    ConversationListBody(state = state, listState = listState, viewModel = viewModel)
                 }
             }
         }

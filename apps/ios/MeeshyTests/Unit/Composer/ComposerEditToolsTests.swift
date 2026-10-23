@@ -750,7 +750,7 @@ final class ComposerEditToolsTests: XCTestCase {
                        "une seule recette de rendu vidéo")
         let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("|| audioGain != 1"), "un son réglé force le rendu")
-        XCTAssertTrue(export.contains("session.audioMix = audioMix"), "le gain part dans le fichier")
+        XCTAssertTrue(export.contains("audioMix: mixage"), "le gain part dans le fichier (#11849 : par la passe unique)")
         XCTAssertTrue(export.contains("setVolume("))
     }
 

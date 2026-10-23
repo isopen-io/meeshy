@@ -138,25 +138,27 @@ extension ComposerCaptureSession {
     /// le dossier temporaire.
     private func finishVideo(_ url: URL) {
         guard let source = editSource else { return }
-        let exporter = videoRender(url)
+        let enregistre = savePolicy().savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
+        let exporter = videoRender(url, uses: enregistre ? [.gallery, .delivery] : .delivery)
         let galerie = gallery
-        let politique = savePolicy()
-        let enregistre = politique.savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
         let brutEnGalerie = editRawSave
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
-            let rendue = await exporter()
-            guard let rendue else {
+            let rendition = await exporter()
+            guard let rendue = rendition?.delivery else {
                 guard isStillEditing(source) else { return }
                 isRenderingLook = false
                 HapticFeedback.error()
                 return
             }
             let neuve = rendue == url ? nil : rendue
-            if enregistre, isStillEditing(source) {
-                _ = await Self.writeVideo(rendue, original: url, originalInLibrary: await brutEnGalerie?.value ?? false,
-                                          gallery: galerie)
+            if enregistre, isStillEditing(source), let copie = rendition?.gallery {
+                _ = await ComposerVideoGalleryCopy.write(copie, original: url,
+                                                         originalInLibrary: await brutEnGalerie?.value ?? false, gallery: galerie)
+            }
+            if let reste = rendition?.galleryLeftover(original: url) {
+                FileManager.default.removeItemLogging(at: reste, context: "copie de galerie écrite", logger: .media)
             }
             guard isStillEditing(source) else {
                 if let neuve {
@@ -177,15 +179,15 @@ extension ComposerCaptureSession {
         guard let photo = editPhoto else { return nil }
         let regard = look
         let cadrage = framing
-        let auteur = lookPerson
-        let date = lookDate
+        let (auteur, date) = (lookPerson, lookDate)
         let cache = scenes
         let prise = editPhotoData
         let proportions = canvasAspect
+        let intacte = ComposerPhotoEncoding.untouchedTake(prise, of: photo, paints: ComposerLiveLookRule.rendersLive(regard) || !cadrage.isIdentity, aspect: proportions)
         return { @MainActor in
-            guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
-                                                                    aspect: proportions, person: auteur,
-                                                                    date: date, scenes: cache) else { return nil }
+            if intacte != nil { return (photo, intacte) }
+            guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage, aspect: proportions,
+                                                                    person: auteur, date: date, scenes: cache) else { return nil }
             return (rendu, await ComposerPhotoEncoding.encode(rendu, like: prise))
         }
     }
@@ -193,7 +195,7 @@ extension ComposerCaptureSession {
     /// Le rendu de la vidéo retouchée — look, cadrage, découpe et son (#9754),
     /// lus dans l'espace où la boucle la lisait. « Terminé » et la flèche ⬇︎
     /// exportent par lui : une seule recette.
-    private func videoRender(_ url: URL) -> @MainActor () async -> URL? {
+    private func videoRender(_ url: URL, uses usages: ComposerVideoUses) -> @MainActor () async -> ComposerVideoRendition? {
         let regard = look
         let cadrage = framing
         let auteur = lookPerson
@@ -204,7 +206,7 @@ extension ComposerCaptureSession {
         let gain = takeSound.effectiveGain
         return { @MainActor in
             await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage,
-                                                   aspect: proportions, person: auteur, date: date,
+                                                   aspect: proportions, person: auteur, date: date, uses: usages,
                                                    declaredSpaceName: espace, audioGain: gain)
         }
     }
@@ -313,12 +315,12 @@ extension ComposerCaptureSession {
                 return await galerie.saveImage(octets)
             }
         case .editing(.video(let url)):
-            let exporter = videoRender(url)
+            let exporter = videoRender(url, uses: .gallery)
             ecriture = {
-                guard let rendue = await exporter() else { return nil }
-                let enregistree = await Self.writeVideo(rendue, original: url,
-                                                        originalInLibrary: await brutEnGalerie?.value ?? false,
-                                                        gallery: galerie)
+                guard let rendue = await exporter()?.gallery else { return nil }
+                let enregistree = await ComposerVideoGalleryCopy.write(rendue, original: url,
+                                                                       originalInLibrary: await brutEnGalerie?.value ?? false,
+                                                                       gallery: galerie)
                 if rendue != url {
                     FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré par la flèche",
                                                           logger: .media)

@@ -2,6 +2,8 @@ package me.meeshy.app.conversations
 
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
+import me.meeshy.sdk.model.ConversationReorder
+import me.meeshy.sdk.model.ConversationReorderItem
 
 /**
  * The kind of a conversation-list section (parity §B): Épingles first, then the
@@ -86,4 +88,16 @@ public object ConversationSections {
             grouped[OTHER_KEY]?.let { add(ConversationSection(ConversationSectionKind.ALL, it)) }
         }
     }
+
+    /**
+     * The `orderInCategory` updates for dragging the row at [from] onto slot [to] inside
+     * [section] (iOS `reorderConversations`). Only a user-category section reorders: the
+     * pinned and catch-all sections are ordered by recency, so a drag there sends nothing.
+     */
+    public fun reorderUpdates(section: ConversationSection, from: Int, to: Int): List<ConversationReorderItem> =
+        if (section.kind != ConversationSectionKind.CATEGORY) {
+            emptyList()
+        } else {
+            ConversationReorder.move(section.items.map { it.id }, from, to)
+        }
 }

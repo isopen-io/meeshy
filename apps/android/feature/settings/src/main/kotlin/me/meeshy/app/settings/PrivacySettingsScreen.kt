@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Visibility
@@ -110,6 +111,18 @@ fun PrivacySettingsScreen(
                             )
                         }
                     }
+                }
+                PrivacySection(
+                    title = stringResource(R.string.location_settings_title),
+                    icon = Icons.Filled.LocationOn,
+                    iconColor = MeeshyPalette.Info,
+                ) {
+                    LocationSharingSettingsSection(
+                        preferences = state.locationSharing,
+                        accent = MeeshyPalette.Indigo500,
+                        onSelectPrecision = viewModel::setLocationPrecision,
+                        onSelectMapStyle = viewModel::setLocationMapStyle,
+                    )
                 }
                 EncryptionComingSoonSection()
                 Spacer(Modifier.height(MeeshySpacing.xl))
