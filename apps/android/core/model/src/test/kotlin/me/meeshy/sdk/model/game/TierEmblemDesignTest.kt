@@ -73,8 +73,8 @@ class TierEmblemDesignTest {
     fun `la constellation relie cinq points puis les marque`() {
         val shapes = emblem(LevelTierKey.Constellation).shapes
         assertThat(shapes[0]).isEqualTo(EmblemShape.Line(-34.0, 18.0, -14.0, -14.0, 3.0))
-        assertThat(shapes[4]).isEqualTo(EmblemShape.Line(32.0, -26.0, 36.0, 24.0, 3.0))
-        assertThat(shapes[5]).isEqualTo(EmblemShape.Circle(-34.0, 18.0, 6.0, EmblemPaint.Fill))
+        assertThat(shapes[3]).isEqualTo(EmblemShape.Line(32.0, -26.0, 36.0, 24.0, 3.0))
+        assertThat(shapes[4]).isEqualTo(EmblemShape.Circle(-34.0, 18.0, 6.0, EmblemPaint.Fill))
     }
 
     @Test
