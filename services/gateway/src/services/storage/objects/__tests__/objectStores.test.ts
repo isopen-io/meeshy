@@ -26,7 +26,7 @@ const text = async (stream: Readable | null): Promise<string | null> => {
 
 const tmpRoot = () => mkdtemp(path.join(os.tmpdir(), 'meeshy-objects-'));
 
-type FakeObject = { body: Buffer; contentType?: string };
+type FakeObject = { body: Buffer; contentType?: string; metadata?: Record<string, string> };
 
 /** Un S3 en mémoire qui répond aux quatre commandes comme S3/MinIO, erreurs 404 comprises. */
 function fakeS3(options: { failPut?: boolean } = {}) {
@@ -43,13 +43,13 @@ function fakeS3(options: { failPut?: boolean } = {}) {
         if (options.failPut) throw Object.assign(new Error('unreachable'), { $metadata: { httpStatusCode: 503 } });
         const body = input.Body;
         const bytes = Buffer.isBuffer(body) ? body : Buffer.from(await text(body as Readable) ?? '');
-        objects.set(key, { body: bytes, contentType: input.ContentType as string | undefined });
+        objects.set(key, { body: bytes, contentType: input.ContentType as string | undefined, metadata: input.Metadata as Record<string, string> | undefined });
         return {};
       }
       if (command instanceof HeadObjectCommand) {
         const object = objects.get(key);
         if (!object) throw notFound('NotFound');
-        return { ContentLength: object.body.length, ETag: '"abc123"', LastModified: new Date('2026-10-01T00:00:00Z'), ContentType: object.contentType };
+        return { ContentLength: object.body.length, ETag: '"abc123"', LastModified: new Date('2026-10-01T00:00:00Z'), ContentType: object.contentType, Metadata: object.metadata };
       }
       if (command instanceof GetObjectCommand) {
         const object = objects.get(key);
@@ -116,6 +116,15 @@ describe('S3ObjectStore', () => {
     expect(s3.sent[0]!.input).toMatchObject({ Key: '2026/10/a.txt', ContentLength: 7, ContentType: 'text/plain' });
     expect(s3.sent[0]!.input).not.toHaveProperty('ACL');
     expect(s3.sent[2]!.input).toMatchObject({ Range: 'bytes=3-5' });
+  });
+
+  it('la date du fichier source voyage en métadonnée et revient au HEAD (audit D6)', async () => {
+    const s3 = fakeS3();
+    const store = new S3ObjectStore({ client: s3.client, bucket: 'meeshy-media' });
+    const sourceModified = new Date('2026-10-20T08:30:00.123Z');
+    await store.write('2026/10/b.jpg', { body: Buffer.from('xy'), size: 2, sourceModified });
+    expect(s3.sent[0]!.input).toMatchObject({ Metadata: { 'source-mtime': String(sourceModified.getTime()) } });
+    expect((await store.head('2026/10/b.jpg'))?.sourceModified).toEqual(sourceModified);
   });
 
   it('une clé absente se lit null, jamais une erreur', async () => {

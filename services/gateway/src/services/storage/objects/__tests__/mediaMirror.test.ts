@@ -21,11 +21,12 @@ const ROOT_PREFIX = path.join(os.tmpdir(), 'meeshy-mirror-');
 /** Un seau en mémoire, qui compte ses écritures. */
 function memoryStore(failing: ReadonlySet<string> = new Set()) {
   const objects = new Map<string, Buffer>();
+  const sourceModified = new Map<string, Date | null>();
   const writes: string[] = [];
   const store: MediaObjectStore = {
     head: async (key): Promise<StoredObjectHead | null> => {
       const bytes = objects.get(key);
-      return bytes === undefined ? null : { size: bytes.length, etag: '"x"', lastModified: null, contentType: null };
+      return bytes === undefined ? null : { size: bytes.length, etag: '"x"', lastModified: null, contentType: null, sourceModified: sourceModified.get(key) ?? null };
     },
     read: async () => null,
     write: async (key, object: ObjectBody) => {
@@ -34,13 +35,14 @@ function memoryStore(failing: ReadonlySet<string> = new Set()) {
       if (Buffer.isBuffer(object.body)) chunks.push(object.body);
       else for await (const chunk of object.body) chunks.push(Buffer.from(chunk));
       objects.set(key, Buffer.concat(chunks));
+      sourceModified.set(key, object.sourceModified ?? null);
       writes.push(key);
     },
     remove: async (key) => {
       objects.delete(key);
     },
   };
-  return { store, objects, writes };
+  return { store, objects, writes, sourceModified };
 }
 
 async function diskWith(files: Record<string, string>) {
@@ -185,5 +187,30 @@ describe('les clés vivantes sont TOUTES nommées — le balayage efface ce qu�
     expect(mediaRowStorageKeys({ fileUrl: '/api/v1/attachments/file/2026%2F10%2Fu1%2Fonly-url.jpg' }, '/srv/uploads')).toEqual(['2026/10/u1/only-url.jpg']);
     expect(mediaRowStorageKeys({ filePath: '/srv/uploads/2026/10/u1/abs.jpg' }, '/srv/uploads')).toEqual(['2026/10/u1/abs.jpg']);
     expect(mediaRowStorageKeys({ filePath: '/etc/passwd' }, '/srv/uploads')).toEqual([]);
+  });
+});
+
+describe('#11267, audit D6 — « déjà là » se juge à la taille ET à la date du fichier source', () => {
+  it('une copie faite se reconnaît au passage suivant', async () => {
+    const { local } = await diskWith({ '2026/10/u1/a.jpg': 'aaaa' });
+    const bucket = memoryStore();
+    expect(await mirrorKey({ local, mirror: bucket.store, key: '2026/10/u1/a.jpg', apply: true })).toBe('copied');
+    expect(await mirrorKey({ local, mirror: bucket.store, key: '2026/10/u1/a.jpg', apply: true })).toBe('already');
+  });
+
+  it('un fichier réécrit sur place à taille égale (métadonnées retirées) est recopié : l’ancienne copie pouvait porter le GPS', async () => {
+    const { local } = await diskWith({ '2026/10/u1/a.jpg': 'aaaa' });
+    const bucket = memoryStore();
+    bucket.objects.set('2026/10/u1/a.jpg', Buffer.from('gps!'));
+    bucket.sourceModified.set('2026/10/u1/a.jpg', new Date('2020-01-01T00:00:00Z'));
+    expect(await mirrorKey({ local, mirror: bucket.store, key: '2026/10/u1/a.jpg', apply: true })).toBe('copied');
+    expect(bucket.objects.get('2026/10/u1/a.jpg')!.toString()).toBe('aaaa');
+  });
+
+  it('une copie d’avant ce correctif, sans date de source, est recopiée une fois', async () => {
+    const { local } = await diskWith({ '2026/10/u1/a.jpg': 'aaaa' });
+    const bucket = memoryStore();
+    bucket.objects.set('2026/10/u1/a.jpg', Buffer.from('aaaa'));
+    expect(await mirrorKey({ local, mirror: bucket.store, key: '2026/10/u1/a.jpg', apply: true })).toBe('copied');
   });
 });
