@@ -411,7 +411,7 @@ class SignupViewModelTest {
             ApiResponse(success = false, error = "Bad number", code = "PHONE_INVALID", fieldName = "phoneNumber"),
         )
         scenario.viewModel.fillValid()
-        scenario.viewModel.onPhoneEntryChange("06")
+        scenario.viewModel.onPhoneEntryChange("0612345678")
         scenario.viewModel.register()
         advanceUntilIdle()
 

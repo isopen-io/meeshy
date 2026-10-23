@@ -79,6 +79,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CreateShareLinkForm
+import me.meeshy.sdk.model.ShareLinkAddress
 import me.meeshy.sdk.model.ShareLinkExpiration
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.chrome.MeeshyBackground
@@ -308,7 +309,7 @@ private fun IdentitySection(form: CreateShareLinkForm, enabled: Boolean, vm: Cre
         )
         if (form.slug.isNotBlank()) {
             Text(
-                text = "meeshy.me/chat/${form.slug.trim().lowercase()}",
+                text = ShareLinkAddress(form.slug.trim().lowercase()).displayString(),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = ShareAccent,
