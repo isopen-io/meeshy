@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.StorySourceWindow
 import me.meeshy.sdk.model.StorySourceWindowMs
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.QualifiedView
@@ -62,6 +63,9 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Pause de l'appui long — portée par [emit] tant que la story n'a pas repris. */
     private var isHoldPaused = false
+
+    /** Son coupé pour toute la session de lecture — porté par [emit]. */
+    private var isMuted = false
 
     /** Optimistic reaction state per slide id, seeded lazily from the slide's count. */
     private val reactionStates = mutableMapOf<String, StoryReactionState>()
@@ -307,6 +311,12 @@ class StoryViewerViewModel @Inject constructor(
         if (onLeftHalf) back() else advance()
     }
 
+    /** Coupe ou rétablit le son de toutes les pistes de la session (iOS `StoryGlobalMute`). */
+    fun toggleMute() {
+        isMuted = !isMuted
+        _state.update { it.copy(isMuted = isMuted) }
+    }
+
     fun advance() {
         playback = playback.advance()
         emit()
@@ -509,6 +519,8 @@ class StoryViewerViewModel @Inject constructor(
             availableLanguages = availableLanguagesFor(currentId),
             languageOverride = override,
             isPaused = isHoldPaused,
+            isMuted = isMuted,
+            authorAvatarUrl = playback.currentGroup?.avatarUrl,
         )
     }
 
@@ -609,6 +621,7 @@ class StoryViewerViewModel @Inject constructor(
             userId = id,
             authorName = username,
             slides = stories.map { it.toSlideView(avatarColor, prefs) },
+            avatarUrl = avatarURL?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.apiBaseUrl) },
         )
     }
 
@@ -655,6 +668,7 @@ class StoryViewerViewModel @Inject constructor(
             repostAttribution = StoryRepostAttribution.resolve(this),
             strokes = storyEffects?.drawingStrokes.orEmpty(),
             isViewed = isViewed,
+            createdAtMillis = isoToEpochMillis(createdAt).takeIf { it > 0L },
         )
     }
 

@@ -139,9 +139,17 @@ internal class StoryCacheSource(
             cachedAt = cachedAt,
         )
 
+    /**
+     * Une story déjà vue sur cet appareil le reste : une page servie avant que la vue ne
+     * soit arrivée au serveur ne regriserait pas l'anneau à l'envers (vue monotone, comme
+     * [me.meeshy.sdk.model.StoryUpdateMerge]).
+     */
     private suspend fun persist(stories: List<ApiPost>, prune: Boolean) {
         val now = clock.nowMillis()
-        val rows = stories.map { it.toEntity(now) }
+        val seenHere = readLocal().filter { it.isViewedByMe == true }.mapTo(HashSet()) { it.id }
+        val rows = stories
+            .map { if (it.id in seenHere && it.isViewedByMe != true) it.copy(isViewedByMe = true) else it }
+            .map { it.toEntity(now) }
         database.withTransaction {
             storyDao.upsertAll(rows)
             if (prune) storyDao.deleteNotIn(rows.map { it.id })
