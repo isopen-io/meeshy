@@ -65,10 +65,10 @@ class EpisodeSegmenterTest {
 
     @Test fun `le fuseau injecte decide de la frontiere de jour`() {
         val messages = listOf(
-            episodeMsg("a", "u", jan(1, 22)), episodeMsg("b", "u", jan(1, 22, 10)),
-            episodeMsg("c", "u", jan(1, 22, 20)), episodeMsg("d", "u", jan(1, 22, 30)),
-            episodeMsg("e", "u", jan(1, 23, 10)), episodeMsg("f", "u", jan(1, 23, 20)),
-            episodeMsg("g", "u", jan(1, 23, 30)), episodeMsg("h", "u", jan(1, 23, 40)),
+            episodeMsg("a", "u", jan(1, 14)), episodeMsg("b", "u", jan(1, 14, 10)),
+            episodeMsg("c", "u", jan(1, 14, 20)), episodeMsg("d", "u", jan(1, 14, 30)),
+            episodeMsg("e", "u", jan(1, 15, 10)), episodeMsg("f", "u", jan(1, 15, 20)),
+            episodeMsg("g", "u", jan(1, 15, 30)), episodeMsg("h", "u", jan(1, 15, 40)),
         )
         assertThat(EpisodeSegmenter.segment(messages, UTC)).hasSize(1)
         assertThat(EpisodeSegmenter.segment(messages, java.time.ZoneId.of("Asia/Tokyo"))).hasSize(2)
@@ -138,7 +138,7 @@ class EpisodeSegmenterTest {
         assertThat(EpisodeSegmenter.dayLabel(jan(21), now, UTC)).isEqualTo(DayLabel.Relative(DayLabelKey.TODAY))
         assertThat(EpisodeSegmenter.dayLabel(jan(19), now, UTC)).isEqualTo(DayLabel.Relative(DayLabelKey.YESTERDAY))
         assertThat(EpisodeSegmenter.dayLabel(jan(17), now, UTC)).isEqualTo(DayLabel.Weekday(DayOfWeek.SATURDAY))
-        assertThat(EpisodeSegmenter.dayLabel(jan(14), now, UTC)).isEqualTo(DayLabel.FullDate(LocalDate.of(2026, 1, 14), false))
+        assertThat(EpisodeSegmenter.dayLabel(jan(13), now, UTC)).isEqualTo(DayLabel.FullDate(LocalDate.of(2026, 1, 13), false))
         val lastYear = java.time.ZonedDateTime.of(2025, 12, 1, 12, 0, 0, 0, UTC).toInstant()
         assertThat(EpisodeSegmenter.dayLabel(lastYear, now, UTC)).isEqualTo(DayLabel.FullDate(LocalDate.of(2025, 12, 1), true))
     }
