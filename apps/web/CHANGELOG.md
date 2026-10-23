@@ -1,5 +1,305 @@
 # @meeshy/web-v2
 
+## 2.24.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le squelette Lentille prend la hauteur de layout de la rangée réelle, Dynamic Type compris
+  - CallManager.shared ne se relit plus pendant sa propre construction — run test
+  - les séparateurs de Téléchargement auto s'alignent sur un retrait nommé, dérivé des jetons
+  - le plafond de capture HD d'un appel dérive de VideoConfig.hd720p30, sa seule source
+  - la photo envoyée se réduit par ImageDownsampler, pas par ses options recopiées
+  - une slide muette ne réclame plus le moteur audio partagé, et le témoin des courbes mesure à la précision Float
+  - la cible de tests recompile après l'intégration des lots
+  - avatar_a11y_mood (#11969, chaîne générée à un seul spécificateur) rejoint la dette consignée du générateur
+  - la suite unitaire Android redevient verte après l'intégration des lots
+  - une liste en cache ne clignote plus vide après une écriture
+  - choisir un autre serveur relance l'app sur ce serveur
+  - le renouvellement envoie le JWT présenté et le jeton de session, comme iOS
+  - ComposerLiveLookTests importe MeeshySDK — la cible de tests recompile, run test
+  - les tests des lots fusionnés sans CI passent — réglages, accueil, conversations, plateau
+  - les lots fusionnés ce soir passent leurs cliquets de routes, de localisation et de vocabulaire
+  - le résultat d'une compression d'image se construit hors de l'acteur principal
+  - les tests des lots fusionnés sans CI passent, et une URL média à schéma étranger est refusée
+  - CompressedImageResult est nonisolated — dev recompile, l'acteur MediaCompressor construit de nouveau son résultat, run test
+  - les tests des lots fusionnés sans CI compilent
+  - les vignettes vidéo passent par un seul générateur du SDK, en lot et en cache borné — run test
+  - la WebSocket partagée n'hérite pas du délai de lecture REST
+  - la connexion temps réel s'ouvre une seule fois, avec la bonne identité et un jeton valide
+  - l'avatar suit la loi de contextes, l'humeur respire discretement et les non-lus n'apparaissent que s'il y en a
+  - l'intégration des lots fusionnés sans CI compile
+  - le visage se lit en 76 points avec son orientation, sur une sonde de 320 px, et sert les déclencheurs des lens — run test
+  - sur le canevas vivant, Core Animation joue les keyframes d'un texte — calque bâti une fois, seule l'horloge du calque bouge — run test
+  - LocalReduceMotion s'importe depuis ui.accessibility, où #11866 l'a déplacé
+  - les lots du jeu, des liens et des libellés de conversation passent les cliquets de routes et de localisation
+  - la coque Android exige Android System WebView 111 et dit en dessous comment la mettre à jour
+  - loi des contextes d'avatar, du point de presence, de l'humeur et des non-lus
+  - la décision de connexion et la charge d'authentification du socket (lois pures)
+  - « Masquer mon adresse IP » force le relais TURN sur toutes les connexions d'appel — run test
+  - la rangée d'outils de l'atelier consigne les écarts de localisation qu'elle ouvre
+  - seuls les fichiers sur le disque deviennent des lecteurs préparés, le pool garde les voisins du réel, la fin d'un fichier se signale — run test
+  - une vidéo de message part en 1080p, en une génération visée sur la qualité ; la compression forte reste un choix — run test
+  - les cadres décoratifs sont peints sur canevas : fonds, motifs, bordures, cases, portraits
+  - Réglages, export et sécurité s'affichent en allemand, italien et arabe
+  - les 28 lots du 22 octobre compilent et passent toutes leurs gardes une fois réunis
+  - la copie en galerie d'une retouche garde la définition et le HDR de la source ; seul l'envoi suit son budget — run test
+  - le jeton personnalisé part sous customToken, la clé lue par la passerelle
+  - la progression se lit depuis GET me/engagement et la frappe d'une Meesh part avec son prix maximal
+  - le constructeur Core Animation et son témoin importent UIKit pour NSValue(cgPoint:) — run test
+  - l'ouverture des fichiers audio vit dans un type non isolé — run test
+  - les images se sous-échantillonnent par un seul atome ImageIO du SDK
+  - la progression des badges, séries et niveaux se résout comme sur iOS
+  - le voile du viseur se règle sur la luminance du cadre qu'il couvre — run test
+  - le site de composition de la conversation se dit sur sa ligne — le type ConversationView ne grossit pas
+  - la scène unifiée se pose en cascade et partage ses plafonds avec le composeur
+  - la puce d'un commentaire nomme la langue servie, et liste, recherche, widget et ingestion des messages lisent le Prisme strict
+  - une vidéo retouchée ne passe qu'une fois par un encodeur, au débit des publications — run test
+  - le module Jeu existe et est branché à l'application
+  - Réglages › Médias choisit si la prise rejoint la galerie
+  - les libelles du refus de localisation et de photos restent desactives jusqu'a l'ecran refuse
+  - les keyframes d'une story se décrivent une fois pour Core Animation, à parité avec l'évaluateur image par image
+  - la géométrie des cadres décoratifs est tracée à l'identique partout
+  - les libellés de Réglages reprennent les textes iOS en sept langues
+  - compteurs au pluriel et libellés en allemand, italien et arabe
+  - couche données des chiffres de mes liens (suivi, parrainage, partage, communautés)
+  - la loi d'enregistrement, la garde du viseur et le registre des prises
+  - une vidéo ré-encodée garde sa stéréo, son 48 kHz et son HDR, et vise une qualité — run test
+  - trois machines pures mesurent visibilité, défilement et qualité de lecture
+  - les compteurs du fil, des stories et des reels sont de vrais pluriels, sept langues pour chaque module
+  - objets de scène unifiés, plafonds, z-order et cascade (squelette)
+  - écoutes et visionnages mesurés par plages continues avec la raison de leur fin
+  - les vocaux et vidéos déjà lus se rouvrent sans réseau, cache LRU qui épargne les épingles
+  - je règle la précision du partage de position et le style de carte une fois pour toutes
+  - les fichiers audio passent au mixer par transfert, sans @unchecked Sendable — run test
+  - connexion, profil et contacts parlent allemand, italien et arabe comme iOS
+  - un second appel pendant un appel s'annonce par une bannière claire, sans appelant orphelin
+  - SMS resolve test needs a populated ActivityInfo
+  - marge des poignées de rognage pour que leur cible entière reçoive le geste
+  - les widgets partagent avatars, thème jour/nuit et libellés
+  - horloge avançante dans le test du reconnaisseur (débit non nul)
+  - clé canonique et évinceur LRU conscient des épingles pour les caches audio et vidéo
+  - type explicite du registre vide du prechargement
+  - la connexion, le profil et les contacts adoptent le catalogue iOS (manifestes, chaînes générées)
+  - l'isolation vocale d'Apple s'ouvre en un geste depuis le panneau d'appel — run test
+  - les libellés des conversations adoptent le catalogue iOS dans sept langues
+  - la rangée de sept outils à badges remplace les FAB Contenu/Effets
+  - rogner un média de scène en voyant ce qu'on retire, sans jamais ré-encoder
+  - classe les chaînes du service d'appel dans le manifeste i18n
+  - Écrire, se connecter ou inviter suit une seule règle et un seul geste
+  - les calculs de chiffrement donnent les mêmes octets que sur iPhone
+  - une vidéo illisible ne produit pas de vignette vide
+  - la caméra d'un appel descend avec le palier de qualité et l'état thermique — run test
+  - le parcours d'accueil devient un calque fluide avec progression et carte partagée
+  - ouvrir l'une des 20 premières conversations n'attend plus le réseau
+  - le test des orbes tolère la quantification 8 bits de l'alpha Compose
+  - les lois de la rangée de sept outils et de la bande basse
+  - la parole se reconnaît sur l'appareil, sans jamais passer par le réseau
+  - le fil, les stories et les commentaires affichent leurs traductions par le Prisme strict du lecteur
+  - un sticker gabarit, un lieu, un texte en cadre ou une image réglée gardent leur identité
+  - chaque lien du maillage d'un appel de groupe encode à sa part du débit montant — run test
+  - la politique de confidentialité nomme ses sous-traitants et ses transferts hors UE
+  - publier les normes de sécurité des enfants sur /child-safety
+  - erreurs, permission et résultat typés de la reconnaissance vocale sur l'appareil
+  - autofill via the Compose 1.7 modifier, not the 1.8 ContentType API
+  - close the missing brace of ChatHeaderHost
+  - le témoin du registre des cadres compte le pack succes — dev rougit depuis 71338c814, run test
+  - la fenêtre de préchargement des réels et des stories s'arrête hors du premier plan et reprend au retour
+  - par défaut une photo part compressée une fois en HD, jamais au budget du contexte — run test
+  - la loi du préchargement des premières conversations est posée
+  - le calque d'accueil choisit son mouvement selon Réduire les animations
+  - une session expirée se renouvelle en silence et une seule fois
+  - le fournisseur de jeu herite de la reduction deja resolue
+  - observe sees a synced-but-empty key via the metadata row
+  - le manifeste déclare ses permissions, sa sauvegarde exclue et ses liens vérifiés comme la fiche iOS
+  - un changement de sortie pendant un appel ne rallume pas le moteur du lecteur
+  - les canevas de lecture partagent un seul moteur audio, qui reprend seul après un changement de sortie
+  - les lois de traduction sur appareil et l'admission serveur fail-closed
+  - la commande Raccrocher/Micro ne se rappelle plus elle-même (paramètres renommés)
+  - le composer démarre vidéo et son ensemble, un recalage de dérive à la fois, tampon 5 ms emprunté à la lecture seulement — run test
+  - primitives de chiffrement identiques à CryptoKit (WIP)
+  - le cadran circulaire du vocal plein écran se règle du doigt
+  - l'écran d'appel est un plein écran sombre aux états dessinés — sonnerie, connexion, fin, appel entrant
+  - couleurs hex, palette derivee, cache de couleurs et surfaces teintees iso iOS
+  - Reduire les animations supprime tout mouvement non essentiel et les elements reagissent avec les ressorts d'iOS
+  - retoucher une image est non destructif, avec historique annuler/rétablir
+  - couper la longueur d'une vidéo sans la retoucher ne la ré-encode plus — run test
+  - lois pures du cadran et du plein écran vocal
+  - une page Sécurité réunit mot de passe, deux facteurs, e-mail, téléphone et sessions
+  - le fil garde images, videos, audios et documents d'un post et prechauffe les suivants
+  - une story et son groupe d'auteur portent les mêmes données que sur iOS
+  - une photo n'est encodée qu'une fois entre la prise et l'envoi
+  - lois pures de l'écran d'appel — ligne d'attente, glissé, disposition connectée, permissions
+  - mes pièces choisies attendent au plateau jusqu'à Envoyer
+  - une seule implémentation des points de frappe et de la pulsation — run test
+  - import drawLayer pour le flou du verre
+  - l'écran de conversation est assemblé de cinq hôtes et le composeur de trois blocs
+  - les cartes sur verre ont un vrai flou, un relief et une bordure iOS
+  - le cadrage, la presentation et la fenetre de prechargement des medias d'un post
+  - chaque route de la passerelle est classée, la dette « à porter » ne peut que rétrécir
+  - lois pures du 401 et de la propriété d'une requête
+  - l'appel reste vivant en arrière-plan avec une notification « appel en cours » (chrono, Raccrocher, micro)
+  - test 304 non constructible via Response.error
+  - les images se décodent au palier affiché, hors de l'acteur du cache, à concurrence bornée — run test
+  - le serveur connaît la version et l'appareil, et STAGING pointe l'hôte déployé
+  - mise en forme de Pagination, lot réponses API prêt à relire
+  - les routes REST sont un catalogue Kotlin généré depuis le manifeste de la passerelle
+  - les listes secondaires se rouvrent depuis le disque (RoomCacheStore, curseur, cache JSON par cle)
+  - modèle pur du changement de téléphone et verdict du badge de vérification
+  - le verre choisit son rendu — flou, translucide ou opaque
+  - la photo envoyée garde sa taille HD sur tout appareil, le tier ne la rabote plus
+  - la piste et le texte d'un réel suivent le Prisme strict du lecteur — run test
+  - l'app ne plante plus au lancement — les rétrogradations Room ne visent plus les versions remises à zéro
+  - un post composé part avec sa scène, ses légendes et ses alternatives
+  - accepter ou refuser une demande d'ami est instantané, même hors connexion
+  - tables cache_entries et keyed_json_cache (schema 18)
+  - loi de la notification d'appel en cours (quand s'ouvrir, quoi montrer, sous-titres sûrs)
+  - modèle de pièce en attente et réducteur du plateau
+  - le mouvement d'un sticker est une pose pure du temps
+  - l'enveloppe de réponse porte meta, pagination typée et suppressions tolérantes
+  - lois d'identité client, de version et de politique des URL médias
+  - loi du diff d'ecriture et modes de fraicheur du cache disque
+  - l'intégration des 50 lots Android compile et passe toutes ses gardes
+  - toast d'échec des médias récents sans AnimatedVisibility ambigu
+  - consigner les écarts feature:settings ar/de/it au cliquet de localisation
+  - intégration — compile
+  - un KDoc contenant /\* n'ouvre plus un commentaire imbriqué non fermé
+  - classify bubble_view_once_opened in the string manifest
+  - classer les chaînes de types de notification dans le manifeste i18n
+  - le rollback de savepoint ne termine plus la transaction Room
+  - le test de route lit la page de préférences avec un corps liste
+  - le garde du splash lit SplashOverlay.kt apres l'extraction de MeeshyApp
+  - le média de tête d'un commentaire de post, de réel ou de story se CHOISIT — photo, vidéo (sa première image) ou son (son onde), parmi tous ceux du support ; défaut : le premier visuel ; un seul média : pas de sélecteur. Un son choisi se peint comme le son de la carte (sa piste servie par le Prisme du lecteur) et offre la sortie vidéo. Un support non public le DIT dans la feuille (« Cette publication n'est pas publique : son contenu ne figure pas sur l'image. », 7 langues) au lieu de taire le média. Parité web : composition partagée (postCommentCardHeadMedia, postCommentCardDefaultHeadMediaIndex, postCommentCardWithheldByAudience, choix headMediaIndex), puces de vignettes et avis d'audience dans l'atelier ; un post ou un réel de scène n'est plus traité comme une story (Closes #11783)
+  - le trousseau lu d'avance expire à la lecture, sans minuterie — le cliquet async-after revient à 76
+  - Imager un commentaire de post ou de réel composé avec la SCÈNE remet le support en tête — un post ou un réel qui porte storyEffects (presque tous ceux de production) était traité comme une story : en tête 20 h après sa publication, puis plus jamais. Le média de tête se CHOISIT parmi ceux du support (photo, vidéo, son ; défaut : le premier visuel ; un son se peint comme le son de la carte), et withheldByAudience dit qu'un support non public est retenu par son audience (Refs #11783)
+  - le pseudo libre est proposé et le refus de numéro est prouvé
+  - compteurs, durées, dernière connexion et types de fichier écrits selon la langue
+  - l'inscription dérive nom, pseudo et refus de numéro (squelette)
+  - classer les chaînes a11y du fil dans le manifeste sdk-ui
+  - import currentTime dans BoundedResolutionTest
+  - abrégés, durées, noms et types de fichier localisés (squelette testé)
+  - classer les chaînes sharelinks dans le manifeste du module conversations
+  - la liste montre un squelette de 6 rangs, un vide propre et une erreur avec Réessayer
+  - extension de cle vide pour une URL sans chemin
+  - briques partagées des écrans de réglages (cartes, rangées, bulle d'aide)
+  - le volume, le ducking et le mixage de lecture suivent les lois d'iPhone
+  - import dp and avoid cross-module smart cast in audio route lot
+  - retire les alias media3 dupliqués du catalogue après fusion de dev
+  - les commandes de l'appel et leurs couches obéissent à des règles pures
+  - comparaison orderInCategory IEEE comme le miroir TS
+  - brancher la source générée du catalogue de cadres via l'API AGP
+  - explicit type on LocalProfileGameSlot
+  - ordre du fil, classification des medias et portes de lecture d'un reel
+  - le décodage tolérant de l'activation compile et se teste
+  - no hairline border on unselected recent-media cells, opt in FlowPreview
+  - aligner le test Robolectric sur le SDK 26 des autres tests push
+  - je choisis la sortie du son pendant l'appel et il ne se perd plus après une interruption
+  - grille des 40 derniers médias dans le plateau du chat, avec sélection ordonnée et aperçu
+  - le fil et la liste estompent, compactent et magnifient leurs rangées autour de l'élue
+  - chaque appel réseau se réessaie seul, échoue lisiblement et ne rejoue jamais un refus définitif
+  - référence de fonction surchargée remplacée par un lambda (compilation sans ambiguïté)
+  - épingles persistées après redémarrage et politique des stories vues
+  - election du reel actif, fenetre de prechargement et horloge des visites
+  - lois de réessai, politique par route et taxonomie d'erreurs du transport
+  - règles pures des médias récents (lien pièce-asset, fenêtre de cache, sélection ordonnée)
+  - ouvrir une conversation par son identifiant, même hors cache, avec nouvelle tentative et message d'erreur clair
+  - une mise à jour ne détruit plus la file d'envoi ni les médias en attente
+  - réglage Partage de position et persistance de la précision
+  - le ViewModel du composer délègue texte, sticker, dessin et fond à des réducteurs purs testés
+  - socle d'extension de l'app, MeeshyApp decoupe en graphes par domaine
+  - les 164 films de Mee et Meo et les 100 Instants sont décrits par un catalogue généré
+  - la liste range ses conversations en sections comme iOS et le web
+  - migrations Room versionnées, v16 exportée et v17 (squelette)
+  - lecteur MeeshyLens v1 qui ne lève jamais et n'exécute rien
+  - lois pures du transport vidéo plein écran
+  - lois pures des sorties audio d'appel (genres, état, proximité)
+  - lois pures du cache média (clé, budgets, épingles, plan LRU)
+  - le push FCM peut arriver sur l'appli native configurée, build sain sans Firebase
+  - rendu graphique natif pour les tests de compression d'image
+  - reference de fonction explicite pour la fabrique d'identifiant
+  - retirer de known-gaps les 240 lignes sdk-ui ar/de/it comblees
+  - l'écran du composer est découpé en fichiers par surface sans changer le rendu
+  - niveaux de précision du partage de position et arrondi des coordonnées
+  - 146 cadres décoratifs, géométrie et textes pour habiller la capture d'un appel
+  - chaque type de notification est reconnu, décodé et coloré (contacts, jeu, signalements, paliers)
+  - Mes stories classe publiées, expirées et brouillons, avec sa donnée
+  - doublons emoji_category_animals/objects entre strings.xml et strings_generated.xml (ar, de, it)
+  - découpe la logique de la liste de conversations en collaborateurs testables
+  - compilation et bornes de la fenêtre d'apparition
+  - spécificateurs positionnels dans les durées de média
+  - retire les doublons emoji*category*\* de strings.xml (de, it, ar) déjà générés dans strings_generated.xml
+  - retirer les doublons emoji*category*\* de strings.xml (déjà générés)
+  - préférences, étiquettes et plis de catégories lus cache-first
+  - retirer les doublons emoji*category*\* de ar/de/it, déjà générés
+  - retire les doublons emoji_category_animals/objects de strings.xml (ar, de, it) déjà générés
+  - la fiche d'une personne sait qui elle montre, ce qu'on peut en faire et quand elle se replie
+  - retire les chaines emoji_category dupliquees de strings.xml (ar, de, it) deja generees
+  - retire les doublons emoji_category_animals/objects de strings.xml (ar, de, it), strings_generated.xml les porte
+  - les photos et vidéos sont allégées avant l'envoi
+  - routes et lois pures de réorganisation des préférences
+  - drop sdk-ui emoji_category_animals/objects duplicated between strings.xml and strings_generated.xml in ar/de/it
+  - retire les chaines emoji_category dupliquees entre strings.xml et strings_generated.xml (ar, de, it)
+  - retire les doublons emoji_category_animals/objects de strings.xml (ar, de, it) deja generes
+  - evite le conflit de SectionTitle du package et fige la resolution de JsonPrimitive
+  - seuil de luminance de l'encre des matieres (le test echouerait en CI)
+  - positional media duration plurals and drop sdk-ui gaps now filled on dev
+  - durees de media en specificateurs positionnels
+  - chaque vue, impression et ouverture porte une identité stable rejouable sans double compte
+  - les onglets de Mes stories se choisissent et se replient d'eux-mêmes
+  - le socle de dessin du jeu partage matières, Signature, accessibilité et mouvement
+  - spécificateurs positionnels dans les durées de média sdk-ui
+  - les mesures de l'Android natif sont attribuées à la plateforme android
+  - replace companion callable reference with lambdas
+  - la bannière et la photo d'un profil se montrent avec leurs signes et s'ouvrent en plein écran
+  - spécificateurs positionnels des durées média, écarts sdk-ui comblés retirés du cliquet
+  - lois pures de compression image et vidéo (format préservé, remux ou ré-encodage)
+  - la courbe de focus du fil et de la liste est une loi pure rejouée sur les vecteurs partagés
+  - catalogue de 146 cadres décoratifs et géométrie de capture (WIP)
+  - un lien meeshy.me ou meeshy:// se comprend d'une seule manière
+  - les chorégraphies, motifs haptiques et lois de mouvement du jeu sont des fonctions pures
+  - briques de diagnostic transverses (bestEffort, journal de sérialisation, ids typés)
+  - squelette de la loi des liens profonds (destinations et jeu)
+  - chaque message du serveur se décode complet et tolérant
+  - la bulle est lue dans l'ordre iOS, vidéos, contacts, vue unique, flou et envoi lent compris
+  - ce que je publie reste lisible partout, pont d'écriture v1 vers canvas v3
+  - une valeur de forme d'onde non numérique tombe au plancher, jamais en barre indéfinie
+  - chaque vocal affiche sa vraie forme d'onde, calculée une seule fois
+  - reutilise l'enum PostType existant au lieu de le redeclarer
+  - lire le bloc Jeu du serveur sans jamais casser l'application
+  - fakes MessageApi et flux d'état de la fiche « Vu par »
+  - catalogue typé v2 des événements d'interaction, sans URL ni texte saisi
+  - un texte à vue unique se referme quand on le retouche ou qu'il quitte l'écran
+  - lois pures du contenu du fil (grille, audio, protection, long message)
+  - liste cache-first et fiche d'un lien éditable (PATCH des seuls champs modifiés)
+  - chaînes d'accessibilité de la bulle (vidéos, contact, vue unique, flou, envoi lent)
+  - lois pures de l'éditeur d'objet (sections, fenêtre d'apparition)
+  - brouillon d'édition d'un lien, fiche peinte depuis la ligne et dates grégoriennes
+  - squelette du pont d'écriture StoryEffects vers canvas v3
+  - ma traduction scellée sur l'appareil s'ouvre à l'identique du web et d'iOS
+  - loi de rechargement de la liste des liens de partage
+  - la fiche « Vu par » se charge sans clignoter
+  - les posts et commentaires gardent tout ce que le serveur envoie
+  - modèles et loi de scellement de la traduction partagée (squelette)
+  - règles et modèle de la fiche « Vu par »
+  - la logique de l'écran de conversation est répartie en contrôleurs, sans rien changer à l'écran
+  - la forme d'onde a ses lois — échelle en décibels, clé de contenu, courbe d'affichage
+  - la mesure d'une forme d'onde est une fonction pure (RMS par compartiment, mono, PCM)
+  - le look d'une photo se développe à 1920 px sur un appareil de tier bas, 2560 sinon
+  - un seul tier de capacité de l'appareil, jumeau d'iOS, lu par les réels, les films Lottie, la découpe des effets d'appel et la frappe du jeu
+  - la qualité d'un appel est persistée et lisible — gels, limitation, MOS, relais, codec, plateforme
+  - un appel passe derrière un pare-feu qui n'ouvre que le 443
+  - l'échec du retrait des métadonnées d'une vidéo est journalisé avec sa cause
+  - une photo abîmée perd quand même son EXIF, et un PNG lisible n'est plus vidé
+  - une vidéo perd son GPS sans ré-encodage, aux trois portes d'entrée
+  - une photo perd EXIF, GPS et XMP sans perdre une génération ni son profil de couleur
+  - la télémétrie d'appel quitte video-call.ts pour call-analytics.ts
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.42.1
+
 ## 2.23.0
 
 ### Minor Changes
