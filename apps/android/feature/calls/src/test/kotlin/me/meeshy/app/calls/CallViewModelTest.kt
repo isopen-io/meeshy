@@ -1455,6 +1455,16 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `the re-presented waiting call keeps its conversation so minimising has a destination`() = runTest {
+        val vm = vm().connect()
+
+        incomingOffers.emit(offer(callId = "call-77").copy(conversationId = "conv-77"))
+        vm.acceptWaitingSwap()
+
+        assertThat(vm.activeConfig.conversationId).isEqualTo("conv-77")
+    }
+
+    @Test
     fun `answering with no waiting call is inert`() = runTest {
         val vm = vm().connect()
 

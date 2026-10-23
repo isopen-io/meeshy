@@ -125,9 +125,15 @@
     <string name="privacy_section_media">Média &amp; Données</string>
     <string name="privacy_section_visibility">Visibilité</string>
     <string name="privacy_typing_indicator">Indicateur de frappe</string>
+    <string name="sessions_cancel">Annuler</string>
     <string name="sessions_current">Cet appareil</string>
     <string name="sessions_retry">Réessayer</string>
     <string name="sessions_revoke">Déconnecter</string>
+    <string name="sessions_revoke_all_action">Déconnecter les autres appareils</string>
+    <string name="sessions_revoke_all_confirm_message">Seul cet appareil restera connecté. Les autres devront se reconnecter.</string>
+    <string name="sessions_revoke_confirm_action">Déconnecter</string>
+    <string name="sessions_revoke_confirm_message">%s devra se reconnecter pour accéder à votre compte.</string>
+    <string name="sessions_revoke_confirm_title">Déconnecter cet appareil ?</string>
     <string name="settings_active_sessions">Sessions actives</string>
     <string name="settings_back">Retour</string>
     <string name="settings_blocked_users">Utilisateurs bloqués</string>

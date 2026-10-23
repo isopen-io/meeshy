@@ -125,9 +125,15 @@
     <string name="privacy_section_media">Medien &amp; Daten</string>
     <string name="privacy_section_visibility">Sichtbarkeit</string>
     <string name="privacy_typing_indicator">Schreibanzeige</string>
+    <string name="sessions_cancel">Abbrechen</string>
     <string name="sessions_current">Dieses Gerät</string>
     <string name="sessions_retry">Erneut versuchen</string>
     <string name="sessions_revoke">Abmelden</string>
+    <string name="sessions_revoke_all_action">Andere Geräte abmelden</string>
+    <string name="sessions_revoke_all_confirm_message">Nur dieses Gerät bleibt angemeldet. Die anderen müssen sich erneut anmelden.</string>
+    <string name="sessions_revoke_confirm_action">Abmelden</string>
+    <string name="sessions_revoke_confirm_message">%s muss sich erneut anmelden, um auf dein Konto zuzugreifen.</string>
+    <string name="sessions_revoke_confirm_title">Dieses Gerät abmelden?</string>
     <string name="settings_active_sessions">Aktive Sitzungen</string>
     <string name="settings_back">Zurück</string>
     <string name="settings_blocked_users">Blockierte Benutzer</string>

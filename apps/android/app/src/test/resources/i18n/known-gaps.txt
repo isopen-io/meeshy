@@ -945,3 +945,4 @@ bare-specifier :feature:contacts en contacts_requests_accept_a11y
 bare-specifier :feature:contacts en contacts_requests_cancel_a11y
 bare-specifier :feature:contacts en contacts_requests_reject_a11y
 bare-specifier :feature:stories en stories_viewer_profile_of
+bare-specifier :feature:settings en sessions_revoke_confirm_message

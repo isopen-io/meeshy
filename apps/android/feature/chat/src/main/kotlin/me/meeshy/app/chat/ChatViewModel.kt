@@ -41,6 +41,7 @@ import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
+import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -119,6 +120,12 @@ class ChatViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId, draft = initialDraft.orEmpty()))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
+
+    private val _callEntry = MutableStateFlow<HeaderCallEntry?>(null)
+
+    /** The header's call entry ([HeaderCallEntry.resolve], iOS parity): `null` hides every
+     * call button (guest, global, broadcast…), `canStart == false` keeps only « Rejoindre ». */
+    val callEntry: StateFlow<HeaderCallEntry?> = _callEntry.asStateFlow()
 
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
@@ -260,6 +267,14 @@ class ChatViewModel @Inject constructor(
                 val viewerRole = conversation.participants
                     .firstOrNull { it.userId == currentUserId }
                     ?.role
+                _callEntry.value = HeaderCallEntry.resolve(
+                    conversationId = conversation.id,
+                    conversationType = conversation.type,
+                    viewerConversationRole = viewerRole,
+                    viewerPlatformRole = sessionRepository.currentUser.value?.role,
+                    viewerIsGuest = sessionRepository.currentUser.value?.isAnonymous == true,
+                    directPeerUserId = conversation.otherParticipantUserId(currentUserId),
+                )
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(currentUserId = currentUserId),

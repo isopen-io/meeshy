@@ -16,6 +16,12 @@ data class WaitingCall(
     val callerId: String,
     val callerName: String,
     val isVideo: Boolean,
+    /**
+     * The room the offer rings in ([CallInitiatedPayload.conversationId]), blank when
+     * the frame does not carry it. Threaded into the call screen so « Réduire » has a
+     * real chat to open.
+     */
+    val conversationId: String = "",
 ) {
     companion object {
         /**
@@ -34,6 +40,7 @@ data class WaitingCall(
                 callerId = initiator?.userId.orEmpty(),
                 callerName = resolveName(initiator),
                 isVideo = payload.type == VIDEO_TYPE,
+                conversationId = payload.conversationId.orEmpty(),
             )
         }
 
