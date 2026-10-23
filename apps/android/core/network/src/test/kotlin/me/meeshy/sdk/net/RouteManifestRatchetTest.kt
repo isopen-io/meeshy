@@ -32,8 +32,10 @@ class RouteManifestRatchetTest {
          * interfaces des liens, du suivi de liens, de l'affiliation, des médias, de l'annuaire, des
          * hashtags et des packs déclarent depuis la vague du 2026-10-23, plus `GET /u/:username`
          * qui y revient : c'est un alias du profil public, qu'aucune interface ne vise (#4161, #4250).
+         * 254 : plus `GET /attachments/:attachmentId/subtitles/:lang`, servie par la passerelle depuis
+         * #11329 et sans interface Retrofit encore.
          */
-        const val TO_PORT_CEILING = 253
+        const val TO_PORT_CEILING = 254
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
