@@ -1699,7 +1699,6 @@ jobs:
           jpegtran -version 2>&1 | head -1
           command -v heif-convert
           avifenc --version | head -1
-          command -v heif-convert
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'

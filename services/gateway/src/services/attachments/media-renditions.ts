@@ -6,7 +6,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { ThumbHashGenerator } from './ThumbHashGenerator.js';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
 import type { MediaRendition } from '@meeshy/shared/types/attachment';
-import { produceCompatibilityRendition, type VideoRendition } from './video-compat-rendition.js';
+import { produceCompatibilityRendition } from './video-compat-rendition.js';
 import { convertStoredHeif } from './heif-conversion.js';
 import { timeMediaStage } from '../metrics/mediaStageMetrics';
 
