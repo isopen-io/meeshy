@@ -147,6 +147,7 @@ object SocketEventNames {
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
     // reaction
+    const val PROFILE_DECOR_UPDATED = "profile:decor-updated"
     const val REACTION_ADDED = "reaction:added"
     const val REACTION_REMOVED = "reaction:removed"
 
@@ -288,6 +289,7 @@ object SocketEventNames {
         POST_UPDATED,
         PRESENCE_APP_STATE,
         PRESENCE_SNAPSHOT,
+        PROFILE_DECOR_UPDATED,
         REACTION_ADDED,
         REACTION_REMOVED,
         READ_STATUS_UPDATED,
