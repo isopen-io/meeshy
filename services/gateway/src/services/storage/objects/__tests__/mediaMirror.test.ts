@@ -14,6 +14,7 @@ import path from 'node:path';
 import { LocalObjectStore } from '../LocalObjectStore';
 import type { MediaObjectStore, ObjectBody, StoredObjectHead } from '../MediaObjectStore';
 import { mediaRowStorageKeys, mirrorKey, runMirrorBatch, type MirrorRowSource } from '../mediaMirror';
+import { mediaMirrorSources } from '../mediaMirrorCli';
 
 const ROOT_PREFIX = path.join(os.tmpdir(), 'meeshy-mirror-');
 
@@ -139,5 +140,26 @@ describe('runMirrorBatch — un lot, un curseur, des comptes', () => {
     const { root, local } = await diskWith({});
     const result = await runMirrorBatch({ source: source([]), uploadRoot: root, local, mirror: memoryStore().store, after: 'z9', batchSize: 10, apply: false });
     expect(result).toMatchObject({ rows: 0, nextCursor: 'z9', done: true });
+  });
+});
+
+describe('les clés vivantes sont TOUTES nommées — le balayage efface ce qu’elles taisent', () => {
+  it('la vignette rangée par chemin (`thumbnailPath`) est une clé', () => {
+    expect(mediaRowStorageKeys({ filePath: '2026/10/u1/v.mp4', thumbnailPath: '2026/10/u1/v_thumb.webp' }, '/srv/uploads')).toContain('2026/10/u1/v_thumb.webp');
+  });
+
+  it('chaque collection lit toutes les colonnes qui portent une clé, pistes TTS des posts comprises', async () => {
+    const selects: Record<string, Record<string, true>> = {};
+    const delegate = (name: string) => ({
+      findMany: async (args: { select: Record<string, true> }) => {
+        selects[name] = args.select;
+        return [];
+      },
+    });
+    const prisma = { messageAttachment: delegate('messageAttachment'), postMedia: delegate('postMedia') };
+    for (const source of mediaMirrorSources(prisma as never)) await source.page(null, 1);
+    const columns = ['filePath', 'fileUrl', 'thumbnailPath', 'thumbnailUrl', 'imageVariants', 'translations'];
+    expect(Object.keys(selects).sort()).toEqual(['messageAttachment', 'postMedia']);
+    for (const select of Object.values(selects)) expect(Object.keys(select)).toEqual(expect.arrayContaining(columns));
   });
 });
