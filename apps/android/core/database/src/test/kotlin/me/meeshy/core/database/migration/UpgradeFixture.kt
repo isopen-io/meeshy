@@ -11,7 +11,7 @@ internal fun SupportSQLiteDatabase.seedV16() {
     execSQL("INSERT INTO media_blob VALUES ('c3', X'0001FF7F80', 'a.jpg', 'image/jpeg', 13)")
     execSQL("INSERT INTO tus_upload_checkpoint VALUES ('k1','https://up/1',4096,9000,14)")
     execSQL("INSERT INTO sync_meta VALUES ('conversations',15,16,'\"etag\"','full')")
-    execSQL("INSERT INTO messages VALUES ('m1','conv1',1,'{\"id\":\"m1\"}',17,18,'SENT')")
+    execSQL("INSERT INTO messages (id, conversationId, seq, payload, createdAt, cachedAt, sendState) VALUES ('m1','conv1',1,'{\"id\":\"m1\"}',17,18,'SENT')")
     execSQL("INSERT INTO conversations VALUES ('conv1','{\"id\":\"conv1\"}',19,20,3)")
 }
 
