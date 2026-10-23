@@ -167,6 +167,11 @@ data class StoryTextElement(
      * wide — BEFORE its own [scale], which the scene applies as a layer transform. Same
      * law as the reader ([StoryTextMetrics]), so what the author sees is what is read.
      */
+    /** The glyph outline stroke in pixels on a scene [canvasWidthPx] wide, before [scale] — the reader's law (#12324). */
+    fun previewOutlinePx(canvasWidthPx: Float): Float =
+        StoryTextMetrics.designPx(outline.width.toDouble(), 1.0, canvasWidthPx)
+
+
     fun previewFontPx(canvasWidthPx: Float): Float =
         StoryTextMetrics.fontPx(size.designSize.toDouble(), 1.0, canvasWidthPx)
 

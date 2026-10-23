@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="composer_object_editor_adjust_blur">Desenfoque</string>
+    <string name="composer_object_editor_adjust_brightness">Brillo</string>
+    <string name="composer_object_editor_adjust_contrast">Contraste</string>
+    <string name="composer_object_editor_adjust_exposure">Exposición</string>
+    <string name="composer_object_editor_adjust_reset">Restablecer</string>
+    <string name="composer_object_editor_adjust_saturation">Saturación</string>
+    <string name="composer_object_editor_adjust_sharpness">Nitidez</string>
+    <string name="composer_object_editor_adjust_temperature">Temperatura</string>
+    <string name="composer_object_editor_adjust_vibrance">Intensidad</string>
+    <string name="composer_object_editor_adjust_vignette">Viñeta</string>
+    <string name="composer_object_editor_effects_bloom">Resplandor</string>
+    <string name="composer_object_editor_effects_grain">Grano</string>
     <string name="stories_action_delete">Eliminar</string>
     <string name="stories_action_react">Reaccionar</string>
     <string name="stories_action_report">Denunciar</string>
@@ -95,6 +107,8 @@
     <string name="story_composer_grabber">Asa de la barra de herramientas</string>
     <string name="story_composer_grabber_hint_dismiss">Arrastra hacia abajo para reducir o cerrar.</string>
     <string name="story_composer_grabber_hint_resize">Arrastra hacia arriba para ampliar, hacia abajo para reducir o cerrar.</string>
+    <string name="story_composer_redo">Rehacer</string>
+    <string name="story_composer_undo">Deshacer</string>
     <string name="story_send_caption_hint">Añadir un mensaje…</string>
     <string name="story_send_loading">Cargando conversaciones…</string>
     <plurals name="story_send_members">
@@ -110,4 +124,6 @@
     <string name="story_tool_text">Texto</string>
     <string name="story_tool_texture">Fondo</string>
     <string name="story_tool_timeline">Timeline</string>
+    <string name="story_tray_menu_profile">Ver el perfil</string>
+    <string name="story_tray_menu_viewStories">Ver las stories</string>
 </resources>

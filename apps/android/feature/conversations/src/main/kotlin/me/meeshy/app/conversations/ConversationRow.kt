@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -26,11 +27,8 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,11 +39,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +57,8 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.currentUserRole
+import me.meeshy.sdk.model.avatar.AvatarContext
+import me.meeshy.sdk.model.avatar.ConversationHere as AvatarHere
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.model.resolvedLastMessagePreview
 import me.meeshy.sdk.theme.DynamicColorGenerator
@@ -63,6 +66,8 @@ import me.meeshy.sdk.theme.accentColorPalette
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyUnreadBadge
+import me.meeshy.ui.component.swipe.SwipeAction
+import me.meeshy.ui.component.swipe.SwipeableRow
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -75,7 +80,6 @@ import me.meeshy.ui.theme.hexColor
 import java.time.ZoneId
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ConversationRow(
     model: ConversationRowModel,
@@ -85,29 +89,20 @@ internal fun ConversationRow(
     val isPinned = prefs?.isPinned == true
     val isArchived = prefs?.isArchived == true
 
-    // Swipe snaps back after firing the action (non-destructive) — the visual
-    // outcome is the row re-sorting/re-filtering itself once the cache mutates.
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> actions.onTogglePin()
-                SwipeToDismissBoxValue.EndToStart -> actions.onToggleArchive()
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-            false
-        },
+    val pinLabel = stringResource(
+        if (isPinned) R.string.conversations_action_unpin else R.string.conversations_action_pin,
     )
+    val archiveLabel = stringResource(
+        if (isArchived) R.string.conversations_action_unarchive else R.string.conversations_action_archive,
+    )
+    val leadingActions = remember(pinLabel, actions.onTogglePin) {
+        listOf(SwipeAction(Icons.Filled.PushPin, pinLabel, MeeshyPalette.Warning, actions.onTogglePin))
+    }
+    val trailingActions = remember(archiveLabel, actions.onToggleArchive) {
+        listOf(SwipeAction(Icons.Filled.Archive, archiveLabel, MeeshyPalette.Indigo500, actions.onToggleArchive))
+    }
 
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = {
-            SwipeActionBackground(
-                direction = dismissState.dismissDirection,
-                isPinned = isPinned,
-                isArchived = isArchived,
-            )
-        },
-    ) {
+    SwipeableRow(leadingActions = leadingActions, trailingActions = trailingActions) {
         ConversationRowContent(model = model, actions = actions)
     }
 }
@@ -194,6 +189,20 @@ private fun ConversationRowContent(
             secondaryAccent.copy(alpha = gradient.bottomOpacity),
         ),
     )
+    val relativeTime = conversationRowRelativeTime(conversation, model.nowMillis)
+    val accessibilityLabel = ConversationRowAccessibility.label(
+        title = title,
+        spokenPreview = ConversationRowAccessibility.spokenPreview(rowPreview),
+        relativeTime = relativeTime,
+        unreadCount = conversation.unreadCount,
+        isMuted = isMuted,
+        isPinned = isPinned,
+        hasPendingSync = model.hasPendingSync,
+        strings = conversationRowAccessibilityStrings(),
+    )
+    val opensConversation = stringResource(R.string.row_a11y_opens_conversation)
+    val joinCallDescription = stringResource(R.string.row_join_call_a11y)
+    val showsJoin = ConversationRowJoinCall.isVisible(model.callInProgress, isLocked, typingLine != null)
     Box {
         MeeshyGlassSurface(
             shape = RoundedCornerShape(MeeshyRadius.xl),
@@ -201,6 +210,7 @@ private fun ConversationRowContent(
                 .fillMaxWidth()
                 .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs)
                 .combinedClickable(
+                    onClickLabel = opensConversation,
                     onClick = actions.onClick,
                     onLongClick = {
                         actions.onLoadPreview()
@@ -208,10 +218,21 @@ private fun ConversationRowContent(
                     },
                 )
                 .alpha(ConversationRowAppearance.rowOpacity(isMuted))
-                // Merged, never overridden: TalkBack reads the name, the pinned/muted/locked
-                // badges, the preview line, the time and the spoken unread count together
-                // (parity iOS `accessibilityElement(children: .combine)` + label).
-                .semantics(mergeDescendants = true) { role = Role.Button },
+                // One spoken sentence (parity iOS `conversationAccessibilityLabel`): conversation
+                // with X, preview, time, unread, muted, pinned, sync pending — the children are
+                // folded into it, so no badge is read twice.
+                .clearAndSetSemantics {
+                    role = Role.Button
+                    contentDescription = accessibilityLabel
+                    if (showsJoin) {
+                        customActions = listOf(
+                            CustomAccessibilityAction(joinCallDescription) {
+                                actions.onJoinCall()
+                                true
+                            },
+                        )
+                    }
+                },
         ) {
             Row(
                 modifier = Modifier
@@ -222,10 +243,12 @@ private fun ConversationRowContent(
             ) {
             MeeshyAvatar(
                 name = title,
+                context = AvatarContext.ConversationList,
                 containerColor = primaryAccent,
                 presence = model.presence,
                 storyRing = model.storyRing,
                 moodEmoji = model.moodEmoji,
+                here = model.peerHere.toAvatarHere(),
             )
             Column(
                 modifier = Modifier
@@ -283,18 +306,33 @@ private fun ConversationRowContent(
                         )
                     }
                 }
-                ConversationRowPreviewLine(
-                    preview = rowPreview,
-                    primaryAccent = primaryAccent,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.weight(1f, fill = false)) {
+                        ConversationRowPreviewLine(
+                            preview = rowPreview,
+                            primaryAccent = primaryAccent,
+                        )
+                    }
+                    if (showsJoin) {
+                        ConversationRowJoinButton(accent = primaryAccent, onClick = actions.onJoinCall)
+                    }
+                }
             }
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             ) {
-                conversationRowRelativeTime(conversation, model.nowMillis)?.let { relativeTime ->
+                if (model.hasPendingSync) {
+                    Icon(
+                        imageVector = Icons.Filled.Sync,
+                        contentDescription = null,
+                        tint = primaryAccent.copy(alpha = PENDING_SYNC_ALPHA),
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+                relativeTime?.let { timeLabel ->
                     Text(
-                        text = relativeTime,
+                        text = timeLabel,
                         style = MaterialTheme.typography.labelSmall,
                         // A third level of text whatever the read state (parity iOS
                         // `timestampColor`): the unread news is the badge, never a red time.
@@ -345,6 +383,36 @@ private fun ConversationRowContent(
             onCreateCategory = actions.onCreateCategory,
             isLocked = isLocked,
             onLockToggle = actions.onLockToggle,
+            onViewInfo = actions.onViewInfo,
+            onViewProfile = actions.onViewProfile,
+            onCreateShareLink = actions.onCreateShareLink,
         )
     }
 }
+
+/** Opacité de l'icône de synchro en attente : discrète (iOS `MeeshyOpacity.heavy`). */
+private const val PENDING_SYNC_ALPHA = 0.8f
+
+/** Les libellés parlés de la ligne, résolus une fois par composition. */
+@Composable
+private fun conversationRowAccessibilityStrings(): ConversationRowAccessibility.Strings {
+    val resources = LocalContext.current.resources
+    val conversationWith = stringResource(R.string.row_a11y_conversation_with)
+    val lastMessage = stringResource(R.string.row_a11y_last_message)
+    val muted = stringResource(R.string.row_a11y_muted)
+    val pinned = stringResource(R.string.row_a11y_pinned)
+    val pendingSync = stringResource(R.string.row_a11y_pending_sync)
+    return remember(resources, conversationWith, lastMessage, muted, pinned, pendingSync) {
+        ConversationRowAccessibility.Strings(
+            conversationWith = { conversationWith.format(it) },
+            lastMessage = { lastMessage.format(it) },
+            unread = { resources.getQuantityString(R.plurals.row_a11y_unread_count, it, it) },
+            muted = muted,
+            pinned = pinned,
+            pendingSync = pendingSync,
+        )
+    }
+}
+
+private fun me.meeshy.sdk.model.presence.ConversationHere.toAvatarHere(): AvatarHere =
+    AvatarHere.valueOf(name)

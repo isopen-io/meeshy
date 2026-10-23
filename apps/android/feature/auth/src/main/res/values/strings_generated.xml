@@ -44,8 +44,14 @@
     <string name="guest_join_back">Back</string>
     <string name="guest_join_birthday">Birthday</string>
     <string name="guest_join_email">Email</string>
+    <string name="guest_join_email_optional">Email (optional)</string>
+    <string name="guest_join_error_join_failed">Error joining conversation</string>
+    <string name="guest_join_error_link_not_found">This conversation link could not be found</string>
+    <string name="guest_join_error_too_many_users">Too many users connected</string>
     <string name="guest_join_first_name">First name</string>
     <string name="guest_join_last_name">Last name</string>
+    <string name="guest_join_optional_section">Optional</string>
+    <string name="guest_join_required_section">Required information</string>
     <string name="guest_join_retry">Retry</string>
     <string name="guest_join_sign_in">Sign in</string>
     <string name="guest_join_submit">Join</string>
@@ -64,8 +70,14 @@
     <string name="login_signup_prompt">No account?</string>
     <string name="login_username_label">Username</string>
     <string name="logout_in_progress">Logging out...</string>
+    <string name="onboarding_friends_badge">+%d each</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d sparks to reach level 1</string>
     <string name="onboarding_gauge_reached">Level 1 reached 🎉</string>
+    <string name="onboarding_global_sample_1">Hi from São Paulo 👋</string>
+    <string name="onboarding_global_sample_2">Who\'s into Nova Club? 🎧</string>
+    <string name="onboarding_global_sample_3">Welcome!</string>
+    <string name="onboarding_languages_demo_translated">Hi, how are you?</string>
+    <string name="onboarding_notifications_sample">Lina replied to you in Meeshy Global</string>
     <plurals name="onboarding_points_a11y">
         <item quantity="one">%d spark earned</item>
         <item quantity="other">%d sparks earned</item>
@@ -80,6 +92,7 @@
         <item quantity="other">Plus %d sparks</item>
     </plurals>
     <string name="onboarding_skipAll">Skip all</string>
+    <string name="onboarding_story_badge">24h</string>
     <string name="registration_back">Back</string>
     <string name="session_closed_continue">Sign in again</string>
     <string name="session_closed_signed_out_message">This session was closed. Sign in again to continue.</string>
@@ -104,7 +117,9 @@
     <string name="signup_password_hide">Hide password</string>
     <string name="signup_password_label">Password</string>
     <string name="signup_password_show">Show password</string>
+    <string name="signup_phone_implausible">This number doesn’t look real — please check it.</string>
     <string name="signup_phone_label">Phone</string>
+    <string name="signup_phone_too_short">This number is too short: at least %d digits.</string>
     <string name="signup_sign_in">Log in</string>
     <string name="signup_subtitle">You’ll read everyone in your own language.</string>
     <string name="signup_title">Create your account</string>

@@ -21,6 +21,13 @@ import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import java.util.concurrent.CancellationException
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.PostReactionPick
+import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
 import javax.inject.Inject
 
 data class ReelsUiState(
@@ -42,7 +49,14 @@ class ReelsViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val clock: CacheClock,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
+    private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
 ) : ViewModel() {
+
+    /** Les émojis de la palette : les mêmes, dans le même ordre que messages et stories (récents d'abord). */
+    val quickEmojis: StateFlow<List<String>> = emojiUsageStore.usage
+        .map { emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size))
+
 
     private val _state = MutableStateFlow(ReelsUiState())
     val state: StateFlow<ReelsUiState> = _state.asStateFlow()
@@ -334,6 +348,20 @@ class ReelsViewModel @Inject constructor(
             val result = if (before.isLiked) postRepository.unlike(reelId) else postRepository.like(reelId)
             if (result is NetworkResult.Failure) {
                 updateReel(reelId) { it.copy(isLiked = before.isLiked, likeCount = before.likeCount) }
+            }
+        }
+    }
+
+    /**
+     * Le choix d'un émoji dans la palette du cœur d'un réel : le cœur garde son bascule optimiste
+     * ([toggleLike], `heartInFlight` côté iOS), tout autre émoji est additif et sans état local.
+     */
+    fun react(reelId: String, pick: PostReactionPick) {
+        when (pick) {
+            PostReactionPick.Heart -> toggleLike(reelId)
+            is PostReactionPick.Other -> viewModelScope.launch {
+                emojiUsageStore.record(pick.emoji)
+                postRepository.react(reelId, pick.emoji)
             }
         }
     }

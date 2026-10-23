@@ -44,8 +44,14 @@
     <string name="guest_join_back">Indietro</string>
     <string name="guest_join_birthday">Compleanno</string>
     <string name="guest_join_email">E-mail</string>
+    <string name="guest_join_email_optional">Email (facoltativa)</string>
+    <string name="guest_join_error_join_failed">Errore durante la connessione</string>
+    <string name="guest_join_error_link_not_found">Questo link di conversazione non esiste</string>
+    <string name="guest_join_error_too_many_users">Troppi utenti connessi</string>
     <string name="guest_join_first_name">Nome</string>
     <string name="guest_join_last_name">Cognome</string>
+    <string name="guest_join_optional_section">Facoltativo</string>
+    <string name="guest_join_required_section">Informazioni richieste</string>
     <string name="guest_join_retry">Riprova</string>
     <string name="guest_join_sign_in">Accedi</string>
     <string name="guest_join_submit">Unisciti</string>
@@ -64,8 +70,14 @@
     <string name="login_signup_prompt">Non hai un account?</string>
     <string name="login_username_label">Nome utente</string>
     <string name="logout_in_progress">Disconnessione in corso...</string>
+    <string name="onboarding_friends_badge">+%d a testa</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d scintille per il tuo livello 1</string>
     <string name="onboarding_gauge_reached">Livello 1 raggiunto 🎉</string>
+    <string name="onboarding_global_sample_1">Ciao da São Paulo 👋</string>
+    <string name="onboarding_global_sample_2">Chi ascolta i Nova Club? 🎧</string>
+    <string name="onboarding_global_sample_3">Benvenuto/a!</string>
+    <string name="onboarding_languages_demo_translated">Ciao, come va?</string>
+    <string name="onboarding_notifications_sample">Lina ti ha risposto in Meeshy Global</string>
     <plurals name="onboarding_points_a11y">
         <item quantity="one">%d scintilla guadagnata</item>
         <item quantity="many">%d scintille guadagnate</item>
@@ -83,6 +95,7 @@
         <item quantity="other">Più %d scintille</item>
     </plurals>
     <string name="onboarding_skipAll">Salta tutto</string>
+    <string name="onboarding_story_badge">24 h</string>
     <string name="registration_back">Indietro</string>
     <string name="session_closed_continue">Accedi di nuovo</string>
     <string name="session_closed_signed_out_message">Questa sessione è stata chiusa. Accedi di nuovo per continuare.</string>
@@ -107,7 +120,9 @@
     <string name="signup_password_hide">Nascondi password</string>
     <string name="signup_password_label">Password</string>
     <string name="signup_password_show">Mostra password</string>
+    <string name="signup_phone_implausible">Questo numero non sembra reale: controllalo.</string>
     <string name="signup_phone_label">Telefono</string>
+    <string name="signup_phone_too_short">Questo numero è troppo corto: almeno %d cifre.</string>
     <string name="signup_sign_in">Accedi</string>
     <string name="signup_subtitle">Leggerai tutti nella tua lingua.</string>
     <string name="signup_title">Crea il tuo account</string>

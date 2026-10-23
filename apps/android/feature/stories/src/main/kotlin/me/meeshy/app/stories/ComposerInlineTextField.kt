@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.TextFieldValue
  * soft keyboard, with the caret after what the object already says. While it is mounted
  * this field is the object's only writer, so its buffer is keyed by [elementId] and never
  * re-seeded from [text] mid-typing (a lagging state echo would otherwise eat keystrokes).
+ * An [outlineStyle] strokes the glyphs beneath the fill, inside the field's own box.
  */
 @Composable
 internal fun ComposerInlineTextField(
@@ -32,6 +33,7 @@ internal fun ComposerInlineTextField(
     style: TextStyle,
     onTextChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    outlineStyle: TextStyle? = null,
 ) {
     var value by remember(elementId) { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
     val focusRequester = remember { FocusRequester() }
@@ -47,6 +49,11 @@ internal fun ComposerInlineTextField(
         modifier = modifier.focusRequester(focusRequester),
         decorationBox = { field ->
             Box {
+                if (outlineStyle != null && value.text.isNotEmpty()) {
+                    // The glyph outline, laid out in the field's own box so it hugs the
+                    // letters being typed (a sibling underlay drifts from the field's layout).
+                    Text(text = value.text, style = outlineStyle, modifier = Modifier.matchParentSize())
+                }
                 if (value.text.isEmpty()) {
                     Text(text = placeholder, style = style.copy(color = style.color.copy(alpha = PLACEHOLDER_ALPHA)))
                 }

@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.scene.StoryTextOutline
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -51,5 +52,28 @@ class StoryTextComposerReaderParityTest {
         assertThat(StoryTextStyle.fromWire(null)).isEqualTo(StoryTextStyle.BOLD)
         assertThat(StoryTextStyle.fromWire("glitch")).isEqualTo(StoryTextStyle.BOLD)
         assertThat(StoryTextStyle.fromWire("typewriter")).isEqualTo(StoryTextStyle.TYPEWRITER)
+    }
+
+    @Test
+    fun `a published outline keeps in the reader its colour and the stroke it had on the composer scene (#12324)`() {
+        listOf(2f, 8f, 12f).forEach { width ->
+            val element = StoryTextElement(
+                id = "t", text = "Story", scale = 1.5f, outline = StoryTextOutline(width = width, color = "FF3B30"),
+            )
+            val reader = readerViewOf(element)
+
+            assertThat(reader.outline).isEqualTo(element.outline)
+            listOf(360f, 1080f).forEach { canvasWidth ->
+                val composerPx = element.previewOutlinePx(canvasWidth) * element.scale
+                assertThat(reader.outlinePx(canvasWidth)).isWithin(0.01f).of(composerPx)
+            }
+        }
+        assertThat(StoryTextElement(id = "t", outline = StoryTextOutline(width = 8f, color = "FFFFFF")).previewOutlinePx(540f))
+            .isWithin(0.01f).of(4f)
+    }
+
+    @Test
+    fun `a text without outline reads without one`() {
+        assertThat(readerViewOf(StoryTextElement(id = "t", text = "Story")).outline.isVisible).isFalse()
     }
 }

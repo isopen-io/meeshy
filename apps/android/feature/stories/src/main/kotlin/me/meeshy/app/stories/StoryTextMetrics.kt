@@ -11,7 +11,13 @@ object StoryTextMetrics {
     const val DESIGN_CANVAS_WIDTH: Float = 1080f
 
     fun fontPx(fontSize: Double, scale: Double, canvasWidthPx: Float): Float =
-        (fontSize * scale).toFloat()
-            .times(canvasWidthPx / DESIGN_CANVAS_WIDTH)
-            .coerceAtLeast(1f)
+        designPx(fontSize, scale, canvasWidthPx).coerceAtLeast(1f)
+
+    /**
+     * Any other design-pixel length of a text — its glyph outline (`borderWidth`, iOS
+     * `StoryTextLayer`: design px, scaled with the font) — mapped by the same law, with no
+     * floor: a zero stays zero (#12324).
+     */
+    fun designPx(value: Double, scale: Double, canvasWidthPx: Float): Float =
+        (value * scale).toFloat().times(canvasWidthPx / DESIGN_CANVAS_WIDTH).coerceAtLeast(0f)
 }

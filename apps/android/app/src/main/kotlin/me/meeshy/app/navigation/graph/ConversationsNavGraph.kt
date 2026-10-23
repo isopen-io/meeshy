@@ -14,6 +14,7 @@ import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.conversations.ConversationListScreen
+import me.meeshy.app.conversations.ConversationRowNavigation
 import me.meeshy.app.conversations.CreateShareLinkScreen
 import me.meeshy.app.conversations.CreateShareLinkViewModel
 import me.meeshy.app.conversations.DashboardScreen
@@ -22,9 +23,9 @@ import me.meeshy.app.conversations.MyShareLinksScreen
 import me.meeshy.app.conversations.NewConversationScreen
 import me.meeshy.app.conversations.ShareLinkDetailScreen
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
-import me.meeshy.app.conversations.ShareLinkPickerScreen
 import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
+import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.stories.StoriesViewModel
 import me.meeshy.app.stories.StoryTray
@@ -57,21 +58,22 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 StoryTray(
                     onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
                     onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
+                    onShowProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                     viewModel = storiesViewModel,
                 )
             },
             onRefresh = storiesViewModel::refresh,
+            rowNavigation = ConversationRowNavigation(
+                onViewProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+                onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
+            ),
         )
     }
     composable(Routes.SHARE_LINK_PICKER) {
-        ShareLinkPickerScreen(
+        CreateShareLinkScreen(
             onBack = { navController.popBackStack() },
+            onCreated = { navController.popBackStack() },
             onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
-            onSelectConversation = { conversationId ->
-                navController.navigate(Routes.createShareLink(conversationId)) {
-                    popUpTo(Routes.SHARE_LINK_PICKER) { inclusive = true }
-                }
-            },
         )
     }
     composable(Routes.GLOBAL_SEARCH) {
@@ -155,6 +157,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         val conversationId = entry.arguments
             ?.getString(ChatViewModel.CONVERSATION_ID_ARG)
             .orEmpty()
+        ReportsConversationViewing(conversationId)
         ChatScreen(
             onBack = { navController.popBackStack() },
             onStartCall = { peerName, isVideo ->
@@ -186,8 +189,8 @@ internal fun NavGraphBuilder.conversationsNavGraph(
     composable(Routes.STARRED) {
         StarredMessagesScreen(
             onBack = { navController.popBackStack() },
-            onOpenConversation = { conversationId ->
-                navController.navigate(Routes.chat(conversationId))
+            onOpenMessage = { conversationId, messageId ->
+                navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
             },
         )
     }

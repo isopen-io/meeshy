@@ -5671,6 +5671,48 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 
 **Gardes.** `lib/media/recent-media-policy.test.ts`, `lib/media/recent-media-store.test.ts`, `lib/media/use-remember-seen-media.test.tsx`, `src/sw-recent-media.test.ts` (plages, 416, expiré, `no-store`, jumeaux, import et retrait de la coque), `lib/shell/recent-media-worker.test.ts`, `scripts/check-shell-dist.test.ts`, `lib/api/query-client.test.ts` (purge de fin de compte).
 
+## D-220 — Un vocal se lit au niveau perçu de −16 LUFS : atténué par le volume de l'élément, amplifié par un graphe Web Audio limité, l'original seulement (2026-10-23, #12285 côté web ; consomme S4 #11259)
+
+**Contexte.** La passerelle ne réencode plus un vocal AAC : il garde son niveau d'origine, et sa sonie intégrée EBU R128 est mesurée et servie (`Attachment.loudnessLufs`). Sans correction à la lecture, un vocal d'iPhone faible se lit plus bas qu'un vocal web normalisé.
+
+**Décision.**
+- **La loi** (`lib/media/loudness.ts`) : gain `−16 − loudnessLufs` dB, plafonné à +12 dB ; champ absent, `null` ou non fini ⇒ 0. Une piste TRADUITE (TTS) n'est pas le fichier mesuré : aucun gain.
+- **Atténuer** passe par `HTMLMediaElement.volume`, sans graphe ni CORS.
+- **Amplifier** passe par un graphe Web Audio partagé (source → gain → limiteur à −1 dBFS, ratio 20 → sortie), qui retient les crêtes que le gain ferait écrêter. **Sûr par défaut (tour 5)** : un élément branché sur un graphe alors que sa réponse n'est pas lisible en CORS sort du SILENCE. Le graphe n'est donc branché qu'après deux preuves : une sonde `HEAD` en mode `cors`, une fois par origine (la route de flux rend `Access-Control-Allow-Origin: *`, `download.ts`), puis les métadonnées lues par un élément PARTI en `crossOrigin="anonymous"`. Un élément parti sans le mode CORS le garde, sans gain ; un élément en CORS qui échoue est remonté en lecture directe et l'origine perd sa preuve. Sans preuve : lecture directe, volume d'origine, jamais muette.
+- **Sites** : la bulle (`attachment-blocks.tsx`), la page plein écran (`viewer-audio-page.tsx`) et le mini-lecteur (`mini-audio-player.tsx`), par `useLoudnessLevel` (`lib/media/loudness-level.ts`).
+
+**Repli navigateur.** Safari iOS ignore `volume` : l'atténuation n'y a pas lieu, l'amplification y passe par le graphe. Sans `AudioContext`, rien ne change.
+
+**Ce que ce lot ne fait pas.** iOS (`packages/MeeshySDK`) et Android restent à faire (#12285 reste ouverte). Les citations et la bannière de notification jouent encore sans gain. Rien n'est mesuré ici.
+
+**Gardes.** `lib/media/loudness.test.ts`, `lib/media/loudness-level.test.ts`, `lib/media/loudness-cors.test.tsx` (une source sans CORS joue sans gain), `components/voice-loudness.test.tsx`.
+
+## D-221 — La boutique dit ce qui reste à débloquer d'un pack, et n'offre le geste qu'une fois débloqué (2026-10-23, #11324 ; consomme S21 #11276)
+
+**Contexte.** Un pack récompensé (rang, trophée, saison) ou à fenêtre apparaissait en boutique sans dire comment l'obtenir. Pire : un pack sans prix était décodé « possédé » d'office (`owned: price === null`), et la boutique offrait « Installer » sur un pack que le serveur refuse (`not-owned`). La passerelle sert désormais `requirementPreview` (`PackRequirementPreview`, `packages/shared/types/pack-unlock.ts`) pour chaque pack du registre NON possédé qui se gagne ou qui a une fenêtre.
+
+**Décision.**
+- **Le décodage** (`lib/api/packs-shop.ts`) valide `requirementPreview` à la frontière et ignore une forme inattendue. Un pack sans prix qui porte un aperçu suit le `owned` servi ; sans aperçu (ancien serveur, pack libre), rien ne change.
+- **Une ligne** (`lib/packs/unlock-line.ts`, `packUnlockLine`) : la Gloire qui manque (et le rang visé dès que le catalogue du jeu est chargé), le trophée, la saison, puis la fenêtre (à partir du…, jusqu'au…, plus proposé). Une récompense remplie ne se redit pas. Sept langues (`catalog-sticker-packs-<langue>.ts`).
+- **Le geste** : tant que l'aperçu n'est pas rempli (`packIsLocked`), la rangée montre « À débloquer » à la place de « Installer » ou « Acheter ». Un pack payant à fenêtre ouverte reste achetable. Le serveur reste juge.
+
+**Gardes.** `lib/packs/unlock-line.test.ts`, `lib/api/packs-shop-unlock.test.ts`, `components/unified-shop-unlock.test.tsx`.
+
+## D-218 — Le web choisit le rendu servi : l'AVIF avant le WebP dans une `<picture>`, l'original HD en `src` ; une vidéo HEVC joue son rendu H.264 là où le navigateur ou le tier le demandent (2026-10-23, #11318 ; consomme S7 #11262 et S6 #11261)
+
+**Contexte.** La passerelle sert désormais, à côté de `imageVariants` (WebP), une liste `avifVariants` aux mêmes largeurs, et à côté de l'original d'une vidéo HEVC un rendu `renditions[codec = 'h264']` ≤ 1080p mappé en SDR BT.709. Le web ne lisait que le WebP et jouait toujours l'original : une vidéo d'iPhone restait noire sur Chrome sans décodeur HEVC et dans la coque Android.
+
+**Décision.**
+- **Image : `ServedPicture`** (`components/served-picture.tsx`) enveloppe l'`<img>` de la grille (`ImageTile`, `GridCellImage`) dans une `<picture>` dont la `<source type="image/avif">` porte les variantes AVIF au MÊME `sizes` que l'image. L'`<img>` garde son `srcset` WebP et son `src`, l'original HD : la visionneuse plein écran le sert toujours (verdict du porteur, la photo reste HD), et un navigateur sans AVIF retombe sur le WebP sans rien demander. Sans AVIF, aucune `<picture>` : le DOM d'avant. Les deux listes sont lues par `attachmentPictureSrcSets` (`lib/api/media-url.ts`), qui filtre le format de chacune — jamais un AVIF dans le `srcset` WebP.
+- **Vidéo : une loi pure, `electVideoSource`** (`lib/media/video-rendition.ts`). Sans rendu H.264 ⇒ l'original. Navigateur sans HEVC ⇒ le rendu, quel que soit le tier. Tier `low` ⇒ le rendu ; `mid` ⇒ le plus léger des deux ; `high`/`pro` ⇒ l'original (HDR). Le tier est celui de W10 (`capability-tier.ts`), jamais un seuil local. La sonde HEVC (`canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"')`) vit dans `lib/media/served-video.ts`, mémoïsée une fois par session ; la tuile vidéo et la page plein écran lisent `useServedVideoSrc`, élue une fois par pièce montée sur des primitives : un tier qui change en cours de lecture ne recharge pas la vidéo.
+- **L'administration masque les deux** : `SECRETS_DUNE_PIECE` retire `avifVariants` et `renditions` d'une pièce voilée, comme `imageVariants`.
+
+**Repli navigateur.** Safari 16+ décode l'AVIF et le HEVC : il reçoit l'AVIF et l'original. Chrome et la WebView Android décodent l'AVIF ; le HEVC dépend du matériel, et la sonde le dit. Firefox ne décode pas le HEVC : il reçoit le H.264.
+
+**Ce que ce lot ne fait pas.** Les médias de POSTS (fil, réels) ne lisent encore ni variantes ni rendus (`lib/feed/card-model.ts` sert `fileUrl`) : issue de suivi. Rien n'est mesuré ici (poids servi, temps à la première image) : argumenté, non mesuré.
+
+**Gardes.** `lib/media/video-rendition.test.ts`, `lib/media/served-video.test.ts`, `lib/api/media-url.test.ts` (`attachmentPictureSrcSets`), `components/served-rendition.test.tsx` (DOM de la grille et de la tuile vidéo), `lib/api/admin-conversations.test.ts` (masquage).
+
 ## D-219 — Une photo HEIC choisie sur Android ou Chrome part telle quelle et la passerelle la convertit ; l'aperçu attend la vignette servie ; un refus nomme le format (2026-10-23, #11315 ; consomme S8 #11263)
 
 **Contexte.** Seul Safari décode le HEIC. Sur Chrome et dans la coque Android, une photo HEIC choisie pour le profil était dite « illisible » (la recompression lève) et rien ne partait ; dans un message, elle partait telle quelle mais une passerelle qui ne la connaissait pas l'avalait sous `success: true`, et l'échec se disait « une pièce n'a pas pu être téléversée ». La passerelle accepte désormais HEIC/HEIF/AVIF, sert un JPEG (`fileUrl`) et garde l'original (`renditions[codec = 'heic']`).

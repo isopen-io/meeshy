@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.entity.OutboxEntity
@@ -22,6 +24,7 @@ import javax.inject.Singleton
 class OutboxRepository @Inject constructor(
     private val database: MeeshyDatabase,
     private val outboxDao: OutboxDao,
+    private val ownerSource: OutboxOwnerSource = OutboxOwnerSource { null },
 ) {
     private val _outcomes = MutableSharedFlow<OutboxOutcome>(extraBufferCapacity = 128)
 
@@ -36,7 +39,7 @@ class OutboxRepository @Inject constructor(
      * @return the persisted row's `cmid`, or `null` if it annihilated existing rows.
      */
     suspend fun enqueue(mutation: OutboxMutation): String? {
-        val incoming = mutation.toEntity(now())
+        val incoming = mutation.toEntity(now(), ownerSource.currentOwnerId())
         val decision = database.withTransaction {
             val pending = outboxDao.deliverableForLane(incoming.lane)
                 .filter { it.stateEnum == OutboxState.PENDING }
@@ -147,7 +150,7 @@ class OutboxRepository @Inject constructor(
      * Records a failed attempt: back to `PENDING` for another try, or `EXHAUSTED`
      * (with an [OutboxOutcome.Exhausted] signal) once [MAX_ATTEMPTS] is reached.
      */
-    suspend fun markFailed(cmid: String): OutboxState {
+    suspend fun markFailed(cmid: String, reason: String? = null): OutboxState {
         val row = outboxDao.find(cmid) ?: return OutboxState.PENDING
         val attempts = row.attempts + 1
         return if (attempts >= MAX_ATTEMPTS) {
@@ -156,6 +159,7 @@ class OutboxRepository @Inject constructor(
             OutboxState.EXHAUSTED
         } else {
             outboxDao.updateState(cmid, OutboxState.PENDING.name, attempts, now())
+            reason?.let { outboxDao.recordError(cmid, it, now()) }
             OutboxState.PENDING
         }
     }
@@ -164,16 +168,94 @@ class OutboxRepository @Inject constructor(
     suspend fun markExhausted(cmid: String, reason: String) {
         val row = outboxDao.find(cmid) ?: return
         outboxDao.updateState(cmid, OutboxState.EXHAUSTED.name, row.attempts, now())
+        outboxDao.recordError(cmid, reason, now())
         emit(OutboxOutcome.Exhausted(cmid, reason))
     }
 
     /**
+     * A row whose payload cannot be decoded: it would fail identically forever, so it leaves the
+     * queue after the [OutboxOutcome.Exhausted] outcome is published (the optimistic effect rolls
+     * back from that signal) — never replayed in a loop, never kept as a dead row.
+     */
+    suspend fun discardUnreadable(cmid: String, reason: String) {
+        outboxDao.deleteAll(listOf(cmid))
+        emit(OutboxOutcome.Exhausted(cmid, reason))
+    }
+
+    /**
+     * A deferred row (its transfer origin is not delivered yet) waits without being charged an
+     * attempt. The wait clock starts at the first deferral and is kept across later ones.
+     *
+     * @return `true` while the row may keep waiting, `false` once [maxWaitMs] is exceeded and the
+     *   row has been exhausted.
+     */
+    suspend fun defer(cmid: String, reason: String, retryAfterMs: Long, maxWaitMs: Long): Boolean {
+        val row = outboxDao.find(cmid) ?: return false
+        val at = now()
+        val since = row.waitingSince ?: at
+        if (at - since > maxWaitMs) {
+            markExhausted(cmid, "Deferred too long: $reason")
+            return false
+        }
+        outboxDao.defer(cmid, nextAttemptAt = at + retryAfterMs, waitingSince = since, now = at)
+        outboxDao.recordError(cmid, reason, at)
+        return true
+    }
+
+    /** Reclaims rows left `INFLIGHT` for longer than [staleAfterMs] (a worker killed mid-send). */
+    suspend fun reclaimStaleInflight(staleAfterMs: Long = STALE_INFLIGHT_MS): Int {
+        val at = now()
+        return outboxDao.reclaimStaleInflight(staleBefore = at - staleAfterMs, now = at)
+    }
+
+    /** Whether a [kind] row anchored on [anchor] is still on its way (exhausted rows do not count). */
+    suspend fun hasUnsentRow(kind: OutboxKind, anchor: String): Boolean =
+        outboxDao.hasUnsentRow(kind.name, anchor)
+
+    /**
+     * The anchors (`targetId`) that still owe the server a write of one of [kinds], live. A row
+     * leaves the set the instant it is delivered (the row is deleted) or gives up (exhausted).
+     * Emits only on a real change of the set.
+     */
+    fun observePendingTargets(vararg kinds: OutboxKind): Flow<Set<String>> =
+        outboxDao.observePendingTargets(kinds.map { it.name })
+            .map { it.toSet() }
+            .distinctUntilChanged()
+
+    /** Rows the "Synchronisation…" indicator counts, live. */
+    fun observeSyncIndicatorCount(): Flow<Int> =
+        outboxDao.observeActiveCount(OutboxKindCatalog.syncIndicatorExcludedDiskValues)
+
+    /** Head of the queue for the sync pill, capped at [TOP_OF_QUEUE_LIMIT]. */
+    fun observeTopOfQueue(): Flow<List<OutboxEntity>> =
+        outboxDao.observeTop(OutboxKindCatalog.syncIndicatorExcludedDiskValues, TOP_OF_QUEUE_LIMIT)
+
+    /**
+     * Garbage-collects rows that gave up more than [olderThanMs] ago, but only the kinds whose
+     * terminal rows are [disposable][OutboxKindMeta.terminalDisposable] — a failed send that still
+     * carries the user's text is kept.
+     *
+     * @return how many rows were removed.
+     */
+    suspend fun collectExhausted(olderThanMs: Long = EXHAUSTED_RETENTION_MS): Int {
+        val doomed = outboxDao.exhaustedOlderThan(now() - olderThanMs)
+            .filter { it.kind in OutboxKindCatalog.terminalDisposableDiskValues }
+            .map { it.cmid }
+        if (doomed.isNotEmpty()) outboxDao.deleteAll(doomed)
+        return doomed.size
+    }
+
+    /**
      * Revives an `EXHAUSTED` row for a user-initiated retry: back to `PENDING`
-     * with a fresh attempt budget. Returns `false` when the row no longer exists.
+     * with a fresh attempt budget and a clean schedule. An ownerless row (queued before
+     * authorship existed) is adopted by the signed-in account. Returns `false` when the row no longer exists.
      */
     suspend fun retry(cmid: String): Boolean {
         if (outboxDao.find(cmid) == null) return false
-        outboxDao.updateState(cmid, OutboxState.PENDING.name, 0, now())
+        val at = now()
+        outboxDao.updateState(cmid, OutboxState.PENDING.name, 0, at)
+        outboxDao.resetSchedule(cmid)
+        ownerSource.currentOwnerId()?.let { outboxDao.claimIfOwnerless(cmid, it, at) }
         return true
     }
 
@@ -233,5 +315,8 @@ class OutboxRepository @Inject constructor(
 
     companion object {
         const val MAX_ATTEMPTS: Int = 5
+        const val STALE_INFLIGHT_MS: Long = 30 * 60 * 1000L
+        const val TOP_OF_QUEUE_LIMIT: Int = 50
+        const val EXHAUSTED_RETENTION_MS: Long = 7 * 24 * 60 * 60 * 1000L
     }
 }

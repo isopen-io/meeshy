@@ -108,6 +108,9 @@ export const analyticsLanguageDistribution = '/api/v1/admin/analytics/language-d
 /** GET /api/v1/admin/analytics/message-types */
 export const analyticsMessageTypes = '/api/v1/admin/analytics/message-types';
 
+/** GET /api/v1/admin/analytics/playback */
+export const analyticsPlayback = '/api/v1/admin/analytics/playback';
+
 /** GET /api/v1/admin/analytics/realtime */
 export const analyticsRealtime = '/api/v1/admin/analytics/realtime';
 
@@ -257,6 +260,12 @@ export const opsHostMetrics = '/api/v1/admin/ops/host-metrics';
 
 /** GET /api/v1/admin/ops/status */
 export const opsStatus = '/api/v1/admin/ops/status';
+
+/** GET /api/v1/admin/packs/registry */
+export const packsRegistry = '/api/v1/admin/packs/registry';
+
+/** PUT · DELETE /api/v1/admin/packs/registry/:domain/:slug */
+export const packsRegistryByDomainBySlug = (domain: string, slug: string): string => `/api/v1/admin/packs/registry/${encodeURIComponent(domain)}/${encodeURIComponent(slug)}`;
 
 /** GET /api/v1/admin/posts */
 export const posts = '/api/v1/admin/posts';

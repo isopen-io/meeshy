@@ -95,6 +95,11 @@ class FriendListRepository @Inject constructor(
         persist(current.filterNot { it.id == userId })
     }
 
+    /** Expires the roster's freshness (the rows stay for the cold-start paint). */
+    suspend fun invalidate() {
+        syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, 0L))
+    }
+
     internal companion object {
         const val RESOURCE_KEY: String = "friends_list"
     }

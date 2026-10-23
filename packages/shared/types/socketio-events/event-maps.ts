@@ -119,7 +119,7 @@ import type { CallPreviewRequestEvent, CallPreviewRequestedEvent } from '../call
 import type { CallLiveFrameSelectEvent, CallLiveFrameSelectedEvent } from '../call-live-frame.js';
 
 import type { AgentAdminEventData } from './agent.js';
-import type { AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
+import type { AttachmentReadyEventData, AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
 import type {
   AudioTranslationFailedEventData,
   AudioTranslationReadyEventData,
@@ -248,6 +248,7 @@ import type { UserUpdatedEventData } from './user.js';
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED]: (data: AttachmentUpdatedEventData) => void;
+  [SERVER_EVENTS.ATTACHMENT_READY]: (data: AttachmentReadyEventData) => void;
   [SERVER_EVENTS.MESSAGE_EDITED]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_DELETED]: (data: MessageDeletedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EXPIRED]: (data: MessageExpiredEventData) => void;

@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextOutline
 
 /**
  * A text overlay on a slide, projected for the viewer canvas. Pure data.
@@ -47,7 +48,12 @@ data class StoryTextObjectView(
     val effect: StoryTextEffect = StoryTextEffect.NONE,
     /** The published font style ([StoryTextStyle.fromWire]) — the reader renders its typography like the composer. */
     val style: StoryTextStyle = StoryTextStyle.BOLD,
+    /** The published glyph outline ([StoryTextObject.borderWidth] / [StoryTextObject.borderColor]), design px. */
+    val outline: StoryTextOutline = StoryTextOutline(),
 ) {
+    /** The outline stroke in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
+    fun outlinePx(canvasWidthPx: Float): Float = StoryTextMetrics.designPx(outline.width.toDouble(), scale, canvasWidthPx)
+
     /** The glyph size in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
     fun fontPx(canvasWidthPx: Float): Float = StoryTextMetrics.fontPx(fontSize, scale, canvasWidthPx)
 
@@ -176,5 +182,9 @@ object StoryTextObjectProjection {
             background = StoryTextBackground.resolve(textObject.backgroundStyle, textObject.textBg),
             effect = StoryTextEffect.fromWire(textObject.textEffect),
             style = StoryTextStyle.fromWire(textObject.textStyle),
+            outline = StoryTextOutline(
+                width = textObject.borderWidth?.toFloat()?.takeIf { it > StoryTextOutline.NONE_WIDTH } ?: StoryTextOutline.NONE_WIDTH,
+                color = textObject.borderColor,
+            ),
         )
 }
