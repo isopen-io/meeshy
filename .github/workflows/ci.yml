@@ -1685,13 +1685,15 @@ jobs:
 
       # #11258 — le retrait des métadonnées vidéo se prouve par ffmpeg/ffprobe
       # RÉELS (GPS absent, paquets identiques) : la passerelle les embarque en
-      # production (Dockerfile), sa suite les exige ici.
-      - name: Install ffmpeg (gateway)
+      # production (Dockerfile), sa suite les exige ici. #11841 — la rotation
+      # JPEG sans perte se prouve par jpegtran RÉEL (libjpeg-turbo-progs).
+      - name: Install ffmpeg and jpegtran (gateway)
         if: matrix.package.name == 'gateway'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+          sudo apt-get install -y --no-install-recommends ffmpeg libjpeg-turbo-progs
           ffprobe -version | head -1
+          jpegtran -version 2>&1 | head -1
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'

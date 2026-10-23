@@ -8,9 +8,12 @@
  * à palette ne gonfle pas, une image animée garde toutes ses images (#10639).
  *
  * `sharp` n'intervient que dans deux cas :
- * - une image FIXE dont l'orientation EXIF vaut autre chose que 1 : la
- *   rotation est appliquée aux pixels (`autoOrient`) avant que l'EXIF ne
- *   parte, le profil ICC gardé (`keepIccProfile`), dans un encodage aussi
+ * - une image FIXE dont l'orientation EXIF vaut autre chose que 1, quand la
+ *   rotation SANS PERTE est impossible : un JPEG pivote d'abord par ses
+ *   coefficients DCT (`metadata-strip/jpeg-orientation.ts`, #11841), sans
+ *   génération perdue ; ce n'est que si ses dimensions sortent de la grille
+ *   des blocs, ou pour un WebP, que la rotation est appliquée aux pixels
+ *   (`autoOrient`) avant que l'EXIF ne parte, le profil ICC gardé (`keepIccProfile`), dans un encodage aussi
  *   fidèle que le format le permet (JPEG q92 4:4:4, WebP sans perte si la
  *   source l'était, PNG à palette si la source l'était) ; un JPEG HDR y
  *   garde sa carte de gain, pivotée avec lui (`keepGainMap`, que les typages
@@ -32,6 +35,7 @@ import sharp, { type Metadata, type Sharp } from 'sharp';
 import { stripGifMetadataBlocks } from './metadata-strip/gif-blocks';
 import { blankIsobmffMetadataItems } from './metadata-strip/isobmff-items';
 import { stripJpegKeepingGainMap } from './metadata-strip/jpeg-gain-map';
+import { losslesslyOrientedJpeg } from './metadata-strip/jpeg-orientation';
 import { hasPngPixels, isAnimatedPng, readPngChunks, stripPngMetadataChunks } from './metadata-strip/png-chunks';
 import { isLosslessWebp, stripWebpMetadataChunks } from './metadata-strip/webp-chunks';
 
@@ -94,6 +98,9 @@ async function stripStillOrReencode(buffer: Buffer, format: ReencodableFormat): 
   const still = (metadata.pages ?? 1) <= 1;
   const unreadable = (error: unknown): Buffer => withoutMetadataOrFail(format, buffer, error);
   if (still && (metadata.orientation ?? 1) !== 1) {
+    const lossless = format === 'jpeg' ? await losslesslyOrientedJpeg(buffer, metadata.orientation ?? 1).catch(() => null) : null;
+    const strippedLossless = lossless === null ? null : stripBytes(format, lossless);
+    if (strippedLossless !== null) return strippedLossless;
     return reencoded(buffer, format, metadata).catch((error: unknown) => stripBytes(format, buffer) ?? unreadable(error));
   }
   return stripBytes(format, buffer) ?? reencoded(buffer, format, metadata).catch(unreadable);

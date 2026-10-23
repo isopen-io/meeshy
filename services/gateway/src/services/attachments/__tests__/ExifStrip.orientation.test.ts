@@ -36,8 +36,25 @@ function headerSegments(buffer: Buffer): readonly Segment[] {
   return walk(2, []);
 }
 
-const quantisationTables = (buffer: Buffer): Buffer =>
-  Buffer.concat(headerSegments(buffer).filter((s) => s.marker === DQT).map((s) => buffer.subarray(s.start, s.end)));
+/**
+ * Les tables de quantification, chacune réduite à ses valeurs TRIÉES : une
+ * rotation de 90° transpose une table (ses valeurs changent de case, pas de
+ * valeur), un réencodage la remplace.
+ */
+function quantisationTables(buffer: Buffer): readonly (readonly number[])[] {
+  const payloads = headerSegments(buffer).filter((s) => s.marker === DQT).map((s) => buffer.subarray(s.start + 4, s.end));
+  return payloads.flatMap((payload) => {
+    const tables: number[][] = [];
+    let at = 0;
+    while (at < payload.length) {
+      const wide = payload[at] >> 4 === 1;
+      const values = Array.from({ length: 64 }, (_, i) => (wide ? payload.readUInt16BE(at + 1 + i * 2) : payload[at + 1 + i]));
+      tables.push([payload[at] & 0x0f, ...[...values].sort((a, b) => a - b)]);
+      at += 1 + (wide ? 128 : 64);
+    }
+    return tables;
+  });
+}
 
 async function photo(width: number, height: number, orientation: number): Promise<Buffer> {
   const gradient = Buffer.from(
@@ -64,7 +81,7 @@ function meanAbsoluteError(a: Buffer, b: Buffer): number {
 }
 
 describe('stripExifFromImageBuffer — rotation JPEG sans perte (#11841)', () => {
-  it.each([2, 3, 4, 5, 6, 7, 8])('orientation %i : la photo ressort droite, sans EXIF, avec ses tables de quantification d’origine', async (orientation) => {
+  it.each([2, 3, 4, 5, 6, 7, 8])('orientation %i : la photo ressort droite, sans EXIF, avec ses tables de quantification d’origine (transposées au plus)', async (orientation) => {
     const original = await photo(64, 48, orientation);
     const upright = await sharp(original).autoOrient().raw().toBuffer({ resolveWithObject: true });
 
@@ -75,7 +92,7 @@ describe('stripExifFromImageBuffer — rotation JPEG sans perte (#11841)', () =>
     expect(after.orientation).toBeUndefined();
     expect([after.width, after.height]).toEqual([upright.info.width, upright.info.height]);
     expect(stripped.toString('latin1')).not.toContain(SECRET);
-    expect(quantisationTables(stripped).equals(quantisationTables(original))).toBe(true);
+    expect(quantisationTables(stripped)).toEqual(quantisationTables(original));
     expect(meanAbsoluteError(await decoded(stripped), upright.data)).toBeLessThan(0.5);
   });
 
@@ -90,8 +107,12 @@ describe('stripExifFromImageBuffer — rotation JPEG sans perte (#11841)', () =>
     expect(stripped.toString('latin1')).not.toContain(SECRET);
   });
 
-  it('une photo HDR orientée pivote SANS PERTE avec sa carte de gain', async () => {
-    const hdr = readFileSync(join(__dirname, 'fixtures', 'gain-map', 'ultra-hdr-xmp-and-iso.jpg'));
+  it.each([
+    ['carte hors de la grille des blocs, réencodée seule', 'ultra-hdr-xmp-and-iso.jpg'],
+    ['carte pivotée sans perte elle aussi', 'apple-gain-map-xmp-headroom.jpg'],
+  ])('une photo HDR orientée pivote SANS PERTE avec sa carte de gain (%s)', async (_label, name) => {
+    const hdr = readFileSync(join(__dirname, 'fixtures', 'gain-map', name));
+    const before = await sharp(hdr).metadata();
     const carrier = await photo(16, 16, 6);
     const exif = headerSegments(carrier).find((s) => s.marker === 0xe1);
     if (!exif) throw new Error('fixture: no EXIF');
@@ -102,8 +123,8 @@ describe('stripExifFromImageBuffer — rotation JPEG sans perte (#11841)', () =>
     const after = await sharp(stripped).metadata();
 
     expect(after.gainMap).toBeDefined();
-    expect([after.width, after.height]).toEqual([720, 1280]);
-    expect(quantisationTables(stripped).equals(quantisationTables(hdr))).toBe(true);
+    expect([after.width, after.height]).toEqual([before.height, before.width]);
+    expect(quantisationTables(stripped)).toEqual(quantisationTables(hdr));
     expect(stripped.toString('latin1')).not.toContain(SECRET);
   });
 });
