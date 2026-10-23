@@ -150,7 +150,7 @@ describe('interpretAuditAction — un code se dit en mots', () => {
 });
 
 describe('les familles — chaque code appartient à une famille, chaque famille tient dans un filtre', () => {
-  test('toutes les familles de filtre sont nommées : les onze de la spécification, plus la sécurité, plus les réglages du barème (#8906), plus la lecture souveraine', () => {
+  test('toutes les familles de filtre sont nommées : les onze de la spécification, plus la sécurité, plus les réglages du barème (#8906), plus les packs (#11323), plus la lecture souveraine', () => {
     expect([...AUDIT_FILTER_FAMILIES]).toEqual([
       'sovereign',
       'accounts',
@@ -165,6 +165,7 @@ describe('les familles — chaque code appartient à une famille, chaque famille
       'reports',
       'communities',
       'settings',
+      'packs',
     ]);
     expect(AUDIT_FILTER_FAMILIES.every((family) => isAuditFilterFamily(family))).toBe(true);
     expect(isAuditFilterFamily('nothing')).toBe(false);

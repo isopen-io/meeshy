@@ -158,6 +158,12 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
     install: packsEndpoints.avatarRingBySlugInstall,
     purchase: packsEndpoints.avatarRingBySlugPurchase,
   },
+  lens: {
+    catalogue: packsEndpoints.lens,
+    installed: packsEndpoints.lensInstalled,
+    bySlug: packsEndpoints.lensBySlug,
+    install: packsEndpoints.lensBySlugInstall,
+  },
   banner: {
     catalogue: packsEndpoints.banner,
     installed: packsEndpoints.bannerInstalled,

@@ -1,3 +1,4 @@
+import { UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 import type { ApiFailure } from '@/lib/api/http';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -46,6 +47,7 @@ export function sendFailureReason(
    * Distinct de tout statut HTTP réel : c'est ce module-ci, et lui seul, qui
    * doit reconnaître ce code AVANT de tomber dans les branches par statut.
    */
+  if (failure.code === UPLOAD_FORMAT_REFUSED) return translate(language, 'send.failure.formatRefused');
   if (failure.code === 'UPLOAD_PARTIAL') return translate(language, 'send.failure.uploadPartial');
   /**
    * PAS DE BRANCHE `ATTACHMENT_RIGHT_NOT_PERMITTED` ICI, ET C'EST MESURÉ

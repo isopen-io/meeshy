@@ -29,8 +29,16 @@ import javax.inject.Singleton
  */
 @Singleton
 class FriendshipCache @Inject constructor(
-    private val persisted: PersistedFriendCaches = PersistedFriendCaches.None,
+    private val persisted: PersistedFriendCaches,
 ) {
+
+    /**
+     * A cache with no persisted roster, for tests and previews. Kept as a secondary
+     * constructor rather than a default argument: a default on every parameter makes
+     * Kotlin emit a second, no-arg JVM constructor that inherits `@Inject`, and Dagger
+     * refuses a type with two injected constructors.
+     */
+    constructor() : this(PersistedFriendCaches.None)
 
     private val lock = Any()
     private val friendIds = mutableSetOf<String>()
