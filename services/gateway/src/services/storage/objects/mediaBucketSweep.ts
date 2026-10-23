@@ -38,9 +38,10 @@ export async function collectReferencedKeys(params: {
 }
 
 /**
- * Le seau ne garde que ce qu'une ligne vivante nomme (#11267). Deux passes :
- * l'énumération décide, puis seulement l'effacement — un refus n'a rien
- * effacé. Un objet plus récent que `graceMs` (ou sans date) est épargné :
+ * Le seau ne garde que ce qu'une ligne vivante nomme (#11267). Deux passes EN
+ * FLUX, jamais le seau entier en mémoire (audit D5) : la première compte et
+ * décide, la seconde efface — un refus n'a rien effacé. Seules les clés
+ * vivantes de la base sont tenues en mémoire. Un objet plus récent que `graceMs` (ou sans date) est épargné :
  * l'écriture en double précède la ligne qui le nommera.
  */
 export async function sweepBucket(params: {
@@ -56,29 +57,36 @@ export async function sweepBucket(params: {
 }): Promise<SweepReport> {
   if (params.referenced.size === 0) return { kind: 'refused', reason: 'no-referenced-key' };
 
-  const listed: ListedObject[] = [];
-  for await (const object of params.lister.list()) listed.push(object);
-
   const cutoff = params.now.getTime() - params.graceMs;
   const isYoung = (object: ListedObject) => object.lastModified === null || object.lastModified.getTime() > cutoff;
-  const unreferenced = listed.filter((object) => !params.referenced.has(object.key));
-  const doomed = unreferenced.filter((object) => !isYoung(object));
-  if (params.allowMassRemoval !== true && doomed.length > listed.length * MAX_REMOVAL_SHARE) return { kind: 'refused', reason: 'too-many-removals' };
+  const isDoomed = (object: ListedObject) => !params.referenced.has(object.key) && !isYoung(object);
 
-  const base = { kept: listed.length - unreferenced.length, young: unreferenced.length - doomed.length };
-  if (!params.apply) return { kind: 'swept', counts: { ...base, removed: 0, 'would-remove': doomed.length, failed: 0 } };
+  let listed = 0;
+  let unreferenced = 0;
+  let doomed = 0;
+  for await (const object of params.lister.list()) {
+    listed += 1;
+    if (params.referenced.has(object.key)) continue;
+    unreferenced += 1;
+    if (!isYoung(object)) doomed += 1;
+  }
+  if (params.allowMassRemoval !== true && doomed > listed * MAX_REMOVAL_SHARE) return { kind: 'refused', reason: 'too-many-removals' };
 
-  const outcomes = await doomed.reduce<Promise<{ removed: number; failed: number }>>(async (pending, object) => {
-    const tally = await pending;
+  const base = { kept: listed - unreferenced, young: unreferenced - doomed };
+  if (!params.apply) return { kind: 'swept', counts: { ...base, removed: 0, 'would-remove': doomed, failed: 0 } };
+
+  let removed = 0;
+  let failed = 0;
+  for await (const object of params.lister.list()) {
+    if (!isDoomed(object)) continue;
     try {
       await params.remover.remove(object.key);
+      removed += 1;
       params.log?.(`effacée du seau : ${object.key}`);
-      return { ...tally, removed: tally.removed + 1 };
     } catch (error: unknown) {
+      failed += 1;
       params.log?.(`échec d'effacement : ${object.key} — ${error instanceof Error ? error.message : String(error)}`);
-      return { ...tally, failed: tally.failed + 1 };
     }
-  }, Promise.resolve({ removed: 0, failed: 0 }));
-
-  return { kind: 'swept', counts: { ...base, ...outcomes, 'would-remove': 0 } };
+  }
+  return { kind: 'swept', counts: { ...base, removed, failed, 'would-remove': 0 } };
 }
