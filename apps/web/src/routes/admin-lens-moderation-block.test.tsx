@@ -136,7 +136,7 @@ describe('AdminLensModerationPanel', () => {
     const { calls, deps } = gateway((request) =>
       request.path.endsWith('/withdraw') ? { ok: true, data: pack('neige', { status: 'withdrawn' }) } : request.path.endsWith('/restore') ? { ok: true, data: pack('neige', { status: 'approved' }) } : undefined,
     );
-    const host = mount(deps);
+    const host = await mount(deps);
     await until(() => host.querySelector('[data-lens-withdraw="neige"]') !== null);
     expect(host.querySelector('[data-lens-restore="neige"]')).toBeNull();
     await mounter.click(host.querySelector<HTMLElement>('[data-lens-withdraw="neige"]'));
@@ -153,7 +153,7 @@ describe('AdminLensModerationPanel', () => {
     const { calls, deps } = gateway((request) =>
       request.path.endsWith('/givre/restore') ? { ok: false, status: 404, error: 'No withdrawn lens under this name', code: 'LENS_NOT_FOUND' } : request.path.endsWith('/restore') ? { ok: true, data: pack('brume', { status: 'approved' }) } : undefined,
     );
-    const host = mount(deps);
+    const host = await mount(deps);
     await until(() => host.querySelector('[data-lens-restore-slug]') !== null);
     await type(host.querySelector<HTMLInputElement>('[data-lens-restore-slug]'), 'givre');
     await mounter.click(host.querySelector<HTMLElement>('[data-lens-restore-by-slug]'));
