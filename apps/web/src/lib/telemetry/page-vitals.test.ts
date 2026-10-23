@@ -86,7 +86,7 @@ const fakeHost = (supported: readonly string[]) => {
       registrations.push({ type: options.type, buffered: options.buffered === true, deliver: (entries) => this.callback({ getEntries: () => entries }) });
     }
   }
-  const host: VitalsObserverHost = { PerformanceObserver: FakeObserver as unknown as VitalsObserverHost['PerformanceObserver'] };
+  const host: VitalsObserverHost = { PerformanceObserver: FakeObserver as unknown as NonNullable<VitalsObserverHost['PerformanceObserver']> };
   return { host, registrations };
 };
 
@@ -126,7 +126,7 @@ describe('observePageVitals — le seul site qui touche au navigateur', () => {
         observed.push(options);
       }
     }
-    observePageVitals({ PerformanceObserver: Spy as unknown as VitalsObserverHost['PerformanceObserver'] });
+    observePageVitals({ PerformanceObserver: Spy as unknown as NonNullable<VitalsObserverHost['PerformanceObserver']> });
     expect(observed).toEqual([{ type: 'event', buffered: true, durationThreshold: 40 }]);
   });
 
@@ -139,7 +139,7 @@ describe('observePageVitals — le seul site qui touche au navigateur', () => {
         observed.push(options.type);
       }
     }
-    observePageVitals({ PerformanceObserver: Picky as unknown as VitalsObserverHost['PerformanceObserver'] });
+    observePageVitals({ PerformanceObserver: Picky as unknown as NonNullable<VitalsObserverHost['PerformanceObserver']> });
     expect(observed).toEqual(['long-animation-frame']);
   });
 });
@@ -156,5 +156,10 @@ describe('playbackPageProbe — ce qu’une séance de lecture emporte de la pag
     vitals.record({ kind: 'frame', duration: 70, blockingDuration: 20 });
     expect(session.close()).toEqual({ deviceTier: 'mid', lcpMs: 2_100, longFrames: 1, longFramesBlockingMs: 20, longFrameWorstMs: 70 });
     expect(reads).toBe(1);
+  });
+
+  test('le tier `pro` du web se range sous `high`, le plus haut que la télémétrie connaisse', () => {
+    const probe = playbackPageProbe({ vitals: createVitalsAccumulator(), tier: () => 'pro' });
+    expect(probe.open().close().deviceTier).toBe('high');
   });
 });
