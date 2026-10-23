@@ -71,6 +71,12 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.AccountDeletionPhase
+import me.meeshy.sdk.model.WireDate
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Account-deletion screen (feature-parity §L) — port of iOS `DeleteAccountView`. A red
@@ -154,6 +160,8 @@ fun AccountDeletionScreen(
                         if (emailSent) {
                             EmailSentBlock(onDone = onBack)
                         } else {
+                            DeletionStatusCard(state)
+                            if (state.deletion.isOpenRequest()) return@Column
                             DeletionForm(state = state, viewModel = viewModel)
                         }
                     }
@@ -422,4 +430,48 @@ private fun AccountDeletionError.messageRes(): Int = when (this) {
     AccountDeletionError.NO_EMAIL -> R.string.delete_account_error_no_email
     AccountDeletionError.NETWORK -> R.string.delete_account_error_network
     AccountDeletionError.GENERIC -> R.string.account_delete_error
+}
+
+private fun AccountDeletionPhase?.isOpenRequest(): Boolean =
+    this is AccountDeletionPhase.PendingConfirmation || this is AccountDeletionPhase.GracePeriod
+
+private fun formatWireDay(iso: String?): String? {
+    val millis = WireDate.epochMillis(iso) ?: return null
+    return DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withZone(ZoneId.systemDefault())
+        .format(Instant.ofEpochMilli(millis))
+}
+
+/**
+ * Where the deletion request stands (`GET me/account/deletion`). Cancelling goes through the
+ * link in the e-mail, so no cancel button is offered; nothing is shown while the status is unread
+ * or when there is no request.
+ */
+@Composable
+private fun DeletionStatusCard(state: AccountDeletionUiState) {
+    val phase = state.deletion
+    if (!phase.isOpenRequest()) return
+    val lines = when (phase) {
+        is AccountDeletionPhase.GracePeriod -> {
+            val until = formatWireDay(phase.cancelableUntil)
+            listOf(
+                if (until != null) stringResource(R.string.account_lifecycle_deletion_grace, until)
+                else stringResource(R.string.account_lifecycle_deletion_grace_no_date),
+            )
+        }
+        else -> listOfNotNull(
+            stringResource(R.string.account_lifecycle_deletion_pending),
+            formatWireDay(state.tokenExpiresAt)?.let { stringResource(R.string.account_lifecycle_deletion_pending_expires, it) },
+        )
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MeeshyPalette.Warning.copy(alpha = 0.12f), RoundedCornerShape(MeeshySpacing.md))
+            .padding(MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        lines.forEach {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MeeshyTheme.tokens.textPrimary)
+        }
+    }
 }
