@@ -6176,6 +6176,26 @@ model LensPackAsset {
   @@index([src])
 }
 
+/// La SURCHARGE d'un pack du registre versionné (#11275), écrite par
+/// l'administration sans déploiement : masqué, ordre, prix, fenêtre, ciblage
+/// (`PackRegistryOverride`, JSON validé). Ne crée jamais un pack : les packs du
+/// dépôt restent lus au démarrage, la surcharge s'y applique. Chaque écriture
+/// est journalisée (`AdminAuditLog`) AVANT d'agir.
+model PackRegistryEntry {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  domain     String
+  slug       String
+  /// `PackRegistryOverride` — seules les clés présentes surchargent ; `null` retire.
+  override   Json
+  /// Compare-and-set : une écriture porte la révision qu'elle a lue.
+  revision   Int      @default(1)
+  updatedBy  String   @db.ObjectId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([domain, slug])
+}
+
 /// LA POSSESSION d'un pack payant (#10632). Quatre voies (#11272, `PACK_OWNERSHIP_SOURCES`) :
 /// l'ACHAT en Meeshes, écrit dans la MÊME transaction que la ligne `spend` du registre
 /// `MeeshLedger` (MeeshSpend.apply) — ni achat sans possession, ni possession sans achat —,
