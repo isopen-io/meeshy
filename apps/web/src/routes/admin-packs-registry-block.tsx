@@ -133,8 +133,9 @@ export function AdminPacksRegistryPanel({ language, deps, auditHref }: { readonl
 
   const keyOf = (row: RegistryRow): string => `${row.domain}:${row.slug}`;
 
-  const replace = (next: RegistryRow): void =>
+  const replace = (next: RegistryRow): void => {
     queryClient.setQueryData<readonly RegistryRow[]>(ADMIN_PACKS_REGISTRY_QUERY_KEY, (rows) => (rows ?? []).map((row) => (keyOf(row) === keyOf(next) ? next : row)));
+  };
 
   const reload = (): Promise<void> => queryClient.invalidateQueries({ queryKey: ADMIN_PACKS_REGISTRY_QUERY_KEY });
 
