@@ -67,11 +67,6 @@
     <!-- Privacidad y visibilidad (§L) -->
     <string name="settings_privacy">Privacidad y visibilidad</string>
     <string name="privacy_title">Privacidad y visibilidad</string>
-    <string name="privacy_last_seen">Última conexión</string>
-    <string name="privacy_hide_from_search">Ocultar de la búsqueda</string>
-    <string name="privacy_group_invites">Invitaciones de grupo</string>
-    <string name="privacy_save_media">Guardar medios en la galería</string>
-    <string name="privacy_share_data">Compartir datos de uso</string>
     <!-- Account deletion (§L) -->
     <string name="delete_account_warning_title">Esta acción es irreversible</string>
     <string name="delete_account_warning_intro">Eliminar tu cuenta borra de forma permanente:</string>
