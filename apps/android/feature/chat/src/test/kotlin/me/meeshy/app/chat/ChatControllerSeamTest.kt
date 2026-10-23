@@ -141,16 +141,16 @@ class ChatControllerSeamTest {
 
     @Test
     fun `the host shows the screen state read-only and carries failures into its single error channel`() {
-        val flow = MutableStateFlow(ChatUiState(conversationId = "c1", draft = "hello"))
+        val flow = MutableStateFlow(ChatUiState(conversationId = "c1", conversationTitle = "hello"))
         val host = host(flow)
 
         assertThat(host.conversationId).isEqualTo("c1")
-        assertThat(host.uiState.value.draft).isEqualTo("hello")
+        assertThat(host.uiState.value.conversationTitle).isEqualTo("hello")
 
         host.reportError("quota exceeded")
 
         assertThat(flow.value.errorMessage).isEqualTo("quota exceeded")
-        assertThat(flow.value.copy(errorMessage = null)).isEqualTo(ChatUiState(conversationId = "c1", draft = "hello"))
+        assertThat(flow.value.copy(errorMessage = null)).isEqualTo(ChatUiState(conversationId = "c1", conversationTitle = "hello"))
         assertThat(host.uiState.value).isEqualTo(flow.value)
     }
 

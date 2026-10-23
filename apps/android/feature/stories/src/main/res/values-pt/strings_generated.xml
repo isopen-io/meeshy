@@ -122,4 +122,6 @@
     <string name="story_tool_text">Texto</string>
     <string name="story_tool_texture">Fundo</string>
     <string name="story_tool_timeline">Linha do tempo</string>
+    <string name="story_tray_menu_profile">Ver o perfil</string>
+    <string name="story_tray_menu_viewStories">Ver os stories</string>
 </resources>

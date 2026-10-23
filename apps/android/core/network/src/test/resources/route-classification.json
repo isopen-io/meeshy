@@ -2,7 +2,7 @@
  "notice": "Classement des routes du manifeste que ni une interface Retrofit ni ops-only-routes.ts ne couvrent. Cliquet : RouteManifestRatchetTest. La liste a-porter ne peut que rétrécir (porter une route = la retirer ici). Fichier de test, jamais lu à l'exécution.",
  "categories": [
   {
-   "status": "hors-perimetre-mobile",
+   "status": "ops-only",
    "reason": "Administration des sockets côté serveur (exploitation), jamais un écran d'app.",
    "routes": [
     "GET /api/socketio/stats",
@@ -43,7 +43,7 @@
    ]
   },
   {
-   "status": "hors-perimetre-mobile",
+   "status": "ops-only",
    "reason": "Console d'administration web : aucun écran mobile ne l'appelle (rôles BIGBOSS/ADMIN, exploitation de la plateforme).",
    "routes": [
     "DELETE /api/v1/admin/agent/configs/:conversationId",
@@ -112,7 +112,6 @@
     "GET /api/v1/admin/languages/stats",
     "GET /api/v1/admin/languages/timeline",
     "GET /api/v1/admin/languages/translation-accuracy",
-    "GET /api/v1/admin/me/permissions",
     "GET /api/v1/admin/messages",
     "GET /api/v1/admin/messages/engagement",
     "GET /api/v1/admin/messages/stats",
@@ -226,12 +225,11 @@
    ]
   },
   {
-   "status": "hors-perimetre-mobile",
+   "status": "ops-only",
    "reason": "Sonde d'exploitation (santé, métriques) pour l'infrastructure, pas pour un écran.",
    "routes": [
     "GET /api/v1/health/circuit-breakers",
     "GET /api/v1/health/metrics",
-    "GET /api/v1/health/ready",
     "GET /api/v1/status-metrics",
     "GET /health",
     "POST /api/v1/status-metrics/reset"
