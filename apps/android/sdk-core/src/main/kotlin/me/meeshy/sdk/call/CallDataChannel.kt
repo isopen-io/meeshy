@@ -32,7 +32,7 @@ public class CallDataChannel internal constructor(
         override fun onMessage(buffer: DataChannel.Buffer) {
             val bytes = ByteArray(buffer.data.remaining())
             buffer.data.get(bytes)
-            onMessage(bytes)
+            this@CallDataChannel.onMessage(bytes)
         }
     }
 
