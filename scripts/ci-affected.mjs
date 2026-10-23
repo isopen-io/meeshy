@@ -30,7 +30,6 @@ import { execFileSync } from 'node:child_process';
 
 export const GLOBAUX = [
   '.github/workflows/ci.yml',
-  '.github/workflows/_setup.yml',
   'scripts/ci-affected.mjs',
   'package.json',
   'bun.lock',
