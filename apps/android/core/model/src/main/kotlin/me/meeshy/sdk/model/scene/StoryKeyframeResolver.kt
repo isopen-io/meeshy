@@ -23,7 +23,8 @@ data class ResolvedKeyframeTransform(
  * `scale`, `opacity`); a point that keys only one leaves the others `null`, and
  * that channel is then ignored — exactly as a position-only point ignores scale.
  * Each present channel is projected onto its own [KeyframeChannelSample] list and
- * handed to [StoryKeyframeInterpolator].
+ * handed to [StoryKeyframeInterpolator]. **Before a channel's first keyframe it yields
+ * to the base value** (no jump at the start of the clip).
  *
  * **Deliberate improvement over iOS.** iOS subtracts the clip's `startTime` from
  * the playhead for the *position* channel but forgets to for `scale`/`opacity`
@@ -53,10 +54,10 @@ object StoryKeyframeResolver {
         val frames = keyframes?.takeIf { it.isNotEmpty() } ?: return null
         val local = currentTime - startTime
 
-        val x = StoryKeyframeInterpolator.interpolate(frames.channel { it.x }, local)
-        val y = StoryKeyframeInterpolator.interpolate(frames.channel { it.y }, local)
-        val scale = StoryKeyframeInterpolator.interpolate(frames.channel { it.scale }, local)
-        val opacity = StoryKeyframeInterpolator.interpolate(frames.channel { it.opacity }, local)
+        val x = frames.heldChannel(local) { it.x }
+        val y = frames.heldChannel(local) { it.y }
+        val scale = frames.heldChannel(local) { it.scale }
+        val opacity = frames.heldChannel(local) { it.opacity }
 
         if (x == null && y == null && scale == null && opacity == null) return null
 
@@ -66,6 +67,23 @@ object StoryKeyframeResolver {
             scale = scale ?: baseScale,
             opacity = opacity ?: baseOpacity,
         )
+    }
+
+    /**
+     * Valeur d'un canal à l'instant local [local], ou `null` AVANT sa première keyframe : le
+     * canal garde alors la valeur de base de l'objet (miroir de `applyKeyframes` iOS). Chaque
+     * canal (x, y, échelle, opacité) est armé indépendamment — un texte peut animer son échelle
+     * dès t = 1 et son opacité dès t = 0. Sans ce maintien, l'objet sautait à la première valeur
+     * keyframée dès t = 0.
+     */
+    private inline fun List<StoryKeyframe>.heldChannel(
+        local: Float,
+        select: (StoryKeyframe) -> Double?,
+    ): Double? {
+        val samples = channel(select)
+        val first = samples.minOfOrNull { it.time } ?: return null
+        if (local < first) return null
+        return StoryKeyframeInterpolator.interpolate(samples, local)
     }
 
     private inline fun List<StoryKeyframe>.channel(

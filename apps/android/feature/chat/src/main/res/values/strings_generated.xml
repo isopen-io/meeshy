@@ -1,5 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_composer_edit_title">Edit the message</string>
+    <string name="chat_composer_reply_a11y">Replying to %1$s: %2$s</string>
+    <string name="chat_composer_reply_file">File</string>
+    <string name="chat_composer_reply_location">Location</string>
+    <string name="chat_composer_reply_photo">Photo</string>
+    <string name="chat_composer_reply_unknown">a message</string>
+    <string name="chat_composer_reply_video">Video</string>
+    <string name="chat_composer_reply_voice">Voice message</string>
+    <string name="chat_composer_reply_you">You</string>
+    <string name="chat_delete_confirm_cancel">Cancel</string>
+    <string name="chat_delete_confirm_hint">Delete for everyone is available for 2 h after sending.</string>
+    <string name="chat_delete_confirm_title">Delete this message?</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_send">Send</string>
+    <string name="common_unknown">Unknown</string>
     <string name="composer_a11y_addSelection">Add selection</string>
     <string name="composer_a11y_cancelSelection">Cancel selection</string>
     <string name="composer_a11y_openFullLibrary">Open the full photo library</string>
@@ -17,6 +32,10 @@
     <string name="composer_recent_grantAccess">Allow photo access</string>
     <string name="composer_recent_grantAccess_hint">To find your recent media here</string>
     <string name="composer_recent_select">Select</string>
+    <string name="message_detail_reactions_count_a11y">%d reaction(s)</string>
+    <string name="message_detail_reactions_empty">No reactions</string>
+    <string name="message_detail_report_confirm_message">The message will be sent to moderation.</string>
+    <string name="message_detail_report_confirm_title">Report this message?</string>
     <string name="recentMedia_resolveFailed">This media couldn\'t be prepared — use the full photo library</string>
     <string name="recentMedia_resolveFailed_multiple">%d media items couldn\'t be prepared — use the full photo library</string>
 </resources>

@@ -1,9 +1,22 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="profile_action_accept_connection">Accetta la connessione</string>
+    <string name="profile_action_block_user">Blocca questo utente</string>
+    <string name="profile_action_cancel_request">Annulla la richiesta</string>
+    <string name="profile_action_connection_request">Richiesta di connessione</string>
+    <string name="profile_action_decline_connection">Rifiuta la connessione</string>
+    <string name="profile_action_report">Segnala</string>
+    <string name="profile_action_resend_request">Invia di nuovo la richiesta</string>
+    <string name="profile_action_send_message">Invia un messaggio</string>
+    <string name="profile_action_unblock_user">Sblocca l\'utente</string>
     <string name="profile_activity_title">Attività</string>
     <string name="profile_back">Indietro</string>
     <string name="profile_bio_label">Bio</string>
+    <string name="profile_blocked_by_me">Hai bloccato questo utente</string>
+    <string name="profile_blocked_unblock">Sblocca</string>
     <string name="profile_cancel">Annulla</string>
+    <string name="profile_connection_context_received">%s desidera mettersi in contatto con te. Accetta per scambiare messaggi.</string>
+    <string name="profile_connection_context_sent">Hai inviato una richiesta di connessione a %s. In attesa della sua risposta.</string>
     <string name="profile_detail_country">Paese</string>
     <string name="profile_detail_system_language">Lingua principale</string>
     <string name="profile_display_name_label">Nome visualizzato</string>
@@ -13,6 +26,7 @@
     <string name="profile_image_error_update">Impossibile aggiornare la foto del profilo</string>
     <string name="profile_language_unset">Non impostato</string>
     <string name="profile_last_name_label">Cognome</string>
+    <string name="profile_open_conversation_error">Impossibile aprire la conversazione</string>
     <string name="profile_presence_away">Assente</string>
     <string name="profile_presence_online">In linea</string>
     <string name="profile_save">Salva</string>
@@ -24,8 +38,13 @@
     <string name="profile_stat_messages">Messaggi</string>
     <string name="profile_stat_translations">Traduzioni</string>
     <string name="profile_stats_title">Statistiche</string>
+    <string name="profile_status_connected">Collegati</string>
     <string name="profile_system_language_label">Lingua principale</string>
     <string name="profile_title">Profilo</string>
+    <string name="profile_toast_block_failed">Impossibile bloccare</string>
+    <string name="profile_toast_unblock_failed">Impossibile sbloccare</string>
+    <string name="profile_toast_user_blocked">Utente bloccato</string>
+    <string name="profile_toast_user_unblocked">Utente sbloccato</string>
     <string name="profile_unknown">Sconosciuto</string>
     <string name="profile_view_posts">Post</string>
     <string name="report_close">Chiudi</string>

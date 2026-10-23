@@ -31,7 +31,9 @@
     <string name="account_contact_phone_code_label">Codice a 6 cifre</string>
     <string name="account_contact_phone_code_sent">Codice inviato via SMS</string>
     <string name="account_contact_phone_current_label">Telefono attuale</string>
+    <string name="account_contact_phone_implausible">Questo numero non sembra reale: controllalo.</string>
     <string name="account_contact_phone_section">Telefono</string>
+    <string name="account_contact_phone_too_short">Questo numero è troppo corto: almeno %d cifre.</string>
     <string name="account_contact_phone_verify">Verifica</string>
     <string name="account_contact_send">Invia</string>
     <string name="account_contact_verified">Verificato</string>
@@ -125,9 +127,15 @@
     <string name="privacy_section_media">Media e dati</string>
     <string name="privacy_section_visibility">Visibilità</string>
     <string name="privacy_typing_indicator">Indicatore di digitazione</string>
+    <string name="sessions_cancel">Annulla</string>
     <string name="sessions_current">Questo dispositivo</string>
     <string name="sessions_retry">Riprova</string>
     <string name="sessions_revoke">Disconnetti</string>
+    <string name="sessions_revoke_all_action">Disconnetti gli altri dispositivi</string>
+    <string name="sessions_revoke_all_confirm_message">Solo questo dispositivo resterà connesso. Gli altri dovranno accedere di nuovo.</string>
+    <string name="sessions_revoke_confirm_action">Disconnetti</string>
+    <string name="sessions_revoke_confirm_message">%s dovrà accedere di nuovo per usare il tuo account.</string>
+    <string name="sessions_revoke_confirm_title">Disconnettere questo dispositivo?</string>
     <string name="settings_active_sessions">Sessioni attive</string>
     <string name="settings_back">Indietro</string>
     <string name="settings_blocked_users">Utenti bloccati</string>
@@ -140,6 +148,8 @@
     <string name="settings_export_data">Esporta i miei dati</string>
     <string name="settings_language_dialog_close">Chiudi</string>
     <string name="settings_log_out">Esci</string>
+    <string name="settings_logout_confirm_message">Vuoi davvero uscire?</string>
+    <string name="settings_logout_confirm_title">Esci</string>
     <string name="settings_media_capture_header">Durante lo scatto</string>
     <string name="settings_media_capture_original_subtitle">La foto o il video originale, senza effetti né cornice, viene salvato in Foto a ogni scatto.</string>
     <string name="settings_media_capture_original_title">Salva l\'originale</string>

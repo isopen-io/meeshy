@@ -1,16 +1,14 @@
 package me.meeshy.app.calls
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
@@ -21,21 +19,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.theme.DynamicColorGenerator
-import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.IncomingCallAnswer
-import org.webrtc.VideoTrack
 import me.meeshy.ui.theme.hexColor
 
 /**
@@ -104,6 +98,13 @@ fun CallScreen(
 
     CallImmersiveEffect()
     CallStatusAnnouncer(state.status)
+    BackHandler {
+        when (CallPillPresenter.backAction(state.status)) {
+            CallBackAction.Inert -> Unit
+            CallBackAction.Minimize -> onMinimize()
+            CallBackAction.Close -> close()
+        }
+    }
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
@@ -119,7 +120,20 @@ fun CallScreen(
         ) {
             CallBackdrop(imageUrl = backdropUrl)
 
-            if (state.isVideoCall) CallVideoLayers(viewModel, remoteVideo, connected = state.showsConnectedLayout)
+            // Un pair qui escalade l'audio en vidéo s'affiche même si l'appel est né audio.
+            val videoStage = state.isVideoCall || remoteVideo != null
+            if (videoStage) {
+                CallDuoVideoStage(
+                    state = state,
+                    callKey = viewModel.activeCallId.ifBlank { config.callId }.ifBlank { config.peerId },
+                    remoteTrack = remoteVideo,
+                    localTrack = viewModel.localVideoTrack,
+                    eglContext = viewModel.eglBaseContext,
+                    peerAvatarUrl = avatarUrl,
+                    connected = state.showsConnectedLayout,
+                    reduceMotion = reduceMotion,
+                )
+            }
 
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Background, overlayContext, Modifier.fillMaxSize())
 
@@ -135,6 +149,8 @@ fun CallScreen(
                     config = config,
                     viewModel = viewModel,
                     overlayContext = overlayContext,
+                    videoStage = videoStage,
+                    avatarUrl = avatarUrl,
                     onClose = close,
                     modifier = content,
                 )
@@ -243,6 +259,8 @@ private fun CallConnectedColumn(
     config: CallConfig,
     viewModel: CallViewModel,
     overlayContext: CallOverlayContext,
+    videoStage: Boolean,
+    avatarUrl: String?,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -254,7 +272,11 @@ private fun CallConnectedColumn(
     ) {
         Spacer(Modifier.height(MeeshySpacing.xl))
 
-        CallPeerBlock(state = state, accent = accent)
+        if (videoStage) {
+            CallPeerBlock(state = state, accent = accent, videoStage = true)
+        } else {
+            CallAudioStage(state = state, peerAvatarUrl = avatarUrl)
+        }
 
         state.captionText?.let { caption -> CallCaption(caption) }
         CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
@@ -275,40 +297,6 @@ private fun CallConnectedColumn(
             onToggleSpeaker = viewModel::toggleSpeaker,
             onClose = onClose,
             onRetry = viewModel::retry,
-        )
-    }
-}
-
-/**
- * Connecté : l'image distante plein écran et l'aperçu local en incrustation, en haut à la fin.
- * Pas encore connecté : l'aperçu local (miroir) tient tout le fond, pour que l'appelant se voie
- * avant que l'autre décroche.
- */
-@Composable
-private fun BoxScope.CallVideoLayers(viewModel: CallViewModel, remoteVideo: VideoTrack?, connected: Boolean) {
-    remoteVideo?.let { track ->
-        VideoRenderer(
-            track = track,
-            eglContext = viewModel.eglBaseContext,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-    viewModel.localVideoTrack?.let { local ->
-        VideoRenderer(
-            track = local,
-            eglContext = viewModel.eglBaseContext,
-            modifier = if (connected) {
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .systemBarsPadding()
-                    .padding(MeeshySpacing.lg)
-                    .size(width = 108.dp, height = 148.dp)
-                    .clip(RoundedCornerShape(MeeshyRadius.md))
-            } else {
-                Modifier.fillMaxSize()
-            },
-            mirror = true,
-            overlay = connected,
         )
     }
 }

@@ -45,8 +45,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.ContentScale
+import coil.request.ImageRequest
+import coil.compose.AsyncImage
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.avatar.AvatarAccessibilityLabel
+import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.sdk.model.avatar.AvatarCornerBadge
 import me.meeshy.sdk.model.avatar.AvatarDotTone
@@ -57,6 +61,7 @@ import me.meeshy.sdk.model.avatar.PresenceArrival
 import me.meeshy.sdk.model.avatar.PresenceHereWave
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.appearance.AvatarRingLayer
 import me.meeshy.ui.motion.pulse
 import me.meeshy.ui.theme.MeeshyBorder
 import me.meeshy.ui.theme.MeeshyMotion
@@ -93,6 +98,9 @@ public fun meeshyPresenceDotColor(presence: PresenceState?): Color? = when (pres
  * SDK-pure: every behaviour is an explicit opaque parameter. The product decision
  * of *which* size/ring/presence a given surface uses (iOS `AvatarContext`) stays
  * app-side.
+ *
+ * [imageUrl] is the person's photo (iOS `avatarURL:`): it covers the initials once
+ * loaded, and the initials stay visible while it loads or if it fails.
  */
 @Composable
 public fun MeeshyAvatar(
@@ -105,6 +113,7 @@ public fun MeeshyAvatar(
     storyRing: StoryRingState = StoryRingState.None,
     presence: PresenceState? = null,
     moodEmoji: String? = null,
+    imageUrl: String? = null,
 ) {
     val density = LocalDensity.current
     val textSize = with(density) { (size * 0.38f).toSp() }
@@ -146,6 +155,14 @@ public fun MeeshyAvatar(
                 fontWeight = FontWeight.Bold,
                 fontSize = textSize,
             )
+            imageUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(size),
+                )
+            }
         }
 
         if (!moodEmoji.isNullOrEmpty()) {
@@ -186,6 +203,8 @@ public fun meeshyDotToneColor(tone: AvatarDotTone): Color = when (tone) {
  * l'humeur puis « dans la conversation ».
  *
  * [isUser] = faux pour une entite (communaute, groupe) : ni humeur ni anneau de story.
+ * [ring] = le contour choisi par son porteur (miroir d'`avatarRingWithin`) : il se pose DANS l'empreinte, l'anneau de
+ * story reste concentrique dedans, la pastille de presence se pose par-dessus. `null` = rendu historique.
  */
 @Composable
 public fun MeeshyAvatar(
@@ -202,6 +221,7 @@ public fun MeeshyAvatar(
     isUser: Boolean = true,
     enablePulse: Boolean = context.defaultPulse,
     onMoodTap: (() -> Unit)? = null,
+    ring: AvatarRingDesign? = null,
 ) {
     val reduceMotion = LocalReduceMotion.current
     val density = LocalDensity.current
@@ -230,26 +250,28 @@ public fun MeeshyAvatar(
     LaunchedEffect(dot?.transitionKey) { transition = transition.observe(dot) }
 
     Box(modifier = modifier.size(frame), contentAlignment = Alignment.Center) {
-        when (effectiveRing) {
-            StoryRingState.Unread -> Box(Modifier.size(frame).border(context.ringWidth.dp * 2, MeeshyPalette.Indigo500, CircleShape))
-            StoryRingState.Read -> Box(Modifier.size(frame).border(context.ringWidth.dp, containerColor.copy(alpha = 0.3f), CircleShape))
-            StoryRingState.None -> Unit
-        }
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(containerColor, gradientEnd)))
-                .semantics { contentDescription = spokenName },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = avatarInitials(name),
-                color = contentColor,
-                fontFamily = NunitoFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = with(density) { context.initialFont.dp.toSp() },
-            )
+        AvatarRingLayer(ring, footprint = size, storyRingSize = if (hasRing) frame else null) {
+            when (effectiveRing) {
+                StoryRingState.Unread -> Box(Modifier.size(frame).border(context.ringWidth.dp * 2, MeeshyPalette.Indigo500, CircleShape))
+                StoryRingState.Read -> Box(Modifier.size(frame).border(context.ringWidth.dp, containerColor.copy(alpha = 0.3f), CircleShape))
+                StoryRingState.None -> Unit
+            }
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(containerColor, gradientEnd)))
+                    .semantics { contentDescription = spokenName },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = avatarInitials(name),
+                    color = contentColor,
+                    fontFamily = NunitoFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = with(density) { context.initialFont.dp.toSp() },
+                )
+            }
         }
         AvatarCorner(
             corner = corner,
