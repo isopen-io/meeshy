@@ -23,3 +23,4 @@
 - [2026-09: Whisper — Settings devient la seule source du modele/device/compute_type (#3666)](decisions/2026-09-whisper-settings-devient-la-seule-source-du-modele-device-compute-type.md)
 - [2026-09-08: gRPC — code mort retire (#3664), dependances gardees pour l'instant (#5710)](decisions/2026-09-08-grpc-code-mort-retire-3664-dependances-gardees-pour-l-instant-5710.md)
 - [2026-10-23: L'audio d'un message a son histogramme `audio_pipeline_seconds{stage}` — whisper, nllb, tts — servi sur `GET /metrics`, port non routé (#11257)](decisions/2026-10-23-l-audio-d-un-message-a-son-histogramme-11257.md)
+- [2026-10-23: La diarization ne tourne que si une sonde à quatre empreintes entend plusieurs voix ; le vocal d'un message passe avant le média d'un post (admission à priorités) ; le défaut Whisper attend un jeu de test STT (#11268)](decisions/2026-10-23-la-diarization-ne-tourne-que-si-plusieurs-voix-et-le-vocal-passe-avant-le-post-11268.md)
