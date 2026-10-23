@@ -30,10 +30,10 @@ public nonisolated struct LensAssets {
 public nonisolated enum LensDocumentPainter {
 
     public static func paint(_ source: CIImage, lens: LensDocument, input: LensFrameInput,
-                             languages: [String], level: LensLevel, assets: LensAssets) -> CIImage {
+                             languages: [String], level: LensLevel, hidden: Set<String> = [], assets: LensAssets) -> CIImage {
         let extent = source.extent
         let plan = LensPlan.plan(LensPlanInput(lens: lens, frame: extent.size, face: input.face?.imageBox(in: extent.size),
-                                               languages: languages, level: level, milliseconds: input.time * 1000))
+                                               languages: languages, level: level, milliseconds: input.time * 1000, hidden: hidden))
         return LensPainter.paint(source, passes: passes(for: plan, lens: lens, extent: extent, assets: assets), input: input)
     }
 
