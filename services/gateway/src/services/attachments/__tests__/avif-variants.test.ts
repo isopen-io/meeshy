@@ -19,6 +19,8 @@ import { AVIF_VARIANT_QUALITY, avifVariantPathFor, createAvifVariants } from '..
 import { MetadataManager } from '../MetadataManager';
 import { produceMediaRenditions } from '../media-renditions';
 import { resolveFileRouteVerdict, type FileRouteVerdictPrisma } from '../fileRouteVerdict';
+import { derivedFileCandidates } from '../derivedAttachmentFiles';
+import { copiedAttachmentFields } from '../../messaging/copiedAttachmentFields';
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -119,5 +121,18 @@ describe('route de fichier — une variante AVIF appartient à sa pièce jointe 
   it('la variante AVIF d’une vue unique rappelée est refusée comme son original, jamais servie comme un fichier quelconque', async () => {
     expect(await resolveFileRouteVerdict('2026/10/u/secret_abc_640w.avif', prisma, new Date('2026-10-23'))).toEqual({ kind: 'gone' });
     expect(await resolveFileRouteVerdict('2026/10/u/secret_abc_640w.webp', prisma, new Date('2026-10-23'))).toEqual({ kind: 'gone' });
+  });
+});
+
+describe('ce qui voyage AVEC une pièce porte aussi ses variantes AVIF (#11262)', () => {
+  const avifVariants = [{ width: 640, height: 480, url: '2026/10/u/p_640w.avif', size: 8, format: 'avif' }];
+
+  it('la suppression d’une pièce efface ses fichiers AVIF', () => {
+    expect(derivedFileCandidates({ imageVariants: [], avifVariants })).toEqual(['2026/10/u/p_640w.avif']);
+  });
+
+  it('le transfert recopie les variantes AVIF avec les octets qu’il partage', () => {
+    const copy = copiedAttachmentFields({ fileName: 'p.jpg', originalName: 'p.jpg', mimeType: 'image/jpeg', fileSize: 1, filePath: '2026/10/u/p.jpg', fileUrl: '2026/10/u/p.jpg', avifVariants } as never);
+    expect(copy.avifVariants).toEqual(avifVariants);
   });
 });
