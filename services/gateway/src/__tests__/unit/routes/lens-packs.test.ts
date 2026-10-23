@@ -474,3 +474,93 @@ describe('une lens n’est servie que dans sa fenêtre et à son public (audit d
     expect(served).not.toContain(COMMUNITY);
   });
 });
+
+describe('une lens retirée par erreur se rétablit par la modération (#12321)', () => {
+  const published = async () => {
+    const h = await harness();
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    await review(h, 'aurore-polaire', { decision: 'approve', note: 'Belle lens' });
+    return h;
+  };
+  const withdraw = (h: Harness) => h.app.inject({ method: 'POST', url: '/aurore-polaire/withdraw', headers: { 'x-user': MODO }, payload: { note: 'Signalée' } });
+  const restore = (h: Harness, user = MODO, body: object = { note: 'Retrait par erreur' }) =>
+    h.app.inject({ method: 'POST', url: '/aurore-polaire/restore', headers: { 'x-user': user }, payload: body });
+  const actions = (h: Harness) => h.tables.audit.map((entry) => entry.action);
+
+  it('une lens retirée revient publiée : journalisé AVANT d’agir, puis son issue', async () => {
+    const h = await published();
+    await withdraw(h);
+
+    const res = await restore(h);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ slug: 'aurore-polaire', status: 'approved' });
+    expect(h.tables.packs[0]!.status).toBe('approved');
+    expect(actions(h).slice(-2)).toEqual(['LENS_PACK_RESTORE', 'LENS_PACK_RESTORE_APPLIED']);
+    const before = h.tables.audit.at(-2)!;
+    expect(before).toMatchObject({ adminId: MODO, userId: BOB, entity: 'LensPack', entityId: 'aurore-polaire', statusAtWrite: 'withdrawn' });
+    expect(JSON.parse(String(before.metadata))).toEqual({ note: 'Retrait par erreur' });
+  });
+
+  it('qui ne modère pas ne rétablit rien (403)', async () => {
+    const h = await published();
+    await withdraw(h);
+    const journal = actions(h).length;
+
+    expect((await restore(h, ALICE)).statusCode).toBe(403);
+    expect(h.tables.packs[0]!.status).toBe('withdrawn');
+    expect(actions(h)).toHaveLength(journal);
+  });
+
+  it('refusé sur toute lens qui n’est pas retirée : publiée, en attente, inconnue (404), sans rien journaliser', async () => {
+    const h = await published();
+    const journal = actions(h).length;
+    expect((await restore(h)).statusCode).toBe(404);
+    expect((await h.app.inject({ method: 'POST', url: '/inconnue/restore', headers: { 'x-user': MODO }, payload: {} })).statusCode).toBe(404);
+    expect(actions(h)).toHaveLength(journal);
+    expect(h.tables.packs[0]!.status).toBe('approved');
+  });
+
+  it('sans journal, rien n’est rétabli (500)', async () => {
+    const h = await published();
+    await withdraw(h);
+    h.tables.auditState.down = true;
+
+    expect((await restore(h)).statusCode).toBe(500);
+    expect(h.tables.packs[0]!.status).toBe('withdrawn');
+  });
+
+  it('ses installations retirées NE reviennent PAS : chacun la réinstalle par son propre geste', async () => {
+    const h = await published();
+    expect((await h.app.inject({ method: 'PUT', url: '/aurore-polaire/install' })).statusCode).toBe(200);
+    await withdraw(h);
+
+    expect((await restore(h)).statusCode).toBe(200);
+
+    const installed = (await h.app.inject({ method: 'GET', url: '/installed' })).json().data as Array<{ slug: string }>;
+    expect(installed.map((pack) => pack.slug)).not.toContain('aurore-polaire');
+    expect(JSON.parse(String(h.tables.audit.at(-1)!.metadata))).toEqual({ installationsReset: 1 });
+    expect(h.tables.packs[0]!.installCount).toBe(0);
+    expect((await h.app.inject({ method: 'PUT', url: '/aurore-polaire/install' })).statusCode).toBe(200);
+    expect(((await h.app.inject({ method: 'GET', url: '/installed' })).json().data as Array<{ slug: string }>).map((pack) => pack.slug)).toContain('aurore-polaire');
+  });
+
+  it('un rétablissement perdu dans une course, ou dont l’écriture lève, est journalisé comme non appliqué', async () => {
+    const h = await published();
+    await withdraw(h);
+    h.tables.lensPack.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
+    expect((await restore(h)).statusCode).toBe(404);
+    expect(h.tables.audit.slice(-2).map((entry) => [entry.action, JSON.parse(String(entry.metadata)).reason ?? null])).toEqual([
+      ['LENS_PACK_RESTORE', null],
+      ['LENS_PACK_RESTORE_NOT_APPLIED', 'concurrent-review'],
+    ]);
+
+    h.tables.lensPack.updateMany.mockImplementationOnce(async () => { throw new Error('write conflict'); });
+    expect((await restore(h)).statusCode).toBe(500);
+    expect(h.tables.audit.slice(-2).map((entry) => [entry.action, JSON.parse(String(entry.metadata)).reason ?? null])).toEqual([
+      ['LENS_PACK_RESTORE', null],
+      ['LENS_PACK_RESTORE_NOT_APPLIED', 'write-failed'],
+    ]);
+    expect(h.tables.packs[0]!.status).toBe('withdrawn');
+  });
+});
