@@ -16,6 +16,7 @@ import { processMediaStageMetrics } from '../mediaStageMetrics';
 import { MetadataManager } from '../../attachments/MetadataManager';
 import { stripMediaMetadataBuffer, stripStoredMediaMetadata } from '../../attachments/media-metadata-strip';
 import { transcodeVideoRendition } from '../../attachments/media-renditions';
+import { normalizeAudioBuffer, normalizeStoredAudio } from '../../attachments/audio-normalization';
 import { produceCompatibilityRendition } from '../../attachments/video-compat-rendition';
 
 const count = async (stage: string, kind: string): Promise<number> => {
@@ -83,6 +84,11 @@ describe('les étapes de la chaîne média sont mesurées là où elles s’exé
         { relPath: 'clip.webm', fileSize: 80 * 1024 * 1024, metadata: { width: 3840, height: 2160, bitrate: 60_000_000, videoCodec: 'vp9' } },
       );
     expect(await delta('transcode', 'video', run)).toBe(0);
+  });
+
+  it('audio — la normalisation d’un vocal (#11259), posé ou en tampon, même quand ffmpeg échoue', async () => {
+    expect(await delta('audio', 'audio', () => normalizeStoredAudio(path.join(absent, 'voice.webm')))).toBe(1);
+    expect(await delta('audio', 'audio', () => normalizeAudioBuffer(Buffer.from('pas un son'), 'voice.webm'))).toBe(1);
   });
 
   it('transcode — le rendu H.264 de compatibilité d’une vidéo HEVC (#11261), même quand ffmpeg échoue', async () => {
