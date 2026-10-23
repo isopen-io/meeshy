@@ -15,11 +15,13 @@ import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
 import timber.log.Timber
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Applique `user:updated` au cache des rosters même quand aucun écran n'est ouvert : le renommage
  * ou la nouvelle photo d'un pair est déjà là à l'ouverture suivante, sans relecture.
  */
+@Singleton
 class UserRepaintBinding @Inject constructor(
     private val socket: MessageSocketManager,
     private val rosters: ParticipantCacheRepository,
@@ -50,8 +52,8 @@ class UserRepaintBinding @Inject constructor(
 
 @Module
 @InstallIn(SingletonComponent::class)
-internal abstract class UserRepaintModule {
+internal interface UserRepaintModule {
     @Binds
     @IntoSet
-    abstract fun bindRealtime(binding: UserRepaintBinding): RealtimeBinding
+    fun bindRealtime(binding: UserRepaintBinding): RealtimeBinding
 }
