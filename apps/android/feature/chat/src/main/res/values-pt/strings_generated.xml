@@ -1,5 +1,14 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_composer_edit_title">Editar a mensagem</string>
+    <string name="chat_composer_reply_a11y">Resposta a %1$s: %2$s</string>
+    <string name="chat_composer_reply_file">Arquivo</string>
+    <string name="chat_composer_reply_location">Localização</string>
+    <string name="chat_composer_reply_photo">Foto</string>
+    <string name="chat_composer_reply_unknown">uma mensagem</string>
+    <string name="chat_composer_reply_video">Vídeo</string>
+    <string name="chat_composer_reply_voice">Mensagem de voz</string>
+    <string name="chat_composer_reply_you">Você</string>
     <string name="chat_delete_confirm_cancel">Cancelar</string>
     <string name="chat_delete_confirm_hint">Apagar para todos fica disponível por 2 h após o envio.</string>
     <string name="chat_delete_confirm_title">Apagar esta mensagem?</string>

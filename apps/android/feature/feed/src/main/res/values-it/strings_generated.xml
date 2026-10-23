@@ -29,8 +29,11 @@
     <string name="feed_delete_cancel">Annulla</string>
     <string name="feed_delete_confirm">Elimina</string>
     <string name="feed_empty">Nessun post</string>
+    <string name="feed_empty_subtitle">I post dei tuoi contatti appariranno qui</string>
     <string name="feed_header_nearby">Post nelle vicinanze</string>
     <string name="feed_like">Metti mi piace</string>
+    <string name="feed_link_copied">Link copiato</string>
+    <string name="feed_load_error">Impossibile caricare il feed</string>
     <string name="feed_location_shared">Posizione condivisa</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
     <plurals name="feed_new_posts">
@@ -38,6 +41,16 @@
         <item quantity="many">%d nuovi post</item>
         <item quantity="other">%d nuovi post</item>
     </plurals>
+    <string name="feed_notice_bookmark_failed">Errore nel salvataggio del segnalibro</string>
+    <string name="feed_notice_delete_failed">Errore durante l\'eliminazione del post</string>
+    <string name="feed_notice_like_failed">Errore nel mettere Mi piace</string>
+    <string name="feed_notice_pin_failed">Errore durante il fissaggio del post</string>
+    <string name="feed_notice_publish_failed">Pubblicazione del post non riuscita</string>
+    <string name="feed_notice_published">Post pubblicato</string>
+    <string name="feed_notice_report_failed">Errore durante la segnalazione del post</string>
+    <string name="feed_notice_reported">Post segnalato</string>
+    <string name="feed_notice_repost_failed">Errore durante la ripubblicazione</string>
+    <string name="feed_notice_translation_failed">Errore di traduzione</string>
     <string name="feed_quote_cancel">Annulla</string>
     <string name="feed_quote_submit">Ripubblica</string>
     <string name="feed_reel">Reel</string>
@@ -56,6 +69,7 @@
     <string name="feed_repost_reposted">Ripubblicato</string>
     <string name="feed_repost_story">Storia</string>
     <string name="feed_reposts">Ricondivisioni</string>
+    <string name="feed_retry">Riprova</string>
     <string name="feed_translated">Traduzione disponibile</string>
     <string name="feed_unknown_author">Sconosciuto</string>
     <string name="feed_unlike">Non mi piace più</string>
@@ -63,10 +77,17 @@
     <string name="nearby_retry">Riprova</string>
     <string name="nearby_title">Nelle vicinanze</string>
     <string name="post_comments_cancel_reply">Annulla la risposta</string>
+    <string name="post_comments_copy_text">Copia il testo</string>
+    <string name="post_comments_delete_error">Impossibile eliminare il commento</string>
+    <string name="post_comments_deleted">Commento eliminato</string>
+    <string name="post_comments_load_error">Errore nel caricamento dei commenti</string>
+    <string name="post_comments_more_options">Altre opzioni</string>
     <string name="post_comments_reply_action">Rispondi</string>
     <string name="post_comments_reply_badge">Rispondi</string>
+    <string name="post_comments_reply_error">Errore nell\'invio della risposta</string>
     <string name="post_comments_replying_to">In risposta a %s</string>
     <string name="post_comments_send">Invia</string>
+    <string name="post_comments_send_error">Errore nell\'invio del commento</string>
     <string name="post_comments_sending">Invio…</string>
     <string name="post_comments_title">Commenti</string>
     <plurals name="post_comments_view_replies">

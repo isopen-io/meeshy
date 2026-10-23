@@ -24,6 +24,10 @@
         {
           "androidName": "chat_tray_remove",
           "status": "android-only"
+        },
+        {
+          "androidName": "chat_tray_too_large",
+          "status": "android-only"
         }
       ]
     }
