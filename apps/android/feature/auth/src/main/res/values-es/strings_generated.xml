@@ -6,6 +6,10 @@
     <string name="auth_forgot_never_had_text">El mismo enlace te permite crear una.</string>
     <string name="auth_forgot_subtitle">Recibe por correo un enlace para elegir una nueva contraseña.</string>
     <string name="auth_forgot_title">Contraseña olvidada</string>
+    <string name="auth_login_two_factor_description">Introduce el código de verificación de 6 dígitos generado por tu aplicación de autenticación.</string>
+    <string name="auth_login_two_factor_label">Código de verificación de doble factor</string>
+    <string name="auth_login_two_factor_placeholder">Código de verificación</string>
+    <string name="auth_login_two_factor_title">Doble factor</string>
     <string name="auth_magic_expired">Enlace caducado, envía uno nuevo</string>
     <string name="auth_magic_header">Tu dirección de correo</string>
     <string name="auth_magic_how_label">Cómo funciona</string>
@@ -18,6 +22,25 @@
     <string name="auth_magic_subtitle">Ninguna contraseña que recordar: te enviamos un enlace por correo. Ábrelo y ya habrás iniciado sesión.</string>
     <string name="auth_magic_success">¡Sesión iniciada!</string>
     <string name="auth_magic_title">Acceso por correo</string>
+    <string name="common_error_generic">Se ha producido un error</string>
+    <string name="email_verification_code_a11y_label">Código de verificación</string>
+    <string name="email_verification_code_placeholder">000000</string>
+    <string name="email_verification_error_expired_code">Este código ha caducado. Solicita uno nuevo.</string>
+    <string name="email_verification_error_generic">La verificación ha fallado. Inténtalo de nuevo.</string>
+    <string name="email_verification_error_invalid_code">Código de verificación no válido.</string>
+    <string name="email_verification_error_offline">Sin conexión. Comprueba tu red e inténtalo de nuevo.</string>
+    <string name="email_verification_error_resend_failed">No se ha podido reenviar el código de verificación</string>
+    <string name="email_verification_error_too_many_attempts">Demasiados intentos. Vuelve a intentarlo en unos minutos.</string>
+    <string name="email_verification_inbox_hint">Abre tu bandeja de entrada y revisa también la carpeta de correo no deseado.</string>
+    <string name="email_verification_nav_close">Cerrar</string>
+    <string name="email_verification_no_code">¿No has recibido el código?</string>
+    <string name="email_verification_resend_button">Reenviar el código</string>
+    <string name="email_verification_resend_confirmed">¡Código reenviado!</string>
+    <string name="email_verification_subtitle">Introduce el código de 6 dígitos enviado a <b>%s</b></string>
+    <string name="email_verification_subtitle_account_created">Tu cuenta ha sido creada. Se han enviado un código y un enlace de verificación a <b>%s</b>.</string>
+    <string name="email_verification_subtitle_activation_required">Tu contraseña es correcta, pero primero debes activar tu cuenta demostrando que esta dirección es tuya. Acabamos de enviar un código a <b>%s</b>.</string>
+    <string name="email_verification_title">Revisa tu correo</string>
+    <string name="email_verification_verify_button">Verificar</string>
     <string name="guest_join_back">Atrás</string>
     <string name="guest_join_birthday">Cumpleaños</string>
     <string name="guest_join_email">Correo</string>
@@ -40,6 +63,7 @@
     <string name="login_signup_link">Registrarse</string>
     <string name="login_signup_prompt">¿No tienes cuenta?</string>
     <string name="login_username_label">Usuario</string>
+    <string name="logout_in_progress">Cerrando sesión...</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d chispas para tu nivel 1</string>
     <string name="onboarding_gauge_reached">Nivel 1 alcanzado 🎉</string>
     <plurals name="onboarding_points_a11y">
@@ -60,6 +84,9 @@
     </plurals>
     <string name="onboarding_skipAll">Saltar todo</string>
     <string name="registration_back">Atrás</string>
+    <string name="session_closed_continue">Volver a iniciar sesión</string>
+    <string name="session_closed_signed_out_message">Esta sesión se cerró. Vuelve a iniciar sesión para continuar.</string>
+    <string name="session_closed_signed_out_title">Se cerró tu sesión</string>
     <string name="share_link_join_anonymously">Unirse de forma anónima</string>
     <string name="share_link_resume_anonymously">Retomar de forma anónima</string>
     <string name="signup_back">Atrás</string>

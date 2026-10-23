@@ -1,9 +1,22 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="profile_action_accept_connection">Verbindung akzeptieren</string>
+    <string name="profile_action_block_user">Benutzer blockieren</string>
+    <string name="profile_action_cancel_request">Anfrage abbrechen</string>
+    <string name="profile_action_connection_request">Verbindungsanfrage</string>
+    <string name="profile_action_decline_connection">Verbindung ablehnen</string>
+    <string name="profile_action_report">Melden</string>
+    <string name="profile_action_resend_request">Anfrage erneut senden</string>
+    <string name="profile_action_send_message">Nachricht senden</string>
+    <string name="profile_action_unblock_user">Benutzer entsperren</string>
     <string name="profile_activity_title">Aktivität</string>
     <string name="profile_back">Zurück</string>
     <string name="profile_bio_label">Bio</string>
+    <string name="profile_blocked_by_me">Sie haben diesen Benutzer blockiert</string>
+    <string name="profile_blocked_unblock">Entsperren</string>
     <string name="profile_cancel">Abbrechen</string>
+    <string name="profile_connection_context_received">%s möchte sich mit dir verbinden. Akzeptiere, um Nachrichten auszutauschen.</string>
+    <string name="profile_connection_context_sent">Du hast %s eine Verbindungsanfrage gesendet. Warten auf Antwort.</string>
     <string name="profile_detail_country">Land</string>
     <string name="profile_detail_system_language">Hauptsprache</string>
     <string name="profile_display_name_label">Anzeigename</string>
@@ -13,6 +26,7 @@
     <string name="profile_image_error_update">Profilfoto konnte nicht aktualisiert werden</string>
     <string name="profile_language_unset">Nicht festgelegt</string>
     <string name="profile_last_name_label">Nachname</string>
+    <string name="profile_open_conversation_error">Unterhaltung konnte nicht geöffnet werden</string>
     <string name="profile_presence_away">Abwesend</string>
     <string name="profile_presence_online">Online</string>
     <string name="profile_save">Speichern</string>
@@ -24,8 +38,13 @@
     <string name="profile_stat_messages">Nachrichten</string>
     <string name="profile_stat_translations">Übersetzungen</string>
     <string name="profile_stats_title">Statistiken</string>
+    <string name="profile_status_connected">Verbunden</string>
     <string name="profile_system_language_label">Hauptsprache</string>
     <string name="profile_title">Profil</string>
+    <string name="profile_toast_block_failed">Blockieren fehlgeschlagen</string>
+    <string name="profile_toast_unblock_failed">Entsperren fehlgeschlagen</string>
+    <string name="profile_toast_user_blocked">Benutzer blockiert</string>
+    <string name="profile_toast_user_unblocked">Benutzer entsperrt</string>
     <string name="profile_unknown">Unbekannt</string>
     <string name="profile_view_posts">Beiträge</string>
     <string name="report_close">Schließen</string>

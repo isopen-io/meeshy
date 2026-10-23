@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "story.viewer.a11y.profileOf", "androidName": "stories_viewer_profile_of", "status": "adopted" },
+        { "catalog": "app", "iosKey": "reels.action.mute", "androidName": "stories_viewer_mute", "status": "adopted" },
+        { "catalog": "app", "iosKey": "reels.action.unmute", "androidName": "stories_viewer_unmute", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "media.caption.see_more", "androidName": "stories_caption_see_more", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "media.caption.see_less", "androidName": "stories_caption_see_less", "status": "adopted" }
+      ]
+    }
+  }
+}
