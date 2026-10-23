@@ -47,6 +47,8 @@ const CONTENT_EVENT_READERS_ALLOWED = [
   'services/social/readingTelemetryErasure.ts',
   'routes/me/export-reading.ts',
   'services/InitService.ts',
+  // #11280 : ne lit que `type = playback` et ne sert que des quantiles k-anonymes, sans aucun acteur.
+  'services/social/playbackQoeAggregate.ts',
 ];
 
 describe('O8 — personne ne sert la télémétrie v2 par acteur', () => {
