@@ -398,7 +398,7 @@ final class CallManager: ObservableObject, Sendable {
     /// Construit au premier appel, jamais avec `CallManager` (#7955) : le client
     /// WebRTC et sa chaîne de filtres (Vision + Metal) n'ont rien à faire en
     /// mémoire tant qu'aucun appel n'a commencé.
-    private var builtWebRTCService: WebRTCService?
+    private(set) var builtWebRTCService: WebRTCService?
     var webRTCService: WebRTCService {
         if let builtWebRTCService { return builtWebRTCService }
         let service = WebRTCService()
