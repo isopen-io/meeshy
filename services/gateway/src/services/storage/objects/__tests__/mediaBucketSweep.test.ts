@@ -108,4 +108,17 @@ describe('sweepBucket — le seau ne garde que ce qu’une ligne vivante nomme',
     const report = await sweepBucket({ ...b, referenced: new Set(LIVE), now: NOW, graceMs: GRACE_MS, apply: true, allowMassRemoval: true });
     expect(report.kind === 'swept' && report.counts.removed).toBe(4);
   });
+
+  it('le seau se parcourt en FLUX : un objet est effacé avant que le suivant ne soit énuméré, jamais le seau entier en mémoire (audit D5)', async () => {
+    const events: string[] = [];
+    const objects = [...live(), { key: '2026/09/u9/a.jpg', lastModified: OLD }, { key: '2026/09/u9/b.jpg', lastModified: OLD }];
+    const report = await sweepBucket({
+      lister: { list: async function* () { for (const object of objects) { events.push(`list:${object.key}`); yield object; } } },
+      remover: { remove: async (key: string) => { events.push(`remove:${key}`); } },
+      referenced: new Set(LIVE), now: NOW, graceMs: GRACE_MS, apply: true,
+    });
+    expect(report.kind === 'swept' && report.counts.removed).toBe(2);
+    const secondPass = events.slice(objects.length);
+    expect(secondPass.indexOf('remove:2026/09/u9/a.jpg')).toBeLessThan(secondPass.indexOf('list:2026/09/u9/b.jpg'));
+  });
 });
