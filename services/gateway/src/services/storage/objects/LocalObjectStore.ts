@@ -6,6 +6,7 @@ import { createWriteStream } from 'node:fs';
 import type { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import { assertSafeStorageKey, isSafeStorageKey, type ByteRange, type MediaObjectStore, type ObjectBody, type StoredObjectHead } from './MediaObjectStore';
+import { storedFileETag } from '../../../utils/etag';
 
 /**
  * Le volume des dépôts (`UPLOAD_PATH`) vu comme un stockage d'objets (#11267).
@@ -33,7 +34,7 @@ export class LocalObjectStore implements MediaObjectStore {
     try {
       const stats = await stat(filePath);
       if (!stats.isFile()) return null;
-      return { size: stats.size, etag: `"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}-${stats.ino.toString(16)}"`, lastModified: stats.mtime, contentType: null };
+      return { size: stats.size, etag: storedFileETag(stats), lastModified: stats.mtime, contentType: null };
     } catch {
       return null;
     }
