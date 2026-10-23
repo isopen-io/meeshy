@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertDoesNotExist
@@ -12,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.StoryRingState
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -41,7 +43,9 @@ class ConversationFlatRowTest {
 
     private fun show(conversation: ApiConversation, isSelected: Boolean = false, typing: String? = null) {
         compose.setContent {
-            MeeshyTheme {
+            // Sans animation infinie (points de frappe): l'horloge de test doit pouvoir s'immobiliser.
+            CompositionLocalProvider(LocalReduceMotion provides true) {
+              MeeshyTheme {
                 ConversationRowContainer(
                     model = ConversationRowModel(
                         conversation = conversation,
@@ -60,6 +64,7 @@ class ConversationFlatRowTest {
                     ),
                     actions = ConversationRowActions(),
                 )
+              }
             }
         }
     }
