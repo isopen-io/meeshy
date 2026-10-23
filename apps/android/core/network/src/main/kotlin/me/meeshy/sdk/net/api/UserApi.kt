@@ -105,10 +105,6 @@ interface UserApi {
     @DELETE("users/me/devices/{id}")
     suspend fun revokeDevice(@Path("id") id: String): ApiResponse<DeviceRevokedResponse>
 
-    /** Profil public par pseudo (alias `/u/{username}` des liens partages). */
-    @GET("u/{username}")
-    suspend fun getProfileByUsername(@Path("username") username: String): ApiResponse<MeeshyUser>
-
     @GET("users/search")
     suspend fun search(
         @Query("q") query: String,

@@ -27,8 +27,13 @@ import org.junit.Test
 class RouteManifestRatchetTest {
 
     private companion object {
-        /** 286 : la dette de dev (280) plus les six routes de lecture et d'installation des lens (#11271). */
-        const val TO_PORT_CEILING = 286
+        /**
+         * 253 : 286 (dev 280 + six routes des lens, #11271) moins les 34 routes « à porter » que les
+         * interfaces des liens, du suivi de liens, de l'affiliation, des médias, de l'annuaire, des
+         * hashtags et des packs déclarent depuis la vague du 2026-10-23, plus `GET /u/:username`
+         * qui y revient : c'est un alias du profil public, qu'aucune interface ne vise (#4161, #4250).
+         */
+        const val TO_PORT_CEILING = 253
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
