@@ -133,6 +133,12 @@ on:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
       - '.github/workflows/ios.yml'
+      - 'scripts/ci/**'
+      - 'scripts/check-swift-catalog-dead-entries.mjs'
+      - 'scripts/check-accent-color-hardcoding.mjs'
+      - 'scripts/check-law-literals.sh'
+      - 'scripts/check-swift-viewbuilder.sh'
+      - 'scripts/check-ios-spm-resolve-retry.mjs'
   pull_request:
     branches:
       - main
@@ -145,6 +151,12 @@ on:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
       - '.github/workflows/ios.yml'
+      - 'scripts/ci/**'
+      - 'scripts/check-swift-catalog-dead-entries.mjs'
+      - 'scripts/check-accent-color-hardcoding.mjs'
+      - 'scripts/check-law-literals.sh'
+      - 'scripts/check-swift-viewbuilder.sh'
+      - 'scripts/check-ios-spm-resolve-retry.mjs'
   workflow_dispatch:
     # Suites ciblées (noms de classes MeeshyTests séparés par des virgules) :
     # la suite complète dépasse la limite du job, et un lot doit pouvoir
@@ -304,7 +316,7 @@ jobs:
   gardes-outillage:
     name: Gardes iOS (texte, ubuntu)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -355,6 +367,63 @@ jobs:
       # abaissée » sur le dépôt réel ; aucun compilateur Swift n'est requis (#11046).
       - name: Règles maison — cliquets sur la référence
         run: bash apps/ios/scripts/check_house_rules.sh --self-test && bash apps/ios/scripts/check_house_rules.sh
+
+      # Les cinq gardes ci-dessous lisent du SWIFT (et le script de résolution
+      # SPM) et rien d'autre : elles jugent donc ICI, là où vivent leurs entrées,
+      # et non dans `quality` de ci.yml, où un cliquet Swift rouge sautait toute
+      # la suite TS et bloquait la promotion de production. Node est épinglé comme
+      # dans ci.yml (NODE_VERSION).
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.19'
+
+      # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
+      # sans appelant se compte comme un lecteur : un décideur qui cherche qui
+      # consomme un champ voit la déclaration `case foo(...)` /
+      # `foo: '/chemin'` et GARDE, alors que rien ne l'appelle jamais. Les
+      # deux catalogues (`packages/MeeshySDK/.../Networking/Endpoints/*.swift`,
+      # `packages/shared/api/endpoints.ts`) sont GÉNÉRÉS depuis
+      # `services/gateway/route-manifest.json` — un marqueur posé à la main
+      # sur une entrée y serait écrasé (ou rejeté par le cliquet de
+      # régénération TS) à la prochaine régénération. Ces deux cliquets à deux
+      # sens gardent donc le compte de dette à CÔTÉ des catalogues plutôt que
+      # dedans, sur le modèle du ratchet de types ci-dessus.
+      - name: Swift catalog dead-entries ratchet
+        run: node scripts/check-swift-catalog-dead-entries.mjs --self-test && node scripts/check-swift-catalog-dead-entries.mjs
+
+      # #3678 — la règle d'accent (CLAUDE.md § « Conversation Accent Color »)
+      # veut qu'un composant lié au contexte d'une conversation utilise
+      # `accentColor`/`colorPalette`, jamais une couleur en dur. Le golden
+      # partagé qui PROUVE le calcul existe déjà (accent.vectors.json, joué
+      # par les 3 clients) ; ce cliquet ferme l'autre moitié du critère de
+      # fin de #3678 en empêchant le CONTOURNEMENT (`Color(hex:)` hors
+      # `Theme/`) de grossir en silence.
+      - name: Accent color hardcoding ratchet
+        run: node scripts/check-accent-color-hardcoding.mjs --self-test && node scripts/check-accent-color-hardcoding.mjs
+
+      - name: Law literals guard
+        run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
+
+      # #6545 — le run iOS déclenché sur `promote/main-39224d5fc9` est tombé
+      # avant toute compilation : `xcodebuild -resolvePackageDependencies`
+      # échouait quatre fois avec la MÊME erreur (« already exists in file
+      # system », une entrée du cache d'artefacts SwiftPM DU RUNNER), et la
+      # boucle de reprise — qui n'attendait et rejouait que pour une panne
+      # réseau — ne pouvait pas en sortir. La logique a quitté `ios.yml` pour
+      # `scripts/ci/resolve-spm-packages.sh`, rejouable ici (faux
+      # `xcodebuild`/`sleep` sur PATH) sans macOS : collision purgée sans
+      # dormir, panne réseau toujours retentée avec attente, échec réel
+      # toujours définitif après 4 essais.
+      - name: iOS SPM resolve retry guard
+        run: node scripts/check-ios-spm-resolve-retry.mjs --self-test && node scripts/check-ios-spm-resolve-retry.mjs
+
+      # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
+      # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
+      # ~15 min et meurt à la première erreur, alors que ce garde les liste
+      # toutes avant même que le job iOS ne démarre.
+      - name: ViewBuilder statement-chaining guard
+        run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
 
   # File d'attente des suites complètes (#9751). L'org a 5 jobs macOS
   # simultanés, et une suite complète les prend tous (build + 4 tranches) : deux
