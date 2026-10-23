@@ -1,5 +1,5 @@
 import { forgetCallJournal } from '../calls/call-network-journal-keys';
-import { SW_RUNTIME_CACHE_NAMES } from '../sw-caches';
+import { SW_ACCOUNT_CACHE_NAMES } from '../sw-caches';
 import { safeLocalStorage, type SafeStorage } from '../storage';
 
 import type { SessionStoreApi } from './session';
@@ -149,7 +149,7 @@ export type CacheStorageLike = {
 
 /**
  * `purgeReaderCaches` — LES SEAUX DU SERVICE WORKER QUI PORTENT DE LA DONNÉE
- * DE LECTEUR (`api`, `medias`, `sw-caches.ts`) ; le précache (le shell, le même
+ * DE LECTEUR (`api`, `medias`, `recent-media`, `sw-caches.ts`) ; le précache (le shell, le même
  * pour tous) n'y est pas.
  *
  * Le seau `api` range désormais chaque réponse sous l'identité qui l'a
@@ -166,7 +166,7 @@ export function purgeReaderCaches(storage?: CacheStorageLike): void {
   void store
     .keys()
     .then((names) =>
-      Promise.all(names.filter((name) => SW_RUNTIME_CACHE_NAMES.includes(name)).map((name) => store.delete(name))),
+      Promise.all(names.filter((name) => SW_ACCOUNT_CACHE_NAMES.includes(name)).map((name) => store.delete(name))),
     )
     .catch(() => undefined);
 }

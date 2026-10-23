@@ -47,12 +47,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onOpenShareLinkPicker = { navController.navigate(Routes.SHARE_LINK_PICKER) },
             onDashboard = { navController.navigate(Routes.DASHBOARD) },
             onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
-            onLogout = {
-                authViewModel.logout()
-                navController.navigate(Routes.LOGIN) {
-                    popUpTo(Routes.CONVERSATIONS) { inclusive = true }
-                }
-            },
+            onLogout = { authViewModel.logout() },
             header = {
                 StoryTray(
                     onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },

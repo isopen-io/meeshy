@@ -55,4 +55,15 @@
     <string name="time_lastSeen_online">Online</string>
     <string name="time_lastSeen_seen">Seen %s</string>
     <string name="time_lastSeen_yesterdayAt">Seen yesterday at %s</string>
+    <string name="viewer_caption_see_less">see less</string>
+    <string name="viewer_caption_see_less_hint">Collapses the caption</string>
+    <string name="viewer_caption_see_more">see more</string>
+    <string name="viewer_caption_see_more_hint">Shows the full caption</string>
+    <string name="viewer_media_unavailable">This media is no longer available</string>
+    <string name="viewer_more">More</string>
+    <string name="viewer_position">Media %1$d of %2$d</string>
+    <string name="viewer_retry">Try again</string>
+    <string name="viewer_save">Save</string>
+    <string name="viewer_saving">Saving…</string>
+    <string name="viewer_share_outside">Share outside Meeshy</string>
 </resources>

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "calls.history.error",
+          "androidName": "call_history_error",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.loadingMore",
+          "androidName": "call_history_loading_more",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.redial",
+          "androidName": "call_history_redial",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.redial.hint",
+          "androidName": "call_history_redial_hint",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.detail.type",
+          "androidName": "call_detail_type",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.detail.date",
+          "androidName": "call_detail_date",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.detail.duration",
+          "androidName": "call_detail_duration",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.detail.data",
+          "androidName": "call_detail_data",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.detail.phone",
+          "androidName": "call_detail_phone",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.type.audio",
+          "androidName": "call_detail_type_audio",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.type.video",
+          "androidName": "call_detail_type_video",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

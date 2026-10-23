@@ -55,4 +55,15 @@
     <string name="time_lastSeen_online">Online</string>
     <string name="time_lastSeen_seen">Gesehen %s</string>
     <string name="time_lastSeen_yesterdayAt">Gestern um %s gesehen</string>
+    <string name="viewer_caption_see_less">weniger anzeigen</string>
+    <string name="viewer_caption_see_less_hint">Klappt die Bildunterschrift ein</string>
+    <string name="viewer_caption_see_more">mehr anzeigen</string>
+    <string name="viewer_caption_see_more_hint">Zeigt die vollständige Bildunterschrift</string>
+    <string name="viewer_media_unavailable">Dieses Medium ist nicht mehr verfügbar</string>
+    <string name="viewer_more">Mehr</string>
+    <string name="viewer_position">Medium %1$d von %2$d</string>
+    <string name="viewer_retry">Erneut versuchen</string>
+    <string name="viewer_save">Speichern</string>
+    <string name="viewer_saving">Wird gesichert…</string>
+    <string name="viewer_share_outside">Außerhalb von Meeshy teilen</string>
 </resources>

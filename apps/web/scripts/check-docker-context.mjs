@@ -82,6 +82,7 @@ const excluded = (path) =>
 const REQUIRED = [
   'apps/web/package.json',
   'apps/web/vite.config.ts',
+  'apps/web/vite/pwa.ts',
   'apps/web/tsconfig.json',
   'apps/web/index.html',
   'apps/web/nginx.conf',
