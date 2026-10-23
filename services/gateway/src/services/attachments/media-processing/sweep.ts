@@ -27,14 +27,14 @@ export type SweepPorts = {
   reschedule(job: MediaJob): Promise<void>;
 };
 
-export async function sweepPendingMedia(
-  ports: SweepPorts,
-  options: { readonly now: Date; readonly compatRenditionEnabled: boolean }
-): Promise<number> {
-  const before = new Date(options.now.getTime() - PENDING_SWEEP_AGE_MS);
+/** Les tâches des pièces `pending` créées avant `before`, une par jeu d'octets. */
+export async function pendingMediaJobs(
+  listPending: SweepPorts['listPending'],
+  options: { readonly before: Date; readonly limit: number; readonly compatRenditionEnabled: boolean }
+): Promise<readonly MediaJob[]> {
   const targets: readonly MediaJobTarget[] = ['messageAttachment', 'postMedia'];
-  const jobs = (await Promise.all(targets.map(async (target) => {
-    const rows = await ports.listPending(target, before, PENDING_SWEEP_BATCH);
+  return (await Promise.all(targets.map(async (target) => {
+    const rows = await listPending(target, options.before, options.limit);
     const seen = new Set<string>();
     return rows.flatMap((row) => {
       if (row.filePath === null) return [];
@@ -51,7 +51,17 @@ export async function sweepPendingMedia(
       return job ? [job] : [];
     });
   }))).flat();
+}
 
+export async function sweepPendingMedia(
+  ports: SweepPorts,
+  options: { readonly now: Date; readonly compatRenditionEnabled: boolean }
+): Promise<number> {
+  const jobs = await pendingMediaJobs(ports.listPending, {
+    before: new Date(options.now.getTime() - PENDING_SWEEP_AGE_MS),
+    limit: PENDING_SWEEP_BATCH,
+    compatRenditionEnabled: options.compatRenditionEnabled,
+  });
   const results = await Promise.allSettled(jobs.map((job) => ports.reschedule(job)));
   return results.filter((r) => r.status === 'fulfilled').length;
 }

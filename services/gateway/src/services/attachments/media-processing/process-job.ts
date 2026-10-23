@@ -105,6 +105,7 @@ export async function processMediaJob(deps: ProcessJobDeps, job: MediaJob, hooks
   const delegate = deps.prisma[job.target];
   const done = new Set<MediaJobKind>(hooks.done ?? []);
   let recordIds: readonly string[] = [job.recordId];
+  let written: Record<string, unknown> = {};
 
   for (const [index, kind] of job.kinds.entries()) {
     if (done.has(kind)) continue;
@@ -116,13 +117,18 @@ export async function processMediaJob(deps: ProcessJobDeps, job: MediaJob, hooks
     const rendered = await renderDeferred(deps, source, kind, { strict: true });
     const last = index === job.kinds.length - 1;
 
-    await delegate.updateMany({ where, data: fieldsOf(rendered, row) });
+    const fields = fieldsOf(rendered, row);
+    written = { ...written, ...fields };
+    await delegate.updateMany({ where, data: fields });
     const survivors = await delegate.findMany({ where, select: { id: true } });
     if (survivors.length === 0) {
       await unlinkProduced(deps.uploadBasePath, rendered);
       return { status: 'gone' };
     }
-    if (last) await delegate.updateMany({ where: { ...where, processingState: 'pending' }, data: { processingState: 'ready' } });
+    // Les champs rendus sont RÉAPPLIQUÉS avec `ready` : une copie lue avant la
+    // première écriture et insérée après elle ne passe jamais prête sans
+    // vignette (troisième passe d'audit, R2).
+    if (last) await delegate.updateMany({ where: { ...where, processingState: 'pending' }, data: { ...written, processingState: 'ready' } });
 
     recordIds = survivors.map((survivor) => survivor.id);
     done.add(kind);

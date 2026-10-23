@@ -22,16 +22,17 @@ export type LeaseClient = {
 export function listenerLease(
   client: () => Promise<LeaseClient>,
   instanceId: string,
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  key: string = MEDIA_LISTENER_LEASE_KEY
 ): { holds(): Promise<boolean> } {
   let last: { readonly at: number; readonly held: boolean } | null = null;
 
   const refresh = async (): Promise<boolean> => {
     try {
       const redis = await client();
-      if (await redis.setnx(MEDIA_LISTENER_LEASE_KEY, instanceId, MEDIA_LISTENER_LEASE_TTL_SECONDS)) return true;
-      if ((await redis.get(MEDIA_LISTENER_LEASE_KEY)) !== instanceId) return false;
-      await redis.expire(MEDIA_LISTENER_LEASE_KEY, MEDIA_LISTENER_LEASE_TTL_SECONDS);
+      if (await redis.setnx(key, instanceId, MEDIA_LISTENER_LEASE_TTL_SECONDS)) return true;
+      if ((await redis.get(key)) !== instanceId) return false;
+      await redis.expire(key, MEDIA_LISTENER_LEASE_TTL_SECONDS);
       return true;
     } catch {
       return false;
