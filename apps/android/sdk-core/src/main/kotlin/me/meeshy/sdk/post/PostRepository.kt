@@ -803,8 +803,11 @@ class PostRepository @Inject constructor(
         parentId: String? = null,
         effectFlags: Int? = null,
         clientMutationId: String? = null,
+        originalLanguage: String? = null,
     ): NetworkResult<ApiPostComment> =
-        apiCall { postApi.addComment(postId, CreateCommentRequest(content, parentId, effectFlags), clientMutationId) }
+        apiCall {
+            postApi.addComment(postId, CreateCommentRequest(content, parentId, effectFlags, originalLanguage), clientMutationId)
+        }
 
     suspend fun updateComment(
         postId: String,

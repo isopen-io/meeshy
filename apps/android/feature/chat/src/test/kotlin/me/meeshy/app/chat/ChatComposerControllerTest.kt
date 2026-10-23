@@ -332,6 +332,62 @@ class ChatComposerControllerTest {
         assertThat(r.recents.history.value).containsExactly("❤️", "🎉").inOrder()
     }
 
+    // --- la langue choisie tient (#12484) ---------------------------------------------------------
+
+    @Test
+    fun `a french draft typed letter by letter keeps the french pill and leaves in french`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("pt", 0.4) })
+        val text = "Recette offline Android"
+
+        val pills = text.indices.map { end ->
+            r.controller.onDraftChange(text.substring(0, end + 1))
+            r.state.composerLanguageCode
+        }
+        r.controller.send()
+        advanceUntilIdle()
+
+        assertThat(pills.toSet()).containsExactly("fr")
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", text, "fr", me, null) }
+    }
+
+    @Test
+    fun `a manual pick survives the draft and the send`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("pt", 0.99) })
+        r.controller.onComposerLanguagePicked("es")
+        r.controller.onDraftChange("Recette offline Android")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "Recette offline Android", "es", me, null) }
+    }
+
+    @Test
+    fun `leaving an edit empties the field and gives back the default pill`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "typo")))
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("Il gatto è sul tavolo perché non vuole più mangiare")
+        assertThat(r.state.composerLanguageCode).isEqualTo("it")
+        r.controller.cancelEdit()
+
+        assertThat(r.text.text).isEmpty()
+        assertThat(r.state.composerLanguageCode).isEqualTo("fr")
+    }
+
+    @Test
+    fun `applying an edit gives back the pill of the restored draft`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "typo")))
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("Il gatto è sul tavolo perché non vuole più mangiare")
+        r.controller.send()
+        advanceUntilIdle()
+
+        assertThat(r.text.text).isEmpty()
+        assertThat(r.state.composerLanguageCode).isEqualTo("fr")
+    }
+
     private fun ownRecent(id: String, content: String) = LocalMessage(
         ApiMessage(
             id = id,

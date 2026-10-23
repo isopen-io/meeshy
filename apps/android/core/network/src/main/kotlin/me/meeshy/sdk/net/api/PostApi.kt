@@ -125,6 +125,8 @@ data class CreateCommentRequest(
     val content: String,
     val parentId: String? = null,
     val effectFlags: Int? = null,
+    /** La langue dans laquelle le commentaire est écrit ; absente, la passerelle la devine (#12484). */
+    val originalLanguage: String? = null,
 )
 
 /** Repost a post — port of RepostRequest (StoryModels.swift). */
