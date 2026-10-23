@@ -10,6 +10,7 @@
  *   - `GET    /packs/lens/pending`          la file de modération (`canModerateContent`) ;
  *   - `POST   /packs/lens/:slug/review`     publier ou refuser, en FIXANT la fenêtre et les communautés ;
  *   - `POST   /packs/lens/:slug/withdraw`   retirer une lens publiée (`canModerateContent`) ;
+ *   - `GET    /packs/lens/withdrawn`        les lens retirées, à rétablir (`canModerateContent`, #12321) ;
  *   - `POST   /packs/lens/:slug/restore`    rétablir une lens retirée (`canModerateContent`, #12321) ;
  *   - `GET    /packs/lens/:slug/document`   le document servi, pour l'auteur, la modération, et à qui la lens est offerte.
  *
@@ -219,6 +220,20 @@ export async function lensPacksRoutes(fastify: FastifyInstance, options: LensPac
       schema: { description: 'La file de modération des lens, la plus ancienne proposition d’abord (#11271).', tags: [...tags, 'admin'], summary: 'List lenses awaiting review', response: { 200: list, ...PACK_ERRORS } },
     },
     guard(`[GET ${basePath}/pending]`, async (_request, reply, viewer) => sendSuccess(reply, await packs.pending(viewer.userId))),
+  );
+
+  fastify.get(
+    '/withdrawn',
+    {
+      onRequest: [fastify.authenticate, requireModerator],
+      schema: {
+        description: 'Les lens RETIRÉES, la plus récemment retirée d’abord, avec le mot du retrait (#12321) — pour les rétablir sans connaître leur nom. Au plus 200.',
+        tags: [...tags, 'admin'],
+        summary: 'List withdrawn lenses',
+        response: { 200: list, ...PACK_ERRORS },
+      },
+    },
+    guard(`[GET ${basePath}/withdrawn]`, async (_request, reply, viewer) => sendSuccess(reply, await packs.withdrawn(viewer.userId))),
   );
 
   fastify.post<{ Params: { slug: string }; Body: unknown }>(

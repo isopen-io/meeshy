@@ -155,6 +155,7 @@
     "GET /api/v1/admin/users/:userId/stats",
     "GET /api/v1/admin/users/:userId/voice-profile",
     "GET /api/v1/packs/lens/pending",
+    "GET /api/v1/packs/lens/withdrawn",
     "GET /api/v1/packs/lens/submissions",
     "PATCH /api/v1/admin/agent/delivery-queue/:id",
     "PATCH /api/v1/admin/agent/topics/:id",

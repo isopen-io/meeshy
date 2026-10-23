@@ -42,6 +42,7 @@ const LENS_ROUTES: readonly DeclaredRouteReaders[] = [
   { method: 'PUT', path: '/api/v1/packs/lens/:slug/install' },
   { method: 'DELETE', path: '/api/v1/packs/lens/:slug/install' },
   { method: 'GET', path: '/api/v1/packs/lens/pending' },
+  { method: 'GET', path: '/api/v1/packs/lens/withdrawn' },
   { method: 'GET', path: '/api/v1/packs/lens/submissions' },
   { method: 'POST', path: '/api/v1/packs/lens/submissions' },
   { method: 'POST', path: '/api/v1/packs/lens/:slug/review' },
