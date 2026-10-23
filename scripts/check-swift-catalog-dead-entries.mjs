@@ -545,7 +545,13 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // de D22(b), que le web émet et que le carnet iOS émettra dans son lot). Entrées PRÉMATURÉES, pas des faux
 // morts (#5427). Valeur MESURÉE le 2026-10-22 en local, en diffant les entrées mortes entre origin/dev (322)
 // et la fusion de la branche de #10167 avec origin/dev.
-const BASELINE_DEAD_ENTRIES = 324;
+// 324 -> 325 (#11329, 2026-10-23) : `AttachmentsEndpoint.byAttachmentIdSubtitlesByLang`
+// (`GET /api/v1/attachments/:attachmentId/subtitles/:lang`, la transcription servie en WebVTT dans la langue
+// du lecteur). La passerelle la sert depuis S27 (#11329) ; iOS la lira par IL21, le web par W21, deux lots
+// qui en dépendent et ne sont pas encore livrés. Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE
+// le 2026-10-23 en local en diffant les entrées mortes entre origin/dev~60 (324) et origin/dev (325) : une
+// seule entrée nouvelle, la même que côté TS.
+const BASELINE_DEAD_ENTRIES = 325;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
