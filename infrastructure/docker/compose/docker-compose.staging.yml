@@ -127,6 +127,55 @@ services:
       retries: 3
 
   # ===========================================================================
+  # SEAU DES MÉDIAS STAGING — stockage S3 privé (#11267)
+  # ===========================================================================
+  # La passerelle double ses médias dans ce seau (MEDIA_S3_*, plus bas) et le
+  # relit quand le disque n'a plus un fichier ; AUCUN client ne l'adresse.
+  # D'où : ni `ports`, ni Traefik, et le seul réseau INTERNE du staging (jamais
+  # `meeshy-network`, partagé avec la production et Traefik). Garde :
+  # media-bucket-never-public.test.ts.
+  #
+  # Profil `media-s3` : rien ne démarre sans `--profile media-s3` ET des
+  # identifiants posés sur l'hôte. Sans identifiants, MinIO prendrait
+  # « minioadmin » : aucune valeur par défaut n'est donc écrite ici.
+  #
+  # Image : MinIO ne publie plus d'image communautaire depuis le 2025-10-23
+  # (CVE-2025-62506 non corrigée en amont) ; la construction Chainguard est
+  # tenue à jour. Le code ne parle que S3 : une autre implémentation (Garage,
+  # SeaweedFS, R2) se branche par MEDIA_S3_IMAGE et MEDIA_S3_ENDPOINT.
+  media-s3-staging:
+    image: ${MEDIA_S3_IMAGE:-cgr.dev/chainguard/minio:latest}
+    container_name: meeshy-media-s3-staging
+    profiles: ["media-s3"]
+    restart: unless-stopped
+    logging: *journald-logging
+    command: ["server", "/data"]
+    environment:
+      - MINIO_ROOT_USER=${MEDIA_S3_ACCESS_KEY_ID}
+      - MINIO_ROOT_PASSWORD=${MEDIA_S3_SECRET_ACCESS_KEY}
+      - MINIO_BROWSER=off
+    volumes:
+      - media_staging_bucket:/data
+    networks:
+      - meeshy-staging-network
+
+  # Crée le seau, PRIVÉ (un seau MinIO neuf n'a aucune politique anonyme ;
+  # `anonymous set` n'est jamais appelé). Idempotent, rejoué jusqu'au succès.
+  media-s3-init-staging:
+    image: ${MEDIA_S3_CLIENT_IMAGE:-cgr.dev/chainguard/minio-client:latest}
+    container_name: meeshy-media-s3-init-staging
+    profiles: ["media-s3"]
+    restart: on-failure
+    logging: *journald-logging
+    depends_on:
+      - media-s3-staging
+    command: ["mb", "--ignore-existing", "staging/${MEDIA_S3_BUCKET:-meeshy-media-staging}"]
+    environment:
+      - MC_HOST_staging=http://${MEDIA_S3_ACCESS_KEY_ID}:${MEDIA_S3_SECRET_ACCESS_KEY}@media-s3-staging:9000
+    networks:
+      - meeshy-staging-network
+
+  # ===========================================================================
   # P3X REDIS UI STAGING - accès SSH tunnel/VPN uniquement (#6254)
   # ===========================================================================
   # Même traitement qu'en production (#3640) : jamais routée par Traefik — un
@@ -329,6 +378,18 @@ services:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET absente sur l hote. Vide, la passerelle signerait avec un secret publie dans le depot}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - UPLOAD_PATH=/app/uploads
+      # #11267 — le seau des médias : écriture en double, relecture par la
+      # passerelle quand le disque n'a plus un fichier, miroir continu des
+      # écrivains qui posent encore sur le disque. Éteint tant que
+      # MEDIA_S3_MIRROR ne vaut pas « on » sur l'hôte (profil `media-s3`).
+      - MEDIA_S3_MIRROR=${MEDIA_S3_MIRROR:-off}
+      - MEDIA_S3_MIRROR_FOLLOW=${MEDIA_S3_MIRROR:-off}
+      - MEDIA_S3_ENDPOINT=http://media-s3-staging:9000
+      - MEDIA_S3_BUCKET=${MEDIA_S3_BUCKET:-meeshy-media-staging}
+      - MEDIA_S3_REGION=us-east-1
+      - MEDIA_S3_FORCE_PATH_STYLE=true
+      - MEDIA_S3_ACCESS_KEY_ID=${MEDIA_S3_ACCESS_KEY_ID:-}
+      - MEDIA_S3_SECRET_ACCESS_KEY=${MEDIA_S3_SECRET_ACCESS_KEY:-}
       # Volume DÉDIÉ à la bibliothèque de sons — même règle qu'en prod :
       # surtout PAS sous UPLOAD_PATH (servi sans authentification par nginx
       # jusqu'à #11256 : rester hors de cet arbre garde d'un remontage futur).
@@ -691,6 +752,9 @@ volumes:
     name: meeshy-staging-gateway-uploads
   gateway_staging_sounds:
     name: meeshy-staging-gateway-sounds
+  # #11267 — les objets du seau des médias (profil `media-s3`).
+  media_staging_bucket:
+    name: meeshy-staging-media-bucket
   # Le magasin d'avatars servi en lecture seule par `static-files-staging`.
   # Depuis que le frontend de staging est la v3.1 (nginx statique), il n'a plus
   # d'ÉCRIVAIN : le legacy y déposait `/app/public/u`. Le volume reste déclaré
