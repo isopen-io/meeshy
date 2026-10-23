@@ -200,14 +200,14 @@ final class LensPrimitivesTests: XCTestCase {
     }
 
     private static func identityStrip(_ n: Int) -> [UInt8] {
-        let level = { (index: Int) in UInt8((Double(index * 255) / Double(n - 1)).rounded()) }
-        return (0..<n).flatMap { g in
-            (0..<(n * n)).flatMap { x in [level(x % n), level(g), level(x / n), 255] }
+        let level = { (index: Int) -> UInt8 in UInt8((Double(index * 255) / Double(n - 1)).rounded()) }
+        return (0..<n).flatMap { (g: Int) -> [UInt8] in
+            (0..<(n * n)).flatMap { (x: Int) -> [UInt8] in [level(x % n), level(g), level(x / n), 255] }
         }
     }
 
     private static func invertingCube() -> LensLutCube? {
-        let strip = identityStrip(16).enumerated().map { index, value in index % 4 == 3 ? value : 255 - value }
+        let strip = identityStrip(16).enumerated().map { pair -> UInt8 in pair.offset % 4 == 3 ? pair.element : 255 - pair.element }
         return LensLutStrip.cube(rgba: strip, width: 256, height: 16)
     }
 
@@ -237,8 +237,8 @@ final class LensPrimitivesTests: XCTestCase {
 
     private static func brightPixels(_ octets: [UInt8], in rect: CGRect) -> Int {
         let w = Int(size.width)
-        return (Int(rect.minY)..<Int(rect.maxY)).reduce(0) { total, y in
-            total + (Int(rect.minX)..<Int(rect.maxX)).filter { x in octets[(y * w + x) * 4] > 128 }.count
+        return (Int(rect.minY)..<Int(rect.maxY)).reduce(0) { (total: Int, y: Int) -> Int in
+            total + (Int(rect.minX)..<Int(rect.maxX)).filter { (x: Int) -> Bool in octets[(y * w + x) * 4] > 128 }.count
         }
     }
 }
