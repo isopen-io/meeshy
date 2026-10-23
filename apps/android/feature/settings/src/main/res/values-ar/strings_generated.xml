@@ -38,6 +38,13 @@
     <string name="account_contact_send">إرسال</string>
     <string name="account_contact_verified">موثّق</string>
     <string name="account_contact_verify">تحقُّق</string>
+    <string name="account_delete_button_hint_ready">اضغط لتأكيد الحذف</string>
+    <string name="account_delete_button_hint_type_phrase">اكتب عبارة التأكيد أولًا</string>
+    <string name="account_delete_confirmation_value_matched">العبارة صحيحة</string>
+    <string name="account_delete_confirmation_value_pending">العبارة ناقصة</string>
+    <string name="account_delete_error">خطأ أثناء حذف الحساب. يُرجى المحاولة مرة أخرى.</string>
+    <string name="account_delete_final_message">هل أنت متأكد تمامًا؟ لا يمكن التراجع عن هذا الإجراء.</string>
+    <string name="account_delete_final_title">التأكيد النهائي</string>
     <string name="change_password_confirm_label">تأكيد كلمة المرور</string>
     <string name="change_password_current_label">كلمة المرور الحالية</string>
     <string name="change_password_error_generic">حدث خطأ. يُرجى المحاولة مرة أخرى.</string>
@@ -54,6 +61,8 @@
     <string name="change_password_strength_5">ممتازة</string>
     <string name="change_password_submit">تغيير كلمة المرور</string>
     <string name="change_password_title">تغيير كلمة المرور</string>
+    <string name="common_cancel">إلغاء</string>
+    <string name="common_delete">حذف</string>
     <string name="common_done">تم</string>
     <string name="crash_kind_cpu">المعالج</string>
     <string name="crash_kind_crash">تعطّل</string>
@@ -144,6 +153,9 @@
     <string name="settings_back">رجوع</string>
     <string name="settings_blocked_users">المستخدمون المحظورون</string>
     <string name="settings_change_password">تغيير كلمة المرور</string>
+    <string name="settings_data_export_button_done">اكتمل التصدير</string>
+    <string name="settings_data_export_hint_exporting">جارٍ التصدير</string>
+    <string name="settings_data_export_hint_start">يبدأ تصدير بياناتك</string>
     <string name="settings_delete_account">حذف الحساب</string>
     <string name="settings_dnd">عدم الإزعاج</string>
     <string name="settings_dnd_day_sun">شمس</string>

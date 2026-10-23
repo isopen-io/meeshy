@@ -38,6 +38,13 @@
     <string name="account_contact_send">Envoyer</string>
     <string name="account_contact_verified">Vérifié</string>
     <string name="account_contact_verify">Vérifier</string>
+    <string name="account_delete_button_hint_ready">Appuyez pour confirmer la suppression</string>
+    <string name="account_delete_button_hint_type_phrase">Tapez la phrase de confirmation d\'abord</string>
+    <string name="account_delete_confirmation_value_matched">Phrase correcte</string>
+    <string name="account_delete_confirmation_value_pending">Phrase incomplète</string>
+    <string name="account_delete_error">Erreur lors de la suppression du compte. Veuillez réessayer.</string>
+    <string name="account_delete_final_message">Êtes-vous absolument certain ? Cette action est irréversible.</string>
+    <string name="account_delete_final_title">Confirmation finale</string>
     <string name="change_password_confirm_label">Confirmer le mot de passe</string>
     <string name="change_password_current_label">Mot de passe actuel</string>
     <string name="change_password_error_generic">Une erreur est survenue. Veuillez réessayer.</string>
@@ -54,6 +61,8 @@
     <string name="change_password_strength_5">Excellent</string>
     <string name="change_password_submit">Changer le mot de passe</string>
     <string name="change_password_title">Changer le mot de passe</string>
+    <string name="common_cancel">Annuler</string>
+    <string name="common_delete">Supprimer</string>
     <string name="common_done">Terminé</string>
     <string name="crash_kind_cpu">CPU</string>
     <string name="crash_kind_crash">Crash</string>
@@ -144,6 +153,9 @@
     <string name="settings_back">Retour</string>
     <string name="settings_blocked_users">Utilisateurs bloqués</string>
     <string name="settings_change_password">Changer le mot de passe</string>
+    <string name="settings_data_export_button_done">Export terminé</string>
+    <string name="settings_data_export_hint_exporting">Export en cours</string>
+    <string name="settings_data_export_hint_start">Lance l\'export de vos données</string>
     <string name="settings_delete_account">Supprimer le compte</string>
     <string name="settings_dnd">Ne pas déranger</string>
     <string name="settings_dnd_day_sun">Soleil</string>
