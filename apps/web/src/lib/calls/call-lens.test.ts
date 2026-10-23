@@ -57,3 +57,15 @@ describe('poseCallLens', () => {
     expect(refreshed).toHaveLength(2);
   });
 });
+
+describe('poseCallLens — la mémoire de la lens retirée', () => {
+  test('ses images sont relâchées quand une autre lens la remplace ou qu’on la retire', () => {
+    const closed: string[] = [];
+    const image = (name: string) => ({ close: () => void closed.push(name) }) as unknown as ImageBitmap;
+    poseCallLens({ lens: LENS, languages: ['fr'], level: 'full', files: { cubes: {}, images: { a: image('a') } } }, () => undefined);
+    poseCallLens({ lens: LENS, languages: ['fr'], level: 'full', files: { cubes: {}, images: { b: image('b') } } }, () => undefined);
+    expect(closed).toEqual(['a']);
+    poseCallLens(null, () => undefined);
+    expect(closed).toEqual(['a', 'b']);
+  });
+});

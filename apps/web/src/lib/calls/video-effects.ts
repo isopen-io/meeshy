@@ -71,10 +71,11 @@ export const needsFramePipeline = (effects: VideoEffects): boolean => effectsFil
  */
 export type FrameSettings = { readonly effects: VideoEffects; readonly zoom: number; readonly segmentBlur: boolean; readonly lens?: LensSettings };
 
-export const frameSettings = (effects: VideoEffects, camera: { readonly nativeBlur: boolean; readonly zoom: number }): FrameSettings => ({
+export const frameSettings = (effects: VideoEffects, camera: { readonly nativeBlur: boolean; readonly zoom: number }, lens?: LensSettings): FrameSettings => ({
   effects,
   zoom: Number.isFinite(camera.zoom) ? Math.max(1, camera.zoom) : 1,
   segmentBlur: effects.blur && !camera.nativeBlur,
+  ...(lens === undefined ? {} : { lens }),
 });
 
 /** Faut-il traiter les images ? Sinon la caméra part BRUTE, sans traverser le moindre code. */

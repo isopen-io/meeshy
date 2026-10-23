@@ -9,10 +9,10 @@ import { createLensStage, type LensStage, type LensStageEnv } from './lens-stage
  * chargé À LA DEMANDE (`lens-lazy.ts`), jamais l'inverse. Il ne dépend que
  * d'API qu'un WORKER connaît aussi.
  *
- * Les fichiers d'une lens (cube de sa LUT, images de ses stickers) ne lui sont
- * pas encore remis : aucune surface du web ne télécharge un pack de lens. Une
- * lens s'y joue donc par ses textes, ses particules et son plan, et sa LUT et
- * ses stickers attendent ce téléchargement (#11320, blocage consigné).
+ * Les fichiers d'une lens (cube de sa LUT, images de ses stickers) arrivent
+ * DANS ses réglages (`LensSettings.files`, #11994), lus et décodés par l'hôte
+ * (`call-lens.ts`) : l'étage les y lit, et ses `cube`/`assets` ne sont que le
+ * repli d'une lens posée sans fichiers.
  */
 function browserLutStage(): LutStage | null {
   if (typeof OffscreenCanvas === 'undefined') return null;
