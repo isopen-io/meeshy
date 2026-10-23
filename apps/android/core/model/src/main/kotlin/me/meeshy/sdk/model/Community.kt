@@ -11,6 +11,8 @@ data class ApiCommunityUser(
     val displayName: String? = null,
     val avatar: String? = null,
     val isOnline: Boolean? = null,
+    /** Contour d'avatar équipé (#10945) ; absent ou illisible => aucun contour. */
+    val profileDecor: ServedProfileDecor? = null,
 )
 
 /** A community member — port of APICommunityMember (CommunityModels.swift). */
