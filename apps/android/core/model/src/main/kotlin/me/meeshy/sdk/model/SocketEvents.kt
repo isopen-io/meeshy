@@ -624,3 +624,6 @@ data class SocketStatusUnreactedData(
     val userId: String,
     val emoji: String,
 )
+
+/** `message:translation-shared` (#9899) : la même forme que la lecture REST, enveloppe scellée comprise. */
+typealias MessageTranslationSharedEvent = me.meeshy.sdk.model.translation.SharedTranslation
