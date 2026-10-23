@@ -206,7 +206,14 @@ data class StorySlideView(
     val strokes: List<StoryDrawingStroke> = emptyList(),
     /** Déjà vue par le lecteur à l'ouverture : la lecture commence à la première non vue. */
     val isViewed: Boolean = false,
-)
+    /** Instant de publication, pour le « il y a 2 h » de l'en-tête ; `null` si illisible. */
+    val createdAtMillis: Long? = null,
+) {
+    /** La slide fait du son : vidéo de fond ou de premier plan, ou piste audio. */
+    val hasSound: Boolean
+        get() = backgroundVideoUrl != null || backgroundAudioUrl != null || foregroundAudioUrl != null ||
+            foregroundMedia.any { it.isVideo }
+}
 
 /**
  * One language chip of the story language bar. Pure data.
@@ -258,6 +265,10 @@ data class StoryViewerUiState(
      * suivant reprend sans naviguer.
      */
     val isPaused: Boolean = false,
+    /** Coupure du son pour toute la session de lecture (iOS `isGlobalMuted`). */
+    val isMuted: Boolean = false,
+    /** Avatar de l'auteur du groupe courant, résolu ; `null` ⇒ initiales. */
+    val authorAvatarUrl: String? = null,
 ) {
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
