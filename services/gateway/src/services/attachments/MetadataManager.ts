@@ -15,6 +15,7 @@ import { createImageThumbnail, thumbnailPathFor, createResponsiveVariants, varia
 import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { guardedTimeout } from '../../utils/guarded-timer';
+import { mediaKindOf, mediaKindOfPath, timeMediaStage } from '../metrics/mediaStageMetrics';
 
 // Logger dédié pour MetadataManager
 const logger = enhancedLogger.child({ module: 'MetadataManager' });
@@ -78,6 +79,10 @@ export class MetadataManager {
    * Génère une miniature pour une image (WebP — sprint bande passante D4)
    */
   async generateThumbnail(imagePath: string): Promise<string | null> {
+    return timeMediaStage('thumbnail', 'image', () => this.generateThumbnailUntimed(imagePath));
+  }
+
+  private async generateThumbnailUntimed(imagePath: string): Promise<string | null> {
     try {
       const fullPath = path.join(this.uploadBasePath, imagePath);
       const thumbnailPath = thumbnailPathFor(imagePath);
@@ -103,6 +108,13 @@ export class MetadataManager {
   async generateImageVariants(
     imagePath: string,
     options: { readonly strict?: boolean } = {}
+  ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
+    return timeMediaStage('variants', 'image', () => this.generateImageVariantsUntimed(imagePath, options));
+  }
+
+  private async generateImageVariantsUntimed(
+    imagePath: string,
+    options: { readonly strict?: boolean }
   ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
     try {
       const fullPath = path.join(this.uploadBasePath, imagePath);
@@ -170,6 +182,10 @@ export class MetadataManager {
    * Génère une miniature pour une vidéo avec ffmpeg
    */
   async generateVideoThumbnail(videoPath: string): Promise<string | null> {
+    return timeMediaStage('thumbnail', 'video', () => this.generateVideoThumbnailUntimed(videoPath));
+  }
+
+  private async generateVideoThumbnailUntimed(videoPath: string): Promise<string | null> {
     try {
       const fullPath = path.join(this.uploadBasePath, videoPath);
       const ext = path.extname(videoPath);
@@ -630,6 +646,10 @@ export class MetadataManager {
    * `fullPath` est ABSOLU : la sonde sert aussi un fichier hors du dépôt.
    */
   async probeMediaStreams(fullPath: string): Promise<{ video: boolean; audio: boolean } | null> {
+    return timeMediaStage('probe', mediaKindOfPath(fullPath), () => this.probeMediaStreamsUntimed(fullPath));
+  }
+
+  private async probeMediaStreamsUntimed(fullPath: string): Promise<{ video: boolean; audio: boolean } | null> {
     return new Promise((resolve) => {
       const timeout = guardedTimeout({ name: 'ffprobe-streams-timeout', afterMs: 10000, logger, run: () => resolve(null) });
       ffmpeg.ffprobe(fullPath, (err, metadata) => {
@@ -725,6 +745,16 @@ export class MetadataManager {
    * Avec validation intelligente utilisant les métadonnées du frontend
    */
   async extractMetadata(
+    filePath: string,
+    attachmentType: string,
+    mimeType: string,
+    providedMetadata?: any,
+    fileSize?: number
+  ): Promise<AttachmentMetadata> {
+    return timeMediaStage('probe', mediaKindOf(mimeType), () => this.extractMetadataUntimed(filePath, attachmentType, mimeType, providedMetadata, fileSize));
+  }
+
+  private async extractMetadataUntimed(
     filePath: string,
     attachmentType: string,
     mimeType: string,

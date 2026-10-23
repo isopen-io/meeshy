@@ -42,10 +42,11 @@ type DefinitionRow = {
   readonly themeKey: string;
   readonly stepPoints: number;
   readonly copy: unknown;
+  readonly rewardPackKey?: string | null;
   readonly revision: number;
 };
 
-const SELECT = { number: true, startDay: true, status: true, themeKey: true, stepPoints: true, copy: true, revision: true } as const;
+const SELECT = { number: true, startDay: true, status: true, themeKey: true, stepPoints: true, copy: true, rewardPackKey: true, revision: true } as const;
 
 /** Les lignes de la base → le calendrier de la loi (révision = la plus haute écrite). */
 export function scheduleOfRows(rows: readonly DefinitionRow[]): SeasonSchedule {
@@ -59,6 +60,7 @@ export function scheduleOfRows(rows: readonly DefinitionRow[]): SeasonSchedule {
       themeKey: row.themeKey,
       stepPoints: row.stepPoints,
       copy: row.copy ?? null,
+      rewardPack: row.rewardPackKey ?? undefined,
     })),
   });
 }
@@ -199,6 +201,7 @@ export async function writeSeasonEdit(params: {
     themeKey: def.themeKey,
     stepPoints: def.stepPoints,
     copy: (def.copy ?? null) as never,
+    rewardPackKey: def.rewardPack ?? null,
     revision,
     updatedBy: actorId,
   };
@@ -226,6 +229,7 @@ export async function writeSeasonEdit(params: {
           themeKey: existing.themeKey,
           stepPoints: existing.stepPoints,
           copy: existing.copy ?? null,
+          ...(existing.rewardPackKey ? { rewardPack: existing.rewardPackKey } : {}),
         } as SeasonDefinition);
   return { ok: true, schedule: fresh, definition: def, before };
 }

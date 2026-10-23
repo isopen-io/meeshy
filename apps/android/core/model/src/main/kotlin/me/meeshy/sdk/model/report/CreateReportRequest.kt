@@ -6,8 +6,10 @@ import kotlinx.serialization.Serializable
  * The wire body for `POST /reports` (S2 — any authenticated user may file a report; the gateway
  * fills `reporterId`/`reporterName` from the auth context, so the client omits them).
  *
- * Matches the gateway `createReportSchema`: `reportedType` ∈ {message,user,conversation,community},
- * `reportedEntityId` the reported entity id, `reportType` a lowercase reason token
+ * Matches the gateway `createReportSchema` (`routes/reports/index.ts`): `reportedType` ∈
+ * {message,user,conversation,community,post,story,comment,sound}. Android files five-plus-one of them:
+ * `user`, `message`, `post`, `story`, `comment` and `conversation` (see [ReportRequestBuilder]);
+ * `community` and `sound` have no report surface yet. `reportedEntityId` the reported entity id, `reportType` a lowercase reason token
  * ([ReportReason.wireValue]), and an optional free-text `reason`. Serialised with the SDK Json
  * (`explicitNulls = false`), a `null` [reason] is omitted from the body — matching the gateway's
  * optional field.
@@ -68,6 +70,17 @@ public object ReportRequestBuilder {
      */
     public fun forStory(storyId: String, reason: ReportReason, details: String?): CreateReportRequest? =
         build("story", storyId, reason, details)
+
+    /**
+     * Builds a comment-report body (`'comment'` cote gateway) — un commentaire de post, de reel
+     * ou de story. Memes gardes que [forUser].
+     */
+    public fun forComment(commentId: String, reason: ReportReason, details: String?): CreateReportRequest? =
+        build("comment", commentId, reason, details)
+
+    /** Builds a conversation-report body (`'conversation'` cote gateway). Memes gardes que [forUser]. */
+    public fun forConversation(conversationId: String, reason: ReportReason, details: String?): CreateReportRequest? =
+        build("conversation", conversationId, reason, details)
 
     private fun build(
         reportedType: String,
