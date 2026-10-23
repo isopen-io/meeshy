@@ -39,10 +39,10 @@ function tempAssets(files: Record<string, string>) {
   return dir;
 }
 
-async function buildApp(options: { index: PackIndex; assetsDir: string; globalMax?: number; community?: { approvedContract: (src: string) => Promise<string | null> } }): Promise<FastifyInstance> {
+async function buildApp(options: { index: PackIndex; assetsDir: string; globalMax?: number; community?: { approvedContract: (src: string) => Promise<string | null> }; lens?: { approvedFile: (src: string) => Promise<{ bytes: Buffer; contentType: string } | null> } }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(rateLimit, { global: true, max: options.globalMax ?? 300, timeWindow: '1 minute' });
-  await app.register(packAssetsRoutes, { prefix: '/api/v1/pack-assets', index: options.index, assetsDir: options.assetsDir, community: options.community ?? { approvedContract: async () => null } });
+  await app.register(packAssetsRoutes, { prefix: '/api/v1/pack-assets', index: options.index, assetsDir: options.assetsDir, community: options.community ?? { approvedContract: async () => null }, lens: options.lens ?? { approvedFile: async () => null } });
   app.get('/api/v1/autre', async () => ({ ok: true }));
   await app.ready();
   return app;
@@ -268,3 +268,26 @@ describe('le registre RÉEL des cadres de gloire (#10154, L3) — servi partout,
   });
 });
 
+describe('les fichiers d’une lens publiée (#11271)', () => {
+  it('sert le fichier d’une lens publiée hors liste blanche, immuable, à son type ; 404 sinon, et jamais une autre extension', async () => {
+    const png = Buffer.from('89504e470d0a1a0a', 'hex');
+    const asked: string[] = [];
+    const app = await buildApp({
+      index: RETAINED_ONLY,
+      assetsDir: tempAssets({}),
+      lens: { approvedFile: async (src) => { asked.push(src); return src === 'abcdefabcdefabcd.png' ? { bytes: png, contentType: 'image/png' } : null; } },
+    });
+    try {
+      const served = await app.inject({ method: 'GET', url: '/api/v1/pack-assets/abcdefabcdefabcd.png' });
+      expect(served.statusCode).toBe(200);
+      expect(served.headers['content-type']).toBe('image/png');
+      expect(served.headers['cache-control']).toBe(PACK_ASSETS_CACHE_CONTROL);
+      expect(served.rawPayload.equals(png)).toBe(true);
+      expect((await app.inject({ method: 'GET', url: '/api/v1/pack-assets/0000000000000000.png' })).statusCode).toBe(404);
+      expect((await app.inject({ method: 'GET', url: '/api/v1/pack-assets/abcdefabcdefabcd.woff2' })).statusCode).toBe(404);
+      expect(asked).not.toContain('abcdefabcdefabcd.woff2');
+    } finally {
+      await app.close();
+    }
+  });
+});

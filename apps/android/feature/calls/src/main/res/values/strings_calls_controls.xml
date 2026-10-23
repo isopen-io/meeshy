@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_more">More actions</string>
+    <string name="call_control_more_caption">More</string>
+    <string name="call_control_more_hint">Shows or hides the call actions</string>
+    <string name="call_control_expanded">Expanded</string>
+    <string name="call_control_collapsed">Collapsed</string>
+    <string name="call_actions_my_image">My image</string>
+    <string name="call_actions_the_call">The call</string>
+    <string name="call_actions_label">Call actions</string>
+    <string name="call_control_mute_label">Mute microphone</string>
+    <string name="call_control_unmute_label">Unmute microphone</string>
+    <string name="call_control_mute_caption">Mic</string>
+    <string name="call_control_mute_hint">Mutes your microphone for the other person</string>
+    <string name="call_control_output_hint">Chooses where the call audio plays</string>
+    <string name="call_control_end_caption">Hang up</string>
+    <string name="call_control_end_hint">Ends the current call</string>
+    <string name="call_control_video_paused">Video paused (weak connection)</string>
+    <string name="call_control_video_paused_caption">Paused</string>
+    <string name="call_control_video_paused_hint">Tap to turn the camera off. Video resumes automatically if the connection improves.</string>
+    <string name="call_control_video_caption">Video</string>
+    <string name="call_panel_close">Close</string>
+    <string name="call_panel_back">Back to actions</string>
+</resources>

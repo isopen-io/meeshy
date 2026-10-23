@@ -106,6 +106,8 @@ const frComposerAttach = {
   'composer.guest.refused.size': '« {name} » est trop lourd : {max} au plus.',
   'send.failure.guestKind': 'ce fichier n’est pas accepté ici',
   'send.failure.guestTooLarge': 'ce fichier est trop lourd ici ({max} au plus)',
+  'send.failure.formatRefused': 'ce format de photo (HEIC) n’est pas encore accepté',
+  'profile.image.formatRefused': 'Ce format de photo (HEIC) n’est pas encore accepté. Choisissez une photo JPEG ou PNG.',
 } as const;
 
 export type ComposerAttachCatalogSlice = Readonly<Record<keyof typeof frComposerAttach, string>>;

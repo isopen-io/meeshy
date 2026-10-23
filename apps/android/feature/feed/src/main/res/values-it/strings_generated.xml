@@ -81,7 +81,14 @@
     <string name="post_comments_delete_error">Impossibile eliminare il commento</string>
     <string name="post_comments_deleted">Commento eliminato</string>
     <string name="post_comments_load_error">Errore nel caricamento dei commenti</string>
+    <plurals name="post_comments_load_more_replies">
+        <item quantity="one">Mostra %d altra risposta</item>
+        <item quantity="many">Mostra altre %d risposte</item>
+        <item quantity="other">Mostra altre %d risposte</item>
+    </plurals>
+    <string name="post_comments_load_more_replies_hint">Mostra le risposte restanti in questo thread</string>
     <string name="post_comments_more_options">Altre opzioni</string>
+    <string name="post_comments_reply_a11y_label">%1$s, risposta. %2$s. %3$s</string>
     <string name="post_comments_reply_action">Rispondi</string>
     <string name="post_comments_reply_badge">Rispondi</string>
     <string name="post_comments_reply_error">Errore nell\'invio della risposta</string>

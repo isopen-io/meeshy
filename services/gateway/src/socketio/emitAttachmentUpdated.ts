@@ -76,9 +76,11 @@ export interface AttachmentUpdatedParams {
 export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Promise<void> {
   const { io, prisma, deliveryQueue, connectedUsers, conversationId, messageId, attachment } = params;
 
+  const attachmentId = typeof attachment.id === 'string' ? attachment.id : undefined;
   const payload = {
     conversationId,
     messageId,
+    ...(attachmentId ? { attachmentId } : {}),
     attachment: serializeAttachmentForSocket(attachment),
   };
 
@@ -107,8 +109,6 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
       payload,
     });
   }
-
-  const attachmentId = typeof attachment.id === 'string' ? attachment.id : undefined;
 
   await enqueueForOfflineParticipants(
     { deliveryQueue, prisma, connectedUsers },

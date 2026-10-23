@@ -23,6 +23,15 @@ public struct DeviceMediaInputs: Sendable, Equatable, Decodable {
             @unknown default: self = .critical
             }
         }
+
+        /// **LE seuil de chaleur (#9880)** : `.serious` ou pire. La politique
+        /// des lecteurs, la fenêtre des réels et le tier le lisent ici, et
+        /// nulle part ailleurs — deux lois ne peuvent plus trancher à deux états.
+        public var isUnderPressure: Bool { self == .serious || self == .critical }
+
+        /// Seul le stade critique suspend tout préchargement vidéo : au stade
+        /// sérieux, le plancher N±2 de la fenêtre des réels tient (#9702).
+        public var stopsVideoPrefetch: Bool { self == .critical }
     }
 
     /// Mémoire RAPPORTÉE, en Gio ; `nil` = inconnue (Safari), ne baisse rien.

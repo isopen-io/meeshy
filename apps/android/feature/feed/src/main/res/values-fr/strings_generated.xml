@@ -81,7 +81,14 @@
     <string name="post_comments_delete_error">Impossible de supprimer le commentaire</string>
     <string name="post_comments_deleted">Commentaire supprimé</string>
     <string name="post_comments_load_error">Impossible de charger les commentaires</string>
+    <plurals name="post_comments_load_more_replies">
+        <item quantity="one">Voir %d réponse de plus</item>
+        <item quantity="many">Voir %d réponses de plus</item>
+        <item quantity="other">Voir %d réponses de plus</item>
+    </plurals>
+    <string name="post_comments_load_more_replies_hint">Affiche les réponses restantes de ce fil</string>
     <string name="post_comments_more_options">Plus d\'options</string>
+    <string name="post_comments_reply_a11y_label">%1$s, réponse. %2$s. %3$s</string>
     <string name="post_comments_reply_action">Répondre</string>
     <string name="post_comments_reply_badge">Répondre</string>
     <string name="post_comments_reply_error">Impossible d\'envoyer la réponse</string>

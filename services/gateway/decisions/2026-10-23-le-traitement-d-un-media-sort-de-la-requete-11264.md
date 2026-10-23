@@ -1,0 +1,28 @@
+## 2026-10-23 : Le traitement d'un média sort de la requête HTTP (#11264)
+
+Défaut validé par le porteur dans #11249 (point 5) : BullMQ sur le Redis existant, et un conteneur worker de plus sur le serveur partagé. Revu après l'audit adversarial S9 (bloquant, 2026-10-23).
+
+### Décision
+
+- **Une file, `media-processing`, UNE tâche par pièce** (`media-<table>-<id>`, idempotente ; BullMQ refuse `:`), qui porte ses rendus dans l'ordre : `thumb` (vignette, variantes WebP/AVIF, thumbhash), puis `transcode` (rendu H.264 de #11261). Priorité : celle du rendu le plus urgent (`thumb` = 2, `transcode` = 3). La pièce est `ready` à la fin de SA tâche — un drapeau « dernière tâche » suivait l'ordre du tableau, pas l'achèvement.
+- **Un rendu raté LÈVE dans le worker** (mode strict de `renderDeferred`, jusqu'aux variantes WebP et AVIF) : trois essais à reprise exponentielle, les rendus déjà faits sautés (`progress`) ; au dernier, la pièce et ses copies passent à `failed` avant que l'échec ne soit publié (toutes annoncées par `progress`), et le média reste servi tel quel.
+- **Ce qui sort de la requête** : la vignette et les variantes d'une image d'**au moins 2 Mo**, la vignette et le rendu H.264 d'une **vidéo**. **Ce qui reste dans la requête** : la vérification et la persistance ; le retrait des métadonnées et la conversion d'un HEIC ; une image de moins de 2 Mo (un ancien client attend sa vignette dans la réponse) ; un vocal (sa normalisation changerait l'URL après la réponse).
+- **La requête n'attend jamais Redis.** La connexion productrice est distincte (sans file hors ligne, réessais bornés), chaque appel est borné à 2 s, et l'on ne diffère que si un worker **bat** (clé Redis à 30 s, posée toutes les 10 s). Sans battement : tout reste synchrone, comme avant la file. Si la mise en file échoue ou dépasse son délai après le battement, la pièce RESTE `pending` et le balayage la reprend : elle n'est jamais rendue sur place à ce moment-là, car une mise en file qui dépasse son délai peut quand même aboutir, et deux rendus (requête et worker) écriraient le même fichier de sortie (contre-audit S9, N1).
+- **Balayage** : le worker remet en file, toutes les 5 min, les pièces `pending` de plus de 10 min (une par jeu d'octets), en remplaçant une tâche finie retenue de même identifiant. Index `[processingState, createdAt]` sur les deux tables, créé par `scripts/migrations/mongodb/media_processing_sweep_indexes_11264.js` (staging : Claude ; production : feu vert du porteur).
+- **Retour arrière** (troisième passe, R1) : `MEDIA_QUEUE=drain` éteint la file (les nouveaux envois redeviennent synchrones) et laisse la passerelle reprendre, toutes les 5 min, sous bail (une instance), cinq par cinq, les pièces `pending` de plus de 15 min — en synchrone, par la même fabrique que le worker ; un rendu raté les passe `failed`. Le même balayage tourne avec `MEDIA_QUEUE=bullmq` quand AUCUN worker ne bat. Puis on retire `MEDIA_QUEUE` quand plus aucune pièce n'est `pending`.
+- **Effacement** : le worker écrit toutes les lignes qui partagent les octets (même `filePath` : copies de diffusion et de transfert, qui reprennent `processingState`), puis relit ; si plus aucune ligne ne les cite (suppression, vue unique brûlée, éphémère expiré PENDANT le rendu), il efface ce qu'il vient de produire. Et `deleteAttachment` efface, quand aucune ligne ne partage plus les octets, les chemins dérivés CONVENTIONNELS présents sur le disque (vignette, variantes, rendu H.264), que la ligne les cite ou non : la suppression qui lit la ligne pendant que le worker écrit ne laisse plus rien.
+- **`processingState`** est optionnel sur `MessageAttachment` et `PostMedia`. Absent, la ligne est prête (héritée, ou traitée pendant la requête).
+- **Notification** : le worker est un autre processus. La passerelle écoute la file (`QueueEvents` : `progress`, `completed`, `failed`) et UNE seule instance émet (bail `SET NX EX` sur le `CacheStore`) :
+  - `message:attachment-updated` aux lecteurs, avec ses trois audiences, et `attachmentId` au premier niveau (le décodeur Android natif l'exige) ;
+  - la rediffusion du post ou de la story (`post:updated` / `story:updated`) à ses lecteurs ;
+  - `attachment:ready` (nouveau) à la room personnelle de l'auteur, échec compris.
+- **Allumage** : `MEDIA_QUEUE=bullmq` (staging). Éteint, aucune tâche n'existe : c'est l'état de la production tant que la mesure CPU de S2 n'est pas faite (#9232).
+- **Worker** `media-worker-staging` : même image, `node dist/src/workers/media-worker.js`, concurrence 1 (une valeur mal formée retombe à 1), sonde de santé sur son propre battement, `stop_grace_period` de 180 s. Aucun port, aucun routeur Traefik (garde `media-uploads-never-public.test.ts`). Il se déploie avec la passerelle par un second appel TOLÉRANT de `docker.yml` : la copie hôte de `meeshy-deploy-staging.sh` doit être réinstallée pour l'accepter, et d'ici là la passerelle reste synchrone.
+
+### Rétrocompatibilité (#9223)
+
+Un ancien client reçoit une réponse de même forme, sans `thumbnailUrl` pour une grande image (le champ était déjà nullable), puis la ligne complète par `message:attachment-updated`. iOS et le web l'appliquent ; Android natif le décode désormais (`attachmentId`) mais ne l'applique pas encore — issue de suivi. Un nouveau client lit `processingState` et `attachment:ready`. Un ancien serveur n'émet ni l'un ni l'autre. Les tâches de l'ancienne forme (`{ kind, final }`) encore en file sont lues.
+
+### Chemin `uploadEncryptedFile`
+
+Il reçoit le clair et chiffre côté serveur : **ce n'est pas du E2EE au sens de #9224**. Rien n'y est différé : il ne produit qu'une vignette en tampon, chiffrée avec le fichier.

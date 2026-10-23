@@ -38,6 +38,13 @@ const mockEncryptionService = {
 
 const mockFsReadFile = jest.fn() as jest.Mock<any>;
 const mockFsUnlink = jest.fn() as jest.Mock<any>;
+/** Un fichier « existe » pour `stat`, sauf les chemins dérivés CONVENTIONNELS : ceux-là, chaque témoin les pose (#11264). */
+const CONVENTIONAL_DERIVED = /_(thumb\.(webp|jpg)|\d+w\.(webp|avif)|h264\.mp4)$/;
+const mockConventionalPresent = new Set<string>();
+const mockFsStat = jest.fn(async (p: unknown) => {
+  if (CONVENTIONAL_DERIVED.test(String(p)) && !mockConventionalPresent.has(String(p))) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+  return { size: 1024 };
+}) as jest.Mock<any>;
 
 jest.mock('../../../services/attachments/UploadProcessor', () => ({
   UploadProcessor: jest.fn().mockImplementation(() => mockUploadProcessor),
@@ -58,7 +65,7 @@ jest.mock('fs', () => ({
     mkdir: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
     writeFile: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
     chmod: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
-    stat: (jest.fn() as jest.Mock<any>).mockResolvedValue({ size: 1024 }),
+    stat: (...args: unknown[]) => mockFsStat(...args),
   },
 }));
 
@@ -563,6 +570,35 @@ describe('AttachmentService — direct-access methods', () => {
         `/uploads/${SHARED}`,
         `/uploads/${THUMB}`,
       ]);
+    });
+
+    it('les rendus que le worker posait PENDANT la suppression partent avec la dernière ligne (#11264, contre-audit N2)', async () => {
+      const SHARED = '2024/01/video.mp4';
+      const prisma = makeAttachmentStore([makeAttachmentRow({ id: 'solo', filePath: SHARED, thumbnailPath: null })]);
+      mockConventionalPresent.add('/uploads/2024/01/video_h264.mp4');
+      mockConventionalPresent.add('/uploads/2024/01/video_thumb.webp');
+      const svc = new AttachmentService(prisma as PrismaClient);
+
+      await svc.deleteAttachment('solo');
+      mockConventionalPresent.clear();
+
+      const unlinked = mockFsUnlink.mock.calls.map((call: unknown[]) => call[0]);
+      expect(unlinked).toEqual(expect.arrayContaining(['/uploads/2024/01/video_h264.mp4', '/uploads/2024/01/video_thumb.webp']));
+    });
+
+    it('une COPIE vivante garde les rendus conventionnels', async () => {
+      const SHARED = '2024/01/video.mp4';
+      const prisma = makeAttachmentStore([
+        makeAttachmentRow({ id: 'famille', filePath: SHARED }),
+        makeAttachmentRow({ id: 'collegues', filePath: SHARED }),
+      ]);
+      mockConventionalPresent.add('/uploads/2024/01/video_h264.mp4');
+      const svc = new AttachmentService(prisma as PrismaClient);
+
+      await svc.deleteAttachment('famille');
+      mockConventionalPresent.clear();
+
+      expect(mockFsUnlink).not.toHaveBeenCalled();
     });
 
     it('une ligne seule sur son fichier : le fichier part, sans charger de collection', async () => {

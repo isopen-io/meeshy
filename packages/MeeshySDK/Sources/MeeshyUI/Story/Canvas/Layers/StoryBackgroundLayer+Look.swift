@@ -100,10 +100,15 @@ extension StoryBackgroundLayer {
         // L'asset de l'item joué ; à défaut — une boucle dont les répliques ne
         // sont pas encore en file —, celui que l'attache a ouvert sur la même URL.
         guard let asset = backgroundPlaybackItems(of: player).first?.asset ?? attachedVideoAsset else { return }
+        let looper = avPlayerLooper
         backgroundVideoLookTask = Task { @MainActor [weak self, weak player] in
             guard let composition = try? await StoryVideoAdjustmentsProcessor.composition(for: asset,
-                                                                                          adjustments: reglages),
-                  !Task.isCancelled, let self, let player,
+                                                                                          adjustments: reglages)
+            else { return }
+            // Une boucle pose ses répliques quand SON asset est chargé — le même
+            // que la composition lit (#9881) : on attend qu'elles existent.
+            if let looper { await LoopReplicasReady.wait(for: looper) }
+            guard !Task.isCancelled, let self, let player,
                   self.appliedBackgroundVideoLook?.player == ObjectIdentifier(player),
                   self.appliedBackgroundVideoLook?.signature == signature else { return }
             self.backgroundPlaybackItems(of: player).forEach { $0.videoComposition = composition }
@@ -117,5 +122,67 @@ extension StoryBackgroundLayer {
         let candidats = (avPlayerLooper?.loopingPlayerItems ?? []) + [player.currentItem].compactMap { $0 }
         var vus = Set<ObjectIdentifier>()
         return candidats.filter { vus.insert(ObjectIdentifier($0)).inserted }
+    }
+}
+
+/// **Les répliques d'une boucle existent (#9881)** : l'`AVPlayerLooper` ne les
+/// pose qu'une fois l'asset de son modèle chargé. Une composition prête AVANT
+/// elles ne réglerait aucun tour de la boucle ; elle attend donc que le looper
+/// quitte `.unknown` (prêt ou en échec), ou que l'attente soit annulée.
+nonisolated enum LoopReplicasReady {
+    @MainActor
+    static func wait(for looper: AVPlayerLooper) async {
+        guard looper.status == .unknown else { return }
+        let signal = LooperStatusSignal()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                signal.arm(looper, continuation: continuation)
+            }
+        } onCancel: {
+            signal.fire()
+        }
+    }
+}
+
+// unchecked: l'observation et la reprise vivent sous `state` (Locked) ; elles ne sont pas Sendable.
+private nonisolated final class LooperStatusSignal: @unchecked Sendable {
+    private struct State {
+        var observation: NSKeyValueObservation?
+        var continuation: CheckedContinuation<Void, Never>?
+        var fired = false
+    }
+
+    private let state = Locked(uncheckedState: State())
+
+    func arm(_ looper: AVPlayerLooper, continuation: CheckedContinuation<Void, Never>) {
+        let alreadyFired = state.mutateUnchecked { state -> Bool in
+            state.continuation = continuation
+            return state.fired
+        }
+        guard !alreadyFired else { return fire() }
+        let observation = looper.observe(\.status, options: [.initial, .new]) { [weak self] observed, _ in
+            guard observed.status != .unknown else { return }
+            self?.fire()
+        }
+        let keep = state.mutateUnchecked { state -> Bool in
+            guard !state.fired else { return false }
+            state.observation = observation
+            return true
+        }
+        if !keep { observation.invalidate() }
+    }
+
+    /// Une seule reprise, quel que soit le premier signal.
+    func fire() {
+        let (observation, continuation) = state.mutateUnchecked { state -> (NSKeyValueObservation?, CheckedContinuation<Void, Never>?) in
+            state.fired = true
+            defer {
+                state.observation = nil
+                state.continuation = nil
+            }
+            return (state.observation, state.continuation)
+        }
+        observation?.invalidate()
+        continuation?.resume()
     }
 }
