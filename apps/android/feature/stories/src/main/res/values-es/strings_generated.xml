@@ -107,6 +107,8 @@
     <string name="story_composer_grabber">Asa de la barra de herramientas</string>
     <string name="story_composer_grabber_hint_dismiss">Arrastra hacia abajo para reducir o cerrar.</string>
     <string name="story_composer_grabber_hint_resize">Arrastra hacia arriba para ampliar, hacia abajo para reducir o cerrar.</string>
+    <string name="story_composer_redo">Rehacer</string>
+    <string name="story_composer_undo">Deshacer</string>
     <string name="story_send_caption_hint">Añadir un mensaje…</string>
     <string name="story_send_loading">Cargando conversaciones…</string>
     <plurals name="story_send_members">
