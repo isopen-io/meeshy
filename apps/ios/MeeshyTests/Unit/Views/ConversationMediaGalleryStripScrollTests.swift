@@ -59,8 +59,9 @@ final class ConversationMediaGalleryStripScrollTests: XCTestCase {
     }
 
     private static func thumbnailCount(in screen: RenderedScreen) -> Int {
-        let suffix = "sur \(count)"
-        return screen.nodes.compactMap(\.label).filter { $0.hasSuffix(suffix) }.count
+        let format = String(localized: "gallery.position", defaultValue: "Média %1$d sur %2$d", bundle: .main)
+        let positions = (1...count).map { String(format: format, $0, count) }
+        return screen.nodes.compactMap(\.label).filter { label in positions.contains { label.hasPrefix($0) } }.count
     }
 
     private static func scrollViews(in view: UIView) -> [UIScrollView] {
