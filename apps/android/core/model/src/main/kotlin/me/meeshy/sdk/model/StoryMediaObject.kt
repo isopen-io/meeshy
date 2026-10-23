@@ -23,7 +23,12 @@ data class StoryMediaObject(
     val scale: Double = 1.0,
     val rotation: Double = 0.0,
     override val volume: Float = 1.0f,
-    val aspectRatio: Double = 1.0,
+    /**
+     * Le ratio MESURÉ sur l'asset — `null` tant qu'aucune mesure n'est arrivée (#5100). `1.0`
+     * disait à la fois « pas encore mesuré » et « ce média est carré » ; la PRÉSENCE de la clé
+     * fait la mesure. Lire le ratio à servir par [servedAspectRatio].
+     */
+    val aspectRatio: Double? = null,
     val anchor: StoryAnchorPoint = StoryAnchorPoint(),
     val intrinsicDuration: Double? = null,
     val isBackground: Boolean = false,
@@ -67,4 +72,32 @@ data class StoryMediaObject(
     val isDuckingDisabled: Boolean? = null,
     /** Niveau d'avant le mute d'auteur ; invariant `mutedVolumeMemento != null => volume == 0`. */
     override val mutedVolumeMemento: Float? = null,
-) : me.meeshy.sdk.model.scene.StoryVolumeCarrying
+    /** Le filtre de CET objet (`StoryFilter` par son nom de fil) ; `null` : aucun filtre. */
+    val filter: String? = null,
+    /** ThumbHash du contenu (placeholder) ; au-delà de [MAX_THUMB_HASH_LENGTH] il se lit absent. */
+    val thumbHash: String? = null,
+) : me.meeshy.sdk.model.scene.StoryVolumeCarrying {
+
+    /** Le ratio à SERVIR : la mesure, ou le repli historique quand elle manque. */
+    val servedAspectRatio: Double get() = aspectRatio ?: UNMEASURED_ASPECT_RATIO
+
+    /** Type sûr de [mediaType] ; `null` pour un kind inconnu (client plus récent), jamais un échec. */
+    val kind: StoryMediaKind?
+        get() = when (mediaType) {
+            "image" -> StoryMediaKind.IMAGE
+            "video" -> StoryMediaKind.VIDEO
+            else -> null
+        }
+
+    /** Le filtre typé ; une valeur inconnue se lit « aucun filtre ». */
+    val parsedFilter: StoryFilter?
+        get() = filter?.let { name -> StoryFilter.entries.firstOrNull { it.name.lowercase() == name } }
+
+    /** Le thumbHash servi : un blob démesuré (charge malformée) se lit absent. */
+    val servedThumbHash: String? get() = thumbHash?.takeIf { it.length <= MAX_THUMB_HASH_LENGTH }
+
+    companion object {
+        const val UNMEASURED_ASPECT_RATIO: Double = 1.0
+        const val MAX_THUMB_HASH_LENGTH: Int = 100
+    }
+}

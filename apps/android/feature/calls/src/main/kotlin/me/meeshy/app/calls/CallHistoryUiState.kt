@@ -28,3 +28,23 @@ data class CallHistoryUiState(
     val isFilteredEmpty: Boolean
         get() = records.isEmpty() && !showSkeleton && errorMessage == null && missedOnly
 }
+
+/**
+ * Which body the journal shows — one decision for the four states, so an offline
+ * cold start reads « Erreur lors du chargement » (with retry) rather than « Aucun
+ * appel », and the missed filter still paging on its own shows the list footer
+ * rather than claiming there is no missed call.
+ */
+enum class CallHistoryContent {
+    SKELETON, ERROR, EMPTY, LIST;
+
+    companion object {
+        fun of(state: CallHistoryUiState): CallHistoryContent = when {
+            state.showSkeleton -> SKELETON
+            state.records.isNotEmpty() -> LIST
+            state.errorMessage != null -> ERROR
+            state.missedOnly && (state.hasMore || state.isLoadingMore) -> LIST
+            else -> EMPTY
+        }
+    }
+}

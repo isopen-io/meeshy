@@ -287,7 +287,7 @@ final class ComposerTrimTrackTests: XCTestCase {
     func test_finishEditingVideo_aFailedRender_neverFallsBackToTheRawClip() throws {
         let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertFalse(edition.contains("neuve ?? url"), "le brut ne remplace jamais un rendu raté")
-        XCTAssertTrue(edition.contains("guard let rendue else {"), "un rendu raté s'arrête avant toute remise")
+        XCTAssertTrue(edition.contains("guard let rendue = rendition?.delivery else {"), "un rendu raté s'arrête avant toute remise")
     }
 
     private static func clip() -> URL {

@@ -1,8 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_composer_edit_title">Editar a mensagem</string>
+    <string name="chat_composer_reply_a11y">Resposta a %1$s: %2$s</string>
+    <string name="chat_composer_reply_file">Arquivo</string>
+    <string name="chat_composer_reply_location">Localização</string>
+    <string name="chat_composer_reply_photo">Foto</string>
+    <string name="chat_composer_reply_unknown">uma mensagem</string>
+    <string name="chat_composer_reply_video">Vídeo</string>
+    <string name="chat_composer_reply_voice">Mensagem de voz</string>
+    <string name="chat_composer_reply_you">Você</string>
     <string name="chat_delete_confirm_cancel">Cancelar</string>
     <string name="chat_delete_confirm_hint">Apagar para todos fica disponível por 2 h após o envio.</string>
     <string name="chat_delete_confirm_title">Apagar esta mensagem?</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_send">Enviar</string>
+    <string name="common_unknown">Desconhecido</string>
     <string name="composer_a11y_addSelection">Adicionar a seleção</string>
     <string name="composer_a11y_cancelSelection">Cancelar a seleção</string>
     <string name="composer_a11y_openFullLibrary">Abrir toda a fototeca</string>
@@ -20,6 +32,14 @@
     <string name="composer_recent_grantAccess">Permitir acesso às fotos</string>
     <string name="composer_recent_grantAccess_hint">Para encontrar suas mídias recentes aqui</string>
     <string name="composer_recent_select">Selecionar</string>
+    <string name="message_detail_reactions_count_a11y">%d reação(ões)</string>
+    <string name="message_detail_reactions_empty">Nenhuma reação</string>
+    <string name="message_detail_report_confirm_message">A mensagem será enviada à moderação.</string>
+    <string name="message_detail_report_confirm_title">Denunciar esta mensagem?</string>
     <string name="recentMedia_resolveFailed">Não foi possível preparar esta mídia — use a biblioteca de fotos completa</string>
     <string name="recentMedia_resolveFailed_multiple">Não foi possível preparar %d mídias — use toda a fototeca</string>
+    <string name="starred_more_options">Mais opções</string>
+    <string name="starred_remove">Remover dos favoritos</string>
+    <string name="starred_remove_all">Remover tudo</string>
+    <string name="starred_row_hint">Abre a conversa</string>
 </resources>

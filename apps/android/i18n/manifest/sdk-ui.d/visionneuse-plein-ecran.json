@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "common.more", "androidName": "viewer_more", "status": "adopted" },
+        { "catalog": "app", "iosKey": "media.save.title", "androidName": "viewer_save", "status": "adopted" },
+        { "catalog": "app", "iosKey": "gallery.menu.share", "androidName": "viewer_share_outside", "status": "adopted" },
+        { "catalog": "app", "iosKey": "common.saving", "androidName": "viewer_saving", "status": "adopted" },
+        { "catalog": "app", "iosKey": "gallery.media.unavailable", "androidName": "viewer_media_unavailable", "status": "adopted" },
+        { "catalog": "app", "iosKey": "common.retry", "androidName": "viewer_retry", "status": "adopted" },
+        { "catalog": "app", "iosKey": "gallery.position", "androidName": "viewer_position", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "media.caption.see_more", "androidName": "viewer_caption_see_more", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "media.caption.see_less", "androidName": "viewer_caption_see_less", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "media.caption.see_more.hint", "androidName": "viewer_caption_see_more_hint", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "media.caption.see_less.hint", "androidName": "viewer_caption_see_less_hint", "status": "adopted" }
+      ]
+    }
+  }
+}

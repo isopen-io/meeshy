@@ -50,6 +50,8 @@
     <string name="stories_composer_style_neon">Neon</string>
     <string name="stories_composer_style_typewriter">Typewriter</string>
     <string name="stories_composer_text_caption">Caption</string>
+    <string name="stories_composer_text_finish">Done</string>
+    <string name="stories_composer_text_finish_a11y">Finish editing text</string>
     <string name="stories_delete_confirm_title">Delete this story?</string>
     <string name="stories_publish_retry">Retry</string>
     <string name="stories_report_reason_harassment">Harassment</string>
@@ -61,6 +63,8 @@
     <string name="stories_report_reason_violence">Violence</string>
     <string name="stories_reposted">Reposted</string>
     <string name="stories_translated">Translation available</string>
+    <string name="stories_tray_add_story">Add a story</string>
+    <string name="stories_tray_view_my_story">View my story</string>
     <string name="stories_viewer_close">Close</string>
     <string name="stories_viewer_mute">Mute background sound</string>
     <string name="stories_viewer_next">Next story</string>

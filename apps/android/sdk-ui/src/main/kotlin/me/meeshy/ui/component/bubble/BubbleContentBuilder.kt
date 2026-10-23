@@ -334,6 +334,7 @@ public object BubbleContentBuilder {
      *
      * The duration falls back to the transcription's `durationMs` when the
      * attachment carries no explicit `duration`, matching the gateway's two sources.
+     * Both are milliseconds (`MessageAttachment.duration`, packages/shared/prisma/schema.prisma).
      */
     private fun buildAudio(
         attachment: ApiMessageAttachment,
@@ -344,7 +345,7 @@ public object BubbleContentBuilder {
         val translatedAudio = resolveTranslatedAudio(attachment, preferences)
         val playableUrl = translatedAudio?.url ?: attachment.fileUrl
         val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
-            ?: attachment.duration
+            ?: attachment.duration?.let { it / 1000 }
             ?: attachment.transcription?.durationMs?.let { it / 1000 }
         return BubbleAudio(
             attachmentId = attachment.id,

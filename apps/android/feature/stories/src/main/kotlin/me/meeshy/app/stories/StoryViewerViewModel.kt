@@ -299,16 +299,27 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     /**
-     * Tap sur la scène : sur une story figée il REPREND sans naviguer
-     * (`StoryGestureOverlayView`) ; sinon moitié gauche = précédente, droite = suivante.
+     * Toucher simple sur la scène (iOS `StoryGestureDecisions`) : un BORD reprend une story
+     * figée sans naviguer, sinon il navigue ; la bande CENTRALE ne fait rien — elle appartient
+     * au double toucher.
      */
-    fun onCanvasTap(onLeftHalf: Boolean) {
+    fun onCanvasTap(zone: StoryTapZone) {
+        if (zone == StoryTapZone.Center) return
         if (isHoldPaused) {
-            isHoldPaused = false
-            _state.update { it.copy(isPaused = false) }
+            resume()
             return
         }
-        if (onLeftHalf) back() else advance()
+        if (zone == StoryTapZone.Previous) back() else advance()
+    }
+
+    /** Double toucher dans la bande centrale : bascule pause / lecture, sans naviguer. */
+    fun onCanvasDoubleTap() {
+        if (isHoldPaused) resume() else pauseByHold()
+    }
+
+    private fun resume() {
+        isHoldPaused = false
+        _state.update { it.copy(isPaused = false) }
     }
 
     /** Coupe ou rétablit le son de toutes les pistes de la session (iOS `StoryGlobalMute`). */
@@ -667,6 +678,10 @@ class StoryViewerViewModel @Inject constructor(
                 ?.let { StoryBackgroundValue.parse(it) },
             repostAttribution = StoryRepostAttribution.resolve(this),
             strokes = storyEffects?.drawingStrokes.orEmpty(),
+            stickers = StorySceneObjectsProjection.stickers(storyEffects) { mediaId ->
+                media.firstOrNull { it.id == mediaId }?.url?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+            },
+            audioChips = StorySceneObjectsProjection.audioChips(storyEffects),
             isViewed = isViewed,
             createdAtMillis = isoToEpochMillis(createdAt).takeIf { it > 0L },
         )
@@ -747,7 +762,7 @@ class StoryViewerViewModel @Inject constructor(
             x = x,
             y = y,
             scale = scale,
-            aspectRatio = aspectRatio,
+            aspectRatio = servedAspectRatio,
             startTime = startTime ?: 0.0,
             duration = duration ?: 0.0,
             fadeIn = fadeIn ?: 0.0,

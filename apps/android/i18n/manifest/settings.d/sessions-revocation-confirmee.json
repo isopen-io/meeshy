@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "sessions.revoke.confirm.title",
+          "androidName": "sessions_revoke_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.revoke.confirm.action",
+          "androidName": "sessions_revoke_confirm_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.revoke.confirm.message",
+          "androidName": "sessions_revoke_confirm_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.revokeAll.confirm.message",
+          "androidName": "sessions_revoke_all_confirm_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_revoke_all",
+          "androidName": "sessions_revoke_all_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.cancel",
+          "androidName": "sessions_cancel",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -19,6 +19,12 @@ public enum class SignupFieldIssue {
     DISPLAY_NAME_TOO_LONG,
     EMAIL_INVALID,
     PASSWORD_TOO_SHORT,
+
+    /** Un numéro SAISI de moins de [PhonePlausibility.MIN_DIGITS] chiffres. */
+    PHONE_TOO_SHORT,
+
+    /** Cinq chiffres identiques d'affilée ou répétition intégrale d'un motif court : un remplissage. */
+    PHONE_IMPLAUSIBLE,
 }
 
 /** Le verdict local, un champ à la fois — rendu par [SignupForm.validate]. */
@@ -26,20 +32,21 @@ public data class SignupValidation(
     val displayName: SignupFieldIssue? = null,
     val email: SignupFieldIssue? = null,
     val password: SignupFieldIssue? = null,
+    val phone: SignupFieldIssue? = null,
 ) {
     public val isValid: Boolean
-        get() = displayName == null && email == null && password == null
+        get() = displayName == null && email == null && password == null && phone == null
 
     /**
-     * Le refus local porté par [field]. [SignupField.PHONE] n'en a jamais : le
-     * téléphone n'est pas annoncé facultatif, mais un champ vide part
-     * simplement absent de la charge — il ne peut donc pas bloquer l'envoi.
+     * Le refus local porté par [field]. [SignupField.PHONE] n'en porte un que pour un numéro
+     * SAISI mais implausible : un champ vide part simplement absent de la charge, il ne peut
+     * donc pas bloquer l'envoi.
      */
     public fun issueFor(field: SignupField): SignupFieldIssue? = when (field) {
         SignupField.DISPLAY_NAME -> displayName
         SignupField.EMAIL -> email
         SignupField.PASSWORD -> password
-        SignupField.PHONE -> null
+        SignupField.PHONE -> phone
     }
 }
 
@@ -182,7 +189,17 @@ public data class SignupForm(
         displayName = displayNameIssue(),
         email = if (SignupFieldValidation.isEmailValidLocally(email.trim())) null else SignupFieldIssue.EMAIL_INVALID,
         password = if (password.length >= PASSWORD_MIN_LENGTH) null else SignupFieldIssue.PASSWORD_TOO_SHORT,
+        phone = phoneIssue(),
     )
+
+    /** Le numéro est facultatif : vide ne se refuse jamais, saisi il doit être plausible. */
+    private fun phoneIssue(): SignupFieldIssue? = when (PhonePlausibility.refusal(phoneDigits)) {
+        null -> null
+        PhonePlausibility.Refusal.TOO_SHORT -> SignupFieldIssue.PHONE_TOO_SHORT
+        PhonePlausibility.Refusal.IDENTICAL_RUN,
+        PhonePlausibility.Refusal.REPEATED_PATTERN,
+        -> SignupFieldIssue.PHONE_IMPLAUSIBLE
+    }
 
     /** Le bouton est actif dès que nom, e-mail et mot de passe sont valides. */
     public val canSubmit: Boolean get() = validate().isValid
@@ -202,6 +219,7 @@ public data class SignupForm(
             displayName = all.displayName?.takeIf { displayName.isNotEmpty() },
             email = all.email?.takeIf { email.isNotEmpty() },
             password = all.password?.takeIf { password.isNotEmpty() },
+            phone = all.phone,
         )
     }
 

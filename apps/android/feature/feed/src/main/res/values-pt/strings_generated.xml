@@ -29,9 +29,11 @@
     <string name="feed_delete_cancel">Cancelar</string>
     <string name="feed_delete_confirm">Excluir</string>
     <string name="feed_empty">Nenhuma publicação</string>
+    <string name="feed_empty_subtitle">As publicações dos seus contatos aparecerão aqui</string>
     <string name="feed_header_nearby">Publicações por perto</string>
     <string name="feed_like">Curtir</string>
     <string name="feed_link_copied">Link copiado</string>
+    <string name="feed_load_error">Não foi possível carregar o feed</string>
     <string name="feed_location_shared">Localização compartilhada</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
     <plurals name="feed_new_posts">
@@ -39,6 +41,16 @@
         <item quantity="many">%d novas publicações</item>
         <item quantity="other">%d novas publicações</item>
     </plurals>
+    <string name="feed_notice_bookmark_failed">Erro ao salvar o favorito</string>
+    <string name="feed_notice_delete_failed">Erro ao excluir a publicação</string>
+    <string name="feed_notice_like_failed">Erro ao curtir a publicação</string>
+    <string name="feed_notice_pin_failed">Erro ao fixar a publicação</string>
+    <string name="feed_notice_publish_failed">Falha ao publicar a publicação</string>
+    <string name="feed_notice_published">Publicação publicada</string>
+    <string name="feed_notice_report_failed">Erro ao denunciar a publicação</string>
+    <string name="feed_notice_reported">Publicação denunciada</string>
+    <string name="feed_notice_repost_failed">Erro ao republicar</string>
+    <string name="feed_notice_translation_failed">Erro de tradução</string>
     <string name="feed_quote_cancel">Cancelar</string>
     <string name="feed_quote_submit">Republicar</string>
     <string name="feed_reel">Reel</string>
@@ -57,6 +69,7 @@
     <string name="feed_repost_reposted">Republicado</string>
     <string name="feed_repost_story">Story</string>
     <string name="feed_reposts">Recompartilhamentos</string>
+    <string name="feed_retry">Tentar novamente</string>
     <string name="feed_translated">Tradução disponível</string>
     <string name="feed_unknown_author">Desconhecido</string>
     <string name="feed_unlike">Descurtir</string>
@@ -64,10 +77,17 @@
     <string name="nearby_retry">Tentar novamente</string>
     <string name="nearby_title">Por perto</string>
     <string name="post_comments_cancel_reply">Cancelar resposta</string>
+    <string name="post_comments_copy_text">Copiar texto</string>
+    <string name="post_comments_delete_error">Não foi possível excluir o comentário</string>
+    <string name="post_comments_deleted">Comentário excluído</string>
+    <string name="post_comments_load_error">Erro ao carregar os comentários</string>
+    <string name="post_comments_more_options">Mais opções</string>
     <string name="post_comments_reply_action">Responder</string>
     <string name="post_comments_reply_badge">Responder</string>
+    <string name="post_comments_reply_error">Erro ao enviar a resposta</string>
     <string name="post_comments_replying_to">Em resposta a %s</string>
     <string name="post_comments_send">Enviar</string>
+    <string name="post_comments_send_error">Erro ao enviar o comentário</string>
     <string name="post_comments_sending">Enviando…</string>
     <string name="post_comments_title">Comentários</string>
     <plurals name="post_comments_view_replies">

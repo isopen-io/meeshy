@@ -122,6 +122,17 @@ class PostRepository @Inject constructor(
     suspend fun refresh() = revalidateFeed()
 
     /**
+     * A user-driven refresh (pull to refresh, « Réessayer ») that reports its outcome:
+     * the failure, or `null` on success. [refresh] swallows it, which left the caller's
+     * spinner turning forever when the feed could not load.
+     */
+    suspend fun refreshReporting(): Throwable? {
+        var failure: Throwable? = null
+        revalidateFeed { failure = it }
+        return failure
+    }
+
+    /**
      * Optimistic, durable like toggle (ARCHITECTURE.md §4-5). The viewer's own like
      * state (`isLikedByMe`) flips instantly with the count; the mutation is then
      * handed to the outbox rather than sent directly, so it survives an offline tap

@@ -994,4 +994,12 @@ class PostDetailViewModelTest {
         assertThat(vm.state.value.post?.isLiked).isFalse()
         assertThat(vm.state.value.post?.likeCount).isEqualTo(2)
     }
+
+    @Test
+    fun `the author's avatar stored as a key loads from the API attachment route`() = runTest {
+        val vm = loadedVm(loaded = post().copy(author = ApiAuthor(id = "u1", username = "amina", avatar = "avatars/user/u1.jpg")))
+
+        assertThat(vm.state.value.post?.authorAvatarUrl)
+            .isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/avatars/user/u1.jpg")
+    }
 }

@@ -1,12 +1,12 @@
 package me.meeshy.app.stories
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Arrangement
@@ -41,16 +41,14 @@ import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.StoryToolMode
 
 /**
- * The bottom band — parity with iOS: the row of served tools (tinted, badged, see
- * [ComposerToolRow]) and, once one is open, its panel under a resizable handle. What is
- * open and whether the chrome is voluntarily hidden is decided by the pure
- * [ComposerBandState]; this Composable only renders it and forwards intents. With the
- * chrome hidden only a ghost handle remains: one tap gives the row back.
+ * The open tool's panel under a resizable handle — parity with iOS, it slides over the
+ * bottom of the stage ([ComposerStage]) and never resizes the scene. What is open is decided
+ * by the pure [ComposerBandState]; this Composable only renders it and forwards intents. The
+ * tool row itself is [ComposerToolBand].
  */
 @Composable
-internal fun ComposerControlsLayer(
+internal fun ComposerToolPanel(
     band: ComposerBandState,
-    badges: Map<StoryToolMode, Int>,
     visibility: StoryVisibility,
     selectedFilter: StoryFilter?,
     filterIntensity: Float,
@@ -62,10 +60,6 @@ internal fun ComposerControlsLayer(
     isMediaFull: Boolean,
     mediaCount: Int,
     hasMedia: Boolean,
-    onToolTap: (StoryToolMode) -> Unit,
-    onToolSwipeUp: (StoryToolMode) -> Unit,
-    onHideChrome: () -> Unit,
-    onShowChrome: () -> Unit,
     onDismiss: () -> Unit,
     onAddText: () -> Unit,
     onAddSticker: () -> Unit,
@@ -79,81 +73,94 @@ internal fun ComposerControlsLayer(
 ) {
     var panelHeightDp by remember { mutableFloatStateOf(DEFAULT_PANEL_HEIGHT_DP) }
     val activeTool = band.activeTool
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        AnimatedVisibility(visible = activeTool != null) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column {
-                    ComposerBandHandle(
-                        heightDp = panelHeightDp,
-                        onHeightChange = { panelHeightDp = it },
-                        onDismiss = onDismiss,
-                    )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(panelHeightDp.dp)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        when (activeTool) {
-                            StoryToolMode.MEDIA -> {
-                                MediaTile(isUploadingMedia, isMediaFull, mediaCount, hasMedia, onPickMedia)
-                                BandTile(
-                                    icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
-                                    label = stringResource(R.string.stories_composer_add_sticker),
-                                    enabled = canAddSticker,
-                                    onClick = onAddSticker,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                            StoryToolMode.TEXT -> BandTile(
-                                icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
-                                label = stringResource(R.string.stories_composer_add_text),
-                                enabled = canAddText,
-                                onClick = onAddText,
+    AnimatedVisibility(visible = activeTool != null) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column {
+                ComposerBandHandle(
+                    heightDp = panelHeightDp,
+                    onHeightChange = { panelHeightDp = it },
+                    onDismiss = onDismiss,
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(panelHeightDp.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    when (activeTool) {
+                        StoryToolMode.MEDIA -> {
+                            MediaTile(isUploadingMedia, isMediaFull, mediaCount, hasMedia, onPickMedia)
+                            BandTile(
+                                icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
+                                label = stringResource(R.string.stories_composer_add_sticker),
+                                enabled = canAddSticker,
+                                onClick = onAddSticker,
                                 modifier = Modifier.fillMaxWidth(),
                             )
-                            StoryToolMode.DRAWING -> BandTile(
-                                icon = { Icon(Icons.Filled.Brush, contentDescription = null) },
-                                label = stringResource(R.string.stories_composer_draw),
-                                enabled = true,
-                                onClick = onEnterDrawing,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            StoryToolMode.TEXTURE -> {
-                                BackgroundRow(selected = selectedBackground, onSelect = onSelectBackground)
-                                FilterRow(
-                                    selected = selectedFilter,
-                                    intensity = filterIntensity,
-                                    onSelect = onSelectFilter,
-                                    onIntensityChange = onFilterIntensityChange,
-                                )
-                                DurationRow(seconds = slideDurationSeconds, onSecondsChange = onSlideDurationChange)
-                                VisibilityRow(selected = visibility, onSelect = onSelectVisibility)
-                            }
-                            else -> Unit
                         }
+                        StoryToolMode.TEXT -> BandTile(
+                            icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
+                            label = stringResource(R.string.stories_composer_add_text),
+                            enabled = canAddText,
+                            onClick = onAddText,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        StoryToolMode.DRAWING -> BandTile(
+                            icon = { Icon(Icons.Filled.Brush, contentDescription = null) },
+                            label = stringResource(R.string.stories_composer_draw),
+                            enabled = true,
+                            onClick = onEnterDrawing,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        StoryToolMode.TEXTURE -> {
+                            BackgroundRow(selected = selectedBackground, onSelect = onSelectBackground)
+                            FilterRow(
+                                selected = selectedFilter,
+                                intensity = filterIntensity,
+                                onSelect = onSelectFilter,
+                                onIntensityChange = onFilterIntensityChange,
+                            )
+                            DurationRow(seconds = slideDurationSeconds, onSecondsChange = onSlideDurationChange)
+                            VisibilityRow(selected = visibility, onSelect = onSelectVisibility)
+                        }
+                        else -> Unit
                     }
                 }
             }
         }
-        if (band.isChromeHidden) {
-            GhostHandle(onShowChrome)
-        } else {
-            ComposerToolRow(
-                tools = ComposerBandTools.served,
-                badges = badges,
-                activeTool = activeTool,
-                onTap = onToolTap,
-                onSwipeUp = onToolSwipeUp,
-                onSwipeDown = onHideChrome,
-            )
-        }
+    }
+}
+
+/**
+ * The tool row of the band, under the stage — or, with the chrome voluntarily hidden, only a
+ * ghost handle that gives the row back in one tap.
+ */
+@Composable
+internal fun ComposerToolBand(
+    band: ComposerBandState,
+    badges: Map<StoryToolMode, Int>,
+    onToolTap: (StoryToolMode) -> Unit,
+    onToolSwipeUp: (StoryToolMode) -> Unit,
+    onHideChrome: () -> Unit,
+    onShowChrome: () -> Unit,
+) {
+    if (band.isChromeHidden) {
+        GhostHandle(onShowChrome)
+    } else {
+        ComposerToolRow(
+            tools = ComposerBandTools.served,
+            badges = badges,
+            activeTool = band.activeTool,
+            onTap = onToolTap,
+            onSwipeUp = onToolSwipeUp,
+            onSwipeDown = onHideChrome,
+        )
     }
 }
 

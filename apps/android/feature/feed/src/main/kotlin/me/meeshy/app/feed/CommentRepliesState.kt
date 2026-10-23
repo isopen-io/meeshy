@@ -102,9 +102,12 @@ data class CommentRepliesState(
     /** Swap the optimistic [tempId] reply under [parentId] for the server row; inert if not pending. */
     fun confirmedReply(parentId: String, tempId: String, confirmed: ApiPostComment): CommentRepliesState {
         if (tempId !in pendingReplyIds) return this
+        val current = repliesFor(parentId)
+        val echoed = current.any { it.id == confirmed.id }
         return copy(
-            repliesByParent = repliesByParent +
-                (parentId to repliesFor(parentId).map { if (it.id == tempId) confirmed else it }),
+            repliesByParent = repliesByParent + (
+                parentId to if (echoed) current.filterNot { it.id == tempId } else current.map { if (it.id == tempId) confirmed else it }
+            ),
             pendingReplyIds = pendingReplyIds - tempId,
         )
     }

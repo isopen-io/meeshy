@@ -443,10 +443,8 @@ struct FeedComposerSheet: View {
             // Le viseur du composeur, seul en plein écran (#9125).
             ComposerViewfinder { result in
                 switch result {
-                // Le fil du feed ré-encode déjà l'image : les octets d'origine
-                // ne lui servent pas, et il les jette explicitement.
-                case .photo(let image, _):
-                    handleCameraCapture(image)
+                case .photo(let image, let data):
+                    handleCameraCapture(image, data: data)
                 case .video(let url):
                     handleCameraVideo(url)
                 }
@@ -594,9 +592,9 @@ struct FeedComposerSheet: View {
         pendingThumbnails.removeValue(forKey: id)
     }
 
-    private func handleCameraCapture(_ image: UIImage) {
-        let prep = AttachmentPreparationService.shared.prepareImage(
-            image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
+    private func handleCameraCapture(_ image: UIImage, data: Data? = nil) {
+        let prep = AttachmentPreparationService.shared.prepareCapture(
+            image, data: data, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
         )
         trackSheetPreparation(prep)
     }
