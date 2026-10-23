@@ -6,7 +6,9 @@
     <string name="contacts_blocked_unblock_a11y">%s entsperren</string>
     <string name="contacts_blocked_unblock_cancel">Abbrechen</string>
     <string name="contacts_blocked_unblock_confirm">Entsperren</string>
+    <string name="contacts_blocked_unblock_error">Entsperren nicht möglich</string>
     <string name="contacts_blocked_unblock_message">%s entsperren?</string>
+    <string name="contacts_blocked_unblock_success">Benutzer entsperrt</string>
     <string name="contacts_blocked_unblock_title">Entsperren?</string>
     <string name="contacts_discover_blocked">Blockiert</string>
     <string name="contacts_discover_email_error">Einladung konnte nicht gesendet werden</string>
@@ -30,7 +32,11 @@
     <string name="contacts_request_accept">Annehmen</string>
     <string name="contacts_request_cancel">Abbrechen</string>
     <string name="contacts_request_decline">Ablehnen</string>
+    <string name="contacts_requests_accept_a11y">Anfrage von %s annehmen</string>
+    <string name="contacts_requests_cancel_a11y">An %s gesendete Anfrage zurückziehen</string>
     <string name="contacts_requests_received">Erhalten</string>
+    <string name="contacts_requests_received_intent">Möchte sich mit dir verbinden</string>
+    <string name="contacts_requests_reject_a11y">Anfrage von %s ablehnen</string>
     <string name="contacts_requests_sent">Gesendet</string>
     <string name="contacts_search_hint">Kontakt suchen</string>
     <string name="contacts_tab_blocked">Blockiert</string>

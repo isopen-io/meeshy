@@ -31,4 +31,16 @@ class ChromeAvatarButtonTest {
             .containsExactly(MeeshyPalette.Error, MeeshyPalette.Indigo300)
             .inOrder()
     }
+
+    @Test
+    fun `a stored avatar key resolves against the API base so the chrome shows the photo`() {
+        assertThat(chromeAvatarModel("avatars/user/u1.jpg", "https://gate.staging.meeshy.me/api/v1/"))
+            .isEqualTo("https://gate.staging.meeshy.me/api/v1/attachments/file/avatars/user/u1.jpg")
+    }
+
+    @Test
+    fun `no photo yields no model, so the initials show`() {
+        assertThat(chromeAvatarModel(null, "https://gate.meeshy.me/api/v1/")).isNull()
+        assertThat(chromeAvatarModel("  ", "https://gate.meeshy.me/api/v1/")).isNull()
+    }
 }

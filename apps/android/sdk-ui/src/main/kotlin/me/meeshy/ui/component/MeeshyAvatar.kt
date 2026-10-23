@@ -45,6 +45,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.ContentScale
+import coil.request.ImageRequest
+import coil.compose.AsyncImage
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.avatar.AvatarAccessibilityLabel
 import me.meeshy.sdk.model.avatar.AvatarContext
@@ -93,6 +96,9 @@ public fun meeshyPresenceDotColor(presence: PresenceState?): Color? = when (pres
  * SDK-pure: every behaviour is an explicit opaque parameter. The product decision
  * of *which* size/ring/presence a given surface uses (iOS `AvatarContext`) stays
  * app-side.
+ *
+ * [imageUrl] is the person's photo (iOS `avatarURL:`): it covers the initials once
+ * loaded, and the initials stay visible while it loads or if it fails.
  */
 @Composable
 public fun MeeshyAvatar(
@@ -105,6 +111,7 @@ public fun MeeshyAvatar(
     storyRing: StoryRingState = StoryRingState.None,
     presence: PresenceState? = null,
     moodEmoji: String? = null,
+    imageUrl: String? = null,
 ) {
     val density = LocalDensity.current
     val textSize = with(density) { (size * 0.38f).toSp() }
@@ -146,6 +153,14 @@ public fun MeeshyAvatar(
                 fontWeight = FontWeight.Bold,
                 fontSize = textSize,
             )
+            imageUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(size),
+                )
+            }
         }
 
         if (!moodEmoji.isNullOrEmpty()) {

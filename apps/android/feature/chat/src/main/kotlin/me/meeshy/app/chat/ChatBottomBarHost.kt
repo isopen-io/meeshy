@@ -1,7 +1,10 @@
 package me.meeshy.app.chat
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 
 /** Bottom bar layer: the pending attachments and the @mention suggestions strips stacked over the composer. */
 @Composable
@@ -10,8 +13,15 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
     val pending = host.pending
     val actions = host.actions
     val accentColor = host.accentColor
-    val replyTarget = state.replyingToMessageId?.let { id ->
-        state.messages.firstOrNull { it.messageId == id }
+    val replyBanner = state.replyingToMessageId?.let { id ->
+        ComposerReplyBanner.of(state.messages.firstOrNull { it.messageId == id })
+    }
+    val editingOriginalText = state.editingMessageId?.let { id ->
+        state.messages.firstOrNull { it.messageId == id }?.let { it.originalText ?: it.text }
+    }
+    val context = LocalContext.current
+    LaunchedEffect(actions.trayNotices) {
+        actions.trayNotices.collect { notice -> Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
     }
     Column {
         ComposerPendingStrip(pending.items, onRemove = actions.removePendingAttachment)
@@ -29,7 +39,10 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             isEditing = state.isEditing,
             affordances = state.composerAffordances,
             slowMode = rememberComposerSlowMode(state),
-            replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
+            replyBanner = replyBanner,
+            editingOriginalText = editingOriginalText,
+            onStageVoiceFile = { file -> actions.stageFile(file, "audio/mp4") },
+            onStageCapturedUris = actions.stageCapturedUris,
             hasEffects = state.hasPendingEffects,
             clipboardContent = state.clipboardContent,
             sentiment = state.composerSentiment,

@@ -2,9 +2,7 @@ package me.meeshy.app.chat
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.media.MediaRecorder
 import android.net.Uri
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -42,12 +40,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +62,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -73,12 +75,9 @@ import me.meeshy.sdk.composer.SlowModeState
 import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.SentimentLevel
-import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
-import me.meeshy.sdk.model.waveform.VoiceRecordingFile
-import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
-import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.recording.VoiceRecordingPill
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -102,7 +101,7 @@ internal fun ChatComposer(
     isEditing: Boolean,
     affordances: ComposerAffordances,
     slowMode: SlowModeState,
-    replyingToLabel: String?,
+    replyBanner: ComposerReplyBanner?,
     hasEffects: Boolean,
     clipboardContent: ClipboardContent?,
     sentiment: SentimentLevel?,
@@ -118,6 +117,9 @@ internal fun ChatComposer(
     onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
     hasPendingAttachments: Boolean = false,
     onPickUris: ((List<Uri>) -> Unit)? = null,
+    editingOriginalText: String? = null,
+    onStageVoiceFile: ((File) -> Unit)? = null,
+    onStageCapturedUris: (suspend (List<Uri>) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val ioScope = rememberCoroutineScope()
@@ -134,51 +136,27 @@ internal fun ChatComposer(
             onPickFile(picked.bytes, picked.fileName, picked.mimeType)
         }
     }
-    var recording by remember { mutableStateOf(VoiceRecordingSession.idle()) }
-    var activeVoiceRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var activeVoiceRecordingFile by remember { mutableStateOf<File?>(null) }
+    val haptics = rememberMeeshyHaptics()
+    val voiceCapture = remember {
+        ComposerVoiceCapture(File(context.cacheDir, "voice"), { MediaRecorderEngine(context) })
+    }
+    var recording by remember { mutableStateOf(voiceCapture.session) }
 
-    // Stops+releases the real MediaRecorder session (Android hardware), distinct from
-    // VoiceRecordingSession.stop() (the pure UI state machine) below — the two "stop"s
-    // are independent concerns. Returns the recorded file, if any, for the caller to
-    // decide what to do with (send it, or discard it on cancel).
-    fun releaseVoiceRecorder(): File? {
-        activeVoiceRecorder?.let { recorder ->
-            // stop() throws IllegalStateException if called too soon after start() with
-            // no data captured yet (e.g. a cancel within the same frame as the tap) —
-            // never worth crashing the composer over a take too short to matter.
-            runCatching { recorder.stop() }
-            recorder.release()
+    // A finished take joins the tray by copy, off the main thread (iOS
+    // `stopRecordingToAttachment`). Without a file-staging host, it is read on IO instead.
+    fun deliverTake(take: VoiceTake?) {
+        val file = take?.file ?: return
+        val stage = onStageVoiceFile
+        if (stage != null) return stage(file)
+        ioScope.launch {
+            val bytes = withContext(Dispatchers.IO) { runCatching { file.readBytes() }.getOrNull().also { file.delete() } }
+            if (bytes != null && bytes.isNotEmpty()) onPickFile(bytes, file.name, VOICE_MIME_TYPE)
         }
-        activeVoiceRecorder = null
-        val file = activeVoiceRecordingFile
-        activeVoiceRecordingFile = null
-        return file
     }
 
     fun startVoiceRecording() {
-        val dir = File(context.cacheDir, "voice").apply { mkdirs() }
-        val file = File(dir, VoiceRecordingFile.next(System.currentTimeMillis()))
-        val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(context)
-        } else {
-            @Suppress("DEPRECATION")
-            MediaRecorder()
-        }
-        try {
-            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
-            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            recorder.setOutputFile(file.absolutePath)
-            recorder.prepare()
-            recorder.start()
-            activeVoiceRecorder = recorder
-            activeVoiceRecordingFile = file
-            recording = recording.start()
-        } catch (e: Exception) {
-            recorder.release()
-            file.delete()
-        }
+        if (voiceCapture.start()) haptics.medium()
+        recording = voiceCapture.session
     }
 
     val micPermissionLauncher = rememberLauncherForActivityResult(
@@ -194,24 +172,32 @@ internal fun ChatComposer(
     }
 
     fun cancelVoiceRecording() {
-        releaseVoiceRecorder()?.delete()
-        recording = recording.cancel()
+        voiceCapture.cancel()
+        recording = voiceCapture.session
+        haptics.light()
     }
 
-    // Both the pill's Stop and Send controls finalise the take the same way — there is
-    // no staging tray in this composer (every other attachment kind, file/clipboard, is
-    // delivered immediately on pick too), so "stop and add to attachments" reads as
-    // "deliver it now", identically to "send". A take below the minimum sendable
-    // duration (canSend == false) never reaches here — the pill disables both buttons.
+    // Both the pill's Stop and Send controls put the take in the tray, next to the other
+    // pieces, ready for the send button. A take below the minimum sendable duration never
+    // reaches here — the pill disables both buttons.
     fun finishVoiceRecording() {
-        val file = releaseVoiceRecorder()
-        val stop = recording.stop()
-        recording = stop.session
-        val completedFile = file.takeIf { stop.outcome is VoiceRecordingOutcome.Completed }
-        val bytes = completedFile?.let { runCatching { it.readBytes() }.getOrNull() }
-        file?.delete()
-        if (completedFile != null && bytes != null && bytes.isNotEmpty()) {
-            onPickFile(bytes, completedFile.name, "audio/mp4")
+        val take = voiceCapture.finish()
+        recording = voiceCapture.session
+        haptics.light()
+        deliverTake(take)
+    }
+
+    // Leaving the screen (navigation, rotation, theme change) or the app going to the
+    // background frees the mic: Android cuts a background mic anyway, and a take left
+    // running would keep the mic indicator on and leave an orphan file behind.
+    val latestDeliver by rememberUpdatedState(::deliverTake)
+    DisposableEffect(voiceCapture) {
+        onDispose { latestDeliver(voiceCapture.abandon()) }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        if (voiceCapture.session.isRecording) {
+            deliverTake(voiceCapture.abandon())
+            recording = voiceCapture.session
         }
     }
     var attachmentTrayOpen by remember { mutableStateOf(false) }
@@ -242,10 +228,18 @@ internal fun ChatComposer(
     LaunchedEffect(draftRevision) {
         fieldValue = TextFieldValue(draft, selection = TextRange(draft.length))
     }
+    // The capture joins the tray by a streamed copy (never a whole-file read): a long
+    // video can no longer exhaust memory and vanish. The camera deletes its file once
+    // the copy is done, hence the wait.
     val chatCameraCapture = rememberChatCameraCapture(
         onCaptured = { uri, _ ->
-            withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }?.let { picked ->
-                onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+            val stage = onStageCapturedUris
+            if (stage != null) {
+                stage(listOf(uri))
+            } else {
+                withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }?.let { picked ->
+                    onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+                }
             }
         },
     )
@@ -260,7 +254,12 @@ internal fun ChatComposer(
                 ComposerAttachmentTray(
                     tiles = ladderTiles,
                     recentMedia = {
-                        ComposerRecentMedia(affordances.canSendImages || affordances.canSendVideos, accentColor, onPickFile)
+                        ComposerRecentMedia(
+                            canCapture = affordances.canSendImages || affordances.canSendVideos,
+                            accentColor = accentColor,
+                            onPickFile = onPickFile,
+                            onPickUri = onPickUris?.let { stage -> { uri: Uri -> stage(listOf(uri)) } },
+                        )
                     },
                     onTileClick = { kind ->
                         attachmentTrayOpen = false
@@ -284,8 +283,8 @@ internal fun ChatComposer(
                     onDismiss = { cameraChooserOpen = false },
                 )
             }
-            if (replyingToLabel != null) ComposerReplyRow(replyingToLabel, accentColor, onCancelReply)
-            if (isEditing) ComposerEditRow(accentColor, onCancelEdit)
+            if (replyBanner != null) ComposerReplyRow(replyBanner, accentColor, onCancelReply)
+            if (isEditing) ComposerEditRow(editingOriginalText, onCancelEdit)
             if (clipboardContent != null) {
                 ClipboardContentPreview(
                     clip = clipboardContent,
@@ -297,11 +296,8 @@ internal fun ChatComposer(
             LaunchedEffect(recording.isRecording) {
                 while (recording.isRecording) {
                     delay(100)
-                    recording = recording.tick(0.1)
-                    val amplitude = activeVoiceRecorder?.let { runCatching { it.maxAmplitude }.getOrNull() }
-                    if (amplitude != null) {
-                        recording = recording.meter(MicAmplitudeDecibels.toDecibels(amplitude))
-                    }
+                    voiceCapture.tick(0.1)
+                    recording = voiceCapture.session
                 }
             }
             if (recording.isRecording) {
@@ -348,7 +344,10 @@ internal fun ChatComposer(
                         onDraftChange(newValue.text)
                     },
                     onRequestVoice = ::requestVoiceRecording,
-                    onSend = onSend,
+                    onSend = {
+                        haptics.light()
+                        onSend()
+                    },
                 )
             }
         }
@@ -376,3 +375,4 @@ internal fun ChatComposer(
     }
 }
 
+private const val VOICE_MIME_TYPE = "audio/mp4"
