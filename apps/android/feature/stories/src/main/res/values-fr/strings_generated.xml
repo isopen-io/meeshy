@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="composer_object_editor_adjust_blur">Flou</string>
+    <string name="composer_object_editor_adjust_brightness">Luminosité</string>
+    <string name="composer_object_editor_adjust_contrast">Contraste</string>
+    <string name="composer_object_editor_adjust_exposure">Exposition</string>
+    <string name="composer_object_editor_adjust_reset">Réinitialiser</string>
+    <string name="composer_object_editor_adjust_saturation">Saturation</string>
+    <string name="composer_object_editor_adjust_sharpness">Netteté</string>
+    <string name="composer_object_editor_adjust_temperature">Température</string>
+    <string name="composer_object_editor_adjust_vibrance">Vibrance</string>
+    <string name="composer_object_editor_adjust_vignette">Vignette</string>
+    <string name="composer_object_editor_effects_bloom">Bloom</string>
+    <string name="composer_object_editor_effects_grain">Grain</string>
     <string name="stories_action_delete">Supprimer</string>
     <string name="stories_action_react">Réagir</string>
     <string name="stories_action_report">Signaler</string>

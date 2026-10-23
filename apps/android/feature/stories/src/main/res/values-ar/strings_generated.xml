@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="composer_object_editor_adjust_blur">التمويه</string>
+    <string name="composer_object_editor_adjust_brightness">السطوع</string>
+    <string name="composer_object_editor_adjust_contrast">التباين</string>
+    <string name="composer_object_editor_adjust_exposure">التعريض</string>
+    <string name="composer_object_editor_adjust_reset">إعادة تعيين</string>
+    <string name="composer_object_editor_adjust_saturation">التشبع</string>
+    <string name="composer_object_editor_adjust_sharpness">الحدة</string>
+    <string name="composer_object_editor_adjust_temperature">درجة الحرارة</string>
+    <string name="composer_object_editor_adjust_vibrance">الحيوية</string>
+    <string name="composer_object_editor_adjust_vignette">التظليل الجانبي</string>
+    <string name="composer_object_editor_effects_bloom">توهج</string>
+    <string name="composer_object_editor_effects_grain">حبيبات</string>
     <string name="stories_action_delete">حذف</string>
     <string name="stories_action_react">تفاعل</string>
     <string name="stories_action_report">إبلاغ</string>

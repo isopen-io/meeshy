@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="composer_object_editor_adjust_blur">Desfoque</string>
+    <string name="composer_object_editor_adjust_brightness">Brilho</string>
+    <string name="composer_object_editor_adjust_contrast">Contraste</string>
+    <string name="composer_object_editor_adjust_exposure">Exposição</string>
+    <string name="composer_object_editor_adjust_reset">Redefinir</string>
+    <string name="composer_object_editor_adjust_saturation">Saturação</string>
+    <string name="composer_object_editor_adjust_sharpness">Nitidez</string>
+    <string name="composer_object_editor_adjust_temperature">Temperatura</string>
+    <string name="composer_object_editor_adjust_vibrance">Vibração</string>
+    <string name="composer_object_editor_adjust_vignette">Vinheta</string>
+    <string name="composer_object_editor_effects_bloom">Brilho</string>
+    <string name="composer_object_editor_effects_grain">Granulação</string>
     <string name="stories_action_delete">Excluir</string>
     <string name="stories_action_react">Reagir</string>
     <string name="stories_action_report">Denunciar</string>

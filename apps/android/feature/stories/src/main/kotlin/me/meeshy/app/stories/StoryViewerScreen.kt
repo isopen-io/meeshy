@@ -101,6 +101,7 @@ import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.story.canvas.SceneLookChain
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.LanguageQuickOption
 import me.meeshy.ui.component.LanguageQuickStrip
@@ -446,6 +447,7 @@ fun StoryViewerScreen(
                     model = imageUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    colorFilter = SceneLookChain.colorFilter(slide.lookRecipe),
                     // Instant blur behind the loading image — no black flash on cold
                     // load (decoded from the slide's ThumbHash; null → plain background).
                     placeholder = rememberThumbHashPainter(slide.backgroundThumbHash),
