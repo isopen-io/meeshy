@@ -394,7 +394,6 @@ extension UniversalComposerBar {
         onAnyInteraction?()
         RecentEmojiStore.record(RecentEmojiHistory.emojis(in: text))
 
-        // Custom send (edit mode, recording, or parent-managed send)
         if let onCustomSend {
             onCustomSend()
             // **Le champ ressuscitait son texte juste après l'envoi** (#5961).
@@ -428,17 +427,14 @@ extension UniversalComposerBar {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !allAttachments.isEmpty else { return }
 
-        // Rich callback (full parity with web MessageComposer)
         if let onSendMessage = onSendMessage {
             onSendMessage(trimmed, allAttachments, currentLanguage)
         }
 
-        // Simple callback (backward compatible)
         if let onSend = onSend, !trimmed.isEmpty {
             onSend(trimmed)
         }
 
-        // Clear state + remove draft for this story
         text = ""
         attachments.removeAll()
         isFocused = false

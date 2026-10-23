@@ -369,19 +369,15 @@ struct UniversalComposerBar: View {
     @State var isExpandingToLibrary = false
     @State var currentLanguage: String = "fr"
 
-    // Attachments
     @State var attachments: [ComposerAttachment] = []
 
-    // Minimized / expanded state
     @State var isMinimized: Bool = false
     @State var dragOffsetY: CGFloat = 0
     @State var clipboardContent: ClipboardContent? = nil
 
-    // Ephemeral picker
     @State var showEphemeralPicker = false
     /// Le petit panneau des effets du message, ouvert par la baguette (#7967).
     @State var showEffectsPanel = false
-    // Permanent effects inline picker (for comments)
     @State var showPermanentEffectsPicker = false
 
     // Text analysis (sentiment + language detection from MessageComposer)

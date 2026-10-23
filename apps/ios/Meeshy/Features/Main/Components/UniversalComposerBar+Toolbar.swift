@@ -24,12 +24,10 @@ extension UniversalComposerBar {
 
     var topToolbar: some View {
         ComposerToolbarStrip {
-            // Ephemeral mode toggle (hidden for comments)
             if !resolvedHideEphemeral {
                 ephemeralToggleButton
             }
 
-            // Blur mode toggle
             if !hideBlur {
                 blurToggleButton
             }
@@ -46,7 +44,6 @@ extension UniversalComposerBar {
                 effectsToggleButton
             }
 
-            // Permanent effects inline toggle (comments only)
             if resolvedShowPermanentEffects {
                 permanentEffectsToggleButton
             }
@@ -68,7 +65,6 @@ extension UniversalComposerBar {
             // sous les portes de droite dès que la rangée débordait.
             languageSelectorPill
         } trailing: {
-            // Character counter
             if let maxLen = maxLength {
                 let count = text.count
                 if count > Int(Double(maxLen) * 0.8) {

@@ -98,7 +98,6 @@ extension UniversalComposerBar {
 
     private var expandedComposer: some View {
         VStack(spacing: 0) {
-            // Swipe handle indicator
             if startMinimized {
                 swipeHandle
             }
@@ -130,15 +129,12 @@ extension UniversalComposerBar {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Permanent effects inline picker (for comments)
             if showPermanentEffectsPicker {
                 permanentEffectsInlinePicker
                     .padding(.top, Self.railTopInset)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Top toolbar (ephemeral, sentiment, language, char counter)
-            // Hidden during recording for a clean, iMessage-like full-width bar
             if !effectiveIsRecording {
                 topToolbar
                     .padding(.horizontal, MeeshySpacing.sm)
@@ -185,7 +181,6 @@ extension UniversalComposerBar {
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
                 HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
-                    // Left: (+) attach / keyboard toggle button
                     if resolvedShowAttachment {
                         attachButton
                     }
@@ -204,7 +199,6 @@ extension UniversalComposerBar {
                             }
                         }
 
-                    // Right: send (when content) or hidden (idle)
                     actionButton
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
@@ -243,7 +237,6 @@ extension UniversalComposerBar {
         .adaptiveOnChange(of: showAttachOptions) { _, open in onAttachmentsVisibilityChange?(open) }
         .onAppear {
             currentLanguage = selectedLanguage
-            // Load initial draft if available
             if let id = storyId, let draft = getDraft?(id) {
                 text = draft.text
                 attachments = draft.attachments
@@ -331,18 +324,15 @@ extension UniversalComposerBar {
                 }
             }
             onTextChange?(newValue)
-            // Sync to external binding
             if let binding = textBinding, binding.wrappedValue != newValue {
                 binding.wrappedValue = newValue
             }
-            // Ripple wave on each keystroke
             if isFocused && !typeWave {
                 typeWave = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     typeWave = false
                 }
             }
-            // Close attach options when typing starts
             if !newValue.isEmpty && showAttachOptions {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showAttachOptions = false
