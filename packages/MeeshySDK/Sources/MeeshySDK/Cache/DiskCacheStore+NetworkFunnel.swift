@@ -63,6 +63,21 @@ extension DiskCacheStore {
     }
 
     private func launchTransfer(fileKey: String, fetch: NetworkFetch) async throws -> Data {
+        let entry = startTransfer(fileKey: fileKey, fetch: fetch)
+        defer { finishTransfer(entry.id, fileKey: fileKey) }
+        guard fetch.cancelsWithCaller else { return try await entry.task.value }
+        return try await withTaskCancellationHandler {
+            try await entry.task.value
+        } onCancel: {
+            entry.task.cancel()
+        }
+    }
+
+    /// Ouvre le transfert et l'inscrit au registre SANS l'attendre : un lecteur
+    /// vidéo obtient ainsi, dans le même tour, le fichier qu'il va lire pendant
+    /// que le cache l'écrit (#9881).
+    func startTransfer(fileKey: String, fetch: NetworkFetch) -> InFlightDownload {
+        let readable = fetch.transfer == .streamedToFile ? makeReadableDownload() : nil
         let task = Task<Data, Error> {
             // Média protégé même-origine (ex. audio de la bibliothèque de sons
             // servi par `/api/v1/static/:filename`, route JWT) : la requête nue
@@ -75,6 +90,15 @@ extension DiskCacheStore {
                 sessionToken: APIClient.shared.anonymousSessionToken
             )
             if fetch.transfer == .streamedToFile {
+                if let readable {
+                    return try await readableNetworkData(
+                        for: fetch.urlString,
+                        request: request,
+                        profile: fetch.profile,
+                        progress: fetch.progress,
+                        into: readable
+                    )
+                }
                 return try await streamedNetworkData(
                     for: fetch.urlString,
                     request: request,
@@ -87,15 +111,17 @@ extension DiskCacheStore {
 
         let entry = InFlightDownload(task: task, profile: fetch.profile)
         inFlightTasks[fileKey] = entry
-        defer {
-            if inFlightTasks[fileKey]?.id == entry.id { inFlightTasks[fileKey] = nil }
+        if let readable { registerReadable(readable, entryId: entry.id, fileKey: fileKey) }
+        Task {
+            _ = await task.result
+            finishTransfer(entry.id, fileKey: fileKey)
         }
-        guard fetch.cancelsWithCaller else { return try await task.value }
-        return try await withTaskCancellationHandler {
-            try await task.value
-        } onCancel: {
-            task.cancel()
-        }
+        return entry
+    }
+
+    func finishTransfer(_ entryId: UUID, fileKey: String) {
+        if inFlightTasks[fileKey]?.id == entryId { inFlightTasks[fileKey] = nil }
+        releaseReadable(entryId: entryId, fileKey: fileKey)
     }
 
     private func inMemoryNetworkData(for urlString: String, request: URLRequest) async throws -> Data {

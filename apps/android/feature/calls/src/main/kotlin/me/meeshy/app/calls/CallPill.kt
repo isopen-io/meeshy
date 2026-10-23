@@ -60,7 +60,23 @@ object CallPillPresenter {
     /** The pill shows for a minimisable call only while off the full-screen call surface. */
     fun shouldShow(status: CallStatus, onCallScreen: Boolean): Boolean =
         isMinimizable(status) && !onCallScreen
+
+    /**
+     * What the system Back gesture does on the call screen. A ringing incoming call
+     * has no pill and no notification when it rang over the socket: popping the
+     * screen would leave it ringing with no way to answer, so Back is inert (iOS
+     * presents it as a full-screen cover with no dismiss gesture). A live call
+     * minimises into the pill, exactly like the chevron; a settled call closes.
+     */
+    fun backAction(status: CallStatus): CallBackAction = when {
+        status == CallStatus.INCOMING -> CallBackAction.Inert
+        isMinimizable(status) -> CallBackAction.Minimize
+        else -> CallBackAction.Close
+    }
 }
+
+/** The outcome of the system Back gesture on the call screen ([CallPillPresenter.backAction]). */
+enum class CallBackAction { Inert, Minimize, Close }
 
 /**
  * The minimised call pill — a full-width banner pinned to the top of the app
@@ -78,6 +94,9 @@ object CallPillPresenter {
 fun CallPill(
     state: CallUiState,
     onClick: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleSpeaker: () -> Unit,
+    onHangUp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val accent = hexColor(DynamicColorGenerator.colorForName(state.peerName))
@@ -90,49 +109,65 @@ fun CallPill(
             .padding(horizontal = MeeshySpacing.md)
             .clip(RoundedCornerShape(MeeshyRadius.xxl))
             .background(MeeshyTheme.tokens.backgroundSecondary)
-            .clickable(onClickLabel = reopenLabel, onClick = onClick)
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
-            .semantics { contentDescription = ongoingLabel },
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.Start),
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.Start),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
+        // Only the identity part reopens the call: the controls beside it stay their
+        // own TalkBack elements (a clickable parent would merge and swallow them).
+        Row(
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(accent),
-            contentAlignment = Alignment.Center,
+                .weight(1f)
+                .clickable(onClickLabel = reopenLabel, onClick = onClick)
+                .semantics { contentDescription = ongoingLabel },
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.Start),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = state.peerName.take(1).uppercase(),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(accent),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = state.peerName.take(1).uppercase(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.peerName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MeeshyTheme.tokens.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = pillStatusLine(state),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = pillStatusColor(state.status),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Icon(
+                imageVector = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
+                contentDescription = null,
+                tint = accent,
             )
         }
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = state.peerName,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyTheme.tokens.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = pillStatusLine(state),
-                style = MaterialTheme.typography.bodySmall,
-                color = pillStatusColor(state.status),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        Icon(
-            imageVector = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
-            contentDescription = null,
-            tint = accent,
+        CallPillControls(
+            state = state,
+            onToggleMute = onToggleMute,
+            onToggleSpeaker = onToggleSpeaker,
+            onHangUp = onHangUp,
         )
     }
 }

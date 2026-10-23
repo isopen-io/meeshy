@@ -85,6 +85,15 @@ public struct VideoTranscodeRecipe: Sendable, Equatable {
         audioChannels = source.audioChannelCount.map { min(max($0, 1), 2) }
     }
 
+    /// **Le plafond d'une copie GARDÉE** (galerie) : 0,15 bit par pixel et par
+    /// image, soit ≈ 37 Mb/s pour une 4K à 30 i/s. La qualité visée gouverne ; ce
+    /// plafond ne fait que borner un cas pathologique, il ne rabote jamais la
+    /// définition ni ne vise un débit d'envoi.
+    public static func archivalCeiling(width: Int, height: Int, frameRate: Float) -> Int {
+        let cadence = frameRate > 0 ? Int(frameRate.rounded()) : Int(frameRateCeiling)
+        return width * height * cadence * 15 / 100
+    }
+
     public var readerPixelFormat: OSType {
         keepsTenBits ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
     }

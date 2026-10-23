@@ -375,8 +375,9 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         let router = try appSource("Features/Main/Navigation/Router.swift")
         let push = try XCTUnwrap(router.components(separatedBy: "func push(_ route: Route) {").dropFirst().first)
         let body = push.components(separatedBy: "private func place(_ route: Route) {")[0]
-        XCTAssertTrue(body.contains("guard case .conversation = route else"))
+        XCTAssertTrue(body.contains("guard case .conversation(let conversation) = route else"))
         XCTAssertTrue(body.contains("clearPresentedSurfaces"))
+        XCTAssertTrue(body.contains("admitConversation(conversation)"), "une conversation verrouillée (#11386) ne s'ouvre qu'admise")
     }
 
     func test_notificationOpeningAPostOrAStory_goesThroughTheRouterSite() throws {

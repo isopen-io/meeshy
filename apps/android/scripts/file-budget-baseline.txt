@@ -4,5 +4,4 @@
 feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatViewModel.kt 2248
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryComposerScreen.kt 2027
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryComposerViewModel.kt 1241
-sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/MessageBubble.kt 1202
 app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt 1202

@@ -5,6 +5,7 @@ import { validateQuery } from '../../validation/helpers.js';
 import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, AnalyticsKpisQuerySchema } from '../../validation/admin-schemas.js';
 import { getCacheStore } from '../../services/CacheStore';
 import { coerceCallAnalytics, coerceCallFeedback, summarizeCallFeedback, summarizeCallReliability } from '../../services/callAnalyticsAggregate';
+import { coerceCallQuality, summarizeCallQuality } from '../../services/callQualityAggregate';
 import { requirePermission } from '../../middleware/authorize';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 
@@ -411,7 +412,8 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         ? Math.min(90, Math.max(1, Math.floor(parsedDays)))
         : 7;
 
-      const cacheKey = `admin:analytics:calls:${days}`;
+      // `v2` (#11277) : une réponse mise en cache avant `quality` ne la masque pas jusqu'à son expiration.
+      const cacheKey = `admin:analytics:calls:v2:${days}`;
       const cached = await getCacheStore().get(cacheKey);
       if (cached) {
         return reply.send(JSON.parse(cached));
@@ -447,6 +449,13 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
           .map((row) => coerceCallFeedback(row.feedback))
           .filter((r): r is NonNullable<typeof r> => r !== null)
       );
+      // La qualité (#11277) : gels, limitation, MOS, relais, codec, plateforme
+      // — même fenêtre, même lecture, aucun appareil ni appel dans la réponse.
+      const quality = summarizeCallQuality(
+        rows
+          .map((row) => coerceCallQuality(row.analytics))
+          .filter((r): r is NonNullable<typeof r> => r !== null)
+      );
       const responseBody = {
         success: true,
         data: {
@@ -455,6 +464,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
           rowsWithTelemetry: records.length,
           ...summary,
           feedback,
+          quality,
         }
       };
 

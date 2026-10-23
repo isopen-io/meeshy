@@ -145,6 +145,6 @@ class MediaUrlResolverTest {
 
     @Test
     fun `un environnement local accepte les plages privees`() {
-        assertThat(resolveSafeMediaUrl("http://192.168.1.2:3000/a.png", "http://192.168.1.2:3000/api/v1")).isNotNull()
+        assertThat(resolveSafeMediaUrl("https://192.168.1.2:3000/a.png", "http://192.168.1.2:3000/api/v1")).isNotNull()
     }
 }

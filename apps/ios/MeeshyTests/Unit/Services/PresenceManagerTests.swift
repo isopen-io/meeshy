@@ -460,9 +460,21 @@ final class PresenceManagerTests: XCTestCase {
         try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
     }
 
+    /// Attend le battement que la dernière écriture a programmé : c'est lui qui
+    /// pose `publishedStates`. Une attente fixe ne le garantit pas sur un
+    /// simulateur chargé — ces tests rougissaient en CI et dans la suite
+    /// complète, jamais lancés seuls.
+    private func awaitBeat(after version: Int) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while sut.refreshSignal.presenceVersion == version, Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
     func test_recalculateStates_nothingChangedSinceTheLastBeat_doesNotRepaint() async throws {
+        let initial = sut.refreshSignal.presenceVersion
         sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-10))
-        try await settle()
+        try await awaitBeat(after: initial)
         let before = sut.refreshSignal.presenceVersion
 
         XCTAssertFalse(sut.recalculateStates(now: Date()))
@@ -472,11 +484,13 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_recalculateStates_thresholdCrossed_repaintsOnce() async throws {
+        let initial = sut.refreshSignal.presenceVersion
         sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-50))
-        try await settle()
+        try await awaitBeat(after: initial)
         let before = sut.refreshSignal.presenceVersion
 
         XCTAssertTrue(sut.recalculateStates(now: Date().addingTimeInterval(20)))
+        try await awaitBeat(after: before)
         try await settle()
 
         XCTAssertEqual(sut.refreshSignal.presenceVersion, before + 1)
@@ -485,8 +499,9 @@ final class PresenceManagerTests: XCTestCase {
     /// Un tick manqué ne saute plus un seuil : à 250 s, aucune des anciennes
     /// fenêtres ne contenait l'instant, l'état avait pourtant changé deux fois.
     func test_recalculateStates_tickMissedAcrossTwoThresholds_stillRepaints() async throws {
+        let initial = sut.refreshSignal.presenceVersion
         sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-50))
-        try await settle()
+        try await awaitBeat(after: initial)
 
         XCTAssertTrue(sut.recalculateStates(now: Date().addingTimeInterval(200)))
         try await settle()

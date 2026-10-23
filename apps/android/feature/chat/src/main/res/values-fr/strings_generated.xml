@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="chat_composer_edit_title">Modifier le message</string>
+    <string name="chat_composer_reply_a11y">Réponse à %1$s : %2$s</string>
+    <string name="chat_composer_reply_file">Fichier</string>
+    <string name="chat_composer_reply_location">Position</string>
+    <string name="chat_composer_reply_photo">Photo</string>
+    <string name="chat_composer_reply_unknown">un message</string>
+    <string name="chat_composer_reply_video">Vidéo</string>
+    <string name="chat_composer_reply_voice">Message vocal</string>
+    <string name="chat_composer_reply_you">Vous</string>
+    <string name="chat_delete_confirm_cancel">Annuler</string>
+    <string name="chat_delete_confirm_hint">La suppression pour tout le monde est disponible pendant 2 h après l\'envoi.</string>
+    <string name="chat_delete_confirm_title">Supprimer ce message ?</string>
     <string name="common_cancel">Annuler</string>
     <string name="common_send">Envoyer</string>
     <string name="common_unknown">Inconnu</string>
@@ -9,6 +21,7 @@
     <string name="composer_a11y_recentPhoto">Photo récente</string>
     <string name="composer_a11y_recentVideo">Vidéo récente</string>
     <string name="composer_a11y_selectedState">Sélectionné</string>
+    <string name="composer_drop_unnamedItem">élément sans nom</string>
     <string name="composer_recent_accessDenied">Accès aux photos refusé</string>
     <string name="composer_recent_accessDenied_hint">Toucher pour ouvrir les Réglages</string>
     <string name="composer_recent_add">Ajouter</string>

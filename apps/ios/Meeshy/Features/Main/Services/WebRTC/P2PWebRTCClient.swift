@@ -114,24 +114,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             Logger.webrtc.warning("configure() called with a live peerConnection — disconnecting it before creating a new one")
             disconnect()
         }
-        let config = RTCConfiguration()
-        config.iceServers = iceServers.map { server in
-            RTCIceServer(
-                urlStrings: server.urls,
-                username: server.username,
-                credential: server.credential
-            )
-        }
-        config.sdpSemantics = .unifiedPlan
-        config.continualGatheringPolicy = .gatherContinually
-        config.bundlePolicy = .maxBundle
-        config.rtcpMuxPolicy = .require
-        // PERF-003: pre-warm ICE candidate gathering while the user is still
-        // tapping Answer. With pool size = 4, host/srflx/relay candidates start
-        // resolving as soon as setConfiguration runs, so ICE checks can begin
-        // immediately after the SDP answer is sent — typically shaving 200–400ms
-        // off the connect time on cellular.
-        config.iceCandidatePoolSize = Int32(QualityThresholds.iceCandidatePoolSize)
+        let config = WebRTCPeerConfiguration.make(
+            iceServers: iceServers.map { RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential) },
+            transport: CallAddressPrivacySetting.transport()
+        )
 
         let constraints = RTCMediaConstraints(
             mandatoryConstraints: nil,

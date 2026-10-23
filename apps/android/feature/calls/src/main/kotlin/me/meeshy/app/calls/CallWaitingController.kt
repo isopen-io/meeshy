@@ -22,6 +22,7 @@ import javax.inject.Inject
 class CallWaitingController @Inject constructor(
     private val signals: CallSignalManager,
     private val timer: CallWaitingTimer,
+    private val haptics: CallHaptics,
 ) {
     /** The pending-call slice republished by the host after every change. */
     var state: CallWaitingState = CallWaitingState.EMPTY
@@ -53,6 +54,7 @@ class CallWaitingController @Inject constructor(
     fun reject() {
         val pending = state.pending ?: return
         stopTimer()
+        haptics.play(CallHapticKind.Light)
         end(pending)
     }
 
@@ -64,6 +66,7 @@ class CallWaitingController @Inject constructor(
     fun accept(): WaitingCall? {
         val pending = state.pending ?: return null
         stopTimer()
+        haptics.play(CallHapticKind.Light)
         reduce(CallWaitingEvent.Accepted)
         return pending
     }
@@ -86,12 +89,17 @@ class CallWaitingController @Inject constructor(
      * banner **only** while a call is already active (parity with iOS busy-path)
      * and only for a *different* call than the one in progress — a redelivery of
      * the active call's own offer is ignored. A newer offer replaces an older
-     * pending one and restarts the auto-dismiss window.
+     * pending one and restarts the auto-dismiss window; the displaced caller is refused on the
+     * wire so it never keeps ringing for a banner that no longer exists.
      */
     private fun onIncomingOffer(call: WaitingCall) {
         val host = host ?: return
         if (!host.callState.isActive) return
         if (call.callId == host.callId) return
+        CallWaitingReducer.displacedBy(state, call)?.let { displaced ->
+            signals.emitEnd(displaced.callId, reason = END_REASON_REJECTED)
+        }
+        if (state.pending?.callId != call.callId) haptics.play(CallHapticKind.Light)
         reduce(CallWaitingEvent.Offered(call))
         startTimer(host, call.callId)
     }

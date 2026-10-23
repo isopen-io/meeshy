@@ -500,6 +500,40 @@ class ChatViewModelTest {
     )
 
     @Test
+    fun a_plain_member_of_a_public_conversation_may_join_a_call_but_never_start_one() = runTest(dispatcher) {
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = slowConversation(role = "member").copy(type = "public"),
+        )
+        advanceUntilIdle()
+
+        val entry = h.vm.callEntry.value
+        assertThat(entry).isNotNull()
+        assertThat(entry!!.canStart).isFalse()
+    }
+
+    @Test
+    fun a_global_conversation_offers_no_call_button() = runTest(dispatcher) {
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = slowConversation(role = "admin").copy(type = "global"),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.callEntry.value).isNull()
+    }
+
+    @Test
+    fun a_group_member_may_start_a_call() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(role = "member"))
+        advanceUntilIdle()
+
+        assertThat(h.vm.callEntry.value?.canStart).isTrue()
+    }
+
+    @Test
     fun the_conversation_slow_mode_interval_populates_the_composer_state() = runTest(dispatcher) {
         val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
 

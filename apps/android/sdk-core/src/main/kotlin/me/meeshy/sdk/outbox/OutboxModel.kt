@@ -1,6 +1,7 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import timber.log.Timber
 
 /** Mutation kinds the outbox can carry (ARCHITECTURE.md §5). */
 public enum class OutboxKind {
@@ -27,6 +28,7 @@ public enum class OutboxKind {
     BOOKMARK_POST,
     UNBOOKMARK_POST,
     RESPOND_FRIEND_REQUEST,
+    REPORT_ATTACHMENT_STATUS,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -36,9 +38,15 @@ public enum class OutboxState {
     EXHAUSTED,
 }
 
-/** Drain lane for a mutation — see [OutboxLanes]. */
-public val OutboxEntity.kindEnum: OutboxKind
-    get() = OutboxKind.valueOf(kind)
+/**
+ * The row's kind, or `null` when a NEWER build wrote a kind this one does not know. Never
+ * `OutboxKind.valueOf`, which throws: an unknown row is ignored (and logged), not a crash.
+ */
+public val OutboxEntity.kindEnum: OutboxKind?
+    get() = OutboxKindCatalog.fromDiskValue(kind) ?: run {
+        Timber.w("Outbox row %s has unknown kind %s: ignored", cmid, kind)
+        null
+    }
 
 public val OutboxEntity.stateEnum: OutboxState
     get() = OutboxState.valueOf(state)
@@ -62,6 +70,7 @@ public object OutboxLanes {
     public const val BLOCK: String = "block"
     public const val FRIEND: String = "friend"
     public const val PIN: String = "pin"
+    public const val MEDIA_STATUS: String = "mediaStatus"
 }
 
 /**
@@ -127,6 +136,8 @@ public object OutboxLaneMap {
         OutboxKind.BOOKMARK_POST,
         OutboxKind.UNBOOKMARK_POST,
         -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
+
+        OutboxKind.REPORT_ATTACHMENT_STATUS -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA_STATUS)
     }
 
     /**
@@ -311,7 +322,7 @@ public data class OutboxMutation(
     val cmid: String = OutboxIds.cmid(),
 )
 
-internal fun OutboxMutation.toEntity(now: Long): OutboxEntity = OutboxEntity(
+internal fun OutboxMutation.toEntity(now: Long, ownerId: String? = null): OutboxEntity = OutboxEntity(
     cmid = cmid,
     lane = lane,
     kind = kind.name,
@@ -322,6 +333,7 @@ internal fun OutboxMutation.toEntity(now: Long): OutboxEntity = OutboxEntity(
     state = OutboxState.PENDING.name,
     createdAt = now,
     updatedAt = now,
+    ownerId = ownerId,
 )
 
 /** Terminal (or near-terminal) signal for a queued mutation, keyed by [cmid]. */

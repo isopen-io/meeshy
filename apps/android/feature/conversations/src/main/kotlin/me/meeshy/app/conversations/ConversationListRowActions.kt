@@ -126,8 +126,13 @@ internal class ConversationListRowActions(
         }
     }
 
-    /** Charge (une fois, cache seul) les derniers messages de l'apercu de [conversationId]. */
+    /**
+     * Charge (une fois, cache seul) les derniers messages de l'apercu de [conversationId].
+     * Une conversation verrouillee ne lit rien : l'apercu est scelle (parite iOS
+     * `ConversationListPreviewLoader.load`, `guard !isLocked`).
+     */
     fun loadPreviewMessages(conversationId: String) {
+        if (state.value.isLocked(conversationId)) return
         if (state.value.previewMessages.containsKey(conversationId)) return
         if (!previewLoadingIds.add(conversationId)) return
         scope.launch {
