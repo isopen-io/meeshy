@@ -3,6 +3,7 @@ package me.meeshy.sdk.story
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -63,6 +64,9 @@ internal class StoryCacheSource(
         }
 
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
+
+    /** Les stories déjà en main, lues une fois — les lignes illisibles sautées. */
+    suspend fun readLocal(): List<ApiPost> = storyDao.observeAll().first().mapNotNull { it.decodedOrNull() }
 
     /**
      * Pages through the feed up to [MAX_PAGES] (`MAX_PAGES * STORIES_PAGE_SIZE` = 300

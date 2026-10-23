@@ -61,7 +61,10 @@
     <string name="stories_translated">Übersetzung verfügbar</string>
     <string name="stories_viewer_close">Schließen</string>
     <string name="stories_viewer_next">Nächste Story</string>
+    <string name="stories_viewer_not_found_description">Diese Story konnte nicht geladen werden. Erneut versuchen oder schließen.</string>
+    <string name="stories_viewer_not_found_title">Story nicht gefunden</string>
     <string name="stories_viewer_previous">Vorherige Story</string>
+    <string name="stories_viewer_retry">Erneut versuchen</string>
     <plurals name="stories_viewers_count">
         <item quantity="one">%d Ansicht</item>
         <item quantity="other">%d Ansichten</item>
