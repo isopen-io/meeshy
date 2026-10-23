@@ -123,6 +123,7 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   // Variantes WebP responsives (#11260) — OPTIONNEL : absent d'une ligne héritée,
   // un ancien client ignore la clé.
   imageVariants: true,
+  avifVariants: true,
   duration: true,
   order: true,
   caption: true,

@@ -105,6 +105,7 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   thumbnailUrl: true,
   thumbHash: true,
   imageVariants: true,
+  avifVariants: true,
   width: true,
   height: true,
   duration: true,

@@ -454,6 +454,7 @@ export class UploadProcessor {
         thumbnailUrl: thumbnailUrl,
         thumbHash: thumbHash || undefined,
         imageVariants: imageVariants ? imageVariantsJson(imageVariants) : undefined,
+        avifVariants: renditions.avifVariants ? imageVariantsJson(renditions.avifVariants) : undefined,
         width: metadata.width,
         height: metadata.height,
         duration: metadata.duration,

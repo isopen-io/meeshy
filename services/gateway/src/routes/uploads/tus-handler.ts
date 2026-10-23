@@ -193,6 +193,7 @@ function persistedRenditionFields(rendered: MediaRenditions) {
     thumbnailUrl: rendered.thumbnailPath,
     thumbHash: rendered.thumbHash,
     ...(rendered.imageVariants ? { imageVariants: imageVariantsJson(rendered.imageVariants) } : {}),
+    ...(rendered.avifVariants ? { avifVariants: imageVariantsJson(rendered.avifVariants) } : {}),
   };
 }
 

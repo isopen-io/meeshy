@@ -37,6 +37,24 @@ export type ImageVariant = {
   readonly buffer: Buffer;
 };
 
+/**
+ * #11262 — AVIF variants, stored NEXT TO the WebP ones (never inside
+ * `imageVariants`, which older clients read without filtering the format).
+ * q60 / effort 4 is a perceptual quality comparable to WebP q78 at a smaller
+ * weight (verdict #11247: one perceptual generation, colour profile kept):
+ * the source ICC profile (Display P3 on every recent phone) is KEPT, where the
+ * WebP variants convert to sRGB.
+ */
+export const AVIF_VARIANT_QUALITY = 60;
+export const AVIF_VARIANT_EFFORT = 4;
+
+export type AvifImageVariant = {
+  readonly width: number;
+  readonly height: number;
+  readonly format: 'avif';
+  readonly buffer: Buffer;
+};
+
 
 /**
  * Resize (fit inside, never enlarge) and encode an image to a WebP thumbnail.
@@ -61,8 +79,7 @@ export async function createImageThumbnail(
  * ascending by width; an empty array means the source is already small enough
  * that no downscaled variant is worthwhile (caller keeps just the original).
  *
- * WebP only by design: AVIF (smaller still) is far costlier to encode and is
- * gated on a libheif/aom-enabled build — a config-flippable follow-up.
+ * AVIF variants are produced separately by `createAvifVariants` (#11262).
  */
 export async function createResponsiveVariants(
   input: Buffer | string,
@@ -88,6 +105,39 @@ export async function createResponsiveVariants(
     variants.push({ width: info.width, height: info.height, format: 'webp', buffer: data });
   }
   return variants;
+}
+
+/**
+ * Generate responsive AVIF variants, one per target width strictly smaller
+ * than the source width — the same widths as the WebP ones (#11262).
+ */
+export async function createAvifVariants(
+  input: Buffer | string,
+  opts: { widths?: readonly number[]; quality?: number } = {}
+): Promise<AvifImageVariant[]> {
+  const widths = opts.widths ?? RESPONSIVE_VARIANT_WIDTHS;
+  const quality = opts.quality ?? AVIF_VARIANT_QUALITY;
+  const source = typeof input === 'string' ? await fs.readFile(input) : input;
+  const srcWidth = (await sharp(source).metadata()).width ?? 0;
+  const targets = [...new Set(widths)].filter((w) => w > 0 && w < srcWidth).sort((a, b) => a - b);
+
+  const variants: AvifImageVariant[] = [];
+  for (const width of targets) {
+    const { data, info } = await sharp(source)
+      .resize(width, null, { fit: 'inside', withoutEnlargement: true })
+      .keepIccProfile()
+      .avif({ quality, effort: AVIF_VARIANT_EFFORT })
+      .toBuffer({ resolveWithObject: true });
+    variants.push({ width: info.width, height: info.height, format: 'avif', buffer: data });
+  }
+  return variants;
+}
+
+/** Stored path for an AVIF variant: `<base>_<width>w.avif` (#11262). */
+export function avifVariantPathFor(imagePath: string, width: number): string {
+  const ext = path.extname(imagePath);
+  const base = ext ? imagePath.slice(0, imagePath.length - ext.length) : imagePath;
+  return `${base}_${width}w.avif`;
 }
 
 /**
