@@ -1,4 +1,5 @@
 import { lookFilter } from '@/lib/media/photo-develop';
+import type { LensStage } from '@/lib/meeshy-lens/lens-stage';
 
 import { faceGrade } from './face-effects';
 import { effectsFilter, type FrameSettings, type VideoEffects } from './video-effects';
@@ -14,10 +15,13 @@ import { effectsFilter, type FrameSettings, type VideoEffects } from './video-ef
  *
  * 1. le FLOU d'arrière-plan par segmentation (`BlurStage`, compositeur WebGL2),
  *    quand la caméra ne le fait pas elle-même ;
- * 2. sur le canevas 2D : le RECADRAGE du zoom numérique, la couleur
+ * 2. la LUT d'une lens MeeshyLens, sur le GPU (`LensStage.grade`, W14) ;
+ * 3. sur le canevas 2D : le RECADRAGE du zoom numérique, la couleur
  *    (préréglage, luminosité, étalonnage de l'effet de visage, avec le look
  *    léger des photos, #8695), puis le CALQUE de l'effet de visage
- *    (`FaceLayer`, `face-effects-draw.ts`), piloté par l'heure de l'image.
+ *    (`FaceLayer`, `face-effects-draw.ts`), piloté par l'heure de l'image ;
+ * 4. le reste de la lens (cadre, stickers, textes, particules), ancré à la
+ *    boîte du visage (`LensStage.plan` puis `paint`).
  *
  * Rien à faire laisse passer l'image telle quelle ; une image qu'on n'a pas su
  * traiter part quand même, originale. Chaque image traitée compte son coût
@@ -41,6 +45,8 @@ export type FrameEnv = {
   readonly face?: FaceLayer;
   /** Bâtit le flou au premier besoin — absent ou `null` : pas de segmentation ici. */
   readonly blur?: () => BlurStage | null;
+  /** L'étage des lens (W14) — absent : une lens posée ne se joue pas ici, l'image part comme avant. */
+  readonly lens?: LensStage;
 };
 
 export type Timings = { readonly frames: number; readonly p50: number; readonly p95: number; readonly max: number };
@@ -111,8 +117,11 @@ export function createFrameEngine(initial: FrameSettings, env: FrameEnv): FrameE
       filter = frameFilter(next.effects);
     },
     draw: (source, width, height, t) => {
-      const image = blurred(source, width, height, t);
-      const painted = filter !== 'none' || current.effects.faceEffect !== 'none' || current.zoom > 1;
+      const frame = { width, height };
+      const lens = current.lens === undefined || env.lens === undefined ? null : { stage: env.lens, settings: current.lens };
+      const softened = blurred(source, width, height, t);
+      const image = lens === null ? softened : lens.stage.grade(softened, lens.settings, frame);
+      const painted = filter !== 'none' || current.effects.faceEffect !== 'none' || current.zoom > 1 || lens !== null;
       if (!painted) return image === source ? null : image;
       surface ??= env.surface();
       surface.resize(width, height);
@@ -122,9 +131,10 @@ export function createFrameEngine(initial: FrameSettings, env: FrameEnv): FrameE
         const crop = cropRect(width, height, current.zoom);
         context.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height);
       } else context.drawImage(image, 0, 0);
-      if (current.effects.faceEffect === 'none' || env.face === undefined) return surface.canvas;
+      const drawn = current.zoom > 1 ? surface.canvas : source;
       context.filter = 'none';
-      env.face({ context, source: current.zoom > 1 ? surface.canvas : source, width, height, t }, current.effects);
+      if (current.effects.faceEffect !== 'none' && env.face !== undefined) env.face({ context, source: drawn, width, height, t }, current.effects);
+      if (lens !== null) lens.stage.paint(context, lens.stage.plan(lens.settings, drawn, frame, t), frame);
       return surface.canvas;
     },
     record: (duration) => {
@@ -134,6 +144,7 @@ export function createFrameEngine(initial: FrameSettings, env: FrameEnv): FrameE
     close: () => {
       blur?.close();
       blur = null;
+      env.lens?.close();
     },
   };
 }

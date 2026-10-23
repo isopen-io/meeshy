@@ -388,8 +388,6 @@ fun SettingsScreen(
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_export_data), detail = null, onClick = onOpenDataExport)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_clear_media_cache), detail = null, onClick = onOpenMediaCache)
-                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_storage_used), detail = null, onClick = onOpenMediaCache)
             }
 

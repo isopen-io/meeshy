@@ -125,9 +125,15 @@
     <string name="privacy_section_media">Multimedia y datos</string>
     <string name="privacy_section_visibility">Visibilidad</string>
     <string name="privacy_typing_indicator">Indicador de escritura</string>
+    <string name="sessions_cancel">Cancelar</string>
     <string name="sessions_current">Este dispositivo</string>
     <string name="sessions_retry">Reintentar</string>
     <string name="sessions_revoke">Cerrar sesión</string>
+    <string name="sessions_revoke_all_action">Cerrar sesión en los demás dispositivos</string>
+    <string name="sessions_revoke_all_confirm_message">Solo este dispositivo seguirá con la sesión iniciada. Los demás tendrán que volver a iniciarla.</string>
+    <string name="sessions_revoke_confirm_action">Cerrar sesión</string>
+    <string name="sessions_revoke_confirm_message">%s tendrá que volver a iniciar sesión para acceder a tu cuenta.</string>
+    <string name="sessions_revoke_confirm_title">¿Cerrar la sesión de este dispositivo?</string>
     <string name="settings_active_sessions">Sesiones activas</string>
     <string name="settings_back">Atrás</string>
     <string name="settings_blocked_users">Usuarios bloqueados</string>
