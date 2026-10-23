@@ -71,6 +71,9 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
         var acceptance: ProgressiveResumeLaw.Acceptance?
         var rejected: URLResponse?
         var written: Int64 = 0
+        /// La tête a atteint `limit` : la tâche est annulée, et les paquets
+        /// déjà en route ne s'écrivent plus.
+        var cut = false
 
         init(continuation: CheckedContinuation<URLResponse, Error>, sink: ProgressiveMediaDownload, progress: ProgressHandler?, offset: Int64, limit: Int64?, cadence: TransferProgressCadence) {
             self.continuation = continuation
@@ -322,7 +325,7 @@ extension MediaFileDownloader: URLSessionDataDelegate {
     /// transfert sans qu'un seul de ses octets passe pour du média.
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard let stream = ledger.mutateUnchecked({ $0.streams[ObjectIdentifier(dataTask)] }) else { return }
-        if ledger.mutateUnchecked({ _ in stream.rejected != nil }) { return }
+        if ledger.mutateUnchecked({ _ in stream.rejected != nil || stream.cut }) { return }
         guard accept(stream, response: dataTask.response) else {
             dataTask.cancel()
             return
@@ -345,7 +348,7 @@ extension MediaFileDownloader: URLSessionDataDelegate {
             return (progress, whole, wholeExpected)
         }
         if let report { report.0(report.1, report.2) }
-        if exceedsLimit(stream) { dataTask.cancel() }
+        if cutsAtLimit(stream) { dataTask.cancel() }
     }
 
     /// La première réponse d'un flux décide de tout le reste : refusée, elle
@@ -362,10 +365,19 @@ extension MediaFileDownloader: URLSessionDataDelegate {
         return true
     }
 
-    private func exceedsLimit(_ stream: ReadableTransfer) -> Bool {
+    /// Une réponse ENTIÈRE qui atteint `limit` est coupée, et rien de ce qui
+    /// arrive après ne s'écrit : les paquets en route après l'annulation
+    /// remplissaient la tête jusqu'au fichier entier, sans réponse pour
+    /// l'adopter, et l'élection levait `notCached`. Un fichier déjà arrivé en
+    /// entier n'est pas coupé : sa réponse le rend adoptable.
+    private func cutsAtLimit(_ stream: ReadableTransfer) -> Bool {
         ledger.mutateUnchecked { _ -> Bool in
-            guard let limit = stream.limit, stream.acceptance?.resumable == false else { return false }
-            return stream.offset + stream.written >= limit
+            guard let limit = stream.limit, let acceptance = stream.acceptance, !acceptance.resumable else { return false }
+            let arrived = stream.offset + stream.written
+            let whole = acceptance.totalBytes.map { arrived >= $0 } ?? false
+            guard arrived >= limit, !whole else { return false }
+            stream.cut = true
+            return true
         }
     }
 

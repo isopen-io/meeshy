@@ -218,7 +218,19 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
     `${label} le double tap au tiers gauche recule, borné à zéro (${afterBackward?.currentTime})`,
   );
 
-  await page.mouse.dblclick(stageBox.x + stageBox.width * 0.9, stageBox.y + stageBox.height / 2);
+  // Le rail d'actions (#12424) flotte SUR le bord de fin de la scène et monte
+  // jusqu'à mi-hauteur : un double tap sur l'un de ses boutons n'est pas un
+  // double tap sur la scène. Le doigt se pose donc dans le tiers droit, à
+  // gauche du rail mesuré — jamais à une fraction fixe de la largeur.
+  const railBox = await page.locator('[data-media-viewer] [data-viewer-stage-rail]').boundingBox();
+  const rightThirdStart = stageBox.x + (stageBox.width * 2) / 3;
+  const rightThirdEnd = railBox === null ? stageBox.x + stageBox.width : railBox.x;
+  const forwardX = (rightThirdStart + rightThirdEnd) / 2;
+  expect(
+    rightThirdEnd - rightThirdStart >= 24,
+    `${label} le tiers droit garde une bande libre à gauche du rail pour le double tap (${rightThirdStart} → ${rightThirdEnd})`,
+  );
+  await page.mouse.dblclick(forwardX, stageBox.y + stageBox.height / 2);
   await page.waitForTimeout(50);
   const afterForward = await viewerVideoState(page);
   expect(

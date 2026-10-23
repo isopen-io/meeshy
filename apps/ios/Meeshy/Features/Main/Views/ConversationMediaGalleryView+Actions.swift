@@ -56,6 +56,48 @@ nonisolated enum MediaStageActionColumn {
     }
 }
 
+// MARK: - Enregistrer et Transférer, dans le rail (#12420)
+
+/// **Les deux sorties de la pièce, au rail ET au ⋯** (demande porteur, #12420).
+///
+/// Elles appellent les MÊMES transports que les entrées du menu
+/// (`requestSaveCurrent`, `forwardCurrent`) : deux boutons, un seul chemin.
+/// « Enregistrer » lit le portillon de sortie de l'hôte (#9573) dans
+/// l'environnement — une extension de la galerie ne le peut pas —, et la photo
+/// d'une flamme ou d'une vue unique n'a donc pas ce bouton. « Transférer » suit
+/// le verdict de l'hôte, qui connaît la loi de transfert du message porteur.
+struct GalleryRailExitActions: View {
+    let contentId: String
+    let offersSave: Bool
+    let offersForward: Bool
+    let onSave: () -> Void
+    let onForward: () -> Void
+    @Environment(\.contentExitGate) private var exitGate
+
+    var body: some View {
+        if offersSave && exitGate.mayLeave(contentId) {
+            FullscreenActionButton(
+                systemImage: FullscreenChromeSymbol.save,
+                label: String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main),
+                hint: String(localized: "media.save.rail.hint",
+                             defaultValue: "Enregistre ce média sur l'appareil.", bundle: .main),
+                style: .disc(.adaptive),
+                action: onSave
+            )
+        }
+        if offersForward {
+            FullscreenActionButton(
+                systemImage: MessageActionVerb.forward.filledSymbol,
+                label: MessageActionVerb.forward.label,
+                hint: String(localized: "media.forward.rail.hint",
+                             defaultValue: "Envoie ce média dans une autre conversation.", bundle: .main),
+                style: .disc(.adaptive),
+                action: onForward
+            )
+        }
+    }
+}
+
 extension ConversationMediaGalleryView {
 
     // MARK: - Couche haute : la traînée d'émojis

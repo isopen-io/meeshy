@@ -121,5 +121,5 @@
     <string name="viewer_retry">Réessayer</string>
     <string name="viewer_save">Enregistrer</string>
     <string name="viewer_saving">Enregistrement…</string>
-    <string name="viewer_share_outside">Partager hors de Meeshy</string>
+    <string name="viewer_share_outside">Partager</string>
 </resources>

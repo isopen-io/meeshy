@@ -19,6 +19,8 @@ import { MissionService, READ_ONLY_CREDIT } from '../services/game/MissionServic
 import { PersonalMissionService } from '../services/game/PersonalMissionService';
 import { mediaQueueEnabled } from '../services/attachments/media-processing/queue';
 import { gatewaySweepEnabled, startGatewayPendingSweep } from '../services/attachments/media-processing/gateway-sweep-runner';
+import { mediaReadyPorts } from '../services/attachments/media-processing/ready-listener';
+import { MessageAttachmentAltTranslationService } from '../services/attachments/MessageAttachmentAltTranslationService';
 import { startMediaReadyListener } from '../services/attachments/media-processing/ready-listener';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { getCacheStore } from '../services/CacheStore';
@@ -81,8 +83,27 @@ export class MeeshySocketIOHandler {
       getManager: () => this.socketIOManager,
     });
 
+    this.startMediaPipelines(this.socketIOManager);
+
+    logger.info('✅ Socket.IO configuré et routes ajoutées');
+  }
+
+  /**
+   * Les trois chemins qui republient une pièce rendue ou traduite. Leurs
+   * dépendances (file de livraison Redis, bail) ne se construisent que si l'un
+   * d'eux est allumé : éteints, la passerelle ne touche pas à Redis pour eux.
+   */
+  private startMediaPipelines(manager: MeeshySocketIOManager): void {
     // #11264 — les médias rendus par le worker se signalent ici (file allumée seulement).
-    const manager = this.socketIOManager;
+    const listenerRedisUrl = mediaQueueEnabled() ? process.env.REDIS_URL : undefined;
+    // R1 — sans worker vivant, ou file mise à l'arrêt (`MEDIA_QUEUE=drain`),
+    // la passerelle reprend elle-même les pièces restées `pending`.
+    const sweepOn = gatewaySweepEnabled();
+    // #12333 — la description d'une pièce traduite par NLLB rejoint ses
+    // lecteurs par `message:attachment-updated`, sous la loi de `servedDescription`.
+    const zmqClient = this.translationService.getZmqClient();
+    if (!listenerRedisUrl && !sweepOn && !zmqClient) return;
+
     const mediaDeps = {
       prisma: this.prisma,
       io: manager.getIO() as never,
@@ -91,16 +112,22 @@ export class MeeshySocketIOHandler {
       socialEvents: () => manager.getSocialEventsHandler(),
       leaseStore: getCacheStore(),
     };
-    if (mediaQueueEnabled() && process.env.REDIS_URL) {
-      this.mediaReadyListener = startMediaReadyListener(mediaDeps, process.env.REDIS_URL);
+    if (listenerRedisUrl) {
+      this.mediaReadyListener = startMediaReadyListener(mediaDeps, listenerRedisUrl);
     }
-    // R1 — sans worker vivant, ou file mise à l'arrêt (`MEDIA_QUEUE=drain`),
-    // la passerelle reprend elle-même les pièces restées `pending`.
-    if (gatewaySweepEnabled()) {
+    if (sweepOn) {
       this.mediaPendingSweep = startGatewayPendingSweep(mediaDeps);
     }
-
-    logger.info('✅ Socket.IO configuré et routes ajoutées');
+    if (zmqClient) {
+      const ports = mediaReadyPorts(mediaDeps);
+      MessageAttachmentAltTranslationService.init(this.prisma, zmqClient, async (attachmentId) => {
+        const attachment = await ports.loadMessageAttachment(attachmentId);
+        const conversationId = attachment?.message?.conversationId;
+        if (attachment?.messageId && conversationId) {
+          await ports.emitAttachmentUpdated({ conversationId, messageId: attachment.messageId, attachment });
+        }
+      });
+    }
   }
 
   /**

@@ -63,6 +63,15 @@ describe('GET /playback — la qualité de lecture par surface × tier × jour (
     })]);
   });
 
+  it('sert aussi les Web Vitals et les longues images de la cellule (W11, #11317)', async () => {
+    const rows = Array.from({ length: 20 }, (_, i) => stored(i, { lcpMs: 1000 + i * 100, cls: 0.01, inpMs: 100, longFrames: 1, longFramesBlockingMs: 60, longFrameWorstMs: 60 }));
+    const { app } = await appWith({ role: 'ADMIN', rows });
+
+    const [cell] = (await app.inject({ method: 'GET', url: '/playback?days=7' })).json().data.cells;
+
+    expect(cell).toMatchObject({ lcpMs: { p50: 1900, p95: 2800 }, cls: { p50: 0.01, p95: 0.01 }, inpMs: { p50: 100, p95: 100 }, longFrames: { p50: 1, p95: 1 } });
+  });
+
   it('ne sert aucun identifiant de compte', async () => {
     const { app } = await appWith({ role: 'ADMIN', rows: Array.from({ length: 25 }, (_, i) => stored(i)) });
 

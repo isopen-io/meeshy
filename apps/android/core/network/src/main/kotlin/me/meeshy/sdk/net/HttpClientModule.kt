@@ -28,12 +28,14 @@ internal object HttpClientModule {
         sessionExpiry: SessionExpiryNotifier,
         refresher: SessionRefresher,
         transition: SessionTransitionFlags,
+        visitorKey: VisitorReaderKeyProviding,
     ): Set<HttpClientContributor> = builtInContributors(
         config = config,
         tokenStore = tokenStore,
         onSessionExpired = sessionExpiry::notifyExpired,
         refresher = refresher,
         transition = transition,
+        visitorKey = visitorKey,
     ).toSet()
 
     @Provides

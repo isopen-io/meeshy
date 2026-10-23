@@ -57,6 +57,7 @@ import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.search.MessageSearchHit
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.search.SearchLoadState
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
@@ -112,15 +113,19 @@ fun GlobalSearchScreen(
                     label = stringResource(R.string.global_search_empty_title),
                     sublabel = stringResource(R.string.global_search_empty_subtitle),
                 )
+                state.loadState == SearchLoadState.ERROR -> SearchFailureState(onRetry = viewModel::retryLastSearch)
                 state.isCurrentTabEmpty -> SearchStatus(
                     label = stringResource(R.string.global_search_no_results),
                     sublabel = stringResource(R.string.global_search_no_results_hint),
                 )
-                else -> SearchResults(
-                    state = state,
-                    onOpenConversation = onOpenConversation,
-                    onOpenUser = onOpenUser,
-                )
+                else -> {
+                    SearchStateBanner(state = state, onRetry = viewModel::retryLastSearch)
+                    SearchResults(
+                        state = state,
+                        onOpenConversation = onOpenConversation,
+                        onOpenUser = onOpenUser,
+                    )
+                }
             }
         }
     }

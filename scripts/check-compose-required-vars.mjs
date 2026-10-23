@@ -305,8 +305,8 @@ const SUBSTITUTIONS = Object.freeze({
   },
 });
 
-/** `${NOM}` · `${NOM:-defaut}` · `${NOM:?message}` · `${NOM:+autre}` — et leurs variantes sans `:`. */
-const SUBSTITUTION = /\$\{([A-Za-z_][A-Za-z0-9_]*)(:?[-?+])?([^}]*)\}/g;
+/** `${NOM}` · `${NOM:-defaut}` · `${NOM:?message}` · `${NOM:+autre}` — et leurs variantes sans `:`. `$${NOM}` est l'échappement d'une variable du shell du conteneur : Compose ne la substitue pas. */
+const SUBSTITUTION = /(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)(:?[-?+])?([^}]*)\}/g;
 
 const NUE = 'nue';
 
@@ -890,7 +890,20 @@ const MUTATIONS_MUETTES = Object.freeze([
 const mondeNomme = (world, name) =>
   world.files.some((file) => file.substitutions.some((substitution) => substitution.name === name));
 
+const SONDES_DE_LECTURE = Object.freeze([
+  ['une substitution Compose est lue', 'x: ${TEMOIN_LU}', ['TEMOIN_LU']],
+  ["`$${…}` est une variable du shell du conteneur, que Compose ne substitue pas", 'x: "$${TEMOIN_ECHAPPE}"', []],
+]);
+
+const sondesDeLectureFausses = () =>
+  SONDES_DE_LECTURE.filter(
+    ([, source, attendus]) => JSON.stringify(substitutionsOf(source).map((s) => s.name)) !== JSON.stringify(attendus),
+  );
+
 const selfTest = (world) => {
+  const lectures = sondesDeLectureFausses();
+  lectures.forEach(([titre, source]) => console.error(`LECTURE FAUSSE : « ${titre} » sur ${source}`));
+  if (lectures.length > 0) return 1;
   const blind = MUTATIONS.filter(
     ([, apply, expected]) => !inspect(mutate(world, apply)).some((failure) => failure.includes(expected)),
   );

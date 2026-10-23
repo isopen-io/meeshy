@@ -72,7 +72,7 @@
  * modale ne rend ces accusés. Un champ calculé que personne n'affiche est le
  * défaut « une LOI qui calcule une valeur que personne ne lit » ; le jour où
  * une surface les demande, l'ajout est d'une ligne (`loadMessageReadStatusMap`,
- * exporté par `messages-list-query.ts`) — et il devra venir avec son lecteur.
+ * exporté par `messages-list-reader-state.ts`) — et il devra venir avec son lecteur.
  */
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';

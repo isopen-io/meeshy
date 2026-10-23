@@ -60,7 +60,7 @@ public nonisolated enum StoryOverlayVideoTracks {
 
     private static func compose(_ media: StoryMediaObject, into composition: AVMutableComposition,
                                 storyStart: CMTime) async -> StoryOverlayTrack? {
-        guard let adresse = media.mediaURL.flatMap({ URL(string: $0) }) else { return nil }
+        guard let adresse = media.mediaURL.flatMap(MeeshyConfig.resolveMediaURL) else { return nil }
         let asset = AVURLAsset(url: adresse)
         guard let source = try? await asset.loadTracks(withMediaType: .video).first,
               let longueur = try? await asset.load(.duration), longueur > .zero else { return nil }

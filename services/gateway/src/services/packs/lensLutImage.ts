@@ -12,6 +12,8 @@
  *   table marquée Display P3 (le défaut des exports Mac et iPhone) vers sRGB ;
  * - une table 16 bits sort en 16 bits (`rgb16`) ; une table 16 bits qui n'est
  *   pas en couleur ne se garde pas à l'identique, elle est refusée.
+ * - une source hors RVB et gris (CMYK, Lab) est refusée (#12329 R4) : la
+ *   convertir changerait chaque valeur.
  * Une image animée n'est pas une LUT.
  */
 import sharp from 'sharp';
@@ -25,6 +27,13 @@ import type { StickerImageOutcome } from '../stickers/stickerImage';
  */
 const MAX_LUT_PIXELS = 4096 * 4096;
 
+/**
+ * Les espaces où une table se lit sans conversion (#12329 R4) : RVB et gris,
+ * 8 ou 16 bits. Un CMYK, un Lab ou un espace inconnu seraient CONVERTIS en
+ * RVB par l'écriture PNG, et chaque valeur de la table changerait : refusés.
+ */
+const TABLE_SPACES: ReadonlySet<string> = new Set(['srgb', 'rgb', 'rgb16', 'b-w', 'grey16']);
+
 export async function normalizeLensLut(source: Buffer): Promise<StickerImageOutcome> {
   if (source.length > STICKER_LIMITS.maxSourceBytes) return { ok: false, reason: 'too-large' };
   if (stickerMimeFromSignature(source) === null) return { ok: false, reason: 'not-an-image' };
@@ -32,6 +41,7 @@ export async function normalizeLensLut(source: Buffer): Promise<StickerImageOutc
     const input = sharp(source, { limitInputPixels: MAX_LUT_PIXELS, ignoreIcc: true });
     const meta = await input.metadata();
     if ((meta.pages ?? 1) > 1 || meta.width === undefined || meta.height === undefined) return { ok: false, reason: 'not-an-image' };
+    if (meta.space === undefined || !TABLE_SPACES.has(meta.space)) return { ok: false, reason: 'not-an-image' };
     const sixteenBits = meta.depth === 'ushort';
     if (sixteenBits && (meta.channels ?? 0) < 3) return { ok: false, reason: 'not-an-image' };
     const kept = sixteenBits ? input.toColourspace('rgb16') : input;

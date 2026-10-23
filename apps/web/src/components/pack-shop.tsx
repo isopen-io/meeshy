@@ -8,6 +8,7 @@ import type { ApiResult } from '@/lib/api/http';
 import { createPackGestureGuard, newPurchaseRequestId } from '@/lib/api/packs';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { unlockText } from '@/lib/packs/unlock-texts';
 
 /**
  * **LA BOUTIQUE DE PACKS, UNE POUR TOUS LES DOMAINES** (#10149, LP1) — la
@@ -252,7 +253,7 @@ export function PackShop<P extends ShopPack>({
                 </div>
                 {adapter.locked?.(pack) === true && !pack.installed ? (
                   <span data-shop-locked={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                    {translateStickerPacks(language, 'packs.locked')}
+                    {unlockText(language, 'locked')}
                   </span>
                 ) : pack.installed && !toBuy && adapter.removable?.(pack) === false ? (
                   <span data-shop-included={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>

@@ -1,18 +1,18 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'bun:test';
 
 /**
- * LE FOND DES BARRES SYSTÈME SUIT LE THÈME DE L'APP SOUS ANDROID 15 (#9533).
+ * LA COQUE EST BORD À BORD À TOUTE VERSION (#9533, #12447).
  *
- * Chrome peint sa barre de la couleur `theme-color` de la page. Sous l'API 35,
- * la coque n'est pas bord à bord : le thème `DayNight` peint les barres selon
- * le SYSTÈME, et `SystemBars.setStyle` ne règle que leurs icônes. Thème clair
- * dans l'app : icônes sombres sur barre noire, illisibles. Le pont
- * `MeeshySystemBars` peint le fond ; ses règles vivent dans `SystemBarPaint`
- * (JUnit), ce témoin garde leur branchement.
+ * Sous l'API 35, la coque peignait elle-même ses barres de la `theme-color`
+ * de la page par `setStatusBarColor` / `setNavigationBarColor`. Ces API sont
+ * obsolètes depuis Android 15, et la Play Console les signale. La coque est
+ * désormais bord à bord partout (`EdgeToEdge.enable`) : les barres sont
+ * transparentes, la page ou le fond de fenêtre se voit derrière, comme sous
+ * Android 15.
  */
 
 const JAVA = join(dirname(fileURLToPath(import.meta.url)), '..', 'android', 'app', 'src', 'main', 'java', 'me', 'meeshy', 'app');
@@ -21,18 +21,26 @@ function sansCommentaires(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 }
 
-describe('la coque peint le fond des barres système sous Android 15 (#9533)', () => {
-  test('l’activité enregistre le pont', () => {
+describe('la coque est bord à bord à toute version (#12447)', () => {
+  test('l’activité enregistre le pont et passe bord à bord une fois le thème sans barre d’action posé', () => {
     const activite = sansCommentaires(readFileSync(join(JAVA, 'MainActivity.java'), 'utf8'));
     expect(activite).toContain('registerPlugin(MeeshySystemBarsPlugin.class);');
+    // Avant `super.onCreate`, `enable` installerait la fenêtre avec la barre
+    // d'action du thème de l'application (`BridgeActivity` pose le thème après).
+    expect(activite).toMatch(/super\.onCreate\(savedInstanceState\);\s*EdgeToEdge\.enable\(this\);/);
   });
 
-  test('le pont peint chaque barre seulement là où ses règles le disent', () => {
+  test('aucune source de la coque n’appelle les API de barres obsolètes', () => {
+    const sources = readdirSync(JAVA)
+      .filter((nom) => nom.endsWith('.java'))
+      .map((nom) => sansCommentaires(readFileSync(join(JAVA, nom), 'utf8')));
+    expect(sources.some((source) => /setStatusBarColor\(|setNavigationBarColor\(/.test(source))).toBe(false);
+  });
+
+  test('le pont lit la couleur de la page par ses règles', () => {
     const pont = sansCommentaires(readFileSync(join(JAVA, 'MeeshySystemBarsPlugin.java'), 'utf8'));
     expect(pont).toContain('@CapacitorPlugin(name = "MeeshySystemBars")');
     expect(pont).toContain('SystemBarPaint.opaque(');
-    expect(pont).toMatch(/SystemBarPaint\.paintsStatus\(Build\.VERSION\.SDK_INT\)[\s\S]*setStatusBarColor\(/);
-    expect(pont).toMatch(/SystemBarPaint\.paintsNavigation\(Build\.VERSION\.SDK_INT\)[\s\S]*setNavigationBarColor\(/);
   });
 });
 

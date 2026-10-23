@@ -118,5 +118,5 @@
     <string name="viewer_retry">Erneut versuchen</string>
     <string name="viewer_save">Speichern</string>
     <string name="viewer_saving">Wird gesichert…</string>
-    <string name="viewer_share_outside">Außerhalb von Meeshy teilen</string>
+    <string name="viewer_share_outside">Teilen</string>
 </resources>

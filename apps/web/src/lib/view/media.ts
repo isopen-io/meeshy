@@ -1,4 +1,5 @@
-import { electServedAudio, prismFor, servedTranscript, type Served, type ServedTrack } from '@/lib/api/prism';
+import { resolveMediaDescription } from '@meeshy/shared/utils/media-description';
+import { electServedAudio, prismFor, type Served, type ServedTrack } from '@/lib/api/prism';
 import type { Attachment } from '@/lib/api/types';
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
@@ -130,7 +131,7 @@ export function mediaCarrierOf(params: {
  * - `electDescription` — le TEXTE d'une pièce, et rien d'autre (image, fichier) ;
  * - `electAudio` — le texte ET la piste d'un VOCAL, d'UNE descente.
  */
-export type MediaAttachment = Pick<Attachment, 'transcription' | 'translations' | 'alt' | 'originalName' | 'fileUrl'>;
+export type MediaAttachment = Pick<Attachment, 'transcription' | 'translations' | 'alt' | 'altLanguage' | 'altTranslations' | 'originalName' | 'fileUrl'>;
 
 type ElectionInput = {
   readonly attachment: MediaAttachment;
@@ -148,11 +149,21 @@ type ElectionInput = {
  */
 export function electDescription(params: ElectionInput): Served {
   const { attachment, readerLanguages, displayLanguage, fallbackLanguage } = params;
-  return servedTranscript({
+  // #12333 — LA loi partagée : la description de l'auteur et la transcription
+  // descendent ENSEMBLE le prisme, rang par rang (l'auteur d'abord à chaque
+  // rang). La passerelle a déjà retiré la description d'une pièce protégée.
+  const described = resolveMediaDescription({
+    alt: attachment.alt,
+    altLanguage: attachment.altLanguage,
+    altTranslations: attachment.altTranslations,
+    transcription: attachment.transcription,
+    translations: attachment.translations,
     preferredLanguages: prismFor({ readerLanguages, displayLanguage }),
-    attachment,
-    fallbackLanguage,
+    isProtected: false,
   });
+  return described
+    ? { text: described.text, language: described.language ?? fallbackLanguage, translated: described.translated }
+    : { text: attachment.originalName ?? '', language: fallbackLanguage, translated: false };
 }
 
 export type ElectedAudio = {

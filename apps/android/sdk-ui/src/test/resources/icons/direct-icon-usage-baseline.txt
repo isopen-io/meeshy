@@ -42,7 +42,6 @@ feature/calls/src/test/kotlin/me/meeshy/app/calls/CallActionDispatcherTest.kt
 feature/calls/src/test/kotlin/me/meeshy/app/calls/CallControlsPillSemanticsTest.kt
 feature/calls/src/test/kotlin/me/meeshy/app/calls/CallPillModelTest.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/AddParticipantSheet.kt
-feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatComposer.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatHeaderHost.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatListRows.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatListSeparators.kt

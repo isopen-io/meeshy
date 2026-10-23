@@ -248,7 +248,7 @@ extension CallView {
                 CachedAsyncImage(
                     url: avatar,
                     targetSize: CGSize(width: size, height: size),
-                    thumbHash: remoteProfile?.avatarThumbHash
+                    thumbHash: remoteProfile?.avatarThumbHash, showsStatusOverlays: false, autoLoad: true
                 ) {
                     Color.clear
                 }
@@ -257,6 +257,7 @@ extension CallView {
                 .clipShape(Circle())
             }
         }
+        .avatarRingWithin(ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing), footprint: size)
         .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
     }
 
@@ -295,7 +296,7 @@ extension CallView {
                 CachedAsyncImage(
                     url: avatar,
                     targetSize: CGSize(width: size, height: size),
-                    thumbHash: user?.avatarThumbHash
+                    thumbHash: user?.avatarThumbHash, showsStatusOverlays: false, autoLoad: true
                 ) {
                     Color.clear
                 }

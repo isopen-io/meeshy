@@ -4,8 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -24,6 +22,7 @@ import androidx.compose.ui.semantics.semantics
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.LanguageData
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -63,7 +62,7 @@ internal fun ComposerLanguagePill(
                     trailingIcon = if (code == languageCode) {
                         {
                             Icon(
-                                imageVector = Icons.Filled.Check,
+                                imageVector = MeeshyIcons.Check,
                                 contentDescription = null,
                                 tint = accentColor,
                             )

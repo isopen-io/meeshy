@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -49,7 +47,7 @@ internal fun ClipboardContentPreview(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = Icons.Filled.Description,
+            imageVector = MeeshyIcons.Document,
             contentDescription = null,
             tint = accentColor,
             modifier = Modifier.size(20.dp),
@@ -81,7 +79,7 @@ internal fun ClipboardContentPreview(
         }
         IconButton(onClick = onRemove) {
             Icon(
-                imageVector = Icons.Filled.Close,
+                imageVector = MeeshyIcons.Close,
                 contentDescription = stringResource(R.string.chat_clipboard_remove),
                 tint = MeeshyTheme.tokens.textSecondary,
                 modifier = Modifier.size(18.dp),

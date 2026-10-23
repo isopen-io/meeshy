@@ -9,7 +9,9 @@
         { "catalog": "ui", "iosKey": "joinFlow.form.emailOptional", "androidName": "guest_join_email_optional", "status": "adopted" },
         { "catalog": "ui", "iosKey": "joinFlow.error.linkNotFound", "androidName": "guest_join_error_link_not_found", "status": "adopted" },
         { "catalog": "ui", "iosKey": "joinFlow.error.tooManyUsers", "androidName": "guest_join_error_too_many_users", "status": "adopted" },
-        { "catalog": "ui", "iosKey": "joinFlow.error.joinFailed", "androidName": "guest_join_error_join_failed", "status": "adopted" }
+        { "catalog": "ui", "iosKey": "joinFlow.error.joinFailed", "androidName": "guest_join_error_join_failed", "status": "adopted" },
+        { "androidName": "guest_join_error_sign_in", "status": "android-only" },
+        { "androidName": "guest_join_email_invalid", "status": "android-only" }
       ]
     }
   }

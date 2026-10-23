@@ -12,6 +12,9 @@ struct IncomingCallView: View {
     // Receive the manager from the parent so SwiftUI keeps the same
     // subscription throughout the view's lifetime.
     @ObservedObject var callManager: CallManager
+    /// Le profil du correspondant résolu par `CallView` (cache d'abord) : sa photo et son
+    /// contour équipé habillent le disque (#12336). `nil` tant qu'il n'est pas résolu.
+    let peerProfile: MeeshyUser?
     // Audit P2-iOS-9 — see CallView; skip repeating animations for
     // motion-sensitive users.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -191,7 +194,23 @@ struct IncomingCallView: View {
                 // décorative (déjà aplatie par le `.accessibilityHidden(true)` du ring parent)
                 .font(.system(size: 44, weight: .bold, design: .rounded))
                 .foregroundStyle(Color.white)
+
+            if let avatar = peerProfile?.avatar, !avatar.isEmpty {
+                CachedAsyncImage(
+                    url: avatar,
+                    targetSize: CGSize(width: 110, height: 110),
+                    thumbHash: peerProfile?.avatarThumbHash,
+                    showsStatusOverlays: false,
+                    autoLoad: true
+                ) {
+                    Color.clear
+                }
+                .scaledToFill()
+                .frame(width: 110, height: 110)
+                .clipShape(Circle())
+            }
         }
+        .avatarRingWithin(ProfileDecorResolver.ring(peerProfile?.profileDecor?.avatarRing), footprint: 110)
         .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)
     }
 

@@ -179,6 +179,70 @@ final class CallViewLayoutGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Le disque d'avatar du correspondant (#12336)
+
+    /// Le disque d'avatar de l'écran d'appel porte le contour que le correspondant a
+    /// équipé, comme partout ailleurs dans l'app (`MeeshyAvatar`) : dans l'empreinte du
+    /// disque, sans rien décaler. Sans lui, l'appel était le seul écran où le contour
+    /// d'un contact disparaissait.
+    func test_avatarCircle_wearsThePeersEquippedRing() throws {
+        let code = try callViewCode()
+        guard let start = code.range(of: "func avatarCircle(size: CGFloat) -> some View {"),
+              let end = code.range(of: "func callAvatarPair(size: CGFloat)", range: start.upperBound ..< code.endIndex)
+        else {
+            XCTFail("CallView doit garder `avatarCircle(size:)` et `callAvatarPair(size:)`")
+            return
+        }
+        let block = String(code[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(
+            block.contains(".avatarRingWithin(") && block.contains("ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing)"),
+            "Le disque d'avatar doit poser `avatarRingWithin` avec le contour équipé du " +
+            "correspondant (`remoteProfile?.profileDecor?.avatarRing`)."
+        )
+    }
+
+    /// L'appel entrant hérite du même profil résolu que le reste de l'écran d'appel.
+    func test_incomingCall_receivesTheResolvedPeerProfile() throws {
+        let code = try callViewCode()
+        XCTAssertTrue(
+            code.contains("IncomingCallView(callManager: callManager, peerProfile: remoteProfile)"),
+            "CallView doit passer `remoteProfile` à IncomingCallView : sans lui, l'appel " +
+            "entrant n'a ni photo ni contour du correspondant."
+        )
+    }
+
+    // MARK: - L'identité du correspondant ne dépend pas de la politique média (#12442)
+
+    /// La bannière en fond et les photos des disques sont l'IDENTITÉ du correspondant,
+    /// comme `CachedAvatarImage` / `CachedBannerImage`, qui ne passent pas par
+    /// `MediaDownloadPolicy`. Avec un `CachedAsyncImage` soumis à cette politique, un
+    /// utilisateur qui règle les images sur « jamais » (ou « Wi-Fi seulement » en
+    /// cellulaire) voyait le fond et le disque rester vides : aucune requête ne partait.
+    func test_everyCallScreenImage_bypassesTheMediaDownloadPolicy() throws {
+        let sources = [try callViewCode(), AppSourceGuard.stripComments(try incomingCallViewSource())]
+        let calls = sources.flatMap { source in
+            source.components(separatedBy: "CachedAsyncImage(").dropFirst().map { String($0.prefix(260)) }
+        }
+        XCTAssertGreaterThanOrEqual(calls.count, 4, "fond, disque du correspondant, pastille locale, appel entrant")
+        for call in calls {
+            XCTAssertTrue(
+                call.contains("autoLoad: true"),
+                "Chaque image de l'écran d'appel doit passer `autoLoad: true` : sans lui, la " +
+                "politique de téléchargement retient la bannière et la photo du correspondant.\n\(call)"
+            )
+        }
+    }
+
+    private func incomingCallViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/IncomingCallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
     // MARK: - Bord a bord du fullScreenCover
 
     /// Les lignes de code, commentaires retires.

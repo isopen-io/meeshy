@@ -38,7 +38,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 internal fun IncomingCallScreen(
     state: CallUiState,
     accent: androidx.compose.ui.graphics.Color,
-    avatarUrl: String?,
+    peer: CallPeerVisual,
     reduceMotion: Boolean,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
@@ -59,7 +59,7 @@ internal fun IncomingCallScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.weight(1f))
-        IncomingCallRings(name = state.peerName, avatarUrl = avatarUrl, reduceMotion = reduceMotion)
+        IncomingCallRings(name = state.peerName, peer = peer, reduceMotion = reduceMotion)
         Spacer(Modifier.height(MeeshySpacing.xxxl))
         Text(
             text = title,

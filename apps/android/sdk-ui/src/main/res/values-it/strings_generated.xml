@@ -121,5 +121,5 @@
     <string name="viewer_retry">Riprova</string>
     <string name="viewer_save">Salva</string>
     <string name="viewer_saving">Salvataggio…</string>
-    <string name="viewer_share_outside">Condividi fuori da Meeshy</string>
+    <string name="viewer_share_outside">Condividi</string>
 </resources>
