@@ -22,4 +22,8 @@
     <string name="composer_recent_select">Seleccionar</string>
     <string name="recentMedia_resolveFailed">No se ha podido preparar este archivo: usa la fototeca completa</string>
     <string name="recentMedia_resolveFailed_multiple">No se pudieron preparar %d archivos: usa toda la fototeca</string>
+    <string name="starred_more_options">Más opciones</string>
+    <string name="starred_remove">Quitar de favoritos</string>
+    <string name="starred_remove_all">Quitar todo</string>
+    <string name="starred_row_hint">Abre la conversación</string>
 </resources>

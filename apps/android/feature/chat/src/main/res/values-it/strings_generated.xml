@@ -22,4 +22,8 @@
     <string name="composer_recent_select">Seleziona</string>
     <string name="recentMedia_resolveFailed">Impossibile preparare questo contenuto — usa la libreria foto completa</string>
     <string name="recentMedia_resolveFailed_multiple">Non è stato possibile preparare %d media — usa l\'intera libreria foto</string>
+    <string name="starred_more_options">Altre opzioni</string>
+    <string name="starred_remove">Rimuovi dai preferiti</string>
+    <string name="starred_remove_all">Rimuovi tutto</string>
+    <string name="starred_row_hint">Apre la conversazione</string>
 </resources>
