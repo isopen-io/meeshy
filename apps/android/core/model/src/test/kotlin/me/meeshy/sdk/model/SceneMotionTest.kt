@@ -7,7 +7,7 @@ import org.junit.Test
 
 class SceneMotionTest {
 
-    private fun obj(kind: String, timing: TimingV3? = null, vararg payload: Pair<String, JsonPrimitive>) =
+    private fun obj(kind: String, timing: TimingV3? = null, payload: Array<Pair<String, JsonPrimitive>> = emptyArray()) =
         ObjectV3(id = "o", kind = kind, timing = timing, payload = JsonObject(mapOf(*payload)))
 
     private fun scene(vararg objects: ObjectV3, opening: JsonObject? = null, transitions: List<JsonObject>? = null) =
