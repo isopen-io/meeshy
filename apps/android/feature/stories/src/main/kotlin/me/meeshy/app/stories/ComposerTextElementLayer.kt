@@ -162,7 +162,7 @@ internal fun TextElementLayer(
                 .padding(horizontal = 6.dp, vertical = 2.dp),
         ) {
             val outline = element.outline
-            if (outline.isVisible && !(editing && element.text.isEmpty())) {
+            if (outline.isVisible && !editing) {
                 // Stroked underlay: the same glyphs painted as an outline beneath the fill,
                 // so the border hugs the letterforms rather than boxing the element.
                 Text(
@@ -192,6 +192,20 @@ internal fun TextElementLayer(
                         textAlign = element.align.toTextAlign(),
                     ),
                     onTextChange = onTextChange,
+                    outlineStyle = if (outline.isVisible) {
+                        baseStyle.copy(
+                            color = hexColor(outline.color.orEmpty(), Color.White),
+                            fontSize = canvasFontSize,
+                            fontWeight = FontWeight(typography.fontWeight),
+                            fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                            fontFamily = typography.family.toFontFamily(),
+                            letterSpacing = typography.letterSpacingEm.em,
+                            textAlign = element.align.toTextAlign(),
+                            drawStyle = Stroke(width = element.previewOutlinePx(canvasWidthPx)),
+                        )
+                    } else {
+                        null
+                    },
                 )
             } else {
                 Text(
