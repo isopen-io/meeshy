@@ -107,7 +107,7 @@ function lensTables() {
 
 type Harness = { app: FastifyInstance; tables: ReturnType<typeof lensTables>; normalizedAs: { assets: string[]; luts: string[] }; packs: LensPacks };
 
-async function harness(options: { now?: string; communities?: readonly string[] } = {}): Promise<Harness> {
+async function harness(options: { now?: string; communities?: readonly string[]; log?: { error: (message: string, context?: Record<string, unknown>) => void } } = {}): Promise<Harness> {
   const db = appearancePrisma();
   const tables = lensTables();
   const prisma = Object.assign(Object.create(db.prisma as object) as PrismaClient, {
@@ -121,6 +121,7 @@ async function harness(options: { now?: string; communities?: readonly string[] 
   const packs = new LensPacks({
     prisma,
     now,
+    ...(options.log === undefined ? {} : { log: options.log }),
     normalizeAsset: async (bytes) => {
       normalizedAs.assets.push(bytes.subarray(PNG.length).toString());
       return image(bytes);
@@ -386,6 +387,46 @@ describe('modération journalisée et retrait d’une lens publiée (audit de #1
 
     expect((await review(h, 'aurore-polaire', { decision: 'approve' })).statusCode).toBe(404);
     expect(h.tables.audit.map((entry) => entry.action)).toEqual(['LENS_PACK_APPROVE', 'LENS_PACK_APPROVE_NOT_APPLIED']);
+  });
+
+  it('une écriture qui LÈVE est journalisée comme non appliquée (#12329 R2) : la publication ne reste pas seule au journal', async () => {
+    const h = await harness();
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    h.tables.lensPack.updateMany.mockImplementationOnce(async () => { throw new Error('write conflict'); });
+
+    expect((await review(h, 'aurore-polaire', { decision: 'approve' })).statusCode).toBe(500);
+    expect(h.tables.audit.map((entry) => [entry.action, JSON.parse(String(entry.metadata)).reason ?? null])).toEqual([
+      ['LENS_PACK_APPROVE', null],
+      ['LENS_PACK_APPROVE_NOT_APPLIED', 'write-failed'],
+    ]);
+    expect(h.tables.packs[0]!.status).toBe('pending');
+  });
+
+  it('un retrait dont l’écriture lève est journalisé comme non appliqué (#12329 R2)', async () => {
+    const h = await approved();
+    h.tables.lensPack.updateMany.mockImplementationOnce(async () => { throw new Error('write conflict'); });
+
+    expect((await withdraw(h)).statusCode).toBe(500);
+    expect(h.tables.audit.slice(-2).map((entry) => [entry.action, JSON.parse(String(entry.metadata)).reason ?? null])).toEqual([
+      ['LENS_PACK_WITHDRAW', null],
+      ['LENS_PACK_WITHDRAW_NOT_APPLIED', 'write-failed'],
+    ]);
+  });
+
+  it('si la ligne « non appliqué » ne s’écrit pas, le trou du journal se signale en erreur, nommé (#12329 R2)', async () => {
+    const errors: Array<{ message: string; context?: Record<string, unknown> }> = [];
+    const h = await harness({ log: { error: (message, context) => errors.push({ message, ...(context === undefined ? {} : { context }) }) } });
+    await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
+    h.tables.lensPack.updateMany.mockImplementationOnce(async () => {
+      h.tables.auditState.down = true;
+      return { count: 0 };
+    });
+
+    expect((await review(h, 'aurore-polaire', { decision: 'approve' })).statusCode).toBe(404);
+    expect(h.tables.audit.map((entry) => entry.action)).toEqual(['LENS_PACK_APPROVE']);
+    expect(errors).toEqual([
+      expect.objectContaining({ context: expect.objectContaining({ action: 'LENS_PACK_APPROVE_NOT_APPLIED', slug: 'aurore-polaire', reason: 'concurrent-review' }) }),
+    ]);
   });
 
   it('sans journal, rien n’est retiré', async () => {
