@@ -39,6 +39,14 @@ public enum PacksEndpoint: MeeshyEndpoint, Sendable {
     case gloryFrameBySlug(slug: String)
     case gloryFrameBySlugInstall(slug: String)
     case gloryFrameInstalled
+    case lens
+    case lensBySlug(slug: String)
+    case lensBySlugDocument(slug: String)
+    case lensBySlugInstall(slug: String)
+    case lensBySlugReview(slug: String)
+    case lensInstalled
+    case lensPending
+    case lensSubmissions
     case shop
     case wallpaper
     case wallpaperBySlug(slug: String)
@@ -79,6 +87,14 @@ public enum PacksEndpoint: MeeshyEndpoint, Sendable {
         case .gloryFrameBySlug(let slug): return "/api/v1/packs/glory-frame/\(slug)"
         case .gloryFrameBySlugInstall(let slug): return "/api/v1/packs/glory-frame/\(slug)/install"
         case .gloryFrameInstalled: return "/api/v1/packs/glory-frame/installed"
+        case .lens: return "/api/v1/packs/lens"
+        case .lensBySlug(let slug): return "/api/v1/packs/lens/\(slug)"
+        case .lensBySlugDocument(let slug): return "/api/v1/packs/lens/\(slug)/document"
+        case .lensBySlugInstall(let slug): return "/api/v1/packs/lens/\(slug)/install"
+        case .lensBySlugReview(let slug): return "/api/v1/packs/lens/\(slug)/review"
+        case .lensInstalled: return "/api/v1/packs/lens/installed"
+        case .lensPending: return "/api/v1/packs/lens/pending"
+        case .lensSubmissions: return "/api/v1/packs/lens/submissions"
         case .shop: return "/api/v1/packs/shop"
         case .wallpaper: return "/api/v1/packs/wallpaper"
         case .wallpaperBySlug(let slug): return "/api/v1/packs/wallpaper/\(slug)"

@@ -275,3 +275,33 @@ describe('les propositions d’apparence d’un tiers suivent le compte (#10709)
     expect(db.tables.communityAppearancePack.rows).toHaveLength(4);
   });
 });
+
+describe('les lens proposées suivent le compte (#11271)', () => {
+  const lens = (id: string, submitterId: string, status: string, author = 'Studio Nord'): Row => ({
+    id, slug: `lens-${id}`, name: 'Aurore', author, submitterId, status, reviewNote: null, reviewedAt: null, installCount: 2, cost: 'standard', createdAt: AT, documentJson: '{"schema":1}',
+  });
+  const packs = (): Row[] => [lens('l1', PARTI, 'pending'), lens('l2', PARTI, 'rejected'), lens('l3', PARTI, 'approved'), lens('l4', VOISIN, 'pending', 'Voisin')];
+  const assets = (): Row[] => ['l1', 'l2', 'l3', 'l4'].map((packId) => ({ id: `f-${packId}`, packId, src: `${packId.padEnd(16, '0')}.png` }));
+
+  it('les exporte, document compris, sans rien du voisin', async () => {
+    const db = fakePackDb({ lensPack: packs(), lensPackAsset: assets() });
+    const data = await exportPackData(db as never, PARTI, PAGE);
+    expect(data.lensSubmissions.total).toBe(3);
+    expect(data.lensSubmissions.items.map((row) => row.slug).sort()).toEqual(['lens-l1', 'lens-l2', 'lens-l3']);
+    expect(data.lensSubmissions.items[0]).toHaveProperty('documentJson');
+    expect(JSON.stringify(data)).not.toContain('Voisin');
+  });
+
+  it('efface les non publiées et leurs fichiers, anonymise la publiée, laisse le voisin', async () => {
+    const db = fakePackDb({ lensPack: packs(), lensPackAsset: assets() });
+    const summary = await purgePackData(db as never, PARTI, { files: fakeFileStore([]).store });
+    expect(db.tables.lensPack.rows.map((row) => [row.id, row.author])).toEqual([
+      ['l3', DELETED_ACCOUNT_PACK_AUTHOR],
+      ['l4', 'Voisin'],
+    ]);
+    expect(db.tables.lensPackAsset.rows.map((row) => row.packId).sort()).toEqual(['l3', 'l4']);
+    expect(summary).toMatchObject({ submissionsDeleted: 2, publishedAnonymized: 1 });
+    expect(await measurePackData(db as never, PARTI, { files: fakeFileStore([]).store })).toMatchObject({ submissionsDeleted: 0, publishedAnonymized: 0 });
+  });
+});
+

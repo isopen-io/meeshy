@@ -245,7 +245,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // la bannière, vendu en boutique sous `/api/v1/packs/banner-frame`, monté
     // par le même `appearancePacksPlugin`). Aucun alias, aucune route retirée
     // ni renommée.
-    expect(ROUTE_TABLE.length).toBe(89);
+    // 90 : #11271 ajoute `packs-lens` (les lens des partenaires sous
+    // `/api/v1/packs/lens` : proposer, modérer, installer). Aucun alias, aucune
+    // route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(90);
   });
 });
 

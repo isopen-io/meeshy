@@ -27,7 +27,8 @@ import org.junit.Test
 class RouteManifestRatchetTest {
 
     private companion object {
-        const val TO_PORT_CEILING = 298
+        /** 304 : les six routes de lecture et d'installation des lens (#11271) entrent à porter. */
+        const val TO_PORT_CEILING = 304
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "a-porter", "implementee-par-url-serveur")
     }
 

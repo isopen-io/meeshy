@@ -84,7 +84,7 @@ function lensTables() {
         data.forEach((row: Row) => assets.push({ ...row, id: nextId() }));
         return { count: data.length };
       }),
-      findFirst: jest.fn(async ({ where, select }: any) => pick(assets.find((row) => matches(row, where)), select)),
+      findMany: jest.fn(async ({ where, select }: any) => assets.filter((row) => matches(row, where)).map((row) => pick(row, select))),
       deleteMany: jest.fn(async ({ where }: any) => {
         const before = assets.length;
         assets.splice(0, assets.length, ...assets.filter((row) => !matches(row, where)));
@@ -101,7 +101,7 @@ async function harness(options: { now?: string; communities?: readonly string[] 
   const tables = lensTables();
   const prisma = Object.assign(Object.create(db.prisma as object) as PrismaClient, { lensPack: tables.lensPack, lensPackAsset: tables.lensPackAsset });
   const now = () => new Date(options.now ?? '2026-11-10T00:00:00Z');
-  const packs = new LensPacks({ prisma, now, normalizeAsset: async (bytes) => ({ image: { bytes, mimeType: 'image/png', width: 64, height: 64, animated: false } }) });
+  const packs = new LensPacks({ prisma, now, normalizeAsset: async (bytes) => ({ ok: true, image: { bytes, mimeType: 'image/png', width: 64, height: 64, animated: false } }) });
   const app = Fastify({ logger: false });
   app.decorate('prisma', prisma as never);
   app.decorate('authenticate', async (request: any) => {
@@ -148,7 +148,7 @@ describe('proposer une lens (#11271)', () => {
     const h = await harness();
     expect((await submit(h, { document: lensDocument({ shader: 'x' }), assets: {} })).json()).toMatchObject({ code: 'LENS_FORBIDDEN' });
     expect((await submit(h, { document: { schema: 1 }, assets: {} })).json()).toMatchObject({ code: 'LENS_INVALID' });
-    expect((await submit(h, { document: { schema: 2 }, assets: {} })).json()).toMatchObject({ code: 'LENS_UPDATE_REQUIRED' });
+    expect((await submit(h, { document: { schema: 2 }, assets: {} })).json()).toMatchObject({ code: 'LENS_UPDATE_REQUIRED', requiredSchema: 2 });
   });
 
   it('un fichier manquant, en trop ou trop lourd est refusé', async () => {
