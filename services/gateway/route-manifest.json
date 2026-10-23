@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 747,
+  "routeCount": 748,
   "routes": [
     {
       "method": "DELETE",
@@ -8989,6 +8989,20 @@
     {
       "method": "POST",
       "path": "/api/v1/packs/lens/:slug/review",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/lens/:slug/withdraw",
       "module": "lensPacksRoutes",
       "mountPrefix": "/api/v1/packs/lens",
       "securityLevel": "inconnu",

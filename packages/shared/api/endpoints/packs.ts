@@ -108,6 +108,9 @@ export const lensBySlugInstall = (slug: string): string => `/api/v1/packs/lens/$
 /** POST /api/v1/packs/lens/:slug/review */
 export const lensBySlugReview = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}/review`;
 
+/** POST /api/v1/packs/lens/:slug/withdraw */
+export const lensBySlugWithdraw = (slug: string): string => `/api/v1/packs/lens/${encodeURIComponent(slug)}/withdraw`;
+
 /** GET /api/v1/packs/lens/installed */
 export const lensInstalled = '/api/v1/packs/lens/installed';
 

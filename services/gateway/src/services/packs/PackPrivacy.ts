@@ -39,6 +39,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { parsePackChoiceKey } from '@meeshy/shared/types/content-pack';
 import { packOwnershipSourceOf } from '@meeshy/shared/types/pack-ownership';
 import { streamedFileUrlFromEnv } from '../attachments/publicMediaUrl';
+import { anonymizedLensDocument } from './LensPacks';
 
 export const DELETED_ACCOUNT_PACK_AUTHOR = 'Compte supprimé';
 
@@ -230,6 +231,8 @@ type PackPurgePlan = {
 
 const unpublishedOf = (userId: string) => ({ submitterId: userId, status: { in: UNPUBLISHED_STATUSES } });
 const publishedOf = (userId: string) => ({ submitterId: userId, status: 'approved', author: { not: DELETED_ACCOUNT_PACK_AUTHOR } });
+/** Une lens retirée par la modération n'est plus servie : elle part avec le compte, comme une proposition. */
+const lensUnpublishedOf = (userId: string) => ({ submitterId: userId, status: { in: [...UNPUBLISHED_STATUSES, 'withdrawn'] } });
 
 /** Ce que la purge effacerait, lu sans rien écrire — l'unique inventaire, partagé par la purge et sa mesure. */
 async function planPackPurge(prisma: PackPrivacyDb, userId: string, files: PackFileStore): Promise<PackPurgePlan> {
@@ -242,7 +245,7 @@ async function planPackPurge(prisma: PackPrivacyDb, userId: string, files: PackF
     prisma.userPackOwnership.count({ where: { userId } }),
     prisma.communityAppearancePack.count({ where: unpublishedOf(userId) }),
     prisma.communityAppearancePack.count({ where: publishedOf(userId) }),
-    prisma.lensPack.findMany({ where: unpublishedOf(userId), select: { id: true } }),
+    prisma.lensPack.findMany({ where: lensUnpublishedOf(userId), select: { id: true } }),
     prisma.lensPack.count({ where: publishedOf(userId) }),
   ]);
   const referenced = [...libraryRows.map((row) => row.filePath), ...unpublished.flatMap((pack) => pack.items.map((item) => item.filePath))];
@@ -275,6 +278,25 @@ export async function measurePackData(prisma: PackPrivacyDb, userId: string, opt
   };
 }
 
+/**
+ * Le nom de l'auteur vit DEUX fois dans une lens publiée : la colonne `author` et
+ * `credits.author` du document, que `/pack-assets` sert sans authentification.
+ * Les deux se taisent, et le document est ré-adressé ; l'écriture est
+ * conditionnelle sur l'ancienne empreinte (une revue concurrente gagne).
+ */
+async function anonymizePublishedLenses(prisma: PackPrivacyDb, userId: string): Promise<{ readonly count: number }> {
+  const rows = await prisma.lensPack.findMany({ where: publishedOf(userId), select: { id: true, documentJson: true, documentSha256: true } });
+  const written = await Promise.all(
+    rows.map((row) =>
+      prisma.lensPack.updateMany({
+        where: { id: row.id, documentSha256: row.documentSha256 },
+        data: { author: DELETED_ACCOUNT_PACK_AUTHOR, ...anonymizedLensDocument(row.documentJson, DELETED_ACCOUNT_PACK_AUTHOR) },
+      }),
+    ),
+  );
+  return { count: written.reduce((sum, result) => sum + result.count, 0) };
+}
+
 export async function purgePackData(prisma: PackPrivacyDb, userId: string, options: PackPurgeOptions = {}): Promise<PackPurgeSummary> {
   const files = options.files ?? defaultPackFileStore();
   const plan = await planPackPurge(prisma, userId, files);
@@ -292,8 +314,8 @@ export async function purgePackData(prisma: PackPrivacyDb, userId: string, optio
     prisma.userPackOwnership.deleteMany({ where: { userId } }),
     prisma.communityAppearancePack.deleteMany({ where: unpublishedOf(userId) }),
     prisma.communityAppearancePack.updateMany({ where: publishedOf(userId), data: { author: DELETED_ACCOUNT_PACK_AUTHOR } }),
-    prisma.lensPack.deleteMany({ where: { id: { in: lensIds }, ...unpublishedOf(userId) } }),
-    prisma.lensPack.updateMany({ where: publishedOf(userId), data: { author: DELETED_ACCOUNT_PACK_AUTHOR } }),
+    prisma.lensPack.deleteMany({ where: { id: { in: lensIds }, ...lensUnpublishedOf(userId) } }),
+    anonymizePublishedLenses(prisma, userId),
   ]);
 
   return {

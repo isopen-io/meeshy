@@ -44,6 +44,7 @@ public object ApiRoutesPacks {
     public const val LENS_BY_SLUG_DOCUMENT: String = "packs/lens/{slug}/document"
     public const val LENS_BY_SLUG_INSTALL: String = "packs/lens/{slug}/install"
     public const val LENS_BY_SLUG_REVIEW: String = "packs/lens/{slug}/review"
+    public const val LENS_BY_SLUG_WITHDRAW: String = "packs/lens/{slug}/withdraw"
     public const val LENS_INSTALLED: String = "packs/lens/installed"
     public const val LENS_PENDING: String = "packs/lens/pending"
     public const val LENS_SUBMISSIONS: String = "packs/lens/submissions"

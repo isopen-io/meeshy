@@ -9,7 +9,11 @@
  *   - `POST   /packs/lens/submissions`      proposer : `{ document, assets: { "<sha16>.<ext>": base64 } }` ;
  *   - `GET    /packs/lens/pending`          la file de modération (`canModerateContent`) ;
  *   - `POST   /packs/lens/:slug/review`     publier ou refuser, en FIXANT la fenêtre et les communautés ;
- *   - `GET    /packs/lens/:slug/document`   le document servi, pour l'auteur, la modération, et tous une fois publié.
+ *   - `POST   /packs/lens/:slug/withdraw`   retirer une lens publiée (`canModerateContent`) ;
+ *   - `GET    /packs/lens/:slug/document`   le document servi, pour l'auteur, la modération, et à qui la lens est offerte.
+ *
+ * Chaque geste de modération s'écrit au journal d'audit AVANT d'agir : journal
+ * indisponible ⇒ 500 `LENS_AUDIT_UNAVAILABLE`, rien n'a bougé.
  *
  * La loi vit dans `services/packs/LensPacks.ts` et dans `@meeshy/shared`
  * (`lens-format.ts`, `lens-pack.ts`) ; ce fichier n'en fait que la traduction
@@ -27,7 +31,7 @@ import { requirePermission } from '../middleware/authorize';
 import { PackCatalog } from '../services/packs/PackCatalog';
 import { LensPacks, type LensPackDetail } from '../services/packs/LensPacks';
 import { readPackAudience } from '../services/packs/packAudience';
-import { sendBadRequest, sendConflict, sendForbidden, sendNotFound, sendSuccess } from '../utils/response.js';
+import { sendBadRequest, sendConflict, sendError, sendForbidden, sendNotFound, sendSuccess } from '../utils/response.js';
 import { gameRateLimitConfig } from './me/game-shared';
 import {
   PACK_ERRORS,
@@ -50,6 +54,7 @@ export const LENS_PACK_ERROR_CODES = {
   TOO_MANY_PENDING: 'LENS_TOO_MANY_PENDING',
   SELF_REVIEW: 'LENS_SELF_REVIEW',
   INVALID_WINDOW: 'LENS_INVALID_WINDOW',
+  AUDIT_UNAVAILABLE: 'LENS_AUDIT_UNAVAILABLE',
 } as const;
 
 /** Le document, ses fichiers en base64 (4/3 des octets) et l'enveloppe. */
@@ -59,6 +64,8 @@ const submissionSchema = z.object({
   document: z.unknown(),
   assets: z.record(z.string().max(32), z.string()).default({}),
 });
+
+const withdrawSchema = z.object({ note: z.string().max(LENS_PACK_LIMITS.maxReviewNoteLength).optional() });
 
 const isoInstant = z.iso.datetime();
 const reviewSchema = z.object({
@@ -147,6 +154,8 @@ export async function lensPacksRoutes(fastify: FastifyInstance, options: LensPac
   const basePath = '/packs/lens';
   const list = packEnvelope({ type: 'array', items: lensPackJsonSchema });
   const notFound = { message: 'Lens not found', code: LENS_PACK_ERROR_CODES.NOT_FOUND };
+  const auditUnavailable = (reply: Parameters<typeof sendNotFound>[0]) =>
+    sendError(reply, 500, 'The audit log is unavailable: nothing was changed', { code: LENS_PACK_ERROR_CODES.AUDIT_UNAVAILABLE });
 
   fastify.get(
     '/submissions',
@@ -196,6 +205,8 @@ export async function lensPacksRoutes(fastify: FastifyInstance, options: LensPac
           return sendConflict(reply, 'This lens name is taken', { code: LENS_PACK_ERROR_CODES.SLUG_TAKEN });
         case 'too-many-pending':
           return sendConflict(reply, `At most ${LENS_PACK_LIMITS.maxPendingPerAuthor} lenses can wait for review`, { code: LENS_PACK_ERROR_CODES.TOO_MANY_PENDING });
+        case 'audit-unavailable':
+          return auditUnavailable(reply);
       }
     }),
   );
@@ -243,6 +254,38 @@ export async function lensPacksRoutes(fastify: FastifyInstance, options: LensPac
           return sendBadRequest(reply, 'The window must end after it starts', { code: LENS_PACK_ERROR_CODES.INVALID_WINDOW });
         case 'not-found':
           return sendNotFound(reply, 'No lens awaiting review under this name', { code: LENS_PACK_ERROR_CODES.NOT_FOUND });
+        case 'audit-unavailable':
+          return auditUnavailable(reply);
+      }
+    }),
+  );
+
+  fastify.post<{ Params: { slug: string }; Body: unknown }>(
+    '/:slug/withdraw',
+    {
+      onRequest: [fastify.authenticate, requireModerator],
+      schema: {
+        description:
+          'Retire une lens PUBLIÉE (#11271, audit de #12293) avec un mot facultatif : elle quitte la boutique, les lens installées et le magasin des fichiers. ' +
+          'Journalisé avant d’agir ; 404 si aucune lens publiée ne porte ce nom.',
+        tags: [...tags, 'admin'],
+        summary: 'Withdraw a published lens',
+        params: packSlugParamsJsonSchema,
+        body: { type: 'object', properties: { note: { type: 'string' } } },
+        response: { 200: packEnvelope(lensPackJsonSchema), ...PACK_ERRORS },
+      },
+    },
+    guard(`[POST ${basePath}/:slug/withdraw]`, async (request: PackSlugRequest, reply, viewer) => {
+      const body = withdrawSchema.safeParse(request.body ?? {});
+      if (!body.success) return sendBadRequest(reply, 'Invalid withdrawal', { code: 'VALIDATION_ERROR' });
+      const outcome = await packs.withdraw(viewer.userId, request.params.slug, { note: body.data.note ?? null });
+      switch (outcome.kind) {
+        case 'withdrawn':
+          return sendSuccess(reply, outcome.pack);
+        case 'not-found':
+          return sendNotFound(reply, 'No published lens under this name', { code: LENS_PACK_ERROR_CODES.NOT_FOUND });
+        case 'audit-unavailable':
+          return auditUnavailable(reply);
       }
     }),
   );
@@ -252,7 +295,9 @@ export async function lensPacksRoutes(fastify: FastifyInstance, options: LensPac
     {
       onRequest: [fastify.authenticate],
       schema: {
-        description: 'Le document d’une lens (#11271), sérialisé tel que servi, avec son empreinte : publiée pour tous ; en attente ou refusée pour son auteur et la modération.',
+        description:
+          'Le document d’une lens (#11271), sérialisé tel que servi, avec son empreinte : publiée, à qui elle est offerte (fenêtre, communautés) ou qui l’a installée ; ' +
+          'en attente, refusée ou retirée pour son auteur et la modération.',
         tags,
         summary: 'Read a lens document',
         params: packSlugParamsJsonSchema,
@@ -263,7 +308,8 @@ export async function lensPacksRoutes(fastify: FastifyInstance, options: LensPac
       },
     },
     guard(`[GET ${basePath}/:slug/document]`, async (request: PackSlugRequest, reply, viewer) => {
-      const document = await packs.document(request.params.slug, viewer);
+      const offered = await catalog.detail(request.params.slug, viewer);
+      const document = offered === null ? null : await packs.document(request.params.slug, viewer);
       if (document === null) return sendNotFound(reply, notFound.message, { code: notFound.code });
       return sendSuccess(reply, document);
     }),
