@@ -119,3 +119,16 @@ export const withdrawLens = async (deps: ConversationsDeps, slug: string, note?:
       body: note === undefined || note.trim() === '' ? {} : { note: note.trim() },
     }),
   );
+
+/**
+ * Rétablir une lens RETIRÉE (#12321, `canModerateContent`) : elle revient
+ * publiée. Ses installations retirées ne reviennent pas — chacun la réinstalle.
+ */
+export const restoreLens = async (deps: ConversationsDeps, slug: string, note?: string): Promise<ApiResult<LensPack>> =>
+  oneOf(
+    await deps.transport.request<unknown>({
+      method: 'POST',
+      path: packsEndpoints.lensBySlugRestore(slug),
+      body: note === undefined || note.trim() === '' ? {} : { note: note.trim() },
+    }),
+  );

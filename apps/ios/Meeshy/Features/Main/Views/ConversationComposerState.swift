@@ -39,6 +39,9 @@ struct ConversationComposerState {
     /// d'une pièce avec `forwardMessage` ; `nil` = tout le message. Effacée par
     /// la fermeture de l'écran de partage.
     var forwardPieceId: String? = nil
+    /// **Le transfert demandé depuis le plein écran** (#12420), RETENU le temps
+    /// que la galerie se referme — même course que `pendingComposeTarget`.
+    @Indirect var pendingForward: (message: Message, pieceId: String)? = nil
     /// La cible de « Composer » — le média reçu que la porte va semer.
     /// Non-nil = la porte est présentée.
     @Indirect var composeMediaTarget: ComposerSeedTarget? = nil

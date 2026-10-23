@@ -31,7 +31,7 @@ export type DeclaredRouteReaders = ManifestRouteInput & {
 };
 
 const LENS_WEB_ONLY =
-  'Lens (#11271) : catalogue, document, installation et modération des packs de lens. Lues par le web (W16) ; ' +
+  'Lens (#11271, #12321) : catalogue, document, installation et modération des packs de lens (retrait et rétablissement compris). Lues par le web (W16) ; ' +
   'le composer iOS ajoutera `ios` quand il les lira (IC24).';
 
 const LENS_ROUTES: readonly DeclaredRouteReaders[] = [
@@ -46,6 +46,7 @@ const LENS_ROUTES: readonly DeclaredRouteReaders[] = [
   { method: 'POST', path: '/api/v1/packs/lens/submissions' },
   { method: 'POST', path: '/api/v1/packs/lens/:slug/review' },
   { method: 'POST', path: '/api/v1/packs/lens/:slug/withdraw' },
+  { method: 'POST', path: '/api/v1/packs/lens/:slug/restore' },
 ].map((route) => ({ ...route, readers: ['web'] as const, reason: LENS_WEB_ONLY }));
 
 export const ROUTE_READERS: readonly DeclaredRouteReaders[] = [

@@ -1,14 +1,14 @@
 import type { PackRequirementPreview, PackRewardPreview, PackWindowPreview } from '@meeshy/shared/types/pack-unlock';
 import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
 
-import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
+import { unlockText } from './unlock-texts';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **CE QUI RESTE À DÉBLOQUER D'UN PACK, EN UNE LIGNE** (W18, #11324) — lu dans
  * `requirementPreview`, que la boutique sert (S21, #11276). Une récompense
  * remplie ne se redit pas ; une fenêtre ouverte sans fin non plus. Le nom d'un
- * rang vient du catalogue du jeu, chargé à part : tant qu'il ne l'est pas, la
+ * rang vient du catalogue du jeu ; les phrases, de `unlock-texts.ts`, chargé à part : tant qu'il ne l'est pas, la
  * ligne dit la Gloire qui manque, sans le nom (`rankName` absent).
  *
  * Le serveur reste juge (`PackGrants`) : cette ligne MONTRE, elle n'accorde
@@ -39,22 +39,22 @@ function rewardLine(reward: PackRewardPreview, language: InterfaceLanguage, rank
       if (reward.requirement.met) return null;
       const missing = formatUnlockCount(language, reward.requirement.missing);
       return rankName === undefined
-        ? translateStickerPacks(language, 'packs.unlock.glory', { missing })
-        : translateStickerPacks(language, 'packs.unlock.rank', { rank: rankName(reward.rank), missing });
+        ? unlockText(language, 'glory', { missing })
+        : unlockText(language, 'rank', { rank: rankName(reward.rank), missing });
     }
     case 'trophy':
-      return reward.met ? null : translateStickerPacks(language, 'packs.unlock.trophy');
+      return reward.met ? null : unlockText(language, 'trophy');
     case 'season':
-      return reward.met ? null : translateStickerPacks(language, 'packs.unlock.season', { number: String(reward.number) });
+      return reward.met ? null : unlockText(language, 'season', { number: String(reward.number) });
   }
 }
 
 function windowLine(window: PackWindowPreview, language: InterfaceLanguage): string | null {
-  if (window.state === 'closed') return translateStickerPacks(language, 'packs.unlock.closed');
+  if (window.state === 'closed') return unlockText(language, 'closed');
   const bound = window.state === 'upcoming' ? window.startsAt : window.endsAt;
   const date = bound === undefined ? null : formatUnlockDate(language, bound);
   if (date === null) return null;
-  return translateStickerPacks(language, window.state === 'upcoming' ? 'packs.unlock.upcoming' : 'packs.unlock.until', { date });
+  return unlockText(language, window.state === 'upcoming' ? 'upcoming' : 'until', { date });
 }
 
 export function packUnlockLine(params: {
