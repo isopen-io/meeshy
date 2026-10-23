@@ -103,8 +103,11 @@ object SocketEventNames {
     const val CONVERSATION_UPDATED = "conversation:updated"
 
     // location
+    const val LOCATION_LIVE_START = "location:live-start"
     const val LOCATION_LIVE_STARTED = "location:live-started"
+    const val LOCATION_LIVE_STOP = "location:live-stop"
     const val LOCATION_LIVE_STOPPED = "location:live-stopped"
+    const val LOCATION_LIVE_UPDATE = "location:live-update"
     const val LOCATION_LIVE_UPDATED = "location:live-updated"
 
     // media
@@ -267,8 +270,11 @@ object SocketEventNames {
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
+        LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
+        LOCATION_LIVE_STOP,
         LOCATION_LIVE_STOPPED,
+        LOCATION_LIVE_UPDATE,
         LOCATION_LIVE_UPDATED,
         MEDIA_CAPTION_TRANSLATION_UPDATED,
         MESSAGE_ATTACHMENT_UPDATED,
