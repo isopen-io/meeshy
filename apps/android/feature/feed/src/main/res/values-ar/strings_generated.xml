@@ -31,6 +31,7 @@
     <string name="feed_empty">لا توجد منشورات</string>
     <string name="feed_header_nearby">المنشورات القريبة</string>
     <string name="feed_like">إعجاب</string>
+    <string name="feed_link_copied">تم نسخ الرابط</string>
     <string name="feed_location_shared">موقع تمت مشاركته</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
     <plurals name="feed_new_posts">

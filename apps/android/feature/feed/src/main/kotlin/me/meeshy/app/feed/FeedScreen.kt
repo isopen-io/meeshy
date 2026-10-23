@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.PostShareLink
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -90,6 +91,7 @@ fun FeedScreen(
             // it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
             FeedComposerPlaceholder(onClick = { composerDraft = FeedComposerDraft() })
             val clipboard = LocalClipboardManager.current
+            val linkCopied = stringResource(R.string.feed_link_copied)
             val shareContext = LocalContext.current
             var reportPostId by remember { mutableStateOf<String?>(null) }
             var deletePostId by remember { mutableStateOf<String?>(null) }
@@ -157,16 +159,20 @@ fun FeedScreen(
                                 viewModel.recordShare(post.id)
                                 val send = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, postShareUrl(post.id))
+                                    putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(post.id))
                                 }
                                 shareContext.startActivity(Intent.createChooser(send, null))
                             },
-                            onCopyLink = { clipboard.setText(AnnotatedString(postShareUrl(post.id))) },
+                            onCopyLink = {
+                                clipboard.setText(AnnotatedString(PostShareLink.webLink(post.id)))
+                                scope.launch { snackbar.showSnackbar(linkCopied) }
+                            },
                             onRepost = { viewModel.repost(post.id) },
                             onQuote = { viewModel.beginQuote(post.id) },
                             onPin = { viewModel.pinPost(post.id) },
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
+                            onComments = { onOpenPost(post.id) },
                         )
                     }
                     if (state.isLoadingMore) {

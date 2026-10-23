@@ -31,6 +31,7 @@
     <string name="feed_empty">Noch keine Beiträge</string>
     <string name="feed_header_nearby">Beiträge in der Nähe</string>
     <string name="feed_like">Gefällt mir</string>
+    <string name="feed_link_copied">Link kopiert</string>
     <string name="feed_location_shared">Geteilter Standort</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
     <plurals name="feed_new_posts">

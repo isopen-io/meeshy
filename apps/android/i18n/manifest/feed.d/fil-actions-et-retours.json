@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.detail.copy_link.success",
+          "androidName": "feed_link_copied",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
