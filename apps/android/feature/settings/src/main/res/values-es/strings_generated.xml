@@ -140,6 +140,8 @@
     <string name="settings_export_data">Exportar mis datos</string>
     <string name="settings_language_dialog_close">Cerrar</string>
     <string name="settings_log_out">Cerrar sesión</string>
+    <string name="settings_logout_confirm_message">¿Seguro que quieres cerrar sesión?</string>
+    <string name="settings_logout_confirm_title">Cerrar sesión</string>
     <string name="settings_media_capture_header">Al capturar</string>
     <string name="settings_media_capture_original_subtitle">La foto o el vídeo sin procesar, sin efectos ni marco, se guarda en Fotos con cada toma.</string>
     <string name="settings_media_capture_original_title">Guardar el original</string>

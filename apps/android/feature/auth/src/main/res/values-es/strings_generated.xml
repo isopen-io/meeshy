@@ -63,6 +63,7 @@
     <string name="login_signup_link">Registrarse</string>
     <string name="login_signup_prompt">¿No tienes cuenta?</string>
     <string name="login_username_label">Usuario</string>
+    <string name="logout_in_progress">Cerrando sesión...</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d chispas para tu nivel 1</string>
     <string name="onboarding_gauge_reached">Nivel 1 alcanzado 🎉</string>
     <plurals name="onboarding_points_a11y">
@@ -83,6 +84,9 @@
     </plurals>
     <string name="onboarding_skipAll">Saltar todo</string>
     <string name="registration_back">Atrás</string>
+    <string name="session_closed_continue">Volver a iniciar sesión</string>
+    <string name="session_closed_signed_out_message">Esta sesión se cerró. Vuelve a iniciar sesión para continuar.</string>
+    <string name="session_closed_signed_out_title">Se cerró tu sesión</string>
     <string name="share_link_join_anonymously">Unirse de forma anónima</string>
     <string name="share_link_resume_anonymously">Retomar de forma anónima</string>
     <string name="signup_back">Atrás</string>

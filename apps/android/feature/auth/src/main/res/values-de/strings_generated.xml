@@ -63,6 +63,7 @@
     <string name="login_signup_link">Registrieren</string>
     <string name="login_signup_prompt">Kein Konto?</string>
     <string name="login_username_label">Benutzername</string>
+    <string name="logout_in_progress">Abmeldung läuft...</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d Funken bis Level 1</string>
     <string name="onboarding_gauge_reached">Level 1 erreicht 🎉</string>
     <plurals name="onboarding_points_a11y">
@@ -80,6 +81,9 @@
     </plurals>
     <string name="onboarding_skipAll">Alles überspringen</string>
     <string name="registration_back">Zurück</string>
+    <string name="session_closed_continue">Erneut anmelden</string>
+    <string name="session_closed_signed_out_message">Diese Sitzung wurde beendet. Melde dich erneut an, um fortzufahren.</string>
+    <string name="session_closed_signed_out_title">Du wurdest abgemeldet</string>
     <string name="share_link_join_anonymously">Anonym beitreten</string>
     <string name="share_link_resume_anonymously">Anonym fortsetzen</string>
     <string name="signup_back">Zurück</string>
