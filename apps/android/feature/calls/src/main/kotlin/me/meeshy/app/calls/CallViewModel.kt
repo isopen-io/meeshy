@@ -329,6 +329,7 @@ class CallViewModel @Inject constructor(
                 peerName = pending.callerName,
                 isVideo = pending.isVideo,
                 isOutgoing = false,
+                conversationId = pending.conversationId,
                 callId = pending.callId,
             ),
         )
