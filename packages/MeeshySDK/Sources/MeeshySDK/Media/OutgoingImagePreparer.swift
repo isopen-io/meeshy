@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreImage
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -287,16 +288,18 @@ enum OutgoingImageWriter {
 
     /// Décodage réduit par ImageIO ; le profil couleur suit l'image ; les
     /// métadonnées de la prise suivent, sans le lieu sauf choix contraire.
-    /// Les pixels sont redressés, SAUF ceux d'une photo HDR : sa carte de gain
-    /// est relative aux pixels STOCKÉS (#11847). Ils restent alors couchés,
-    /// l'orientation voyage avec eux, et la carte de gain les suit.
+    /// Les pixels sont redressés, SAUF ceux d'une photo HDR (#11847) : ils
+    /// restent couchés, l'orientation voyage avec eux, et la carte de gain les suit.
     private static func encodeOnce(_ original: OriginalImage, as format: OutgoingImageFormat, limit: CGFloat,
                                    policy: OutgoingImagePolicy) -> OutgoingImage? {
         guard let type = format.typeIdentifier else { return nil }
         let carriesGainMap = format.isLossy && OutgoingImageGainMap.isPresent(in: original.source)
         let redresses = !carriesGainMap || OutgoingImageGeometry.isUpright(original.properties)
-        guard let image = ImageDownsampler.thumbnail(source: original.source, maxPixelSize: limit, decodeImmediately: true,
-                                                     keepsStoredOrientation: !redresses) else {
+        let decoded = carriesGainMap
+            ? OutgoingImageGainMap.decoded(original, maxPixelSize: limit, upright: redresses)
+            : nil
+        guard let image = decoded ?? ImageDownsampler.thumbnail(source: original.source, maxPixelSize: limit,
+                                                                decodeImmediately: true, keepsStoredOrientation: !redresses) else {
             return nil
         }
         let written = CGSize(width: image.width, height: image.height)
@@ -304,11 +307,13 @@ enum OutgoingImageWriter {
         let carried = PhotoCaptureMetadata.carried(from: original.properties, orientation: orientation)
             .filter { policy.keepsLocation || $0.key != kCGImagePropertyGPSDictionary }
         let quality: [CFString: Any] = format.isLossy ? [kCGImageDestinationLossyCompressionQuality: policy.quality] : [:]
-        let options = carried.merging(quality) { _, requested in requested }
+        let options = carried
+            .merging(quality) { _, requested in requested }
+            .merging(decoded != nil ? OutgoingImageGainMap.encodeRequest : [:]) { _, requested in requested }
         let buffer = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type, 1, nil) else { return nil }
         CGImageDestinationAddImage(destination, image, options as CFDictionary)
-        if carriesGainMap {
+        if carriesGainMap, decoded == nil {
             OutgoingImageGainMap.carry(from: original.source, to: destination)
         }
         guard CGImageDestinationFinalize(destination) else { return nil }
@@ -318,23 +323,51 @@ enum OutgoingImageWriter {
     }
 }
 
-/// **Le HDR suit la photo** (verdict #11247) : la carte de gain d'une prise HDR
-/// (Apple, et ISO 21496-1 depuis iOS 18) est une donnée auxiliaire, relative à
-/// l'image — elle suit une réduction, pas un redressement des pixels.
+/// **Le HDR suit la photo** (verdict #11247, #11847).
+///
+/// Depuis iOS 18, la carte de gain est RECALCULÉE, jamais recopiée : l'image est
+/// décodée AVEC sa carte (`expandToHDR`, pixels au-delà du blanc de référence),
+/// réduite, rendue en demi-flottants PQ, puis écrite en UNE génération par
+/// `kCGImageDestinationEncodeToISOGainmap` — une base SDR et une carte ISO
+/// 21496-1 calculée sur les pixels qui partent. C'est la voie de
+/// `PhotoCaptureProcessor`, prouvée par ses témoins. Recopier l'auxiliaire de la
+/// source (`CGImageDestinationAddAuxiliaryDataInfo`) à côté d'une base réduite
+/// et réencodée rendait un JPEG SANS carte : la CI de #11974 l'a montré sur la
+/// photo droite comme sur la couchée. Avant iOS 18, aucun encodeur de carte
+/// n'existe : seule la recopie de la carte Apple est tentée.
 enum OutgoingImageGainMap {
     static func isPresent(in source: CGImageSource) -> Bool {
         gainMapTypes.contains { CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, $0) != nil }
     }
 
-    static func carry(from source: CGImageSource, to destination: CGImageDestination) {
-        gainMapTypes.forEach { type in
-            guard let info = CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, type) else { return }
-            CGImageDestinationAddAuxiliaryDataInfo(destination, type, info)
+    /// Les pixels HDR réduits, couchés ou redressés ; `nil` avant iOS 18.
+    static func decoded(_ original: OriginalImage, maxPixelSize: CGFloat, upright: Bool) -> CGImage? {
+        guard #available(iOS 18.0, macOS 15.0, *) else { return nil }
+        guard let input = CIImage(data: original.data, options: [.applyOrientationProperty: upright, .expandToHDR: true]),
+              let space = CGColorSpace(name: CGColorSpace.displayP3_PQ) else { return nil }
+        let origin = input.extent.origin
+        let anchored = input.transformed(by: CGAffineTransform(translationX: -origin.x, y: -origin.y))
+        guard let target = PhotoCaptureGeometry.targetSize(for: anchored.extent.size, maxPixelDimension: maxPixelSize) else {
+            return nil
         }
+        return CIContext(options: [.cacheIntermediates: false])
+            .createCGImage(PhotoCaptureProcessor.scaled(anchored, to: target), from: CGRect(origin: .zero, size: target),
+                           format: .RGBAh, colorSpace: space)
+    }
+
+    static var encodeRequest: [CFString: Any] {
+        guard #available(iOS 18.0, macOS 15.0, *) else { return [:] }
+        return [kCGImageDestinationEncodeRequest: kCGImageDestinationEncodeToISOGainmap]
+    }
+
+    /// Avant iOS 18 seulement : la carte Apple de la source, recopiée.
+    static func carry(from source: CGImageSource, to destination: CGImageDestination) {
+        guard let info = CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, kCGImageAuxiliaryDataTypeHDRGainMap) else { return }
+        CGImageDestinationAddAuxiliaryDataInfo(destination, kCGImageAuxiliaryDataTypeHDRGainMap, info)
     }
 
     private static var gainMapTypes: [CFString] {
-        guard #available(iOS 18.0, *) else { return [kCGImageAuxiliaryDataTypeHDRGainMap] }
+        guard #available(iOS 18.0, macOS 15.0, *) else { return [kCGImageAuxiliaryDataTypeHDRGainMap] }
         return [kCGImageAuxiliaryDataTypeHDRGainMap, kCGImageAuxiliaryDataTypeISOGainMap]
     }
 }
