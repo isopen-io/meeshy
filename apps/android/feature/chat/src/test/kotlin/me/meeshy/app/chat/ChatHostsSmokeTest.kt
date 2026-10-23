@@ -167,6 +167,16 @@ class ChatHostsSmokeTest {
     }
 
     @Test
+    fun `a reply whose quoted message is not loaded reads Replying to a message`() {
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) {
+                ComposerReplyRow(banner = ComposerReplyBanner.of(null), accentColor = Color.Blue, onCancel = {})
+            }
+        }
+        compose.onNodeWithContentDescription("Replying to a message").assertExists()
+    }
+
+    @Test
     fun `the composer edit row shows the title and the original text`() {
         compose.setContent {
             MeeshyTheme(darkTheme = false) { ComposerEditRow(originalText = "typo", onCancel = {}) }

@@ -64,11 +64,12 @@ internal fun ComposerReplyRow(banner: ComposerReplyBanner, accentColor: Color, o
     }
     val kindLabel = replyKindLabel(banner.kind)
     val preview = banner.preview ?: kindLabel
-    val spoken = stringResource(
-        R.string.chat_composer_reply_a11y,
-        title ?: stringResource(R.string.chat_composer_reply_unknown),
-        preview.orEmpty(),
-    )
+    val unknown = stringResource(R.string.chat_composer_reply_unknown)
+    val spoken = if (title == null && preview == null) {
+        stringResource(R.string.chat_replying_to, unknown)
+    } else {
+        stringResource(R.string.chat_composer_reply_a11y, title ?: unknown, preview.orEmpty())
+    }
     val tokens = MeeshyTheme.tokens
     val flow = buildAnnotatedString {
         if (title != null) {
@@ -78,7 +79,7 @@ internal fun ComposerReplyRow(banner: ComposerReplyBanner, accentColor: Color, o
         if (preview != null) withStyle(SpanStyle(color = tokens.textSecondary)) { append(preview) }
         if (title == null && preview == null) {
             withStyle(SpanStyle(color = tokens.textSecondary)) {
-                append(stringResource(R.string.chat_replying_to, stringResource(R.string.chat_composer_reply_unknown)))
+                append(spoken)
             }
         }
     }
