@@ -132,6 +132,38 @@ describe('AdminLensModerationPanel', () => {
     expect(calls.find((call) => call.method === 'POST')).toMatchObject({ path: '/api/v1/packs/lens/neige/withdraw', body: { note: 'Signalée' } });
   });
 
+  test('une lens retirée pendant la visite se RÉTABLIT, et l’écran dit que ses installations ne reviennent pas (#12321)', async () => {
+    const { calls, deps } = gateway((request) =>
+      request.path.endsWith('/withdraw') ? { ok: true, data: pack('neige', { status: 'withdrawn' }) } : request.path.endsWith('/restore') ? { ok: true, data: pack('neige', { status: 'approved' }) } : undefined,
+    );
+    const host = mount(deps);
+    await until(() => host.querySelector('[data-lens-withdraw="neige"]') !== null);
+    expect(host.querySelector('[data-lens-restore="neige"]')).toBeNull();
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-withdraw="neige"]'));
+    await until(() => host.querySelector('[data-lens-restore="neige"]') !== null);
+    expect(host.querySelector('[data-lens-withdrawn-hint]')?.textContent).toContain('ne reviennent pas');
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-restore="neige"]'));
+    await until(() => host.querySelector('[data-lens-done="restored"]') !== null);
+    expect(calls.filter((call) => call.method === 'POST').map((call) => call.path)).toEqual(['/api/v1/packs/lens/neige/withdraw', '/api/v1/packs/lens/neige/restore']);
+    expect(host.querySelector('[data-lens-done="restored"]')?.textContent).toContain('réinstalle');
+    expect(host.querySelector('[data-lens-restore="neige"]')).toBeNull();
+  });
+
+  test('une lens retirée avant la visite se rétablit par son nom ; un nom inconnu se dit', async () => {
+    const { calls, deps } = gateway((request) =>
+      request.path.endsWith('/givre/restore') ? { ok: false, status: 404, error: 'No withdrawn lens under this name', code: 'LENS_NOT_FOUND' } : request.path.endsWith('/restore') ? { ok: true, data: pack('brume', { status: 'approved' }) } : undefined,
+    );
+    const host = mount(deps);
+    await until(() => host.querySelector('[data-lens-restore-slug]') !== null);
+    await type(host.querySelector<HTMLInputElement>('[data-lens-restore-slug]'), 'givre');
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-restore-by-slug]'));
+    await until(() => host.querySelector('[data-lens-refusal="not-found"]') !== null);
+    await type(host.querySelector<HTMLInputElement>('[data-lens-restore-slug]'), ' brume ');
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-restore-by-slug]'));
+    await until(() => host.querySelector('[data-lens-done="restored"]') !== null);
+    expect(calls.filter((call) => call.method === 'POST').map((call) => call.path)).toEqual(['/api/v1/packs/lens/givre/restore', '/api/v1/packs/lens/brume/restore']);
+  });
+
   test('les textes existent dans les quatre langues de l’administration', () => {
     const source = [...lensModerationTextKeysOf('fr')].sort();
     for (const language of ['en', 'es', 'pt'] as const) expect([...lensModerationTextKeysOf(language)].sort()).toEqual(source);
