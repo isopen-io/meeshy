@@ -99,6 +99,9 @@ class ConversationListViewModelEmptyTest {
         typingStopped: MutableSharedFlow<TypingEvent> = MutableSharedFlow(),
     ): MessageSocketManager =
         mockk<MessageSocketManager> {
+            every { this@mockk.participantBanned } returns MutableSharedFlow()
+            every { this@mockk.participantJoined } returns MutableSharedFlow()
+            every { this@mockk.participantUnbanned } returns MutableSharedFlow()
             every { this@mockk.unreadUpdated } returns unreadUpdated
             every { this@mockk.messageReceived } returns messageReceived
             every { this@mockk.conversationUpdated } returns conversationUpdated
@@ -197,6 +200,7 @@ class ConversationListViewModelEmptyTest {
         me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         io.mockk.mockk(relaxed = true),
         idleRowSignalsSource(),
+        io.mockk.mockk(relaxed = true),
     )
 
     @Test

@@ -67,6 +67,9 @@ class ConversationLockFlowViewModelTest {
             every { conversationRestored } returns MutableSharedFlow()
             every { conversationClosed } returns MutableSharedFlow()
             every { participantLeft } returns MutableSharedFlow()
+            every { participantBanned } returns MutableSharedFlow()
+            every { participantJoined } returns MutableSharedFlow()
+            every { participantUnbanned } returns MutableSharedFlow()
             every { userStatus } returns MutableSharedFlow()
             every { presenceSnapshot } returns MutableSharedFlow()
             every { typingStarted } returns MutableSharedFlow()
@@ -105,6 +108,7 @@ class ConversationLockFlowViewModelTest {
         networkMonitor = me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         statusRepository = mockk(relaxed = true),
         rowSignalsSource = idleRowSignalsSource(),
+        livePatcher = mockk(relaxed = true),
     )
 
     private fun ConversationListViewModel.enter(digits: String) {

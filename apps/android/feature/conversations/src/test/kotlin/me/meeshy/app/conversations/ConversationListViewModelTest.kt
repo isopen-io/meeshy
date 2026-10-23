@@ -29,6 +29,7 @@ import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
 import me.meeshy.sdk.chat.StarredMessagesStore
+import me.meeshy.sdk.conversation.ConversationLivePatcher
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
@@ -99,6 +100,9 @@ class ConversationListViewModelTest {
         typingStopped: MutableSharedFlow<TypingEvent> = MutableSharedFlow(),
     ): MessageSocketManager =
         mockk<MessageSocketManager> {
+            every { this@mockk.participantBanned } returns MutableSharedFlow()
+            every { this@mockk.participantJoined } returns MutableSharedFlow()
+            every { this@mockk.participantUnbanned } returns MutableSharedFlow()
             every { this@mockk.unreadUpdated } returns unreadUpdated
             every { this@mockk.messageReceived } returns messageReceived
             every { this@mockk.conversationUpdated } returns conversationUpdated
@@ -190,6 +194,7 @@ class ConversationListViewModelTest {
         lockStore: ConversationLockStore = InMemoryConversationLockStore(),
         storyRepository: me.meeshy.sdk.story.StoryRepository = storyRepo(),
         statusBarCache: StatusBarCache = statusBarCache(),
+        patcher: ConversationLivePatcher = io.mockk.mockk(relaxed = true),
     ) = ConversationListViewModel(
         repo, messageRepo, socket, relay, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
@@ -197,6 +202,7 @@ class ConversationListViewModelTest {
         me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         io.mockk.mockk(relaxed = true),
         idleRowSignalsSource(),
+        patcher,
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(
@@ -209,26 +215,18 @@ class ConversationListViewModelTest {
     )
 
     /**
-     * Un message entrant vaut TROIS trames serveur — `message:new`,
-     * `conversation:updated` et `conversation:unread-updated`, toutes emises par
-     * le meme `MessageHandler.broadcastNewMessage` pour le meme message. Repondre
-     * a chacune par un `repository.refresh()` (une requete de liste COMPLETE plus
-     * une transaction Room `upsertAll` + `deleteNotIn`) triplait le cout reseau,
-     * batterie et base de chaque message recu.
+     * Un message entrant vaut TROIS trames serveur - `message:new`, `conversation:updated` et
+     * `conversation:unread-updated`. Aucune ne declenche plus de relecture de liste : chacune se
+     * plie EN PLACE dans la ligne Room, dans l'ordre d'arrivee.
      */
     @Test
-    fun the_three_socket_frames_of_one_incoming_message_collapse_into_a_single_trailing_refresh() =
+    fun the_three_socket_frames_of_one_incoming_message_patch_in_place_with_zero_list_rereads() =
         runTest(dispatcher) {
             val messageReceived = MutableSharedFlow<ApiMessage>()
             val conversationUpdated = MutableSharedFlow<ConversationUpdatedSocketEvent>()
             val unreadUpdated = MutableSharedFlow<UnreadUpdateEvent>()
-            val firstRefreshHeld = CompletableDeferred<Unit>()
-            var refreshCount = 0
             val repo = repositoryReturning(flowOf(CacheResult.Empty))
-            coEvery { repo.refresh() } coAnswers {
-                refreshCount++
-                if (refreshCount == 1) firstRefreshHeld.await()
-            }
+            val patcher = io.mockk.mockk<ConversationLivePatcher>(relaxed = true)
             viewModel(
                 repo,
                 socket = socketManager(
@@ -236,26 +234,20 @@ class ConversationListViewModelTest {
                     conversationUpdated = conversationUpdated,
                     unreadUpdated = unreadUpdated,
                 ),
+                patcher = patcher,
             )
             advanceUntilIdle()
 
-            messageReceived.emit(ApiMessage(id = "m1", conversationId = "c1"))
-            advanceUntilIdle()
-            assertThat(refreshCount).isEqualTo(1)
-
+            val message = ApiMessage(id = "m1", conversationId = "c1")
+            messageReceived.emit(message)
             conversationUpdated.emit(ConversationUpdatedSocketEvent(conversationId = "c1"))
             unreadUpdated.emit(UnreadUpdateEvent(conversationId = "c1", unreadCount = 1))
             advanceUntilIdle()
 
-            // Les deux trames jumelles arrivent pendant la relecture en vol : elles
-            // se fondent en UNE seule demande en attente, elles n'en empilent pas deux.
-            assertThat(refreshCount).isEqualTo(1)
-
-            firstRefreshHeld.complete(Unit)
-            advanceUntilIdle()
-
-            // Une relecture de queue — jamais zero (rien n'est perdu), jamais trois.
-            assertThat(refreshCount).isEqualTo(2)
+            coVerify(exactly = 1) { patcher.applyMessage(message) }
+            coVerify(exactly = 1) { patcher.applyUpdated(any()) }
+            coVerify(exactly = 1) { patcher.applyUnread("c1", 1) }
+            coVerify(exactly = 0) { repo.refresh() }
         }
 
     /**
@@ -273,60 +265,73 @@ class ConversationListViewModelTest {
      * `collect` du ViewModel.
      */
     @Test
-    fun a_restored_conversation_refreshes_the_list_on_this_device() =
+    fun a_restored_conversation_is_fetched_by_id_on_this_device() =
         runTest(dispatcher) {
             val conversationRestored = MutableSharedFlow<ConversationRestoredSocketEvent>()
-            var refreshCount = 0
             val repo = repositoryReturning(flowOf(CacheResult.Empty))
-            coEvery { repo.refresh() } coAnswers { refreshCount++; Unit }
-            viewModel(repo, socket = socketManager(conversationRestored = conversationRestored))
+            val patcher = io.mockk.mockk<ConversationLivePatcher>(relaxed = true)
+            viewModel(repo, socket = socketManager(conversationRestored = conversationRestored), patcher = patcher)
             advanceUntilIdle()
-            val avant = refreshCount
 
             conversationRestored.emit(
                 ConversationRestoredSocketEvent(conversationId = "c1", userId = "u1"),
             )
             advanceUntilIdle()
 
-            assertThat(refreshCount).isGreaterThan(avant)
+            coVerify(exactly = 1) { patcher.discover("c1") }
+            coVerify(exactly = 0) { repo.refresh() }
         }
 
-    /**
-     * La contrepartie de la fusion : elle ne doit RIEN retarder. Une trame isolee
-     * declenche sa relecture immediatement — pas de `debounce`, pas de fenetre
-     * d'attente (Instant App, cache-first/network-second).
-     */
+    /** Une trame isolee se patche immediatement - pas de debounce, aucune requete de liste. */
     @Test
-    fun an_isolated_socket_frame_still_refreshes_the_list_without_any_delay() =
+    fun an_isolated_socket_frame_is_patched_at_once_without_any_network_call() =
         runTest(dispatcher) {
             val messageReceived = MutableSharedFlow<ApiMessage>()
             val repo = repositoryReturning(flowOf(CacheResult.Empty))
-            viewModel(repo, socket = socketManager(messageReceived = messageReceived))
+            val patcher = io.mockk.mockk<ConversationLivePatcher>(relaxed = true)
+            viewModel(repo, socket = socketManager(messageReceived = messageReceived), patcher = patcher)
             advanceUntilIdle()
 
             messageReceived.emit(ApiMessage(id = "m1", conversationId = "c1"))
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { repo.refresh() }
+            coVerify(exactly = 1) { patcher.applyMessage(any()) }
+            coVerify(exactly = 0) { repo.refresh() }
         }
 
-    /**
-     * Une relecture qui echoue (session en teardown, reseau coupe) ne doit pas
-     * emporter la pompe avec elle : la trame SUIVANTE doit encore etre servie.
-     * Avant la fusion, chaque collecteur portait son propre `try/catch` ; la
-     * pompe unique en fait un point de defaillance unique s'il manque.
-     */
+    /** Le tirer-pour-rafraichir reste le seul geste qui montre un indicateur : une trame n'en leve aucun. */
     @Test
-    fun a_failed_refresh_does_not_stop_the_next_socket_frame_from_refreshing() =
+    fun a_socket_frame_over_a_populated_cache_never_raises_a_spinner_or_the_skeleton() =
+        runTest(dispatcher) {
+            val messageReceived = MutableSharedFlow<ApiMessage>()
+            val repo = repositoryReturning(
+                flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+            )
+            val vm = viewModel(repo, socket = socketManager(messageReceived = messageReceived))
+            advanceUntilIdle()
+
+            messageReceived.emit(ApiMessage(id = "m1", conversationId = "c1"))
+            advanceUntilIdle()
+
+            assertThat(vm.state.value.isUserRefreshing).isFalse()
+            assertThat(vm.state.value.isSyncing).isFalse()
+            assertThat(vm.state.value.showSkeleton).isFalse()
+        }
+
+    /** Un patch qui echoue (session en teardown) ne doit pas emporter la voie : la trame suivante est servie. */
+    @Test
+    fun a_failed_patch_does_not_stop_the_next_socket_frame_from_being_patched() =
         runTest(dispatcher) {
             val messageReceived = MutableSharedFlow<ApiMessage>()
             val repo = repositoryReturning(flowOf(CacheResult.Empty))
-            var refreshCount = 0
-            coEvery { repo.refresh() } coAnswers {
-                refreshCount++
-                if (refreshCount == 1) throw IllegalStateException("session teardown")
+            val patcher = io.mockk.mockk<ConversationLivePatcher>(relaxed = true)
+            var calls = 0
+            coEvery { patcher.applyMessage(any()) } coAnswers {
+                calls++
+                if (calls == 1) throw IllegalStateException("session teardown")
+                true
             }
-            viewModel(repo, socket = socketManager(messageReceived = messageReceived))
+            viewModel(repo, socket = socketManager(messageReceived = messageReceived), patcher = patcher)
             advanceUntilIdle()
 
             messageReceived.emit(ApiMessage(id = "m1", conversationId = "c1"))
@@ -334,7 +339,7 @@ class ConversationListViewModelTest {
             messageReceived.emit(ApiMessage(id = "m2", conversationId = "c1"))
             advanceUntilIdle()
 
-            assertThat(refreshCount).isEqualTo(2)
+            assertThat(calls).isEqualTo(2)
         }
 
     @Test
@@ -1275,11 +1280,12 @@ class ConversationListViewModelTest {
     }
 
     @Test
-    fun a_closed_conversation_sheds_its_stars_and_refreshes_the_list() = runTest(dispatcher) {
+    fun a_closed_conversation_sheds_its_stars_and_removes_the_row_the_list() = runTest(dispatcher) {
         val closed = MutableSharedFlow<ConversationClosedSocketEvent>()
         val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
         val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"), star("c2"))))
-        val vm = viewModel(repo, socket = socketManager(conversationClosed = closed), starredStore = stars)
+        val patcher = io.mockk.mockk<ConversationLivePatcher>(relaxed = true)
+        val vm = viewModel(repo, socket = socketManager(conversationClosed = closed), starredStore = stars, patcher = patcher)
         advanceUntilIdle()
 
         closed.emit(ConversationClosedSocketEvent(conversationId = "c1", closedBy = "creator-1"))
@@ -1287,7 +1293,8 @@ class ConversationListViewModelTest {
 
         // c1's bookmark is gone; c2's survives.
         assertThat(stars.starred.value.items.map { it.conversationId }).containsExactly("c2")
-        coVerify { repo.refresh() }
+        coVerify { patcher.remove("c1") }
+        coVerify(exactly = 0) { repo.refresh() }
     }
 
     @Test
@@ -1355,11 +1362,12 @@ class ConversationListViewModelTest {
         StarredMessage(messageId = messageId, conversationId = conversationId)
 
     @Test
-    fun a_deleted_conversation_sheds_its_stars_and_refreshes_the_list() = runTest(dispatcher) {
+    fun a_deleted_conversation_sheds_its_stars_and_removes_the_row_the_list() = runTest(dispatcher) {
         val deleted = MutableSharedFlow<ConversationDeletedSocketEvent>()
         val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
         val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"), star("c2"))))
-        val vm = viewModel(repo, socket = socketManager(conversationDeleted = deleted), starredStore = stars)
+        val patcher = io.mockk.mockk<ConversationLivePatcher>(relaxed = true)
+        val vm = viewModel(repo, socket = socketManager(conversationDeleted = deleted), starredStore = stars, patcher = patcher)
         advanceUntilIdle()
 
         deleted.emit(ConversationDeletedSocketEvent(conversationId = "c1"))
@@ -1367,7 +1375,8 @@ class ConversationListViewModelTest {
 
         // c1's bookmark is gone; c2's survives.
         assertThat(stars.starred.value.items.map { it.conversationId }).containsExactly("c2")
-        coVerify { repo.refresh() }
+        coVerify { patcher.remove("c1") }
+        coVerify(exactly = 0) { repo.refresh() }
     }
 
     @Test
@@ -1386,15 +1395,17 @@ class ConversationListViewModelTest {
     }
 
     @Test
-    fun the_current_user_leaving_sheds_that_conversation_stars_and_refreshes() = runTest(dispatcher) {
+    fun the_current_user_leaving_sheds_that_conversation_stars_and_removes_the_row() = runTest(dispatcher) {
         val left = MutableSharedFlow<ParticipantLeftEvent>()
         val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
         val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"))))
+        val patcher = io.mockk.mockk<ConversationLivePatcher>(relaxed = true)
         val vm = viewModel(
             repo,
             socket = socketManager(participantLeft = left),
             starredStore = stars,
             session = session(userId = "me"),
+            patcher = patcher,
         )
         advanceUntilIdle()
 
@@ -1402,7 +1413,8 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(stars.starred.value.items).isEmpty()
-        coVerify { repo.refresh() }
+        coVerify { patcher.remove("c1") }
+        coVerify(exactly = 0) { repo.refresh() }
     }
 
     @Test

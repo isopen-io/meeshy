@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.StarredMessagesStore
+import me.meeshy.sdk.conversation.ConversationLivePatcher
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lock.ConversationLockStore
@@ -62,6 +63,7 @@ class ConversationListViewModel @Inject constructor(
     networkMonitor: NetworkMonitor,
     statusRepository: StatusRepository,
     rowSignalsSource: ConversationListRowSignals,
+    livePatcher: ConversationLivePatcher,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -108,6 +110,8 @@ class ConversationListViewModel @Inject constructor(
         preferencesSocketManager = preferencesSocketManager,
         starredStore = starredStore,
         currentUserId = { _state.value.currentUserId },
+        patcher = livePatcher,
+        connectionState = socketManager.connectionState,
     )
     private val pullRefresh = ConversationListPullRefresh(
         storyRepository = storyRepository,

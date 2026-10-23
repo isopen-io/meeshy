@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.category.CategoryRepository
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.UserCategoryCatalog
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -119,12 +120,23 @@ internal class ConversationListObservers(
                 armTypingCleanup(event.conversationId, event.userId)
             }
         }
+        scope.launch { messageSocketManager.messageReceived.collect(::endTypingOnMessage) }
         scope.launch {
             messageSocketManager.typingStopped.collect { event ->
                 typingCleanupJobs.remove("${event.conversationId} ${event.userId}")?.cancel()
                 state.update {
                     it.copy(typers = ConversationTypingRoster.stopped(it.typers, event.conversationId, event.userId))
                 }
+            }
+        }
+    }
+
+    /** Le message de X est la preuve qu'il a fini d'ecrire : sa frappe s'eteint sans attendre `typing:stop`. */
+    private fun endTypingOnMessage(message: ApiMessage) {
+        listOfNotNull(message.senderId, message.sender?.resolvedUserId).distinct().forEach { userId ->
+            typingCleanupJobs.remove("${message.conversationId} $userId")?.cancel()
+            state.update {
+                it.copy(typers = ConversationTypingRoster.stopped(it.typers, message.conversationId, userId))
             }
         }
     }
