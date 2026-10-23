@@ -83,10 +83,17 @@
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>
     <string name="post_comments_cancel_reply">إلغاء الرد</string>
+    <string name="post_comments_copy_text">نسخ النص</string>
+    <string name="post_comments_delete_error">تعذّر حذف التعليق</string>
+    <string name="post_comments_deleted">تم حذف التعليق</string>
+    <string name="post_comments_load_error">تعذّر تحميل التعليقات</string>
+    <string name="post_comments_more_options">المزيد من الخيارات</string>
     <string name="post_comments_reply_action">رد</string>
     <string name="post_comments_reply_badge">رد</string>
+    <string name="post_comments_reply_error">تعذّر إرسال الرد</string>
     <string name="post_comments_replying_to">ردًا على %s</string>
     <string name="post_comments_send">إرسال</string>
+    <string name="post_comments_send_error">تعذّر إرسال التعليق</string>
     <string name="post_comments_sending">جارٍ الإرسال…</string>
     <string name="post_comments_title">التعليقات</string>
     <plurals name="post_comments_view_replies">
