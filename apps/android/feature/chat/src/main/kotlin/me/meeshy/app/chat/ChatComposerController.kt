@@ -345,6 +345,7 @@ internal class ChatComposerController(
         val languageCode = state.value.composerLanguage.display(
             fallback = LanguageResolver.resolveUserLanguage(user),
         )
+        val manualLanguage = state.value.composerLanguage.manualOverride
         composerText.clear()
         state.update {
             it.copy(
@@ -359,7 +360,6 @@ internal class ChatComposerController(
         }
         persistDraft("", replyToId = null)
         recordTypedEmojis(text)
-        val manualLanguage = state.value.composerLanguage.manualOverride
         scope.launch {
             try {
                 val sentLanguage = originalLanguageAtSend(text, manualLanguage, languageCode)

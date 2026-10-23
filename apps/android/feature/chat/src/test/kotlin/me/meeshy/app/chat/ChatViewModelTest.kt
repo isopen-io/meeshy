@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import me.meeshy.sdk.model.EmojiCatalog
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.justRun
@@ -3179,7 +3180,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.quickReactions)
-            .containsExactlyElementsIn(me.meeshy.sdk.model.EmojiCatalog.defaultQuickReactions).inOrder()
+            .containsExactlyElementsIn(EmojiCatalog.defaultQuickReactions).inOrder()
     }
 
     @Test

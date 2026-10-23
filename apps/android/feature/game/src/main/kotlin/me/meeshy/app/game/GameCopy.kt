@@ -61,7 +61,7 @@ object GameCopy {
 
     private fun argument(resources: Resources, argument: GameTextArg, locale: Locale): String = when (argument) {
         is GameTextArg.Count -> GameNumberFormat.formatCount(argument.value, locale)
-        is GameTextArg.Compact -> GameNumberFormat.compactCount(argument.value, locale)
+        is GameTextArg.Compact -> GameNumberFormat.tightCount(argument.value, locale)
         is GameTextArg.Verbatim -> argument.value
         is GameTextArg.Nested -> resolve(resources, argument.text, locale)
     }
