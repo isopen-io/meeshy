@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import XCTest
 @testable import MeeshyUI
 
@@ -27,6 +28,34 @@ final class StoryCapturedPhotoFileTests: XCTestCase {
 
         XCTAssertEqual(url.lastPathComponent, "prise.heic")
         XCTAssertEqual(try Data(contentsOf: url), Self.heic)
+    }
+
+    @MainActor
+    func test_place_withTheBytesOfTheTake_makesThemTheMediaFile() async throws {
+        let image = Self.image()
+        let octets = try XCTUnwrap(image.jpegData(compressionQuality: 0.9))
+
+        let placed = try XCTUnwrap(await StoryCapturedPhotoFile.place(image, data: octets, objectId: UUID().uuidString))
+        defer { try? FileManager.default.removeItem(at: placed.url) }
+
+        XCTAssertEqual(placed.url.pathExtension, "jpg")
+        XCTAssertEqual(try Data(contentsOf: placed.url), octets, "le fichier du média EST la prise, sans seconde génération")
+    }
+
+    @MainActor
+    func test_place_withoutBytes_encodesTheDecodedImageOnce() async throws {
+        let placed = try XCTUnwrap(await StoryCapturedPhotoFile.place(Self.image(), data: nil, objectId: UUID().uuidString))
+        defer { try? FileManager.default.removeItem(at: placed.url) }
+
+        XCTAssertEqual(placed.url.pathExtension, "jpg")
+        XCTAssertNotNil(UIImage(contentsOfFile: placed.url.path))
+    }
+
+    private static func image() -> UIImage {
+        UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
+        }
     }
 
     func test_write_refusesBytesThatAreNotAPhoto() {
