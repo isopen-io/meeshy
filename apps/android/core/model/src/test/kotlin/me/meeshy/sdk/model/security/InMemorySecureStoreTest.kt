@@ -61,4 +61,14 @@ class InMemorySecureStoreTest {
         store.removeSuspend("k", "A")
         assertThat(store.getSuspend("k", "A")).isNull()
     }
+
+    @Test
+    fun `read rend absent present ou illisible`() {
+        val store = InMemorySecureStore(unreadableKeys = setOf("A.bad"))
+        store.put("k", "v", "A")
+        assertThat(store.read("k", "A")).isEqualTo(SecureRead.Present("v"))
+        assertThat(store.read("nope", "A")).isEqualTo(SecureRead.Absent)
+        assertThat(store.read("bad", "A")).isEqualTo(SecureRead.Unreadable)
+        assertThat(InMemorySecureStore(allUnreadable = true).read("k", "A")).isEqualTo(SecureRead.Unreadable)
+    }
 }

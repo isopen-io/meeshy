@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.security.SecureKeyNamespace
+import me.meeshy.sdk.model.security.SecureRead
 import me.meeshy.sdk.model.security.SecureStore
 
 /**
@@ -19,6 +20,10 @@ import me.meeshy.sdk.model.security.SecureStore
  *   `AEADBadTagException`, `KeyStoreException`) is an EMPTY vault. The corrupt
  *   file is recreated once through [reset]; if it still cannot open, the store
  *   stays empty and writes report `false`. It never throws, never loops.
+ * - `get` stays fail-soft, but [read] does NOT confuse "absent" with "unreadable": a file recreated
+ *   after an open failure (we cannot know what it held) and any entry that throws are
+ *   [SecureRead.Unreadable], so a caller never regenerates a secret over data it merely failed to read.
+ *   [acknowledgeRecovery] is the explicit, per-account way out.
  * - Silent: no value (and no key) is ever logged.
  *
  * [open] is injected so tests substitute real `SharedPreferences` for the
@@ -33,6 +38,8 @@ class KeystoreSecureStore(
     private val lock = Any()
     private var cached: SharedPreferences? = null
     private var gaveUp = false
+    private var recreated = false
+    private val acknowledged = mutableSetOf<String>()
 
     private fun prefs(): SharedPreferences? = synchronized(lock) {
         cached ?: if (gaveUp) null else openOrRecreate().also { cached = it; gaveUp = it == null }
@@ -40,6 +47,7 @@ class KeystoreSecureStore(
 
     private fun openOrRecreate(): SharedPreferences? =
         attempt(open) ?: run {
+            recreated = true
             attempt(reset)
             attempt(open)
         }
@@ -52,6 +60,26 @@ class KeystoreSecureStore(
 
     override fun get(key: String, account: String?): String? =
         prefs()?.let { attempt { it.getString(SecureKeyNamespace.compose(account, key), null) } }
+
+    override fun read(key: String, account: String?): SecureRead {
+        val prefs = prefs() ?: return SecureRead.Unreadable
+        if (isRecoveryPending(account)) return SecureRead.Unreadable
+        val composed = SecureKeyNamespace.compose(account, key)
+        return try {
+            if (!prefs.contains(composed)) SecureRead.Absent
+            else prefs.getString(composed, null)?.let(SecureRead::Present) ?: SecureRead.Unreadable
+        } catch (_: Exception) {
+            SecureRead.Unreadable
+        }
+    }
+
+    override fun acknowledgeRecovery(account: String?) {
+        synchronized(lock) { acknowledged.add(SecureKeyNamespace.normalize(account).orEmpty()) }
+    }
+
+    private fun isRecoveryPending(account: String?): Boolean = synchronized(lock) {
+        recreated && SecureKeyNamespace.normalize(account).orEmpty() !in acknowledged
+    }
 
     override fun put(key: String, value: String, account: String?): Boolean {
         val prefs = prefs() ?: return false
