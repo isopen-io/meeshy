@@ -107,7 +107,7 @@ function lensTables() {
 
 type Harness = { app: FastifyInstance; tables: ReturnType<typeof lensTables>; normalizedAs: { assets: string[]; luts: string[] }; packs: LensPacks };
 
-async function harness(options: { now?: string; communities?: readonly string[]; log?: { error: (message: string, context?: Record<string, unknown>) => void } } = {}): Promise<Harness> {
+async function harness(options: { now?: string; communities?: readonly string[]; log?: { error: (line: string) => void } } = {}): Promise<Harness> {
   const db = appearancePrisma();
   const tables = lensTables();
   const prisma = Object.assign(Object.create(db.prisma as object) as PrismaClient, {
@@ -414,8 +414,8 @@ describe('modération journalisée et retrait d’une lens publiée (audit de #1
   });
 
   it('si la ligne « non appliqué » ne s’écrit pas, le trou du journal se signale en erreur, nommé (#12329 R2)', async () => {
-    const errors: Array<{ message: string; context?: Record<string, unknown> }> = [];
-    const h = await harness({ log: { error: (message, context) => errors.push({ message, ...(context === undefined ? {} : { context }) }) } });
+    const errors: string[] = [];
+    const h = await harness({ log: { error: (line) => errors.push(String(line)) } });
     await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
     h.tables.lensPack.updateMany.mockImplementationOnce(async () => {
       h.tables.auditState.down = true;
@@ -424,9 +424,8 @@ describe('modération journalisée et retrait d’une lens publiée (audit de #1
 
     expect((await review(h, 'aurore-polaire', { decision: 'approve' })).statusCode).toBe(404);
     expect(h.tables.audit.map((entry) => entry.action)).toEqual(['LENS_PACK_APPROVE']);
-    expect(errors).toEqual([
-      expect.objectContaining({ context: expect.objectContaining({ action: 'LENS_PACK_APPROVE_NOT_APPLIED', slug: 'aurore-polaire', reason: 'concurrent-review' }) }),
-    ]);
+    expect(errors[0]).toBe('lens moderation journal incomplete: a gesture is journaled without its outcome');
+    expect(JSON.parse(errors[1]!)).toEqual({ action: 'LENS_PACK_APPROVE_NOT_APPLIED', slug: 'aurore-polaire', reason: 'concurrent-review' });
   });
 
   it('sans journal, rien n’est retiré', async () => {
