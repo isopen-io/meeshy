@@ -45,8 +45,21 @@ internal class StoryCacheSource(
             if (rows.isEmpty() && syncedAt == null) {
                 null
             } else {
-                rows.map { MeeshyApi.json.decodeFromString<ApiPost>(it.payload) }
+                rows.mapNotNull { it.decodedOrNull() }
             }
+        }
+
+    /**
+     * Une ligne qui ne se relit plus (écrite par une version antérieure, tronquée) ne
+     * coûte qu'ELLE-MÊME : décoder toutes les lignes d'un bloc faisait lever le flux de la
+     * barre, et l'exception fermait l'app à l'affichage des stories. La revalidation
+     * suivante la réécrit ou l'élague.
+     */
+    private fun StoryEntity.decodedOrNull(): ApiPost? =
+        try {
+            MeeshyApi.json.decodeFromString<ApiPost>(payload)
+        } catch (_: IllegalArgumentException) {
+            null
         }
 
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
@@ -103,7 +116,7 @@ internal class StoryCacheSource(
      * onto this copy and writes the result back via [upsertLocal].
      */
     suspend fun findLocal(storyId: String): ApiPost? =
-        storyDao.getById(storyId)?.let { MeeshyApi.json.decodeFromString<ApiPost>(it.payload) }
+        storyDao.getById(storyId)?.decodedOrNull()
 
     /**
      * Upserts a single merged story, re-deriving the tray-ordering (`createdAt`) column
