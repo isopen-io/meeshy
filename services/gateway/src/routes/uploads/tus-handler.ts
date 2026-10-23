@@ -47,6 +47,7 @@ import { stripStoredMediaMetadata } from '../../services/attachments/media-metad
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { mediaDescriptionFields } from '../../services/attachments/mediaDescriptionInput';
 import { triggerMediaAltTranslations } from '../../services/posts/mediaAltWrites';
+import { triggerMessageAttachmentAltTranslation } from '../../services/attachments/MessageAttachmentAltTranslationService';
 import { originIsAllowed } from '../../config/cors-origins';
 import { TUS_COLLECTION_METHODS, TUS_UPLOAD_METHODS } from './tus-methods';
 
@@ -713,6 +714,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         });
         recordId = attachment.id;
         await scheduleDeferred('messageAttachment', attachment.id);
+        if ('alt' in description) triggerMessageAttachmentAltTranslation(attachment.id);
         logger.info(`[TUS] MessageAttachment created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes)`);
       }
 
