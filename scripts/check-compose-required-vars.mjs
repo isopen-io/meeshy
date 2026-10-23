@@ -890,7 +890,29 @@ const MUTATIONS_MUETTES = Object.freeze([
 const mondeNomme = (world, name) =>
   world.files.some((file) => file.substitutions.some((substitution) => substitution.name === name));
 
+/**
+ * La LECTURE elle-même (#11267) : `$$` est l'échappement de Compose — `$${X}`
+ * arrive TEL QUEL au conteneur (une variable du SHELL qu'il exécute), il n'est
+ * jamais substitué. Lu comme une substitution, il fait rougir le garde sur
+ * tout script embarqué dans une composition.
+ */
+const PARSE_CASES = Object.freeze([
+  ['  - JWT_SECRET=${JWT_SECRET}', ['JWT_SECRET']],
+  ['        echo "$${MEDIA_S3_BUCKET}"', []],
+  ['        printf "$$${PORT:-80}"', ['PORT']],
+  ['  - A=${A:-x} B=$${B}', ['A']],
+]);
+
+const parseFailures = () =>
+  PARSE_CASES.flatMap(([line, expected]) => {
+    const names = substitutionsOf(line).map((substitution) => substitution.name);
+    return JSON.stringify(names) === JSON.stringify(expected) ? [] : [`LECTURE : « ${line.trim()} » lit ${JSON.stringify(names)}, attendu ${JSON.stringify(expected)}`];
+  });
+
 const selfTest = (world) => {
+  const misread = parseFailures();
+  misread.forEach((failure) => console.error(failure));
+  if (misread.length > 0) return 1;
   const blind = MUTATIONS.filter(
     ([, apply, expected]) => !inspect(mutate(world, apply)).some((failure) => failure.includes(expected)),
   );
