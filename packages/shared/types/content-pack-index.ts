@@ -63,8 +63,17 @@ export const PackEligibilityRuleSchema: z.ZodMiniType<PackEligibilityRule> = z.d
  * `startsAt` inclus et `endsAt` exclu. Une fenêtre qui finit avant de
  * commencer est illisible : l'entrée tombe, jamais le registre.
  */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$/;
+
+/**
+ * Un instant ISO en UTC. Pas `z.iso.datetime()` : ce constructeur n'est appelé
+ * nulle part ailleurs du web, et il alourdissait au-delà de son plafond le chunk
+ * `zod` que plus de soixante écrans partagent (budgets.json › zod).
+ */
+const isoInstant = z.string().check(z.refine((value) => ISO_INSTANT.test(value) && Number.isFinite(Date.parse(value))));
+
 export const PackAvailabilitySchema: z.ZodMiniType<PackAvailability> = z
-  .object({ startsAt: z.optional(z.iso.datetime()), endsAt: z.optional(z.iso.datetime()) })
+  .object({ startsAt: z.optional(isoInstant), endsAt: z.optional(isoInstant) })
   .check(z.refine((window) => window.startsAt === undefined || window.endsAt === undefined || Date.parse(window.startsAt) < Date.parse(window.endsAt)));
 
 const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/;
