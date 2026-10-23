@@ -14,7 +14,8 @@
  *   génération perdue ; ce n'est que si ses dimensions sortent de la grille
  *   des blocs, ou pour un WebP, que la rotation est appliquée aux pixels
  *   (`autoOrient`) avant que l'EXIF ne parte, le profil ICC gardé (`keepIccProfile`), dans un encodage aussi
- *   fidèle que le format le permet (JPEG q92 4:4:4, WebP sans perte si la
+ *   fidèle que le format le permet (JPEG q95 au sous-échantillonnage de la
+ *   source, WebP q97 « sharp YUV », WebP sans perte si la
  *   source l'était, PNG à palette si la source l'était) ; un JPEG HDR y
  *   garde sa carte de gain, pivotée avec lui (`keepGainMap`, que les typages
  *   de sharp 0.35.5 omettent — d'où `GainMapAware`, #11840) ;
@@ -52,8 +53,15 @@ const FORMAT_BY_MIME_TYPE: Readonly<Record<string, ImageFormat>> = {
   'image/avif': 'heif',
 };
 
-const JPEG_REENCODE = { quality: 92, chromaSubsampling: '4:4:4' } as const;
-const WEBP_LOSSY_REENCODE = { quality: 90 } as const;
+// #12278 — mesuré (PSNR contre l'original redressé, JPEG q80 4:2:0 hors grille) :
+// q92 4:4:4 → 43,2 dB ; q95 au sous-échantillonnage de la SOURCE → 45,5 dB, pour
+// +5 % de poids (rééchantillonner une chrominance déjà sous-échantillonnée en
+// 4:4:4 n'ajoute que du poids). WebP q80 → q90 : 40,8 dB ; q97 avec
+// sous-échantillonnage « sharp YUV » : 45,0 à 45,7 dB pour 2,1 à 2,5 fois le poids
+// de la source ; le WebP sans perte (exact) pèserait 6,5 fois la source. Le WebP
+// avec perte n'a pas de rotation sans perte : cette génération reste inévitable.
+const JPEG_REENCODE_QUALITY = 95;
+const WEBP_LOSSY_REENCODE = { quality: 97, smartSubsample: true } as const;
 
 function formatOf(mimeType: string): ImageFormat | undefined {
   return FORMAT_BY_MIME_TYPE[mimeType.toLowerCase()];
@@ -64,12 +72,16 @@ export function isExifStrippable(mimeType: string): boolean {
 }
 
 type ReencodableFormat = 'jpeg' | 'png' | 'webp';
-type ImageFacts = Partial<Pick<Metadata, 'isPalette' | 'pages' | 'orientation' | 'gainMap'>>;
+type ImageFacts = Partial<Pick<Metadata, 'isPalette' | 'pages' | 'orientation' | 'gainMap' | 'chromaSubsampling'>>;
+
+function jpegReencode(metadata: ImageFacts): { quality: number; chromaSubsampling: string } {
+  return { quality: JPEG_REENCODE_QUALITY, chromaSubsampling: metadata.chromaSubsampling === '4:2:0' ? '4:2:0' : '4:4:4' };
+}
 type GainMapAware = Sharp & { readonly keepGainMap: () => Sharp };
 
 function encode(image: Sharp, format: ReencodableFormat, source: Buffer, metadata: ImageFacts): Promise<Buffer> {
-  if (format === 'jpeg' && metadata.gainMap) return (image as GainMapAware).keepGainMap().jpeg(JPEG_REENCODE).toBuffer();
-  if (format === 'jpeg') return image.jpeg(JPEG_REENCODE).toBuffer();
+  if (format === 'jpeg' && metadata.gainMap) return (image as GainMapAware).keepGainMap().jpeg(jpegReencode(metadata)).toBuffer();
+  if (format === 'jpeg') return image.jpeg(jpegReencode(metadata)).toBuffer();
   if (format === 'png') return image.png({ palette: metadata.isPalette === true }).toBuffer();
   return image.webp(isLosslessWebp(source) ? { lossless: true } : WEBP_LOSSY_REENCODE).toBuffer();
 }
