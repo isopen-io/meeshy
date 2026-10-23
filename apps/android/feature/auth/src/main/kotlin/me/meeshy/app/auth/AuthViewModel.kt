@@ -54,6 +54,10 @@ data class AuthUiState(
     val pendingVerification: PendingEmailVerification? = null,
     val verificationCode: String = "",
     val verificationResend: VerificationResend = VerificationResend.IDLE,
+    /** iOS `SettingsView` : le voile « Déconnexion en cours… » tient l'écran le temps de l'appel serveur. */
+    val isLoggingOut: Boolean = false,
+    /** iOS `SessionClosedNoticeView` : la session a été fermée sans que l'utilisateur l'ait demandé. */
+    val sessionClosedNotice: Boolean = false,
 ) {
     val canSubmit: Boolean get() = username.isNotBlank() && password.isNotBlank() && !isSubmitting
 
@@ -377,7 +381,16 @@ class AuthViewModel @Inject constructor(
         _state.update { it.copy(isAuthenticated = authRepository.isAuthenticated) }
     }
 
-    fun logout() {
+    /**
+     * Ferme la session. [closedByServer] : la passerelle a refusé l'identité (session révoquée,
+     * expirée, compte fermé) ; l'écran de connexion dit alors pourquoi on y revient. Un second
+     * appel pendant la fermeture est sans effet.
+     */
+    fun logout(closedByServer: Boolean = false) {
+        val current = _state.value
+        if (current.isLoggingOut) return
+        val explain = closedByServer && current.isAuthenticated
+        _state.update { it.copy(isLoggingOut = true) }
         viewModelScope.launch {
             authRepository.logout()
             realtimeCoordinator.onAuthenticatedChanged(false)
@@ -389,8 +402,14 @@ class AuthViewModel @Inject constructor(
                 selectedEnvironment = serverEnvironmentStore.selectedEnvironment,
                 customHostInput = serverEnvironmentStore.customHost,
                 showEnvironmentSelector = config.enableLogging,
+                sessionClosedNotice = explain,
             )
         }
+    }
+
+    /** « Se reconnecter » de l'avis de session fermée. */
+    fun dismissSessionClosedNotice() {
+        _state.update { it.copy(sessionClosedNotice = false) }
     }
 
     private companion object {

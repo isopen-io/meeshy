@@ -125,9 +125,15 @@
     <string name="privacy_section_media">الوسائط والبيانات</string>
     <string name="privacy_section_visibility">الظهور</string>
     <string name="privacy_typing_indicator">مؤشر الكتابة</string>
+    <string name="sessions_cancel">إلغاء</string>
     <string name="sessions_current">هذا الجهاز</string>
     <string name="sessions_retry">إعادة المحاولة</string>
     <string name="sessions_revoke">تسجيل الخروج</string>
+    <string name="sessions_revoke_all_action">تسجيل خروج الأجهزة الأخرى</string>
+    <string name="sessions_revoke_all_confirm_message">سيبقى هذا الجهاز وحده متصلًا، وستحتاج الأجهزة الأخرى إلى تسجيل الدخول مجددًا.</string>
+    <string name="sessions_revoke_confirm_action">تسجيل الخروج</string>
+    <string name="sessions_revoke_confirm_message">سيحتاج %s إلى تسجيل الدخول مجددًا للوصول إلى حسابك.</string>
+    <string name="sessions_revoke_confirm_title">تسجيل خروج هذا الجهاز؟</string>
     <string name="settings_active_sessions">الجلسات النشطة</string>
     <string name="settings_back">رجوع</string>
     <string name="settings_blocked_users">المستخدمون المحظورون</string>
@@ -140,6 +146,8 @@
     <string name="settings_export_data">تصدير بياناتي</string>
     <string name="settings_language_dialog_close">إغلاق</string>
     <string name="settings_log_out">تسجيل الخروج</string>
+    <string name="settings_logout_confirm_message">هل تريد فعلاً تسجيل الخروج؟</string>
+    <string name="settings_logout_confirm_title">تسجيل الخروج</string>
     <string name="settings_media_capture_header">عند التصوير</string>
     <string name="settings_media_capture_original_subtitle">تُحفظ الصورة أو الفيديو الخام، دون تأثيرات أو إطار، في الصور مع كل لقطة.</string>
     <string name="settings_media_capture_original_title">حفظ الأصل</string>

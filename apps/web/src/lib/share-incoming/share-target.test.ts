@@ -32,8 +32,8 @@ describe('le share_target du manifeste', () => {
     expect(lire('public', 'sw-share-target.js')).toContain(`const SHARE_PATH = '${SHARE_PATH}';`);
   });
 
-  test('vite.config.ts le publie dans le manifeste et charge le worker, sans le précacher', () => {
-    const config = lire('vite.config.ts');
+  test('vite/pwa.ts le publie dans le manifeste et charge le worker, sans le précacher', () => {
+    const config = lire('vite/pwa.ts');
     expect(config).toMatch(/share_target:\s*SHARE_TARGET/);
     expect(config).toMatch(/SERVICE_WORKER_SCRIPTS\s*=\s*\[[^\]]*'sw-share-target\.js'/);
     const ignores = config.slice(config.indexOf('globIgnores: ['));

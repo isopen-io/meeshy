@@ -63,6 +63,7 @@
     <string name="login_signup_link">إنشاء حساب</string>
     <string name="login_signup_prompt">ليس لديك حساب؟</string>
     <string name="login_username_label">اسم المستخدم</string>
+    <string name="logout_in_progress">جارٍ تسجيل الخروج...</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d شرارة للمستوى ١</string>
     <string name="onboarding_gauge_reached">وصلت إلى المستوى ١ 🎉</string>
     <plurals name="onboarding_points_a11y">
@@ -92,6 +93,9 @@
     </plurals>
     <string name="onboarding_skipAll">تخطَّ الكل</string>
     <string name="registration_back">رجوع</string>
+    <string name="session_closed_continue">تسجيل الدخول مجددًا</string>
+    <string name="session_closed_signed_out_message">أُغلقت هذه الجلسة. سجّل الدخول مجددًا للمتابعة.</string>
+    <string name="session_closed_signed_out_title">تم تسجيل خروجك</string>
     <string name="share_link_join_anonymously">انضمام دون الكشف عن الهوية</string>
     <string name="share_link_resume_anonymously">الاستئناف دون الكشف عن هويتي</string>
     <string name="signup_back">رجوع</string>
