@@ -27,6 +27,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { VideoRendition } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { timeMediaStage } from '../metrics/mediaStageMetrics';
 
 const logger = enhancedLogger.child({ module: 'video-compat-rendition' });
 
@@ -145,7 +146,9 @@ export async function produceCompatibilityRendition(
   const outputRel = compatRenditionPathFor(source.relPath);
   const outputAbs = path.join(deps.uploadBasePath, outputRel);
   try {
-    await deps.runFfmpeg(buildCompatibilityRenditionArgs(inputAbs, outputAbs, plan));
+    // #11257 — le rendu H.264 d'une vidéo HEVC est l'encodage qui reste au
+    // serveur depuis #11261 : il est mesuré à l'étape `transcode`.
+    await timeMediaStage('transcode', 'video', () => deps.runFfmpeg(buildCompatibilityRenditionArgs(inputAbs, outputAbs, plan)));
     const [rendered, stat] = await Promise.all([probeVideo(outputAbs), fs.stat(outputAbs)]);
     if (!rendered?.width || !rendered.height || stat.size === 0) throw new Error('rendu vide');
     return { codec: 'h264', url: outputRel, width: rendered.width, height: rendered.height, size: stat.size };
