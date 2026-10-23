@@ -2637,6 +2637,12 @@ jobs:
     needs: [changes, quality, gardes-depot, web-navigateur, shell-android, glory-frames, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
+      - name: Checkout (le script du verdict seul)
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/ci
+          fetch-depth: 1
+
       - name: Tableau
         run: |
           echo "## CI — verdict" >> $GITHUB_STEP_SUMMARY
