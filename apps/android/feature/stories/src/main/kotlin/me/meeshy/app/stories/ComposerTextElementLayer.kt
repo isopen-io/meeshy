@@ -81,6 +81,7 @@ internal fun TextElementLayer(
     onTransform: (Float, Float) -> Unit,
     onRemove: () -> Unit,
     onMeasured: (IntSize) -> Unit = {},
+    onTextChange: (String) -> Unit = {},
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     Box(
@@ -136,7 +137,10 @@ internal fun TextElementLayer(
         val density = LocalDensity.current
         val canvasFontSizePx = element.previewFontPx(canvasWidthPx)
         val canvasFontSize = with(density) { canvasFontSizePx.toSp() }
-        val displayText = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) }
+        // Edited in place while selected (and no context menu is up) — iOS inline editor.
+        val editing = selected && menu == null
+        val placeholder = stringResource(R.string.stories_composer_text_placeholder)
+        val displayText = element.text.ifBlank { placeholder }
         // Base writing direction is derived from the caption (iOS-parity render-time
         // derivation via the pure StoryTextBidi), so an Arabic/Hebrew caption lays its
         // paragraph out right-to-left. Applied to both the stroked underlay and the fill.
@@ -158,7 +162,7 @@ internal fun TextElementLayer(
                 .padding(horizontal = 6.dp, vertical = 2.dp),
         ) {
             val outline = element.outline
-            if (outline.isVisible) {
+            if (outline.isVisible && !(editing && element.text.isEmpty())) {
                 // Stroked underlay: the same glyphs painted as an outline beneath the fill,
                 // so the border hugs the letterforms rather than boxing the element.
                 Text(
@@ -173,17 +177,35 @@ internal fun TextElementLayer(
                     style = baseStyle.copy(drawStyle = Stroke(width = outline.width)),
                 )
             }
-            Text(
-                text = displayText,
-                color = textColor,
-                fontSize = canvasFontSize,
-                fontWeight = FontWeight(typography.fontWeight),
-                fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                fontFamily = typography.family.toFontFamily(),
-                letterSpacing = typography.letterSpacingEm.em,
-                textAlign = element.align.toTextAlign(),
-                style = baseStyle,
-            )
+            if (editing) {
+                ComposerInlineTextField(
+                    elementId = element.id,
+                    text = element.text,
+                    placeholder = placeholder,
+                    style = baseStyle.copy(
+                        color = textColor,
+                        fontSize = canvasFontSize,
+                        fontWeight = FontWeight(typography.fontWeight),
+                        fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                        fontFamily = typography.family.toFontFamily(),
+                        letterSpacing = typography.letterSpacingEm.em,
+                        textAlign = element.align.toTextAlign(),
+                    ),
+                    onTextChange = onTextChange,
+                )
+            } else {
+                Text(
+                    text = displayText,
+                    color = textColor,
+                    fontSize = canvasFontSize,
+                    fontWeight = FontWeight(typography.fontWeight),
+                    fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                    fontFamily = typography.family.toFontFamily(),
+                    letterSpacing = typography.letterSpacingEm.em,
+                    textAlign = element.align.toTextAlign(),
+                    style = baseStyle,
+                )
+            }
         }
         if (selected) {
             Surface(

@@ -89,6 +89,7 @@ internal fun StoryCanvasSurface(
     onElementDragEnd: () -> Unit,
     onElementTransform: (String, Float, Float) -> Unit,
     onElementRemove: (String) -> Unit,
+    onElementTextChange: (String) -> Unit,
     onStickerTap: (String) -> Unit,
     onStickerDrag: (String, Float, Float) -> Unit,
     onStickerTransform: (String, Float, Float) -> Unit,
@@ -237,6 +238,7 @@ internal fun StoryCanvasSurface(
                     onDragEnd = onElementDragEnd,
                     onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
                     onRemove = { onElementRemove(element.id) },
+                    onTextChange = onElementTextChange,
                     onMeasured = { size ->
                         if (element.id == selectedElement?.id) selectedHalfHeightPx = size.height / 2f
                     },

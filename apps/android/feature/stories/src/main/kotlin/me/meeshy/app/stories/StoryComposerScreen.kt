@@ -183,6 +183,7 @@ fun StoryComposerScreen(
                 onElementDragEnd = viewModel::onTextElementDragEnd,
                 onElementTransform = viewModel::onTextElementTransform,
                 onElementRemove = viewModel::onRemoveTextElement,
+                onElementTextChange = viewModel::onTextChange,
                 onStickerTap = viewModel::onSelectSticker,
                 onStickerDrag = viewModel::onStickerMoved,
                 onStickerTransform = viewModel::onStickerTransform,
@@ -226,27 +227,15 @@ fun StoryComposerScreen(
                     onUndo = viewModel::onDrawUndo,
                     onDone = viewModel::onExitDrawingMode,
                 )
-            } else {
+            } else if (!state.isEditingTextElement) {
+                // The slide CAPTION only: a text object is written on the scene itself
+                // (ComposerInlineTextField), so this field never silently changes role.
                 OutlinedTextField(
                     value = state.editorText,
                     onValueChange = viewModel::onTextChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = if (state.isEditingTextElement) {
-                        { Text(stringResource(R.string.stories_composer_add_text)) }
-                    } else {
-                        { Text(stringResource(R.string.stories_composer_text_caption)) }
-                    },
-                    placeholder = {
-                        Text(
-                            stringResource(
-                                if (state.isEditingTextElement) {
-                                    R.string.stories_composer_text_placeholder
-                                } else {
-                                    R.string.stories_composer_placeholder
-                                },
-                            ),
-                        )
-                    },
+                    label = { Text(stringResource(R.string.stories_composer_text_caption)) },
+                    placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
                     isError = !state.draft.isWithinLimit,
                     supportingText = {
                         Text(
