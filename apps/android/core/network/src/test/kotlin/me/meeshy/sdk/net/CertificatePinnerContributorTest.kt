@@ -15,7 +15,7 @@ import javax.net.ssl.SSLPeerUnverifiedException
 class CertificatePinnerContributorTest {
 
     private class Fixture(val server: MockWebServer, val serverCert: HeldCertificate, val clientCerts: HandshakeCertificates) {
-        val host: String = server.hostName
+        val host: String = "localhost"
         val spki: String = CertificatePinning.spkiSha256Base64(serverCert.certificate)!!
     }
 
@@ -48,7 +48,7 @@ class CertificatePinnerContributorTest {
         )
 
     private fun get(client: OkHttpClient, f: Fixture): String =
-        client.newCall(Request.Builder().url(f.server.url("/")).build()).execute().use { it.body!!.string() }
+        client.newCall(Request.Builder().url("https://localhost:${f.server.port}/").build()).execute().use { it.body!!.string() }
 
     @Test
     fun `le bon pin laisse passer la requete`() {
