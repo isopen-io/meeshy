@@ -1,0 +1,28 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_recording_accept">Accetta</string>
+    <string name="call_recording_active">Registrazione in corso</string>
+    <string name="call_recording_ask">%s vuole registrare la chiamata</string>
+    <string name="call_recording_askDetail">La registrazione inizia solo se tutti accettano, poi viene aggiunta alla conversazione.</string>
+    <string name="call_recording_askDetail_video">Lo schermo della chiamata e tutto il suo audio vengono registrati solo se tutti accettano, poi vengono aggiunti alla conversazione.</string>
+    <string name="call_recording_ask_video">%s vuole registrare la chiamata in video</string>
+    <string name="call_recording_cancel">Annulla</string>
+    <string name="call_recording_caption">Registra</string>
+    <string name="call_recording_close">Chiudi</string>
+    <string name="call_recording_hint">Chiede il consenso di ogni partecipante prima di registrare</string>
+    <string name="call_recording_kind_audio">Solo audio</string>
+    <string name="call_recording_kind_hint">Scegli cosa registrare; poi ogni partecipante deve accettare</string>
+    <string name="call_recording_kind_video">Audio e video</string>
+    <string name="call_recording_refuse">Rifiuta</string>
+    <string name="call_recording_saveFailed">Impossibile aggiungere la registrazione</string>
+    <string name="call_recording_saved">La registrazione è stata aggiunta alla conversazione</string>
+    <string name="call_recording_someone">Un partecipante</string>
+    <string name="call_recording_start">Registra la chiamata</string>
+    <string name="call_recording_stop">Interrompi la registrazione</string>
+    <string name="call_recording_stopped_joined">Qualcuno si è unito alla chiamata: registrazione interrotta</string>
+    <string name="call_recording_stopped_other">Registrazione interrotta</string>
+    <string name="call_recording_stopped_refused">Registrazione rifiutata</string>
+    <string name="call_recording_stopped_timeout">Non tutti hanno risposto: nessuna registrazione</string>
+    <string name="call_recording_unavailable">Registrazione non disponibile al momento</string>
+    <string name="call_recording_waiting">In attesa del consenso di tutti…</string>
+</resources>
