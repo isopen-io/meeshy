@@ -7,12 +7,14 @@
  * `MEDIA_S3_MIRROR_FOLLOW=on` ; appliqué en staging ou sur feu vert nommé du
  * porteur, à blanc ailleurs.
  */
+import os from 'node:os';
 import path from 'node:path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { guardedInterval, type TimerErrorLogger } from '../utils/guarded-timer.js';
 import { processMediaObjectStores } from '../services/storage/objects/mediaObjectStoreFactory';
 import { followMediaMirrorOnce, mediaMirrorFollowMode, type MediaMirrorFollowMode } from '../services/storage/objects/mediaMirrorFollow';
-import { mediaMirrorSources } from '../services/storage/objects/mediaMirrorCli';
+import { MIRROR_LOCK_TTL_MS, mediaMirrorSources, mirrorLockFile } from '../services/storage/objects/mediaMirrorCli';
+import { withMirrorLock } from '../services/storage/objects/mediaMirrorLock';
 import { processMediaBucketMetrics, recordSweepReport } from '../services/metrics/mediaBucketMetrics';
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -71,6 +73,17 @@ export class MediaMirrorFollowJob {
   }
 }
 
+/** Repousse l'échéance du verrou tant que le passage tourne : une passe complète peut dépasser l'échéance. */
+async function withHeartbeat<T>(renew: () => Promise<void>, run: () => Promise<T>): Promise<T> {
+  const heartbeat = setInterval(() => void renew().catch(() => undefined), MIRROR_LOCK_TTL_MS / 3);
+  heartbeat.unref();
+  try {
+    return await run();
+  } finally {
+    clearInterval(heartbeat);
+  }
+}
+
 /** Le job du processus : le stockage, la base et l'horloge réels. */
 export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLogger): MediaMirrorFollowJob {
   let lastSweepAt: Date | null = null;
@@ -83,10 +96,11 @@ export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLog
       const stores = processMediaObjectStores();
       if (stores.mirror === null) return;
       const uploadRoot = process.env.UPLOAD_PATH || 'uploads/attachments';
-      const next = await followMediaMirrorOnce({
+      const mirror = stores.mirror;
+      const locked = await withMirrorLock({ file: mirrorLockFile(uploadRoot), owner: `gateway:${os.hostname()}:${process.pid}`, ttlMs: MIRROR_LOCK_TTL_MS }, (renew) => withHeartbeat(renew, () => followMediaMirrorOnce({
         sources: mediaMirrorSources(prisma),
         local: stores.local,
-        mirror: stores.mirror,
+        mirror,
         uploadRoot,
         stateFile: path.join(path.resolve(uploadRoot), '.media-mirror', 'state.json'),
         apply,
@@ -100,9 +114,13 @@ export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLog
             logger.warn('Media bucket sweep refused — nothing erased; see mediaMirrorCli --sweep --allow-mass-removal', { reason: report.reason });
           }
         },
-      });
-      lastSweepAt = next.lastSweepAt;
-      lastFullScanAt = next.lastFullScanAt;
+      })));
+      if (locked.kind === 'busy') {
+        logger.info('Media mirror pass skipped: another pass holds the volume lock', { holder: locked.holder });
+        return;
+      }
+      lastSweepAt = locked.value.lastSweepAt;
+      lastFullScanAt = locked.value.lastFullScanAt;
     },
   });
 }

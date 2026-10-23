@@ -30,9 +30,15 @@
  * - `--batch=<1..5000>` (500), `--limit=<lignes par collection>`.
  *
  * Code de sortie : 0 = terminé sans échec ; 4 = des copies ont échoué (relancer
- * reprend) ; 2 = refusé (arguments, feu vert, seau non configuré) ; 1 = erreur.
+ * reprend) ; 2 = refusé (arguments, feu vert, seau non configuré, balayage
+ * refusé, ou un autre passage tient le verrou du volume) ; 1 = erreur.
+ *
+ * Un passage APPLIQUÉ tient le verrou `<UPLOAD_PATH>/.media-mirror/lock`, que
+ * le job de la passerelle prend aussi : jamais deux passages à la fois sur un
+ * volume (audit D5). Un passage à blanc n'écrit rien et ne le prend pas.
  */
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isStagingEnvironment } from '../../email/staging-marker';
@@ -42,6 +48,7 @@ import { emptyMirrorCounts, runMirrorBatch, type MirrorCounts, type MirrorRowSou
 import { mediaObjectStoresFromEnv } from './mediaObjectStoreFactory';
 import { isPorteurApproval } from './mediaObjectStoreConfig';
 import { collectReferencedKeys, sweepBucket, type SweepReport } from './mediaBucketSweep';
+import { withMirrorLock } from './mediaMirrorLock';
 import type { S3ObjectStore } from './S3ObjectStore';
 
 export type MirrorOptions = { readonly apply: boolean; readonly batchSize: number; readonly limit: number | null; readonly reset: boolean };
@@ -52,6 +59,13 @@ export type ParsedMirrorArgs =
 
 const MAX_BATCH = 5_000;
 export const FOLLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** L'échéance du verrou du miroir : un processus mort ne bloque pas plus longtemps ; un passage vivant la repousse. */
+export const MIRROR_LOCK_TTL_MS = 10 * 60 * 1000;
+
+/** Le verrou que la ligne de commande et le job partagent, à côté du fichier d'état. */
+export function mirrorLockFile(uploadRoot: string): string {
+  return path.join(path.resolve(uploadRoot), '.media-mirror', 'lock');
+}
 
 export function parseMirrorArgs(argv: readonly string[], env: Readonly<Record<string, string | undefined>>): ParsedMirrorArgs {
   const flag = (name: string) => argv.includes(`--${name}`);
@@ -93,7 +107,7 @@ async function readState(stateFile: string): Promise<MirrorState> {
 
 async function writeState(stateFile: string, state: MirrorState): Promise<void> {
   await mkdir(path.dirname(stateFile), { recursive: true });
-  const temporary = `${stateFile}.tmp`;
+  const temporary = `${stateFile}.${randomUUID()}.tmp`;
   await writeFile(temporary, JSON.stringify(state, null, 2));
   await rename(temporary, stateFile);
 }
@@ -199,12 +213,15 @@ export async function runMediaMirrorCli(argv: readonly string[], env: Readonly<R
   const stateFile = path.join(path.resolve(uploadRoot), '.media-mirror', 'state.json');
   const log = (line: string) => console.log(line);
   console.log(parsed.apply ? 'Migration des médias vers le seau : APPLIQUÉE' : 'Migration des médias vers le seau : À BLANC (aucune écriture)');
-  try {
+  const mirror = stores.mirror;
+  const pass = async (renew: () => Promise<void>): Promise<number> => {
     const sources = mediaMirrorSources(prisma);
-    const run = (startAfter?: string) =>
-      runMediaMirror({ sources, local: stores.local, mirror: stores.mirror, uploadRoot, stateFile, options: parsed, log, ...(startAfter === undefined ? {} : { startAfter }) });
+    const run = async (startAfter?: string) => {
+      await renew();
+      return runMediaMirror({ sources, local: stores.local, mirror, uploadRoot, stateFile, options: parsed, log, ...(startAfter === undefined ? {} : { startAfter }) });
+    };
     const reports = await run();
-    const sweep = parsed.sweep ? await sweepOnce(sources, stores.mirror, uploadRoot, { apply: parsed.apply, allowMassRemoval: parsed.allowMassRemoval }, log) : null;
+    const sweep = parsed.sweep ? await sweepOnce(sources, mirror, uploadRoot, { apply: parsed.apply, allowMassRemoval: parsed.allowMassRemoval }, log) : null;
     if (sweep?.kind === 'refused') return 2;
     if (!parsed.follow) return failedCount(reports) > 0 || (sweep?.kind === 'swept' && sweep.counts.failed > 0) ? 4 : 0;
     const intervalMs = Number(env.MEDIA_MIRROR_INTERVAL_MS) > 0 ? Number(env.MEDIA_MIRROR_INTERVAL_MS) : 60_000;
@@ -213,6 +230,23 @@ export async function runMediaMirrorCli(argv: readonly string[], env: Readonly<R
       await run();
       await run(objectIdAtOrAfter(new Date(Date.now() - FOLLOW_WINDOW_MS)));
     }
+  };
+  try {
+    if (!parsed.apply) return await pass(async () => undefined);
+    const locked = await withMirrorLock({ file: mirrorLockFile(uploadRoot), owner: `cli:${process.pid}`, ttlMs: MIRROR_LOCK_TTL_MS }, async (renew) => {
+      const heartbeat = setInterval(() => void renew().catch(() => undefined), MIRROR_LOCK_TTL_MS / 3);
+      heartbeat.unref();
+      try {
+        return await pass(renew);
+      } finally {
+        clearInterval(heartbeat);
+      }
+    });
+    if (locked.kind === 'busy') {
+      console.error(`Refusé : un autre passage du miroir tourne déjà sur ce volume (${locked.holder}).`);
+      return 2;
+    }
+    return locked.value;
   } finally {
     await prisma.$disconnect();
   }
