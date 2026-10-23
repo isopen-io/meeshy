@@ -68,6 +68,7 @@ class FeedViewModelTest {
     }
 
     private val repository: PostRepository = mockk(relaxed = true)
+    private val engagement: me.meeshy.sdk.post.FeedEngagementRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val feedMediaUploader: FeedMediaUploader = mockk(relaxed = true)
@@ -104,7 +105,7 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement)
     }
 
     @Test
@@ -452,7 +453,7 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement)
     }
 
     @Test
