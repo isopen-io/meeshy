@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
+import me.meeshy.app.navigation.ProvideRootSplash
 import me.meeshy.app.push.MeeshyFcmService
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
@@ -77,12 +78,14 @@ class MainActivity : ComponentActivity() {
             val languageCode by languageViewModel.languageCode.collectAsStateWithLifecycle()
             LocalizedContent(languageCode = languageCode) {
                 MeeshyTheme(darkTheme = themeMode.resolveDarkMode(isSystemInDarkTheme())) {
-                    MeeshyApp(
-                        floatingButtonPositions = floatingButtonPositions,
-                        sessionExpiry = sessionExpiry,
-                        launchRoute = launchRoute,
-                        onLaunchRouteConsumed = { launchRoute = null },
-                    )
+                    ProvideRootSplash {
+                        MeeshyApp(
+                            floatingButtonPositions = floatingButtonPositions,
+                            sessionExpiry = sessionExpiry,
+                            launchRoute = launchRoute,
+                            onLaunchRouteConsumed = { launchRoute = null },
+                        )
+                    }
                 }
             }
         }

@@ -144,7 +144,7 @@ fun MeeshyApp(
             // insets, ce qui laisse le fond de marque plein ecran (edge-to-edge).
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize().rootPresentationContent()) {
                 ProvideAppLocals(extensions.localsProviders) {
                     NavHost(
                         navController = navController,
@@ -206,6 +206,8 @@ fun MeeshyApp(
         )
 
         AppOverlayStack(extensions.overlays, navController)
+
+        ArrivalCelebrationHost()
 
         SplashOverlay()
     }
