@@ -11,7 +11,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, afterEach } from '@jest/globals';
-import { promises as fs } from 'fs';
+import { promises as fs, readFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
@@ -134,5 +134,36 @@ describe('ce qui voyage AVEC une pièce porte aussi ses variantes AVIF (#11262)'
   it('le transfert recopie les variantes AVIF avec les octets qu’il partage', () => {
     const copy = copiedAttachmentFields({ fileName: 'p.jpg', originalName: 'p.jpg', mimeType: 'image/jpeg', fileSize: 1, filePath: '2026/10/u/p.jpg', fileUrl: '2026/10/u/p.jpg', avifVariants } as never);
     expect(copy.avifVariants).toEqual(avifVariants);
+  });
+});
+
+describe('createAvifVariants — une photo HDR garde son HDR en AVIF (#12290)', () => {
+  const HDR = readFileSync(path.join(__dirname, 'fixtures', 'gain-map', 'apple-gain-map-xmp-headroom.jpg'));
+
+  /** La boîte `colr`/`nclx` d'un HEIF : primaires, transfert, matrice (CICP). */
+  function nclx(avif: Buffer): readonly number[] | null {
+    const at = avif.indexOf(Buffer.from('colrnclx', 'latin1'));
+    return at === -1 ? null : [avif.readUInt16BE(at + 8), avif.readUInt16BE(at + 10), avif.readUInt16BE(at + 12)];
+  }
+
+  it('une source à carte de gain rend des AVIF 10 bits BT.2100 PQ (CICP 9/16/9), jamais un AVIF SDR', async () => {
+    const variants = await createAvifVariants(HDR, { widths: [256] });
+
+    expect(variants).toHaveLength(1);
+    expect(nclx(variants[0].buffer)).toEqual([9, 16, 9]);
+    expect((await sharp(variants[0].buffer).metadata()).bitsPerSample).toBe(10);
+  });
+
+  it('ses hautes lumières dépassent le blanc SDR (203 cd/m² en PQ) : l’effet HDR survit', async () => {
+    const [variant] = await createAvifVariants(HDR, { widths: [256] });
+    const pixels = await sharp(variant.buffer).toColourspace('rgb16').raw().toBuffer();
+    const codes = new Uint16Array(pixels.buffer, pixels.byteOffset, pixels.length / 2);
+    const sdrWhite = 0.5807 * 65535;
+
+    expect(Math.max(...codes)).toBeGreaterThan(sdrWhite * 1.1);
+  });
+
+  it('sans encodeur HDR, AUCUN AVIF n’est servi pour une source HDR (jamais un AVIF délavé)', async () => {
+    expect(await createAvifVariants(HDR, { widths: [256], encodeHdr: async () => null })).toEqual([]);
   });
 });
