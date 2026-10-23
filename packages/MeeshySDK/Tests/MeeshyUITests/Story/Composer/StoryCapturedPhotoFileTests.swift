@@ -35,7 +35,8 @@ final class StoryCapturedPhotoFileTests: XCTestCase {
         let image = Self.image()
         let octets = try XCTUnwrap(image.jpegData(compressionQuality: 0.9))
 
-        let placed = try XCTUnwrap(await StoryCapturedPhotoFile.place(image, data: octets, objectId: UUID().uuidString))
+        let place = await StoryCapturedPhotoFile.place(image, data: octets, objectId: UUID().uuidString)
+        let placed = try XCTUnwrap(place)
         defer { try? FileManager.default.removeItem(at: placed.url) }
 
         XCTAssertEqual(placed.url.pathExtension, "jpg")
@@ -44,7 +45,8 @@ final class StoryCapturedPhotoFileTests: XCTestCase {
 
     @MainActor
     func test_place_withoutBytes_encodesTheDecodedImageOnce() async throws {
-        let placed = try XCTUnwrap(await StoryCapturedPhotoFile.place(Self.image(), data: nil, objectId: UUID().uuidString))
+        let place = await StoryCapturedPhotoFile.place(Self.image(), data: nil, objectId: UUID().uuidString)
+        let placed = try XCTUnwrap(place)
         defer { try? FileManager.default.removeItem(at: placed.url) }
 
         XCTAssertEqual(placed.url.pathExtension, "jpg")
