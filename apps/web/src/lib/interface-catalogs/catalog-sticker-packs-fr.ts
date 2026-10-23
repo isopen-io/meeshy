@@ -76,6 +76,7 @@ const frStickerPacks = {
   'packs.domain.avatar-ring': "Contours d’avatar",
   'packs.domain.banner': "Bannières",
   'packs.domain.banner-frame': "Cadres de bannière",
+  'packs.domain.lens': "Lens",
   'packs.domain.capture-frame': "Cadres de capture",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Possédé",

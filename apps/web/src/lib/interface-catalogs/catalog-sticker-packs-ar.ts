@@ -73,6 +73,7 @@ const arStickerPacks = {
   'packs.domain.avatar-ring': "حلقات الصورة الرمزية",
   'packs.domain.banner': "اللافتات",
   'packs.domain.banner-frame': "إطارات اللافتة",
+  'packs.domain.lens': "العدسات",
   'packs.domain.capture-frame': "إطارات الالتقاط",
   'packs.price': "{price} ميشيز",
   'packs.owned': "مملوك",
