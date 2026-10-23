@@ -1,5 +1,7 @@
 package me.meeshy.sdk.net.api
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.DiscoverabilityPrecision
@@ -63,14 +65,21 @@ data class CreatePostRequest(
 typealias MobileTranscriptionPayload = me.meeshy.sdk.model.MobileTranscriptionPayload
 typealias MobileTranscriptionSegment = me.meeshy.sdk.model.MobileTranscriptionSegment
 
-/** Create a story — port of CreateStoryRequest (ServiceModels.swift). */
+/**
+ * Create a story — port of CreateStoryRequest (ServiceModels.swift).
+ *
+ * [type] et [visibility] partent TOUJOURS (#4754) : `MeeshyApi.json` n'encode pas les
+ * valeurs par défaut, et la passerelle pose `type = POST` sur un corps qui n'en porte
+ * pas — la story devenait un post public permanent, sans expiration ni anneau.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CreateStoryRequest(
-    val type: String = "STORY",
+    @EncodeDefault val type: String = "STORY",
     val content: String? = null,
     @Serializable(with = StoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
-    val visibility: String = "PUBLIC",
+    @EncodeDefault val visibility: String = "PUBLIC",
     val originalLanguage: String? = null,
     val mediaIds: List<String>? = null,
     val repostOfId: String? = null,

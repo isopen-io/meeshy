@@ -346,7 +346,7 @@
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryExporter.swift::StoryExporter.composeBackgroundVideoAudio": 86,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryExporter.swift::StoryExporter.export": 300,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderRepresentable.swift::StoryReaderRepresentable.makeUIView": 124,
-    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift::StoryRenderer.render": 233,
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift::StoryRenderer.render": 222,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift::StoryRenderer.renderItem": 81,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/ComposerBottomBand.swift::ComposerBottomBand.body": 88,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/ComposerControlsLayer.swift::ComposerControlsLayer.body": 262,

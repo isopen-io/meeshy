@@ -62,7 +62,10 @@
     <string name="stories_translated">Traducción disponible</string>
     <string name="stories_viewer_close">Cerrar</string>
     <string name="stories_viewer_next">Historia siguiente</string>
+    <string name="stories_viewer_not_found_description">No se pudo cargar esta story. Reinténtalo o cierra.</string>
+    <string name="stories_viewer_not_found_title">Story no encontrada</string>
     <string name="stories_viewer_previous">Historia anterior</string>
+    <string name="stories_viewer_retry">Reintentar</string>
     <plurals name="stories_viewers_count">
         <item quantity="one">%d vista</item>
         <item quantity="many">%d vistas</item>
