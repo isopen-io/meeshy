@@ -70,8 +70,14 @@
     <string name="login_signup_prompt">No account?</string>
     <string name="login_username_label">Username</string>
     <string name="logout_in_progress">Logging out...</string>
+    <string name="onboarding_friends_badge">+%d each</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d sparks to reach level 1</string>
     <string name="onboarding_gauge_reached">Level 1 reached 🎉</string>
+    <string name="onboarding_global_sample_1">Hi from São Paulo 👋</string>
+    <string name="onboarding_global_sample_2">Who\'s into Nova Club? 🎧</string>
+    <string name="onboarding_global_sample_3">Welcome!</string>
+    <string name="onboarding_languages_demo_translated">Hi, how are you?</string>
+    <string name="onboarding_notifications_sample">Lina replied to you in Meeshy Global</string>
     <plurals name="onboarding_points_a11y">
         <item quantity="one">%d spark earned</item>
         <item quantity="other">%d sparks earned</item>
@@ -86,6 +92,7 @@
         <item quantity="other">Plus %d sparks</item>
     </plurals>
     <string name="onboarding_skipAll">Skip all</string>
+    <string name="onboarding_story_badge">24h</string>
     <string name="registration_back">Back</string>
     <string name="session_closed_continue">Sign in again</string>
     <string name="session_closed_signed_out_message">This session was closed. Sign in again to continue.</string>

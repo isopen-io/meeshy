@@ -70,8 +70,14 @@
     <string name="login_signup_prompt">Pas de compte ?</string>
     <string name="login_username_label">Pseudo</string>
     <string name="logout_in_progress">Déconnexion en cours...</string>
+    <string name="onboarding_friends_badge">+%d chacun</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d étincelles pour ton niveau 1</string>
     <string name="onboarding_gauge_reached">Niveau 1 atteint 🎉</string>
+    <string name="onboarding_global_sample_1">Salut de São Paulo 👋</string>
+    <string name="onboarding_global_sample_2">Qui écoute Nova Club ? 🎧</string>
+    <string name="onboarding_global_sample_3">Bienvenue à toi !</string>
+    <string name="onboarding_languages_demo_translated">Salut, ça va ?</string>
+    <string name="onboarding_notifications_sample">Lina t\'a répondu dans Meeshy Global</string>
     <plurals name="onboarding_points_a11y">
         <item quantity="one">%d étincelle gagnée</item>
         <item quantity="many">%d étincelles gagnées</item>
@@ -89,6 +95,7 @@
         <item quantity="other">Plus %d étincelles</item>
     </plurals>
     <string name="onboarding_skipAll">Passer tout</string>
+    <string name="onboarding_story_badge">24 h</string>
     <string name="registration_back">Retour</string>
     <string name="session_closed_continue">Se reconnecter</string>
     <string name="session_closed_signed_out_message">Cette session a été fermée. Reconnectez-vous pour continuer.</string>

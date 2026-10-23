@@ -70,8 +70,14 @@
     <string name="login_signup_prompt">Não tem conta?</string>
     <string name="login_username_label">Usuário</string>
     <string name="logout_in_progress">Saindo...</string>
+    <string name="onboarding_friends_badge">+%d cada</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d faíscas para o seu nível 1</string>
     <string name="onboarding_gauge_reached">Nível 1 alcançado 🎉</string>
+    <string name="onboarding_global_sample_1">Oi de São Paulo 👋</string>
+    <string name="onboarding_global_sample_2">Quem curte Nova Club? 🎧</string>
+    <string name="onboarding_global_sample_3">Boas-vindas!</string>
+    <string name="onboarding_languages_demo_translated">Oi, tudo bem?</string>
+    <string name="onboarding_notifications_sample">Lina te respondeu no Meeshy Global</string>
     <plurals name="onboarding_points_a11y">
         <item quantity="one">%d faísca ganha</item>
         <item quantity="many">%d faíscas ganhas</item>
@@ -89,6 +95,7 @@
         <item quantity="other">Mais %d faíscas</item>
     </plurals>
     <string name="onboarding_skipAll">Pular tudo</string>
+    <string name="onboarding_story_badge">24 h</string>
     <string name="registration_back">Voltar</string>
     <string name="session_closed_continue">Entrar novamente</string>
     <string name="session_closed_signed_out_message">Esta sessão foi encerrada. Entre novamente para continuar.</string>
