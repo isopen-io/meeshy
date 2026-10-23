@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import type { MessageRequest } from '@meeshy/shared/types/messaging';
+import {
+  E2EE_SEND_SHAPE,
+  LIBSIGNAL_PROTOCOL,
+  e2eeDeviceIdSchema,
+  type E2EEEnvelope,
+  type E2EERelayRequest,
+} from '@meeshy/shared/types/e2ee-directory';
 
 /**
  * L'enveloppe de chiffrement d'un envoi de message, déclarée UNE fois pour les
@@ -75,6 +82,11 @@ export const ENCRYPTION_ENVELOPE_SHAPE = {
     )
     .optional(),
   isEncrypted: z.boolean().optional(),
+  /**
+   * Envoi libsignal (#3706) : une enveloppe opaque par appareil destinataire.
+   * Déclaré dans `@meeshy/shared/types/e2ee-directory` (`E2EE_SEND_SHAPE`).
+   */
+  ...E2EE_SEND_SHAPE,
 } as const;
 
 /**
@@ -97,6 +109,48 @@ export const NO_SILENT_DOWNGRADE_ISSUE: { message: string; path: PropertyKey[] }
   path: ['encryptedContent'],
 };
 
+type LibsignalSendFields = {
+  encryptionProtocol?: typeof LIBSIGNAL_PROTOCOL;
+  envelopes?: readonly E2EEEnvelope[];
+  unapprovedOwnDevices?: readonly number[];
+  encryptionMetadata?: Record<string, unknown>;
+};
+
+const senderDeviceIdOf = (metadata: Record<string, unknown> | undefined): number | undefined => {
+  const parsed = e2eeDeviceIdSchema.safeParse(metadata?.senderDeviceId);
+  return parsed.success ? parsed.data : undefined;
+};
+
+/**
+ * Un envoi libsignal est COMPLET ou refusé : le protocole, ses enveloppes et
+ * l'appareil émetteur voyagent ensemble. Des enveloppes sans protocole, ou un
+ * protocole sans enveloppe, seraient lus par la passerelle comme un chiffré à
+ * l'ancienne — jamais distribué à aucun appareil.
+ */
+export const libsignalSendComplete = (data: LibsignalSendFields): boolean => {
+  const declared = data.encryptionProtocol === LIBSIGNAL_PROTOCOL;
+  if (!declared) return data.envelopes === undefined && data.unapprovedOwnDevices === undefined;
+  return (data.envelopes?.length ?? 0) > 0 && senderDeviceIdOf(data.encryptionMetadata) !== undefined;
+};
+
+export const LIBSIGNAL_SEND_ISSUE: { message: string; path: PropertyKey[] } = {
+  message:
+    "un envoi libsignal-v1 porte ses enveloppes et encryptionMetadata.senderDeviceId, et des enveloppes n'existent qu'avec encryptionProtocol libsignal-v1",
+  path: ['envelopes'],
+};
+
+const relayOf = (envelope: LibsignalSendFields, sessionId: string | null): E2EERelayRequest | undefined => {
+  const senderDeviceId = senderDeviceIdOf(envelope.encryptionMetadata);
+  if (envelope.encryptionProtocol !== LIBSIGNAL_PROTOCOL || !envelope.envelopes || senderDeviceId === undefined) return undefined;
+  return {
+    protocol: LIBSIGNAL_PROTOCOL,
+    senderDeviceId,
+    envelopes: envelope.envelopes,
+    unapprovedOwnDevices: envelope.unapprovedOwnDevices ?? [],
+    sessionId,
+  };
+};
+
 /**
  * Recompose l'enveloppe du FIL en la charge que `MessagingService` consomme.
  *
@@ -110,17 +164,25 @@ export const NO_SILENT_DOWNGRADE_ISSUE: { message: string; path: PropertyKey[] }
  * `MessagingService` ne teste que la PRÉSENCE de `encryptedPayload` pour décider
  * d'écrire `encryptedContent` et `encryptionMetadata`, si bien qu'une enveloppe
  * vide mais présente marquerait chiffré un message qui ne l'est pas.
+ *
+ * Un envoi libsignal (#3706) y ajoute `relay` — ses enveloppes, l'appareil
+ * émetteur et la session de l'appelant — que `MessagingService` RETIRE avant
+ * de persister la charge : les enveloppes vont dans `MessageEnvelope`.
  */
-export function toEncryptedPayload(envelope: {
-  encryptedContent?: string;
-  encryptionMode?: 'e2ee' | 'server' | 'hybrid';
-  encryptionMetadata?: Record<string, unknown>;
-}): MessageRequest['encryptedPayload'] | undefined {
+export function toEncryptedPayload(
+  envelope: {
+    encryptedContent?: string;
+    encryptionMode?: 'e2ee' | 'server' | 'hybrid';
+  } & LibsignalSendFields,
+  caller: { readonly sessionId?: string | null } = {},
+): MessageRequest['encryptedPayload'] | undefined {
   if (!envelope.encryptedContent) return undefined;
 
+  const relay = relayOf(envelope, caller.sessionId ?? null);
   return {
     ciphertext: envelope.encryptedContent,
     mode: envelope.encryptionMode ?? 'e2ee',
     ...envelope.encryptionMetadata,
+    ...(relay ? { relay } : {}),
   } as unknown as MessageRequest['encryptedPayload'];
 }

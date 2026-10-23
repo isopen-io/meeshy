@@ -18,6 +18,7 @@ import { GameMissionWindowJob } from './game-mission-window';
 import { GamePhotoMomentsJob } from './game-photo-moments';
 import { BackupStatusCheckJob } from './backup-status-check';
 import { MediaMirrorFollowJob, processMediaMirrorFollowJob } from './media-mirror-follow';
+import { createE2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -62,6 +63,8 @@ export class BackgroundJobsManager {
   private geoCacheInterval: NodeJS.Timeout | null = null;
   /** La conservation (#9614, #9642) : une passe par jour, sans état propre. */
   private retentionInterval: NodeJS.Timeout | null = null;
+  /** Les enveloppes E2EE jamais accusées s'effacent à 30 jours (#3706) : une requête, sans état. */
+  private envelopeSweepInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
 
   private prismaClient: PrismaClient;
@@ -125,6 +128,14 @@ export class BackgroundJobsManager {
     balayerLesSessions();
     this.sessionSweepInterval = guardedInterval({ name: 'session-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesSessions });
     this.sessionSweepInterval.unref();
+
+    const balayerLesEnveloppes = () => {
+      createE2EEEnvelopeRelay({ prisma: this.prismaClient }).sweep()
+        .then((n) => { if (n > 0) logger.info(`${n} unacknowledged e2ee envelope(s) swept after 30 days`); })
+        .catch((err) => logger.error('E2EE envelope sweep failed', err));
+    };
+    this.envelopeSweepInterval = guardedInterval({ name: 'e2ee-envelope-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesEnveloppes });
+    this.envelopeSweepInterval.unref();
 
     /* LE CACHE GEOIP SE LIBÈRE (#9239). Ses entrées expirées n'étaient
        qu'IGNORÉES à la lecture : la table, indexée par l'IP du client,
@@ -215,6 +226,11 @@ export class BackgroundJobsManager {
     if (this.sessionSweepInterval) {
       clearInterval(this.sessionSweepInterval);
       this.sessionSweepInterval = null;
+    }
+
+    if (this.envelopeSweepInterval) {
+      clearInterval(this.envelopeSweepInterval);
+      this.envelopeSweepInterval = null;
     }
 
     if (this.geoCacheInterval) {

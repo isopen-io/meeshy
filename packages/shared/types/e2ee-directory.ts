@@ -7,7 +7,9 @@
  *
  * Tout ce qui voyage ici est PUBLIC (clés publiques, signatures XEdDSA) ou
  * OPAQUE (enveloppes libsignal). Aucun schéma de ce fichier n'accepte une clé
- * privée : un champ inconnu est retiré par Zod, jamais stocké.
+ * privée : un champ dont le NOM évoque une clé privée (`containsPrivateKeyField`)
+ * fait refuser la requête entière ; tout autre champ inconnu est retiré par Zod,
+ * pour qu'un client plus récent reste compris d'une passerelle plus ancienne.
  */
 import { z } from 'zod';
 
@@ -49,6 +51,15 @@ export type E2EEErrorCode = (typeof E2EE_ERROR_CODES)[keyof typeof E2EE_ERROR_CO
 /** Le texte lisible servi à un client qui ne parle pas libsignal (#9223 : rien ne se perd en silence). */
 export const E2EE_CLIENT_OUTDATED_MESSAGE =
   'Cette conversation est chiffrée de bout en bout : mettez à jour Meeshy pour y écrire';
+
+const PRIVATE_KEY_FIELD = /private|secret|privkey|seed/i;
+
+/** Vrai si un champ, à n'importe quelle profondeur, porte un nom de clé privée. */
+export function containsPrivateKeyField(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsPrivateKeyField);
+  if (typeof value !== 'object' || value === null) return false;
+  return Object.entries(value).some(([key, inner]) => PRIVATE_KEY_FIELD.test(key) || containsPrivateKeyField(inner));
+}
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
