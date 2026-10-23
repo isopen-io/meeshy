@@ -66,6 +66,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             timestamps = galleryTimestamps,
             thumbnailUrls = gallery.thumbnailUrls,
             altTexts = gallery.altTexts,
+            exportable = gallery.exportable,
             onImageSaved = { result ->
                 val message = if (result.isSuccess) savedMessage else saveFailedMessage
                 Toast.makeText(galleryContext, message, Toast.LENGTH_SHORT).show()

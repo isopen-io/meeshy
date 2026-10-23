@@ -19,8 +19,8 @@ internal fun NavGraphBuilder.callNavGraph(
 ) {
     composable(Routes.CALLS) {
         CallHistoryScreen(
-            onOpenCall = { record ->
-                navController.navigate(CallRoute.redial(record))
+            onRedial = { record, isVideo ->
+                navController.navigate(CallRoute.redial(record, isVideo))
             },
         )
     }
@@ -53,7 +53,7 @@ internal fun NavGraphBuilder.callNavGraph(
             // CALL entry (inclusive) so the back stack never accumulates stale
             // call screens that a Back press could re-enter (and re-initiate).
             onMinimize = {
-                navController.navigate(Routes.chat(callViewModel.activeConfig.conversationId)) {
+                navController.navigate(CallRoute.minimize(callViewModel.activeConfig.conversationId)) {
                     popUpTo(CallRoute.PATTERN) { inclusive = true }
                     launchSingleTop = true
                 }

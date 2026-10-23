@@ -1,4 +1,5 @@
 import { usePlaybackTelemetry } from '@/lib/telemetry/playback-session';
+import { useRememberSeenMedia } from '@/lib/media/use-remember-seen-media';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -147,6 +148,10 @@ function ReelPlayable({
   const bar = useRef<HTMLSpanElement | null>(null);
   useFrameProgress({ media: element, playing: status === 'playing', bar });
   usePlaybackTelemetry({ element, active, target: { kind: 'reel', id: postId }, mediaId: media.id, surface: 'reels' });
+  /* VU, DONC RELISIBLE HORS LIGNE (#11326) — un réel n'est jamais une vue
+     unique ni un éphémère : la loi du seau « récents » décide du reste
+     (Wi-Fi, budget, ce que la passerelle déclare). */
+  useRememberSeenMedia({ element, src: media.src, protection: 'none', active: active && !held });
 
   return (
     <>

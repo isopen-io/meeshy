@@ -33,6 +33,7 @@ const FICHIERS_CONFORMES = [
   'dist-capacitor/index.html',
   'dist-capacitor/assets/index-abc.js',
   'dist-capacitor/assets/index-abc.css',
+  'dist-capacitor/sw-recent-media.js',
   ...INSTITUTIONAL_ROUTES.map((route) => `dist-capacitor/${route}/index.html`),
 ];
 
@@ -52,6 +53,21 @@ describe('auditShellDist — les quatre clauses du contrat de la variante B', ()
     const violations = auditShellDist(CONFORME, [...FICHIERS_CONFORMES, 'dist-capacitor/sw.js']);
     expect(violations.length).toBe(1);
     expect(violations[0].includes('service worker')).toBe(true);
+  });
+
+  test('le SEUL worker admis est celui des médias récents (#11326) — il ne touche pas au bundle', () => {
+    const violations = auditShellDist(CONFORME, [...FICHIERS_CONFORMES, 'dist-capacitor/sw-push.js']);
+    expect(violations.length).toBe(1);
+    expect(violations[0].includes('sw-push.js')).toBe(true);
+  });
+
+  test('sans le worker des médias récents, un média vu ne se relit pas hors ligne dans la coque (#11326)', () => {
+    const violations = auditShellDist(
+      CONFORME,
+      FICHIERS_CONFORMES.filter((file) => !file.endsWith('sw-recent-media.js')),
+    );
+    expect(violations.length).toBe(1);
+    expect(violations[0].includes('sw-recent-media.js')).toBe(true);
   });
 
   test('viewport-fit=cover absent est refusé — la safe-area ne serait pas exposée', () => {

@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -104,6 +105,13 @@ fun CallScreen(
 
     CallImmersiveEffect()
     CallStatusAnnouncer(state.status)
+    BackHandler {
+        when (CallPillPresenter.backAction(state.status)) {
+            CallBackAction.Inert -> Unit
+            CallBackAction.Minimize -> onMinimize()
+            CallBackAction.Close -> close()
+        }
+    }
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.

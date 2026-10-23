@@ -39,6 +39,7 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
 
     // Re-probe the server for a still-active call each time the screen resumes
     // (returning from the call itself, an app relaunch mid-call) so the
@@ -66,6 +67,7 @@ fun ChatScreen(
             onRejoinCall = onRejoinCall,
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
+            callEntry = callEntry,
         ),
     )
 

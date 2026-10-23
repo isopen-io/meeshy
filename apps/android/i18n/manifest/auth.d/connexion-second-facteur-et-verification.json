@@ -26,7 +26,11 @@
         {"catalog": "app", "iosKey": "emailVerification.error.invalidCode", "status": "adopted", "androidName": "email_verification_error_invalid_code"},
         {"catalog": "app", "iosKey": "emailVerification.error.expiredCode", "status": "adopted", "androidName": "email_verification_error_expired_code"},
         {"catalog": "app", "iosKey": "emailVerification.error.generic", "status": "adopted", "androidName": "email_verification_error_generic"},
-        {"catalog": "app", "iosKey": "emailVerification.error.resendFailed", "status": "adopted", "androidName": "email_verification_error_resend_failed"}
+        {"catalog": "app", "iosKey": "emailVerification.error.resendFailed", "status": "adopted", "androidName": "email_verification_error_resend_failed"},
+        {"catalog": "app", "iosKey": "settings.logout.inprogress", "androidName": "logout_in_progress", "status": "adopted"},
+        {"catalog": "app", "iosKey": "sessionClosed.signedOut.title", "androidName": "session_closed_signed_out_title", "status": "adopted"},
+        {"catalog": "app", "iosKey": "sessionClosed.signedOut.message", "androidName": "session_closed_signed_out_message", "status": "adopted"},
+        {"catalog": "app", "iosKey": "sessionClosed.continue", "androidName": "session_closed_continue", "status": "adopted"}
       ]
     }
   }

@@ -55,4 +55,15 @@
     <string name="time_lastSeen_online">En ligne</string>
     <string name="time_lastSeen_seen">Vu %s</string>
     <string name="time_lastSeen_yesterdayAt">Vu hier à %s</string>
+    <string name="viewer_caption_see_less">voir moins</string>
+    <string name="viewer_caption_see_less_hint">Replie la légende</string>
+    <string name="viewer_caption_see_more">voir plus</string>
+    <string name="viewer_caption_see_more_hint">Affiche la légende entière</string>
+    <string name="viewer_media_unavailable">Ce média n\'est plus disponible</string>
+    <string name="viewer_more">Plus</string>
+    <string name="viewer_position">Média %1$d sur %2$d</string>
+    <string name="viewer_retry">Réessayer</string>
+    <string name="viewer_save">Enregistrer</string>
+    <string name="viewer_saving">Enregistrement…</string>
+    <string name="viewer_share_outside">Partager hors de Meeshy</string>
 </resources>
