@@ -12,9 +12,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.flow.StateFlow
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.composer.PendingAttachmentsState
 import me.meeshy.sdk.model.report.ReportReason
 
@@ -28,6 +30,8 @@ internal class ChatNavigationActions(
     val onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit,
     val onCreateShareLink: () -> Unit,
     val hasLocalLiveCall: Boolean,
+    /** [ChatViewModel.callEntry]: which call buttons the header may show. */
+    val callEntry: HeaderCallEntry? = null,
 )
 
 /**
@@ -52,6 +56,7 @@ internal class ChatSheetVisibility {
 @Stable
 internal class ChatHostContext(
     val state: ChatUiState,
+    val composerText: StateFlow<ComposerTextState>,
     val pending: PendingAttachmentsState,
     val accentColor: Color,
     val actions: ChatHostActions,
@@ -63,6 +68,7 @@ internal class ChatHostContext(
 @Composable
 internal fun rememberChatHostContext(
     state: ChatUiState,
+    composerText: StateFlow<ComposerTextState>,
     pending: PendingAttachmentsState,
     accentColor: Color,
     actions: ChatHostActions,
@@ -72,7 +78,7 @@ internal fun rememberChatHostContext(
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    return ChatHostContext(state, pending, accentColor, actions, navigation, sheets, bubbleFrames)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -127,6 +133,9 @@ internal class ChatHostActions(
     val selectReportReason: (ReportReason) -> Unit,
     val onReportDetailsChange: (String) -> Unit,
     val submitReport: () -> Unit,
+    val confirmReportSubmit: () -> Unit,
+    val cancelReportConfirmation: () -> Unit,
+    val addReactionFromDetails: (String, String) -> Unit,
     val dismissReport: () -> Unit,
     val onExplorerRetranslate: (String, String) -> Unit,
     val dismissLanguageExplorer: () -> Unit,
@@ -203,6 +212,9 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     selectReportReason = this::selectReportReason,
     onReportDetailsChange = this::onReportDetailsChange,
     submitReport = this::submitReport,
+    confirmReportSubmit = this::confirmReportSubmit,
+    cancelReportConfirmation = this::cancelReportConfirmation,
+    addReactionFromDetails = this::addReactionFromDetails,
     dismissReport = this::dismissReport,
     onExplorerRetranslate = this::onExplorerRetranslate,
     dismissLanguageExplorer = this::dismissLanguageExplorer,

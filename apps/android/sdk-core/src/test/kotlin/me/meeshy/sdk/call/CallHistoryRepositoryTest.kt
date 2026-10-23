@@ -7,12 +7,14 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.call.CallHistoryPeer
 import me.meeshy.sdk.model.call.CallRecord
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CallHistoryApi
@@ -22,6 +24,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.IOException
+import me.meeshy.core.database.entity.CallHistoryEntity
+import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.model.call.CallJournalFilter
+import me.meeshy.sdk.model.call.CallJournalQuery
+import me.meeshy.sdk.model.call.CallJournalType
+import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.model.call.CallHistoryClearResult
+import me.meeshy.sdk.model.call.CallHistoryHideResult
 
 @RunWith(RobolectricTestRunner::class)
 class CallHistoryRepositoryTest {
@@ -42,11 +52,27 @@ class CallHistoryRepositoryTest {
         db.close()
     }
 
-    private fun repository() =
-        CallHistoryRepository(api, db, db.callHistoryDao(), db.syncMetaDao())
+    private val clock = object : CacheClock {
+        override fun nowMillis(): Long = NOW
+    }
+
+    private fun repository() = repository(api)
 
     private fun repository(api: CallHistoryApi) =
-        CallHistoryRepository(api, db, db.callHistoryDao(), db.syncMetaDao())
+        CallHistoryRepository(api, db, db.callHistoryDao(), db.syncMetaDao(), clock)
+
+    private suspend fun seed(ids: List<String>, startedAt: (Int) -> Long) {
+        db.callHistoryDao().upsertAll(
+            ids.mapIndexed { i, id ->
+                CallHistoryEntity(
+                    callId = id,
+                    payload = MeeshyApi.json.encodeToString(record(id)),
+                    startedAt = startedAt(i),
+                    cachedAt = NOW,
+                )
+            },
+        )
+    }
 
     private fun stubHistory(vararg records: CallRecord) {
         coEvery { api.history(any(), any(), any()) } returns
@@ -189,100 +215,57 @@ class CallHistoryRepositoryTest {
         assertThat(repository().fetchPage()).isInstanceOf(NetworkResult.Failure::class.java)
     }
 
-    /**
-     * #5190 — same bug as #5186, on the call journal: the pre-fix `revalidate()`
-     * called `callHistoryApi.history(null, HISTORY_PAGE_SIZE=30, null)` for a
-     * SINGLE page, then `deleteNotIn`'d against it — any account with more than
-     * 30 terminal calls in the 3-month window lost the rest on every
-     * revalidation. 245 calls are seeded directly into Room; `refresh()` runs
-     * against a server that still serves all 245 — spanning several cursor
-     * pages, since [PagedCallHistoryApi] answers `GET /calls/history` exactly
-     * like the gateway. None of the 245 should be pruned.
-     */
     @Test
-    fun `refresh does not drop cached calls that live beyond the first page`() = runTest {
-        val total = 245
-        db.callHistoryDao().upsertAll(
-            (0 until total).map { i ->
-                me.meeshy.core.database.entity.CallHistoryEntity(
-                    callId = "c$i",
-                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(record("c$i")),
-                    startedAt = i.toLong(),
-                    cachedAt = i.toLong(),
-                )
-            },
-        )
-        val repo = repository(PagedCallHistoryApi(totalCalls = total))
+    fun `refresh costs ONE request and keeps the cached tail older than the fresh page`() = runTest {
+        val older = (0 until 245).map { "old$it" }
+        seed(older) { OLDEST + it * 1_000L }
+        val paged = PagedCallHistoryApi(totalCalls = 120)
+        val repo = repository(paged)
 
         repo.refresh()
 
-        val cachedIds = db.callHistoryDao().observeAll().first().map { it.callId }.toSet()
-        assertThat(cachedIds).containsExactlyElementsIn((0 until total).map { "c$it" })
+        assertThat(paged.requests).isEqualTo(1)
+        val cached = db.callHistoryDao().observeAll().first().map { it.callId }.toSet()
+        assertThat(cached).containsAtLeastElementsIn(older)
+        assertThat(cached).containsAtLeastElementsIn((0 until 50).map { "c$it" })
+        assertThat(cached).doesNotContain("c50")
     }
 
-    /**
-     * Same scale proof as `ConversationRepositoryTest`'s #5186 hardening witness
-     * (note de revue on #5186's review thread, 2026-09-05): a completed sweep can
-     * legitimately be LARGER than SQLite's per-statement bound-variable ceiling
-     * (`SQLITE_MAX_VARIABLE_NUMBER` = 999 on Android API 26-29, the floor
-     * `minSdk = 26` must hold under) — the 3-month server window bounds the
-     * journal for the overwhelming majority of accounts, but does not CAP it. A
-     * naive `DELETE ... WHERE callId NOT IN (:keptIds)` binds one variable per
-     * kept id and would throw "too many SQL variables" on device at exactly this
-     * scale.
-     *
-     * 1 200 calls are seeded directly into Room; the server sweep (spanning
-     * several cursor pages, `hasMore = false` on the last one) serves only the
-     * first 1 100 of them — the other 100 genuinely no longer exist. Room does
-     * not enforce `SQLITE_MAX_VARIABLE_NUMBER` under Robolectric, so this cannot
-     * reproduce the on-device crash directly; what it proves is the delete-set's
-     * CORRECTNESS at a scale past the 999 threshold — the chunked `deleteByIds`
-     * calls in [CallHistoryCacheSource] are what keep that correct behaviour
-     * from crashing where SQLite actually enforces the limit.
-     */
     @Test
-    fun `refresh purges only the calls truly gone from a 1200-row local cache`() = runTest {
-        val localTotal = 1200
-        val keptTotal = 1100
-        db.callHistoryDao().upsertAll(
-            (0 until localTotal).map { i ->
-                me.meeshy.core.database.entity.CallHistoryEntity(
-                    callId = "c$i",
-                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(record("c$i")),
-                    startedAt = i.toLong(),
-                    cachedAt = i.toLong(),
-                )
-            },
+    fun `refresh deletes a fresh-window line the server no longer lists`() = runTest {
+        seed(listOf("gone")) { FRESH + 5 }
+        coEvery { api.history(any(), any(), any()) } returns ApiResponse(
+            success = true,
+            data = listOf(record("c1")),
+            pagination = Pagination(hasMore = true, nextCursor = "c1"),
         )
-        val repo = repository(PagedCallHistoryApi(totalCalls = keptTotal))
 
-        repo.refresh()
+        repository().refresh()
 
-        val cachedIds = db.callHistoryDao().observeAll().first().map { it.callId }.toSet()
-        assertThat(cachedIds).containsExactlyElementsIn((0 until keptTotal).map { "c$it" })
+        assertThat(db.callHistoryDao().observeAll().first().map { it.callId }).containsExactly("c1")
     }
 
-    /**
-     * #5186-style hardening ported to the call journal: an envelope with NO
-     * `pagination` block at all is UNKNOWN completeness, not proven
-     * completeness. Reading a missing block as "no more pages, sweep is done"
-     * points the failure direction the wrong way for a DELETE. 5
-     * previously-synced rows are seeded directly; the fake server answers with a
-     * single, different call and NO `pagination` key at all. None of the 5
-     * should be pruned — what the page DID mention is still upserted alongside
-     * them.
-     */
+    @Test
+    fun `refresh drops lines past the 90 day window and caps the journal at 1500`() = runTest {
+        seed(listOf("ancient")) { NOW - 91L * 24 * 3600 * 1000 }
+        seed((0 until 1_600).map { "t$it" }) { OLDEST + it * 1_000L }
+        coEvery { api.history(any(), any(), any()) } returns ApiResponse(
+            success = true,
+            data = listOf(record("c1")),
+            pagination = Pagination(hasMore = true, nextCursor = "c1"),
+        )
+
+        repository().refresh()
+
+        val ids = db.callHistoryDao().observeAll().first().map { it.callId }
+        assertThat(ids).doesNotContain("ancient")
+        assertThat(ids.size).isEqualTo(1_500)
+        assertThat(ids).contains("c1")
+    }
+
     @Test
     fun `refresh prunes nothing when the envelope omits pagination`() = runTest {
-        val existing = (0 until 5).map { i ->
-            me.meeshy.core.database.entity.CallHistoryEntity(
-                callId = "c$i",
-                payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(record("c$i")),
-                startedAt = i.toLong(),
-                cachedAt = i.toLong(),
-            )
-        }
-        db.callHistoryDao().upsertAll(existing)
+        seed((0 until 5).map { "c$it" }) { FRESH + it }
         val repo = repository(PaginationlessCallHistoryApi(served = listOf(record("new1"))))
 
         repo.refresh()
@@ -290,21 +273,157 @@ class CallHistoryRepositoryTest {
         val cachedIds = db.callHistoryDao().observeAll().first().map { it.callId }.toSet()
         assertThat(cachedIds).containsExactlyElementsIn((0 until 5).map { "c$it" } + "new1")
     }
+
+    @Test
+    fun `a non-default query is derived from the default cache before the network answers`() = runTest {
+        stubHistory(
+            record("a", name = "Zoé", video = true),
+            record("b", name = "Marc"),
+        )
+        val repo = repository()
+        repo.refresh()
+        coEvery { api.history(any(), any(), any(), any(), any()) } returns
+            ApiResponse(success = false, error = "offline")
+
+        val emissions = repo.journalStream(
+            CallJournalQuery(type = CallJournalType.VIDEO, search = "zoe"),
+            fallbackName = "?",
+        ).toList()
+
+        assertThat(emissions).hasSize(1)
+        assertThat((emissions.single() as CacheResult.Stale).value.map { it.callId }).containsExactly("a")
+    }
+
+    @Test
+    fun `a non-default query sends its filters once and is then remembered in memory`() = runTest {
+        coEvery { api.history(any(), any(), any(), any(), any()) } returns
+            ApiResponse(success = true, data = listOf(record("m1")), pagination = Pagination(hasMore = false))
+        val repo = repository()
+        val query = CallJournalQuery(CallJournalFilter.MISSED, CallJournalType.AUDIO, "Zoé")
+
+        val first = repo.journalStream(query, "?").toList()
+        assertThat(first.last()).isInstanceOf(CacheResult.Fresh::class.java)
+        coVerify { api.history(null, 50, "missed", "audio", "zoe") }
+
+        coEvery { api.history(any(), any(), any(), any(), any()) } returns
+            ApiResponse(success = false, error = "offline")
+        val again = repo.journalStream(query, "?").toList()
+
+        assertThat((again.first() as CacheResult.Stale).value.map { it.callId }).containsExactly("m1")
+    }
+
+    @Test
+    fun `the memory cache is bounded and evicts the least recently used query`() = runTest {
+        coEvery { api.history(any(), any(), any(), any(), any()) } returns
+            ApiResponse(success = true, data = listOf(record("m1")), pagination = Pagination(hasMore = false))
+        val repo = repository()
+        (0 until CallJournalMemoryCache.DEFAULT_MAX_ENTRIES + 1).forEach { i ->
+            repo.journalStream(CallJournalQuery(search = "q$i"), "?").toList()
+        }
+        coEvery { api.history(any(), any(), any(), any(), any()) } returns
+            ApiResponse(success = false, error = "offline")
+
+        val evicted = repo.journalStream(CallJournalQuery(search = "q0"), "?").toList()
+
+        assertThat(evicted.first()).isEqualTo(CacheResult.Empty)
+    }
+
+    @Test
+    fun `hide removes the line at once and keeps it gone on the next revalidation`() = runTest {
+        stubHistory(record("a", "2026-06-20T10:00:00Z"), record("b", "2026-06-19T10:00:00Z"))
+        coEvery { api.hide("a") } returns ApiResponse(success = true, data = CallHistoryHideResult("a", true))
+        val repo = repository()
+        repo.refresh()
+
+        val result = repo.hide("a")
+        stubHistory(record("b", "2026-06-19T10:00:00Z"))
+        repo.refresh()
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat(db.callHistoryDao().observeAll().first().map { it.callId }).containsExactly("b")
+    }
+
+    @Test
+    fun `hide rolls the line back to its original position when the API fails`() = runTest {
+        stubHistory(
+            record("a", "2026-06-20T10:00:00Z"),
+            record("b", "2026-06-19T10:00:00Z"),
+            record("c", "2026-06-18T10:00:00Z"),
+        )
+        coEvery { api.hide("b") } returns ApiResponse(success = false, error = "nope")
+        val repo = repository()
+        repo.refresh()
+
+        val result = repo.hide("b")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat(db.callHistoryDao().observeAll().first().map { it.callId })
+            .containsExactly("a", "b", "c").inOrder()
+    }
+
+    @Test
+    fun `a revalidation during a failed hide does not lose the line`() = runTest {
+        stubHistory(record("a"))
+        coEvery { api.hide("a") } throws IOException("offline")
+        val repo = repository()
+        repo.refresh()
+
+        val result = repo.hide("a")
+        repo.refresh()
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat(db.callHistoryDao().observeAll().first().map { it.callId }).containsExactly("a")
+    }
+
+    @Test
+    fun `clearAll empties the journal and reports the count`() = runTest {
+        stubHistory(record("a"), record("b"))
+        coEvery { api.clearAll() } returns ApiResponse(success = true, data = CallHistoryClearResult(2))
+        val repo = repository()
+        repo.refresh()
+
+        val result = repo.clearAll()
+
+        assertThat((result as NetworkResult.Success).data).isEqualTo(2)
+        assertThat(db.callHistoryDao().observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun `clearAll restores every line when the API fails`() = runTest {
+        stubHistory(record("a", "2026-06-20T10:00:00Z"), record("b", "2026-06-19T10:00:00Z"))
+        coEvery { api.clearAll() } returns ApiResponse(success = false, error = "nope")
+        val repo = repository()
+        repo.refresh()
+
+        val result = repo.clearAll()
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat(db.callHistoryDao().observeAll().first().map { it.callId }).containsExactly("a", "b").inOrder()
+    }
+
+    private companion object {
+        val NOW: Long = java.time.Instant.parse("2026-06-21T00:00:00Z").toEpochMilli()
+        val FRESH: Long = java.time.Instant.parse("2026-06-20T10:00:00Z").toEpochMilli()
+        val OLDEST: Long = java.time.Instant.parse("2026-06-01T00:00:00Z").toEpochMilli()
+    }
 }
 
 /**
- * Mirrors the gateway's cursor-paginated `GET /calls/history`
- * (`services/gateway/src/routes/calls-consultation.ts`,
- * `CallService.listHistory`): cursor-driven paging + `hasMore`, ordered the
- * same way [totalCalls] ids are generated (order itself is irrelevant to the
- * delete-set proof, only exhaustive coverage is). Backs the #5190 regression —
- * a caller that omits pagination (the pre-fix [CallHistoryCacheSource]) only
- * ever sees the first page of [totalCalls].
+ * Mirrors the gateway's cursor-paginated `GET /calls/history`: cursor-driven
+ * paging + `hasMore`. Counts its requests (the revalidation costs exactly one).
  */
 private class PagedCallHistoryApi(totalCalls: Int) : CallHistoryApi {
     private val all: List<CallRecord> = (0 until totalCalls).map { record("c$it") }
+    var requests = 0
 
-    override suspend fun history(cursor: String?, limit: Int?, filter: String?): ApiResponse<List<CallRecord>> {
+    override suspend fun history(
+        cursor: String?,
+        limit: Int?,
+        filter: String?,
+        type: String?,
+        q: String?,
+    ): ApiResponse<List<CallRecord>> {
+        requests += 1
         val appliedLimit = limit ?: 30
         val startIndex = cursor?.let { c -> all.indexOfFirst { it.callId == c } + 1 } ?: 0
         val page = all.drop(startIndex).take(appliedLimit)
@@ -315,22 +434,33 @@ private class PagedCallHistoryApi(totalCalls: Int) : CallHistoryApi {
             pagination = Pagination(hasMore = hasMore, nextCursor = page.lastOrNull()?.callId),
         )
     }
+
+    override suspend fun hide(callId: String): ApiResponse<CallHistoryHideResult> = error("unused")
+
+    override suspend fun clearAll(): ApiResponse<CallHistoryClearResult> = error("unused")
 }
 
-/**
- * A single page with NO `pagination` block at all — a legal but degraded
- * envelope shape (`{ success, data }`, no `pagination` key). Backs the #5190
- * hardening: `pagination?.hasMore ?: false` used to read "envelope omitted
- * pagination" the same as "server confirms no more pages", the wrong failure
- * direction for a DELETE — it must read as UNKNOWN completeness (never
- * prune), not proven completeness.
- */
+/** A single page with NO `pagination` block at all — UNKNOWN completeness, never prune. */
 private class PaginationlessCallHistoryApi(private val served: List<CallRecord>) : CallHistoryApi {
-    override suspend fun history(cursor: String?, limit: Int?, filter: String?): ApiResponse<List<CallRecord>> =
-        ApiResponse(success = true, data = served, pagination = null)
+    override suspend fun history(
+        cursor: String?,
+        limit: Int?,
+        filter: String?,
+        type: String?,
+        q: String?,
+    ): ApiResponse<List<CallRecord>> = ApiResponse(success = true, data = served, pagination = null)
+
+    override suspend fun hide(callId: String): ApiResponse<CallHistoryHideResult> = error("unused")
+
+    override suspend fun clearAll(): ApiResponse<CallHistoryClearResult> = error("unused")
 }
 
-private fun record(id: String, startedAt: String = "2026-06-20T10:00:00Z") =
+private fun record(
+    id: String,
+    startedAt: String = "2026-06-20T10:00:00Z",
+    name: String? = null,
+    video: Boolean = false,
+) =
     CallRecord(
         callId = id,
         conversationId = "conv-$id",
@@ -338,7 +468,8 @@ private fun record(id: String, startedAt: String = "2026-06-20T10:00:00Z") =
         mode = "p2p",
         status = "ended",
         direction = "incoming",
-        isVideo = false,
+        isVideo = video,
         startedAt = startedAt,
         durationSec = 0,
+        peer = name?.let { CallHistoryPeer(userId = "u-$id", username = it.lowercase(), displayName = it) },
     )

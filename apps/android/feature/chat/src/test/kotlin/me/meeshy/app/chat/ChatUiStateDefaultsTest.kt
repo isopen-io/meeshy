@@ -19,13 +19,13 @@ import org.junit.Test
 class ChatUiStateDefaultsTest {
 
     @Test
-    fun `the state keeps exactly its fifty-one stored fields`() {
+    fun `the state keeps exactly its forty-nine stored fields`() {
         val stored = ChatUiState::class.java.declaredFields
             .filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }
             .map { it.name }
 
         assertThat(stored).containsExactlyElementsIn(STORED_FIELDS)
-        assertThat(stored).hasSize(51)
+        assertThat(stored).hasSize(49)
     }
 
     @Test
@@ -34,8 +34,6 @@ class ChatUiStateDefaultsTest {
             conversationId = "",
             messages = emptyList(),
             activeCall = null,
-            draft = "",
-            draftRevision = 0,
             isSyncing = false,
             showSkeleton = false,
             errorMessage = null,
@@ -93,10 +91,8 @@ class ChatUiStateDefaultsTest {
 
         assertThat(fresh.hasMoreOlder).isTrue()
         assertThat(fresh.quickReactions).containsExactlyElementsIn(EmojiCatalog.defaultQuickReactions).inOrder()
-        assertThat(fresh.canSend).isFalse()
         assertThat(fresh.isEditing).isFalse()
         assertThat(fresh.hasPendingEffects).isFalse()
-        assertThat(fresh.composerSentiment).isNull()
         assertThat(fresh.composerLanguageCode).isEqualTo(ComposerLanguage.DEFAULT)
         assertThat(fresh.pinnedBanner).isNull()
         assertThat(fresh.pinnedMessages).isEmpty()
@@ -111,8 +107,6 @@ class ChatUiStateDefaultsTest {
             "conversationId",
             "messages",
             "activeCall",
-            "draft",
-            "draftRevision",
             "isSyncing",
             "showSkeleton",
             "errorMessage",

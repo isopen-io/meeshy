@@ -100,6 +100,15 @@ final class CallStackLazyInstantiationTests: XCTestCase {
         XCTAssertTrue(CallManagerHost.shared.require() === manager)
     }
 
+    /// #11292 — le maillage naît pendant `CallManager.shared` (`adopt` → `bind` →
+    /// `syncWithHost` → `teardown`) : y relire `CallManager.shared` réentre dans
+    /// sa construction et trappe ; y lire `webRTCService` construirait la pile WebRTC.
+    func test_groupMesh_neverReadsCallManagerShared_whileTheStackIsBorn() throws {
+        let source = AppSourceGuard.stripComments(try appSource("Features/Main/Services/GroupCallMeshCoordinator.swift"))
+        XCTAssertFalse(source.contains("CallManager.shared"), "Le plafond du principal passe par l'hôte, sans réveiller ni reconstruire la pile.")
+        XCTAssertFalse(source.contains(".webRTCService."), "Le plafond s'applique au client WebRTC DÉJÀ construit (`builtWebRTCService`).")
+    }
+
     func test_voipPush_reportsIncomingCallSynchronously_throughCallManagerShared() throws {
         let source = AppSourceGuard.stripComments(try appSource("Features/Main/Services/VoIPPushManager.swift"))
         guard let push = source.range(of: "didReceiveIncomingPushWith"),

@@ -165,6 +165,16 @@ final class AttachmentPreparationService {
         return prep
     }
 
+    /// **Une prise du viseur part par ses OCTETS** (#9885, #11847) : ceux que
+    /// `PhotoCaptureProcessor` a écrits une fois, carte de gain HDR comprise.
+    /// L'image ne sert que si la prise n'en a pas (rendu peint par le composer).
+    func prepareCapture(_ image: UIImage, data: Data?,
+                        context: MediaContext,
+                        accentColor: String) -> PreparingAttachment {
+        guard let data else { return prepareImage(image, context: context, accentColor: accentColor) }
+        return prepareImageData(data, context: context, accentColor: accentColor)
+    }
+
     // MARK: Video (URL on disk — camera or already-extracted picker payload)
 
     func prepareVideo(sourceURL: URL,

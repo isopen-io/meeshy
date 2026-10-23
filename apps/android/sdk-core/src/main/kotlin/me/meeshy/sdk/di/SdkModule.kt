@@ -51,6 +51,10 @@ import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.lock.EncryptedConversationLockStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.DataStoreAnonymousSessionStore
+import me.meeshy.sdk.session.SecureAnonymousSessionStore
+import me.meeshy.core.datastore.ConversationLockVault
+import me.meeshy.core.datastore.SecretVault
+import me.meeshy.sdk.model.security.SecureStore
 import me.meeshy.sdk.session.DefaultSessionTeardown
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionTeardown
@@ -255,19 +259,20 @@ object SdkModule {
     @Singleton
     fun providesAnonymousSessionStore(
         @ApplicationContext context: Context,
+        @SecretVault secureStore: SecureStore,
         json: Json,
     ): AnonymousSessionStore {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
             context.preferencesDataStoreFile("meeshy_anonymous_session")
         }
-        return DataStoreAnonymousSessionStore(dataStore, json)
+        return SecureAnonymousSessionStore(secureStore, DataStoreAnonymousSessionStore(dataStore, json), json)
     }
 
     @Provides
     @Singleton
-    fun providesConversationLockStore(@ApplicationContext context: Context): ConversationLockStore =
-        EncryptedConversationLockStore(context)
+    fun providesConversationLockStore(@ConversationLockVault store: SecureStore): ConversationLockStore =
+        EncryptedConversationLockStore(store)
 
     @Provides
     @Singleton
