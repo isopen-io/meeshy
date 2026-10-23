@@ -8,6 +8,9 @@ import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.kindEnum
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -208,5 +211,35 @@ class MessageMutationWriterTest {
         assertThat(
             after.copy(payload = before.payload, contentText = before.contentText, changeVersion = before.changeVersion),
         ).isEqualTo(before)
+    }
+
+    // --- message:edited : la version serveur remplace la copie locale ------
+
+    private fun callNotice(kind: String, outcome: String? = null) = buildJsonObject {
+        put("kind", kind)
+        if (outcome != null) put("outcome", outcome)
+    }
+
+    @Test
+    fun `a server edit turning a live call notice terminal rewrites the cached metadata`() = runHarnessTest { harness ->
+        harness.seedSynced(message().copy(content = "Appel audio en cours", metadata = callNotice("call-live")))
+
+        val applied = writer(harness).applyServerEdit(
+            message().copy(content = "Appel audio manqué", metadata = callNotice("call", outcome = "missed")),
+        )
+
+        assertThat(applied).isTrue()
+        val cached = harness.cachedMessage("m1")
+        assertThat(cached.content).isEqualTo("Appel audio manqué")
+        assertThat(cached.metadata?.get("kind")?.jsonPrimitive?.content).isEqualTo("call")
+        assertThat(cached.metadata?.get("outcome")?.jsonPrimitive?.content).isEqualTo("missed")
+    }
+
+    @Test
+    fun `a server edit of a message this device never cached writes nothing`() = runHarnessTest { harness ->
+        val applied = writer(harness).applyServerEdit(message("unknown"))
+
+        assertThat(applied).isFalse()
+        assertThat(harness.database.messageDao().find("unknown")).isNull()
     }
 }
