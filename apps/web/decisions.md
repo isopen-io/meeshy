@@ -5712,3 +5712,18 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Ce que ce lot ne fait pas.** Les médias de POSTS (fil, réels) ne lisent encore ni variantes ni rendus (`lib/feed/card-model.ts` sert `fileUrl`) : issue de suivi. Rien n'est mesuré ici (poids servi, temps à la première image) : argumenté, non mesuré.
 
 **Gardes.** `lib/media/video-rendition.test.ts`, `lib/media/served-video.test.ts`, `lib/api/media-url.test.ts` (`attachmentPictureSrcSets`), `components/served-rendition.test.tsx` (DOM de la grille et de la tuile vidéo), `lib/api/admin-conversations.test.ts` (masquage).
+
+## D-219 — Une photo HEIC choisie sur Android ou Chrome part telle quelle et la passerelle la convertit ; l'aperçu attend la vignette servie ; un refus nomme le format (2026-10-23, #11315 ; consomme S8 #11263)
+
+**Contexte.** Seul Safari décode le HEIC. Sur Chrome et dans la coque Android, une photo HEIC choisie pour le profil était dite « illisible » (la recompression lève) et rien ne partait ; dans un message, elle partait telle quelle mais une passerelle qui ne la connaissait pas l'avalait sous `success: true`, et l'échec se disait « une pièce n'a pas pu être téléversée ». La passerelle accepte désormais HEIC/HEIF/AVIF, sert un JPEG (`fileUrl`) et garde l'original (`renditions[codec = 'heic']`).
+
+**Décision.**
+- **Le HEIC part tel quel, sous son vrai type** (`lib/media/heif.ts` : `isHeifFamily` lit le type déclaré ou l'extension quand Chrome n'en déclare aucun, `servableHeif` le retype). Le HEIC est déjà efficace : aucun ré-encodage client, une seule génération (#11247). Le profil tente d'abord sa recompression (`createImageBitmap`) ; si elle échoue sur un HEIC, l'original part et la passerelle le convertit. Une autre image illisible reste « illisible ».
+- **L'aperçu attend la vignette servie** quand le navigateur ne décode pas : `needsServedPreview` (essai `createImageBitmap`) garde l'image servie sous le voile du profil ; la vignette du plateau du composeur devient le glyphe d'image sur `error` et ne propose plus « Éditer ». Après l'envoi, c'est le JPEG servi qui s'affiche.
+- **Un refus nomme le format** : `uploadShortfall` (`lib/api/attachments.ts`) rend `UPLOAD_FORMAT_REFUSED` quand un lot qui porte un HEIC revient incomplet ou en `415`, sinon `UPLOAD_PARTIAL` comme avant. Le message, la feuille d'envoi et le profil le lisent ; la cause est dite dans les sept langues (`send.failure.formatRefused`, `profile.image.formatRefused`).
+
+**Repli navigateur.** Safari décode le HEIC : l'aperçu local se montre et la recompression du profil a lieu comme pour un JPEG.
+
+**Ce que ce lot ne fait pas.** L'éditeur d'image du composeur ne sait pas ouvrir un HEIC sur Chrome : il n'est plus proposé. La console d'administration (`admin-user-image-sheet.tsx`) dit encore « échec » générique sur un refus de format. L'attribution de la cause est probable, non certaine : la passerelle n'indique pas quel fichier elle a écarté.
+
+**Gardes.** `lib/media/heif.test.ts`, `lib/api/upload-shortfall.test.ts`, `lib/profile/image-upload.test.ts`, `lib/send/failure-reason.test.ts`, `components/composer-tray-heif.test.tsx`.
