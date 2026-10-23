@@ -56,10 +56,19 @@ class E2eeKeyStoreTest {
     }
 
     @Test
-    fun `un identifiant hors plage est regenere`() {
+    fun `un identifiant hors plage n'est jamais remplace`() {
         val vault = InMemorySecureStore()
         vault.put("me.meeshy.e2ee.preKeyId", "AAAAAA==", "u1")
-        assertThat(E2eeKeyStore(vault, "u1", ids = { 9 }).preKeyId()).isEqualTo(9)
+        assertThrows(E2eeIdentityUnreadableException::class.java) { E2eeKeyStore(vault, "u1", ids = { 9 }).preKeyId() }
+        assertThat(vault.get("me.meeshy.e2ee.preKeyId", "u1")).isEqualTo("AAAAAA==")
+    }
+
+    @Test
+    fun `un identifiant indecodable n'est jamais remplace`() {
+        val vault = InMemorySecureStore()
+        vault.put("me.meeshy.e2ee.registrationId", "pas-du-base64!", "u1")
+        assertThrows(E2eeIdentityUnreadableException::class.java) { E2eeKeyStore(vault, "u1", ids = { 9 }).registrationId() }
+        assertThat(vault.get("me.meeshy.e2ee.registrationId", "u1")).isEqualTo("pas-du-base64!")
     }
 
     @Test
