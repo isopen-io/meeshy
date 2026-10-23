@@ -51,6 +51,7 @@ export type SignableAttachment = {
   readonly fileUrl?: unknown;
   readonly thumbnailUrl?: unknown;
   readonly imageVariants?: unknown;
+  readonly avifVariants?: unknown;
   readonly translations?: unknown;
   readonly isViewOnce?: unknown;
   readonly isBlurred?: unknown;
@@ -102,12 +103,14 @@ export function signReaderAttachmentUrls<T extends SignableAttachment>(attachmen
   const signUrlField = (entry: unknown): unknown => (isRecord(entry) && 'url' in entry ? { ...entry, url: sign(entry.url) } : entry);
 
   const variants = attachment.imageVariants;
+  const avifVariants = attachment.avifVariants;
   const translations = attachment.translations;
   return {
     ...attachment,
     fileUrl: sign(attachment.fileUrl),
     thumbnailUrl: sign(attachment.thumbnailUrl),
     ...(Array.isArray(variants) ? { imageVariants: variants.map(signUrlField) } : {}),
+    ...(Array.isArray(avifVariants) ? { avifVariants: avifVariants.map(signUrlField) } : {}),
     ...(isRecord(translations)
       ? { translations: Object.fromEntries(Object.entries(translations).map(([lang, entry]) => [lang, signUrlField(entry)])) }
       : {}),

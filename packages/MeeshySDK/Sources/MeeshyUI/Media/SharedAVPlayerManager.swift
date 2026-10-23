@@ -138,6 +138,8 @@ public final class SharedAVPlayerManager: ObservableObject {
     private var sessionReachedEnd = false
 
     private var timeObserver: Any?
+    /// La cadence de l'observateur de temps posé, `nil` sans observateur.
+    private(set) var armedTimeObserverInterval: Double?
     private var cancellables = Set<AnyCancellable>()
     /// Les pistes audio suivent le mute effectif.
     let audioTracks = AudioTrackActivator()
@@ -226,6 +228,7 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     private init() {
         observeSessionSignals()
+        observeMediaPolicy()
     }
 
     // MARK: - Load
@@ -280,12 +283,23 @@ public final class SharedAVPlayerManager: ObservableObject {
             return
         }
 
-        // 3. Streaming fallback removed (spec §4.10).
-        // Callers MUST gate on `availability == .ready` before calling
-        // `.load(urlString:)`. Reaching this branch means the caller didn't
-        // gate — log defensively and leave `player` nil so the surrounding
-        // UI (VideoMediaView / InlineVideoPlayerView / VideoFullscreenPlayerView)
-        // shows the download overlay instead of a silent network stream.
+        // 3. Un téléchargement AUTORISÉ de cette vidéo est en cours (#9881) :
+        // la bulle joue dès la tête du fichier qu'il écrit, sans attendre la
+        // fin et sans seconde requête. Rien ne s'ouvre d'ici — la politique
+        // réseau reste celle de la surface qui a lancé le téléchargement.
+        if CacheCoordinator.videoHasReadableTransfer(for: resolved) {
+            let asset = CacheCoordinator.videoPlaybackAsset(for: url, startsTransfer: false)
+            let newPlayer = AVQueuePlayer(playerItem: AVPlayerItem(asset: asset))
+            player = newPlayer
+            setupObservers(for: newPlayer)
+            return
+        }
+
+        // 4. Streaming fallback removed (spec §4.10).
+        // Sans fichier ni téléchargement autorisé en cours, le caller n'a pas
+        // appliqué la politique réseau — `player` reste nil et la surface
+        // (VideoMediaView / InlineVideoPlayerView / VideoFullscreenPlayerView)
+        // montre l'overlay de téléchargement au lieu d'un flux silencieux.
         // Stories don't pass through this manager (their pipeline is
         // StoryReaderPrefetcher + StoryMediaLoader), so removing the
         // fallback only affects conversation/feed video.
@@ -684,34 +698,10 @@ public final class SharedAVPlayerManager: ObservableObject {
         let head = Self.finiteSeconds(player.currentTime())
         if currentTime != head { currentTime = head }
 
-        // The active reel is on-screen: lift the offscreen preroll bitrate cap so
-        // ABR can pick the best rendition (thermal-aware — stays capped when hot).
-        player.currentItem?.preferredPeakBitRate = MediaThermalPolicy.preferredPeakBitRate(
-            isVisible: true, thermalState: ProcessInfo.processInfo.thermalState)
-
-        // Cadence backs off as the device heats up (WWDC19 #422). The block
-        // runs via `MainActor.assumeIsolated` — NOT a `Task { @MainActor }` per tick:
-        // `queue: .main` already runs on the MainActor executor, so a wrapper
-        // would schedule a needless continuation 5-10×/s. Mirrors the proven pattern in
-        // `StoryTimelineEngine`. `lastHeartbeat` is an instance property so the
-        // closure captures nothing mutable.
-        let interval = CMTime(
-            seconds: MediaThermalPolicy.timeObserverInterval(thermalState: ProcessInfo.processInfo.thermalState),
-            preferredTimescale: 600)
-        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let seconds = time.seconds.isNaN ? 0 : time.seconds
-                self.currentTime = seconds
-                // Ne crée aucune entrée : retient seulement la dernière position
-                // connue, pour clore proprement un visionnage interrompu net.
-                self.stretchTracker.observe(max(0, Int(seconds * 1000)))
-                if self.isPlaying, seconds - self.lastHeartbeat >= 10 {
-                    self.lastHeartbeat = seconds
-                    self.emitWatchSample()
-                }
-            }
-        }
+        // Le lecteur affiché suit la politique média vivante (#9880) : sa file
+        // entière, boucle comprise, change de tampon quand l'appareil chauffe.
+        MediaPolicyMonitor.shared.adopt(player, role: .watched)
+        armTimeObserver(on: player, interval: MediaPolicyMonitor.shared.policy.timeObserverInterval)
 
         player.publisher(for: \.rate)
             .receive(on: DispatchQueue.main)
@@ -814,6 +804,40 @@ public final class SharedAVPlayerManager: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Cadence backs off as the device heats up or saves power (WWDC19 #422,
+    /// #9880), and is re-armed live by `applyMediaPolicy`. The block runs via
+    /// `MainActor.assumeIsolated` — NOT a `Task { @MainActor }` per tick:
+    /// `queue: .main` already runs on the MainActor executor. `lastHeartbeat`
+    /// is an instance property so the closure captures nothing mutable.
+    func armTimeObserver(on player: AVPlayer, interval cadence: Double) {
+        if let observer = timeObserver { player.removeTimeObserver(observer) }
+        armedTimeObserverInterval = cadence
+        let interval = CMTime(seconds: cadence, preferredTimescale: 600)
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let seconds = time.seconds.isNaN ? 0 : time.seconds
+                self.currentTime = seconds
+                // Ne crée aucune entrée : retient seulement la dernière position
+                // connue, pour clore proprement un visionnage interrompu net.
+                self.stretchTracker.observe(max(0, Int(seconds * 1000)))
+                if self.isPlaying, seconds - self.lastHeartbeat >= 10 {
+                    self.lastHeartbeat = seconds
+                    self.emitWatchSample()
+                }
+            }
+        }
+    }
+
+    /// Retire l'observateur de temps du lecteur courant.
+    func disarmTimeObserver() {
+        if let observer = timeObserver, let player {
+            player.removeTimeObserver(observer)
+        }
+        timeObserver = nil
+        armedTimeObserverInterval = nil
+    }
+
     // MARK: - Cleanup
 
     /// Chaque `@Published` n'est ré-assigné QUE s'il change : `@Published`
@@ -836,10 +860,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         }
         reportWatchProgress(complete: false)
 
-        if let observer = timeObserver, let player {
-            player.removeTimeObserver(observer)
-        }
-        timeObserver = nil
+        disarmTimeObserver()
         cancellables.removeAll()
         audioTracks.release()
         engineItems.removeAll()

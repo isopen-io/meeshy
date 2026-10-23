@@ -11,7 +11,7 @@ import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { PDFParse } from 'pdf-parse';
 import * as ffmpeg from 'fluent-ffmpeg';
-import { createImageThumbnail, thumbnailPathFor, createResponsiveVariants, variantPathFor } from './thumbnail';
+import { createImageThumbnail, thumbnailPathFor, createResponsiveVariants, variantPathFor, createAvifVariants, avifVariantPathFor } from './thumbnail';
 import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { guardedTimeout } from '../../utils/guarded-timer';
@@ -121,6 +121,29 @@ export class MetadataManager {
       return written;
     } catch (error) {
       logger.error('[MetadataManager] Erreur génération variantes responsive', error);
+      return [];
+    }
+  }
+
+  /**
+   * Variantes AVIF responsive (#11262), écrites à côté des WebP sous
+   * `<base>_<largeur>w.avif`.
+   */
+  async generateAvifVariants(
+    imagePath: string
+  ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
+    try {
+      const fullPath = path.join(this.uploadBasePath, imagePath);
+      const variants = await createAvifVariants(fullPath);
+      const written: Array<{ path: string; width: number; height: number; size: number }> = [];
+      for (const variant of variants) {
+        const relPath = avifVariantPathFor(imagePath, variant.width);
+        await fs.writeFile(path.join(this.uploadBasePath, relPath), variant.buffer);
+        written.push({ path: relPath, width: variant.width, height: variant.height, size: variant.buffer.length });
+      }
+      return written;
+    } catch (error) {
+      logger.error('[MetadataManager] Erreur génération variantes AVIF', error);
       return [];
     }
   }

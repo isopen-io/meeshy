@@ -1,0 +1,15 @@
+Fichiers à carte de gain HDR, témoins de #11840.
+
+apple-gain-map-xmp-headroom.jpg      = libultrahdr tests/data/apple_gainmap_new.jpg
+apple-gain-map-makernote-headroom.jpg = libultrahdr tests/data/apple_gainmap_old.jpg
+iso-21496-gain-map.jpg               = apple_gainmap_new.jpg réencodé par libultrahdr 2.0.2
+                                       (sharp 0.35.5 `withGainMap().jpeg({ quality: 85 })`)
+ultra-hdr-xmp-and-iso.jpg            = Ultra HDR v1 (XMP hdrgm + GContainer + ISO 21496-1) encodé par
+                                       ultrahdr_app de libultrahdr v1.4.0 (UHDR_WRITE_XMP=ON) depuis
+                                       tests/data/raw_p010_image.p010 et raw_yuv420_image.yuv420
+                                       (-a 0 -b 1 -w 1280 -h 720 -q 50 -Q 50 -s 8 -M 0)
+iso-21496-gain-map.heic              = libultrahdr tests/data/gainmap_hevc_16x16.heic
+
+Source : https://github.com/google/libultrahdr, révision 47d9f00726adba87e3f04059a50a8b34492e057a.
+Les quatre JPEG relèvent de la licence CC-BY-4.0 du dossier tests/data de libultrahdr
+(© The libultrahdr Authors). Le HEIC relève de Apache-2.0 OR MIT (GAINMAP_FIXTURE_README.md).

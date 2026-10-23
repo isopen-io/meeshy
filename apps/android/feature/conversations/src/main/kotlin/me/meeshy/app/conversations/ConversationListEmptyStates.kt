@@ -118,7 +118,6 @@ internal fun EmptyStateCard(
                     Text(
                         text = when (subtitle) {
                             is EmptyStateSubtitle.Resource -> stringResource(subtitle.copy.resId())
-                            is EmptyStateSubtitle.Literal -> subtitle.text
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MeeshyTheme.tokens.textSecondary,

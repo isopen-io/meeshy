@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_action_views">المشاهدات</string>
+    <string name="chat_action_history">السجل</string>
+    <string name="chat_action_sentiment">المشاعر</string>
+    <string name="chat_action_select">تحديد</string>
+    <string name="chat_action_export_card">تصدير كبطاقة</string>
+</resources>

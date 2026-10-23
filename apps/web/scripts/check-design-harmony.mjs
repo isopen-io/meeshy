@@ -65,6 +65,10 @@ export const EXEMPT_PATHS = [
     reason: "cadres d'appel peints en canvas : des modèles choisis par l'utilisateur, composés hors du DOM, où un jeton CSS n'a pas cours",
   },
   {
+    prefix: 'lib/meeshy-lens/',
+    reason: "lens MeeshyLens peintes en canvas sur la vidéo : couleurs déclarées par le partenaire et teintes des particules, hors du DOM",
+  },
+  {
     prefix: 'lib/calls/call-montage',
     reason: "montages d'une capture d'appel peints en canvas : treize styles choisis par l'utilisateur, hors du DOM",
   },
