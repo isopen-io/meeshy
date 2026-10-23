@@ -135,21 +135,17 @@ private fun LocalizedContent(
     val tag = AppLanguage.resolveInterfaceLocaleTag(languageCode)
     val baseContext = LocalContext.current
     val baseConfiguration = LocalConfiguration.current
-
-    if (tag == null) {
-        content()
-        return
-    }
-
-    val locale = remember(tag) { Locale.forLanguageTag(tag) }
-    SideEffect { Locale.setDefault(locale) }
+    val locale = remember(tag) { tag?.let(Locale::forLanguageTag) }
+    if (locale != null) SideEffect { Locale.setDefault(locale) }
     val localizedContext = remember(locale, baseContext, baseConfiguration) {
-        LocalizedActivityContext.wrap(baseContext, locale)
+        locale?.let { LocalizedActivityContext.wrap(baseContext, it) } ?: baseContext
     }
     val localizedConfiguration = remember(locale, baseConfiguration) {
-        Configuration(baseConfiguration).apply { setLocale(locale) }
+        locale?.let { Configuration(baseConfiguration).apply { setLocale(it) } } ?: baseConfiguration
     }
 
+    // Toujours le même nœud : passer de « Système » à une langue ne recrée pas l'arbre,
+    // donc la navigation reste sur l'écran où la langue a été choisie.
     CompositionLocalProvider(
         LocalContext provides localizedContext,
         LocalConfiguration provides localizedConfiguration,
