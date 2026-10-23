@@ -144,10 +144,13 @@ function prismaSource(name: string, delegate: PageDelegate, select: Record<strin
   };
 }
 
+/** Toutes les colonnes qui portent une clé de stockage — une colonne tue ici, c'est une copie que le balayage effacerait. */
+const MEDIA_KEY_COLUMNS = { filePath: true, fileUrl: true, thumbnailPath: true, thumbnailUrl: true, imageVariants: true, translations: true } as const;
+
 export function mediaMirrorSources(prisma: PrismaClient): readonly MirrorRowSource[] {
   return [
-    prismaSource('messageAttachment', prisma.messageAttachment as unknown as PageDelegate, { filePath: true, fileUrl: true, thumbnailUrl: true, imageVariants: true, translations: true }),
-    prismaSource('postMedia', prisma.postMedia as unknown as PageDelegate, { filePath: true, fileUrl: true, thumbnailUrl: true, imageVariants: true }),
+    prismaSource('messageAttachment', prisma.messageAttachment as unknown as PageDelegate, MEDIA_KEY_COLUMNS),
+    prismaSource('postMedia', prisma.postMedia as unknown as PageDelegate, MEDIA_KEY_COLUMNS),
   ];
 }
 

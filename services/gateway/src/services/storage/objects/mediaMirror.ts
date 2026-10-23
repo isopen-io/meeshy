@@ -20,6 +20,7 @@ export type MediaRow = {
   readonly id?: string;
   readonly filePath?: string | null;
   readonly fileUrl?: string | null;
+  readonly thumbnailPath?: string | null;
   readonly thumbnailUrl?: string | null;
   readonly imageVariants?: unknown;
   readonly translations?: unknown;
@@ -43,6 +44,7 @@ export function mediaRowStorageKeys(row: MediaRow, uploadRoot: string): readonly
   const candidates = [
     row.filePath,
     row.fileUrl,
+    row.thumbnailPath,
     row.thumbnailUrl,
     ...imageVariantKeys(row.imageVariants),
     ...derivedFileCandidates({ translations: row.translations }),
