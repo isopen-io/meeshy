@@ -454,7 +454,9 @@ struct CallView: View {
                 // expulsé hors écran à x≈-475). Bug repro simu 2026-07-03.
                 Color.clear
                     .overlay {
-                        CachedAsyncImage(url: backdrop, thumbHash: remoteBackdropThumbHash) {
+                        // Identité du correspondant, comme `CachedBannerImage` : hors
+                        // politique de téléchargement (#12442).
+                        CachedAsyncImage(url: backdrop, thumbHash: remoteBackdropThumbHash, showsStatusOverlays: false, autoLoad: true) {
                             Color.clear
                         }
                         .scaledToFill()
