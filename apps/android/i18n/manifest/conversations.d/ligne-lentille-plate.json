@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "accessibility.conversation_with",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "accessibility.last_message_preview",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "accessibility.muted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "accessibility.pinned",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

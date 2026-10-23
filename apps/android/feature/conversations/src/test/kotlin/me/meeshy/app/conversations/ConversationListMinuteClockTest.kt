@@ -88,6 +88,6 @@ class ConversationListMinuteClockTest {
             }
         }
 
-        compose.onNodeWithText("5 min").assertExists()
+        compose.onNodeWithText("5 min", useUnmergedTree = true).assertExists()
     }
 }

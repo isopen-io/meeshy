@@ -51,7 +51,7 @@ import { MediaUnavailable } from './media-unavailable';
 import { GLYPH_SIZE } from './ui-chrome';
 import { ViewerCaption } from './viewer-caption';
 import { ViewerInfoLine } from './viewer-info-line';
-import { ViewerBottomBar, ViewerReplyCapsule, ViewerTopBar, type ViewerIdentityModel } from './viewer-chrome';
+import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from './viewer-chrome';
 import { useViewerSwipe } from './viewer-chrome-gestures';
 import type { NoticeKey } from './viewer-media-actions';
 import { ViewerScenePage } from './viewer-scene-page';
@@ -628,6 +628,7 @@ export default function MediaViewer({
      page AUDIO, l'appui long n'ouvre rien : il ne vibre pas. */
   const longPress = useLongPress({
     pressFeedback: false,
+    haptic: false,
     onOpen: () => {
       heldOpenAtRef.current = performance.now();
       if (audioPage) return false;
@@ -695,8 +696,9 @@ export default function MediaViewer({
 
   const identity = carrierIdentity(currentCarrier);
   const footer = carrierFooter({ carrier: currentCarrier, ...(currentSceneEntry !== undefined ? { sceneEntry: currentSceneEntry } : {}) });
-  const replyOffered = page !== null && page.offers.reply ? page.onReply : undefined;
-  const railOffered = page !== null && (page.offers.react || page.offers.compose || page.offers.share);
+  /* Répondre, Réagir, Transférer, Enregistrer, Créer : tout vit dans le rail (#12424). */
+  const railOffered = page !== null && (page.offers.reply || page.offers.react || page.offers.compose || page.offers.share || page.offers.save);
+  const menuOffered = page !== null && (page.offers.save || (page.offers.share && page.share !== undefined));
   /* UNE VIDÉO QUI SE LIT (#9577) — sa page pose, par portail, le muet et « ⋯ »
      dans la colonne d'actions et la durée dans la ligne d'informations. Une
      scène n'a ni cotes ni poids ; une pièce masquée ne se lit pas. */
@@ -748,7 +750,7 @@ export default function MediaViewer({
       {...(accent === undefined ? {} : { style: { '--accent': accent } as CSSProperties })}
     >
       {/* Barre haute — le chrome COMMUN des plein écrans (#8879) : l'auteur et
-          l'heure, « … » (Enregistrer y vit, iOS #6145), puis la croix EN FIN de
+          l'heure, « … » (Enregistrer et Transférer y vivent, #12424), puis la croix EN FIN de
           rangée. Dans le COULOIR noir au-dessus du plateau ; sa hauteur
           (`safe-top + 56`) est exactement `topCorridorHeight`. Elle cède au
           plein cadre ET au zoom (#8644) : inerte, donc intouchable autant
@@ -760,7 +762,7 @@ export default function MediaViewer({
         hidden={chromeHidden}
         exit={{ kind: 'close', label: translate(language, 'common.close'), onExit: onClose, buttonRef: closeButtonRef }}
         {...(identity !== undefined ? { identity } : {})}
-        {...(page !== null && page.offers.save
+        {...(page !== null && menuOffered
           ? {
               trailing: (
                 <Suspense fallback={null}>
@@ -939,9 +941,8 @@ export default function MediaViewer({
       {/* Barre basse. Sous une image ou une vidéo (#9578), de haut en bas : la
           barre de progression d'un bord à l'autre, COLLÉE sous la scène (#6359,
           la page vidéo ACTIVE y rend `MediaTransport` par un portail), la ligne
-          d'informations « cotes · poids · durée », la légende, la capsule
-          « Répondre… » (l'hôte seul décide qu'il sait répondre : loi 4), puis la
-          pellicule. Sur une page scène en plein viewport, le pied se pose SUR
+          d'informations « cotes · poids · durée », la légende, puis la
+          pellicule. « Répondre » vit dans le rail depuis #12424. Sur une page scène en plein viewport, le pied se pose SUR
           elle avec le voile commun (#6902 : l'encre tombe sur la couleur de la
           scène, jamais sur le noir du plateau), légende et colonne sur une même
           rangée, comme sous un vocal. */}
@@ -958,11 +959,6 @@ export default function MediaViewer({
               {footer}
             </div>
           ) : null}
-          {replyOffered !== undefined ? (
-            <div className="px-3">
-              <ViewerReplyCapsule label={translate(language, 'media.viewer.reply')} onReply={replyOffered} />
-            </div>
-          ) : null}
           {items.length > 1 && !audioPage ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
         </ViewerBottomBar>
       ) : (
@@ -972,7 +968,6 @@ export default function MediaViewer({
           probe={{ 'data-viewer-footer': '' }}
           {...(footer !== undefined ? { caption: footer } : {})}
           {...(rail !== undefined ? { rail } : {})}
-          reply={{ label: translate(language, 'media.viewer.reply'), onReply: replyOffered }}
         >
           <div ref={setTransportSlot} data-viewer-transport-slot />
           {audioPage ? <ViewerInfoLine attachment={current} facts={showsFacts} duration={null} language={language} /> : null}

@@ -189,6 +189,7 @@ class CallViewModelTest {
         CallAnalyticsController(signalManager, clock),
         extensions,
         mockk(relaxed = true),
+        CallPeerVisualSource { kotlinx.coroutines.flow.emptyFlow() },
     )
 
     @Test

@@ -8,6 +8,7 @@ import {
   loadLensSubmissions,
   reviewLens,
   submitLens,
+  restoreLens,
   withdrawLens,
 } from './lens-packs';
 
@@ -109,5 +110,14 @@ describe('les routes des lens', () => {
     const { calls, deps } = transportAnswering(() => ({ ok: true, data: lens({ status: 'withdrawn' }) }));
     await withdrawLens(deps, 'aurore-boreale', 'Signalée');
     expect(calls[0]).toMatchObject({ method: 'POST', path: '/api/v1/packs/lens/aurore-boreale/withdraw', body: { note: 'Signalée' } });
+  });
+
+  test('rétablir une lens retirée : POST /packs/lens/:slug/restore (#12321), le mot facultatif', async () => {
+    const { calls, deps } = transportAnswering(() => ({ ok: true, data: lens({ status: 'approved' }) }));
+    const restored = await restoreLens(deps, 'aurore-boreale', '  Retrait par erreur ');
+    await restoreLens(deps, 'aurore-boreale');
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/api/v1/packs/lens/aurore-boreale/restore', body: { note: 'Retrait par erreur' } });
+    expect(calls[1]?.body).toEqual({});
+    expect(restored.ok && restored.data.status).toBe('approved');
   });
 });

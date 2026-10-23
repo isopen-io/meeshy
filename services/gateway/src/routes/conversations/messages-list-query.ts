@@ -27,6 +27,7 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
+import { servedDescription } from '../../services/attachments/mediaSideContent';
 import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
 import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
@@ -94,7 +95,10 @@ function cleanAttachmentsForApi(
   }
 
   return attachments.map((att, attIndex): CleanedAttachment => {
-    const cleaned: CleanedAttachment = { ...att };
+    // #12333 — la description sous la loi de `servedDescription` ; la ligne
+    // du message porteur (chargée pour cette seule loi) ne sort jamais.
+    const { message: _carrier, ...row } = att as RawMessageAttachment & { message?: unknown };
+    const cleaned: CleanedAttachment = { ...row, ...servedDescription(att as Parameters<typeof servedDescription>[0]) };
 
     // BUG2 A' — agréger les réactions par-image en reactionSummary + currentUserReactions
     // (miroir des réactions message-level) et retirer les rows brutes.

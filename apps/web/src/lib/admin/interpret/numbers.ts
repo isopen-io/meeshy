@@ -17,6 +17,11 @@ export function formatCount(value: number | null | undefined, language: AdminLan
   return isNumber(value) ? new Intl.NumberFormat(language).format(value) : NONE;
 }
 
+/** Un nombre sans unité à décimales FIXES (un score, comme le CLS) : `0,07`, jamais `0,1` ni `7 %`. */
+export function formatDecimal(value: number | null | undefined, language: AdminLanguage, digits = 2): string {
+  return isNumber(value) ? new Intl.NumberFormat(language, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value) : NONE;
+}
+
 export function formatCompact(value: number | null | undefined, language: AdminLanguage): string {
   return isNumber(value)
     ? new Intl.NumberFormat(language, { notation: 'compact', maximumFractionDigits: 1 }).format(value)

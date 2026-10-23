@@ -106,3 +106,50 @@ describe('bindPlaybackQoe — aucun envoi pendant la lecture', () => {
     expect(listeners.size).toBe(0);
   });
 });
+
+const fakeMedia = () => ({
+  currentTime: 0,
+  duration: 10,
+  muted: false,
+  error: null as { code: number } | null,
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+});
+
+describe('bindPlaybackQoe — W11 (#11317) : la page et l’appareil voyagent avec le résumé', () => {
+  test('le contexte de page est ouvert au DÉBUT de la séance et fermé à sa FIN, une fois', () => {
+    const calls: string[] = [];
+    const probe = {
+      open: () => {
+        calls.push('open');
+        return {
+          close: () => {
+            calls.push('close');
+            return { deviceTier: 'mid' as const, lcpMs: 1_400, longFrames: 2, longFramesBlockingMs: 120, longFrameWorstMs: 210 };
+          },
+        };
+      },
+    };
+    const out: Record<string, unknown>[] = [];
+    const session = bindPlaybackQoe(fakeMedia(), { playbackId: 'pb', mediaId: 'm1', now: () => 0, probe, onSummary: (s) => out.push(s) });
+    expect(calls).toEqual(['open']);
+    session.finish('swiped');
+    session.finish('swiped');
+    expect(calls).toEqual(['open', 'close']);
+    expect(out[0]).toMatchObject({ playbackId: 'pb', exitReason: 'swiped', deviceTier: 'mid', lcpMs: 1_400, longFrames: 2, longFramesBlockingMs: 120, longFrameWorstMs: 210 });
+  });
+
+  test('sans sonde (hôte sans navigateur) : le résumé d’avant, rien d’inventé', () => {
+    const out: Record<string, unknown>[] = [];
+    bindPlaybackQoe(fakeMedia(), { playbackId: 'pb', mediaId: 'm1', now: () => 0, onSummary: (s) => out.push(s) }).finish('closed');
+    expect(Object.keys(out[0] ?? {})).not.toContain('deviceTier');
+    expect(Object.keys(out[0] ?? {})).not.toContain('longFrames');
+  });
+
+  test('le contexte ne réécrit jamais un champ de la séance', () => {
+    const probe = { open: () => ({ close: () => ({ deviceTier: 'low' as const, longFrames: 0, longFramesBlockingMs: 0, longFrameWorstMs: 0, playbackId: 'intrus' }) }) };
+    const out: Record<string, unknown>[] = [];
+    bindPlaybackQoe(fakeMedia(), { playbackId: 'pb', mediaId: 'm1', now: () => 0, probe, onSummary: (s) => out.push(s) }).finish('closed');
+    expect(out[0]?.['playbackId']).toBe('pb');
+  });
+});

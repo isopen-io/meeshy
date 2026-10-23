@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.presence.ViewingCommand
 import me.meeshy.sdk.model.presence.ViewingInput
 import me.meeshy.sdk.model.presence.ViewingReporterLaw
 import me.meeshy.sdk.model.presence.ViewingReporterState
+import me.meeshy.sdk.model.socket.SocketEventNames
 import org.json.JSONObject
 import java.util.Optional
 import javax.inject.Inject
@@ -104,9 +105,9 @@ class ConversationViewingReporter @Inject constructor(
     private fun payload(conversationId: String) = JSONObject().put("conversationId", conversationId)
 
     internal companion object {
-        const val START = "viewing:start"
-        const val STOP = "viewing:stop"
-        const val ACTIVITY = "viewing:activity"
-        const val SNAPSHOT = "viewing:snapshot"
+        const val START = SocketEventNames.VIEWING_START
+        const val STOP = SocketEventNames.VIEWING_STOP
+        const val ACTIVITY = SocketEventNames.VIEWING_ACTIVITY
+        const val SNAPSHOT = SocketEventNames.VIEWING_SNAPSHOT
     }
 }
