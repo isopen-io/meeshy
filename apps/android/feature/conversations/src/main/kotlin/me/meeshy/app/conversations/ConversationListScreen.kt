@@ -41,6 +41,7 @@ fun ConversationListScreen(
     onGlobalSearch: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
     header: @Composable () -> Unit = {},
+    onRefresh: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -142,7 +143,7 @@ fun ConversationListScreen(
                     onRetry = viewModel::refresh,
                     onNewConversation = onNewConversation,
                 ) {
-                    ConversationListBody(state = state, listState = listState, viewModel = viewModel)
+                    ConversationListBody(state = state, listState = listState, viewModel = viewModel, onRefresh = onRefresh)
                 }
             }
         }

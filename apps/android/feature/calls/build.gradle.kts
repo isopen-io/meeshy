@@ -31,6 +31,8 @@ android {
 dependencies {
     implementation(project(":sdk-core"))
     implementation(project(":sdk-ui"))
+    implementation(project(":core:common"))
+    implementation(libs.androidx.core.telecom)
     implementation(libs.coil.compose)
 
     implementation(libs.androidx.core.ktx)

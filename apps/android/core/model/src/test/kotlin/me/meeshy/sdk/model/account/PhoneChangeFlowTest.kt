@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.account
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.auth.PhonePlausibility
 import org.junit.Test
 
 class PhoneChangeFlowTest {
@@ -56,6 +57,17 @@ class PhoneChangeFlowTest {
     fun `envoyer le code exige un numero valide`() {
         assertThat(PhoneChangeFlow().beginEdit("abc").canSendCode).isFalse()
         assertThat(PhoneChangeFlow().beginEdit(valid).canSendCode).isTrue()
+    }
+
+    @Test
+    fun `un numero implausible ne peut pas etre envoye et dit pourquoi`() {
+        val short = PhoneChangeFlow().beginEdit("12345678")
+        assertThat(short.canSendCode).isFalse()
+        assertThat(short.numberRefusal).isEqualTo(PhonePlausibility.Refusal.TOO_SHORT)
+        val filler = PhoneChangeFlow().beginEdit("1111100000")
+        assertThat(filler.canSendCode).isFalse()
+        assertThat(filler.numberRefusal).isEqualTo(PhonePlausibility.Refusal.IDENTICAL_RUN)
+        assertThat(PhoneChangeFlow().beginEdit(valid).numberRefusal).isNull()
     }
 
     @Test

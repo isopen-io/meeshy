@@ -44,8 +44,14 @@
     <string name="guest_join_back">Atrás</string>
     <string name="guest_join_birthday">Cumpleaños</string>
     <string name="guest_join_email">Correo</string>
+    <string name="guest_join_email_optional">Correo (opcional)</string>
+    <string name="guest_join_error_join_failed">Error al unirse a la conversación</string>
+    <string name="guest_join_error_link_not_found">No se pudo encontrar este enlace de conversación</string>
+    <string name="guest_join_error_too_many_users">Demasiados usuarios conectados</string>
     <string name="guest_join_first_name">Nombre</string>
     <string name="guest_join_last_name">Apellido</string>
+    <string name="guest_join_optional_section">Opcional</string>
+    <string name="guest_join_required_section">Información requerida</string>
     <string name="guest_join_retry">Reintentar</string>
     <string name="guest_join_sign_in">Iniciar sesión</string>
     <string name="guest_join_submit">Unirse</string>
@@ -64,8 +70,14 @@
     <string name="login_signup_prompt">¿No tienes cuenta?</string>
     <string name="login_username_label">Usuario</string>
     <string name="logout_in_progress">Cerrando sesión...</string>
+    <string name="onboarding_friends_badge">+%d cada uno</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d chispas para tu nivel 1</string>
     <string name="onboarding_gauge_reached">Nivel 1 alcanzado 🎉</string>
+    <string name="onboarding_global_sample_1">Hola desde São Paulo 👋</string>
+    <string name="onboarding_global_sample_2">¿Quién escucha Nova Club? 🎧</string>
+    <string name="onboarding_global_sample_3">¡Bienvenido/a!</string>
+    <string name="onboarding_languages_demo_translated">Hola, ¿qué tal?</string>
+    <string name="onboarding_notifications_sample">Lina te respondió en Meeshy Global</string>
     <plurals name="onboarding_points_a11y">
         <item quantity="one">%d chispa ganada</item>
         <item quantity="many">%d chispas ganadas</item>
@@ -83,6 +95,7 @@
         <item quantity="other">Más %d chispas</item>
     </plurals>
     <string name="onboarding_skipAll">Saltar todo</string>
+    <string name="onboarding_story_badge">24 h</string>
     <string name="registration_back">Atrás</string>
     <string name="session_closed_continue">Volver a iniciar sesión</string>
     <string name="session_closed_signed_out_message">Esta sesión se cerró. Vuelve a iniciar sesión para continuar.</string>
@@ -107,7 +120,9 @@
     <string name="signup_password_hide">Ocultar contraseña</string>
     <string name="signup_password_label">Contraseña</string>
     <string name="signup_password_show">Mostrar contraseña</string>
+    <string name="signup_phone_implausible">Este número no parece real: compruébalo.</string>
     <string name="signup_phone_label">Teléfono</string>
+    <string name="signup_phone_too_short">Este número es demasiado corto: al menos %d dígitos.</string>
     <string name="signup_sign_in">Iniciar sesión</string>
     <string name="signup_subtitle">Leerás a todos en tu idioma.</string>
     <string name="signup_title">Crea tu cuenta</string>
