@@ -101,15 +101,27 @@ const cellOf = (rows: readonly PlaybackQoeRow[]): PlaybackQoeCell => {
 const byCellKey = (a: PlaybackQoeCell, b: PlaybackQoeCell): number =>
   a.day.localeCompare(b.day) || a.surface.localeCompare(b.surface) || a.deviceTier.localeCompare(b.deviceTier);
 
+/**
+ * Groupement LINÉAIRE : la lecture porte jusqu'à 50 000 lignes, et une
+ * réduction qui recopie la carte à chaque ligne serait quadratique. La
+ * mutation reste confinée à cette fonction, qui ne rend qu'une vue en lecture.
+ */
+const groupByCell = (rows: readonly PlaybackQoeRow[]): ReadonlyMap<string, readonly PlaybackQoeRow[]> => {
+  const groups = new Map<string, PlaybackQoeRow[]>();
+  rows.forEach((row) => {
+    const key = cellKeyOf(row);
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
+  });
+  return groups;
+};
+
 export function summarizePlaybackQoe(
   rows: readonly PlaybackQoeRow[],
   options: { readonly minDevices: number },
 ): { readonly cells: readonly PlaybackQoeCell[]; readonly suppressedCells: number } {
-  const groups = rows.reduce<ReadonlyMap<string, readonly PlaybackQoeRow[]>>(
-    (acc, row) => new Map(acc).set(cellKeyOf(row), [...(acc.get(cellKeyOf(row)) ?? []), row]),
-    new Map(),
-  );
-  const all = [...groups.values()].map(cellOf);
+  const all = [...groupByCell(rows).values()].map(cellOf);
   const served = all.filter((cell) => cell.devices >= options.minDevices);
   return { cells: [...served].sort(byCellKey), suppressedCells: all.length - served.length };
 }

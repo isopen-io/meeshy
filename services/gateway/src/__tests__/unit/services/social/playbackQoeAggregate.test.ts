@@ -96,6 +96,18 @@ describe('summarizePlaybackQoe — quantiles par surface × tier × jour', () =>
   });
 });
 
+describe('summarizePlaybackQoe — à la taille du plafond de lecture', () => {
+  it('résume 50 000 sessions d’une même cellule en temps linéaire', () => {
+    const rows = Array.from({ length: 50_000 }, (_, i) => session({ accountId: accountId((i % 40) + 1), startupMs: i % 1000 }));
+
+    const started = Date.now();
+    const [cell] = summarizePlaybackQoe(rows, { minDevices: 20 }).cells;
+
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(cell).toMatchObject({ sessions: 50_000, devices: 40 });
+  });
+});
+
 describe('summarizePlaybackQoe — k-anonymat (aucune ligne sous 20 appareils)', () => {
   it('retient une cellule de 19 comptes et la compte comme retenue', () => {
     const rows = fromAccounts(19);
