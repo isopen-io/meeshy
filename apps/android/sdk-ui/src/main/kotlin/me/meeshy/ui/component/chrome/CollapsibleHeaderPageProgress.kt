@@ -10,7 +10,7 @@ object CollapsibleHeaderPageProgress {
 
     fun scrollOffsetDp(scrollValuePx: Int, density: Float): Float {
         if (density <= 0f) return 0f
-        return -(scrollValuePx.coerceAtLeast(0) / density)
+        return 0f - scrollValuePx.coerceAtLeast(0) / density
     }
 
     /**

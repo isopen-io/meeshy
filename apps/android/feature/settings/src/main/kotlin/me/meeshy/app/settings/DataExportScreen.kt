@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.export.ExportArtifact
 import me.meeshy.sdk.model.export.ExportFormat
+import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
@@ -96,33 +97,16 @@ fun DataExportScreen(
     }
 
     MeeshyBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                        titleContentColor = MeeshyTheme.tokens.textPrimary,
-                        navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
-                    ),
-                    title = { Text(stringResource(R.string.data_export_title)) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.settings_back),
-                            )
-                        }
-                    },
-                )
-            },
-        ) { padding ->
+        CollapsibleHeaderPage(
+            title = stringResource(R.string.data_export_title),
+            onBack = onBack,
+            titleColor = MeeshyTheme.tokens.textPrimary,
+            backArrowColor = MeeshyPalette.Indigo500,
+            backgroundColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {

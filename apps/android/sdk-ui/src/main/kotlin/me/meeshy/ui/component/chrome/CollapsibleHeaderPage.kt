@@ -1,8 +1,10 @@
 package me.meeshy.ui.component.chrome
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -86,6 +88,8 @@ fun CollapsibleHeaderLazyPage(
     backgroundColor: Color,
     modifier: Modifier = Modifier,
     windowInsets: WindowInsets = WindowInsets.statusBars,
+    contentPadding: PaddingValues = PaddingValues(),
+    verticalArrangement: Arrangement.Vertical = Arrangement.Top,
     trailing: @Composable RowScope.() -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
@@ -101,7 +105,12 @@ fun CollapsibleHeaderLazyPage(
         }
     }
     Box(modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = contentPadding,
+            verticalArrangement = verticalArrangement,
+        ) {
             item(key = "collapsible-header-spacer", contentType = "spacer") {
                 Spacer(
                     Modifier

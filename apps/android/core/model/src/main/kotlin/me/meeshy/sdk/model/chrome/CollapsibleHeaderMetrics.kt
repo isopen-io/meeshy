@@ -29,7 +29,7 @@ object CollapsibleHeaderMetrics {
 
     private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
-    fun progress(scrollOffsetDp: Float): Float = (-scrollOffsetDp / COLLAPSE_THRESHOLD).coerceIn(0f, 1f)
+    fun progress(scrollOffsetDp: Float): Float = (-scrollOffsetDp / COLLAPSE_THRESHOLD).coerceIn(0f, 1f) + 0f
 
     fun titleSizeSp(progress: Float): Float = lerp(24f, 17f, progress)
 
