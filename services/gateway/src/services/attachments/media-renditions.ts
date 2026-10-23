@@ -5,6 +5,8 @@ import type { AttachmentMetadata, ImageVariant } from '@meeshy/shared/types/atta
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { ThumbHashGenerator } from './ThumbHashGenerator.js';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
+import { produceCompatibilityRendition, type VideoRendition } from './video-compat-rendition.js';
+import { timeMediaStage } from '../metrics/mediaStageMetrics';
 
 const logger = enhancedLogger.child({ module: 'media-renditions' });
 
@@ -85,6 +87,8 @@ export interface MediaRenditions {
   readonly imageVariants?: readonly ImageVariant[];
   /** #11262 — les variantes AVIF, à CÔTÉ des WebP : absent quand aucune n'existe. */
   readonly avifVariants?: readonly ImageVariant[];
+  /** #11261 — rendus vidéo ADDITIONNELS (H.264 d'un HEVC) ; absent quand il n'y en a pas. */
+  readonly renditions?: readonly VideoRendition[];
   readonly thumbHash: string | null;
 }
 
@@ -96,6 +100,9 @@ export async function produceMediaRenditions(
   const visual = await visualRenditions(deps.metadataManager, source);
 
   const transcoded = attachmentType === 'video' ? await transcodeVideoRendition(deps, source) : null;
+  const compat = attachmentType === 'video' && transcoded === null
+    ? await attempt('compat rendition', () => produceCompatibilityRendition(deps, source), null)
+    : null;
   const storedPath = transcoded?.filePath ?? source.relPath;
   const storedSize = transcoded?.fileSize ?? source.fileSize;
   const storedMimeType = transcoded?.mimeType ?? source.mimeType;
@@ -116,6 +123,7 @@ export async function produceMediaRenditions(
     thumbnailPath: visual.thumbnailPath,
     ...(visual.imageVariants ? { imageVariants: visual.imageVariants } : {}),
     ...(visual.avifVariants ? { avifVariants: visual.avifVariants } : {}),
+    ...(compat ? { renditions: [compat] } : {}),
     thumbHash,
   };
 }
@@ -165,6 +173,11 @@ export function imageVariantsJson(variants: readonly ImageVariant[]): Prisma.Inp
   return variants.map(({ width, height, url, size, format }) => ({ width, height, url, size, format }));
 }
 
+/** La forme que la colonne `renditions` (`Json?`) reçoit (#11261). */
+export function videoRenditionsJson(renditions: readonly VideoRendition[]): Prisma.InputJsonArray {
+  return renditions.map(({ codec, url, width, height, size }) => ({ codec, url, width, height, size }));
+}
+
 export interface TranscodedVideo {
   readonly filePath: string;
   readonly fileSize: number;
@@ -204,7 +217,7 @@ export async function transcodeVideoRendition(
   const outputAbs = path.join(deps.uploadBasePath, outputRel);
 
   try {
-    await deps.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan));
+    await timeMediaStage('transcode', 'video', () => deps.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan)));
     const stat = await fs.stat(outputAbs);
     if (stat.size === 0 || stat.size >= source.fileSize) {
       await fs.unlink(outputAbs).catch(() => {});

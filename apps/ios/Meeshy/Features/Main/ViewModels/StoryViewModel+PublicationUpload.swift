@@ -154,13 +154,12 @@ extension StoryViewModel {
             var uploadResult: TusUploadResult? = nil
             if let bgImage = upload.slideImages[slide.id] {
                 let thumbHash = bgImage.toThumbHash()
-                let compressed = await MediaCompressor.shared.compressImage(bgImage)
-                let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                try compressed.data.write(to: tempURL)
+                let encoded = try await StoryImageUploadEncoder.temporaryFile(
+                    for: bgImage, file: nil, policy: MediaContext.story.storedOutgoingImagePolicy())
+                let tempURL = encoded.url
                 defer { try? FileManager.default.removeItem(at: tempURL) }
                 let result = try await uploader.uploadFile(
-                    fileURL: tempURL, mimeType: compressed.mimeType,
+                    fileURL: tempURL, mimeType: encoded.mimeType,
                     credential: .bearer(token), uploadContext: "story", thumbHash: thumbHash
                 )
                 uploadResult = result
@@ -190,13 +189,12 @@ extension StoryViewModel {
                         foregroundMediaIds.append(result.id)
                     } else if obj.kind == .image, let uiImage = upload.loadedImages[obj.id] {
                         let fgThumbHash = uiImage.toThumbHash()
-                        let compressed = await MediaCompressor.shared.compressImage(uiImage)
-                        let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try compressed.data.write(to: tempURL)
+                        let encoded = try await StoryImageUploadEncoder.temporaryFile(
+                            for: uiImage, file: StoryImageUploadEncoder.localFile(obj.mediaURL), policy: MediaContext.story.storedOutgoingImagePolicy())
+                        let tempURL = encoded.url
                         defer { try? FileManager.default.removeItem(at: tempURL) }
                         let result = try await uploader.uploadFile(
-                            fileURL: tempURL, mimeType: compressed.mimeType,
+                            fileURL: tempURL, mimeType: encoded.mimeType,
                             credential: .bearer(token), uploadContext: "story", thumbHash: fgThumbHash
                         )
                         // Seed the image cache under the server URL — metadata-only
@@ -564,13 +562,12 @@ extension StoryViewModel {
                     keptOriginalIds.insert(originalBg)
                 } else {
                     let thumbHash = bgImage.toThumbHash()
-                    let compressed = await MediaCompressor.shared.compressImage(bgImage)
-                    let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
-                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                    try compressed.data.write(to: tempURL)
+                    let encoded = try await StoryImageUploadEncoder.temporaryFile(
+                        for: bgImage, file: nil, policy: MediaContext.story.storedOutgoingImagePolicy())
+                    let tempURL = encoded.url
                     defer { try? FileManager.default.removeItem(at: tempURL) }
                     let result = try await uploader.uploadFile(
-                        fileURL: tempURL, mimeType: compressed.mimeType,
+                        fileURL: tempURL, mimeType: encoded.mimeType,
                         credential: .bearer(token), uploadContext: "story", thumbHash: thumbHash
                     )
                     await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
@@ -599,13 +596,12 @@ extension StoryViewModel {
                         newMediaIds.append(result.id)
                     } else if obj.kind == .image, let uiImage = loadedImages[obj.id] {
                         let fgThumbHash = uiImage.toThumbHash()
-                        let compressed = await MediaCompressor.shared.compressImage(uiImage)
-                        let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try compressed.data.write(to: tempURL)
+                        let encoded = try await StoryImageUploadEncoder.temporaryFile(
+                            for: uiImage, file: StoryImageUploadEncoder.localFile(obj.mediaURL), policy: MediaContext.story.storedOutgoingImagePolicy())
+                        let tempURL = encoded.url
                         defer { try? FileManager.default.removeItem(at: tempURL) }
                         let result = try await uploader.uploadFile(
-                            fileURL: tempURL, mimeType: compressed.mimeType,
+                            fileURL: tempURL, mimeType: encoded.mimeType,
                             credential: .bearer(token), uploadContext: "story", thumbHash: fgThumbHash
                         )
                         await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)

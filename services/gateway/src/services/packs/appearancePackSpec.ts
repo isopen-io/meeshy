@@ -15,6 +15,7 @@
 import type { FrameUsage } from '@meeshy/shared/types/frame-usage';
 import type { PackAssetRef, PackDomain, PackLanguage, PackSummary } from '@meeshy/shared/types/content-pack';
 import type { PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
+import type { PackAvailability } from '@meeshy/shared/types/pack-availability';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
 import type { CommunityPackStore, PackDomainSpec, RegistryPack } from './PackCatalog';
 import type { PackIndex } from './PackIndex';
@@ -29,6 +30,8 @@ export const isAppearancePackDomain = (value: string): value is AppearancePackDo
 export type AppearancePackSummary = PackSummary & {
   /** Contours et cadres de bannière : où le cadre est utilisable (`avatar`, `banner`). `null` ⇒ nulle part. */
   readonly usage?: FrameUsage | null;
+  /** La fenêtre d'offre (#11274), pour dire « jusqu'au … » ; absente = toujours offert. */
+  readonly availability?: PackAvailability;
 };
 
 export type AppearancePackDetail = AppearancePackSummary & {
@@ -62,6 +65,7 @@ export function appearancePackDetail(entry: PackIndexEntry, installed: boolean, 
     price: entry.price ?? null,
     owned,
     preview: entry.preview,
+    ...(entry.availability === undefined ? {} : { availability: entry.availability }),
     ...(FRAMED_DOMAINS.has(entry.domain) ? { usage: entry.usage ?? null } : {}),
     contractSchema: entry.contractSchema,
     contract: entry.contract,
@@ -80,6 +84,8 @@ const registryOf = (index: PackIndex, domain: AppearancePackDomain): readonly Re
     price: entry.price,
     reward: entry.reward,
     version: entry.version,
+    availability: entry.availability,
+    targeting: entry.targeting,
     project: (installed: boolean, owned: boolean) => appearancePackDetail(entry, installed, owned, index.itemCount(entry)),
   }));
 
