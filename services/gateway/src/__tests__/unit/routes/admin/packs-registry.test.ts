@@ -32,7 +32,7 @@ const wallpaper = (slug: string, over: Record<string, unknown> = {}) => ({
 
 const baseIndex = () =>
   buildPackIndex({
-    registries: [[wallpaper('dunes'), wallpaper('savane', { order: 1 }), wallpaper('essentiels', { origin: 'builtin', installedByDefault: true, removable: false, order: 2 })]],
+    registries: [[wallpaper('dunes', { order: 1 }), wallpaper('savane', { order: 2 }), wallpaper('essentiels', { origin: 'builtin', installedByDefault: true, removable: false, order: 3 })]],
     retained: [],
     contractItemKeys: () => ['fond'],
   });
@@ -214,5 +214,24 @@ describe('les packs du dépôt restent toujours chargés', () => {
     expect(list.map((entry) => entry.slug)).toEqual(['dunes', 'savane', 'essentiels']);
     expect(list[0]).toMatchObject({ base: { hidden: false }, override: { hidden: true }, effective: { hidden: true }, revision: 1 });
     expect(list[1]).toMatchObject({ override: null, revision: 0 });
+  });
+});
+
+describe('la boutique suit une surcharge sans redémarrer', () => {
+  it('un catalogue construit au démarrage cesse d’offrir un pack retiré, puis l’offre de nouveau quand il est republié', async () => {
+    const { appearancePrisma } = await import('../appearance-packs.harness');
+    const { PackCatalog } = await import('../../../../services/packs/PackCatalog');
+    const { appearancePackSpec } = await import('../../../../services/packs/appearancePackSpec');
+    const db = fakeDb();
+    const h = await build(db);
+    const shopDb = appearancePrisma();
+    const catalog = new PackCatalog({ prisma: shopDb.prisma, spec: appearancePackSpec({ index: overlayPackIndex(h.index, () => h.overrides.snapshot()), domain: 'wallpaper' }) });
+    const slugs = async () => (await catalog.catalogue(ADMIN)).map((pack) => pack.slug);
+
+    expect(await slugs()).toContain('dunes');
+    await put(h.app, 'wallpaper/dunes', { expectedRevision: 0, hidden: true });
+    expect(await slugs()).not.toContain('dunes');
+    await put(h.app, 'wallpaper/dunes', { expectedRevision: 1, hidden: false });
+    expect(await slugs()).toContain('dunes');
   });
 });

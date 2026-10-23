@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 744,
+  "routeCount": 747,
   "routes": [
     {
       "method": "DELETE",
@@ -154,6 +154,20 @@
       "path": "/api/v1/admin/broadcasts/:id",
       "module": "broadcastRoutes",
       "mountPrefix": "/api/v1/admin/broadcasts",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/packs/registry/:domain/:slug",
+      "module": "packsRegistryAdminRoutes",
+      "mountPrefix": "/api/v1/admin/packs",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S4",
@@ -2061,6 +2075,20 @@
         "S6"
       ],
       "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/packs/registry",
+      "module": "packsRegistryAdminRoutes",
+      "mountPrefix": "/api/v1/admin/packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
       "hierarchyGated": false,
       "adminPrefixed": true
     },
@@ -9995,6 +10023,20 @@
       "path": "/api/v1/admin/game/seasons/:number",
       "module": "gameSeasonsAdminRoutes",
       "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/packs/registry/:domain/:slug",
+      "module": "packsRegistryAdminRoutes",
+      "mountPrefix": "/api/v1/admin/packs",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S4",

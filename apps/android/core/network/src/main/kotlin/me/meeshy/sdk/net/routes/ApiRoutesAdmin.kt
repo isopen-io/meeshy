@@ -94,6 +94,8 @@ public object ApiRoutesAdmin {
     public const val OPS_CONTAINERS: String = "admin/ops/containers"
     public const val OPS_HOST_METRICS: String = "admin/ops/host-metrics"
     public const val OPS_STATUS: String = "admin/ops/status"
+    public const val PACKS_REGISTRY: String = "admin/packs/registry"
+    public const val PACKS_REGISTRY_BY_DOMAIN_BY_SLUG: String = "admin/packs/registry/{domain}/{slug}"
     public const val POSTS: String = "admin/posts"
     public const val POSTS_BY_POST_ID: String = "admin/posts/{postId}"
     public const val POSTS_BY_POST_ID_GESTURES: String = "admin/posts/{postId}/gestures"

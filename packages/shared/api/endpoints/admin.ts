@@ -258,6 +258,12 @@ export const opsHostMetrics = '/api/v1/admin/ops/host-metrics';
 /** GET /api/v1/admin/ops/status */
 export const opsStatus = '/api/v1/admin/ops/status';
 
+/** GET /api/v1/admin/packs/registry */
+export const packsRegistry = '/api/v1/admin/packs/registry';
+
+/** PUT · DELETE /api/v1/admin/packs/registry/:domain/:slug */
+export const packsRegistryByDomainBySlug = (domain: string, slug: string): string => `/api/v1/admin/packs/registry/${encodeURIComponent(domain)}/${encodeURIComponent(slug)}`;
+
 /** GET /api/v1/admin/posts */
 export const posts = '/api/v1/admin/posts';
 
