@@ -55,7 +55,7 @@ public sealed interface SeasonClaim {
 
 public data class SeasonSettlement(
     val completed: Boolean,
-    /** `GameGlory.POINTS_SEASON` (5 000) au parcours terminé. */
+    /** `GloryLaws.POINTS_SEASON` (5 000) au parcours terminé. */
     val glory: Int,
     val cup: Boolean,
     /** Le badge daté : `season.<n>`, `null` sans parcours terminé. */
@@ -202,7 +202,7 @@ public object GameSeason {
 
     public fun settlement(season: Int, stepsReached: Int): SeasonSettlement =
         if (stepsReached >= STEPS) {
-            SeasonSettlement(completed = true, glory = GameGlory.POINTS_SEASON, cup = true, badgeKey = "season.$season")
+            SeasonSettlement(completed = true, glory = GloryLaws.POINTS_SEASON, cup = true, badgeKey = "season.$season")
         } else {
             SeasonSettlement(completed = false, glory = 0, cup = false, badgeKey = null)
         }

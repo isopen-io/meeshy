@@ -135,7 +135,7 @@ public data class SeasonSchedule(
             value in STEP_POINTS_MIN..STEP_POINTS_MAX && value % STEP_POINTS_STEP == 0
 
         /** Lit un calendrier reçu en texte JSON (réseau, disque). Illisible : le repli. */
-        public fun normalize(text: String?): SeasonSchedule {
+        public fun normalizeJson(text: String?): SeasonSchedule {
             if (text == null) return default
             val raw = try {
                 Json.parseToJsonElement(text)

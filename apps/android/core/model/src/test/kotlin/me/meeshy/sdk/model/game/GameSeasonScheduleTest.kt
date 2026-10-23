@@ -9,7 +9,7 @@ class GameSeasonScheduleTest {
         """{"number":$number,"startDay":"$start","status":"$status","themeKey":"language:fr","stepPoints":$points$extra}"""
 
     private fun schedule(vararg defs: String, revision: Int = 1) =
-        SeasonSchedule.normalize("""{"revision":$revision,"seasons":[${defs.joinToString(",")}]}""")
+        SeasonSchedule.normalizeJson("""{"revision":$revision,"seasons":[${defs.joinToString(",")}]}""")
 
     private fun copyJson(title: String = "Saison un") = SeasonSchedule.COPY_LOCALES.joinToString(",", "{", "}") {
         """"$it":{"title":"$title","tagline":"Une saison","description":"Huit semaines"}"""
@@ -27,10 +27,10 @@ class GameSeasonScheduleTest {
 
     @Test
     fun `un calendrier illisible retombe sur le defaut`() {
-        assertThat(SeasonSchedule.normalize("pas un calendrier")).isEqualTo(SeasonSchedule.default)
-        assertThat(SeasonSchedule.normalize(null)).isEqualTo(SeasonSchedule.default)
-        assertThat(SeasonSchedule.normalize("""{"revision":-1,"seasons":[]}""")).isEqualTo(SeasonSchedule.default)
-        assertThat(SeasonSchedule.normalize("""{"revision":true,"seasons":[]}""")).isEqualTo(SeasonSchedule.default)
+        assertThat(SeasonSchedule.normalizeJson("pas un calendrier")).isEqualTo(SeasonSchedule.default)
+        assertThat(SeasonSchedule.normalizeJson(null)).isEqualTo(SeasonSchedule.default)
+        assertThat(SeasonSchedule.normalizeJson("""{"revision":-1,"seasons":[]}""")).isEqualTo(SeasonSchedule.default)
+        assertThat(SeasonSchedule.normalizeJson("""{"revision":true,"seasons":[]}""")).isEqualTo(SeasonSchedule.default)
     }
 
     @Test
