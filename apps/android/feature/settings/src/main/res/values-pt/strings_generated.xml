@@ -125,9 +125,15 @@
     <string name="privacy_section_media">Mídia e dados</string>
     <string name="privacy_section_visibility">Visibilidade</string>
     <string name="privacy_typing_indicator">Indicador de digitação</string>
+    <string name="sessions_cancel">Cancelar</string>
     <string name="sessions_current">Este aparelho</string>
     <string name="sessions_retry">Tentar novamente</string>
     <string name="sessions_revoke">Desconectar</string>
+    <string name="sessions_revoke_all_action">Desconectar os outros aparelhos</string>
+    <string name="sessions_revoke_all_confirm_message">Só este aparelho continuará conectado. Os outros precisarão entrar novamente.</string>
+    <string name="sessions_revoke_confirm_action">Desconectar</string>
+    <string name="sessions_revoke_confirm_message">%s precisará entrar novamente para acessar sua conta.</string>
+    <string name="sessions_revoke_confirm_title">Desconectar este aparelho?</string>
     <string name="settings_active_sessions">Sessões ativas</string>
     <string name="settings_back">Voltar</string>
     <string name="settings_blocked_users">Usuários bloqueados</string>
