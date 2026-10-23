@@ -30,7 +30,6 @@
     <string name="conversations_delete_for_all_confirm_message">سيتم إغلاق «%1$s» لجميع المشاركين. لن يتمكن أحد من الكتابة بعد الآن.</string>
     <string name="new_conversation_search_hint">ابحث عن أشخاص</string>
     <string name="share_link_field_slug">معرّف رابط مخصص (اختياري)</string>
-    <string name="share_link_access_birthday">تاريخ الميلاد مطلوب</string>
     <string name="share_link_field_max_uses">الحد الأقصى للاستخدامات</string>
     <string name="share_link_created_title">تم إنشاء الرابط</string>
     <string name="share_link_created_subtitle">شاركه لدعوة الأشخاص إلى المحادثة.</string>
@@ -52,7 +51,9 @@
     <string name="conversations_no_results">لا توجد محادثات مطابقة</string>
     <string name="conversations_open_global_search">بحث شامل</string>
     <string name="conversations_section_all">محادثاتي</string>
+    <string name="conversations_section_pinned">المثبّتة</string>
     <string name="dashboard_action_search">بحث شامل</string>
     <string name="global_search_empty_subtitle">الرسائل والمحادثات والمستخدمون</string>
     <string name="global_search_hint">ابحث في كل مكان…</string>
+    <string name="new_conversation_error_blocked">لا يمكنك بدء محادثة مع هذا المستخدم.</string>
 </resources>

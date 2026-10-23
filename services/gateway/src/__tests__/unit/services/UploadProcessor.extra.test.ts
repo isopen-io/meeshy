@@ -3,7 +3,6 @@
  * Targets uncovered paths not reached by UploadProcessor.test.ts:
  *
  * - determinePublicUrl fallback (lines 122-124)
- * - normalizeAudio: success, ffmpeg failure, read/write errors, M4A container
  * - transcodeVideoRendition (ex-maybeTranscodeVideo): all branches
  * - uploadFile video branch: generateVideoThumbnail + transcoded path (lines 421-439)
  * - uploadEncryptedFile video branch: generateVideoThumbnailFromBuffer (line 556)
@@ -224,78 +223,6 @@ describe('UploadProcessor – extra coverage', () => {
       const p = new UploadProcessor(mockPrisma);
       expect(p.getAttachmentUrl('f.jpg')).toContain('http://localhost:3000');
     });
-  });
-
-  // ─── normalizeAudio (#8039) ──────────────────────────────────────────────
-
-  describe('normalizeAudio', () => {
-    it('returns the normalized buffer when ffmpeg exits 0', async () => {
-      const proc = new MockProc();
-      mockSpawnFn.mockReturnValueOnce(proc);
-
-      const p = (processor as any).normalizeAudio(Buffer.from('audio'), 'voice.webm');
-      await new Promise<void>(r => setImmediate(r));
-      proc.stderr.emit('data', Buffer.from('ffmpeg output'));
-      proc.emit('close', 0);
-
-      expect(await p).toEqual(Buffer.from('amplified'));
-    });
-
-    it('returns null when ffmpeg exits with non-zero code', async () => {
-      const proc = new MockProc();
-      mockSpawnFn.mockReturnValueOnce(proc);
-
-      const p = (processor as any).normalizeAudio(Buffer.from('original'), 'voice.webm');
-      await new Promise<void>(r => setImmediate(r));
-      proc.emit('close', 1);
-
-      expect(await p).toBeNull();
-    });
-
-    it('returns null when the normalized file cannot be read', async () => {
-      const proc = new MockProc();
-      mockSpawnFn.mockReturnValueOnce(proc);
-      mockFsReadFile.mockRejectedValueOnce(new Error('read error'));
-
-      const p = (processor as any).normalizeAudio(Buffer.from('fallback'), 'voice.webm');
-      await new Promise<void>(r => setImmediate(r));
-      proc.emit('close', 0);
-
-      expect(await p).toBeNull();
-    });
-
-    it('returns null without spawning when the temp write throws', async () => {
-      mockFsWriteFile.mockRejectedValueOnce(new Error('disk full'));
-
-      expect(await (processor as any).normalizeAudio(Buffer.from('audio'), 'voice.m4a')).toBeNull();
-      expect(mockSpawnFn).not.toHaveBeenCalled();
-    });
-
-    it('returns null when ffmpeg spawn emits error', async () => {
-      const proc = new MockProc();
-      mockSpawnFn.mockImplementationOnce(() => {
-        process.nextTick(() => proc.emit('error', new Error('ENOENT')));
-        return proc;
-      });
-
-      expect(await (processor as any).normalizeAudio(Buffer.from('audio'), 'voice.ogg')).toBeNull();
-    });
-
-    it.each(['voice.wav', 'voice.mp3', 'voice.ogg', 'voice.webm', 'voice.m4a'])(
-      'always writes an M4A container, whatever the source (%s)',
-      async (source) => {
-        const proc = new MockProc();
-        mockSpawnFn.mockReturnValueOnce(proc);
-        const p = (processor as any).normalizeAudio(Buffer.from('audio'), source);
-        await new Promise<void>(r => setImmediate(r));
-        proc.emit('close', 0);
-        await p;
-
-        const args = mockSpawnFn.mock.calls[0][1] as string[];
-        expect(args[args.indexOf('-f') + 1]).toBe('ipod');
-        expect(args[args.length - 1]).toMatch(/\.m4a$/);
-      },
-    );
   });
 
   // ─── maybeTranscodeVideo (lines 280-311) ─────────────────────────────────

@@ -3,6 +3,7 @@ package me.meeshy.app.feed
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,7 @@ import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.toContentFetchFailure
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
@@ -75,6 +77,7 @@ class PostDetailViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val clock: CacheClock,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
+    private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -111,6 +114,8 @@ class PostDetailViewModel @Inject constructor(
         val commentCount: Int? = null,
         val likeCount: Int? = null,
         val isLiked: Boolean? = null,
+        val bookmarkCount: Int? = null,
+        val isBookmarked: Boolean? = null,
     )
     private val liveOverlay = MutableStateFlow(LiveOverlay())
 
@@ -337,6 +342,50 @@ class PostDetailViewModel @Inject constructor(
     }
 
     /**
+     * Tap on the detail's heart (iOS `PostDetailView+Heart`): flips the like and its count
+     * instantly through the live overlay, then hands the mutation to the durable outbox via
+     * [PostRepository.setLiked] — which works even when the post is absent from the feed cache
+     * (opened from a link or a notification) — and schedules the flush. A failed enqueue
+     * reverts the flip. Inert until the post has loaded.
+     */
+    fun toggleLike() {
+        val shown = _state.value.post ?: return
+        val liked = !shown.isLiked
+        val previous = liveOverlay.value
+        liveOverlay.update {
+            it.copy(isLiked = liked, likeCount = (shown.likeCount + if (liked) 1 else -1).coerceAtLeast(0))
+        }
+        sendEngagement(revertTo = previous) { postRepository.setLiked(shown.id, liked) }
+    }
+
+    /** The bookmark analogue of [toggleLike]. */
+    fun toggleBookmark() {
+        val shown = _state.value.post ?: return
+        val bookmarked = !shown.isBookmarked
+        val previous = liveOverlay.value
+        liveOverlay.update {
+            it.copy(
+                isBookmarked = bookmarked,
+                bookmarkCount = (shown.bookmarkCount + if (bookmarked) 1 else -1).coerceAtLeast(0),
+            )
+        }
+        sendEngagement(revertTo = previous) { postRepository.setBookmarked(shown.id, bookmarked) }
+    }
+
+    private fun sendEngagement(revertTo: LiveOverlay, enqueue: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                enqueue()
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                liveOverlay.value = revertTo
+            }
+        }
+    }
+
+    /**
      * Simple repost (no commentary) of the open post. Routed through the tested [RepostCommand]
      * SSOT, which resolves the ROOT target when the open post is itself a repost — iOS's
      * `PostDetailView.toggleDetailRepost` reposts by the raw `postId` and so embeds an empty
@@ -448,12 +497,14 @@ class PostDetailViewModel @Inject constructor(
     ): PostDetailUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
         val projected = post?.let {
-            FeedPostBuilder.build(it, prefs, config.socketUrl, activeLanguageCode = active, currentUserId = user?.id)
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, activeLanguageCode = active, currentUserId = user?.id)
         }?.let { presentation ->
             presentation.copy(
                 commentCount = overlay.commentCount?.coerceAtLeast(0) ?: presentation.commentCount,
                 likeCount = overlay.likeCount?.coerceAtLeast(0) ?: presentation.likeCount,
                 isLiked = overlay.isLiked ?: presentation.isLiked,
+                bookmarkCount = overlay.bookmarkCount?.coerceAtLeast(0) ?: presentation.bookmarkCount,
+                isBookmarked = overlay.isBookmarked ?: presentation.isBookmarked,
             )
         }
         val showSkeleton = st.isLoading && post == null && !st.notFound && st.error == null

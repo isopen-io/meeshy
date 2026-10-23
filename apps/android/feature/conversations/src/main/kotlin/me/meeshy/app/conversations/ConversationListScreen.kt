@@ -49,6 +49,7 @@ fun ConversationListScreen(
     searchSyncPill: @Composable () -> Unit = {},
     searchCommunitiesBand: @Composable () -> Unit = {},
     searchCommunityCount: Int = 0,
+    onRefresh: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -165,7 +166,7 @@ fun ConversationListScreen(
                     onRetry = viewModel::refresh,
                     onNewConversation = onNewConversation,
                 ) {
-                    ConversationListBody(state = state, listState = listState, viewModel = viewModel)
+                    ConversationListBody(state = state, listState = listState, viewModel = viewModel, onRefresh = onRefresh)
                 }
             }
         }

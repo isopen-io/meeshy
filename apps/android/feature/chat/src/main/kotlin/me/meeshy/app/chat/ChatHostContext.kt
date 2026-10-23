@@ -1,6 +1,9 @@
 package me.meeshy.app.chat
 
 import android.net.Uri
+import java.io.File
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -12,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.composer.PendingAttachmentsState
 import me.meeshy.sdk.model.report.ReportReason
 
@@ -25,6 +29,8 @@ internal class ChatNavigationActions(
     val onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit,
     val onCreateShareLink: () -> Unit,
     val hasLocalLiveCall: Boolean,
+    /** [ChatViewModel.callEntry]: which call buttons the header may show. */
+    val callEntry: HeaderCallEntry? = null,
 )
 
 /**
@@ -124,6 +130,9 @@ internal class ChatHostActions(
     val selectReportReason: (ReportReason) -> Unit,
     val onReportDetailsChange: (String) -> Unit,
     val submitReport: () -> Unit,
+    val confirmReportSubmit: () -> Unit,
+    val cancelReportConfirmation: () -> Unit,
+    val addReactionFromDetails: (String, String) -> Unit,
     val dismissReport: () -> Unit,
     val onExplorerRetranslate: (String, String) -> Unit,
     val dismissLanguageExplorer: () -> Unit,
@@ -141,6 +150,9 @@ internal class ChatHostActions(
     val closeForward: () -> Unit,
     val onForwardQueryChange: (String) -> Unit,
     val forwardTo: (String) -> Unit,
+    val stageFile: (File, String?) -> Unit = { _, _ -> },
+    val stageCapturedUris: suspend (List<Uri>) -> Unit = {},
+    val trayNotices: Flow<String> = emptyFlow(),
 )
 
 internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
@@ -178,6 +190,9 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     pickFile = this::onPickFile,
     removePendingAttachment = { id -> controllers.find<ComposerTrayController>()?.remove(id) },
     stagePendingUris = { uris -> controllers.find<ComposerTrayController>()?.stageUris(uris) },
+    stageFile = { file, mime -> controllers.find<ComposerTrayController>()?.stageFile(file, mime) },
+    stageCapturedUris = { uris -> controllers.find<ComposerTrayController>()?.stageUrisAndWait(uris) },
+    trayNotices = controllers.find<ComposerTrayController>()?.notices ?: emptyFlow(),
     dismissImageViewer = this::dismissImageViewer,
     openEmojiPicker = this::openEmojiPicker,
     startEdit = this::startEdit,
@@ -194,6 +209,9 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     selectReportReason = this::selectReportReason,
     onReportDetailsChange = this::onReportDetailsChange,
     submitReport = this::submitReport,
+    confirmReportSubmit = this::confirmReportSubmit,
+    cancelReportConfirmation = this::cancelReportConfirmation,
+    addReactionFromDetails = this::addReactionFromDetails,
     dismissReport = this::dismissReport,
     onExplorerRetranslate = this::onExplorerRetranslate,
     dismissLanguageExplorer = this::dismissLanguageExplorer,

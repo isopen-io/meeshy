@@ -42,6 +42,7 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
     // user). Each bubble projects a pure outcome from this collected cache.
     val linkPreviewStore = remember { LinkPreviewStore(scope) }
+    val audioPlayer = rememberChatAudioPlayer()
     val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
     // [ChatListOrientation.BottomUp]: the list is rendered bottom-anchored
     // (`LazyColumn(reverseLayout = true)` below fed the REVERSED item order)
@@ -247,6 +248,8 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
                         linkPreviewStore = linkPreviewStore,
                         linkPreviewCache = linkPreviewCache,
                         actions = rowActions,
+                        audioPlayer = audioPlayer,
+                        isGroup = state.isGroup,
                     )
                 }
                 TypingIndicator(participants = state.typingParticipants)

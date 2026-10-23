@@ -39,12 +39,13 @@ import me.meeshy.ui.theme.MeeshyTheme
  * connected, reconnecting, ended): the avatar (audio calls), the name, the status
  * line, the connection-quality bars and the notices about the other side
  * (degraded network, screen capture, muted mic, camera off). Pure glue — every
- * show/hide decision is the [CallUiState]'s; the [accent] is the peer's.
+ * show/hide decision is the [CallUiState]'s; the [accent] is the peer's. Over the video stage
+ * ([videoStage]) the avatar and the muted / camera-off notices are on the picture itself.
  */
 @Composable
-internal fun CallPeerBlock(state: CallUiState, accent: Color) {
+internal fun CallPeerBlock(state: CallUiState, accent: Color, videoStage: Boolean = false) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        if (!state.isVideoCall) {
+        if (!state.isVideoCall && !videoStage) {
             Box(
                 modifier = Modifier
                     .size(96.dp)
@@ -84,10 +85,10 @@ internal fun CallPeerBlock(state: CallUiState, accent: Color) {
         if (state.isPeerScreenCapturing) {
             PeerNotice(stringResource(R.string.call_peer_screen_capturing, state.peerName), MeeshyTheme.tokens.error)
         }
-        if (state.isPeerMuted) {
+        if (state.isPeerMuted && !videoStage) {
             PeerNotice(stringResource(R.string.call_peer_muted, state.peerName), MeeshyTheme.tokens.textSecondary)
         }
-        if (state.isPeerCameraOff) {
+        if (state.isPeerCameraOff && !videoStage) {
             PeerNotice(stringResource(R.string.call_peer_camera_off, state.peerName), MeeshyTheme.tokens.textSecondary)
         }
     }

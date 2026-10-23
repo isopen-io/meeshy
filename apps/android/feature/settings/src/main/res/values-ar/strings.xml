@@ -67,11 +67,6 @@
     <!-- Privacy & visibility (§L) -->
     <string name="settings_privacy">الخصوصية والظهور</string>
     <string name="privacy_title">الخصوصية والظهور</string>
-    <string name="privacy_last_seen">آخر ظهور</string>
-    <string name="privacy_hide_from_search">الإخفاء من البحث</string>
-    <string name="privacy_group_invites">دعوات المجموعات</string>
-    <string name="privacy_save_media">حفظ الوسائط في المعرض</string>
-    <string name="privacy_share_data">مشاركة بيانات الاستخدام</string>
     <!-- Account deletion (§L) -->
     <string name="delete_account_warning_title">لا يمكن التراجع عن هذا الإجراء</string>
     <string name="delete_account_warning_intro">يؤدي حذف حسابك إلى إزالة ما يلي نهائيًا:</string>

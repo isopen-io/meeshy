@@ -7,6 +7,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { Attachment, Message } from '@/lib/api/types';
 import { browserFileDeliveryHost, hasFileDeliveryDoor } from '@/lib/media/file-delivery-host';
+import { RecentMediaScopeContext, messagesRecentMediaScope } from '@/lib/media/recent-media-scope';
 import type { MediaCarrier } from '@/lib/view/media';
 import { transcriptionOffered } from '@/lib/view/audio-on-demand';
 import { attachmentSendRequest, mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/viewer-page-offers';
@@ -104,8 +105,14 @@ export default function ThreadMediaViewer({
 
   /* « Annoncé ou noir » (#9617) : aucune page de la visionneuse n'est déclarée à une capture. */
   const shown = useMemo(() => entries.map((entry) => entry.message), [entries]);
+  /* Chaque page se garde hors ligne selon SON message, lu sur la pièce SERVIE (#12052). */
+  const outerRecent = useContext(RecentMediaScopeContext);
+  const recentScope = useMemo(
+    () => messagesRecentMediaScope({ outer: outerRecent, entries, conversationEncrypted: thread === null || thread.conversationEncryptionMode != null, now: Date.now() }),
+    [outerRecent, entries, thread],
+  );
   return (
-    <>
+    <RecentMediaScopeContext.Provider value={recentScope}>
       <CaptureShieldOver messages={shown} viewerId={viewerId} />
       {openedIsQuote ? <CaptureShieldOver messages={[opened]} viewerId={viewerId} quoted /> : null}
       <MediaViewer
@@ -152,6 +159,6 @@ export default function ThreadMediaViewer({
         }}
         {...(deps !== undefined ? { deps } : {})}
       />
-    </>
+    </RecentMediaScopeContext.Provider>
   );
 }
