@@ -54,6 +54,7 @@ function makeMocks() {
   return {
     userFindUnique: jest.fn<any>().mockResolvedValue(mockUser),
     participantFindMany: jest.fn<any>()
+      .mockResolvedValue([])  // tout autre lecteur (appels, #11277) : aucun participant
       .mockResolvedValueOnce([{ id: 'part-1' }])  // for messages: participant ids
       .mockResolvedValueOnce(mockParticipations),  // for contacts
     messageFindMany: jest.fn<any>().mockResolvedValue(mockMessages),
@@ -102,6 +103,8 @@ async function buildApp(opts: {
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
       ),
     ),
+    // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
+    callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   } as any);
 
   app.decorate('authenticate', async (req: FastifyRequest) => {
@@ -153,6 +156,7 @@ describe('GET /export — default JSON (all types)', () => {
     expect(body.data.requestedTypes).toEqual([
       'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
       'readingActivity',
+      'calls',
     ]);
     expect(body.data.profile).toBeDefined();
     expect(body.data.profile.id).toBe(USER_ID);

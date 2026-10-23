@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -13,6 +16,7 @@ import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendRequestListRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequest
+import me.meeshy.sdk.model.friend.ConnectionFeedback
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
 
@@ -36,6 +40,11 @@ class ContactsViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(ContactsUiState())
     val state: StateFlow<ContactsUiState> = _state.asStateFlow()
+
+    private val _feedback = MutableSharedFlow<ConnectionFeedback>(extraBufferCapacity = 16)
+
+    /** One-shot outcome of an accept / decline / cancel (toast + haptic), as on iOS. */
+    val feedback: SharedFlow<ConnectionFeedback> = _feedback.asSharedFlow()
 
     init {
         loadRequests()
@@ -123,6 +132,7 @@ class ContactsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = runCatching { friendRepository.respond(requestId, accepted) }
                 .getOrElse { if (it is CancellationException) throw it else NetworkResult.Failure(toError(it)) }
+            _feedback.tryEmit(respondFeedback(accepted, succeeded = result !is NetworkResult.Failure))
             finishAction(requestId) {
                 if (result is NetworkResult.Failure) {
                     rollbackRespondCache(removed.senderId, removed.id, accepted)
@@ -153,6 +163,9 @@ class ContactsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = runCatching { friendRepository.deleteRequest(requestId) }
                 .getOrElse { if (it is CancellationException) throw it else NetworkResult.Failure(toError(it)) }
+            _feedback.tryEmit(
+                if (result is NetworkResult.Failure) ConnectionFeedback.CancelFailed else ConnectionFeedback.RequestCancelled,
+            )
             finishAction(requestId) {
                 if (result is NetworkResult.Failure) {
                     if (removed.receiverId.isNotBlank()) {
@@ -192,6 +205,13 @@ class ContactsViewModel @Inject constructor(
     }
 
     fun dismissError() = _state.update { it.copy(errorMessage = null) }
+
+    private fun respondFeedback(accepted: Boolean, succeeded: Boolean): ConnectionFeedback = when {
+        accepted && succeeded -> ConnectionFeedback.ConnectionAccepted
+        accepted -> ConnectionFeedback.AcceptFailed
+        succeeded -> ConnectionFeedback.RequestDeclined
+        else -> ConnectionFeedback.DeclineFailed
+    }
 
     private fun finishAction(requestId: String, transform: (ContactsUiState) -> ContactsUiState) {
         _state.update { transform(it).copy(pendingActionIds = it.pendingActionIds - requestId) }

@@ -90,6 +90,9 @@ final class AttachmentDownloadCenter {
     private var active: [String: DownloadProgress] = [:]
     private var tasks: [String: Task<Void, Never>] = [:]
     private let subject = PassthroughSubject<(key: String, event: Event), Never>()
+    /// Les passes qui attendent la fin d'une clé (`awaitEnd(of:)`), reprises
+    /// par `publish` à la fin — jamais par une relecture à cadence fixe.
+    private var endWaiters: [String: [UUID: CheckedContinuation<Event?, Never>]] = [:]
 
     /// La clé d'un média — celle sous laquelle le cache typé le range.
     nonisolated static func key(for urlString: String) -> String {
@@ -123,6 +126,35 @@ final class AttachmentDownloadCenter {
         return nil
     }
 
+    /// **La fin du téléchargement de `key`, signalée** (#9882) — finie,
+    /// échouée ou annulée —, `nil` si rien n'est en cours ou si la tâche qui
+    /// attend est annulée. L'attente s'inscrit sur le fil principal dans le
+    /// même pas que la lecture de l'état : aucune fin ne peut passer entre les
+    /// deux, et rien ne relit l'état à cadence fixe.
+    @discardableResult
+    func awaitEnd(of key: String) async -> Event? {
+        guard active[key] != nil, !Task.isCancelled else { return nil }
+        let id = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Event?, Never>) in
+                endWaiters[key, default: [:]][id] = continuation
+            }
+        } onCancel: {
+            Task { @MainActor in self.resumeEndWaiter(key: key, id: id, with: nil) }
+        }
+    }
+
+    /// Le nombre de passes qui attendent la fin de `key`.
+    func endWaiterCount(for key: String) -> Int {
+        endWaiters[key]?.count ?? 0
+    }
+
+    private func resumeEndWaiter(key: String, id: UUID, with event: Event?) {
+        guard let continuation = endWaiters[key]?.removeValue(forKey: id) else { return }
+        if endWaiters[key]?.isEmpty == true { endWaiters[key] = nil }
+        continuation.resume(returning: event)
+    }
+
     /// Point d'émission UNIQUE : met à jour l'état tenu puis diffuse.
     func publish(_ event: Event, for key: String) {
         switch event {
@@ -132,6 +164,7 @@ final class AttachmentDownloadCenter {
             active[key] = nil
             tasks[key] = nil
             requestedProfiles[key] = nil
+            endWaiters.removeValue(forKey: key)?.values.forEach { $0.resume(returning: event) }
         }
         subject.send((key: key, event: event))
     }

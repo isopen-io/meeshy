@@ -400,7 +400,6 @@ struct FocalGridCell: View {
                     accentColor: accentHex,
                     frame: .bubble,
                     availability: availability,
-                    performance: .inline,
                     playButtonDiameter: 44,
                     surfaceTapExpands: true,
                     onDownload: onDownload,

@@ -4,11 +4,10 @@ import androidx.compose.runtime.Immutable
 
 /**
  * One page of a feed post's fullscreen media gallery: the full-resolution image
- * [url] plus the post's [caption] (its text, trimmed, `null` when blank), the
- * author [authorName] and the [createdAtIso] sent-timestamp to surface in the
- * viewer chrome. Every image of a multi-image post shares that one caption /
- * author / timestamp, mirroring the chat gallery ([GalleryPage]) whose pages all
- * key back to the owning message.
+ * [url] plus its own [caption] (the media's caption; the post text only for a
+ * single-visual post), the author [authorName] and the [createdAtIso]
+ * sent-timestamp to surface in the viewer chrome. Every image of a post shares
+ * the author / timestamp, never the caption.
  */
 @Immutable
 data class FeedGalleryPage(
@@ -81,9 +80,11 @@ data class FeedGallery(
  * resolves where a tap lands.
  *
  * The pages carry the post's *full-resolution* URLs (never the collage thumbnail)
- * so the lightbox is crisp, and each shares the post's text as its caption
- * (trimmed, `null` when blank) plus the post author / timestamp for the viewer
- * chrome — exactly as iOS keys every attachment of a post to the post body. The
+ * so the lightbox is crisp. Each page shows its OWN media caption
+ * (`PostMedia.caption`) — `Post.content`, `PostMedia.caption` and alt are three
+ * contents, never repeated across pages. The post text is only the fallback of a
+ * post with ONE visual (iOS `SocialMediaCaption.map`, `CommentMediaGallery.swift`).
+ * Every page carries the post author / timestamp for the viewer chrome. The
  * [startIndex] is the tapped image clamped into the post's own bounds, so an
  * out-of-range or negative index never escapes the gallery. A post with no image
  * yields an empty gallery (`isEmpty` — nothing to open).
@@ -95,14 +96,14 @@ object FeedMediaGallery {
     fun of(post: FeedPostPresentation, imageIndex: Int): FeedGallery {
         val images = post.images
         if (images.isEmpty()) return EMPTY
-        val caption = post.content.trim().ifBlank { null }
+        val carrierText = post.content.takeIf { images.size == 1 }
         val authorName = post.authorName?.trim()?.ifBlank { null }
         val createdAtIso = post.createdAtIso?.trim()?.ifBlank { null }
         val pages = images.map { image ->
             FeedGalleryPage(
                 url = image.url,
                 thumbnailUrl = image.thumbnailUrl,
-                caption = caption,
+                caption = mediaCaption(own = image.caption, carrierText = carrierText),
                 authorName = authorName,
                 createdAtIso = createdAtIso,
                 alt = image.alt,
@@ -110,4 +111,7 @@ object FeedMediaGallery {
         }
         return FeedGallery(pages, imageIndex.coerceIn(0, pages.lastIndex))
     }
+
+    private fun mediaCaption(own: String?, carrierText: String?): String? =
+        listOf(own, carrierText).firstNotNullOfOrNull { it?.trim()?.ifBlank { null } }
 }

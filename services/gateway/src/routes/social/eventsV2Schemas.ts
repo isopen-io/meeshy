@@ -7,6 +7,7 @@ import {
   CLIENT_PLATFORMS,
   CONSENT_STATES,
   DEVICE_CLASSES,
+  DEVICE_TIERS,
   DISCOVERY_ACTIONS,
   INTERACTION_ACTIONS,
   LINK_ACTIONS,
@@ -223,6 +224,7 @@ const PlaybackSchema = base('playback', PLAYBACK_ACTIONS).extend({
   captionsOn: optionalOf(z.boolean()),
   quartiles: optionalOf(z.number().int().min(0).max(15)),
   exitReason: enumOrOther(PLAYBACK_EXIT_REASONS),
+  deviceTier: enumOrDrop(DEVICE_TIERS),
 });
 
 const LinkSchema = base('link', LINK_ACTIONS).extend({

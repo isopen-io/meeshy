@@ -9,6 +9,8 @@ struct PrivacySettingsView: View {
     @ObservedObject private var prefs = UserPreferencesManager.shared
     /// Fiche « (i) » affichée en surimpression. Une seule à la fois.
     @State private var presentedInfo: SettingsInfo?
+    /// Réglage de l'APPAREIL (#11296) : l'adresse IP à masquer est la sienne.
+    @AppStorage(CallAddressPrivacySetting.key) private var hidesCallAddress = false
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -39,6 +41,7 @@ struct PrivacySettingsView: View {
             contactsSection
             locationSection
             mediaSection
+            callsSection
             encryptionSection
 
             Spacer().frame(height: MeeshySpacing.xxxl + MeeshySpacing.sm)
@@ -221,6 +224,35 @@ struct PrivacySettingsView: View {
                 ),
             ]
         )
+    }
+
+    // MARK: - Appels (#11296)
+
+    /// « Masquer mon adresse IP » force le relais TURN sur toutes les connexions
+    /// d'appel : le correspondant ne voit que l'adresse du relais Meeshy.
+    private var callsSection: some View {
+        let titre = String(localized: "settings.privacy.calls.hide_ip", defaultValue: "Masquer mon adresse IP", bundle: .main)
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            SettingsSectionHeader(title: String(localized: "settings.privacy.calls", defaultValue: "Appels", bundle: .main),
+                                  icon: "phone.fill", color: MeeshyColors.tileBlueHex)
+            SettingsCard(tint: MeeshyColors.tileBlueHex) {
+                SettingsRow(
+                    icon: "eye.slash.fill", title: titre, color: MeeshyColors.tileBlueHex,
+                    info: SettingsInfo(
+                        id: "privacy.calls.hide_ip", title: titre,
+                        message: String(localized: "settings.privacy.calls.hide_ip.info",
+                                        defaultValue: "Vos appels passent par un relais Meeshy : votre correspondant ne voit pas votre adresse IP. La connexion peut être un peu plus lente. Ce réglage vaut pour cet appareil.",
+                                        bundle: .main)
+                    ),
+                    onInfo: { presentedInfo = $0 }
+                ) {
+                    Toggle("", isOn: $hidesCallAddress)
+                        .labelsHidden()
+                        .tint(Color(hex: accentColor))
+                        .accessibilityLabel(titre)
+                }
+            }
+        }
     }
 
     // MARK: - Chiffrement (bientôt disponible)

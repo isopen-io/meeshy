@@ -1,6 +1,8 @@
 package me.meeshy.app.chat
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +33,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ComposerLanguage
@@ -97,6 +101,13 @@ internal fun ComposerInputRow(
             modifier = Modifier.weight(1f),
             placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
             maxLines = 4,
+            // The keyboard's action key reads « Send » and sends, like iOS (`ComposerReturnKey`):
+            // the field empties on send through the controller's draft reset.
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Send,
+            ),
+            keyboardActions = KeyboardActions(onSend = { if (!showMic && sendEnabled) onSend() }),
             trailingIcon = if (sentiment != null) {
                 {
                     val description = stringResource(R.string.chat_composer_sentiment)
@@ -122,6 +133,11 @@ internal fun ComposerInputRow(
                 Icon(
                     imageVector = if (isEditing) Icons.Filled.Check else Icons.AutoMirrored.Filled.Send,
                     contentDescription = stringResource(R.string.chat_send),
+                    tint = when {
+                        !sendEnabled -> MeeshyTheme.tokens.textSecondary.copy(alpha = 0.5f)
+                        isEditing -> MeeshyTheme.tokens.warning
+                        else -> accentColor
+                    },
                 )
             }
         }

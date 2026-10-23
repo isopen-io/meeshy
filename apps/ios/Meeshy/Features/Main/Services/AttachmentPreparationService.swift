@@ -165,6 +165,16 @@ final class AttachmentPreparationService {
         return prep
     }
 
+    /// **Une prise du viseur part par ses OCTETS** (#9885, #11847) : ceux que
+    /// `PhotoCaptureProcessor` a écrits une fois, carte de gain HDR comprise.
+    /// L'image ne sert que si la prise n'en a pas (rendu peint par le composer).
+    func prepareCapture(_ image: UIImage, data: Data?,
+                        context: MediaContext,
+                        accentColor: String) -> PreparingAttachment {
+        guard let data else { return prepareImage(image, context: context, accentColor: accentColor) }
+        return prepareImageData(data, context: context, accentColor: accentColor)
+    }
+
     // MARK: Video (URL on disk — camera or already-extracted picker payload)
 
     func prepareVideo(sourceURL: URL,
@@ -299,7 +309,8 @@ final class AttachmentPreparationService {
                                      context: MediaContext) async {
         let compressedURL: URL
         do {
-            compressedURL = try await MediaCompressor.shared.compressVideo(sourceURL, context: context)
+            compressedURL = try await MediaCompressor.shared.compressVideo(sourceURL, context: context,
+                                                                           budget: context.storedVideoSendBudget())
             if deleteSource, compressedURL != sourceURL {
                 FileManager.default.removeItemLogging(at: sourceURL, context: "post-compression source cleanup", logger: log)
             }
@@ -407,20 +418,7 @@ final class AttachmentPreparationService {
     /// budget used by the message and feed composers so the tray thumbnail
     /// keeps the same on-disk footprint after the unification.
     static func generateVideoThumbnail(url: URL) async -> UIImage? {
-        // Modern async AVFoundation API (iOS 16+): `image(at:)` decodes the frame
-        // on AVFoundation's own queue, so it neither blocks the caller nor needs a
-        // manually-detached thread, and replaces the deprecated synchronous
-        // `copyCGImage` and `AVAsset(url:)`.
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        do {
-            let cgImage = try await generator.image(at: .zero).image
-            return UIImage(cgImage: cgImage)
-        } catch {
-            return nil
-        }
+        await VideoThumbnailGenerator.shared.image(for: .firstFrame(of: url, maxDimension: 200))
     }
 
     /// Feeds `ReelComposition`'s 3-second qualification floor (règle produit
@@ -451,17 +449,8 @@ final class AttachmentPreparationService {
     /// land, before the heavier compression pipeline runs. Returns `nil` when
     /// the bytes can't be decoded: the caller then refuses the image.
     nonisolated static func downsampledPreview(from data: Data, maxPixelSize: CGFloat = 1024) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: false
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: maxPixelSize, decodeImmediately: false)
+            .map { UIImage(cgImage: $0) }
     }
 }
 

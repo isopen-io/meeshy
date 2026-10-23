@@ -36,4 +36,12 @@ class MeeshyAvatarTest {
     fun `missing presence data shows no dot`() {
         assertThat(meeshyPresenceDotColor(null)).isNull()
     }
+
+    @Test
+    fun `dot tones map to the central palette and here is the primary colour`() {
+        assertThat(meeshyDotToneColor(me.meeshy.sdk.model.avatar.AvatarDotTone.HERE)).isEqualTo(MeeshyPalette.Indigo500)
+        assertThat(meeshyDotToneColor(me.meeshy.sdk.model.avatar.AvatarDotTone.ONLINE)).isEqualTo(MeeshyPalette.Success)
+        assertThat(meeshyDotToneColor(me.meeshy.sdk.model.avatar.AvatarDotTone.AWAY)).isEqualTo(MeeshyPalette.Warning)
+        assertThat(meeshyDotToneColor(me.meeshy.sdk.model.avatar.AvatarDotTone.IDLE)).isEqualTo(MeeshyPalette.Neutral400)
+    }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import MeeshySDK
 import UIKit
 
 /// **Décoder une image ANIMÉE — ou dire qu'elle ne l'est pas** (#4925).
@@ -209,13 +210,8 @@ nonisolated public enum AnimatedImageDecoder {
         guard let maxPixelSize else {
             return CGImageSourceCreateImageAtIndex(source, index, nil)
         }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(source, index, options as CFDictionary)
+        return ImageDownsampler.thumbnail(source: source, index: index, maxPixelSize: CGFloat(maxPixelSize),
+                                          decodeImmediately: true)
     }
 
     private static func properties(from source: CGImageSource, at index: Int) -> [String: Any]? {

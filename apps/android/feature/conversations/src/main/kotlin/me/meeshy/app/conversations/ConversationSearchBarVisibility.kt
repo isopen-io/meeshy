@@ -40,6 +40,10 @@ object ConversationSearchBarVisibility {
         }
     }
 
-    fun isVisible(isSearchActive: Boolean, isScrollingDown: Boolean): Boolean =
-        isSearchActive || !isScrollingDown
+    /**
+     * The bar never hides while the user is searching — a typed query OR a focused field
+     * (parity iOS `guard !isSearching`): hiding it under an open keyboard loses the field.
+     */
+    fun isVisible(hasQuery: Boolean, isFocused: Boolean, isScrollingDown: Boolean): Boolean =
+        hasQuery || isFocused || !isScrollingDown
 }
