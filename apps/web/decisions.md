@@ -5686,3 +5686,14 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Ce que ce lot ne fait pas.** iOS (`packages/MeeshySDK`) et Android restent à faire (#12285 reste ouverte). Les citations et la bannière de notification jouent encore sans gain. Rien n'est mesuré ici.
 
 **Gardes.** `lib/media/loudness.test.ts`, `lib/media/loudness-level.test.ts`, `lib/media/loudness-cors.test.tsx` (une source sans CORS joue sans gain), `components/voice-loudness.test.tsx`.
+
+## D-221 — La boutique dit ce qui reste à débloquer d'un pack, et n'offre le geste qu'une fois débloqué (2026-10-23, #11324 ; consomme S21 #11276)
+
+**Contexte.** Un pack récompensé (rang, trophée, saison) ou à fenêtre apparaissait en boutique sans dire comment l'obtenir. Pire : un pack sans prix était décodé « possédé » d'office (`owned: price === null`), et la boutique offrait « Installer » sur un pack que le serveur refuse (`not-owned`). La passerelle sert désormais `requirementPreview` (`PackRequirementPreview`, `packages/shared/types/pack-unlock.ts`) pour chaque pack du registre NON possédé qui se gagne ou qui a une fenêtre.
+
+**Décision.**
+- **Le décodage** (`lib/api/packs-shop.ts`) valide `requirementPreview` à la frontière et ignore une forme inattendue. Un pack sans prix qui porte un aperçu suit le `owned` servi ; sans aperçu (ancien serveur, pack libre), rien ne change.
+- **Une ligne** (`lib/packs/unlock-line.ts`, `packUnlockLine`) : la Gloire qui manque (et le rang visé dès que le catalogue du jeu est chargé), le trophée, la saison, puis la fenêtre (à partir du…, jusqu'au…, plus proposé). Une récompense remplie ne se redit pas. Sept langues (`catalog-sticker-packs-<langue>.ts`).
+- **Le geste** : tant que l'aperçu n'est pas rempli (`packIsLocked`), la rangée montre « À débloquer » à la place de « Installer » ou « Acheter ». Un pack payant à fenêtre ouverte reste achetable. Le serveur reste juge.
+
+**Gardes.** `lib/packs/unlock-line.test.ts`, `lib/api/packs-shop-unlock.test.ts`, `components/unified-shop-unlock.test.tsx`.
