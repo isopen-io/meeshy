@@ -1613,7 +1613,7 @@ class BubbleContentBuilderTest {
                         mimeType = "audio/mp4",
                         fileUrl = "/media/voice.m4a",
                         fileSize = 20480,
-                        duration = 12,
+                        duration = 12_000,
                     ),
                 ),
             ),
@@ -1981,7 +1981,7 @@ class BubbleContentBuilderTest {
                         id = "aud1",
                         mimeType = "audio/mp4",
                         fileUrl = "/media/original.m4a",
-                        duration = 12,
+                        duration = 12_000,
                         transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
                         translations = mapOf(
                             "fr" to ApiAttachmentTranslation(
