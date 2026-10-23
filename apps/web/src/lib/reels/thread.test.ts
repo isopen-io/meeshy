@@ -193,6 +193,7 @@ describe('reelPreloadOf — seul N±1 est décodé, N±2 n’est que des octets 
   test('N±2 reste monté sans rien charger ni décoder : ses octets de tête viennent de l’amorceur, son affiche de l’élément', () => {
     expect(reelPreloadOf(pageModeOf(1, 3))).toBe('none');
     expect(reelPreloadOf(pageModeOf(5, 3))).toBe('none');
+    expect(reelPreloadOf(pageModeOf(0, 3))).toBe('none');
   });
 });
 
