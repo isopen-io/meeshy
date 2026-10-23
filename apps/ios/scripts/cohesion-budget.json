@@ -11,7 +11,6 @@
     "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+ParticipantProfiles.swift::ConversationDashboardProfilesSection.body": 103,
     "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView.swift::ConversationDashboardView.heroHealthCard": 123,
     "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView.swift::ConversationDashboardView.statsRingsSection": 85,
-    "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSecurityRow.swift::ConversationInfoSecurityRow.body": 101,
     "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift::ConversationInfoSheet.membersSection": 82,
     "apps/ios/Meeshy/Features/Main/Components/ConversationPreferencesTab.swift::ConversationPreferencesTab.displaySection": 112,
     "apps/ios/Meeshy/Features/Main/Components/EditPostSheet.swift::EditPostSheet.body": 102,
