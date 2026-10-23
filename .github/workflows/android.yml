@@ -24,7 +24,7 @@
 # would block slices on pre-existing debt the routine never agreed to fix.
 # =============================================================================
 
-name: Android
+name: Android natif
 
 on:
   push:
@@ -82,7 +82,7 @@ jobs:
   # n'est plus celui que les catalogues produiraient. Bloquant pour une PR qui touche apps/android,
   # consultatif pour une PR iOS seule (qui ne peut pas connaître le manifeste Android).
   i18n:
-    name: Android strings (generation check)
+    name: Chaînes Android générées à jour
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -126,7 +126,7 @@ jobs:
   # services/gateway/route-manifest.json (packages/shared/api/build-kotlin-endpoints.ts).
   # Le contrôle échoue quand un fichier a divergé du manifeste ou qu'un orphelin subsiste.
   routes:
-    name: Android routes (generation check)
+    name: Routes Android générées à jour
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -146,7 +146,7 @@ jobs:
   # MeeshyColors.swift par le même parseur strict. Une couleur modifiée côté Swift sans
   # régénération fait échouer ce contrôle.
   tokens:
-    name: Design tokens (generation check)
+    name: Jetons de design générés à jour
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

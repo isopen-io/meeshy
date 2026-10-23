@@ -16,7 +16,7 @@
 # seulement AU MOMENT du déploiement. Celui-ci couvre l'angle mort : une
 # révision qui dérive SANS nouveau déploiement (le cas exact de l'incident :
 # l'image était déjà sur l'hôte, seul le conteneur n'a jamais été recréé).
-name: Comparer la révision servie à sa branche
+name: Veille · révision servie contre sa branche
 
 on:
   schedule:

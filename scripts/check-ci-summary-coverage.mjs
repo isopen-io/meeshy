@@ -182,14 +182,14 @@ const MUTATIONS = [
     muter: (texte) =>
       texte
         .split('\n')
-        .filter((ligne) => !ligne.includes('| Security | ${{ needs.security.result }} |'))
+        .filter((ligne) => !ligne.includes('| Sécurité · Trivy du dépôt | ${{ needs.security.result }} |'))
         .join('\n'),
     attendu: /aucune ligne du tableau ne rend needs\.security\.result/,
   },
   {
     nom: 'règle 3 — un statut écrit à la main',
     muter: (texte) =>
-      texte.replace('| Prisma | ${{ needs.prisma.result }} |', '| Prisma | disabled |'),
+      texte.replace('| Prisma · schéma et client | ${{ needs.prisma.result }} |', '| Prisma · schéma et client | disabled |'),
     attendu: /statut ÉCRIT À LA MAIN/,
   },
 ];

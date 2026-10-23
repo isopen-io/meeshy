@@ -302,7 +302,7 @@ jobs:
   # qui ÉNUMÈRE `apps/ios/scripts/` plutôt que d'en recopier la liste — une
   # garde neuve fait donc rougir le jour où elle est écrite.
   gardes-outillage:
-    name: Gardes de l'outillage iOS
+    name: Gardes iOS (texte, ubuntu)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -400,7 +400,7 @@ jobs:
     # + ARCHS=arm64, qui produit un `.xctestrun` exécutable sur n'importe quel
     # simulateur arm64 — et publie `Build/Products` en artefact ; les tranches
     # `ios-test-shard` l'exécutent en parallèle, `ios-tests` rend le verdict
-    # sous le nom historique « Build app + tests unitaires ». Effet de bord
+    # sous le nom « Verdict iOS (tests) » (ancien « Build app + tests unitaires »). Effet de bord
     # voulu : les deux modes bâtissent désormais la MÊME destination, la
     # lignée DerivedData sert donc indifféremment PR et `dev`.
     name: ${{ needs.scope.outputs.run_tests == 'true' && 'Build app (produits de test)' || 'Build app (app + cibles de test)' }}
@@ -988,8 +988,7 @@ jobs:
           overwrite: true
           if-no-files-found: warn
 
-  # Le VERDICT de la suite, sous le nom de check historique : les veilles qui
-  # cherchent « Build app + tests unitaires » le retrouvent, et il ne verdit
+  # Le VERDICT de la suite (ancien nom : « Build app + tests unitaires ») : il ne verdit
   # que si la compilation ET chaque tranche sont vertes — une tranche annulée
   # (délai, poussée concurrente) n'est jamais un vert. Il rougit aussi sur une
   # tranche qui n'a exécuté AUCUN test : une sélection vide est une faute de
@@ -999,8 +998,8 @@ jobs:
     if: always() && needs.scope.outputs.run_tests == 'true'
     # Nom STATIQUE : un job sauté (compilation seule) n'évalue pas son nom, et
     # l'expression brute s'affichait telle quelle dans la liste des checks
-    # (run 37830972768). Sauté, « Build app + tests unitaires » dit juste.
-    name: Build app + tests unitaires
+    # (run 37830972768). Sauté (compilation seule), « Verdict iOS (tests) » dit juste.
+    name: Verdict iOS (tests)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

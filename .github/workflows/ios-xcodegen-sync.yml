@@ -11,7 +11,7 @@
 # rejoue les gardes du pbxproj, puis commite le résultat sur la même branche.
 # Ce commit, poussé par GITHUB_TOKEN, ne relance pas la CI : l'auteur pousse
 # ensuite un commit (vide au besoin) dont le sujet contient « run test ».
-name: iOS — pbxproj régénéré à la demande
+name: iOS · pbxproj régénéré sur [xcodegen]
 
 on:
   push:
@@ -19,6 +19,9 @@ on:
       - 'lot/**'
       - 'fix/**'
       - 'claude/**'
+    paths:
+      - 'apps/ios/**'
+      - 'packages/MeeshySDK/**'
 
 permissions:
   contents: write

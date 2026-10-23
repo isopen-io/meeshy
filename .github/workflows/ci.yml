@@ -122,7 +122,7 @@ jobs:
   # `scripts/ci-affected.mjs` (en cas de doute, tout tourne).
   # ===========================================================================
   changes:
-    name: Changes
+    name: Zones touchées
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -151,7 +151,7 @@ jobs:
   # QUALITY: Lint & Type-check (Fast feedback)
   # ===========================================================================
   quality:
-    name: Quality (${{ github.event.inputs.package_manager || 'bun' }})
+    name: Qualité TS (${{ github.event.inputs.package_manager || 'bun' }})
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -492,6 +492,9 @@ jobs:
       - name: CI summary coverage guard
         run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
 
+      - name: CI verdict witness
+        run: node scripts/ci/needs-verdict.mjs --self-test
+
       # Pas de mode « balayage du dépôt » ici : `resolve-docker-detect-base.mjs`
       # est une fonction de décision PURE (docker.yml § job `detect`, #6551),
       # invoquée à l'exécution avec le SHA du dernier run réussi et
@@ -630,8 +633,8 @@ jobs:
   # la mesure de première peinture (elle n'installe le service worker qu'à la
   # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
   # visite : c'est exactement ce que ce job fait.
-  institutionnel-v3:
-    name: Peaux web (institutionnel, Lentille, états et virtualisation du fil)
+  web-navigateur:
+    name: Web · gardes navigateur (Playwright)
     runs-on: ubuntu-latest
     needs: quality
     # #8580 — 53 gates Playwright en série : le job franchissait ses 25 min
@@ -1353,7 +1356,7 @@ jobs:
   # la poussée touche ce que le pilote LIT (`shell_android`,
   # `scripts/ci-affected.mjs`). iOS reste local (runner macOS, #5657).
   shell-android:
-    name: Coque Android (apps/web)
+    name: Android coque · APK de recette
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.shell_android == 'true'
@@ -1460,7 +1463,7 @@ jobs:
   # Chromium ; seul ce job lit `docs/product/cadres-de-gloire/` (domaine
   # `glory_frames`, `scripts/ci-affected.mjs`), il n'installe rien du monorepo.
   glory-frames:
-    name: Cadres de gloire (empiètement)
+    name: Cadres de gloire · empiètement
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.glory_frames == 'true'
@@ -1583,7 +1586,7 @@ jobs:
   # runners lents franchissaient 25 min sans aucun échec. Filet en attendant
   # l'accélération de ts-jest (isolatedModules, mesurée 584 → 268 s en local).
   test:
-    name: Test ${{ matrix.package.name }}
+    name: Tests · ${{ matrix.package.name }}
     runs-on: ubuntu-latest
     needs: quality
     timeout-minutes: ${{ matrix.package.timeoutMinutes }}
@@ -1743,7 +1746,7 @@ jobs:
   # jobs dédiés.
   # ===========================================================================
   test-python:
-    name: Test Python (translator)
+    name: Traducteur · tests Python
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -1884,7 +1887,7 @@ jobs:
   # Generates audio samples and uploads as artifacts
   # ===========================================================================
   test-audio-pipeline:
-    name: Audio Pipeline Tests
+    name: Traducteur · pipeline audio
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -2037,7 +2040,7 @@ jobs:
   # Tests UnifiedTTSService, TranscriptionService, and E2E voice pipeline
   # ===========================================================================
   test-tts-stt:
-    name: TTS/STT Integration
+    name: Traducteur · TTS et STT
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -2202,7 +2205,7 @@ jobs:
   # Complete coverage for Voice API endpoints and handlers
   # ===========================================================================
   test-voice-api:
-    name: Voice API Tests
+    name: Traducteur · API vocale
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -2359,7 +2362,7 @@ jobs:
   # Comprehensive pipeline tests matching Python XTTS test script
   # ===========================================================================
   test-voice-e2e:
-    name: Voice E2E Benchmark
+    name: Traducteur · banc vocal de bout en bout
     runs-on: ubuntu-latest
     needs: [quality, test-voice-api]
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[e2e]')
@@ -2430,7 +2433,7 @@ jobs:
   # SECURITY: Vulnerability Scan
   # ===========================================================================
   security:
-    name: Security
+    name: Sécurité · Trivy du dépôt
     runs-on: ubuntu-latest
     # Sans `security-events: write`, l'envoi du SARIF échoue sur les pushes de
     # dev (« Resource not accessible by integration », masqué par
@@ -2465,7 +2468,7 @@ jobs:
   # PRISMA: Validate schema and check migrations
   # ===========================================================================
   prisma:
-    name: Prisma
+    name: Prisma · schéma et client
     runs-on: ubuntu-latest
     needs: quality
     steps:
@@ -2544,7 +2547,7 @@ jobs:
   # BUILD: Verify builds work (like in Dockerfiles)
   # ===========================================================================
   build:
-    name: Build (${{ github.event.inputs.package_manager || 'bun' }})
+    name: Build · shared, passerelle, agent (${{ github.event.inputs.package_manager || 'bun' }})
     runs-on: ubuntu-latest
     needs: [quality, test, prisma]
     steps:
@@ -2654,30 +2657,34 @@ jobs:
   # SUMMARY
   # ===========================================================================
   summary:
-    name: Summary
+    name: Verdict CI
     runs-on: ubuntu-latest
-    needs: [changes, quality, institutionnel-v3, shell-android, glory-frames, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [changes, quality, web-navigateur, shell-android, glory-frames, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
-      - name: Pipeline Summary
+      - name: Tableau
         run: |
-          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## CI — verdict" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package Manager:** ${{ env.PACKAGE_MANAGER }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Changes (translator: ${{ needs.changes.outputs.translator }}) | ${{ needs.changes.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Peaux web (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Coque Android (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Zones touchées (translator: ${{ needs.changes.outputs.translator }}) | ${{ needs.changes.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Qualité TS | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web · gardes navigateur | ${{ needs.web-navigateur.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android coque (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cadres de gloire (glory_frames: ${{ needs.changes.outputs.glory_frames }}) | ${{ needs.glory-frames.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| TTS/STT Integration | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Voice API Tests | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Voice E2E Benchmark | ${{ needs.test-voice-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Prisma | ${{ needs.prisma.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests · paquets Node | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · tests Python | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · pipeline audio | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · TTS et STT | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · API vocale | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · banc vocal de bout en bout | ${{ needs.test-voice-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prisma · schéma et client | ${{ needs.prisma.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sécurité · Trivy du dépôt | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build · shared, passerelle, agent | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+      - name: Verdict
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/ci/needs-verdict.mjs
