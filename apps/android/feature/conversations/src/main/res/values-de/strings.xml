@@ -52,6 +52,7 @@
     <string name="conversations_no_results">Keine passenden Unterhaltungen</string>
     <string name="conversations_open_global_search">Globale Suche</string>
     <string name="conversations_section_all">Meine Unterhaltungen</string>
+    <string name="conversations_section_pinned">Angeheftet</string>
     <string name="dashboard_action_search">Globale Suche</string>
     <string name="global_search_empty_subtitle">Nachrichten, Unterhaltungen, Benutzer</string>
     <string name="global_search_hint">Überall suchen…</string>

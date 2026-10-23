@@ -80,6 +80,15 @@ class StoryRepository @Inject constructor(
     }
 
     /**
+     * A story this device just published joins the tray cache at once, so its ring hands off
+     * from the optimistic one without waiting for the next revalidation (iOS inserts the
+     * published story on success). The next revalidation stays authoritative.
+     */
+    suspend fun adoptPublished(story: ApiPost) {
+        cacheSource.upsertLocal(story)
+    }
+
+    /**
      * Folds a realtime `story:deleted` into the authoritative Room cache so the tray
      * stream repaints without the removed story. Idempotent and inert for an unknown id
      * (over-broadcast delivery). Mirrors the viewer's `StoryPlayback.removingSlide`, but

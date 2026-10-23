@@ -54,6 +54,8 @@
     <string name="stories_composer_style_neon">نيون</string>
     <string name="stories_composer_style_typewriter">آلة كاتبة</string>
     <string name="stories_composer_text_caption">تعليق</string>
+    <string name="stories_composer_text_finish">تم</string>
+    <string name="stories_composer_text_finish_a11y">إنهاء تعديل النص</string>
     <string name="stories_delete_confirm_title">حذف القصة؟</string>
     <string name="stories_publish_retry">إعادة المحاولة</string>
     <string name="stories_report_reason_harassment">تحرّش</string>
@@ -65,6 +67,8 @@
     <string name="stories_report_reason_violence">عنف</string>
     <string name="stories_reposted">أُعيد نشره</string>
     <string name="stories_translated">الترجمة متاحة</string>
+    <string name="stories_tray_add_story">إضافة قصة</string>
+    <string name="stories_tray_view_my_story">عرض قصتي</string>
     <string name="stories_viewer_close">إغلاق</string>
     <string name="stories_viewer_mute">كتم صوت الخلفية</string>
     <string name="stories_viewer_next">القصة التالية</string>
