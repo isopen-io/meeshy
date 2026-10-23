@@ -106,9 +106,9 @@ data class PhoneRecoveryState(
  */
 object PhoneRecoveryInput {
 
-    /** The phone entry carries enough digits to look up (iOS `digits.count >= 8`). */
+    /** The phone entry is present and plausible ([PhonePlausibility], the SSOT shared with signup). */
     fun canLookup(phoneNumber: String): Boolean =
-        SignupFieldValidation.isPhoneValidLocally(phoneNumber)
+        PhonePlausibility.isSubmittable(phoneNumber)
 
     /**
      * The identity challenge is answerable: a non-blank full username and a

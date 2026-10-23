@@ -194,6 +194,9 @@ class ConversationListViewModelTest {
         repo, messageRepo, socket, relay, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
         storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
+        me.meeshy.sdk.network.InMemoryNetworkMonitor(),
+        io.mockk.mockk(relaxed = true),
+        idleRowSignalsSource(),
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(
@@ -913,19 +916,21 @@ class ConversationListViewModelTest {
         runCurrent()
         connection.value = SocketConnectionState.DISCONNECTED
         runCurrent()
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
 
-        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.OFFLINE)
+        advanceTimeBy(ConversationListConnectionObserver.RECONNECT_GRACE_MILLIS + 1)
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.RECONNECTING)
     }
 
     @Test
-    fun a_socket_that_never_connects_is_announced_offline_after_the_grace_period() = runTest(dispatcher) {
+    fun a_socket_that_never_connects_is_announced_connecting_after_the_grace_period() = runTest(dispatcher) {
         val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
         val vm = viewModel(repo, connectionSocket(MutableStateFlow(SocketConnectionState.DISCONNECTED)))
         runCurrent()
 
         advanceTimeBy(ConversationListViewModel.CONNECTION_GRACE_MILLIS + 1)
 
-        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.OFFLINE)
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.CONNECTING)
     }
 
     @Test
@@ -951,7 +956,7 @@ class ConversationListViewModelTest {
         val vm = viewModel(repo, connectionSocket(connection))
         advanceUntilIdle()
 
-        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.RECONNECTING)
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.CONNECTING)
 
         connection.value = SocketConnectionState.CONNECTED
         advanceUntilIdle()

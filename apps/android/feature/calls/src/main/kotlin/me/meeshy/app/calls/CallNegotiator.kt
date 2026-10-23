@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.model.call.CallSignalEnvelope
+import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.socket.CallSignalManager
 import org.webrtc.IceCandidate
 import org.webrtc.SessionDescription
@@ -85,12 +86,25 @@ internal class CallNegotiator(
     }
 
     private suspend fun sendOffer() {
-        val offer = engine.createOffer()
-        engine.setLocalDescription(offer)
-        signals.emitOffer(callId, offer.description, to = peerId, from = selfId, negotiationId = negotiationId)
+        try {
+            val offer = engine.createOffer()
+            engine.setLocalDescription(offer)
+            signals.emitOffer(callId, offer.description, to = peerId, from = selfId, negotiationId = negotiationId)
+        } catch (_: WebRtcError) {
+            // Offre impossible (pair fermé entre-temps) : l'ICE monitor et le budget de reconnexion tranchent.
+        }
     }
 
     private suspend fun onRemoteSignal(envelope: CallSignalEnvelope) {
+        try {
+            applyRemoteSignal(envelope)
+        } catch (_: WebRtcError) {
+            // Un SDP refusé ou une description inapplicable ne doit ni couper le flux de signaux ni raccrocher
+            // un appel sain : le signal est écarté, la négociation en cours continue.
+        }
+    }
+
+    private suspend fun applyRemoteSignal(envelope: CallSignalEnvelope) {
         val signal = envelope.signal
         // §3.5 (mirrors iOS `CallManager.acceptIncomingNegotiation`) — drop a signal
         // from an older negotiation epoch before touching the engine. Checked first,

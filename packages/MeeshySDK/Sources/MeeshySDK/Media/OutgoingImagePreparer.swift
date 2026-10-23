@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreImage
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -249,14 +250,17 @@ enum OutgoingImageGeometry {
         return CGSize(width: width, height: height)
     }
 
+    static func orientation(_ properties: [CFString: Any]) -> Int {
+        (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+    }
+
     static func isUpright(_ properties: [CFString: Any]) -> Bool {
-        ((properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1) == 1
+        orientation(properties) == 1
     }
 
     /// Les orientations EXIF 5 à 8 couchent l'image : sa définition debout s'inverse.
     static func upright(_ size: CGSize, properties: [CFString: Any]) -> CGSize {
-        let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
-        return (5...8).contains(orientation) ? CGSize(width: size.height, height: size.width) : size
+        (5...8).contains(orientation(properties)) ? CGSize(width: size.height, height: size.width) : size
     }
 }
 
@@ -282,45 +286,128 @@ enum OutgoingImageWriter {
         return encode(original, as: format, maxPixelDimension: palier, policy: policy) ?? essai
     }
 
-    /// Décodage réduit et redressé par `ImageDownsampler` (#11845) ; le profil
-    /// couleur suit l'image ; les métadonnées de la prise suivent, sans le lieu
-    /// sauf choix contraire ; la carte de gain HDR suit quand l'image n'a pas eu
-    /// à être redressée.
+    /// Décodage réduit par ImageIO ; le profil couleur suit l'image ; les
+    /// métadonnées de la prise suivent, sans le lieu sauf choix contraire.
+    /// Les pixels sont redressés, SAUF ceux d'une photo HDR (#11847) : ils
+    /// restent couchés, l'orientation voyage avec eux, et la carte de gain les suit.
     private static func encodeOnce(_ original: OriginalImage, as format: OutgoingImageFormat, limit: CGFloat,
                                    policy: OutgoingImagePolicy) -> OutgoingImage? {
-        guard let type = format.typeIdentifier,
-              let image = ImageDownsampler.thumbnail(source: original.source, maxPixelSize: limit,
-                                                     decodeImmediately: true) else { return nil }
-        let carried = PhotoCaptureMetadata.carried(from: original.properties)
+        guard let type = format.typeIdentifier else { return nil }
+        let carriesGainMap = format.isLossy && OutgoingImageGainMap.isPresent(in: original.source)
+        let redresses = !carriesGainMap || OutgoingImageGeometry.isUpright(original.properties)
+        let decoded = carriesGainMap
+            ? OutgoingImageGainMap.decoded(original, maxPixelSize: limit, upright: redresses)
+            : nil
+        guard let image = decoded ?? ImageDownsampler.thumbnail(source: original.source, maxPixelSize: limit,
+                                                                decodeImmediately: true, keepsStoredOrientation: !redresses) else {
+            return nil
+        }
+        let written = CGSize(width: image.width, height: image.height)
+        let orientation = redresses ? 1 : OutgoingImageGeometry.orientation(original.properties)
+        let carried = PhotoCaptureMetadata.carried(from: original.properties, orientation: orientation)
             .filter { policy.keepsLocation || $0.key != kCGImagePropertyGPSDictionary }
         let quality: [CFString: Any] = format.isLossy ? [kCGImageDestinationLossyCompressionQuality: policy.quality] : [:]
-        let options = carried.merging(quality) { _, requested in requested }
+        let options = carried
+            .merging(quality) { _, requested in requested }
+            .merging(decoded != nil ? OutgoingImageGainMap.encodeRequest : [:]) { _, requested in requested }
         let buffer = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type, 1, nil) else { return nil }
         CGImageDestinationAddImage(destination, image, options as CFDictionary)
-        if format.isLossy, OutgoingImageGeometry.isUpright(original.properties) {
+        if carriesGainMap, decoded == nil {
             OutgoingImageGainMap.carry(from: original.source, to: destination)
         }
         guard CGImageDestinationFinalize(destination) else { return nil }
         return OutgoingImage(data: buffer as Data, format: format,
-                             pixelSize: CGSize(width: image.width, height: image.height), encodedGenerations: 1)
+                             pixelSize: redresses ? written : OutgoingImageGeometry.upright(written, properties: original.properties),
+                             encodedGenerations: 1)
     }
 }
 
-/// **Le HDR suit la photo** (verdict #11247) : la carte de gain d'une prise HDR
-/// (Apple, et ISO 21496-1 depuis iOS 18) est une donnée auxiliaire, relative à
-/// l'image — elle suit une réduction, pas un redressement des pixels.
+/// **Le HDR suit la photo** (verdict #11247, #11847).
+///
+/// Depuis iOS 18, la carte de gain est RECALCULÉE, jamais recopiée : l'image est
+/// décodée AVEC sa carte (`expandToHDR`, pixels au-delà du blanc de référence),
+/// réduite, rendue en demi-flottants PQ, puis écrite en UNE génération par
+/// `kCGImageDestinationEncodeToISOGainmap` — une base SDR et une carte ISO
+/// 21496-1 calculée sur les pixels qui partent. C'est la voie de
+/// `PhotoCaptureProcessor`, prouvée par ses témoins. Recopier l'auxiliaire de la
+/// source (`CGImageDestinationAddAuxiliaryDataInfo`) à côté d'une base réduite
+/// et réencodée rendait un JPEG SANS carte : la CI de #11974 l'a montré sur la
+/// photo droite comme sur la couchée. Avant iOS 18, aucun encodeur de carte
+/// n'existe : seule la recopie de la carte Apple est tentée.
 enum OutgoingImageGainMap {
-    static func carry(from source: CGImageSource, to destination: CGImageDestination) {
-        gainMapTypes.forEach { type in
-            guard let info = CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, type) else { return }
-            CGImageDestinationAddAuxiliaryDataInfo(destination, type, info)
+    static func isPresent(in source: CGImageSource) -> Bool {
+        gainMapTypes.contains { CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, $0) != nil }
+    }
+
+    /// Les pixels HDR réduits, couchés ou redressés ; `nil` avant iOS 18.
+    static func decoded(_ original: OriginalImage, maxPixelSize: CGFloat, upright: Bool) -> CGImage? {
+        guard #available(iOS 18.0, macOS 15.0, *) else { return nil }
+        guard let input = CIImage(data: original.data, options: [.applyOrientationProperty: upright, .expandToHDR: true]),
+              let space = CGColorSpace(name: CGColorSpace.displayP3_PQ) else { return nil }
+        let origin = input.extent.origin
+        let anchored = input.transformed(by: CGAffineTransform(translationX: -origin.x, y: -origin.y))
+        guard let target = PhotoCaptureGeometry.targetSize(for: anchored.extent.size, maxPixelDimension: maxPixelSize) else {
+            return nil
         }
+        return CIContext(options: [.cacheIntermediates: false])
+            .createCGImage(PhotoCaptureProcessor.scaled(anchored, to: target), from: CGRect(origin: .zero, size: target),
+                           format: .RGBAh, colorSpace: space)
+    }
+
+    static var encodeRequest: [CFString: Any] {
+        guard #available(iOS 18.0, macOS 15.0, *) else { return [:] }
+        return [kCGImageDestinationEncodeRequest: kCGImageDestinationEncodeToISOGainmap]
+    }
+
+    /// Avant iOS 18 seulement : la carte Apple de la source, recopiée.
+    static func carry(from source: CGImageSource, to destination: CGImageDestination) {
+        guard let info = CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, kCGImageAuxiliaryDataTypeHDRGainMap) else { return }
+        CGImageDestinationAddAuxiliaryDataInfo(destination, kCGImageAuxiliaryDataTypeHDRGainMap, info)
     }
 
     private static var gainMapTypes: [CFString] {
-        guard #available(iOS 18.0, *) else { return [kCGImageAuxiliaryDataTypeHDRGainMap] }
+        guard #available(iOS 18.0, macOS 15.0, *) else { return [kCGImageAuxiliaryDataTypeHDRGainMap] }
         return [kCGImageAuxiliaryDataTypeHDRGainMap, kCGImageAuxiliaryDataTypeISOGainMap]
+    }
+}
+
+/// **Le lieu retiré d'un FICHIER image, sans en décoder les pixels** (#11847).
+///
+/// Pour un hôte qui ne peut pas tenir l'image en mémoire (l'extension de
+/// partage, plafonnée à ~120 Mo) : ImageIO lit le fichier et en réécrit une
+/// copie sans GPS par `CGImageDestinationCopyImageSource`, données compressées
+/// des pixels intactes, puis la copie remplace l'original.
+public enum OutgoingImageLocationRemoval {
+    public enum Outcome: Sendable, Equatable {
+        /// Pas une image, ou une image sans lieu : le fichier n'a pas bougé.
+        case untouched
+        case removed
+        /// Le lieu est là et n'a pas pu être retiré : l'image ne doit pas partir.
+        case failed
+    }
+
+    public static func removeLocation(fromFileAt url: URL) -> Outcome {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+              CGImageSourceGetCount(source) > 0,
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              properties[kCGImagePropertyGPSDictionary] != nil else { return .untouched }
+        guard let type = CGImageSourceGetType(source) else { return .failed }
+        let copy = url.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).\(url.pathExtension)")
+        guard writeWithoutLocation(source, type: type, to: copy),
+              (try? FileManager.default.replaceItemAt(url, withItemAt: copy)) != nil else {
+            try? FileManager.default.removeItem(at: copy)
+            return .failed
+        }
+        return .removed
+    }
+
+    /// La destination est relâchée au retour : le fichier est complet avant de remplacer l'original.
+    private static func writeWithoutLocation(_ source: CGImageSource, type: CFString, to url: URL) -> Bool {
+        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type, CGImageSourceGetCount(source), nil) else {
+            return false
+        }
+        return CGImageDestinationCopyImageSource(destination, source, [kCGImageMetadataShouldExcludeGPS: true] as CFDictionary, nil)
     }
 }
 

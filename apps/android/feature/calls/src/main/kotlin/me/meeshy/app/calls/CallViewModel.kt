@@ -115,11 +115,13 @@ class CallViewModel @Inject constructor(
     val activeConfig: CallConfig get() = config
 
     init {
+        coordinator.onRemoteBye = { onRemoteBye() }
+        coordinator.onSetupFailed = { message -> dispatch(CallEvent.ConnectionFailed(message)) }
         peers.attach(host)
         waiting.attach(host)
         watchdogs.attach(host)
         analytics.attach(host)
-        ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute)
+        ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute, onAnswer = ::accept, onDecline = ::decline)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
         }
@@ -171,7 +173,10 @@ class CallViewModel @Inject constructor(
 
     /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */
     private fun onIceServersRefreshed(iceServers: List<SocketIceServer>) {
-        if (!awaitingIncomingIce) return
+        if (!awaitingIncomingIce) {
+            if (callId.isNotBlank()) coordinator.updateIceServers(iceServers)
+            return
+        }
         awaitingIncomingIce = false
         coordinator.startIncoming(
             viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo,
@@ -180,7 +185,10 @@ class CallViewModel @Inject constructor(
     }
 
     /** WebRTC reports the media path is up → advance the FSM to Connected. */
-    private fun onMediaConnected() = dispatch(CallEvent.MediaConnected)
+    private fun onMediaConnected() {
+        telecomReporter.onMediaConnected()
+        dispatch(CallEvent.MediaConnected)
+    }
 
     /** WebRTC reports a mid-call ICE stall → FSM Reconnecting (« Reconnexion… »). */
     private fun onMediaStalled() = dispatch(CallEvent.ConnectionStalled)
@@ -200,6 +208,7 @@ class CallViewModel @Inject constructor(
         this.elapsedSeconds = 0L
         this.mediaEstablished = false
         this.connectionQuality = null
+        telecomReporter.begin(TelecomCallInfo(config.peerId, config.peerName, config.isVideo, config.isOutgoing))
         waiting.reset()
         analytics.begin()
         stopTicker()
@@ -260,6 +269,7 @@ class CallViewModel @Inject constructor(
     /** Local user hangs up an active call — end the FSM and the call on the wire. */
     fun hangUp() {
         dispatch(CallEvent.LocalHangUp)
+        coordinator.sendHangupBye()
         emitIfIdentified { signalManager.emitEnd(it) }
         coordinator.end()
     }
@@ -284,6 +294,9 @@ class CallViewModel @Inject constructor(
 
     /** Video tracks + EGL context for [CallScreen]'s renderers (video calls only). */
     val eglBaseContext get() = coordinator.eglBaseContext
+
+    /** Le serveur-id de l'appel en cours (vide avant que l'ACK ne le donne) : la clé par appel des surfaces. */
+    val activeCallId: String get() = callId
     val localVideoTrack get() = coordinator.localVideoTrack
     val remoteVideoTracks get() = coordinator.remoteVideoTracks
 
@@ -349,6 +362,13 @@ class CallViewModel @Inject constructor(
             return
         }
         waiting.onRemotelyEnded(signal.callId)
+    }
+
+    /** In-band `bye` from the peer: instant cut; the `call:ended` fanout that follows finds the call already ended. */
+    private fun onRemoteBye() {
+        if (!callState.isActive) return
+        dispatch(CallEvent.RemoteHangUp)
+        coordinator.end()
     }
 
     /** Runs [emit] with the current [callId] only once one is known — inert otherwise. */

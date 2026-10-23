@@ -19,9 +19,9 @@ import androidx.room.migration.Migration
 internal object MeeshyMigrations {
 
     const val BASELINE_VERSION: Int = 16
-    const val CURRENT_VERSION: Int = 18
+    const val CURRENT_VERSION: Int = 21
 
-    val upgrades: List<Migration> = listOf(Migration_16_17, Migration_17_18).map(::GuardedMigration)
+    val upgrades: List<Migration> = listOf(Migration_16_17, Migration_17_18, Migration_18_19, Migration_19_20, Migration_20_21).map(::GuardedMigration)
 
     /**
      * Any downgrade empties caches only; durable rows stay for the older build to read. It never

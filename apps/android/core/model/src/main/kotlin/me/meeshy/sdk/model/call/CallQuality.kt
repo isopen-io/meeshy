@@ -51,6 +51,20 @@ object CallQualityThresholds {
     /** Packet-loss ceiling above which the link is critical. */
     const val POOR_PACKET_LOSS: Double = 0.10
 
+    /** RTT (ms) at or below which the audio bitrate keeps its default (iOS `goodRTT`). */
+    const val GOOD_RTT_MS: Double = 250.0
+
+    /** Audio encoder bitrate ladder (bps): ceiling, default and floor (iOS `maxBitrate`/`defaultBitrate`/`minBitrate`). */
+    const val MAX_AUDIO_BITRATE_BPS: Int = 128_000
+    const val DEFAULT_AUDIO_BITRATE_BPS: Int = 64_000
+    const val MIN_AUDIO_BITRATE_BPS: Int = 24_000
+
+    /** Mean inbound-audio jitter (ms) above which Opus concealment degrades (iOS `highJitterThresholdMs`). */
+    const val HIGH_JITTER_MS: Double = 30.0
+
+    /** Cadence of the live stats tick, in seconds (iOS `statsIntervalSeconds`). */
+    const val STATS_INTERVAL_SECONDS: Long = 5L
+
     /** TWCC/GCC available-outgoing-bitrate (bps) floor for each tier. */
     const val BWE_EXCELLENT_BPS: Int = 2_000_000
     const val BWE_GOOD_BPS: Int = 1_000_000
@@ -226,7 +240,22 @@ enum class VideoQualityLevel {
 data class CallQualitySample(
     val rttMs: Double,
     val packetLoss: Double,
+    val jitterMs: Double = 0.0,
+    val bytesSent: Long = 0L,
+    val bytesReceived: Long = 0L,
+    val availableOutgoingBitrateBps: Int = 0,
 ) {
+    /** The `call:quality-report` payload this tick yields (loss as a percentage, like iOS), at the 4-tier level. */
+    fun toReport(): CallQualityReport = CallQualityReport(
+        level = ConnectionQuality.from(level()),
+        rttMs = rttMs,
+        packetLoss = packetLoss * 100.0,
+        bytesSent = bytesSent,
+        bytesReceived = bytesReceived,
+        availableOutgoingBitrateBps = availableOutgoingBitrateBps,
+        jitterMs = jitterMs,
+    )
+
     /** The quality tier this sample classifies to (rtt/loss ladder). */
     fun level(): VideoQualityLevel = VideoQualityLevel.from(rttMs, packetLoss)
 }
@@ -321,5 +350,50 @@ data class CallQualityReport(
         put("bytesReceived", bytesReceived)
         if (availableOutgoingBitrateBps > 0) put("availableOutgoingBitrateBps", availableOutgoingBitrateBps)
         if (jitterMs > 0) put("jitterMs", jitterMs)
+    }
+}
+
+/**
+ * Un tick de mesures horodaté, entrée de [CallQualityReading.derive] — miroir de iOS
+ * `CallQualitySample` (`CallQualityStatsFeed.swift`). Les octets entrants sont cumulatifs ; les
+ * débits se dérivent de l'écart entre deux ticks.
+ */
+data class CallQualityTick(
+    val atMs: Long,
+    val rttMs: Double,
+    val packetLossPercent: Double,
+    val jitterMs: Double,
+    val inboundAudioBytes: Long,
+    val inboundVideoBytes: Long,
+    val relayed: Boolean? = null,
+)
+
+/**
+ * Ce que l'écran d'appel lit de la qualité : perte, latence, gigue, débits audio et vidéo reçus
+ * (kb/s) et route (relais TURN ou chemin direct). Port de iOS `CallQualityReading`.
+ */
+data class CallQualityReading(
+    val packetLossPercent: Double,
+    val roundTripTimeMs: Double,
+    val jitterMs: Double,
+    val audioKbps: Double,
+    val videoKbps: Double,
+    val relayed: Boolean? = null,
+) {
+    companion object {
+        /** Les débits sont `0` au premier tick et quand un compteur recule (redémarrage ICE). */
+        fun derive(current: CallQualityTick, previous: CallQualityTick?): CallQualityReading {
+            val elapsedMs = previous?.let { current.atMs - it.atMs } ?: 0L
+            fun kbps(now: Long, before: Long?): Double =
+                if (elapsedMs <= 0 || before == null) 0.0 else (now - before).coerceAtLeast(0L) * 8.0 / elapsedMs
+            return CallQualityReading(
+                packetLossPercent = current.packetLossPercent,
+                roundTripTimeMs = current.rttMs,
+                jitterMs = current.jitterMs,
+                audioKbps = kbps(current.inboundAudioBytes, previous?.inboundAudioBytes),
+                videoKbps = kbps(current.inboundVideoBytes, previous?.inboundVideoBytes),
+                relayed = current.relayed,
+            )
+        }
     }
 }

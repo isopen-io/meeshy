@@ -137,4 +137,38 @@ class StoryTrayBuilderTest {
         assertThat(ring.storyCount).isEqualTo(3)
         assertThat(ring.unviewedCount).isEqualTo(2)
     }
+
+    @Test
+    fun `expired archive stories are excluded from the dot count and the unread state`() {
+        val mixed = StoryGroup(
+            id = "me",
+            username = "me",
+            avatarColor = "FF6B6B",
+            stories = listOf(
+                StoryItem(id = "old", createdAt = isoAgo(40), expiresAt = isoAgo(19), isViewed = false),
+                StoryItem(id = "a", createdAt = isoAgo(1), expiresAt = isoAgo(-19), isViewed = true),
+                StoryItem(id = "b", createdAt = isoAgo(1), expiresAt = isoAgo(-19), isViewed = true),
+            ),
+        )
+        val ring = StoryTrayBuilder.build(listOf(mixed), "me", null, now).self!!
+        assertThat(ring.storyCount).isEqualTo(2)
+        assertThat(ring.unviewedCount).isEqualTo(0)
+        assertThat(ring.hasUnviewed).isFalse()
+        assertThat(ring.style.emphasis).isEqualTo(StoryRingEmphasis.Read)
+        assertThat(ring.displayedStoryId).isEqualTo("a")
+    }
+
+    @Test
+    fun `the displayed story is the first unviewed live one`() {
+        val g = StoryGroup(
+            id = "u",
+            stories = listOf(
+                StoryItem(id = "s0", createdAt = isoAgo(1), expiresAt = isoAgo(-19), isViewed = true),
+                StoryItem(id = "s1", createdAt = isoAgo(1), expiresAt = isoAgo(-19), isViewed = false),
+            ),
+        )
+        val ring = StoryTrayBuilder.build(listOf(g), null, null, now).others.single()
+        assertThat(ring.displayedStoryId).isEqualTo("s1")
+        assertThat(ring.style.emphasis).isEqualTo(StoryRingEmphasis.Unread)
+    }
 }

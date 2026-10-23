@@ -186,6 +186,8 @@ services:
       - MAX_TRANSLATION_LENGTH=100000
       - MAX_TEXT_ATTACHMENT_THRESHOLD=100000
       - ENABLE_DIARIZATION=${ENABLE_DIARIZATION:-true}
+      - DIARIZATION_MODE=${DIARIZATION_MODE:-auto}
+      - AUDIO_PROCESS_CONCURRENCY=${AUDIO_PROCESS_CONCURRENCY:-2}
     volumes:
       - models_staging_data:/workspace/models
     depends_on:
@@ -323,6 +325,10 @@ services:
       # BT.709), l'original intact. Staging seulement : la production attend la
       # mesure CPU de S2 (#9232, serveur partagé).
       - VIDEO_COMPAT_RENDITION=true
+      # #11264 — les rendus coûteux (vignette d'une image ≥ 2 Mo, rendus vidéo)
+      # sortent de la requête : file BullMQ sur redis-staging, consommée par
+      # media-worker-staging. Absent : tout reste synchrone, comme avant.
+      - MEDIA_QUEUE=bullmq
       # Les deux origines VIRTUELLES des coques Capacitor de web-v2 (#5815) — iOS
       # `capacitor://localhost` (`CAPInstanceDescriptor.m`), Android `https://localhost`
       # (`CapConfig.java`, `androidScheme: https`). Gardées par `cors-origins.test.ts`.
@@ -546,6 +552,47 @@ services:
       - "traefik.http.middlewares.affiliate-unfurl-staging-path.replacepathregex.regex=^/signup/affiliate/([A-Za-z0-9_-]{2,100})/?$$"
       - "traefik.http.middlewares.affiliate-unfurl-staging-path.replacepathregex.replacement=/api/v1/affiliate/$$1/og"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
+
+  # #11264 — `meeshy-media-worker` : la MÊME image que la passerelle, un autre
+  # CMD. Une tâche à la fois (serveur partagé avec la production, #9232) ; pas
+  # de port, pas de Traefik : il ne parle qu'à Redis, à Mongo et au disque.
+  media-worker-staging:
+    image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:staging}
+    container_name: meeshy-media-worker-staging
+    restart: unless-stopped
+    logging: *journald-logging
+    command: ["node", "dist/src/workers/media-worker.js"]
+    # La sonde de l'image (`curl /health`) vise la passerelle : le worker n'a pas
+    # de port. Il pose un fichier à chaque battement de cœur (toutes les 10 s).
+    healthcheck:
+      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/media-worker.alive) )) -lt 60"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # Un rendu vidéo dure des minutes : l'arrêt laisse finir la tâche en cours.
+    stop_grace_period: 180s
+    environment:
+      - DATABASE_URL=mongodb://database-staging:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true
+      - REDIS_URL=redis://redis-staging:6379
+      - NODE_ENV=production
+      - UPLOAD_PATH=/app/uploads
+      - VIDEO_COMPAT_RENDITION=true
+      - MEDIA_WORKER_CONCURRENCY=1
+    volumes:
+      - gateway_staging_uploads:/app/uploads
+    depends_on:
+      mongo-init-staging:
+        condition: service_completed_successfully
+      redis-staging:
+        condition: service_healthy
+    networks:
+      - meeshy-staging-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1536M
 
   # ===========================================================================
   # STATIC FILES STAGING - Nginx

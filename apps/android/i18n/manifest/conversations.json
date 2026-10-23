@@ -150,8 +150,20 @@
         },
         {
           "catalog": "app",
+          "iosKey": "connection.connecting",
+          "androidName": "conversations_banner_connecting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "contacts.list.filter.offline",
           "androidName": "conversations_banner_offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "connection.online",
+          "androidName": "conversations_banner_online",
           "status": "adopted"
         },
         {
@@ -520,6 +532,12 @@
         },
         {
           "catalog": "app",
+          "iosKey": "draft.label",
+          "androidName": "conversations_preview_draft_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "draft.label_prefix",
           "androidName": "conversations_preview_draft_prefix",
           "status": "adopted"
@@ -637,10 +655,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "a11y.message.pinned",
           "androidName": "conversations_section_pinned",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "conversations_tags_add_content_description",
@@ -946,6 +962,30 @@
         },
         {
           "catalog": "app",
+          "iosKey": "new_conversation.contacts.empty.subtitle",
+          "androidName": "new_conversation_contacts_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "new_conversation.contacts.empty.title",
+          "androidName": "new_conversation_contacts_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "new_conversation.contacts.loading",
+          "androidName": "new_conversation_contacts_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "new_conversation.contacts.section",
+          "androidName": "new_conversation_contacts_section",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "common.create",
           "androidName": "new_conversation_create",
           "status": "adopted"
@@ -983,10 +1023,6 @@
           "iosKey": "share.link.create.access.account_required",
           "androidName": "share_link_access_account",
           "status": "adopted"
-        },
-        {
-          "androidName": "share_link_access_birthday",
-          "status": "android-only"
         },
         {
           "catalog": "app",

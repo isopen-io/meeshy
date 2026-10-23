@@ -130,4 +130,85 @@ class ReportRepositoryTest {
         assertThat(result).isNull()
         coVerify(exactly = 0) { api.create(any()) }
     }
+
+    private class RecordingEmitter : ReportSignalEmitter {
+        val emitted = mutableListOf<Triple<ReportedSocialKind, String, String>>()
+        override fun emitReported(kind: ReportedSocialKind, targetId: String, reasonCode: String) {
+            emitted += Triple(kind, targetId, reasonCode)
+        }
+    }
+
+    private fun okApi(captured: MutableList<CreateReportRequest> = mutableListOf()): ReportApi {
+        val api = mockk<ReportApi>()
+        coEvery { api.create(capture(captured)) } returns ApiResponse(success = true, data = ReportAck(id = "r"))
+        return api
+    }
+
+    @Test
+    fun `reportComment et reportConversation postent sur reports avec leur type`() = runTest {
+        val sent = mutableListOf<CreateReportRequest>()
+        val repo = repo(sessionWith("me"), okApi(sent))
+
+        repo.reportComment("c1", ReportReason.HARASSMENT, "  rude ")
+        repo.reportConversation("k1", ReportReason.SPAM, null)
+
+        assertThat(sent.map { it.reportedType }).containsExactly("comment", "conversation").inOrder()
+        assertThat(sent.map { it.reportedEntityId }).containsExactly("c1", "k1").inOrder()
+        assertThat(sent.map { it.reportType }).containsExactly("harassment", "spam").inOrder()
+        assertThat(sent.map { it.reason }).containsExactly("rude", null).inOrder()
+    }
+
+    @Test
+    fun `reportComment et reportConversation sont inertes sans session ou sans identifiant`() = runTest {
+        val api = mockk<ReportApi>(relaxed = true)
+
+        assertThat(repo(sessionWith(null), api).reportComment("c1", ReportReason.SPAM, null)).isNull()
+        assertThat(repo(sessionWith("me"), api).reportComment(" ", ReportReason.SPAM, null)).isNull()
+        assertThat(repo(sessionWith(null), api).reportConversation("k1", ReportReason.SPAM, null)).isNull()
+        assertThat(repo(sessionWith("me"), api).reportConversation("", ReportReason.SPAM, null)).isNull()
+        coVerify(exactly = 0) { api.create(any()) }
+    }
+
+    @Test
+    fun `un signalement abouti d un contenu social emet report_submit avec le seul code du motif`() = runTest {
+        val emitter = RecordingEmitter()
+        val repo = ReportRepository(okApi(), sessionWith("me"), emitter)
+
+        repo.reportUser("u1", ReportReason.HARASSMENT, "texte libre secret")
+        repo.reportPost("p1", ReportReason.SPAM, "autre texte")
+        repo.reportStory("s1", ReportReason.INAPPROPRIATE, null)
+        repo.reportComment("c1", ReportReason.OTHER, "encore")
+
+        assertThat(emitter.emitted).containsExactly(
+            Triple(ReportedSocialKind.PROFILE, "u1", "harassment"),
+            Triple(ReportedSocialKind.POST, "p1", "spam"),
+            Triple(ReportedSocialKind.STORY, "s1", "inappropriate"),
+            Triple(ReportedSocialKind.COMMENT, "c1", "other"),
+        ).inOrder()
+        assertThat(emitter.emitted.flatMap { listOf(it.second, it.third) }.joinToString()).doesNotContain("libre")
+    }
+
+    @Test
+    fun `un message ou une conversation signale n emet aucun signal`() = runTest {
+        val emitter = RecordingEmitter()
+        val repo = ReportRepository(okApi(), sessionWith("me"), emitter)
+
+        repo.reportMessage("m1", ReportReason.SPAM, null)
+        repo.reportConversation("k1", ReportReason.SPAM, null)
+
+        assertThat(emitter.emitted).isEmpty()
+    }
+
+    @Test
+    fun `un echec reseau n emet aucun signal`() = runTest {
+        val emitter = RecordingEmitter()
+        val api = mockk<ReportApi>()
+        coEvery { api.create(any()) } returns ApiResponse(success = false, error = "boom")
+        val repo = ReportRepository(api, sessionWith("me"), emitter)
+
+        repo.reportUser("u1", ReportReason.SPAM, null)
+        repo.reportPost("p1", ReportReason.SPAM, null)
+
+        assertThat(emitter.emitted).isEmpty()
+    }
 }
