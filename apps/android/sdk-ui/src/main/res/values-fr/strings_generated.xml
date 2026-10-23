@@ -6,6 +6,8 @@
     <string name="common_clearSearch">Effacer la recherche</string>
     <string name="common_close">Fermer</string>
     <string name="common_done">Terminé</string>
+    <string name="common_selected">Sélectionné</string>
+    <string name="components_characterCount_a11y">%1$d caractères sur %2$d</string>
     <string name="emoji_category_activities">Activités</string>
     <string name="emoji_category_animals">Animaux</string>
     <string name="emoji_category_faces">Visages</string>
