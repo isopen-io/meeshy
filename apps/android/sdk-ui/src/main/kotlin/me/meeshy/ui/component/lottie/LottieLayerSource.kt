@@ -23,7 +23,7 @@ public fun interface PackFileReader {
  */
 public class LottieLayerSource(
     private val reader: PackFileReader,
-    private val decoder: (ByteArray) -> LottieFilm? = ::decodeFilm,
+    private val decoder: (ByteArray) -> LottieFilm? = { data -> decodeFilm(data) },
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val memoryLimit: Int = MEMORY_LIMIT,
 ) {
@@ -47,7 +47,7 @@ public class LottieLayerSource(
             load(ref)
         } catch (error: kotlinx.coroutines.CancellationException) {
             lock.withLock { running.remove(ref.sha256) }
-            pending.cancel(error)
+            pending.complete(null)
             throw error
         } catch (_: Exception) {
             null

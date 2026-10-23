@@ -87,7 +87,7 @@ public object LottieFilmRaster {
     /** Un `LottieDrawable` à la taille de l'image, réutilisé pour toutes les images d'un rendu. */
     private class Renderer(film: LottieFilm, private val side: Int) {
         private val drawable = LottieDrawable().apply {
-            composition = film.composition
+            setComposition(film.composition)
             setBounds(0, 0, side, side)
         }
 
