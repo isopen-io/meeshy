@@ -17,8 +17,9 @@ import { MetadataManager } from '../../services/attachments/MetadataManager';
 import { produceMediaRenditions, imageVariantsJson, renditionsJson, type MediaRenditions } from '../../services/attachments/media-renditions';
 import { runFfmpeg } from '../../services/attachments/ffmpeg-run';
 import { UnconvertibleImageError } from '../../services/attachments/heif-conversion';
-import { deferredMediaKinds, mediaJobsFor, type MediaJobTarget } from '../../services/attachments/media-processing/jobs';
+import type { MediaJobTarget } from '../../services/attachments/media-processing/jobs';
 import { mediaJobQueueFromEnv, type MediaJobQueue } from '../../services/attachments/media-processing/queue';
+import { deferrableKinds, scheduleOrRender, type DispatchOutcome } from '../../services/attachments/media-processing/dispatch';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
 import {
   resolveAnonymousUploadIdentity,
@@ -525,20 +526,21 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // #11263 — un HEIC/AVIF illisible par le serveur est REFUSÉ (415),
       // jamais servi tel quel aux lecteurs ; la copie posée est retirée.
       // #11264 — ce qui est différé au worker de médias (file allumée seulement).
-      const deferred = deferredMediaKinds({
+      // Différé seulement quand un worker bat ; file muette ⇒ rendu ici.
+      const deferred = await deferrableKinds(mediaQueue, {
         attachmentType,
         fileSize,
-        queueEnabled: mediaQueue !== null,
         compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
       });
       const processingFields = deferred.length > 0 ? { processingState: 'pending' } : {};
-      const scheduleDeferred = async (target: MediaJobTarget, id: string): Promise<void> => {
-        if (mediaQueue === null) return;
-        for (const job of mediaJobsFor(target, id, deferred)) {
-          await mediaQueue.schedule(job).catch((error: unknown) =>
-            logger.error('[TUS] Rendu différé non mis en file', { id, kind: job.kind, error }));
-        }
-      };
+      const scheduleDeferred = (target: MediaJobTarget, id: string): Promise<DispatchOutcome> =>
+        scheduleOrRender({
+          queue: mediaQueue,
+          deps: { prisma: prisma as never, uploadBasePath: UPLOAD_PATH, metadataManager, runFfmpeg },
+          target,
+          recordId: id,
+          kinds: deferred,
+        });
       const renderMedia = () =>
         produceMediaRenditions(
           { uploadBasePath: UPLOAD_PATH, metadataManager, runFfmpeg },
@@ -558,6 +560,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       const isPostMedia = isPostMediaUploadContext(uploadContext);
 
       let recordId: string;
+      let dispatched: DispatchOutcome = 'none';
+      let servedThumbnail: string | null = null;
       let rendered: MediaRenditions;
       if (isPostMedia) {
         // Upload destiné à un post/story/status : créer PostMedia directement (postId=null = pending)
@@ -595,7 +599,10 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = postMedia.id;
-        await scheduleDeferred('postMedia', postMedia.id);
+        dispatched = await scheduleDeferred('postMedia', postMedia.id);
+        if (dispatched === 'rendered') {
+          servedThumbnail = (await prisma.postMedia.findUnique({ where: { id: postMedia.id }, select: { thumbnailUrl: true } }))?.thumbnailUrl ?? null;
+        }
         logger.info(`[TUS] PostMedia created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes, postId=null pending)`);
       } else {
         // Upload destiné à un message : créer MessageAttachment
@@ -687,7 +694,10 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = attachment.id;
-        await scheduleDeferred('messageAttachment', attachment.id);
+        dispatched = await scheduleDeferred('messageAttachment', attachment.id);
+        if (dispatched === 'rendered') {
+          servedThumbnail = (await prisma.messageAttachment.findUnique({ where: { id: attachment.id }, select: { thumbnailUrl: true } }))?.thumbnailUrl ?? null;
+        }
         logger.info(`[TUS] MessageAttachment created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes)`);
       }
 
@@ -704,9 +714,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
               mimeType: rendered.storedMimeType,
               fileSize: rendered.storedSize,
               fileUrl: rendered.storedPath,
-              thumbnailUrl: rendered.thumbnailPath ?? undefined,
+              thumbnailUrl: rendered.thumbnailPath ?? servedThumbnail ?? undefined,
               // #11264 — `pending` : la vignette et les rendus arrivent par `attachment:ready`.
-              processingState: deferred.length > 0 ? 'pending' : undefined,
+              processingState: dispatched === 'scheduled' ? 'pending' : dispatched === 'failed' ? 'failed' : undefined,
               thumbHash: rendered.thumbHash,
               width: metadata.width,
               height: metadata.height,

@@ -1,9 +1,10 @@
 /**
- * Le câblage de `handleMediaJobCompleted` dans la passerelle (#11264) : écoute
- * des fins de tâches de la file (`QueueEvents`, porté par Redis), relecture de
- * la ligne par la forme du canal socket, émissions. Démarré seulement quand la
- * file est allumée (`MEDIA_QUEUE=bullmq`).
+ * Le câblage de `handleMediaReady` dans la passerelle (#11264) : écoute des
+ * événements de la file (`QueueEvents`, porté par Redis), relecture des lignes
+ * par la forme du canal socket, émissions. Démarré seulement quand la file est
+ * allumée (`MEDIA_QUEUE=bullmq`), et une seule instance émet (`listenerLease`).
  */
+import { randomUUID } from 'crypto';
 import { QueueEvents } from 'bullmq';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { attachmentSocketSelect } from '../attachmentIncludes';
@@ -12,24 +13,33 @@ import { serializeAttachmentForSocket, type SocketAttachmentRow } from '../../..
 import type { ConversationRoomEmitter } from '../../../socketio/emitToConversationParticipants';
 import type { ServerEmitIO } from '../../../socketio/serverEmit';
 import type { OfflineParticipantQueueDeps } from '../../../socketio/offlineParticipantQueue';
+import type { SocialEventsHandler } from '../../../socketio/handlers/SocialEventsHandler';
+import { postInclude, NOT_DELETED } from '../../posts/postIncludes';
+import { withMentions } from '../../posts/postReferences';
+import { WIRE_BROADCAST } from '../../posts/storyEffectsV3';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
-import { MEDIA_QUEUE_NAME } from './jobs';
+import { MEDIA_QUEUE_NAME, mediaJobRef } from './jobs';
 import { mediaQueueConnection } from './queue';
-import { handleMediaJobCompleted, type MediaReadyPorts } from './ready-notifier';
-import type { MediaJobOutcome } from './process-job';
+import { handleMediaReady, readMediaReadyNotice, type MediaReadyNotice, type MediaReadyPorts } from './ready-notifier';
+import { listenerLease, type LeaseClient } from './listener-lease';
 
 const logger = enhancedLogger.child({ module: 'media-ready-listener' });
 
 const POST_MEDIA_READY_SELECT = {
-  id: true, uploaderId: true, processingState: true, thumbnailUrl: true, thumbHash: true, imageVariants: true, avifVariants: true, renditions: true,
+  id: true, uploaderId: true, postId: true, processingState: true, thumbnailUrl: true, thumbHash: true, imageVariants: true, avifVariants: true, renditions: true,
 } as const;
+
+type BroadcastPost = Parameters<SocialEventsHandler['broadcastPostUpdated']>[0];
 
 export type MediaReadyListenerDeps = {
   readonly prisma: PrismaClient;
   readonly io: ConversationRoomEmitter & ServerEmitIO;
   readonly deliveryQueue: OfflineParticipantQueueDeps['deliveryQueue'];
   readonly connectedUsers: () => { has(key: string): boolean };
+  readonly socialEvents: () => Pick<SocialEventsHandler, 'broadcastPostUpdated' | 'broadcastStoryUpdated'> | null;
+  /** Le magasin Redis de la passerelle, qui porte le bail de l'écoute. */
+  readonly leaseStore: LeaseClient;
 };
 
 export function mediaReadyPorts(deps: MediaReadyListenerDeps): MediaReadyPorts {
@@ -52,6 +62,16 @@ export function mediaReadyPorts(deps: MediaReadyListenerDeps): MediaReadyPorts {
         messageId,
         attachment: attachment as unknown as SocketAttachmentRow,
       }),
+    notifyPostReaders: async (postId) => {
+      const social = deps.socialEvents();
+      if (!social) return;
+      const post = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select: postInclude });
+      if (!post) return;
+      const wire = withMentions(post, WIRE_BROADCAST) as unknown as BroadcastPost;
+      await (post.type === 'STORY'
+        ? social.broadcastStoryUpdated(wire, post.authorId, { engagementReset: false })
+        : social.broadcastPostUpdated(wire, post.authorId));
+    },
     emitToUser: (userId, event, payload) => {
       deps.io.to(ROOMS.user(userId)).emit(event, payload);
     },
@@ -62,9 +82,20 @@ export function mediaReadyPorts(deps: MediaReadyListenerDeps): MediaReadyPorts {
 export function startMediaReadyListener(deps: MediaReadyListenerDeps, redisUrl: string): { close(): Promise<void> } {
   const events = new QueueEvents(MEDIA_QUEUE_NAME, { connection: mediaQueueConnection(redisUrl) });
   const ports = mediaReadyPorts(deps);
-  events.on('completed', ({ returnvalue }) => {
-    const outcome = (typeof returnvalue === 'string' ? JSON.parse(returnvalue) : returnvalue) as MediaJobOutcome;
-    handleMediaJobCompleted(ports, outcome).catch((error: unknown) => logger.error('media ready notification failed', error as Error));
+  const lease = listenerLease(async () => deps.leaseStore, randomUUID());
+
+  const notify = (notice: MediaReadyNotice | null): void => {
+    if (notice === null) return;
+    lease.holds()
+      .then((held) => (held ? handleMediaReady(ports, notice) : undefined))
+      .catch((error: unknown) => logger.error('media ready notification failed', error as Error));
+  };
+
+  events.on('progress', ({ data }) => notify(readMediaReadyNotice(data)));
+  events.on('completed', ({ returnvalue }) => notify(readMediaReadyNotice(returnvalue)));
+  events.on('failed', ({ jobId }) => {
+    const ref = mediaJobRef(jobId);
+    notify(ref ? { target: ref.target, recordIds: [ref.recordId], requireState: 'failed' } : null);
   });
   events.on('error', (error) => logger.error('QueueEvents error', error));
   logger.info('Écoute des médias prêts démarrée', { queue: MEDIA_QUEUE_NAME });

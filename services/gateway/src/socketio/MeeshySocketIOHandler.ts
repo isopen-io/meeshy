@@ -87,6 +87,8 @@ export class MeeshySocketIOHandler {
         io: manager.getIO() as never,
         deliveryQueue: new RedisDeliveryQueue(getCacheStore()),
         connectedUsers: () => new Set(manager.getConnectedUsers()),
+        socialEvents: () => manager.getSocialEventsHandler(),
+        leaseStore: getCacheStore(),
       }, process.env.REDIS_URL);
     }
 

@@ -127,6 +127,7 @@ export type CompatRenditionDeps = {
 export async function produceCompatibilityRendition(
   deps: CompatRenditionDeps,
   source: { readonly relPath: string; readonly fileSize: number },
+  options: { readonly strict?: boolean } = {},
 ): Promise<MediaRendition | null> {
   if (process.env.VIDEO_COMPAT_RENDITION !== 'true') return null;
   const maxSync = Number(process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES || 200 * 1024 * 1024);
@@ -151,6 +152,7 @@ export async function produceCompatibilityRendition(
   } catch (error) {
     logger.error('Rendu H.264 de compatibilité échoué, original servi seul', error as Error);
     await fs.unlink(outputAbs).catch(() => undefined);
+    if (options.strict) throw error;
     return null;
   }
 }

@@ -560,6 +560,16 @@ services:
     restart: unless-stopped
     logging: *journald-logging
     command: ["node", "dist/src/workers/media-worker.js"]
+    # La sonde de l'image (`curl /health`) vise la passerelle : le worker n'a pas
+    # de port. Il pose un fichier à chaque battement de cœur (toutes les 10 s).
+    healthcheck:
+      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/media-worker.alive) )) -lt 60"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # Un rendu vidéo dure des minutes : l'arrêt laisse finir la tâche en cours.
+    stop_grace_period: 180s
     environment:
       - DATABASE_URL=mongodb://database-staging:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true
       - REDIS_URL=redis://redis-staging:6379

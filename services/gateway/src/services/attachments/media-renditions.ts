@@ -167,16 +167,26 @@ export type DeferredRenditionFields =
 /**
  * Le rendu d'UNE tâche différée, par les MÊMES fonctions que la requête : une
  * pièce rendue par le worker est identique à une pièce rendue pendant l'upload.
+ *
+ * `strict` (le worker) : un rendu raté LÈVE au lieu de rendre `null`, pour que
+ * la file reprenne puis passe la pièce à `failed` — un échec avalé finissait
+ * `ready` sans vignette (audit S9, défaut 6). Une vidéo sans rendu à faire
+ * (déjà H.264) reste `null`, sans lever.
  */
 export async function renderDeferred(
   deps: RenditionDeps,
   source: Pick<RenditionSource, 'relPath' | 'mimeType' | 'attachmentType' | 'fileSize'>,
-  kind: MediaJobKind
+  kind: MediaJobKind,
+  options: { readonly strict?: boolean } = {}
 ): Promise<DeferredRenditionFields> {
+  const strict = options.strict === true;
   if (kind === 'transcode') {
-    return { kind, rendition: await attempt('compat rendition', () => produceCompatibilityRendition(deps, source), null) };
+    return { kind, rendition: await attempt('compat rendition', () => produceCompatibilityRendition(deps, source, { strict }), null, strict) };
   }
-  const visual = await visualRenditions(deps.metadataManager, { ...source, metadata: {} });
+  const visual = await visualRenditions(deps.metadataManager, { ...source, metadata: {} }, strict);
+  if (strict && visual.thumbnailPath === null && (source.attachmentType === 'image' || source.attachmentType === 'video')) {
+    throw new Error(`vignette non produite pour ${source.relPath}`);
+  }
   const thumbHash = await resolveThumbHash({
     absolutePath: path.join(deps.uploadBasePath, source.relPath),
     mimeType: source.mimeType,
@@ -187,12 +197,13 @@ export async function renderDeferred(
 
 async function visualRenditions(
   metadataManager: RenditionMetadataPort,
-  source: RenditionSource
+  source: RenditionSource,
+  strict = false
 ): Promise<{ thumbnailPath: string | null; imageVariants?: readonly ImageVariant[]; avifVariants?: readonly ImageVariant[] }> {
   if (source.attachmentType === 'image') {
-    const thumbnailPath = await attempt('thumbnail', () => metadataManager.generateThumbnail(source.relPath), null);
-    const variants = await attempt('image variants', () => metadataManager.generateImageVariants(source.relPath), []);
-    const avif = await attempt('avif variants', () => metadataManager.generateAvifVariants(source.relPath), []);
+    const thumbnailPath = await attempt('thumbnail', () => metadataManager.generateThumbnail(source.relPath), null, strict);
+    const variants = await attempt('image variants', () => metadataManager.generateImageVariants(source.relPath), [], strict);
+    const avif = await attempt('avif variants', () => metadataManager.generateAvifVariants(source.relPath), [], strict);
     return {
       thumbnailPath,
       ...(variants.length > 0 ? { imageVariants: variants.map((v) => toImageVariant(v, 'webp')) } : {}),
@@ -200,17 +211,21 @@ async function visualRenditions(
     };
   }
   if (source.attachmentType === 'video') {
-    const thumbnailPath = await attempt('video thumbnail', () => metadataManager.generateVideoThumbnail(source.relPath), null);
+    const thumbnailPath = await attempt('video thumbnail', () => metadataManager.generateVideoThumbnail(source.relPath), null, strict);
     return { thumbnailPath };
   }
   return { thumbnailPath: null };
 }
 
-/** Un rendu manqué ne fait jamais échouer l'upload : le média reste servi tel quel. */
-async function attempt<T>(label: string, run: () => Promise<T>, fallback: T): Promise<T> {
+/**
+ * Un rendu manqué ne fait jamais échouer l'upload : le média reste servi tel
+ * quel. Sauf pour le worker (`strict`), dont la file sait reprendre.
+ */
+async function attempt<T>(label: string, run: () => Promise<T>, fallback: T, strict = false): Promise<T> {
   try {
     return await run();
   } catch (error) {
+    if (strict) throw error;
     logger.warn(`Rendu non généré (${label}), média conservé tel quel`, { error });
     return fallback;
   }
