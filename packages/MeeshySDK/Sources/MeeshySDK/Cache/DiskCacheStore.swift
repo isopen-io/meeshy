@@ -24,6 +24,8 @@ public actor DiskCacheStore: ReadableCacheStore {
     let readsWhileDownloading: Bool
     var readableTransfers: [String: ReadableTransfer] = [:]
     nonisolated let readableKeys = Locked<Set<String>>([])
+    /// Les TÊTES amorcées hors du cache, reprises à l'élection (#11288).
+    var heads = ProgressiveHeadLedger()
 
     /// Clés dont la dernière réponse interdisait le stockage (`no-store` /
     /// `no-cache`, #9478) : leurs octets ne vont ni sur le disque, ni dans le
@@ -182,9 +184,11 @@ public actor DiskCacheStore: ReadableCacheStore {
         // pin conservé re-protégerait un futur re-download de la même clé.
         loadPinsIfNeeded()
         if pinExpiries.removeValue(forKey: fileKey) != nil { persistPins() }
+        dropHeads([key])
     }
 
     public func invalidateAll() async {
+        heads.removeAll().forEach { $0.response.cancel() }
         memoryCache.removeAllObjects()
         fileTimestamps.removeAll()
         transientKeys.removeAll()

@@ -92,15 +92,28 @@ extension DiskCacheStore {
     /// Branche lisible du funnel : les octets arrivent dans `download`, que
     /// les lecteurs suivent ; à la fin, le fichier est adopté sous sa clé (ou
     /// laissé au téléchargement, qui le supprime, si la réponse l'interdit).
+    /// `head` : la tête amorcée que ce transfert reprend (#11288) — attendue,
+    /// puis complétée par plage ; entière, elle est adoptée sans réseau.
     func readableNetworkData(
         for urlString: String,
         request: URLRequest,
         profile: MediaTransferProfile,
         progress: MediaFileDownloader.ProgressHandler?,
-        into download: ProgressiveMediaDownload
+        into download: ProgressiveMediaDownload,
+        after head: ProgressiveHeadLedger.Head? = nil
     ) async throws -> Data {
         do {
-            let response = try await fileDownloader.stream(request, profile: profile, into: download, progress: progress)
+            let headResponse: URLResponse? = await head?.response.value ?? nil
+            let response: URLResponse
+            switch try download.prepareContinuation() {
+            case .complete:
+                guard let headResponse else { throw DiskCacheError.notCached(urlString) }
+                response = headResponse
+            case .resume(let offset):
+                var continued = request
+                continued.setValue(ProgressiveResumeLaw.rangeHeader(from: offset, length: nil), forHTTPHeaderField: "Range")
+                response = try await fileDownloader.stream(continued, profile: profile, into: download, resumingAt: offset, progress: progress)
+            }
             guard let http = response as? HTTPURLResponse else {
                 throw DiskCacheError.notCached(urlString)
             }
