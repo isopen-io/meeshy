@@ -138,7 +138,7 @@ export async function registerDownloadRoutes(
 
         // #9478 — le même cache que la route par chemin pour un média protégé.
         // #11265 — même transport que la route par chemin : plages, ETag, 304.
-        return streamStoredFile(request, reply, {
+        return await streamStoredFile(request, reply, {
           stored,
           cacheControl: await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()),
           representation: attachmentRepresentation(attachment),
@@ -219,7 +219,7 @@ export async function registerDownloadRoutes(
 
         // WebP thumbnails (sprint D4) advertise image/webp; legacy thumbnails
         // (always JPEG bytes whatever their extension) stay image/jpeg.
-        return streamStoredFile(request, reply, {
+        return await streamStoredFile(request, reply, {
           stored: thumbnailStored,
           cacheControl: await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()),
           representation: { contentType: thumbnailContentType(thumbnailPath), headers: { 'Content-Disposition': 'inline' } },
@@ -377,7 +377,7 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
             ? 'public, no-cache'
             : 'private, max-age=31536000');
 
-        return streamStoredFile(request, reply, { stored, cacheControl, representation: pathRepresentation(decodedPath) });
+        return await streamStoredFile(request, reply, { stored, cacheControl, representation: pathRepresentation(decodedPath) });
       } catch (error: unknown) {
         log.error('Error serving file by path', { error: error instanceof Error ? error.message : String(error) });
         return sendInternalError(reply, 'Error serving file');
@@ -445,7 +445,7 @@ function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient,
         const stored = await locateStoredBytes(located.filePath, bytesSource);
         if (!stored) return sendNotFound(reply, 'File not found');
 
-        return streamStoredFile(request, reply, {
+        return await streamStoredFile(request, reply, {
           stored,
           cacheControl: immutableWhenWriteOnce(located.storageKey, access.cacheControl),
           representation: pathRepresentation(decodedPath),
@@ -655,31 +655,55 @@ async function streamStoredFile(
       reply.header('Content-Range', `bytes */${fileSize}`);
       return sendError(reply, 416, 'Range Not Satisfiable');
     }
-    const chunkSize = (end - start) + 1;
+    const opened = await openStoredBytes(stored, { start, end });
+    if (opened.kind !== 'open') return refuseUnopened(reply, opened);
 
     describeServedBytes();
     reply.code(206);
     reply.header('Content-Range', `bytes ${start}-${end}/${fileSize}`);
-    reply.header('Content-Length', chunkSize);
+    reply.header('Content-Length', (end - start) + 1);
     reply.header('Content-Type', representation.contentType);
     reply.headers(representation.headers);
 
-    return sendOpened(reply, await stored.open({ start, end }));
+    return reply.send(opened.body);
   }
+
+  const opened = await openStoredBytes(stored);
+  if (opened.kind !== 'open') return refuseUnopened(reply, opened);
 
   describeServedBytes();
   reply.header('Content-Type', representation.contentType);
   reply.header('Content-Length', fileSize);
   reply.headers(representation.headers);
 
-  return sendOpened(reply, await stored.open());
+  return reply.send(opened.body);
 }
 
-/** Un objet effacé entre la description et l'ouverture : le fichier n'existe plus, rien n'a été envoyé. */
-function sendOpened(reply: FastifyReply, body: Readable | null) {
-  if (body) return reply.send(body);
-  for (const header of ['ETag', 'Cache-Control', 'Content-Range', 'Content-Length', 'Content-Type', 'Content-Disposition']) reply.removeHeader(header);
-  return sendNotFound(reply, 'File not found');
+type OpenedBytes =
+  | { readonly kind: 'open'; readonly body: Readable }
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'unavailable'; readonly reason: string };
+
+/**
+ * #11267, audit D1 — le flux s'ouvre AVANT que la réponse ne soit décrite :
+ * un ETag, un cache d'un an ou un nom de fichier ne décrivent que des octets
+ * qui partent. Un objet effacé entre le HEAD et le GET est absent ; un seau
+ * qui ne répond pas est indisponible, jamais un 500 marqué `immutable`.
+ */
+async function openStoredBytes(stored: StoredBytes, range?: { readonly start: number; readonly end: number }): Promise<OpenedBytes> {
+  try {
+    const body = await stored.open(range);
+    return body === null ? { kind: 'missing' } : { kind: 'open', body };
+  } catch (error: unknown) {
+    return { kind: 'unavailable', reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function refuseUnopened(reply: FastifyReply, opened: Exclude<OpenedBytes, { kind: 'open' }>) {
+  if (opened.kind === 'missing') return sendNotFound(reply, 'File not found');
+  log.warn('Stored bytes unavailable', { reason: opened.reason });
+  reply.header('Cache-Control', 'no-store');
+  return sendError(reply, 503, 'Service Unavailable', { message: 'File temporarily unavailable' });
 }
 
 /**
