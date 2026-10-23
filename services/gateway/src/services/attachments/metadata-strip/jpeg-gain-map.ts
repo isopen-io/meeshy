@@ -34,7 +34,8 @@ const MP_ENTRY_PRIMARY = 0x20030000;
 const MP_ENTRY_JPEG = 0x00000000;
 const MPF_TIFF_OFFSET_IN_SEGMENT = 8;
 
-type GainMapImage = { readonly image: JpegImage; readonly iso: readonly Buffer[]; readonly xmp: readonly GainMapProperty[] };
+/** Une carte de gain annexée : son image lue, ses segments ISO 21496-1, son XMP filtré, et son offset de début. */
+export type GainMapImage = { readonly start: number; readonly image: JpegImage; readonly iso: readonly Buffer[]; readonly xmp: readonly GainMapProperty[] };
 
 const isIso21496 = (segment: DroppedSegment): boolean =>
   segment.marker === APP2 && segment.bytes.subarray(4, 4 + ISO_21496_SIGNATURE.length).equals(ISO_21496_SIGNATURE);
@@ -49,18 +50,18 @@ function xmpProperties(image: JpegImage): readonly GainMapProperty[] {
     .flatMap(gainMapProperties);
 }
 
-function asGainMap(image: JpegImage): GainMapImage | null {
+function asGainMap(image: JpegImage, start: number): GainMapImage | null {
   const iso = isoSegments(image);
   const xmp = xmpProperties(image);
   const describesGain = xmp.some((property) => property.prefix === 'hdrgm' || property.prefix === 'HDRGainMap');
-  return iso.length > 0 || describesGain ? { image, iso, xmp } : null;
+  return iso.length > 0 || describesGain ? { start, image, iso, xmp } : null;
 }
 
-function findGainMap(buffer: Buffer, from: number): GainMapImage | null {
+export function findGainMap(buffer: Buffer, from: number): GainMapImage | null {
   let at = buffer.indexOf(SOI_PREFIX, from);
   for (let tried = 0; at !== -1 && tried < MAX_APPENDED_IMAGES; tried += 1) {
     const image = readJpegImage(buffer, at);
-    const gainMap = image === null ? null : asGainMap(image);
+    const gainMap = image === null ? null : asGainMap(image, at);
     if (gainMap !== null) return gainMap;
     at = buffer.indexOf(SOI_PREFIX, image === null ? at + SOI_PREFIX.length : Math.max(image.end, at + SOI_PREFIX.length));
   }

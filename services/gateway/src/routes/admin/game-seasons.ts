@@ -122,6 +122,7 @@ export type AdminSeasonRow = {
   readonly themeKey: string;
   readonly stepPoints: number;
   readonly copy: unknown;
+  readonly rewardPack: string | null;
 };
 
 export function adminSeasonRow(schedule: SeasonSchedule, number: number, now: LeagueMoment): AdminSeasonRow | null {
@@ -141,6 +142,7 @@ export function adminSeasonRow(schedule: SeasonSchedule, number: number, now: Le
     themeKey: definition.themeKey,
     stepPoints: definition.stepPoints,
     copy: definition.copy,
+    rewardPack: definition.rewardPack ?? null,
   };
 }
 
@@ -181,6 +183,7 @@ const editProperties = {
   themeKey: { type: 'string', enum: [...SEASON_THEME_KEYS] },
   stepPoints: { type: 'integer', minimum: SEASON_STEP_POINTS_MIN, maximum: SEASON_STEP_POINTS_MAX },
   copy: copySchema,
+  rewardPack: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 120 }] },
 } as const;
 
 const editBody = {
@@ -229,7 +232,7 @@ const copyResponse = {
 const seasonRowSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['number', 'startDay', 'endDay', 'status', 'tense', 'explicit', 'editable', 'themeKey', 'stepPoints', 'copy'],
+  required: ['number', 'startDay', 'endDay', 'status', 'tense', 'explicit', 'editable', 'themeKey', 'stepPoints', 'copy', 'rewardPack'],
   properties: {
     number: { type: 'integer' },
     startDay: { type: 'string' },
@@ -241,6 +244,7 @@ const seasonRowSchema = {
     themeKey: { type: 'string' },
     stepPoints: { type: 'integer' },
     copy: copyResponse,
+    rewardPack: { type: ['string', 'null'] },
   },
 } as const;
 
@@ -328,6 +332,7 @@ type EditBody = {
   themeKey?: string;
   stepPoints?: number;
   copy?: unknown;
+  rewardPack?: string | null;
 };
 
 type ProposalRow = {
@@ -391,6 +396,7 @@ const REFUSAL_MESSAGES: Readonly<Record<string, string>> = {
   'copy-invalid': 'Textes incomplets ou trop longs (7 langues ; 30 / 50 / 120 caractères).',
   'invalid-status': 'Statut inconnu.',
   'invalid-number': 'Numéro de saison invalide.',
+  'invalid-reward-pack': 'Pack récompense illisible : une clé `<domaine>.<slug>` est attendue.',
 };
 
 /** Une validation interrompue (processus tombé entre la réservation et l'écriture) se reprend après 5 minutes. */
