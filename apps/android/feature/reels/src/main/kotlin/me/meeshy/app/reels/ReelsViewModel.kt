@@ -111,7 +111,7 @@ class ReelsViewModel @Inject constructor(
         currentSeed = seed
 
         val cachedFeed = postRepository.feedCacheSnapshot
-            ?.let { ReelBuilder.build(it, config.socketUrl, sessionRepository.currentUser.value) }
+            ?.let { ReelBuilder.build(it, config.apiBaseUrl, sessionRepository.currentUser.value) }
             .orEmpty()
         val seedInCache = seed != null && cachedFeed.any { it.id == seed }
         val cached = ReelBuilder.withSeedFirst(cachedFeed, seed)
@@ -126,7 +126,7 @@ class ReelsViewModel @Inject constructor(
                     hasLoadedFirstPage = true
                     nextCursor = page.nextCursor
                     hasMoreReels = page.hasMore
-                    val fresh = ReelBuilder.build(page.posts, config.socketUrl, sessionRepository.currentUser.value)
+                    val fresh = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
                     _state.update { current ->
                         val existingIds = current.reels.mapTo(HashSet()) { it.id }
                         val seedAlreadyPresent = seed != null && seed in existingIds
@@ -168,7 +168,7 @@ class ReelsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = postRepository.getPost(seedId)
             if (result !is NetworkResult.Success) return@launch
-            val seedReel = ReelBuilder.build(listOf(result.data), config.socketUrl, sessionRepository.currentUser.value).firstOrNull() ?: return@launch
+            val seedReel = ReelBuilder.build(listOf(result.data), config.apiBaseUrl, sessionRepository.currentUser.value).firstOrNull() ?: return@launch
             _state.update { current ->
                 if (current.reels.any { it.id == seedReel.id }) return@update current
                 current.copy(reels = listOf(seedReel) + current.reels, isLoading = false)
@@ -195,7 +195,7 @@ class ReelsViewModel @Inject constructor(
                     nextCursor = page.nextCursor
                     hasMoreReels = page.hasMore
                     val existingIds = _state.value.reels.mapTo(HashSet()) { it.id }
-                    val appended = ReelBuilder.build(page.posts, config.socketUrl, sessionRepository.currentUser.value)
+                    val appended = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
                         .filter { it.id !in existingIds }
                     _state.update { it.copy(reels = it.reels + appended, isLoadingMore = false) }
                 }

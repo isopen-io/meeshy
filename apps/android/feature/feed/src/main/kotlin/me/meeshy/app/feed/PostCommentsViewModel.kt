@@ -715,7 +715,7 @@ class PostCommentsViewModel @Inject constructor(
             CommentProjection.build(
                 it,
                 prefs,
-                config.socketUrl,
+                config.apiBaseUrl,
                 isPending = it.id in thread.pendingIds,
                 likeState = likeState,
                 activeLanguageCode = activeLanguages[it.id],
@@ -735,7 +735,7 @@ class PostCommentsViewModel @Inject constructor(
                         CommentProjection.build(
                             it,
                             prefs,
-                            config.socketUrl,
+                            config.apiBaseUrl,
                             isPending = replyState.isPendingReply(it.id),
                             likeState = likeState,
                             activeLanguageCode = activeLanguages[it.id],
