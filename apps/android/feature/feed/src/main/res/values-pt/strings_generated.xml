@@ -81,7 +81,14 @@
     <string name="post_comments_delete_error">Não foi possível excluir o comentário</string>
     <string name="post_comments_deleted">Comentário excluído</string>
     <string name="post_comments_load_error">Erro ao carregar os comentários</string>
+    <plurals name="post_comments_load_more_replies">
+        <item quantity="one">Ver mais %d resposta</item>
+        <item quantity="many">Ver mais %d respostas</item>
+        <item quantity="other">Ver mais %d respostas</item>
+    </plurals>
+    <string name="post_comments_load_more_replies_hint">Mostra as respostas restantes deste tópico</string>
     <string name="post_comments_more_options">Mais opções</string>
+    <string name="post_comments_reply_a11y_label">%1$s, resposta. %2$s. %3$s</string>
     <string name="post_comments_reply_action">Responder</string>
     <string name="post_comments_reply_badge">Responder</string>
     <string name="post_comments_reply_error">Erro ao enviar a resposta</string>

@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.presence.VIEWING_ACTIVITY_THROTTLE_MS
 import me.meeshy.sdk.model.presence.ViewingChange
 import me.meeshy.sdk.model.presence.ViewingEvent
 import me.meeshy.sdk.model.presence.ViewingSnapshot
+import me.meeshy.sdk.model.socket.SocketEventNames
 import org.json.JSONObject
 import timber.log.Timber
 import javax.inject.Inject
@@ -109,10 +110,10 @@ class ConversationViewingBinding @Inject constructor(
     private fun listenOnce() {
         if (listening) return
         listening = true
-        socketManager.on("viewing:start") { args -> decode<ViewingChange>(args)?.let { apply(ViewingEvent.Arrived(it)) } }
-        socketManager.on("viewing:stop") { args -> decode<ViewingChange>(args)?.let { apply(ViewingEvent.Left(it)) } }
-        socketManager.on("viewing:activity") { args -> decode<ViewingChange>(args)?.let { apply(ViewingEvent.Active(it)) } }
-        socketManager.on("viewing:snapshot") { args -> decode<ViewingSnapshot>(args)?.let { apply(ViewingEvent.Snapshot(it)) } }
+        socketManager.on(SocketEventNames.VIEWING_START) { args -> decode<ViewingChange>(args)?.let { apply(ViewingEvent.Arrived(it)) } }
+        socketManager.on(SocketEventNames.VIEWING_STOP) { args -> decode<ViewingChange>(args)?.let { apply(ViewingEvent.Left(it)) } }
+        socketManager.on(SocketEventNames.VIEWING_ACTIVITY) { args -> decode<ViewingChange>(args)?.let { apply(ViewingEvent.Active(it)) } }
+        socketManager.on(SocketEventNames.VIEWING_SNAPSHOT) { args -> decode<ViewingSnapshot>(args)?.let { apply(ViewingEvent.Snapshot(it)) } }
     }
 
     private inline fun <reified T> decode(args: Array<Any>): T? =

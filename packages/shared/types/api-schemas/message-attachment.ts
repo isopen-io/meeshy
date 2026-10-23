@@ -66,7 +66,22 @@ export const messageAttachmentSchema = {
 
     // User-provided metadata
     title: { type: 'string', nullable: true, description: 'Human-readable title' },
-    alt: { type: 'string', nullable: true, description: 'Accessibility alt text' },
+    alt: { type: 'string', nullable: true, description: 'Accessibility alt text — null when the piece or its message is protected (#12333)' },
+    altLanguage: { type: 'string', nullable: true, description: 'Source language of `alt` (#12333)' },
+    altTranslations: {
+      type: 'object',
+      nullable: true,
+      description: 'Translations of `alt`, keyed by language (#12333) — resolve with the Prisme (`resolveMediaDescription`)',
+      additionalProperties: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          translationModel: { type: 'string' },
+          confidenceScore: { type: 'number' },
+          createdAt: { type: 'string' },
+        },
+      },
+    },
     caption: { type: 'string', nullable: true, description: 'Caption/legend' },
 
     // Forwarding
@@ -119,6 +134,7 @@ export const messageAttachmentSchema = {
         },
       },
     },
+    processingState: { type: 'string', nullable: true, description: 'Media worker state (#11264): pending | ready | failed — absent means ready' },
     renditions: {
       type: 'array',
       nullable: true,
@@ -126,7 +142,8 @@ export const messageAttachmentSchema = {
       items: {
         type: 'object',
         properties: {
-          codec: { type: 'string', description: 'Video codec of the rendition (h264)' },
+          codec: { type: 'string', description: 'Codec of the rendition: h264 (video compatibility, #11261), heic / avif (image original, #11263)' },
+          mimeType: { type: 'string', description: 'Media type of the rendition file' },
           url: { type: 'string', description: 'Rendition file URL' },
           width: { type: 'number', description: 'Rendition width in pixels' },
           height: { type: 'number', description: 'Rendition height in pixels' },

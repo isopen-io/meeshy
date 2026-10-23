@@ -525,14 +525,14 @@ describe('SendSheet — envoyer', () => {
   });
 });
 
-describe('SendSheet — copier, partager hors de Meeshy', () => {
+describe('SendSheet — copier, partager', () => {
   test('un texte sans adresse n’a rien à copier ni à partager dehors ; un lien, si', async () => {
     const without = await mount({ request: { payload: { kind: 'text', text: 'Bonjour' }, intent: 'share' } });
-    expect(buttonNamed(without, 'Partager hors de Meeshy')).toBe(null);
+    expect(buttonNamed(without, 'Partager')).toBe(null);
 
     const shared: unknown[] = [];
     const host = await mount({ platform: { share: async (data) => void shared.push(data), copy: async () => {} } });
-    await mounter.click(buttonNamed(host, 'Partager hors de Meeshy'));
+    await mounter.click(buttonNamed(host, 'Partager'));
     expect(shared).toEqual([{ url: 'https://meeshy.me/p/1' }]);
   });
 
@@ -587,10 +587,10 @@ describe('SendSheet — le partage est COMPTÉ quand il est parti (#8884)', () =
     expect(counted).toBe(0);
   });
 
-  test('« Partager hors de Meeshy » compte quand la feuille du système a partagé, pas quand elle est refusée', async () => {
+  test('« Partager » compte quand la feuille du système a partagé, pas quand elle est refusée', async () => {
     let counted = 0;
     const accepted = await mount({ request: sharedRequest(() => void (counted += 1)), platform: { share: async () => {} } });
-    await mounter.click(buttonNamed(accepted, 'Partager hors de Meeshy'));
+    await mounter.click(buttonNamed(accepted, 'Partager'));
     await mounter.settle();
     expect(counted).toBe(1);
 
@@ -603,7 +603,7 @@ describe('SendSheet — le partage est COMPTÉ quand il est parti (#8884)', () =
         },
       },
     });
-    await mounter.click(buttonNamed(refused, 'Partager hors de Meeshy'));
+    await mounter.click(buttonNamed(refused, 'Partager'));
     await mounter.settle();
     expect(refusedCount).toBe(0);
   });

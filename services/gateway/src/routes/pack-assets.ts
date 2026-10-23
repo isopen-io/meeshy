@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { CommunityAppearancePacks } from '../services/packs/CommunityAppearancePacks';
+import { LensPacks } from '../services/packs/LensPacks';
 import { resolvePackAssetsDir, startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
 import { ifNoneMatchMatches } from '../utils/etag';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -49,12 +50,16 @@ const NOT_FOUND_CODE = 'PACK_ASSET_NOT_FOUND';
 
 /** Les contrats tiers sont des `<sha16>.json` en minuscules : toute autre forme ne touche jamais la base. */
 const COMMUNITY_CONTRACT = /^[0-9a-f]{16}\.json$/;
+/** Le document et les fichiers d'une lens publiée (#11271) : la même forme, en minuscules, sans autre extension. */
+const LENS_FILE = /^[0-9a-f]{16}\.(?:json|webp|png)$/;
 
 export type PackAssetsRoutesOptions = {
   readonly index?: PackIndex;
   readonly assetsDir?: string;
   /** Les contrats des packs de vendeurs tiers PUBLIÉS (#10709) : la seule lecture de base de cette route, réservée à une empreinte `.json` hors liste blanche. */
   readonly community?: Pick<CommunityAppearancePacks, 'approvedContract'>;
+  /** Le document et les fichiers des lens PUBLIÉES (#11271) : lus en base seulement pour une empreinte hors liste blanche. */
+  readonly lens?: Pick<LensPacks, 'approvedFile'>;
 };
 
 type FileRequest = FastifyRequest<{ Params: { file: string } }>;
@@ -73,6 +78,7 @@ export async function packAssetsRoutes(fastify: FastifyInstance, options: PackAs
   const index = options.index ?? startupPackIndex();
   const assetsDir = options.assetsDir ?? resolvePackAssetsDir();
   const community = options.community ?? new CommunityAppearancePacks({ prisma: fastify.prisma, index });
+  const lens = options.lens ?? new LensPacks({ prisma: fastify.prisma });
 
   fastify.get(
     '/:file',
@@ -111,12 +117,14 @@ export async function packAssetsRoutes(fastify: FastifyInstance, options: PackAs
       const { file } = request.params;
       if (!index.isServedAsset(file)) {
         const contract = COMMUNITY_CONTRACT.test(file) ? await community.approvedContract(file) : null;
-        if (contract === null) return sendNotFound(reply, 'Pack asset not found', { code: NOT_FOUND_CODE });
+        const lensFile = contract === null && LENS_FILE.test(file) ? await lens.approvedFile(file) : null;
+        if (contract === null && lensFile === null) return sendNotFound(reply, 'Pack asset not found', { code: NOT_FOUND_CODE });
         const communityEtag = `"${fingerprintOf(file)}"`;
         reply.header('ETag', communityEtag);
         reply.header('Cache-Control', PACK_ASSETS_CACHE_CONTROL);
         reply.header('X-Content-Type-Options', 'nosniff');
         if (ifNoneMatchMatches(request.headers['if-none-match'], communityEtag)) return reply.code(304).send();
+        if (lensFile !== null) return reply.type(lensFile.contentType).send(lensFile.bytes);
         return reply.type(CONTENT_TYPES.json).send(contract);
       }
       const etag = `"${fingerprintOf(file)}"`;

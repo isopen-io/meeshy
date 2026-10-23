@@ -62,6 +62,7 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
             store.remove(key)
         } else {
             store.put(key, value, account)
+            if (key == EncryptedAccountTokenVault.KEY_JWT) store.remove(VisitorReaderKey.STORAGE_KEY)
         }
     }
 

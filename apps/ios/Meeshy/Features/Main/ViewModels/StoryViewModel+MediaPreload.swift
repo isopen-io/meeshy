@@ -340,7 +340,7 @@ final class StoryTrayMediaPreloader {
     nonisolated deinit {}
 
     /// Télécharge les URL d'une story ; rend celles que la politique a sautées.
-    typealias Fetch = @Sendable ([String], StoryItem, Bool) async -> [String]
+    typealias Fetch = @Sendable @concurrent ([String], StoryItem, Bool) async -> [String]
 
     private(set) var claimedURLs: Set<String> = []
     private let activity: PreloadActivityGate

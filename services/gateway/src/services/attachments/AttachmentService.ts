@@ -26,7 +26,7 @@ import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
-import { derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
+import { conventionalDerivedPaths, derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
 import { eraseMirroredCopy } from '../storage/objects/mirroredErasure';
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
@@ -393,6 +393,29 @@ export class AttachmentService {
     }
 
     await this.unlinkDerivedFiles(attachment);
+    await this.unlinkConventionalDerivedFiles(attachment.filePath);
+  }
+
+  /**
+   * #11264 (contre-audit S9, N2) — les rendus que le worker de médias écrivait
+   * PENDANT cette suppression n'étaient pas encore sur la ligne lue plus haut.
+   * Une fois qu'aucune ligne ne partage plus les octets, leurs chemins
+   * conventionnels partent aussi. Un comptage qui échoue garde tout.
+   */
+  private async unlinkConventionalDerivedFiles(filePath: string): Promise<void> {
+    try {
+      if ((await this.prisma.messageAttachment.count({ where: { filePath } })) > 0) return;
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+    const files = conventionalDerivedPaths(filePath)
+      .map((candidate) => resolveInsideUploadRoot(this.uploadBasePath, candidate))
+      .filter((fullPath): fullPath is string => fullPath !== null);
+    // Seuls les fichiers PRÉSENTS : la plupart de ces chemins n'existent pas
+    // (une image n'a pas de rendu H.264), et leur absence n'est pas une erreur.
+    const present = await Promise.all(files.map((fullPath) => Promise.resolve().then(() => fs.stat(fullPath)).then(() => fullPath, () => null)));
+    await Promise.all(present.filter((fullPath): fullPath is string => fullPath !== null).map((fullPath) => this.unlinkQuietly(fullPath)));
   }
 
   /**

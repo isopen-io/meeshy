@@ -479,17 +479,27 @@ fileprivate struct BubbleGridCell: View {
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
 
+    /// #12333 — ce que VoiceOver dit de la pièce : la description de l'auteur
+    /// ou, à défaut, la transcription, dans la langue du lecteur (Prisme, rang
+    /// par rang). `nil` sous protection : la loi du SDK ne décrit pas une pièce
+    /// à vue unique, floutée ou chiffrée, et la passerelle ne la sert pas.
+    private var spokenDescription: String? {
+        attachment.servedDescription(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))?.text
+    }
+
     @ViewBuilder
     private var mediaLayer: some View {
         switch attachment.type {
         case .image:
             BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth,
                                 onFullImageLoaded: { displayedImageLanded = true })
+                .modifier(MediaDescriptionLabel(text: spokenDescription))
         case .video:
             ConversationVideoPoster(attachment: attachment,
                                     accentHex: contactColor,
                                     playButtonDiameter: solo ? 64 : 44,
                                     showsPlaybackCue: videoPresentation.showsPlaybackCue)
+                .modifier(MediaDescriptionLabel(text: spokenDescription))
         default:
             EmptyView()
         }
@@ -715,5 +725,23 @@ private struct AttachmentBlurOverlayView: View {
         .accessibilityHint(hint ?? "")
         .accessibilityAddTraits(.isButton)
         .onTapGesture { onReveal() }
+    }
+}
+
+/// #12333 — le libellé VoiceOver d'une pièce visuelle, quand elle a une
+/// description servie ; sinon la pièce garde le libellé qu'elle avait.
+private struct MediaDescriptionLabel: ViewModifier {
+    let text: String?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let text, !text.isEmpty {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(text))
+                .accessibilityAddTraits(.isImage)
+        } else {
+            content
+        }
     }
 }

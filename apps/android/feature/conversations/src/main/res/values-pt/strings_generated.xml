@@ -1,5 +1,9 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="accessibility_conversation_with">Conversa com %s</string>
+    <string name="accessibility_last_message_preview">última mensagem: %s</string>
+    <string name="accessibility_muted">silenciada</string>
+    <string name="accessibility_pinned">fixada</string>
     <string name="accessibility_search_list_hint">Abre a pesquisa de conversas e suas comunidades</string>
     <string name="common_active">Ativo</string>
     <string name="common_cancel">Cancelar</string>
@@ -156,6 +160,20 @@
     <string name="new_conversation_selected">Selecionado</string>
     <string name="new_conversation_title">Nova conversa</string>
     <string name="participantProfile_linkExpires">Expira a</string>
+    <string name="row_a11y_conversation_with">Conversa com %s</string>
+    <string name="row_a11y_last_message">última mensagem: %s</string>
+    <string name="row_a11y_muted">silenciada</string>
+    <string name="row_a11y_pending_sync">sincronização pendente</string>
+    <string name="row_a11y_pinned">fixada</string>
+    <plurals name="row_a11y_unread_count">
+        <item quantity="one">1 mensagem não lida</item>
+        <item quantity="many">%d mensagens não lidas</item>
+        <item quantity="other">%d mensagens não lidas</item>
+    </plurals>
+    <string name="row_join_call">Reingressar</string>
+    <string name="row_join_call_a11y">Chamada em andamento, toque para reingressar</string>
+    <string name="row_menu_info">Informações da conversa</string>
+    <string name="row_menu_view_profile">Ver perfil</string>
     <string name="shareLink_a11y_copied">Link copiado</string>
     <string name="shareLink_detail_allLanguages">Todos os idiomas</string>
     <string name="shareLink_detail_allowedLanguages">Idiomas permitidos</string>

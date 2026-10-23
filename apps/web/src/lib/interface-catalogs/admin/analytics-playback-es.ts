@@ -22,6 +22,20 @@ const f = {
   'admin.analytics.playback.column.rebuffer.p50': 'Pausas de búfer p50',
   'admin.analytics.playback.column.rebuffer.p95': 'Pausas de búfer p95',
   'admin.analytics.playback.column.rebuffered': 'Sesiones interrumpidas',
+  'admin.analytics.playback.vitals.title': 'La página web durante la reproducción',
+  'admin.analytics.playback.vitals.hint': 'Web Vitals de la página (LCP, CLS, INP) y fotogramas de animación largos durante la sesión, mediana (p50) y percentil 95 (p95). Solo la web los mide.',
+  'admin.analytics.playback.vitals.column.day': 'Día',
+  'admin.analytics.playback.vitals.column.surface': 'Superficie',
+  'admin.analytics.playback.vitals.column.tier': 'Dispositivo',
+  'admin.analytics.playback.vitals.column.lcp.p50': 'LCP p50',
+  'admin.analytics.playback.vitals.column.lcp.p95': 'LCP p95',
+  'admin.analytics.playback.vitals.column.cls.p50': 'CLS p50',
+  'admin.analytics.playback.vitals.column.cls.p95': 'CLS p95',
+  'admin.analytics.playback.vitals.column.inp.p50': 'INP p50',
+  'admin.analytics.playback.vitals.column.inp.p95': 'INP p95',
+  'admin.analytics.playback.vitals.column.longFrames.p95': 'Fotogramas largos p95',
+  'admin.analytics.playback.vitals.column.longFramesBlocking.p95': 'Tiempo de bloqueo p95',
+  'admin.analytics.playback.vitals.column.longFrameWorst.p95': 'Peor fotograma p95',
 } satisfies Readonly<Record<PlaybackTextKey, string>>;
 
 export default f;

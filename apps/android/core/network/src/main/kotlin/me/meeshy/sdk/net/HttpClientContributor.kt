@@ -70,6 +70,7 @@ internal fun builtInContributors(
     onSessionExpired: () -> Unit,
     refresher: SessionRefresher,
     transition: SessionTransitionFlags = SessionTransitionFlags(),
+    visitorKey: VisitorReaderKeyProviding? = null,
 ): List<HttpClientContributor> = listOfNotNull(
     HttpClientContributor.of("url-guard", HttpPriority.URL_GUARD) { it.addInterceptor(UrlGuardInterceptor()) },
     HttpClientContributor.of("endpoint-policy", HttpPriority.ENDPOINT_POLICY) {
@@ -79,7 +80,7 @@ internal fun builtInContributors(
     HttpClientContributor.of("proactive-refresh", HttpPriority.PROACTIVE_REFRESH) {
         it.addInterceptor(ProactiveRefreshInterceptor(tokenStore, refresher))
     },
-    HttpClientContributor.of("auth", HttpPriority.AUTH) { it.addInterceptor(AuthInterceptor(tokenStore, transition)) },
+    HttpClientContributor.of("auth", HttpPriority.AUTH) { it.addInterceptor(AuthInterceptor(tokenStore, transition, visitorKey)) },
     // Annonce ce que ce binaire sait LIRE. Ne se pose qu'apres que la lecture v3 existe :
     // l'inverse echangerait une sentinelle lisible contre un ecran vide.
     HttpClientContributor.of("client-capabilities", HttpPriority.CLIENT_CAPABILITIES) {

@@ -1265,6 +1265,18 @@ model MessageAttachment {
   title   String?
   /// Accessibility alt text (for images/media)
   alt     String?
+  /// Langue SOURCE de `alt` (ISO 639-1, détectée à la saisie, #11329) — même
+  /// rôle que `PostMedia.altLanguage`. `null` tant que `alt` est vide. Sans
+  /// saisie, la description par défaut est la transcription, RÉSOLUE par
+  /// `resolveMediaDescription` (`packages/shared/utils/media-description.ts`),
+  /// jamais recopiée ici.
+  altLanguage String?
+  /// Traductions de `alt` (#12333), MÊME forme que `PostMedia.altTranslations`
+  /// (`{ [lang]: { text, translationModel, confidenceScore, createdAt } }`).
+  /// Seul écrivain : `MessageAttachmentAltTranslationService`, garde fail-closed
+  /// (vue unique, floutée, chiffrée ⇒ jamais traduite). DISTINCTE de
+  /// `translations` (pistes audio) et de `captionTranslations`.
+  altTranslations Json?
   /// Caption/legend displayed with the attachment
   caption String?
 
@@ -1339,6 +1351,7 @@ model MessageAttachment {
   imageVariants Json?     // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
   avifVariants  Json?     // Variantes AVIF responsive (#11262), MÊME forme, format 'avif' — à CÔTÉ des WebP, jamais dedans (anciens clients)
   renditions    Json?     // Rendus vidéo ADDITIONNELS (#11261) : [{ codec: 'h264', url, width, height, size }] — l'original reste servi à iOS
+  processingState String? // #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias ; absent = prêt (ligne héritée ou traitée pendant la requête)
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)
@@ -1498,6 +1511,7 @@ model MessageAttachment {
   // index, ce comptage balaie la collection entière à chaque suppression.
   @@index([filePath])
   @@index([thumbnailPath])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 // =====================================================
@@ -4166,6 +4180,9 @@ model PostMedia {
   /// #11261 — rendus vidéo ADDITIONNELS (H.264 de compatibilité d'une vidéo HEVC) :
   /// [{ codec, url, width, height, size }]. OPTIONNEL ; l'original n'est jamais remplacé.
   renditions Json?
+  /// #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias.
+  /// OPTIONNEL : absent = prêt (ligne héritée, ou traitée pendant la requête).
+  processingState String?
 
   // Metadata audio/vidéo
   duration     Int?     // ms
@@ -4277,6 +4294,7 @@ model PostMedia {
   /// Sert le rattrapage et la garde de revendication (filtre sur uploadeur
   /// parmi les médias en attente).
   @@index([uploaderId, postId])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)
@@ -6126,6 +6144,83 @@ model CommunityAppearancePack {
   @@index([domain, status, createdAt])
   @@index([submitterId])
   @@index([contractSrc])
+}
+
+/// Une lens proposée par un partenaire (#11271, MeeshyLens v1) : le document
+/// re-sérialisé par `parseLens`, ses fichiers ré-encodés, et la fenêtre et les
+/// communautés FIXÉES par la modération. Gratuite (prix 0) ; l'identité
+/// partenaire, le crédit et le comptage d'usage attendent #11251 (S26).
+model LensPack {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  slug           String    @unique
+  name           String
+  author         String
+  submitterId    String    @db.ObjectId
+  /// pending · approved · rejected · withdrawn (retirée par la modération après publication)
+  status         String    @default("pending")
+  reviewNote     String?
+  reviewerId     String?   @db.ObjectId
+  reviewedAt     DateTime?
+  installCount   Int       @default(0)
+  /// light · standard · rich — le coût MESURÉ par la passerelle, jamais celui déclaré.
+  cost           String
+  /// capture · live
+  surfaces       String[]
+  /// La fenêtre fixée par la modération (proposée par le document, retenue ou corrigée à la revue).
+  startsAt       DateTime
+  endsAt         DateTime
+  /// Les communautés visées, fixées à la revue ; vide = tout le monde.
+  communities    String[]  @db.ObjectId
+  /// Le document re-sérialisé, tel que servi (adressé par `documentSha256`).
+  documentJson   String
+  documentSha256 String
+  /// `<sha16>.json` — l'adresse sous laquelle le magasin des packs sert le document.
+  documentSrc    String
+  documentBytes  Int
+  /// Les adresses `<sha16>.<ext>` des fichiers du document (`LensPackAsset.src`).
+  assetSrcs      String[]
+  createdAt      DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([submitterId, status])
+  @@index([documentSrc])
+}
+
+/// Un fichier d'une lens (#11271) : ré-encodé à la proposition, adressé par son
+/// empreinte, servi par `/pack-assets` seulement quand sa lens est publiée.
+model LensPackAsset {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  packId    String   @db.ObjectId
+  /// `<sha16>.webp|png` — les 16 premiers hexadécimaux du SHA-256 des octets.
+  src       String
+  sha256    String
+  mimeType  String
+  bytes     Bytes
+  sizeBytes Int
+  createdAt DateTime @default(now())
+
+  @@unique([packId, src])
+  @@index([src])
+}
+
+/// La SURCHARGE d'un pack du registre versionné (#11275), écrite par
+/// l'administration sans déploiement : masqué, ordre, prix, fenêtre, ciblage
+/// (`PackRegistryOverride`, JSON validé). Ne crée jamais un pack : les packs du
+/// dépôt restent lus au démarrage, la surcharge s'y applique. Chaque écriture
+/// est journalisée (`AdminAuditLog`) AVANT d'agir.
+model PackRegistryEntry {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  domain     String
+  slug       String
+  /// `PackRegistryOverride` — seules les clés présentes surchargent ; `null` retire.
+  override   Json
+  /// Compare-and-set : une écriture porte la révision qu'elle a lue.
+  revision   Int      @default(1)
+  updatedBy  String   @db.ObjectId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([domain, slug])
 }
 
 /// LA POSSESSION d'un pack payant (#10632). Quatre voies (#11272, `PACK_OWNERSHIP_SOURCES`) :

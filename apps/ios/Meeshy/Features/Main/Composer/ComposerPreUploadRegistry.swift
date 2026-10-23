@@ -243,7 +243,7 @@ struct ComposerTusPreUploader: ComposerPreUploadProviding {
 /// publication montera et compressera l'asset elle-même.
 struct ComposerCompressingPreUploader: ComposerPreUploadProviding {
     let inner: any ComposerPreUploadProviding
-    let compress: @Sendable (URL) async throws -> URL
+    let compress: @Sendable @concurrent (URL) async throws -> URL
 
     /// Le monteur du composer : TUS, après `compressVideo` au budget de la
     /// story — le seul format dont la publication référence ce qui a été pré-monté.

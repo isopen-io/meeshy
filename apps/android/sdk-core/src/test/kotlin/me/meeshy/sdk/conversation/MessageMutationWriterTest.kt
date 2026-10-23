@@ -196,13 +196,17 @@ class MessageMutationWriterTest {
     }
 
     @Test
-    fun `a mutation keeps the row's identity and only rewrites its payload`() = runHarnessTest { harness ->
+    fun `a mutation keeps the row's identity and only rewrites its payload and what derives from it`() = runHarnessTest { harness ->
         harness.seedSynced(message())
         val before: MessageEntity = harness.database.messageDao().find("m1")!!
 
         writer(harness).editOptimistic("m1", "bonjour")
 
         val after = harness.database.messageDao().find("m1")!!
-        assertThat(after.copy(payload = before.payload)).isEqualTo(before)
+        assertThat(after.contentText).isEqualTo("bonjour")
+        assertThat(after.changeVersion).isEqualTo(before.changeVersion + 1)
+        assertThat(
+            after.copy(payload = before.payload, contentText = before.contentText, changeVersion = before.changeVersion),
+        ).isEqualTo(before)
     }
 }

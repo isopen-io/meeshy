@@ -174,9 +174,9 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[data-quote-open="video"]')?.click();
     });
-    await waitFor(() => document.querySelector('[role="dialog"] [data-viewer-reply]') !== null);
+    await waitFor(() => document.querySelector('[role="dialog"] [data-viewer-action="reply"]') !== null);
     expect(document.querySelector('[role="dialog"] video')?.getAttribute('src')).toContain('sortie.mp4');
-    expect(document.querySelector('[role="dialog"] [data-viewer-reply]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"] [data-viewer-action="reply"]')).not.toBeNull();
   });
 
   test('hors du fil, la pièce citée se partage par ses identifiants (#8884, #9914)', async () => {

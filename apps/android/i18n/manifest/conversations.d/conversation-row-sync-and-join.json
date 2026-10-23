@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "accessibility.conversation_with", "androidName": "row_a11y_conversation_with", "status": "adopted"},
+        {"catalog": "app", "iosKey": "accessibility.last_message_preview", "androidName": "row_a11y_last_message", "status": "adopted"},
+        {"catalog": "app", "iosKey": "accessibility.muted", "androidName": "row_a11y_muted", "status": "adopted"},
+        {"catalog": "app", "iosKey": "accessibility.pinned", "androidName": "row_a11y_pinned", "status": "adopted"},
+        {"catalog": "app", "iosKey": "accessibility.pending_sync", "androidName": "row_a11y_pending_sync", "status": "adopted"},
+        {"androidName": "row_a11y_opens_conversation", "status": "android-only"},
+        {"catalog": "app", "iosKey": "accessibility.unread_count", "androidName": "row_a11y_unread_count", "kind": "plurals", "status": "adopted", "fillMissingQuantities": true},
+        {"catalog": "app", "iosKey": "call.header.rejoin", "androidName": "row_join_call", "status": "adopted"},
+        {"catalog": "app", "iosKey": "call.header.rejoin.a11y", "androidName": "row_join_call_a11y", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.info", "androidName": "row_menu_info", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.view.view_profile", "androidName": "row_menu_view_profile", "status": "adopted"}
+      ]
+    }
+  }
+}

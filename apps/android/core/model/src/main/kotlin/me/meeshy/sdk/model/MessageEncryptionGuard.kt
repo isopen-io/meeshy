@@ -29,7 +29,18 @@ public object MessageEncryptionGuard {
             Verdict.Admitted
         }
 
-    /** Le texte que la recherche locale peut indexer ; `null` pour un message chiffré ou sans texte. */
+    /**
+     * Le texte que la recherche locale peut indexer ; `null` pour un message chiffré, sans texte,
+     * supprimé, éphémère, à vue unique ou flouté : ce qu'on masque à l'écran ne s'indexe jamais en clair.
+     */
     public fun searchableText(message: ApiMessage): String? =
-        message.content.takeIf { message.isEncrypted != true && it.isNotBlank() }
+        message.content.takeIf {
+            it.isNotBlank() &&
+                message.isEncrypted != true &&
+                message.deletedAt == null &&
+                message.expiresAt.isNullOrBlank() &&
+                message.isViewOnce != true &&
+                message.isBlurred != true &&
+                ((message.effectFlags?.toLong() ?: 0L) and AttachmentProtection.MASKING_FLAGS) == 0L
+        }
 }

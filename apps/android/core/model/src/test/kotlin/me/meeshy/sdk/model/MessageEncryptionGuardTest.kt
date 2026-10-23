@@ -51,6 +51,18 @@ class MessageEncryptionGuardTest {
     }
 
     @Test
+    fun `un message protege, supprime ou ephemere n'a aucun texte indexable`() {
+        val clear = message("secret")
+
+        assertThat(MessageEncryptionGuard.searchableText(clear.copy(isViewOnce = true))).isNull()
+        assertThat(MessageEncryptionGuard.searchableText(clear.copy(isBlurred = true))).isNull()
+        assertThat(MessageEncryptionGuard.searchableText(clear.copy(expiresAt = "2030-01-01T00:00:00.000Z"))).isNull()
+        assertThat(MessageEncryptionGuard.searchableText(clear.copy(deletedAt = "2030-01-01T00:00:00.000Z"))).isNull()
+        assertThat(MessageEncryptionGuard.searchableText(clear.copy(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt()))).isNull()
+        assertThat(MessageEncryptionGuard.searchableText(clear.copy(isViewOnce = false, isBlurred = false))).isEqualTo("secret")
+    }
+
+    @Test
     fun `le cryptogramme et le contour d'avatar de l'auteur survivent a l'aller-retour JSON`() {
         val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
         val decoded = json.decodeFromString<ApiMessage>(

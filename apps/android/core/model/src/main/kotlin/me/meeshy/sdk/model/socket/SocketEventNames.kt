@@ -95,14 +95,19 @@ object SocketEventNames {
     const val CONVERSATION_CLOSED = "conversation:closed"
     const val CONVERSATION_DELETED = "conversation:deleted"
     const val CONVERSATION_PARTICIPANT_BANNED = "conversation:participant-banned"
+    const val CONVERSATION_PARTICIPANT_JOINED = "conversation:participant-joined"
     const val CONVERSATION_PARTICIPANT_LEFT = "conversation:participant-left"
+    const val CONVERSATION_PARTICIPANT_UNBANNED = "conversation:participant-unbanned"
     const val CONVERSATION_RESTORED = "conversation:restored"
     const val CONVERSATION_UNREAD_UPDATED = "conversation:unread-updated"
     const val CONVERSATION_UPDATED = "conversation:updated"
 
     // location
+    const val LOCATION_LIVE_START = "location:live-start"
     const val LOCATION_LIVE_STARTED = "location:live-started"
+    const val LOCATION_LIVE_STOP = "location:live-stop"
     const val LOCATION_LIVE_STOPPED = "location:live-stopped"
+    const val LOCATION_LIVE_UPDATE = "location:live-update"
     const val LOCATION_LIVE_UPDATED = "location:live-updated"
 
     // media
@@ -116,6 +121,7 @@ object SocketEventNames {
     const val MESSAGE_NEW = "message:new"
     const val MESSAGE_PINNED = "message:pinned"
     const val MESSAGE_TRANSLATION = "message:translation"
+    const val MESSAGE_TRANSLATION_SHARED = "message:translation-shared"
     const val MESSAGE_UNPINNED = "message:unpinned"
 
     // notification
@@ -146,6 +152,7 @@ object SocketEventNames {
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
     // reaction
+    const val PROFILE_DECOR_UPDATED = "profile:decor-updated"
     const val REACTION_ADDED = "reaction:added"
     const val REACTION_REMOVED = "reaction:removed"
 
@@ -175,6 +182,13 @@ object SocketEventNames {
     // user
     const val USER_PREFERENCES_UPDATED = "user:preferences-updated"
     const val USER_STATUS = "user:status"
+    const val USER_UPDATED = "user:updated"
+
+    // viewing
+    const val VIEWING_ACTIVITY = "viewing:activity"
+    const val VIEWING_SNAPSHOT = "viewing:snapshot"
+    const val VIEWING_START = "viewing:start"
+    const val VIEWING_STOP = "viewing:stop"
 
     /** Tous les noms du catalogue, dans l'ordre de déclaration. */
     val all: List<String> = listOf(
@@ -250,12 +264,17 @@ object SocketEventNames {
         CONVERSATION_CLOSED,
         CONVERSATION_DELETED,
         CONVERSATION_PARTICIPANT_BANNED,
+        CONVERSATION_PARTICIPANT_JOINED,
         CONVERSATION_PARTICIPANT_LEFT,
+        CONVERSATION_PARTICIPANT_UNBANNED,
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
+        LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
+        LOCATION_LIVE_STOP,
         LOCATION_LIVE_STOPPED,
+        LOCATION_LIVE_UPDATE,
         LOCATION_LIVE_UPDATED,
         MEDIA_CAPTION_TRANSLATION_UPDATED,
         MESSAGE_ATTACHMENT_UPDATED,
@@ -265,6 +284,7 @@ object SocketEventNames {
         MESSAGE_NEW,
         MESSAGE_PINNED,
         MESSAGE_TRANSLATION,
+        MESSAGE_TRANSLATION_SHARED,
         MESSAGE_UNPINNED,
         NOTIFICATION_COUNTS,
         NOTIFICATION_DELETED,
@@ -285,6 +305,7 @@ object SocketEventNames {
         POST_UPDATED,
         PRESENCE_APP_STATE,
         PRESENCE_SNAPSHOT,
+        PROFILE_DECOR_UPDATED,
         REACTION_ADDED,
         REACTION_REMOVED,
         READ_STATUS_UPDATED,
@@ -304,5 +325,10 @@ object SocketEventNames {
         TYPING_STOP,
         USER_PREFERENCES_UPDATED,
         USER_STATUS,
+        USER_UPDATED,
+        VIEWING_ACTIVITY,
+        VIEWING_SNAPSHOT,
+        VIEWING_START,
+        VIEWING_STOP,
     )
 }

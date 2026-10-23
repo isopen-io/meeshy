@@ -1,5 +1,9 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="accessibility_conversation_with">Conversazione con %s</string>
+    <string name="accessibility_last_message_preview">ultimo messaggio: %s</string>
+    <string name="accessibility_muted">silenziata</string>
+    <string name="accessibility_pinned">fissata</string>
     <string name="accessibility_search_list_hint">Apre la ricerca delle conversazioni e le tue community</string>
     <string name="common_active">Attivo</string>
     <string name="common_cancel">Annulla</string>
@@ -156,6 +160,20 @@
     <string name="new_conversation_selected">Selezionato</string>
     <string name="new_conversation_title">Nuova conversazione</string>
     <string name="participantProfile_linkExpires">Scade il</string>
+    <string name="row_a11y_conversation_with">Conversazione con %s</string>
+    <string name="row_a11y_last_message">ultimo messaggio: %s</string>
+    <string name="row_a11y_muted">silenziata</string>
+    <string name="row_a11y_pending_sync">sincronizzazione in attesa</string>
+    <string name="row_a11y_pinned">fissata</string>
+    <plurals name="row_a11y_unread_count">
+        <item quantity="one">1 messaggio non letto</item>
+        <item quantity="many">%d messaggi non letti</item>
+        <item quantity="other">%d messaggi non letti</item>
+    </plurals>
+    <string name="row_join_call">Rientra</string>
+    <string name="row_join_call_a11y">Chiamata in corso, tocca per rientrare</string>
+    <string name="row_menu_info">Info conversazione</string>
+    <string name="row_menu_view_profile">Vedi profilo</string>
     <string name="shareLink_a11y_copied">Link copiato</string>
     <string name="shareLink_detail_allLanguages">Tutte le lingue</string>
     <string name="shareLink_detail_allowedLanguages">Lingue consentite</string>

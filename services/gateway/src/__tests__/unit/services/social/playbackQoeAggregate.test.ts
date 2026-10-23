@@ -181,8 +181,40 @@ describe('playbackQoePipeline — une lecture bornée, sur l’index type × act
     expect(pipeline).toContainEqual({ $limit: 50_000 });
     const projection = pipeline.find((stage) => '$project' in stage) as { $project: Record<string, unknown> };
     expect(Object.keys(projection.$project).sort()).toEqual([
-      '_id', 'day', 'props.deviceTier', 'props.exitBeforeStart', 'props.playedMs', 'props.rebufferCount',
-      'props.rebufferMs', 'props.startupMs', 'surface', 'userId',
+      '_id', 'day', 'props.cls', 'props.deviceTier', 'props.exitBeforeStart', 'props.inpMs', 'props.lcpMs', 'props.longFrameWorstMs',
+      'props.longFrames', 'props.longFramesBlockingMs', 'props.playedMs', 'props.rebufferCount', 'props.rebufferMs', 'props.startupMs',
+      'surface', 'userId',
     ]);
   });
 });
+
+describe('les Web Vitals et les longues images de la séance (W11, #11317)', () => {
+  it('coercePlaybackQoeRow lit les six mesures de `props`, et en écarte une illisible SEULE', () => {
+    const row = coercePlaybackQoeRow({
+      day: 20261020,
+      props: { lcpMs: 1800, cls: 0.05, inpMs: 120, longFrames: 2, longFramesBlockingMs: 150, longFrameWorstMs: 90, startupMs: 'x' },
+    });
+    expect(row).toMatchObject({ lcpMs: 1800, cls: 0.05, inpMs: 120, longFrames: 2, longFramesBlockingMs: 150, longFrameWorstMs: 90 });
+    expect(coercePlaybackQoeRow({ day: 20261020, props: { cls: -1, inpMs: 'lent' } })).toMatchObject({ cls: undefined, inpMs: undefined });
+  });
+
+  it('chaque cellule sert leur p50 et leur p95, par tier', () => {
+    const rows = fromAccounts(20, (i) => ({ lcpMs: 1000 + i * 100, cls: i / 100, inpMs: 50 + i * 10, longFrames: i, longFramesBlockingMs: i * 10, longFrameWorstMs: 60 + i }));
+    const [cell] = summarizePlaybackQoe(rows, { minDevices: 20 }).cells;
+    expect(cell).toMatchObject({
+      deviceTier: 'high',
+      lcpMs: { p50: 1900, p95: 2800 },
+      cls: { p50: 0.09, p95: 0.18 },
+      inpMs: { p50: 140, p95: 230 },
+      longFrames: { p50: 9, p95: 18 },
+      longFramesBlockingMs: { p50: 90, p95: 180 },
+      longFrameWorstMs: { p50: 69, p95: 78 },
+    });
+  });
+
+  it('sert null, jamais zéro, quand aucune séance de la cellule ne les porte (client natif, ancien web)', () => {
+    const [cell] = summarizePlaybackQoe(fromAccounts(20), { minDevices: 20 }).cells;
+    expect(cell).toMatchObject({ lcpMs: null, cls: null, inpMs: null, longFrames: null, longFramesBlockingMs: null, longFrameWorstMs: null });
+  });
+});
+

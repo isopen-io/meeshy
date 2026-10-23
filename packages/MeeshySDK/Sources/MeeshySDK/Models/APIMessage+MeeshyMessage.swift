@@ -83,6 +83,7 @@ extension APIMessage {
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
                 mimeType: apiAtt.mimeType ?? "application/octet-stream", fileSize: apiAtt.fileSize ?? 0,
                 fileUrl: apiAtt.fileUrl ?? "",
+                alt: apiAtt.alt,
                 forwardedFromAttachmentId: apiAtt.forwardedFromAttachmentId, isForwarded: apiAtt.isForwarded == true,
                 capturedInApp: apiAtt.capturedInApp == true,
                 // #7070 — la charge socket et REST porte désormais ces cinq
@@ -110,7 +111,9 @@ extension APIMessage {
                 downloadedByAllAt: apiAtt.downloadedByAllAt, listenedByAllAt: apiAtt.listenedByAllAt,
                 watchedByAllAt: apiAtt.watchedByAllAt, viewedCount: apiAtt.viewedCount,
                 downloadedCount: apiAtt.downloadedCount, consumedCount: apiAtt.consumedCount,
-                currentUserConsumption: apiAtt.currentUserConsumption
+                currentUserConsumption: apiAtt.currentUserConsumption,
+                altLanguage: apiAtt.altLanguage,
+                altTranslations: apiAtt.altTranslations
             )
         }
 

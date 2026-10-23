@@ -55,6 +55,7 @@ class CallViewModel @Inject constructor(
     /** The seams capabilities plug into; the call screen reads the UI ones from here. */
     val extensions: CallExtensionPoints,
     private val ongoing: CallOngoingController,
+    private val peerVisuals: CallPeerVisualSource,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -106,6 +107,14 @@ class CallViewModel @Inject constructor(
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
+    private val _peerVisual = MutableStateFlow(CallPeerVisual.EMPTY)
+
+    /** La photo, le contour équipé et la bannière du correspondant ([CallPeerVisualSource]), cache d'abord. */
+    val peerVisual: StateFlow<CallPeerVisual> = _peerVisual.asStateFlow()
+
+    /** Résout le visuel de l'appel en cours ; remplacé à chaque [start]. */
+    private var peerVisualJob: Job? = null
+
     /**
      * The inputs of the call in flight — read by the app shell to rebuild the call
      * route when the floating pill re-opens a minimised call (the Activity-scoped
@@ -115,6 +124,8 @@ class CallViewModel @Inject constructor(
     val activeConfig: CallConfig get() = config
 
     init {
+        coordinator.onRemoteBye = { onRemoteBye() }
+        coordinator.onSetupFailed = { message -> dispatch(CallEvent.ConnectionFailed(message)) }
         peers.attach(host)
         waiting.attach(host)
         watchdogs.attach(host)
@@ -171,7 +182,10 @@ class CallViewModel @Inject constructor(
 
     /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */
     private fun onIceServersRefreshed(iceServers: List<SocketIceServer>) {
-        if (!awaitingIncomingIce) return
+        if (!awaitingIncomingIce) {
+            if (callId.isNotBlank()) coordinator.updateIceServers(iceServers)
+            return
+        }
         awaitingIncomingIce = false
         coordinator.startIncoming(
             viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo,
@@ -210,7 +224,17 @@ class CallViewModel @Inject constructor(
         stopQuality()
         watchdogs.reset()
         peers.clear()
+        resolvePeerVisual(config)
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
+    }
+
+    /** Le visuel d'un appel précédent ne survit jamais : vide d'abord, puis ce que la source résout. */
+    private fun resolvePeerVisual(config: CallConfig) {
+        peerVisualJob?.cancel()
+        _peerVisual.value = CallPeerVisual.EMPTY
+        peerVisualJob = viewModelScope.launch {
+            peerVisuals.visualFor(config).collect { _peerVisual.value = it }
+        }
     }
 
     /**
@@ -264,6 +288,7 @@ class CallViewModel @Inject constructor(
     /** Local user hangs up an active call — end the FSM and the call on the wire. */
     fun hangUp() {
         dispatch(CallEvent.LocalHangUp)
+        coordinator.sendHangupBye()
         emitIfIdentified { signalManager.emitEnd(it) }
         coordinator.end()
     }
@@ -356,6 +381,13 @@ class CallViewModel @Inject constructor(
             return
         }
         waiting.onRemotelyEnded(signal.callId)
+    }
+
+    /** In-band `bye` from the peer: instant cut; the `call:ended` fanout that follows finds the call already ended. */
+    private fun onRemoteBye() {
+        if (!callState.isActive) return
+        dispatch(CallEvent.RemoteHangUp)
+        coordinator.end()
     }
 
     /** Runs [emit] with the current [callId] only once one is known — inert otherwise. */

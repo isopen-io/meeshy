@@ -29,7 +29,7 @@ class CallScreenSemanticsTest {
     fun `an outgoing call first says it is placing the call`() {
         rule.setContent {
             MeeshyTheme {
-                CallOutgoingRingingBody(ui(CallState.Ringing(true)), OutgoingRingingLabel.Placing, null, true, {})
+                CallOutgoingRingingBody(ui(CallState.Ringing(true)), OutgoingRingingLabel.Placing, CallPeerVisual.EMPTY, true, {})
             }
         }
         rule.onNodeWithText("Calling…").assertExists()
@@ -40,7 +40,7 @@ class CallScreenSemanticsTest {
     fun `after the wait it says it waits for the peer with its hint`() {
         rule.setContent {
             MeeshyTheme {
-                CallOutgoingRingingBody(ui(CallState.Ringing(true)), OutgoingRingingLabel.WaitingForPeer, null, true, {})
+                CallOutgoingRingingBody(ui(CallState.Ringing(true)), OutgoingRingingLabel.WaitingForPeer, CallPeerVisual.EMPTY, true, {})
             }
         }
         rule.onNodeWithText("Waiting for the other person…").assertExists()
@@ -51,7 +51,7 @@ class CallScreenSemanticsTest {
     fun `a transient failure offers a labelled retry`() {
         rule.setContent {
             MeeshyTheme {
-                CallEndedPanel(ui(CallState.Ended(CallEndReason.ConnectionLost)), null, {}, {})
+                CallEndedPanel(ui(CallState.Ended(CallEndReason.ConnectionLost)), CallPeerVisual.EMPTY, {}, {})
             }
         }
         rule.onNodeWithText("Connection lost").assertExists()
@@ -62,7 +62,7 @@ class CallScreenSemanticsTest {
     fun `a normal end offers no retry`() {
         rule.setContent {
             MeeshyTheme {
-                CallEndedPanel(ui(CallState.Ended(CallEndReason.Remote), elapsed = 65), null, {}, {})
+                CallEndedPanel(ui(CallState.Ended(CallEndReason.Remote), elapsed = 65), CallPeerVisual.EMPTY, {}, {})
             }
         }
         rule.onNodeWithText("Your contact ended the call").assertExists()
@@ -78,7 +78,7 @@ class CallScreenSemanticsTest {
                 IncomingCallScreen(
                     state = CallPresenter.present(CallState.Ringing(false), incoming, CallMedia()),
                     accent = CallPalette.Brand,
-                    avatarUrl = null,
+                    peer = CallPeerVisual.EMPTY,
                     reduceMotion = true,
                     onAccept = {},
                     onDecline = {},

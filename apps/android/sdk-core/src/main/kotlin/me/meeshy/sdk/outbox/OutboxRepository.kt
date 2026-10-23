@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.entity.OutboxEntity
@@ -209,6 +211,16 @@ class OutboxRepository @Inject constructor(
     /** Whether a [kind] row anchored on [anchor] is still on its way (exhausted rows do not count). */
     suspend fun hasUnsentRow(kind: OutboxKind, anchor: String): Boolean =
         outboxDao.hasUnsentRow(kind.name, anchor)
+
+    /**
+     * The anchors (`targetId`) that still owe the server a write of one of [kinds], live. A row
+     * leaves the set the instant it is delivered (the row is deleted) or gives up (exhausted).
+     * Emits only on a real change of the set.
+     */
+    fun observePendingTargets(vararg kinds: OutboxKind): Flow<Set<String>> =
+        outboxDao.observePendingTargets(kinds.map { it.name })
+            .map { it.toSet() }
+            .distinctUntilChanged()
 
     /** Rows the "Synchronisation…" indicator counts, live. */
     fun observeSyncIndicatorCount(): Flow<Int> =

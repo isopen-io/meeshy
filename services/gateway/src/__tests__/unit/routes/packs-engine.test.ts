@@ -257,9 +257,9 @@ describe('/packs/glory-frame — un registre FIXTURE', () => {
     await app.close();
   });
 
-  it('un pack masqué se LIT mais ne s’installe pas', async () => {
+  it('un pack masqué ne se lit ni ne s’installe par son slug pour qui ne l’a pas (audit de #12293)', async () => {
     const { app } = await frameApp();
-    expect((await app.inject({ method: 'GET', url: '/ancien' })).json().data).toMatchObject({ slug: 'ancien', installed: false });
+    expect((await app.inject({ method: 'GET', url: '/ancien' })).statusCode).toBe(404);
     expect((await app.inject({ method: 'PUT', url: '/ancien/install' })).statusCode).toBe(404);
     await app.close();
   });

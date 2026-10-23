@@ -17,6 +17,12 @@ import MeeshyUI
 
 extension ConversationMediaGalleryView {
 
+    /// Le toucher qui montre ou masque les détails et les actions ne vibre pas
+    /// (#12421) : seules les portes qui AGISSENT se sentent.
+    nonisolated static func stageEntryVibrates(_ door: StageEntry) -> Bool {
+        door != .tap
+    }
+
     /// **La seule écriture de l'état d'immersion.**
     ///
     /// Un geste dit par quelle PORTE il passe ; la loi dit ce qu'elle produit.
@@ -79,7 +85,7 @@ extension ConversationMediaGalleryView {
         }
 
         if next.isFull, reactionBarOpen { reactionBarOpen = false }
-        HapticFeedback.light()
+        if Self.stageEntryVibrates(door) { HapticFeedback.light() }
 
         withAnimation(.easeInOut(duration: 0.25)) { stagePresentation = next }
     }

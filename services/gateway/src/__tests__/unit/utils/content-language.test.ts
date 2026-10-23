@@ -59,3 +59,33 @@ describe('measureContentLanguage — une détection sans indice ne tranche pas (
     expect(measureContentLanguage('مرحبا بكم')).toBe('ar');
   });
 });
+
+describe('measureContentLanguage — l’anglais a son vocabulaire, un mot partagé ne tranche pas seul (#12332)', () => {
+  it('une phrase anglaise contenant « a » est anglaise, jamais portugaise', () => {
+    expect(measureContentLanguage('The photograph shows a beautiful orange cat sleeping peacefully on the comfortable sofa in the living room')).toBe('en');
+    expect(measureContentLanguage('A cat on a roof')).toBe('en');
+  });
+
+  it('des textes COURTS dans chaque langue de vocabulaire', () => {
+    expect(measureContentLanguage('See you at the office')).toBe('en');
+    expect(measureContentLanguage('On se voit au bureau')).toBe('fr');
+    expect(measureContentLanguage('Nos vemos en la oficina')).toBe('es');
+    expect(measureContentLanguage('Wir sehen uns im Büro und nicht zu Hause')).toBe('de');
+    expect(measureContentLanguage('Vou com você ao escritório')).toBe('pt');
+    expect(measureContentLanguage('Ci vediamo in ufficio, non è lontano')).toBe('it');
+  });
+
+  it('des textes LONGS dans chaque langue de vocabulaire', () => {
+    expect(measureContentLanguage('I think we should meet tomorrow morning because the weather will be much better and we can walk to the market together with your sister')).toBe('en');
+    expect(measureContentLanguage('Je pense que nous devrions nous retrouver demain matin parce que le temps sera bien meilleur et nous pourrons marcher jusqu’au marché avec ta sœur')).toBe('fr');
+    expect(measureContentLanguage('Creo que deberíamos vernos mañana por la mañana porque el tiempo será mucho mejor y podremos caminar hasta el mercado con tu hermana')).toBe('es');
+    expect(measureContentLanguage('Ich denke, wir sollten uns morgen früh treffen, weil das Wetter viel besser sein wird und wir mit deiner Schwester zum Markt gehen können')).toBe('de');
+    expect(measureContentLanguage('Eu acho que devemos nos encontrar amanhã de manhã porque o tempo vai estar muito melhor e podemos caminhar até o mercado com a sua irmã')).toBe('pt');
+    expect(measureContentLanguage('Penso che dovremmo vederci domani mattina perché il tempo sarà molto migliore e potremo camminare fino al mercato con tua sorella')).toBe('it');
+  });
+
+  it('un seul mot partagé entre deux langues ne prouve rien', () => {
+    expect(measureContentLanguage('a')).toBeNull();
+    expect(measureContentLanguage('la')).toBeNull();
+  });
+});

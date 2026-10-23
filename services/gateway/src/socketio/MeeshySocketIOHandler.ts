@@ -17,6 +17,13 @@ import { gravedGameRevision } from '../services/game/GameRevision';
 import { GameBlockService } from '../services/game/GameBlockService';
 import { MissionService, READ_ONLY_CREDIT } from '../services/game/MissionService';
 import { PersonalMissionService } from '../services/game/PersonalMissionService';
+import { mediaQueueEnabled } from '../services/attachments/media-processing/queue';
+import { gatewaySweepEnabled, startGatewayPendingSweep } from '../services/attachments/media-processing/gateway-sweep-runner';
+import { mediaReadyPorts } from '../services/attachments/media-processing/ready-listener';
+import { MessageAttachmentAltTranslationService } from '../services/attachments/MessageAttachmentAltTranslationService';
+import { startMediaReadyListener } from '../services/attachments/media-processing/ready-listener';
+import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
+import { getCacheStore } from '../services/CacheStore';
 
 /** Le bloc `game` tel que `GET /me/engagement` le compose : la lecture ne crédite rien (`READ_ONLY_CREDIT`). */
 function gameBlockBuilder(prisma: PrismaClient): (userId: string) => Promise<GameBlock | null> {
@@ -27,6 +34,9 @@ function gameBlockBuilder(prisma: PrismaClient): (userId: string) => Promise<Gam
 
 export class MeeshySocketIOHandler {
   private socketIOManager: MeeshySocketIOManager | null = null;
+
+  private mediaReadyListener: { close(): Promise<void> } | null = null;
+  private mediaPendingSweep: { close(): void } | null = null;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -73,6 +83,38 @@ export class MeeshySocketIOHandler {
       getManager: () => this.socketIOManager,
     });
 
+    // #11264 — les médias rendus par le worker se signalent ici (file allumée seulement).
+    const manager = this.socketIOManager;
+    const mediaDeps = {
+      prisma: this.prisma,
+      io: manager.getIO() as never,
+      deliveryQueue: new RedisDeliveryQueue(getCacheStore()),
+      connectedUsers: () => new Set(manager.getConnectedUsers()),
+      socialEvents: () => manager.getSocialEventsHandler(),
+      leaseStore: getCacheStore(),
+    };
+    if (mediaQueueEnabled() && process.env.REDIS_URL) {
+      this.mediaReadyListener = startMediaReadyListener(mediaDeps, process.env.REDIS_URL);
+    }
+    // R1 — sans worker vivant, ou file mise à l'arrêt (`MEDIA_QUEUE=drain`),
+    // la passerelle reprend elle-même les pièces restées `pending`.
+    if (gatewaySweepEnabled()) {
+      this.mediaPendingSweep = startGatewayPendingSweep(mediaDeps);
+    }
+    // #12333 — la description d'une pièce traduite par NLLB rejoint ses
+    // lecteurs par `message:attachment-updated`, sous la loi de `servedDescription`.
+    const zmqClient = this.translationService.getZmqClient();
+    if (zmqClient) {
+      const ports = mediaReadyPorts(mediaDeps);
+      MessageAttachmentAltTranslationService.init(this.prisma, zmqClient, async (attachmentId) => {
+        const attachment = await ports.loadMessageAttachment(attachmentId);
+        const conversationId = attachment?.message?.conversationId;
+        if (attachment?.messageId && conversationId) {
+          await ports.emitAttachmentUpdated({ conversationId, messageId: attachment.messageId, attachment });
+        }
+      });
+    }
+
     logger.info('✅ Socket.IO configuré et routes ajoutées');
   }
 
@@ -94,6 +136,8 @@ export class MeeshySocketIOHandler {
     } catch (error) {
       logger.warn('⚠️ Could not set call handler shutdown mode', error);
     }
+    await this.mediaReadyListener?.close().catch((error: unknown) => logger.warn('⚠️ Media ready listener close failed', error));
+    this.mediaPendingSweep?.close();
     await manager.close();
     logger.info('✓ Socket.IO closed (clients reconnect to the new instance)');
   }

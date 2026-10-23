@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_location_channel_name">مشاركة الموقع المباشر</string>
+    <string name="live_location_notification_title">تتم مشاركة موقعك المباشر</string>
+    <string name="live_location_notification_stop">إيقاف</string>
+</resources>

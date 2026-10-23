@@ -1,5 +1,9 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="accessibility_conversation_with">Conversation with %s</string>
+    <string name="accessibility_last_message_preview">last message: %s</string>
+    <string name="accessibility_muted">muted</string>
+    <string name="accessibility_pinned">pinned</string>
     <string name="accessibility_search_list_hint">Opens conversation search and your communities</string>
     <string name="common_active">Active</string>
     <string name="common_cancel">Cancel</string>
@@ -154,6 +158,19 @@
     <string name="new_conversation_selected">Selected</string>
     <string name="new_conversation_title">New conversation</string>
     <string name="participantProfile_linkExpires">Expires on</string>
+    <string name="row_a11y_conversation_with">Conversation with %s</string>
+    <string name="row_a11y_last_message">last message: %s</string>
+    <string name="row_a11y_muted">muted</string>
+    <string name="row_a11y_pending_sync">sync pending</string>
+    <string name="row_a11y_pinned">pinned</string>
+    <plurals name="row_a11y_unread_count">
+        <item quantity="one">1 unread message</item>
+        <item quantity="other">%d unread messages</item>
+    </plurals>
+    <string name="row_join_call">Rejoin</string>
+    <string name="row_join_call_a11y">Call in progress, tap to rejoin</string>
+    <string name="row_menu_info">Conversation info</string>
+    <string name="row_menu_view_profile">View profile</string>
     <string name="shareLink_a11y_copied">Link copied</string>
     <string name="shareLink_detail_allLanguages">All languages</string>
     <string name="shareLink_detail_allowedLanguages">Allowed languages</string>

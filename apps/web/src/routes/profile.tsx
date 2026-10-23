@@ -25,6 +25,7 @@ import {
   type ImageUpdateOutcome,
   type ProfileEditOutcome,
 } from '@/lib/api/profile-actions';
+import { needsServedPreview, UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type SessionUser } from '@/lib/api/session';
@@ -119,6 +120,7 @@ function imageNotice(language: InterfaceLanguage, kind: ProfileImageKind, outcom
   if (outcome.status === 'offline') return translate(language, 'profile.save.offline');
   if (outcome.status === 'cancelled') return translate(language, 'profile.image.cancelled');
   if (outcome.status === 'unreadable') return translate(language, 'profile.image.unreadable');
+  if (outcome.status === 'refused' && outcome.code === UPLOAD_FORMAT_REFUSED) return translate(language, 'profile.image.formatRefused');
   return translate(language, kind === 'avatar' ? 'profile.avatar.error' : 'profile.banner.error');
 }
 
@@ -246,12 +248,15 @@ export default function ProfileScreen() {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     if (file === undefined) return;
-    const preview = URL.createObjectURL(file);
+    /* W9 (#11315) — un HEIC que ce navigateur ne décode pas n'a pas d'aperçu
+       local : l'écran garde l'image servie sous son voile, puis montre le JPEG
+       que la passerelle sert une fois la photo posée. */
+    const preview = (await needsServedPreview(file)) ? null : URL.createObjectURL(file);
     const controller = new AbortController();
     controllers.current = { ...controllers.current, [kind]: controller };
-    setPending((current) => ({ ...current, [kind]: preview }));
+    setPending((current) => ({ ...current, [kind]: preview ?? profile?.[kind] ?? '' }));
     const outcome = await performImageUpdate({ kind, file, signal: controller.signal, deps: actionDeps() });
-    URL.revokeObjectURL(preview);
+    if (preview !== null) URL.revokeObjectURL(preview);
     setPending((current) => withoutKind(current, kind));
     setNotice({ text: imageNotice(language, kind, outcome), ...(outcome.status === 'saved' ? { bytes: outcome.bytesSent } : {}) });
   };
