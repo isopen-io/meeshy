@@ -38,6 +38,7 @@ import { LENS_PACK_LIMITS, isLensCostDeclaredHonestly, lensAssetRefs, measureLen
 import { packChoiceKey, type PackAssetRef, type PackStatus, type PackSummary } from '@meeshy/shared/types/content-pack';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
 import { normalizeStickerImage, type StickerImageOutcome } from '../stickers/stickerImage';
+import type { PackInstallationBroadcast } from './PackCatalog';
 import { normalizeLensLut } from './lensLutImage';
 import { isUniqueViolation, type CommunityPackStore, type PackViewer } from './PackCatalog';
 import { logError } from '../../utils/logger';
@@ -122,6 +123,8 @@ export type LensPacksDeps = {
   readonly normalizeLut?: (bytes: Buffer) => Promise<StickerImageOutcome>;
   /** Où se signale un trou du journal de modération (#12329 R2). */
   readonly log?: LensPacksLog;
+  /** `pack:installation-updated` sur la room personnelle de chaque compte dont l'installation change hors de son propre geste. */
+  readonly broadcast?: PackInstallationBroadcast;
 };
 
 type LensPacksLog = { readonly error: (line: string) => void };
@@ -264,9 +267,11 @@ export class LensPacks {
   private readonly normalizeAsset: (bytes: Buffer) => Promise<StickerImageOutcome>;
   private readonly normalizeLut: (bytes: Buffer) => Promise<StickerImageOutcome>;
   private readonly log: LensPacksLog | undefined;
+  private readonly broadcast: PackInstallationBroadcast | undefined;
 
   constructor(deps: LensPacksDeps) {
     this.log = deps.log;
+    this.broadcast = deps.broadcast;
     this.prisma = deps.prisma;
     this.now = deps.now ?? (() => new Date());
     this.normalizeAsset = deps.normalizeAsset ?? normalizeStickerImage;
@@ -286,7 +291,7 @@ export class LensPacks {
   }
 
   /** L'écriture d'un geste déjà journalisé : si elle LÈVE, le journal le dit avant que l'erreur ne remonte. */
-  private async applyJournaled(update: () => Promise<{ readonly count: number }>, notApplied: NotAppliedEntry): Promise<{ readonly count: number }> {
+  private async applyJournaled<T>(update: () => Promise<T>, notApplied: NotAppliedEntry): Promise<T> {
     try {
       return await update();
     } catch (error) {
@@ -502,10 +507,14 @@ export class LensPacks {
     const journaled = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE', slug, metadata: { note } });
     if (!journaled) return { kind: 'audit-unavailable' };
     const notApplied: NotAppliedEntry = { moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE_NOT_APPLIED', slug };
-    const reset = await this.applyJournaled(
-      () => this.prisma.userStickerPack.updateMany({ where: { packSlug: packChoiceKey('lens', slug), installedAt: { not: null } }, data: { installedAt: null } }),
-      notApplied,
-    );
+    const installed = { packSlug: packChoiceKey('lens', slug), installedAt: { not: null } };
+    const reset = await this.applyJournaled(async () => {
+      const installers = await this.prisma.userStickerPack.findMany({ where: installed, select: { userId: true } });
+      const { count } = await this.prisma.userStickerPack.updateMany({ where: installed, data: { installedAt: null } });
+      return { count, userIds: [...new Set(installers.map((row) => row.userId))] };
+    }, notApplied);
+    const at = this.now().toISOString();
+    reset.userIds.forEach((userId) => this.broadcast?.(userId, { domain: 'lens', slug, installed: false, at }));
     const flipped = await this.applyJournaled(
       () =>
         this.prisma.lensPack.updateMany({

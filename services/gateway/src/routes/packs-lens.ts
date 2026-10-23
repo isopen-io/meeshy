@@ -135,7 +135,7 @@ export type LensPacksRoutesOptions = {
 /** Le moteur des packs pour le domaine `lens` : aucun registre officiel, le seul magasin des partenaires. */
 export function lensPackCatalog(fastify: FastifyInstance, options: LensPacksRoutesOptions = {}): { readonly catalog: PackCatalog<LensPackDetail, LensPackDetail>; readonly packs: LensPacks } {
   const now = options.now ?? (() => new Date());
-  const packs = options.packs ?? new LensPacks({ prisma: fastify.prisma, now });
+  const packs = options.packs ?? new LensPacks({ prisma: fastify.prisma, now, broadcast: packInstallationBroadcaster(fastify) });
   const audience = options.audience ?? ((userId: string) => readPackAudience(fastify.prisma, userId));
   const catalog = new PackCatalog<LensPackDetail, LensPackDetail>({
     prisma: fastify.prisma,
