@@ -74,6 +74,7 @@ export class MediaMirrorFollowJob {
 /** Le job du processus : le stockage, la base et l'horloge réels. */
 export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLogger): MediaMirrorFollowJob {
   let lastSweepAt: Date | null = null;
+  let lastFullScanAt: Date | null = null;
   return new MediaMirrorFollowJob({
     env: process.env,
     logger,
@@ -91,6 +92,7 @@ export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLog
         apply,
         now: new Date(),
         lastSweepAt,
+        lastFullScanAt,
         log: (line) => logger.info(line),
         onSweepReport: (report) => {
           recordSweepReport(processMediaBucketMetrics, report, new Date());
@@ -100,6 +102,7 @@ export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLog
         },
       });
       lastSweepAt = next.lastSweepAt;
+      lastFullScanAt = next.lastFullScanAt;
     },
   });
 }

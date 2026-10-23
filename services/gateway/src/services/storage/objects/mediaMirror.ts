@@ -23,21 +23,28 @@ export type MediaRow = {
   readonly thumbnailPath?: string | null;
   readonly thumbnailUrl?: string | null;
   readonly imageVariants?: unknown;
+  readonly avifVariants?: unknown;
+  readonly renditions?: unknown;
   readonly translations?: unknown;
+  /** `Sound.coverUrl` : la couverture qu'un son vise vit chez un média de post, et lui survit. */
+  readonly coverUrl?: string | null;
 };
 
-/** Une clé à partir d'une valeur de colonne : adresse servie, clé nue, ou chemin absolu SOUS la racine. */
+/**
+ * Une clé à partir d'une valeur de colonne : adresse servie, clé nue, ou chemin absolu SOUS la racine.
+ * L'ADRESSE se lit d'abord : `/api/v1/attachments/file/…` est aussi un chemin absolu, et lu comme tel
+ * il tombait hors de la racine — toute clé portée par une seule URL échappait au miroir et au balayage.
+ */
 function keyOf(value: string | null | undefined, uploadRoot: string): string | null {
   if (typeof value !== 'string' || value.length === 0) return null;
-  if (path.isAbsolute(value)) {
-    const root = path.resolve(uploadRoot);
-    const resolved = path.resolve(value);
-    if (!resolved.startsWith(root + path.sep)) return null;
-    const relative = path.relative(root, resolved).split(path.sep).join('/');
-    return isSafeStorageKey(relative) ? relative : null;
-  }
-  const key = storageKeyFromMediaUrl(value);
-  return key !== null && isSafeStorageKey(key) ? key : null;
+  const fromAddress = storageKeyFromMediaUrl(value);
+  if (fromAddress !== null && isSafeStorageKey(fromAddress)) return fromAddress;
+  if (!path.isAbsolute(value)) return null;
+  const root = path.resolve(uploadRoot);
+  const resolved = path.resolve(value);
+  if (!resolved.startsWith(root + path.sep)) return null;
+  const relative = path.relative(root, resolved).split(path.sep).join('/');
+  return isSafeStorageKey(relative) ? relative : null;
 }
 
 export function mediaRowStorageKeys(row: MediaRow, uploadRoot: string): readonly string[] {
@@ -46,8 +53,11 @@ export function mediaRowStorageKeys(row: MediaRow, uploadRoot: string): readonly
     row.fileUrl,
     row.thumbnailPath,
     row.thumbnailUrl,
+    row.coverUrl,
     ...imageVariantKeys(row.imageVariants),
-    ...derivedFileCandidates({ translations: row.translations }),
+    ...imageVariantKeys(row.avifVariants),
+    ...imageVariantKeys(row.renditions),
+    ...derivedFileCandidates(row),
   ];
   return [...new Set(candidates.map((value) => keyOf(value, uploadRoot)).filter((key): key is string => key !== null))];
 }

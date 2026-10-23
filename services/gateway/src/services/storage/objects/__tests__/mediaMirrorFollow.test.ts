@@ -139,6 +139,8 @@ describe('recordSweepReport — la jauge qu’une alerte peut lire', () => {
     expect(text).toMatch(new RegExp(`media_bucket_sweep_last_success_timestamp_seconds ${NOW.getTime() / 1000}`));
   });
 
+});
+
 describe('la réconciliation complète — un fichier écrit après la fenêtre de 24 h est rattrapé', () => {
   async function lateFile() {
     const env = await setup({ '2026/01/u1/old.jpg': 'old', 'translated/1_en.mp3': 'tts' }, [{ id: '000000000000000000000001', filePath: '2026/01/u1/old.jpg' }]);

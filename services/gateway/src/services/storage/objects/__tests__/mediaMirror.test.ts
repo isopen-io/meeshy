@@ -180,4 +180,10 @@ describe('les clés vivantes sont TOUTES nommées — le balayage efface ce qu�
   it('la couverture qu’un son vise est une clé vivante, même quand le post qui l’a posée est purgé', () => {
     expect(mediaRowStorageKeys({ fileUrl: '/api/v1/static/s.mp3', coverUrl: '/api/v1/attachments/file/2026%2F10%2Fu1%2Fcover.jpg' }, '/srv/uploads')).toContain('2026/10/u1/cover.jpg');
   });
+
+  it('une clé portée par la seule ADRESSE (sans filePath) est lue — l’adresse n’est pas un chemin disque', () => {
+    expect(mediaRowStorageKeys({ fileUrl: '/api/v1/attachments/file/2026%2F10%2Fu1%2Fonly-url.jpg' }, '/srv/uploads')).toEqual(['2026/10/u1/only-url.jpg']);
+    expect(mediaRowStorageKeys({ filePath: '/srv/uploads/2026/10/u1/abs.jpg' }, '/srv/uploads')).toEqual(['2026/10/u1/abs.jpg']);
+    expect(mediaRowStorageKeys({ filePath: '/etc/passwd' }, '/srv/uploads')).toEqual([]);
+  });
 });
