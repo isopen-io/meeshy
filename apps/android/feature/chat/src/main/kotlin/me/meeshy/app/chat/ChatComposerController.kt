@@ -128,7 +128,7 @@ internal class ChatComposerController(
                 pendingEffects = restored.effects,
                 composerLanguage = restored.selectedLanguage
                     ?.let { current.composerLanguage.withManualPick(it) }
-                    ?: current.composerLanguage,
+                    ?: current.composerLanguage.onDraftReplaced(restored.text),
             )
         }
     }
@@ -340,11 +340,8 @@ internal class ChatComposerController(
         val replyToId = state.value.replyingToMessageId
         val effects = state.value.pendingEffects
         val batch = tray?.takeForSend()
-        // The composer pill is the authoritative source language: its live detection
-        // or the viewer's manual override, resolved against the user's content language.
-        val languageCode = state.value.composerLanguage.display(
-            fallback = LanguageResolver.resolveUserLanguage(user),
-        )
+        // A manual pick is the source language; otherwise the text is identified at send, the
+        // sender's own language as the fallback — never a partial detection of the typing (#12484).
         val manualLanguage = state.value.composerLanguage.manualOverride
         composerText.clear()
         state.update {
@@ -362,7 +359,12 @@ internal class ChatComposerController(
         recordTypedEmojis(text)
         scope.launch {
             try {
-                val sentLanguage = originalLanguageAtSend(text, manualLanguage, languageCode)
+                val sentLanguage = ComposeLanguageDetector.originalLanguageAtSend(
+                    text = text,
+                    manual = manualLanguage,
+                    senderLanguage = LanguageResolver.resolveUserLanguage(user),
+                    identifier = languageIdentifier,
+                )
                 if (batch != null) {
                     if (clipboard != null) sendClipboardContent(text, clipboard, user, replyToId, effects)
                     sendStagedBatch(
@@ -437,13 +439,6 @@ internal class ChatComposerController(
             ),
         )
     }
-
-    /**
-     * La langue d'origine gravée à l'envoi : le choix manuel prime ; sinon l'identification ML Kit
-     * (4 lettres, confiance 0,65, URL retirées), dont l'échec laisse l'heuristique puis [fallback].
-     */
-    private suspend fun originalLanguageAtSend(text: String, manual: String?, fallback: String): String =
-        manual ?: ComposeLanguageDetector.detect(text, fallback, languageIdentifier)
 
     /** Les emojis tapés dans le message rejoignent les récents (iOS `RecentEmojiStore.record`). */
     private fun recordTypedEmojis(text: String) {
@@ -656,7 +651,7 @@ internal class ChatComposerController(
         if (!editable) return
         if (draftBeforeEdit == null) draftBeforeEdit = composerText.text
         editingOriginal = message.content
-        composerText.replace(message.content)
+        replaceDraft(message.content)
         state.update {
             it.copy(
                 editingMessageId = messageId,
@@ -672,7 +667,7 @@ internal class ChatComposerController(
         }?.message ?: return
         if (message.deletedAt != null) return
         val restored = if (state.value.isEditing) takeDraftBeforeEdit() else null
-        if (restored != null) composerText.replace(restored)
+        if (restored != null) replaceDraft(restored)
         state.update {
             it.copy(
                 replyingToMessageId = messageId,
@@ -689,8 +684,14 @@ internal class ChatComposerController(
     }
 
     fun cancelEdit() {
-        composerText.replace(takeDraftBeforeEdit())
+        replaceDraft(takeDraftBeforeEdit())
         state.update { it.copy(editingMessageId = null) }
+    }
+
+    /** Le brouillon change d'un bloc (édition ouverte ou quittée) : la langue repart de lui. */
+    private fun replaceDraft(text: String) {
+        composerText.replace(text)
+        state.update { it.copy(composerLanguage = it.composerLanguage.onDraftReplaced(text)) }
     }
 
     private fun takeDraftBeforeEdit(): String {
@@ -701,7 +702,7 @@ internal class ChatComposerController(
     }
 
     private fun applyEdit(messageId: String, content: String) {
-        composerText.replace(takeDraftBeforeEdit())
+        replaceDraft(takeDraftBeforeEdit())
         state.update { it.copy(editingMessageId = null) }
         scope.launch {
             try {

@@ -18,6 +18,8 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.model.analytics.ImpressionSource
+import me.meeshy.sdk.post.FeedEngagementRepository
 import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
@@ -69,6 +71,7 @@ class StatusesViewModel @Inject constructor(
     private val socialSocket: SocialSocketManager,
     private val clock: CacheClock,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
+    engagement: FeedEngagementRepository,
 ) : ViewModel() {
 
     private val mode = MutableStateFlow(StatusFeedMode.FRIENDS)
@@ -80,7 +83,11 @@ class StatusesViewModel @Inject constructor(
      * counterpart of the feed's own batcher. Port of iOS `StatusViewModel.impressions`
      * (`source: "status"`).
      */
-    private val impressionBatcher = ImpressionBatcher(source = "status", postRepository = postRepository)
+    private val impressionBatcher = ImpressionBatcher(
+        source = ImpressionSource.STATUS,
+        surface = null,
+        deliver = engagement::deliver,
+    )
 
     /**
      * Dwell bookkeeping for the status-bubble surface. Held outside [_state] because it is an

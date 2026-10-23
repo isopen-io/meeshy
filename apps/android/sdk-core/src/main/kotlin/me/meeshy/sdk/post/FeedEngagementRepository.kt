@@ -3,6 +3,7 @@ package me.meeshy.sdk.post
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import me.meeshy.sdk.model.SocialEventsReceipt
 import me.meeshy.sdk.model.analytics.ContentSurface
 import me.meeshy.sdk.model.analytics.SocialEvent
 import me.meeshy.sdk.model.analytics.SocialEventStamp
@@ -63,6 +64,13 @@ class FeedEngagementRepository internal constructor(
         }
         return ImpressionDelivery(sent = sent, dropped = 0)
     }
+
+    /**
+     * Envoie un lot DÉJÀ enveloppé (ses `eventId` sont ceux de sa création) et rend le verdict de la
+     * passerelle : c'est l'appelant ([ImpressionBatcher]) qui décide de rejouer ou d'abandonner.
+     */
+    suspend fun deliver(events: List<StampedSocialEvent>): NetworkResult<SocialEventsReceipt> =
+        apiCall { api.record(SocialEventsBody.of(events, nowMillis())) }
 
     companion object {
         const val MAX_BATCH = 100

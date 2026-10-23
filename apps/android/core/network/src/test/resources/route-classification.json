@@ -36,6 +36,13 @@
    ]
   },
   {
+   "status": "hors-perimetre-mobile",
+   "reason": "Route dépréciée (en-tête Deprecation, successeur POST /social/events) : les impressions partent par SocialEventsApi depuis #12483 ; la passerelle la sert encore pour les versions publiées.",
+   "routes": [
+    "POST /api/v1/posts/impressions/batch"
+   ]
+  },
+  {
    "status": "ops-only",
    "reason": "Console d'administration web : aucun écran mobile ne l'appelle (rôles BIGBOSS/ADMIN, exploitation de la plateforme).",
    "routes": [

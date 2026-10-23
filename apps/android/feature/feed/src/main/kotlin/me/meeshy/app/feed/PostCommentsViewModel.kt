@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.lang.ComposeLanguageDetector
+import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.mention.MentionComposer
@@ -98,6 +100,7 @@ class PostCommentsViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val mentionSearch: MentionSearch,
     savedStateHandle: SavedStateHandle,
+    private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
@@ -404,7 +407,8 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                when (val result = postRepository.addComment(postId, content)) {
+                val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
+                when (val result = postRepository.addComment(postId, content, originalLanguage = language)) {
                     is NetworkResult.Success -> {
                         thread.update { it.confirmed(tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
@@ -531,7 +535,8 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                when (val result = postRepository.addComment(postId, content, parentId)) {
+                val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
+                when (val result = postRepository.addComment(postId, content, parentId, originalLanguage = language)) {
                     is NetworkResult.Success -> {
                         replies.update { it.confirmedReply(parentId, tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }

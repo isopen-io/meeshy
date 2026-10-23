@@ -62,6 +62,7 @@ class StatusesViewModelTest {
 
     private val repository: StatusRepository = mockk(relaxed = true)
     private val postRepository: PostRepository = mockk(relaxed = true)
+    private val engagement: me.meeshy.sdk.post.FeedEngagementRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val diskCache: StatusBarCacheRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
@@ -109,7 +110,7 @@ class StatusesViewModelTest {
             PrivacyPreferences(allowAnalytics = allowAnalytics),
         )
         return StatusesViewModel(
-            repository, postRepository, session, cache, diskCache, socialSocket, dwellClock, privacyStore,
+            repository, postRepository, session, cache, diskCache, socialSocket, dwellClock, privacyStore, engagement,
         )
     }
 
