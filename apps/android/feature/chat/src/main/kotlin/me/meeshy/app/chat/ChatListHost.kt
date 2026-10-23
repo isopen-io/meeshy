@@ -249,6 +249,7 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
                         linkPreviewCache = linkPreviewCache,
                         actions = rowActions,
                         audioPlayer = audioPlayer,
+                        isGroup = state.isGroup,
                     )
                 }
                 TypingIndicator(participants = state.typingParticipants)
