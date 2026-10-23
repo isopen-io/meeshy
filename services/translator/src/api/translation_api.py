@@ -15,6 +15,7 @@ from api.health import health_router, set_services
 from config.message_limits import can_translate_message, MessageLimits
 from config.settings import get_settings
 from services.language_capabilities import LanguageCapabilitiesService
+from utils.audio_pipeline_metrics import metrics_router
 
 # Import du audio router (lazy loading)
 try:
@@ -114,6 +115,9 @@ class TranslationAPI:
 
         # Inclure le routeur de santé principal
         self.app.include_router(health_router)
+
+        # #11257 — les mesures de l'audio (whisper, nllb, tts), au format Prometheus ; ce port n'est pas routé par Traefik.
+        self.app.include_router(metrics_router())
 
         # Inclure le routeur audio si disponible
         if AUDIO_API_AVAILABLE:

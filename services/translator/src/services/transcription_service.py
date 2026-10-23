@@ -58,6 +58,7 @@ except ImportError:
 
 
 from utils.audio_utils import get_audio_duration as _get_librosa_duration
+from utils.audio_pipeline_metrics import timed_audio_stage
 
 
 @dataclass
@@ -530,6 +531,7 @@ class TranscriptionService:
             traceback.print_exc()
             raise RuntimeError(f"Échec de la transcription: {e}")
 
+    @timed_audio_stage("whisper")
     async def _run_whisper(self, audio_path: str, model, return_timestamps: bool):
         """
         Exécute Whisper dans un thread et retourne (segments_list, info).
