@@ -14,7 +14,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
-import { produceMediaRenditions, imageVariantsJson, type MediaRenditions } from '../../services/attachments/media-renditions';
+import { produceMediaRenditions, imageVariantsJson, videoRenditionsJson, type MediaRenditions } from '../../services/attachments/media-renditions';
 import { runFfmpeg } from '../../services/attachments/ffmpeg-run';
 import { normalizeStoredAudio } from '../../services/attachments/audio-normalization';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
@@ -195,6 +195,7 @@ function persistedRenditionFields(rendered: MediaRenditions) {
     thumbHash: rendered.thumbHash,
     ...(rendered.imageVariants ? { imageVariants: imageVariantsJson(rendered.imageVariants) } : {}),
     ...(rendered.avifVariants ? { avifVariants: imageVariantsJson(rendered.avifVariants) } : {}),
+    ...(rendered.renditions ? { renditions: videoRenditionsJson(rendered.renditions) } : {}),
   };
 }
 
