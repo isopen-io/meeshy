@@ -25,6 +25,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
+import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultLauncher;
@@ -268,6 +269,9 @@ public class MainActivity extends BridgeActivity {
         // chemin des liens profonds : `BridgeActivity.load()` relit l'intent.
         String route = savedInstanceState == null ? null : savedInstanceState.getString(ShellRoute.KEY);
         if (route != null) setIntent(new Intent(Intent.ACTION_VIEW, Uri.parse(route)));
+        // #12447 — bord a bord a toute version, comme Android 15 l'impose :
+        // une seule geometrie d'ecran, et plus d'API de barres obsoletes.
+        EdgeToEdge.enable(this);
         super.onCreate(savedInstanceState);
         // #10375 — les touches de volume reglent les medias, comme dans Chrome,
         // et non la sonnerie ; un appel les rend a la voix (`MeeshyCallPlugin`).
