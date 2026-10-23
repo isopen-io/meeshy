@@ -71,7 +71,7 @@ class GameLeagueDuoVectorParityTest {
     @Test
     fun `les pseudonymes rejoignent le serveur`() {
         cases("league-pseudonym").forEach { c -> check(c, "valid", GameLeague.isValidPseudonym(c.str("value")), c.expected["valid"].b()) }
-        cases("league-pseudonym-draw").forEach { c -> check(c, "pseudonym", GameLeague.pseudonymFromDraw(c.int("draw")), c.expected["pseudonym"].s()) }
+        cases("league-pseudonym-draw").forEach { c -> check(c, "pseudonym", GameLeague.pseudonymFromDraw(c.input["draw"]?.jsonPrimitive?.longOrNull ?: 0L), c.expected["pseudonym"].s()) }
         cases("league-pseudonym-check").forEach { c ->
             val r = GameLeague.checkPseudonym(c.str("value"), strings(c, "forbidden"))
             check(c, "ok", r == LeaguePseudonymCheck.Ok, c.expected["ok"].b())

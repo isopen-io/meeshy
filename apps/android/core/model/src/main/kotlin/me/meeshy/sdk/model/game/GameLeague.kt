@@ -150,8 +150,8 @@ public object GameLeague {
     }
 
     /** Le pseudonyme de départ : un colibri et quatre signes tirés du nombre aléatoire [draw] de la passerelle. */
-    public fun pseudonymFromDraw(draw: Int): String =
-        "Colibri-" + (Math.abs(draw.toLong()) % BASE36_CAP).toString(36).padStart(4, '0')
+    public fun pseudonymFromDraw(draw: Long): String =
+        "Colibri-" + (Math.abs(draw) % BASE36_CAP).toString(36).padStart(4, '0')
 
     /** Ce que la ligue publique montre d'un joueur : son pseudonyme gardé, jamais son nom. */
     public fun displayName(pseudonym: String?): String? = pseudonym?.takeIf(::isValidPseudonym)
