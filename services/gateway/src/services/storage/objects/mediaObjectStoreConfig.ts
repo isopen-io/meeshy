@@ -37,7 +37,15 @@ export function mediaS3ConfigFromEnv(env: Readonly<Record<string, string | undef
   };
 }
 
-/** Le feu vert du porteur se nomme par l'adresse de sa décision (#9232) — jamais par un « oui ». */
+/**
+ * Le feu vert du porteur se nomme par l'adresse de sa décision (#9232) — jamais par un « oui ».
+ *
+ * C'est un contrôle de FORME, pas une preuve d'accord (audit D7) : toute adresse
+ * d'issue ou de PR du dépôt passe, et `MEESHY_ENV=staging` posé à la main
+ * contourne la garde. Il empêche l'accident (un `--apply` lancé sur la
+ * production par habitude) ; il n'empêche pas une volonté. L'accord lui-même
+ * vit dans l'issue citée, que le compte rendu de migration doit lier.
+ */
 export function isPorteurApproval(value: string | undefined): boolean {
   return /^https:\/\/github\.com\/isopen-io\/meeshy\/(issues|pull)\/\d+/.test(value ?? '');
 }
