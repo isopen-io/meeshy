@@ -86,6 +86,28 @@ async function withSecretsInEveryImage(buffer: Buffer): Promise<Buffer> {
 
 type GainMapAware = Sharp & { readonly withGainMap: () => Sharp };
 
+/** Retire les segments ISO 21496-1 de chaque image, en recalant le MPF et le GContainer. */
+function withoutIso21496(buffer: Buffer): Buffer {
+  const iso = Buffer.from('urn:iso:std:iso:ts:21496:-1\0', 'latin1');
+  const images = imageStarts(buffer).map((start, i, all) => buffer.subarray(start, all[i + 1] ?? buffer.length));
+  const [primary, gainMap] = images.map((image) =>
+    Buffer.concat(
+      headerSegments(image, 0)
+        .filter((s) => !(s.marker === 0xe2 && image.subarray(s.start + 4, s.start + 4 + iso.length).equals(iso)))
+        .reduce<readonly Buffer[]>((parts, s, i, kept) => [...parts, image.subarray(s.start, s.end), ...(i === kept.length - 1 ? [image.subarray(s.end)] : [])], [image.subarray(0, 2)]),
+    ),
+  );
+  const mpfAt = primary.indexOf(Buffer.from('MPF\0', 'latin1'));
+  const relinked = Buffer.from(primary);
+  const tiff = mpfAt + 4;
+  const entries = tiff + relinked.readUInt32BE(tiff + 4) + 2 + 3 * 12 + 4;
+  relinked.writeUInt32BE(primary.length, entries + 4);
+  relinked.writeUInt32BE(gainMap.length, entries + 20);
+  relinked.writeUInt32BE(primary.length - tiff, entries + 24);
+  const container = relinked.toString('latin1').replace(/Item:Length="\d+"/, `Item:Length="${gainMap.length}"`);
+  return Buffer.concat([Buffer.from(container, 'latin1'), gainMap]);
+}
+
 async function hdrRendition(buffer: Buffer): Promise<Buffer> {
   return (sharp(buffer) as GainMapAware).withGainMap().raw({ depth: 'float' }).toBuffer();
 }
@@ -95,6 +117,7 @@ async function sdrRendition(buffer: Buffer): Promise<Buffer> {
 }
 
 const JPEG_FIXTURES = [
+  ['Ultra HDR v1 : XMP hdrgm, GContainer et ISO 21496-1 (libultrahdr)', 'ultra-hdr-xmp-and-iso.jpg'],
   ['ISO 21496-1 (libultrahdr)', 'iso-21496-gain-map.jpg'],
   ['Apple, marge HDR dans le XMP de la carte', 'apple-gain-map-xmp-headroom.jpg'],
   ['Apple, marge HDR dans le MakerNote de l’EXIF', 'apple-gain-map-makernote-headroom.jpg'],
@@ -138,6 +161,18 @@ describe('stripExifFromImageBuffer — carte de gain HDR d’un JPEG (#11840)', 
     expect(text).not.toContain('dc:creator');
     expect(gainMap.toString('latin1')).not.toContain(SECRET);
     expect((await sharp(gainMap).metadata()).exif).toBeUndefined();
+  });
+
+  it('un Ultra HDR décrit par le SEUL XMP hdrgm (Android 14) garde sa carte et son rendu HDR', async () => {
+    const xmpOnly = withoutIso21496(fixture('ultra-hdr-xmp-and-iso.jpg'));
+    expect(xmpOnly.includes(Buffer.from('urn:iso:std:iso:ts:21496', 'latin1'))).toBe(false);
+    expect((await sharp(xmpOnly).metadata()).gainMap).toBeDefined();
+
+    const stripped = await stripExifFromImageBuffer(await withSecretsInEveryImage(xmpOnly), 'image/jpeg');
+
+    expect((await hdrRendition(stripped)).equals(await hdrRendition(xmpOnly))).toBe(true);
+    expect(stripped.toString('latin1')).not.toContain(SECRET);
+    expect(stripped.toString('latin1')).toContain('Item:Length');
   });
 
   it('une image annexée qui n’est PAS une carte de gain part toujours, avec son EXIF', async () => {
