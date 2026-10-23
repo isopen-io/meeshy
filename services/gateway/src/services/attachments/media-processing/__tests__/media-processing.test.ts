@@ -50,7 +50,7 @@ async function smallPhoto(): Promise<Buffer> {
 
 const recordingQueue = (): MediaJobQueue & { readonly jobs: MediaJob[] } => {
   const jobs: MediaJob[] = [];
-  return { jobs, enqueue: async (job) => { jobs.push(job); } };
+  return { jobs, schedule: async (job) => { jobs.push(job); } };
 };
 
 describe('deferredMediaKinds — ce qui sort de la requête (#11264)', () => {
@@ -86,7 +86,7 @@ describe('bullmqMediaJobQueue — l’adaptateur BullMQ (#11264)', () => {
     const queue = bullmqMediaJobQueue({ add } as never);
     const job: MediaJob = { kind: 'transcode', target: 'postMedia', recordId: 'aaaaaaaaaaaaaaaaaaaaaaa2', final: true };
 
-    await queue.enqueue(job);
+    await queue.schedule(job);
 
     expect(add).toHaveBeenCalledWith('transcode', job, expect.objectContaining({
       jobId: mediaJobId(job),

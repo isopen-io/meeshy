@@ -532,10 +532,10 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
       });
       const processingFields = deferred.length > 0 ? { processingState: 'pending' } : {};
-      const enqueueDeferred = async (target: MediaJobTarget, id: string): Promise<void> => {
+      const scheduleDeferred = async (target: MediaJobTarget, id: string): Promise<void> => {
         if (mediaQueue === null) return;
         for (const job of mediaJobsFor(target, id, deferred)) {
-          await mediaQueue.enqueue(job).catch((error: unknown) =>
+          await mediaQueue.schedule(job).catch((error: unknown) =>
             logger.error('[TUS] Rendu différé non mis en file', { id, kind: job.kind, error }));
         }
       };
@@ -595,7 +595,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = postMedia.id;
-        await enqueueDeferred('postMedia', postMedia.id);
+        await scheduleDeferred('postMedia', postMedia.id);
         logger.info(`[TUS] PostMedia created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes, postId=null pending)`);
       } else {
         // Upload destiné à un message : créer MessageAttachment
@@ -687,7 +687,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = attachment.id;
-        await enqueueDeferred('messageAttachment', attachment.id);
+        await scheduleDeferred('messageAttachment', attachment.id);
         logger.info(`[TUS] MessageAttachment created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes)`);
       }
 

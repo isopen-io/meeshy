@@ -11,7 +11,7 @@ import { MEDIA_JOB_PRIORITY, MEDIA_QUEUE_NAME, mediaJobId, type MediaJob } from 
 const logger = enhancedLogger.child({ module: 'media-queue' });
 
 export interface MediaJobQueue {
-  enqueue(job: MediaJob): Promise<void>;
+  schedule(job: MediaJob): Promise<void>;
 }
 
 type QueueLike = { add(name: string, data: MediaJob, options: Record<string, unknown>): Promise<unknown> };
@@ -20,7 +20,7 @@ export const MEDIA_JOB_ATTEMPTS = 3;
 
 export function bullmqMediaJobQueue(queue: QueueLike): MediaJobQueue {
   return {
-    enqueue: async (job) => {
+    schedule: async (job) => {
       await queue.add(job.kind, job, {
         jobId: mediaJobId(job),
         priority: MEDIA_JOB_PRIORITY[job.kind],

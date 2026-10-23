@@ -278,10 +278,10 @@ export class UploadProcessor {
    * #11264 — confie les rendus différés au worker. Une file injoignable ne fait
    * pas échouer l'envoi : la ligne reste `pending`, le média est servi tel quel.
    */
-  private async enqueueDeferred(target: 'messageAttachment', recordId: string, kinds: readonly MediaJobKind[]): Promise<void> {
+  private async scheduleDeferred(target: 'messageAttachment', recordId: string, kinds: readonly MediaJobKind[]): Promise<void> {
     if (this.mediaQueue === null || kinds.length === 0) return;
     for (const job of mediaJobsFor(target, recordId, kinds)) {
-      await this.mediaQueue.enqueue(job).catch((error: unknown) =>
+      await this.mediaQueue.schedule(job).catch((error: unknown) =>
         logger.error('Rendu différé non mis en file', { recordId, kind: job.kind, error }));
     }
   }
@@ -508,7 +508,7 @@ export class UploadProcessor {
         ...(deferred.length > 0 ? { processingState: 'pending' } : {}),
       },
     });
-    await this.enqueueDeferred('messageAttachment', attachment.id, deferred);
+    await this.scheduleDeferred('messageAttachment', attachment.id, deferred);
 
     return {
       id: attachment.id,

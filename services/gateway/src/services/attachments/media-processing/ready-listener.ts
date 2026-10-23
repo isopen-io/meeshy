@@ -10,6 +10,7 @@ import { attachmentSocketSelect } from '../attachmentIncludes';
 import { emitAttachmentUpdated } from '../../../socketio/emitAttachmentUpdated';
 import { serializeAttachmentForSocket, type SocketAttachmentRow } from '../../../socketio/serializeAttachmentForSocket';
 import type { ConversationRoomEmitter } from '../../../socketio/emitToConversationParticipants';
+import type { ServerEmitIO } from '../../../socketio/serverEmit';
 import type { OfflineParticipantQueueDeps } from '../../../socketio/offlineParticipantQueue';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
@@ -26,7 +27,7 @@ const POST_MEDIA_READY_SELECT = {
 
 export type MediaReadyListenerDeps = {
   readonly prisma: PrismaClient;
-  readonly io: ConversationRoomEmitter & { to(room: string): { emit(event: string, payload: unknown): unknown } };
+  readonly io: ConversationRoomEmitter & ServerEmitIO;
   readonly deliveryQueue: OfflineParticipantQueueDeps['deliveryQueue'];
   readonly connectedUsers: () => { has(key: string): boolean };
 };

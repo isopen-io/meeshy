@@ -102,7 +102,7 @@ describe('tus-handler — la file de médias (#11264)', () => {
     const jobs: unknown[] = [];
     const prisma = buildFakePrisma();
     const { registerTusRoutes } = await import('../tus-handler');
-    await registerTusRoutes({ prisma, addContentTypeParser: jest.fn(), route: jest.fn() } as any, { mediaQueue: { enqueue: async (job) => { jobs.push(job); } } });
+    await registerTusRoutes({ prisma, addContentTypeParser: jest.fn(), route: jest.fn() } as any, { mediaQueue: { schedule: async (job) => { jobs.push(job); } } });
     if (!captured) throw new Error('options TUS non capturées');
     const bytes = await bigPhoto();
     const created = await captured.onUploadCreate(
