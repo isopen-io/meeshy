@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.SocketPostBookmarkedData
+import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.net.ApiError
@@ -60,6 +61,7 @@ class ReelsViewModelTest {
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val postBookmarked = MutableSharedFlow<SocketPostBookmarkedData>(extraBufferCapacity = 64)
+    private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
     private var clockNow: Long = 0L
     private val clock = object : CacheClock {
@@ -93,9 +95,11 @@ class ReelsViewModelTest {
         allowAnalytics: Boolean = true,
     ): ReelsViewModel {
         every { session.currentUserId } returns currentUserId
+        every { session.currentUser } returns kotlinx.coroutines.flow.MutableStateFlow(null)
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked
+        every { socialSocket.postDeleted } returns postDeleted
         every { repository.feedCacheSnapshot } returns cachedFeed
         coEvery { repository.getReelsPage(any(), any(), any()) } returns
             NetworkResult.Success(PostPage(posts = thread, nextCursor = nextCursor, hasMore = hasMore))
@@ -696,5 +700,74 @@ class ReelsViewModelTest {
 
         assertThat(vm.state.value.reels.map { it.bookmarkCount }).containsExactly(1, 9).inOrder()
         assertThat(vm.state.value.reels.first { it.id == "r1" }.isBookmarked).isFalse()
+    }
+
+    // MARK: - Media addresses resolve against the API base, never the socket origin
+
+    @Test
+    fun `a reel stored as a key plays from the API attachment route`() = runTest {
+        val stored = reel("r1").copy(
+            media = listOf(ApiPostMedia(id = "m1", mimeType = "video/mp4", fileUrl = "2026/10/r1/clip.mp4", thumbnailUrl = "2026/10/r1/poster.jpg")),
+        )
+        val vm = viewModel(thread = listOf(stored))
+
+        vm.load()
+
+        val shown = vm.state.value.reels.single()
+        assertThat(shown.videoUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/r1/clip.mp4")
+        assertThat(shown.posterUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/r1/poster.jpg")
+    }
+
+    // MARK: - Ordre stable, fin en direct, echec
+
+    @Test
+    fun `a refresh keeps the watched reel and those before it where they are`() = runTest {
+        val vm = viewModel(thread = listOf(reel("a"), reel("b"), reel("c"), reel("d")))
+        vm.load()
+        vm.setCurrentReel("b")
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("d"), reel("z"), reel("a"), reel("b")), nextCursor = null, hasMore = false))
+
+        vm.load()
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("a", "b", "d", "z").inOrder()
+    }
+
+    @Test
+    fun `loadMore appends in the tail and never moves what is shown`() = runTest {
+        val vm = viewModel(thread = listOf(reel("a"), reel("b")), nextCursor = "c1", hasMore = true)
+        vm.load()
+        coEvery { repository.getReelsPage(any(), "c1", any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("b"), reel("c")), nextCursor = null, hasMore = false))
+
+        vm.loadMore()
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("a", "b", "c").inOrder()
+    }
+
+    @Test
+    fun `a reel deleted live disappears from the pager`() = runTest {
+        val vm = viewModel(thread = listOf(reel("a"), reel("b")))
+        vm.load()
+
+        postDeleted.emit(SocketPostDeletedData(postId = "a"))
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("b")
+    }
+
+    @Test
+    fun `a failed first load shows an error not an empty thread and retry reloads`() = runTest {
+        val vm = viewModel()
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
+        vm.load()
+        assertThat(vm.state.value.reels).isEmpty()
+        assertThat(vm.state.value.loadFailure).isNotNull()
+
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("a")), nextCursor = null, hasMore = false))
+        vm.retry()
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("a")
+        assertThat(vm.state.value.loadFailure).isNull()
     }
 }

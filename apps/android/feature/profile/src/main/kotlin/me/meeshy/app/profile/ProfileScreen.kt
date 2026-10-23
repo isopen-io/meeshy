@@ -78,6 +78,11 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.LanguageData
 import androidx.compose.material3.TopAppBarDefaults
+import kotlinx.coroutines.flow.MutableSharedFlow
+import me.meeshy.ui.component.ConnectionFeedbackHost
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastHost
+import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.format.RelativeTimeLongText
@@ -97,11 +102,28 @@ fun ProfileScreen(
     onBack: () -> Unit,
     onReport: (userId: String, username: String) -> Unit = { _, _ -> },
     onViewPosts: (userId: String) -> Unit = {},
+    onOpenConversation: (conversationId: String) -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
     uploadViewModel: AvatarBannerUploadViewModel = hiltViewModel(),
+    actionsViewModel: ProfileActionsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
+    val actionsState by actionsViewModel.state.collectAsStateWithLifecycle()
+    val actionToasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 4) }
+    val viewedUser = state.user
+    LaunchedEffect(viewedUser?.id, state.isOwnProfile) {
+        val id = viewedUser?.id?.takeIf { it.isNotBlank() }
+        if (id != null && !state.isOwnProfile) actionsViewModel.bind(id, isAnonymous = viewedUser.isAnonymous == true)
+    }
+    LaunchedEffect(actionsViewModel) {
+        actionsViewModel.events.collect { event ->
+            when (event) {
+                is ProfileActionEvent.OpenConversation -> onOpenConversation(event.conversationId)
+                is ProfileActionEvent.Toast -> actionToasts.tryEmit(event.feedback.toToastRequest())
+            }
+        }
+    }
     val snackbar = remember { SnackbarHostState() }
     var shareTarget by remember { mutableStateOf<ProfileSharePresentation?>(null) }
 
@@ -162,13 +184,7 @@ fun ProfileScreen(
                                 Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_edit))
                             }
                         }
-                        else -> {
-                            state.user?.let { user ->
-                                IconButton(onClick = { onReport(user.id, user.username) }) {
-                                    Icon(Icons.Default.Flag, contentDescription = stringResource(R.string.profile_report))
-                                }
-                            }
-                        }
+                        else -> Unit
                     }
                 },
             )
@@ -192,6 +208,7 @@ fun ProfileScreen(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
             val header = state.user?.let { ProfileHeaderBuilder.build(it, System.currentTimeMillis()) }
+            state.user?.takeIf { !state.isEditing }?.let { ProfileBanner(user = it) }
 
             // Avatar — completion ring + presence dot when viewing (not editing).
             Box(contentAlignment = Alignment.Center) {
@@ -415,6 +432,27 @@ fun ProfileScreen(
                         color = MeeshyTheme.tokens.textSecondary,
                     )
                 }
+                val actionPlan = actionsState.plan
+                if (!state.isOwnProfile && actionPlan != null && state.user != null) {
+                    val user = state.user!!
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    ProfileActionsSection(
+                        plan = actionPlan,
+                        displayName = header?.displayName ?: user.username,
+                        isOpeningConversation = actionsState.isOpeningConversation,
+                        callbacks = ProfileActionCallbacks(
+                            onSendMessage = actionsViewModel::sendMessage,
+                            onRequest = actionsViewModel::requestConnection,
+                            onCancel = actionsViewModel::cancelConnection,
+                            onResend = actionsViewModel::resendConnection,
+                            onAccept = actionsViewModel::acceptConnection,
+                            onDecline = actionsViewModel::declineConnection,
+                            onBlock = actionsViewModel::block,
+                            onUnblock = actionsViewModel::unblock,
+                            onReport = { onReport(user.id, user.username) },
+                        ),
+                    )
+                }
                 header?.let { ProfileDetailsSection(it) }
                 state.user?.id?.takeIf { it.isNotBlank() }?.let { id ->
                     ProfilePostsRow(onClick = { onViewPosts(id) })
@@ -424,12 +462,26 @@ fun ProfileScreen(
             }
         }
     }
+
+    ConnectionFeedbackHost(feedback = actionsViewModel.connectionFeedback)
+    FeedbackToastHost(toasts = actionToasts)
     }
 
     shareTarget?.let { share ->
         ProfileShareSheet(share = share, onDismiss = { shareTarget = null })
     }
 }
+
+private fun ProfileActionFeedback.toToastRequest(): FeedbackToastRequest = FeedbackToastRequest(
+    messageRes = when (this) {
+        ProfileActionFeedback.UserBlocked -> R.string.profile_toast_user_blocked
+        ProfileActionFeedback.BlockFailed -> R.string.profile_toast_block_failed
+        ProfileActionFeedback.UserUnblocked -> R.string.profile_toast_user_unblocked
+        ProfileActionFeedback.UnblockFailed -> R.string.profile_toast_unblock_failed
+        ProfileActionFeedback.OpenConversationFailed -> R.string.profile_open_conversation_error
+    },
+    kind = if (isError) FeedbackKind.Error else FeedbackKind.Success,
+)
 
 /** A tappable row leading to this user's authored-posts feed. */
 @Composable

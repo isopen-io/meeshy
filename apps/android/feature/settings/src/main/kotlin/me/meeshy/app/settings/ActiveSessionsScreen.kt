@@ -25,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.net.api.ActiveSessionInfo
+import me.meeshy.ui.component.chrome.CollapsibleHeaderLazyPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
@@ -58,61 +60,61 @@ fun ActiveSessionsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     MeeshyBackground {
-        // Cet ecran n'a pas de Scaffold : il pose lui-meme son inset depuis que le
-        // Scaffold racine ne reserve plus les barres systeme (MeeshyApp.kt). Le fond
-        // reste plein ecran, seul le contenu est retreci.
-        Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = MeeshySpacing.xl, start = MeeshySpacing.sm),
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.settings_back),
-                        tint = MeeshyTheme.tokens.textPrimary,
-                    )
-                }
-                Text(
-                    text = stringResource(R.string.settings_active_sessions),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    fontWeight = FontWeight.Bold,
+        CollapsibleHeaderLazyPage(
+            title = stringResource(R.string.settings_active_sessions),
+            onBack = onBack,
+            titleColor = MeeshyTheme.tokens.textPrimary,
+            backArrowColor = MeeshyPalette.Indigo500,
+            backgroundColor = MeeshyTheme.tokens.backgroundPrimary,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = MeeshySpacing.lg,
+                end = MeeshySpacing.lg,
+                bottom = MeeshySpacing.lg,
+            ),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            item(key = "confirmations") {
+                SessionRevocationConfirmations(
+                    pending = state.pendingRevocation,
+                    confirmingOthers = state.confirmingRevokeOthers,
+                    onConfirmRevoke = viewModel::confirmRevoke,
+                    onConfirmOthers = viewModel::confirmRevokeOthers,
+                    onCancel = viewModel::cancelConfirmation,
                 )
             }
-
             when {
-                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MeeshyPalette.Indigo500)
-                }
-                state.errorMessage != null -> Column(
-                    modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.xl),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = state.errorMessage.orEmpty(),
-                        color = MeeshyPalette.Error,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    TextButton(onClick = viewModel::load) {
-                        Text(stringResource(R.string.sessions_retry))
+                state.isLoading -> item(key = "loading") {
+                    Box(Modifier.fillMaxWidth().padding(MeeshySpacing.xl), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = MeeshyPalette.Indigo500)
                     }
                 }
-                else -> LazyColumn(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(MeeshySpacing.lg),
-                    verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-                ) {
+                state.errorMessage != null -> item(key = "error") {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.xl),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = state.errorMessage.orEmpty(),
+                            color = MeeshyPalette.Error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        TextButton(onClick = viewModel::load) {
+                            Text(stringResource(R.string.sessions_retry))
+                        }
+                    }
+                }
+                else -> {
                     items(state.sessions, key = { it.id }) { session ->
                         SessionRow(
                             session = session,
                             isRevoking = state.revokingIds.contains(session.id),
-                            onRevoke = { viewModel.revoke(session.id) },
+                            onRevoke = { viewModel.requestRevoke(session) },
                         )
                     }
                     if (state.sessions.any { !it.isCurrentSession }) {
                         item(key = "revoke_others") {
                             TextButton(
-                                onClick = viewModel::revokeOthers,
+                                onClick = viewModel::requestRevokeOthers,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text(
@@ -208,4 +210,41 @@ internal fun sessionTitle(session: ActiveSessionInfo): String {
     val os = listOfNotNull(session.osName, session.osVersion).joinToString(" ")
     return listOf(device, os).filter { it.isNotBlank() }.joinToString(" · ")
         .ifBlank { session.ipAddress ?: session.id }
+}
+
+/** iOS `ActiveSessionsView` : déconnecter un appareil, ou tous les autres, se confirme d'abord. */
+@Composable
+private fun SessionRevocationConfirmations(
+    pending: ActiveSessionInfo?,
+    confirmingOthers: Boolean,
+    onConfirmRevoke: () -> Unit,
+    onConfirmOthers: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = onCancel,
+            title = { Text(stringResource(R.string.sessions_revoke_confirm_title)) },
+            text = { Text(stringResource(R.string.sessions_revoke_confirm_message, sessionTitle(pending))) },
+            confirmButton = {
+                TextButton(onClick = onConfirmRevoke) {
+                    Text(stringResource(R.string.sessions_revoke_confirm_action), color = MeeshyPalette.Error)
+                }
+            },
+            dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.sessions_cancel)) } },
+        )
+    }
+    if (confirmingOthers) {
+        AlertDialog(
+            onDismissRequest = onCancel,
+            title = { Text(stringResource(R.string.sessions_revoke_others)) },
+            text = { Text(stringResource(R.string.sessions_revoke_all_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = onConfirmOthers) {
+                    Text(stringResource(R.string.sessions_revoke_all_action), color = MeeshyPalette.Error)
+                }
+            },
+            dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.sessions_cancel)) } },
+        )
+    }
 }

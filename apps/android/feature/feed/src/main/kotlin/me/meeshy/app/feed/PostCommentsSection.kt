@@ -23,7 +23,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Translate
@@ -54,6 +53,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.wrapContentHeight
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
@@ -77,8 +82,15 @@ import me.meeshy.ui.theme.hexColor
 internal fun PostCommentsSection(
     viewModel: PostCommentsViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
+    onNotice: suspend (CommentNotice) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) {
+        viewModel.state.map { it.notice }.distinctUntilChanged().filterNotNull().collect { notice ->
+            viewModel.consumeNotice()
+            onNotice(notice)
+        }
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -91,6 +103,20 @@ internal fun PostCommentsSection(
 
         when {
             state.showSkeleton -> CommentsSkeleton()
+            state.loadFailed -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = MeeshySpacing.sm),
+            ) {
+                Text(
+                    text = stringResource(R.string.post_comments_load_error),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = viewModel::retryLoad) {
+                    Text(stringResource(R.string.feed_retry), color = MeeshyPalette.Indigo500)
+                }
+            }
             state.isEmpty -> Text(
                 text = stringResource(R.string.post_comments_empty),
                 style = MaterialTheme.typography.bodyMedium,
@@ -154,6 +180,15 @@ private fun CommentRow(
     onDelete: (String) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
+    val timeText = comment.createdAtIso?.let { detailRelativeTime(it) }
+    val replyLabelFormat = stringResource(R.string.post_comments_reply_a11y_label)
+    val textBlockSemantics = if (comment.isReply) {
+        Modifier.semantics(mergeDescendants = true) {
+            contentDescription = comment.accessibilityLabel(replyLabelFormat, timeText.orEmpty(), unknownAuthor)
+        }
+    } else {
+        Modifier
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -173,6 +208,7 @@ private fun CommentRow(
         }
         Spacer(Modifier.width(MeeshySpacing.sm))
         Column(Modifier.weight(1f)) {
+            Column(textBlockSemantics) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = comment.authorName ?: unknownAuthor,
@@ -192,10 +228,10 @@ private fun CommentRow(
                             .padding(horizontal = 6.dp, vertical = 1.dp),
                     )
                 }
-                comment.createdAtIso?.let {
+                timeText?.let {
                     Spacer(Modifier.width(MeeshySpacing.xs))
                     Text(
-                        text = detailRelativeTime(it),
+                        text = it,
                         style = MaterialTheme.typography.labelSmall,
                         color = MeeshyTheme.tokens.textSecondary,
                     )
@@ -210,6 +246,7 @@ private fun CommentRow(
                     mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
                 )
             }
+            }
             if (comment.languageStrip.isNotEmpty()) {
                 Spacer(Modifier.height(2.dp))
                 CommentLanguageStrip(
@@ -223,9 +260,7 @@ private fun CommentRow(
             ) {
                 CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
                 CommentReplyButton(comment = comment, onReply = onReply)
-                if (comment.isOwn) {
-                    CommentDeleteButton(comment = comment, onDelete = onDelete)
-                }
+                CommentMoreMenu(comment = comment, onDelete = onDelete)
             }
         }
     }
@@ -298,11 +333,12 @@ private fun CommentReplyButton(comment: CommentPresentation, onReply: (String) -
         fontWeight = FontWeight.SemiBold,
         color = MeeshyTheme.tokens.textSecondary,
         modifier = Modifier
-            .padding(top = MeeshySpacing.xs)
             .clip(RoundedCornerShape(MeeshyRadius.pill))
             .clickable(enabled = !comment.isPending) { onReply(comment.id) }
             .semantics { role = Role.Button; contentDescription = label }
-            .padding(vertical = 2.dp, horizontal = 4.dp),
+            .heightIn(min = 44.dp)
+            .wrapContentHeight()
+            .padding(horizontal = MeeshySpacing.sm),
     )
 }
 
@@ -331,7 +367,7 @@ private fun ReplyThread(
     val isPreview = thread?.isPreview == true
     if (comment.replyCount <= 0 && !isExpanded && !isPreview) return
 
-    Column(modifier = Modifier.padding(start = 40.dp, top = MeeshySpacing.xs)) {
+    Column(modifier = Modifier.padding(start = CommentThreadLayout.replyIndentDp(depth = 1).dp, top = MeeshySpacing.xs)) {
         if (isPreview && thread != null) {
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 thread.replies.forEach { reply ->
@@ -350,8 +386,16 @@ private fun ReplyThread(
 
         val showToggle = isExpanded || !isPreview || (thread?.hiddenReplyCount ?: 0) > 0
         if (showToggle) {
+            val accent = if (MeeshyTheme.isDark) MeeshyPalette.Indigo400 else MeeshyPalette.Indigo500
+            val moreRepliesHint = stringResource(R.string.post_comments_load_more_replies_hint)
+            val remaining = thread?.hiddenReplyCount ?: 0
             val label = when {
                 isExpanded -> stringResource(R.string.post_comments_hide_replies)
+                isPreview && remaining > 0 -> pluralStringResource(
+                    R.plurals.post_comments_load_more_replies,
+                    remaining,
+                    remaining,
+                )
                 isPreview -> pluralStringResource(
                     R.plurals.post_comments_view_all_replies,
                     comment.replyCount,
@@ -368,21 +412,22 @@ private fun ReplyThread(
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
                 modifier = Modifier
                     .clip(RoundedCornerShape(MeeshyRadius.pill))
-                    .clickable { onToggleReplies(comment.id) }
+                    .clickable(onClickLabel = moreRepliesHint) { onToggleReplies(comment.id) }
                     .semantics { role = Role.Button; contentDescription = label }
+                    .heightIn(min = 48.dp)
                     .padding(vertical = 2.dp, horizontal = 2.dp),
             ) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MeeshyPalette.Indigo500,
+                    color = accent,
                 )
                 if (thread?.isLoading == true) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
                         strokeWidth = 2.dp,
-                        color = MeeshyPalette.Indigo500,
+                        color = accent,
                     )
                 }
             }
@@ -413,11 +458,11 @@ private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (Strin
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         modifier = Modifier
-            .padding(top = MeeshySpacing.xs)
+            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
             .clip(RoundedCornerShape(MeeshyRadius.pill))
             .clickable(enabled = !comment.isPending) { onToggleLike(comment.id) }
             .semantics { role = Role.Button; contentDescription = label }
-            .padding(vertical = 2.dp, horizontal = 2.dp),
+            .padding(horizontal = MeeshySpacing.xs),
     ) {
         Icon(
             imageVector = if (comment.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -433,28 +478,6 @@ private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (Strin
             )
         }
     }
-}
-
-/**
- * Delete affordance for the viewer's own comment — the row's [CommentPresentation.isOwn]
- * gate decides whether this renders at all (mirror of iOS `deleteHandler`'s author check).
- * A single tap deletes immediately, no confirmation step — same as iOS's destructive-role
- * menu item, which also fires on tap without an intermediate alert.
- */
-@Composable
-private fun CommentDeleteButton(comment: CommentPresentation, onDelete: (String) -> Unit) {
-    val label = stringResource(R.string.post_comments_delete_action)
-    Icon(
-        imageVector = Icons.Filled.Delete,
-        contentDescription = label,
-        tint = MeeshyTheme.tokens.textSecondary,
-        modifier = Modifier
-            .padding(top = MeeshySpacing.xs)
-            .size(16.dp)
-            .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .clickable(enabled = !comment.isPending) { onDelete(comment.id) }
-            .semantics { role = Role.Button; contentDescription = label },
-    )
 }
 
 @Composable

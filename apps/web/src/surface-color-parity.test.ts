@@ -47,7 +47,7 @@ describe('theme-color = surface (#10005)', () => {
   });
 
   test('le manifeste de la PWA installée : barre et fond de lancement', () => {
-    const config = read('vite.config.ts');
+    const config = read('vite/pwa.ts');
     expect(config.match(/theme_color:\s*'([^']+)'/)?.[1]?.toLowerCase()).toBe(surface.dark);
     expect(config.match(/background_color:\s*'([^']+)'/)?.[1]?.toLowerCase()).toBe(surface.dark);
   });

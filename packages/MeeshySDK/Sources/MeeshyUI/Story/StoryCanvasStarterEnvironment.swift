@@ -15,8 +15,10 @@ import MeeshySDK
 
 /// Ce que la caméra app-side rend au composer. Le SDK ne référence JAMAIS le
 /// type de résultat de l'app (`CameraResult`) : la frontière est cette valeur.
+/// Une photo porte les OCTETS de la prise quand le viseur en a écrit (#11847) :
+/// c'est eux, et non l'image décodée, qui deviennent le fichier du média.
 public nonisolated enum StoryCameraCapture {
-    case photo(UIImage)
+    case photo(UIImage, data: Data? = nil)
     case video(URL)
 }
 

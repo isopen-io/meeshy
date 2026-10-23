@@ -22,6 +22,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.AutofillType
 import androidx.compose.ui.res.stringResource
+import me.meeshy.sdk.model.auth.PhonePlausibility
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.settings.R
@@ -58,6 +59,7 @@ internal fun SecurityPhoneSection(state: AccountContactUiState, viewModel: Accou
                 onSubmit = viewModel::submitPhoneChange,
                 placeholder = stringResource(R.string.security_phone_placeholder),
                 submitLabel = stringResource(R.string.account_contact_phone_send_code),
+                fieldError = state.phoneRefusal?.let { phoneRefusalText(it) },
             )
             else -> SecurityEditVerifyRow(
                 showVerify = !state.user?.phoneNumber.isNullOrBlank() && state.user?.phoneVerifiedAt == null,
@@ -106,4 +108,13 @@ private fun PhoneCodeRow(state: AccountContactUiState, viewModel: AccountContact
             }
         }
     }
+}
+
+@Composable
+private fun phoneRefusalText(refusal: PhonePlausibility.Refusal): String = when (refusal) {
+    PhonePlausibility.Refusal.TOO_SHORT ->
+        stringResource(R.string.account_contact_phone_too_short, PhonePlausibility.MIN_DIGITS)
+    PhonePlausibility.Refusal.IDENTICAL_RUN,
+    PhonePlausibility.Refusal.REPEATED_PATTERN,
+    -> stringResource(R.string.account_contact_phone_implausible)
 }

@@ -311,8 +311,8 @@ final class MediaGalleryTransportCorridorTests: XCTestCase {
         XCTAssertTrue(TransportLayout.showsRail(placement: .rail, controls: [.mute, .speed, .pip]))
     }
 
-    /// **Cinq actions tiennent encore sur le plateau.** Réagir · répondre ·
-    /// composer, puis le son et (...) : la colonne se pose sur le PLATEAU (#6760),
+    /// **Le rail entier tient sur le plateau.** Réagir · répondre ·
+    /// composer · enregistrer · transférer, puis le son et (...) : la colonne se pose sur le PLATEAU (#6760),
     /// pas sur le cadre — c'est donc la région libre qui doit la contenir avec
     /// le bloc d'informations, y compris sur le plus petit écran servi.
     func test_theColumn_withTheMuteAndTheMenu_stillFitsThePlateau() {
@@ -327,11 +327,15 @@ final class MediaGalleryTransportCorridorTests: XCTestCase {
                 - MediaGalleryStage.topInset(presentation: .carded, corridors: reserves)
                 - MediaGalleryStage.bottomInset(presentation: .carded, corridors: reserves)
 
+            // #12420 — le rail porte sept disques (réagir · répondre · composer ·
+            // enregistrer · transférer, puis le son et (...)) et se pose À CÔTÉ du
+            // bloc d'informations : chacun doit tenir dans la région, pas leur somme.
             XCTAssertLessThanOrEqual(
-                MediaStageActionColumn.height(actions: 5) + MediaGalleryStage.overlayHeight,
+                MediaStageActionColumn.height(actions: 7),
                 region,
-                "\(ecran.taille) : la colonne à cinq actions et le bloc d'informations cohabitent"
+                "\(ecran.taille) : le rail à sept disques tient dans la région"
             )
+            XCTAssertLessThanOrEqual(MediaGalleryStage.overlayHeight, region)
         }
     }
 

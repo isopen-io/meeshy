@@ -25,6 +25,7 @@ sourceSets {
     test {
         kotlin.srcDirs(module.resolve("src/test/kotlin"), crypto.resolve("src/test/kotlin"))
         resources.srcDir(crypto.resolve("src/test/resources"))
+        resources.srcDir(module.resolve("src/test/resources"))
     }
 }
 

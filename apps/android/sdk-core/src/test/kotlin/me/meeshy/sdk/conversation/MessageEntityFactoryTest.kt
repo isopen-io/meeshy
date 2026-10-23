@@ -57,12 +57,14 @@ class MessageEntityFactoryTest {
     }
 
     @Test
-    fun `local differs from cached by the send state alone`() {
+    fun `local differs from cached by the send state and the absent server id alone`() {
         val source = message()
 
         val local = MessageEntityFactory.local(source, cachedAt = 9L, state = LocalSendState.SENDING)
 
-        assertThat(local.copy(sendState = null)).isEqualTo(MessageEntityFactory.cached(source, cachedAt = 9L))
+        assertThat(local.copy(sendState = null, serverId = source.id))
+            .isEqualTo(MessageEntityFactory.cached(source, cachedAt = 9L))
+        assertThat(local.serverId).isNull()
     }
 
     @Test

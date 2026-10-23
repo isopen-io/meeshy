@@ -27,8 +27,16 @@ import org.junit.Test
 class RouteManifestRatchetTest {
 
     private companion object {
-        const val TO_PORT_CEILING = 298
-        val VERB_STATUSES = setOf("hors-perimetre-mobile", "a-porter", "implementee-par-url-serveur")
+        /**
+         * 253 : 286 (dev 280 + six routes des lens, #11271) moins les 34 routes « à porter » que les
+         * interfaces des liens, du suivi de liens, de l'affiliation, des médias, de l'annuaire, des
+         * hashtags et des packs déclarent depuis la vague du 2026-10-23, plus `GET /u/:username`
+         * qui y revient : c'est un alias du profil public, qu'aucune interface ne vise (#4161, #4250).
+         * 254 : plus `GET /attachments/:attachmentId/subtitles/:lang`, servie par la passerelle depuis
+         * #11329 et sans interface Retrofit encore.
+         */
+        const val TO_PORT_CEILING = 254
+        val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
     private data class Route(val verb: String, val path: String) {
@@ -105,6 +113,22 @@ class RouteManifestRatchetTest {
         }
 
         assertThat(stale).isEmpty()
+    }
+
+    @Test
+    fun `the rest of admin and socketio is classified ops-only with a written reason`() {
+        val opsOnly = categories().filter { it.status == "ops-only" }
+        val classified = opsOnly.flatMap { it.routes }
+        val reasons = classification().getValue("categories").jsonArray.map { it as JsonObject }
+            .filter { it.getValue("status").jsonPrimitive.content == "ops-only" }
+            .map { it.getValue("reason").jsonPrimitive.content }
+
+        assertThat(reasons.all { it.length > 20 }).isTrue()
+        val leftover = categories().filter { it.status != "ops-only" }.flatMap { it.routes }
+            .filter { it.contains(" /api/v1/admin/") || it.contains("socketio") }
+        assertThat(leftover).isEmpty()
+        assertThat(classified.any { it.contains("/admin/") }).isTrue()
+        assertThat(classified.any { it.contains("socketio") }).isTrue()
     }
 
     @Test

@@ -136,6 +136,7 @@ jobs:
           path: |
             apps/web/android/app/build/outputs/bundle/release/app-release.aab
             apps/web/android/app/build/outputs/apk/release/app-release.apk
+            apps/web/android/app/build/outputs/mapping/release/mapping.txt
           retention-days: 30
           if-no-files-found: error
 
@@ -146,6 +147,9 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.MEESHY_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: me.meeshy.app
           releaseFiles: apps/web/android/app/build/outputs/bundle/release/app-release.aab
+          # #12447 — R8 obscurcit la release : la Play Console desobscurcit les
+          # plantages et les ANR avec ce fichier.
+          mappingFile: apps/web/android/app/build/outputs/mapping/release/mapping.txt
           track: ${{ inputs.track }}
           status: ${{ inputs.status }}
 

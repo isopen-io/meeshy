@@ -1,7 +1,6 @@
 package me.meeshy.app.settings
 
-import android.content.Intent
-import android.net.Uri
+import me.meeshy.ui.component.link.openExternalLink
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,9 +34,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.settings.R
+import me.meeshy.sdk.model.licenses.GloryFrameFontCredits
 import me.meeshy.sdk.model.licenses.OpenSourceLicense
 import me.meeshy.sdk.model.licenses.OpenSourceLicenseCatalog
 import me.meeshy.sdk.model.licenses.OpenSourceLicenseGroup
@@ -101,6 +104,8 @@ fun LicensesScreen(onBack: () -> Unit) {
                     LicenseGroupCard(group)
                 }
 
+                GloryFrameFontsCard()
+
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
         }
@@ -133,13 +138,68 @@ private fun LicenseGroupCard(group: OpenSourceLicenseGroup) {
 }
 
 @Composable
+private fun GloryFrameFontsCard() {
+    val accent = OpenSourceLicenseType.OTHER.accent()
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+        Text(
+            text = stringResource(R.string.licenses_glory_fonts_title).uppercase(),
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = accent,
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MeeshyTheme.tokens.backgroundSecondary, RoundedCornerShape(MeeshySpacing.md))
+                .border(1.dp, accent.copy(alpha = 0.15f), RoundedCornerShape(MeeshySpacing.md))
+                .padding(MeeshySpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+        ) {
+            GloryFrameFontCredits.CREDITS.forEach { credit ->
+                val description = stringResource(
+                    R.string.licenses_glory_fonts_row_description,
+                    credit.family,
+                    GloryFrameFontCredits.LICENSE_NAME,
+                    credit.copyright,
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { context.openExternalLink(credit.url) }
+                        .semantics(mergeDescendants = true) { contentDescription = description },
+                ) {
+                    Text(
+                        credit.family,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textPrimary,
+                    )
+                    Text(
+                        GloryFrameFontCredits.LICENSE_NAME,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                    )
+                    Text(
+                        credit.copyright,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun LicenseRow(license: OpenSourceLicense, accent: Color) {
     val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(license.url)))
+                context.openExternalLink(license.url)
             },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,

@@ -61,8 +61,11 @@ android {
             if (meeshyReleaseSigningProperties() != null) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // #12447 — R8 reduit, optimise et obscurcit le code : la Play Console
+            // exige 25 % d'obscurcissement. Le mapping part avec le bundle.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

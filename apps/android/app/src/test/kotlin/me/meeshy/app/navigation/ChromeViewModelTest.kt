@@ -56,7 +56,7 @@ class ChromeViewModelTest {
         coEvery { friendRepository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
         every { notificationRepository.notificationsStream(any(), any()) } returns
             MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
-        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager)
+        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager, me.meeshy.sdk.net.MeeshyConfig())
     }
 
     @Test
@@ -146,9 +146,11 @@ class ChromeViewModelTest {
 
     @Test
     fun `warm-up re-arms after a logout so the next authenticated account re-hydrates`() = runTest {
-        val vm = viewModel()
+        val cache = FriendshipCache()
+        val vm = viewModel(cache)
 
         vm.warmUpIfAuthenticated(true)
+        cache.clear()
         vm.warmUpIfAuthenticated(false)
         vm.warmUpIfAuthenticated(true)
 

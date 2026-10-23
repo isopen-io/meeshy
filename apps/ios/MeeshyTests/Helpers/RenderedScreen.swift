@@ -153,6 +153,14 @@ final class RenderedScreen {
         }
     }
 
+    /// L'écran tel qu'il est peint, pour la recette visuelle d'un témoin.
+    func snapshotPNG() -> Data? {
+        guard let window else { return nil }
+        return UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }.pngData()
+    }
+
     /// À appeler depuis `tearDown` : une fenêtre laissée clé retient son hôte.
     func dismount() {
         window?.rootViewController = nil

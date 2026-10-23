@@ -29,6 +29,8 @@ import me.meeshy.sdk.net.api.CreatePostRequest
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.MobileTranscriptionPayload
 import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.net.api.PostLikeRequest
+import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.net.api.PostImpressionsRequest
 import me.meeshy.sdk.net.api.PostTranslationRequest
 import me.meeshy.sdk.net.api.PostViewRequest
@@ -42,6 +44,13 @@ import me.meeshy.sdk.model.MediaCaptionTranslationMerge
 import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.model.PostUpdateMerge
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.apiCallUnit
+import me.meeshy.sdk.net.api.CommentTranslationRequest
+import me.meeshy.sdk.net.api.PublishAttachmentRequest
+import me.meeshy.sdk.net.api.UpdateCommentRequest
+import me.meeshy.sdk.model.NearbyDensityCell
+import me.meeshy.sdk.model.NearbyDensityCellSize
+import me.meeshy.sdk.model.PublicationTarget
 import me.meeshy.sdk.net.rawApiCall
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -122,6 +131,17 @@ class PostRepository @Inject constructor(
     suspend fun refresh() = revalidateFeed()
 
     /**
+     * A user-driven refresh (pull to refresh, « Réessayer ») that reports its outcome:
+     * the failure, or `null` on success. [refresh] swallows it, which left the caller's
+     * spinner turning forever when the feed could not load.
+     */
+    suspend fun refreshReporting(): Throwable? {
+        var failure: Throwable? = null
+        revalidateFeed { failure = it }
+        return failure
+    }
+
+    /**
      * Optimistic, durable like toggle (ARCHITECTURE.md §4-5). The viewer's own like
      * state (`isLikedByMe`) flips instantly with the count; the mutation is then
      * handed to the outbox rather than sent directly, so it survives an offline tap
@@ -146,6 +166,46 @@ class PostRepository @Inject constructor(
             ),
         )
         return true
+    }
+
+    /** The post as the feed cache holds it, or `null` when it is not there. */
+    fun cachedPost(postId: String): ApiPost? = _feedCache.value?.firstOrNull { it.id == postId }
+
+    /**
+     * The explicit-state twin of [toggleLike], for a surface that owns the post itself (the
+     * post detail opened from a link, a notification or a profile — the post may be absent
+     * from the feed cache, where [toggleLike] would refuse). Enqueues the same durable
+     * outbox mutation, and mirrors the feed cache when the post sits there and differs.
+     */
+    suspend fun setLiked(postId: String, liked: Boolean) {
+        cachedPost(postId)
+            ?.takeIf { (it.isLikedByMe == true) != liked }
+            ?.let { applyLike(postId, liked = liked, likeCount = adjustedCount(it.likeCount, wasSet = !liked)) }
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = if (liked) OutboxKind.LIKE_POST else OutboxKind.UNLIKE_POST,
+                lane = OutboxLanes.SOCIAL,
+                targetId = postId,
+                payload = "",
+            ),
+        )
+    }
+
+    /** The bookmark analogue of [setLiked]. */
+    suspend fun setBookmarked(postId: String, bookmarked: Boolean) {
+        cachedPost(postId)
+            ?.takeIf { (it.isBookmarkedByMe == true) != bookmarked }
+            ?.let {
+                applyBookmark(postId, bookmarked = bookmarked, bookmarkCount = adjustedCount(it.bookmarkCount, wasSet = !bookmarked))
+            }
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = if (bookmarked) OutboxKind.BOOKMARK_POST else OutboxKind.UNBOOKMARK_POST,
+                lane = OutboxLanes.SOCIAL,
+                targetId = postId,
+                payload = "",
+            ),
+        )
     }
 
     /**
@@ -331,6 +391,7 @@ class PostRepository @Inject constructor(
         mentions: List<PostMentionInput>? = null,
         mediaCaption: Map<String, String>? = null,
         discoverabilityPrecision: DiscoverabilityPrecision? = null,
+        clientMutationId: String? = null,
     ): NetworkResult<ApiPost> =
         apiCall {
             postApi.create(
@@ -354,6 +415,7 @@ class PostRepository @Inject constructor(
                     mediaCaption = mediaCaption,
                     discoverabilityPrecision = discoverabilityPrecision,
                 ),
+                clientMutationId,
             )
         }
 
@@ -385,6 +447,19 @@ class PostRepository @Inject constructor(
      */
     suspend fun like(postId: String): NetworkResult<Unit> =
         apiCall { postApi.like(postId) }
+
+    /**
+     * Réagit à un post avec [emoji] — la palette d'appui long du cœur (iso `addPostReaction`).
+     * **Additif et sans état local** : ni `isLikedByMe` ni `likeCount` ne bougent, il n'y a rien à
+     * réconcilier ni à défaire. Le cœur seul garde le corps vide de [like] (la passerelle l'entend
+     * comme ❤️) ; l'hôte, lui, bascule son état « aimé » par [toggleLike] avant d'appeler ceci.
+     */
+    suspend fun react(postId: String, emoji: String): NetworkResult<Unit> =
+        if (emoji == EmojiCatalog.DOUBLE_TAP_EMOJI) {
+            like(postId)
+        } else {
+            apiCall { postApi.likeWithEmoji(postId, PostLikeRequest(emoji)) }
+        }
 
     /** Non-durable unlike — see [like]'s KDoc. Prefer [toggleLike]. */
     suspend fun unlike(postId: String): NetworkResult<Unit> =
@@ -498,11 +573,13 @@ class PostRepository @Inject constructor(
         targetType: PostType? = null,
         content: String? = null,
         isQuote: Boolean = false,
+        clientMutationId: String? = null,
     ): NetworkResult<ApiPost> =
         apiCall {
             postApi.repost(
                 postId,
                 RepostPostRequest(content = content, isQuote = isQuote, targetType = targetType?.name),
+                clientMutationId,
             )
         }
 
@@ -519,6 +596,7 @@ class PostRepository @Inject constructor(
         mediaAlt: Map<String, String>? = null,
         mediaCaption: Map<String, String>? = null,
         alsoAsReel: Boolean? = null,
+        clientMutationId: String? = null,
     ): NetworkResult<ApiPost> =
         apiCall {
             postApi.createStory(
@@ -536,6 +614,7 @@ class PostRepository @Inject constructor(
                     mediaCaption = mediaCaption,
                     alsoAsReel = alsoAsReel,
                 ),
+                clientMutationId,
             )
         }
 
@@ -730,8 +809,59 @@ class PostRepository @Inject constructor(
         content: String,
         parentId: String? = null,
         effectFlags: Int? = null,
+        clientMutationId: String? = null,
     ): NetworkResult<ApiPostComment> =
-        apiCall { postApi.addComment(postId, CreateCommentRequest(content, parentId, effectFlags)) }
+        apiCall { postApi.addComment(postId, CreateCommentRequest(content, parentId, effectFlags), clientMutationId) }
+
+    suspend fun updateComment(
+        postId: String,
+        commentId: String,
+        content: String? = null,
+        effectFlags: Int? = null,
+        originalLanguage: String? = null,
+    ): NetworkResult<ApiPostComment> =
+        apiCall { postApi.updateComment(postId, commentId, UpdateCommentRequest(content, effectFlags, originalLanguage)) }
+
+    /** Traduction d'un commentaire à la demande (Prisme, « exploration ») : le résultat arrive par socket. */
+    suspend fun requestCommentTranslation(
+        postId: String,
+        commentId: String,
+        targetLanguage: String,
+        force: Boolean = false,
+    ): NetworkResult<Unit> =
+        apiCallUnit {
+            postApi.requestCommentTranslation(
+                postId,
+                commentId,
+                CommentTranslationRequest(targetLanguage, force.takeIf { it }),
+            )
+        }
+
+    /** Traduction à la demande de la légende d'un média de post ; le résultat arrive par socket. */
+    suspend fun requestMediaCaptionTranslation(mediaId: String, targetLanguage: String): NetworkResult<Unit> =
+        apiCallUnit { postApi.requestMediaCaptionTranslation(mediaId, PostTranslationRequest(targetLanguage)) }
+
+    /** Publie une pièce jointe de conversation ; `capturedInApp` n'est écrit que s'il est vrai. */
+    suspend fun publishAttachment(
+        attachmentId: String,
+        target: PublicationTarget? = null,
+        content: String? = null,
+        capturedInApp: Boolean = false,
+    ): NetworkResult<ApiPost> =
+        apiCall {
+            postApi.publishAttachment(
+                PublishAttachmentRequest(attachmentId, target?.wire, content, capturedInApp.takeIf { it }),
+            )
+        }
+
+    /** Carte de densité « À proximité » : le pas est calé sur ceux que la passerelle sait rendre. */
+    suspend fun nearbyDensity(
+        lat: Double,
+        lng: Double,
+        radiusKm: Double,
+        cellSize: NearbyDensityCellSize,
+    ): NetworkResult<List<NearbyDensityCell>> =
+        apiCall { postApi.getNearbyDensity(lat, lng, radiusKm, cellSize.kilometers) }
 
     suspend fun getCommentReplies(
         postId: String,

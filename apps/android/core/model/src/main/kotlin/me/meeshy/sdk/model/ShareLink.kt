@@ -3,13 +3,14 @@ package me.meeshy.sdk.model
 import kotlinx.serialization.Serializable
 
 /** Public share link info — port of ShareLinkInfo (ShareLinkModels.swift). */
-@Serializable
+@Serializable(with = ShareLinkInfoSerializer::class)
 data class ShareLinkInfo(
     val id: String,
     val linkId: String = "",
     val name: String? = null,
     val description: String? = null,
-    val expiresAt: String? = null,
+    /** Échéance en millisecondes epoch ; `null` = sans échéance (ou date illisible). */
+    val expiresAt: Long? = null,
     val maxUses: Int? = null,
     val currentUses: Int = 0,
     val maxConcurrentUsers: Int? = null,
@@ -19,10 +20,53 @@ data class ShareLinkInfo(
     val requireEmail: Boolean = false,
     val requireBirthday: Boolean = false,
     val allowedLanguages: List<String> = emptyList(),
+    /** Droits d'un invité sans compte ; défauts du schéma quand la passerelle les omet. */
+    val guestRights: ShareLinkGuestRights = ShareLinkGuestRights.SCHEMA_DEFAULTS,
     val conversation: ShareLinkConversation? = null,
     val creator: ShareLinkCreator? = null,
     val stats: ShareLinkStats? = null,
-)
+) {
+    /** Adresse canonique `/chat/<linkId>` — jamais `/l/<token>` ni le slug. */
+    val address: ShareLinkAddress get() = ShareLinkAddress(linkId)
+}
+
+/** L'adresse d'un lien telle qu'on la montre, copie et repartage — miroir de `ShareLinkAddress` (iOS). */
+data class ShareLinkAddress(val linkId: String) {
+    val path: String get() = "/chat/$linkId"
+
+    fun absoluteString(origin: String = DEFAULT_WEB_ORIGIN): String = origin.trimEnd('/') + path
+
+    /** La forme lisible, sans schéma : `meeshy.me/chat/<linkId>`. */
+    fun displayString(origin: String = DEFAULT_WEB_ORIGIN): String =
+        absoluteString(origin).substringAfter("://")
+
+    companion object {
+        const val DEFAULT_WEB_ORIGIN: String = "https://meeshy.me"
+    }
+}
+
+/**
+ * Ce qu'un invité SANS compte peut faire. Défauts du schéma Prisma
+ * (`ConversationShareLink`) : messages vrai, images vrai, fichiers faux, historique vrai.
+ */
+data class ShareLinkGuestRights(
+    val messages: Boolean,
+    val images: Boolean,
+    val files: Boolean,
+    val history: Boolean,
+) {
+    companion object {
+        val SCHEMA_DEFAULTS = ShareLinkGuestRights(messages = true, images = true, files = false, history = true)
+
+        fun resolving(messages: Boolean?, images: Boolean?, files: Boolean?, history: Boolean?) =
+            ShareLinkGuestRights(
+                messages = messages ?: SCHEMA_DEFAULTS.messages,
+                images = images ?: SCHEMA_DEFAULTS.images,
+                files = files ?: SCHEMA_DEFAULTS.files,
+                history = history ?: SCHEMA_DEFAULTS.history,
+            )
+    }
+}
 
 @Serializable
 data class ShareLinkConversation(
@@ -31,17 +75,26 @@ data class ShareLinkConversation(
     val description: String? = null,
     val type: String = "",
     val createdAt: String? = null,
+    val avatar: String? = null,
+    val banner: String? = null,
 )
 
 @Serializable
 data class ShareLinkCreator(
-    val id: String,
+    // L'identifiant du créateur ne part pas vers un visiteur sans compte (#10205).
+    val id: String = "",
     val username: String = "",
     val firstName: String? = null,
     val lastName: String? = null,
     val displayName: String? = null,
     val avatar: String? = null,
-)
+) {
+    /** displayName, sinon prénom + nom, sinon pseudo. */
+    val name: String
+        get() = displayName?.takeIf { it.isNotBlank() }
+            ?: listOfNotNull(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ").ifBlank { null }
+            ?: username
+}
 
 @Serializable
 data class ShareLinkStats(

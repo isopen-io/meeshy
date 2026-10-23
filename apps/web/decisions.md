@@ -5651,3 +5651,156 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Repli navigateur.** Le web servi par le navigateur n'est pas concerné : le plancher ne vaut que dans la coque (`__SHELL__`) et pour un agent Android.
 
 **Gardes.** `src/lib/shell/webview-floor.test.ts` (lecture de l'agent, plancher, renvoi, page en sept langues et en ES5), `capacitor.config.test.ts`, `scripts/check-capacitor-config.test.ts` (`auditWebViewFloor`), et `check-capacitor-config.mjs` sur la config évaluée par la vraie CLI.
+
+## D-217 — Un média vu récemment se relit hors ligne : la page range le fichier ENTIER sur le Wi-Fi, un seul script de worker en découpe les plages, sur le web et dans la coque (2026-10-23, #11326 ; défaut retenu de #11253 : 3 jours, Wi-Fi seulement, 500 Mo)
+
+**Contexte.** Audio et vidéo restaient hors de tout cache (#6973 point 5) : un `<video>` demande d'emblée une plage, la passerelle rend `206`, et une tranche ne se resert pas seule. Un réel vu une minute plus tôt ne se relisait pas dans le métro. La coque n'avait aucun service worker. `vite.config.ts` dépassait le budget (1 176 lignes).
+
+**Décision.**
+- **La configuration du worker et de la PWA vit dans `vite/pwa.ts`** (`vite.config.ts` : 776 lignes) ; `sw.js` construit est identique hors précache.
+- **La page range, le worker resert.** `lib/media/recent-media-store.ts` télécharge UNE fois le fichier entier d'un média dont la lecture a démarré sur la page visible (`useRememberSeenMedia`, premier `playing`), dans le seau `recent-media`, daté par `X-Meeshy-Stored-At`. `public/sw-recent-media.js` y découpe les plages (`206`, `Content-Range`, `416`), retire l'expiré et n'écrit jamais. C'est le rôle du `RangeRequestsPlugin` de Workbox, écrit à la main parce que la coque n'embarque pas Workbox : un seul script pour les deux régimes, importé par le worker du web, inscrit seul par la coque.
+- **La loi** (`lib/media/recent-media-policy.ts`) : Wi-Fi ou Ethernet seulement, lus par le lecteur unique de l'appareil (W10) ; réseau inconnu ⇒ non ; « économiser les données » ⇒ non. Jamais une vue unique, un flouté, un éphémère (déclaré par la surface, et `no-store`/`no-cache` refusés à l'écriture comme à la lecture, #9478), jamais une adresse à paramètres (la route signée par lecteur, #9600), jamais `blob:`/`data:`. Seul un `200` de taille connue entre ; le plus ancien sort pour tenir 500 Mo, l'expiré au passage.
+- **La fin d'un compte purge le seau** (`SW_ACCOUNT_CACHE_NAMES`) ; une mise à jour de l'application, non.
+- **La coque garde ce seul worker** (`SHELL_SERVICE_WORKER_SCRIPTS`) et `check-shell-dist` exige sa présence et refuse tout autre ; Capacitor Android route les requêtes du worker par son serveur local (`resolveServiceWorkerRequests`).
+
+**Repli navigateur.** Safari et Firefox n'exposent pas la connexion : rien n'y est gardé. La WebView iOS (`capacitor://`) n'a pas de service worker : l'inscription y échoue en silence.
+
+**Ce que ce lot ne fait pas.** Seuls les RÉELS déclarent aujourd'hui « vu » : les vidéos et vocaux de message ne connaissent pas, dans leur tuile, la protection du MESSAGE (éphémère, vue unique, flouté au niveau du message) ; ils attendent que cette protection leur soit remise (#12052).
+
+**Complément (2026-10-23, #12052) — la vidéo et le vocal d'un message.** La protection est déclarée par la surface qui connaît le MESSAGE, par un contexte (`lib/media/recent-media-scope.ts`, `RecentMediaScopeContext`) plutôt que par une propriété relayée à travers la grille et la visionneuse : la bulle du fil (`Attachments`, avec `ThreadMediaContext`) et la visionneuse du fil (`ThreadMediaViewer`, page par page sur SON message) le posent ; la tuile vidéo, le vocal et les pages plein écran (`ViewerVideoPage`, `ViewerAudioPage`) le lisent par l'identifiant de leur pièce, et ne sollicitent la garde qu'au premier `playing` visible. La loi (`recentMediaProtectionOf`) ne rend `none` qu'à un message standard selon `protectionOf` ET selon `resolveLastMessageSummaryKind` (la première dit « standard » un éphémère tant que son échéance n'est pas passée), en clair (ni `isEncrypted`, ni `encryptionMode`, ni conversation sous un régime de chiffrement), sur une pièce SERVIE sans masque (`maskedAttachment`, jamais la copie révélée de la visionneuse). Le défaut, hors de ces deux surfaces (écran des médias, notices système, citations), est de ne rien garder.
+
+**Gardes.** `lib/media/recent-media-policy.test.ts`, `lib/media/recent-media-store.test.ts`, `lib/media/use-remember-seen-media.test.tsx`, `src/sw-recent-media.test.ts` (plages, 416, expiré, `no-store`, jumeaux, import et retrait de la coque), `lib/shell/recent-media-worker.test.ts`, `scripts/check-shell-dist.test.ts`, `lib/api/query-client.test.ts` (purge de fin de compte).
+
+## D-220 — Un vocal se lit au niveau perçu de −16 LUFS : atténué par le volume de l'élément, amplifié par un graphe Web Audio limité, l'original seulement (2026-10-23, #12285 côté web ; consomme S4 #11259)
+
+**Contexte.** La passerelle ne réencode plus un vocal AAC : il garde son niveau d'origine, et sa sonie intégrée EBU R128 est mesurée et servie (`Attachment.loudnessLufs`). Sans correction à la lecture, un vocal d'iPhone faible se lit plus bas qu'un vocal web normalisé.
+
+**Décision.**
+- **La loi** (`lib/media/loudness.ts`) : gain `−16 − loudnessLufs` dB, plafonné à +12 dB ; champ absent, `null` ou non fini ⇒ 0. Une piste TRADUITE (TTS) n'est pas le fichier mesuré : aucun gain.
+- **Atténuer** passe par `HTMLMediaElement.volume`, sans graphe ni CORS.
+- **Amplifier** passe par un graphe Web Audio partagé (source → gain → limiteur à −1 dBFS, ratio 20 → sortie), qui retient les crêtes que le gain ferait écrêter. **Sûr par défaut (tour 5)** : un élément branché sur un graphe alors que sa réponse n'est pas lisible en CORS sort du SILENCE. Le graphe n'est donc branché qu'après deux preuves : une sonde `HEAD` en mode `cors`, une fois par origine (la route de flux rend `Access-Control-Allow-Origin: *`, `download.ts`), puis les métadonnées lues par un élément PARTI en `crossOrigin="anonymous"`. Un élément parti sans le mode CORS le garde, sans gain ; un élément en CORS qui échoue est remonté en lecture directe et l'origine perd sa preuve. Sans preuve : lecture directe, volume d'origine, jamais muette.
+- **Sites** : la bulle (`attachment-blocks.tsx`), la page plein écran (`viewer-audio-page.tsx`) et le mini-lecteur (`mini-audio-player.tsx`), par `useLoudnessLevel` (`lib/media/loudness-level.ts`).
+
+**Repli navigateur.** Safari iOS ignore `volume` : l'atténuation n'y a pas lieu, l'amplification y passe par le graphe. Sans `AudioContext`, rien ne change.
+
+**Ce que ce lot ne fait pas.** iOS (`packages/MeeshySDK`) et Android restent à faire (#12285 reste ouverte). Les citations et la bannière de notification jouent encore sans gain. Rien n'est mesuré ici.
+
+**Gardes.** `lib/media/loudness.test.ts`, `lib/media/loudness-level.test.ts`, `lib/media/loudness-cors.test.tsx` (une source sans CORS joue sans gain), `components/voice-loudness.test.tsx`.
+
+## D-221 — La boutique dit ce qui reste à débloquer d'un pack, et n'offre le geste qu'une fois débloqué (2026-10-23, #11324 ; consomme S21 #11276)
+
+**Contexte.** Un pack récompensé (rang, trophée, saison) ou à fenêtre apparaissait en boutique sans dire comment l'obtenir. Pire : un pack sans prix était décodé « possédé » d'office (`owned: price === null`), et la boutique offrait « Installer » sur un pack que le serveur refuse (`not-owned`). La passerelle sert désormais `requirementPreview` (`PackRequirementPreview`, `packages/shared/types/pack-unlock.ts`) pour chaque pack du registre NON possédé qui se gagne ou qui a une fenêtre.
+
+**Décision.**
+- **Le décodage** (`lib/api/packs-shop.ts`) valide `requirementPreview` à la frontière et ignore une forme inattendue. Un pack sans prix qui porte un aperçu suit le `owned` servi ; sans aperçu (ancien serveur, pack libre), rien ne change.
+- **Une ligne** (`lib/packs/unlock-line.ts`, `packUnlockLine`) : la Gloire qui manque (et le rang visé dès que le catalogue du jeu est chargé), le trophée, la saison, puis la fenêtre (à partir du…, jusqu'au…, plus proposé). Une récompense remplie ne se redit pas. Sept langues, dans `lib/packs/unlock-texts.ts` — PAS dans `catalog-sticker-packs-<langue>.ts` : les huit clés y portaient `interface_catalogs_sticker_packs` à 13,19 Ko pour un plafond de 13, que ce chantier ne relève pas ; elles voyagent avec la vitrine (chunks `pack-shop` / boutique, chargés à la demande), et le catalogue retombe à 12,19 Ko.
+- **Le geste** : tant que l'aperçu n'est pas rempli (`packIsLocked`), la rangée montre « À débloquer » à la place de « Installer » ou « Acheter ». Un pack payant à fenêtre ouverte reste achetable. Le serveur reste juge.
+
+**Gardes.** `lib/packs/unlock-line.test.ts`, `lib/api/packs-shop-unlock.test.ts`, `components/unified-shop-unlock.test.tsx`.
+
+## D-218 — Le web choisit le rendu servi : l'AVIF avant le WebP dans une `<picture>`, l'original HD en `src` ; une vidéo HEVC joue son rendu H.264 là où le navigateur ou le tier le demandent (2026-10-23, #11318 ; consomme S7 #11262 et S6 #11261)
+
+**Contexte.** La passerelle sert désormais, à côté de `imageVariants` (WebP), une liste `avifVariants` aux mêmes largeurs, et à côté de l'original d'une vidéo HEVC un rendu `renditions[codec = 'h264']` ≤ 1080p mappé en SDR BT.709. Le web ne lisait que le WebP et jouait toujours l'original : une vidéo d'iPhone restait noire sur Chrome sans décodeur HEVC et dans la coque Android.
+
+**Décision.**
+- **Image : `ServedPicture`** (`components/served-picture.tsx`) enveloppe l'`<img>` de la grille (`ImageTile`, `GridCellImage`) dans une `<picture>` dont la `<source type="image/avif">` porte les variantes AVIF au MÊME `sizes` que l'image. L'`<img>` garde son `srcset` WebP et son `src`, l'original HD : la visionneuse plein écran le sert toujours (verdict du porteur, la photo reste HD), et un navigateur sans AVIF retombe sur le WebP sans rien demander. Sans AVIF, aucune `<picture>` : le DOM d'avant. Les deux listes sont lues par `attachmentPictureSrcSets` (`lib/api/media-url.ts`), qui filtre le format de chacune — jamais un AVIF dans le `srcset` WebP.
+- **Vidéo : une loi pure, `electVideoSource`** (`lib/media/video-rendition.ts`). Sans rendu H.264 ⇒ l'original. Navigateur sans HEVC ⇒ le rendu, quel que soit le tier. Tier `low` ⇒ le rendu ; `mid` ⇒ le plus léger des deux ; `high`/`pro` ⇒ l'original (HDR). Le tier est celui de W10 (`capability-tier.ts`), jamais un seuil local. La sonde HEVC (`canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"')`) vit dans `lib/media/served-video.ts`, mémoïsée une fois par session ; la tuile vidéo et la page plein écran lisent `useServedVideoSrc`, élue une fois par pièce montée sur des primitives : un tier qui change en cours de lecture ne recharge pas la vidéo.
+- **L'administration masque les deux** : `SECRETS_DUNE_PIECE` retire `avifVariants` et `renditions` d'une pièce voilée, comme `imageVariants`.
+
+**Repli navigateur.** Safari 16+ décode l'AVIF et le HEVC : il reçoit l'AVIF et l'original. Chrome et la WebView Android décodent l'AVIF ; le HEVC dépend du matériel, et la sonde le dit. Firefox ne décode pas le HEVC : il reçoit le H.264.
+
+**Ce que ce lot ne fait pas.** Les médias de POSTS (fil, réels) ne lisent encore ni variantes ni rendus (`lib/feed/card-model.ts` sert `fileUrl`) : issue de suivi. Rien n'est mesuré ici (poids servi, temps à la première image) : argumenté, non mesuré.
+
+**Complément (2026-10-23, #12316) — le fil et les réels.** `FeedMedia` déclare `fileSize`, `imageVariants`, `avifVariants` et `renditions`, que `postIncludes.ts` sert déjà. Le modèle de carte (`lib/feed/card-model.ts`) les résout une fois : `srcSet` / `avifSrcSet` (par `attachmentPictureSrcSets`) et `compatSrc` / `compatSize` (par `compatibilityRendition`). La surface du fil (`feed-media-surface.tsx`, `sizes` de la colonne de 640 px) et la galerie d'un réel (`reel-images.tsx`, `<picture class="contents">` pour que l'`<img>` reste l'enfant du défilement aimanté) passent par `ServedPicture` ; la vidéo du fil et celle d'un réel (`reel-page.tsx`) jouent `useElectedVideoSrc`, la même loi `electVideoSource` sur des adresses déjà résolues. La mémoire « vu récemment » d'un réel suit l'adresse jouée. Les pistes de scène (`reel-scene-stage.tsx`) ne sont pas touchées.
+
+**Gardes.** `lib/media/video-rendition.test.ts`, `lib/media/served-video.test.ts`, `lib/api/media-url.test.ts` (`attachmentPictureSrcSets`), `components/served-rendition.test.tsx` (DOM de la grille et de la tuile vidéo), `lib/api/admin-conversations.test.ts` (masquage).
+
+## D-219 — Une photo HEIC choisie sur Android ou Chrome part telle quelle et la passerelle la convertit ; l'aperçu attend la vignette servie ; un refus nomme le format (2026-10-23, #11315 ; consomme S8 #11263)
+
+**Contexte.** Seul Safari décode le HEIC. Sur Chrome et dans la coque Android, une photo HEIC choisie pour le profil était dite « illisible » (la recompression lève) et rien ne partait ; dans un message, elle partait telle quelle mais une passerelle qui ne la connaissait pas l'avalait sous `success: true`, et l'échec se disait « une pièce n'a pas pu être téléversée ». La passerelle accepte désormais HEIC/HEIF/AVIF, sert un JPEG (`fileUrl`) et garde l'original (`renditions[codec = 'heic']`).
+
+**Décision.**
+- **Le HEIC part tel quel, sous son vrai type** (`lib/media/heif.ts` : `isHeifFamily` lit le type déclaré ou l'extension quand Chrome n'en déclare aucun, `servableHeif` le retype). Le HEIC est déjà efficace : aucun ré-encodage client, une seule génération (#11247). Le profil tente d'abord sa recompression (`createImageBitmap`) ; si elle échoue sur un HEIC, l'original part et la passerelle le convertit. Une autre image illisible reste « illisible ».
+- **L'aperçu attend la vignette servie** quand le navigateur ne décode pas : `needsServedPreview` (essai `createImageBitmap`) garde l'image servie sous le voile du profil ; la vignette du plateau du composeur devient le glyphe d'image sur `error` et ne propose plus « Éditer ». Après l'envoi, c'est le JPEG servi qui s'affiche.
+- **Un refus nomme le format** : `uploadShortfall` (`lib/api/attachments.ts`) rend `UPLOAD_FORMAT_REFUSED` quand un lot qui porte un HEIC revient incomplet ou en `415`, sinon `UPLOAD_PARTIAL` comme avant. Le message, la feuille d'envoi et le profil le lisent ; la cause est dite dans les sept langues (`send.failure.formatRefused`, `profile.image.formatRefused`).
+
+**Repli navigateur.** Safari décode le HEIC : l'aperçu local se montre et la recompression du profil a lieu comme pour un JPEG.
+
+**Ce que ce lot ne fait pas.** L'éditeur d'image du composeur ne sait pas ouvrir un HEIC sur Chrome : il n'est plus proposé. La console d'administration (`admin-user-image-sheet.tsx`) dit encore « échec » générique sur un refus de format. L'attribution de la cause est probable, non certaine : la passerelle n'indique pas quel fichier elle a écarté.
+
+**Gardes.** `lib/media/heif.test.ts`, `lib/api/upload-shortfall.test.ts`, `lib/profile/image-upload.test.ts`, `lib/send/failure-reason.test.ts`, `components/composer-tray-heif.test.tsx`.
+
+## D-222 — Le registre des packs s'administre depuis l'écran du barème : publier, retirer, ordonner, mettre à prix, dater et cibler, avec la révision lue et une piste d'audit (2026-10-23, #11323 ; consomme S20 #11275)
+
+**Contexte.** S20 rend le registre des packs surchargeable sans déploiement (`GET|PUT|DELETE /api/v1/admin/packs/registry[/:domain/:slug]`, garde `canManageGame`), mais aucune console ne l'appelait : les deux entrées du catalogue TS restaient sans lecteur.
+
+**Décision.**
+- **Un bloc, comme le calendrier des saisons** : `routes/admin-packs-registry-block.tsx`, chargé par `lazy(import())` sous l'écran du barème, monté pour qui porte `canManageGame` (BIGBOSS, ADMIN). Aucune route neuve, aucun poids dans le module d'entrée.
+- **Le port** (`lib/api/admin-packs-registry.ts`) décode champ par champ. Chaque écriture porte la révision LUE : une révision périmée (409) se dit et relit le registre, une loi du registre violée (422) se dit sans relecture, un journal indisponible (500 `audit-unavailable`) se dit aussi.
+- **Le formulaire** (`lib/admin/packs-registry-form.ts`, loi pure) part de l'entrée servie et rend le seul correctif. Prix, fenêtre ou ciblage vides les retirent (`null`), les dates se saisissent en UTC, et une saisie hors des lois est refusée avant le réseau.
+- **La piste d'audit se voit** : la ligne dit « Surchargé · révision n », et qui lit le journal (`canViewAuditLogs`) a un lien vers la nouvelle famille « Packs » du journal. Elle range les six codes du registre et les sept de la modération des lens (S16).
+- **Les textes du bloc** vivent dans son module (`lib/admin/packs-registry-texts.ts`, les quatre langues de l'administration), pas dans le catalogue d'administration. Seuls les libellés du journal y entrent : ce catalogue est à son plafond de 231 Ko.
+
+**Ce que ce lot ne fait pas.** La modération des packs COMMUNAUTAIRES (stickers, fonds, contours, bannières) garde ses routes de revue par domaine, qu'aucun écran web ne lit encore. Celle des lens est le lot W16 (#11322).
+
+**Gardes.** `lib/api/admin-packs-registry.test.ts`, `lib/admin/packs-registry-form.test.ts`, `routes/admin-packs-registry-block.test.tsx`, `lib/admin/audit-vocabulary.test.ts`, `routes/admin-audit.test.tsx`.
+
+## D-223 — Les lens se proposent depuis la boutique et se modèrent sous les signalements : chaque route de S16 a son écran web, la revue et le retrait pour `canModerateContent` (2026-10-23, #11322 ; consomme S16 #11271)
+
+**Contexte.** S16 sert les packs de lens des partenaires (`/api/v1/packs/lens…`), et aucune surface web ne les lisait. Leurs onze entrées du catalogue TS étaient sans lecteur, et le cliquet `check-ts-catalog-dead-entries` rougissait. La décision du 2026-10-23 sur #12288 fait du web leur seul lecteur, jusqu'à ce que le composer iOS les lise.
+
+**Décision.**
+- **La boutique** : le domaine `lens` de la vitrine unique (`lib/api/packs-shop.ts`) lit la boutique, les installées, le détail et l'installation (PUT et DELETE) comme les autres domaines.
+- **Proposer** (`components/lens-submit.tsx`, montée par la boutique quand le domaine « Lens » est choisi) : le document MeeshyLens et les fichiers que ses couches nomment. `prepareLensSubmission` (`lib/lens-packs/submission.ts`) relit le document par `parseLens`, la même loi que le serveur. Chaque fichier y prend son adresse `<sha16>.<ext>`. Un fichier manquant, un coût déclaré sous le coût mesuré ou une limite dépassée sont refusés avant le réseau ; un refus du serveur se dit par sa cause. « Mes propositions » relit l'état et le mot de la modération. Textes dans les sept langues, dans le module.
+- **Modérer** (`routes/admin-lens-moderation-block.tsx`, chargé à la demande sous l'écran des signalements, pour `canModerateContent` seulement) : la file, le document servi résumé par `parseLens`, publier en fixant la fenêtre (UTC, entière) et les communautés (`reviewOfApproval`), refuser avec un mot, retirer une lens publiée. Une auto-revue, une fenêtre refusée ou un journal indisponible se disent. Les gestes vont à la famille « Packs » du journal (D-222).
+- **Ce qui n'existe pas ici** : prix, crédit, géo-créneau, tous points « ATTEND » de #11251. Une lens est gratuite ; la revue n'envoie aucun géo.
+
+**Rétablir une lens retirée (#12321, consomme S20b).** `POST /packs/lens/:slug/restore` a son lecteur (`restoreLens`) et son geste : la section « Retirées » de la modération offre « Rétablir » pour chaque lens retirée PENDANT la visite (la réponse du retrait la porte), et un champ par nom pour toute autre — la passerelle ne liste pas les lens retirées, et l'écran ne fabrique pas une liste qu'il ne connaît pas. La section dit en permanence, et le message de réussite répète, que les installations retirées ne reviennent pas : chacun réinstalle. Textes dans `moderation-texts.ts` (quatre langues), hors du catalogue d'administration.
+
+**Ce que ce lot ne fait pas.** L'éditeur sans code avec aperçu caméra du critère de #11322 attend le rendu web des lens (W14, #11320) : cette tranche propose un document déjà composé.
+
+**Gardes.** `lib/api/lens-packs.test.ts`, `lib/api/packs-shop-lens.test.ts`, `lib/lens-packs/submission.test.ts`, `lib/lens-packs/review-form.test.ts`, `components/lens-submit.test.tsx`, `routes/admin-lens-moderation-block.test.tsx`.
+
+## D-224 — Les Web Vitals et les longues images voyagent avec le résumé de lecture, et se lisent dans la coque par une trace Chrome distante (2026-10-23, #11317 ; consomme S25 #11280 et W10 #11316)
+
+**Ce qui manquait.** Aucun `PerformanceObserver` ne tournait en production. Un rebuffer se mesurait, mais pas une image perdue pendant la lecture. Le tier d'appareil existait (`lib/device/capability-tier.ts`) sans jamais accompagner le résumé `playback/session`, alors que la passerelle le lit depuis S25.
+
+**Ce qui change.**
+- `lib/telemetry/page-vitals.ts` contient un accumulateur PUR et le seul site qui touche au navigateur. Il ne dépend d'aucun paquet (pas de `web-vitals` : aucun lockfile ne bouge).
+  - **LCP** : la dernière plus grande peinture.
+  - **CLS** : la pire fenêtre de session (1 s de calme ou 5 s de durée la ferment). Les décalages qui suivent une saisie sont exclus.
+  - **INP** : la pire interaction tant qu'il y en a moins de 50, puis le 98e centile. Une interaction est comptée une fois par `interactionId`, et le seuil d'observation est de 40 ms.
+  - **Longues images** (`long-animation-frame`) : le nombre, le temps bloquant et la pire image. Les durées récentes sont gardées en mémoire BORNÉE (256).
+- L'observation ne s'ouvre qu'à la première séance de lecture (`pageVitals()`). Elle ne porte que sur les types que le moteur annonce (`supportedEntryTypes`), et un type refusé n'en empêche aucun autre. Un WebView au plancher 111 n'a pas LoAF (Chromium 123) : il ne l'envoie simplement pas.
+- `bindPlaybackQoe` reçoit une sonde (`playbackPageProbe`), ouverte avec la séance et fermée avec elle. Le résumé gagne ainsi :
+  - `deviceTier`, lu à l'ouverture. Le `pro` du web se range sous `high`, le plus haut tier que la télémétrie connaisse.
+  - `lcpMs`, `cls`, `inpMs` de la page.
+  - `longFrames`, `longFramesBlockingMs`, `longFrameWorstMs` survenues PENDANT la séance seulement.
+  - La sonde ne réécrit jamais un champ de la séance.
+- **Rétrocompatible.** La passerelle accepte `deviceTier` (S25) et, son schéma Zod n'étant pas strict, ignore les autres champs. Les recevoir, les agréger et les servir à l'onglet Lecture appartient à la chaîne serveur. Rien ne part en dehors du résumé existant, sous le consentement existant.
+
+**La trace Chrome distante de la coque** (`me.meeshy.app`, Capacitor 8). La coque de DÉBOGAGE expose son WebView aux DevTools : `webContentsDebuggingEnabled` suit `debuggable`, qui est vrai en debug. Une coque de publication ne l'expose pas, et ne doit pas l'exposer.
+1. Construire la coque de débogage et l'installer : `bun run build`, puis `bun run cap:sync`, puis `./gradlew installDebug` dans `android/`. Activer le débogage USB et brancher l'appareil, ou lancer l'AVD.
+2. Sur le poste, ouvrir `chrome://inspect/#devices`. Le WebView `me.meeshy.app` apparaît : « inspect ».
+3. Dans l'onglet **Performance**, enregistrer, puis faire défiler les réels ou lancer une vidéo, puis arrêter. Les pistes « Interactions » et « Long animation frames » montrent ce que l'accumulateur compte, et « Timings » montre le LCP.
+4. En console, `performance.getEntriesByType('long-animation-frame')` et `PerformanceObserver.supportedEntryTypes` disent ce que ce WebView sait observer.
+5. Pour une trace scriptée sans écran, comme dans `targets/story.scene-sound.md`, utiliser `adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>`. Le protocole CDP s'y parle par WebSocket (`Tracing.start` / `Tracing.end`, catégories `devtools.timeline`, `loading`).
+
+**Gardes.** `lib/telemetry/page-vitals.test.ts` et `lib/telemetry/playback-qoe.test.ts` (séance ouverte puis fermée une fois, aucun champ réécrit, résumé inchangé sans sonde).
+
+## D-225 — Le catalogue d'administration a un plafond de 500 Ko, parce qu'il ne se charge que dans l'administration (décision porteur 2026-10-23)
+
+**Le contexte.** Le chunk `interface_catalogs_admin` regroupe les libellés `admin.*` en fr, en, es et pt (`catalog-admin-<langue>`). Son plafond suivait la mesure au Ko près : 231 Ko pour 229,17 Ko mesurés le 2026-10-22. Chaque écran ou code d'audit ajouté à la console le faisait dépasser. Le 2026-10-23, les trois libellés d'audit `LENS_PACK_RESTORE*` l'ont porté à 231,34 Ko, et le job Quality de dev est passé au rouge.
+
+**La décision.** Le plafond passe à **500 Ko** (gzip -9, quatre catalogues). La valeur est dans `budgets.json › on_demand_chunks.interface_catalogs_admin`, et son commentaire renvoie ici. Aucun autre plafond ne change.
+
+**Ce qui rend ce plafond acceptable : le chargement est réservé à l'administration.** Un lecteur qui n'ouvre pas `/adm` ne télécharge jamais ces catalogues.
+- Ils ne s'atteignent que par un `import()` de `lib/i18n-admin-catalog.ts`. Aucune importation statique depuis la coque, le routeur ou les catalogues communs. Un `import type` n'émet rien et reste permis.
+- Ce chargement n'est déclenché que par les chargeurs des routes `/adm…` (et du pont `/admin…`) dans `routes/route-table.tsx`, et par les écrans `routes/admin*.tsx` (`suspendForAdminInterfaceCatalog`).
+
+**Les gardes.**
+- `src/lib/admin-catalog-reach.test.ts` lit les sources. Il rougit si un fichier autre que `i18n-admin-catalog.ts` désigne un `catalog-admin-*`, si ce fichier le fait autrement que par `import()`, si un fichier hors de la table des routes et des écrans d'administration déclenche le chargement, ou si un chargeur qui l'attend sert une adresse non admin.
+- `admin-catalog-loading.test.ts` garde le sens inverse : toute route `/adm…` charge le catalogue.
+- `measure-weight.mjs` (`dynamic_only: true`) rougit sur le graphe construit si un fichier produit importe le chunk statiquement.
+
+**La limite connue.** Un compte sans rôle d'administration ne voit aucune entrée vers `/adm`, car le barreau Administration du menu flottant lui est caché. Mais s'il tape l'adresse lui-même, la route charge le catalogue, parce que l'écran « Espace réservé » lit `admin.denied.*` dans ce catalogue. La passerelle reste seule juge du droit (`/admin/permissions`). Pour qu'un tel compte ne charge rien, il faudrait vérifier le rôle avant le chargement et sortir les deux libellés du refus vers le catalogue commun, qui a sept langues et un plafond serré. Ce travail se suit dans #12481.

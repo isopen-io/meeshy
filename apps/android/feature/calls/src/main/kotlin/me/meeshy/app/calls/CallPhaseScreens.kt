@@ -81,7 +81,7 @@ private fun callTypeLabel(isVideo: Boolean): String =
 internal fun CallOutgoingRingingBody(
     state: CallUiState,
     label: OutgoingRingingLabel,
-    avatarUrl: String?,
+    peer: CallPeerVisual,
     reduceMotion: Boolean,
     onHangUp: () -> Unit,
     modifier: Modifier = Modifier,
@@ -92,7 +92,7 @@ internal fun CallOutgoingRingingBody(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        CallPulsingAvatar(name = state.peerName, avatarUrl = avatarUrl, reduceMotion = reduceMotion)
+        CallPulsingAvatar(name = state.peerName, peer = peer, reduceMotion = reduceMotion)
         Spacer(Modifier.height(MeeshySpacing.xxl))
         CallPeerTitle(state.peerName)
         Spacer(Modifier.height(MeeshySpacing.sm))
@@ -136,7 +136,7 @@ internal fun CallOutgoingRingingBody(
 @Composable
 internal fun CallOutgoingRingingScreen(
     state: CallUiState,
-    avatarUrl: String?,
+    peer: CallPeerVisual,
     reduceMotion: Boolean,
     onHangUp: () -> Unit,
 ) {
@@ -151,14 +151,14 @@ internal fun CallOutgoingRingingScreen(
     LaunchedEffect(label) {
         if (label == OutgoingRingingLabel.WaitingForPeer) announce(context.getString(R.string.call_outgoing_waiting))
     }
-    CallOutgoingRingingBody(state, label, avatarUrl, reduceMotion, onHangUp)
+    CallOutgoingRingingBody(state, label, peer, reduceMotion, onHangUp)
 }
 
 /** L'écran de connexion : avatar, nom, pastille de progression « Connexion… », raccrocher. */
 @Composable
 internal fun CallConnectingScreen(
     state: CallUiState,
-    avatarUrl: String?,
+    peer: CallPeerVisual,
     reduceMotion: Boolean,
     onHangUp: () -> Unit,
     modifier: Modifier = Modifier,
@@ -168,7 +168,7 @@ internal fun CallConnectingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        CallPulsingAvatar(name = state.peerName, avatarUrl = avatarUrl, reduceMotion = reduceMotion)
+        CallPulsingAvatar(name = state.peerName, peer = peer, reduceMotion = reduceMotion)
         Spacer(Modifier.height(MeeshySpacing.xxl))
         CallPeerTitle(state.peerName)
         Spacer(Modifier.height(MeeshySpacing.sm))
@@ -207,7 +207,7 @@ internal fun CallConnectingScreen(
 @Composable
 internal fun CallEndedPanel(
     state: CallUiState,
-    avatarUrl: String?,
+    peer: CallPeerVisual,
     onRetry: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -221,7 +221,8 @@ internal fun CallEndedPanel(
         CallAvatarDisc(
             name = state.peerName,
             size = 100.dp,
-            avatarUrl = avatarUrl,
+            avatarUrl = peer.avatarUrl,
+            ring = peer.ring,
             modifier = Modifier.alpha(ENDED_AVATAR_ALPHA).clearAndSetSemantics { },
         )
         Text(

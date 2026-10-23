@@ -13,11 +13,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
@@ -49,6 +54,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.composer.StoryCanvasFraming
 
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
@@ -73,6 +79,7 @@ fun StoryComposerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     LaunchedEffect(viewModel, lifecycleOwner) {
         viewModel.published
@@ -135,6 +142,12 @@ fun StoryComposerScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = viewModel::onUndo, enabled = state.canUndo) {
+                        Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.story_composer_undo))
+                    }
+                    IconButton(onClick = viewModel::onRedo, enabled = state.canRedo) {
+                        Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.story_composer_redo))
+                    }
                     TextButton(onClick = viewModel::publish, enabled = state.canPublish) {
                         Text(stringResource(R.string.stories_composer_publish))
                     }
@@ -159,121 +172,158 @@ fun StoryComposerScreen(
                 onMove = viewModel::onMoveSlide,
             )
 
-            StoryCanvasSurface(
-                transform = state.selectedSlideTransform,
-                backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
-                    ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
-                colorMatrix = state.selectedSlideFilterMatrix,
-                textElements = state.selectedSlideTextElements,
-                selectedElement = state.selectedTextElement,
-                elementMenu = state.elementContextMenu,
-                stickers = state.selectedSlideStickers,
-                selectedStickerId = state.selectedStickerId,
-                strokes = state.selectedSlideStrokes,
-                isDrawingActive = state.isDrawingActive,
-                drawColorHex = state.drawColorHex,
-                drawWidthDesign = state.drawWidthDesign,
-                onStrokeCaptured = viewModel::onStrokeCaptured,
-                onTransform = viewModel::onCanvasTransform,
-                onElementTap = viewModel::onSelectTextElement,
-                onElementLongPress = viewModel::onOpenElementMenu,
-                onElementMenuAction = viewModel::onElementMenuAction,
-                onElementMenuDismiss = viewModel::onDismissElementMenu,
-                onElementDrag = viewModel::onTextElementMoved,
-                onElementDragEnd = viewModel::onTextElementDragEnd,
-                onElementTransform = viewModel::onTextElementTransform,
-                onElementRemove = viewModel::onRemoveTextElement,
-                onStickerTap = viewModel::onSelectSticker,
-                onStickerDrag = viewModel::onStickerMoved,
-                onStickerTransform = viewModel::onStickerTransform,
-                onStickerRemove = viewModel::onRemoveSticker,
-                onBackgroundTap = {
-                    viewModel.onDeselectTextElement()
-                    viewModel.onDeselectSticker()
+            ComposerStage(
+                carded = StoryCanvasFraming.shouldCard(
+                    panelOpen = state.band.isPanelOpen &&
+                        ComposerBandTools.showsPanel(state.isDrawingActive, state.isEditingTextElement),
+                    keyboardVisible = keyboardVisible,
+                    drawingActive = state.isDrawingActive,
+                ),
+                scene = { sceneModifier ->
+                    StoryCanvasSurface(
+                        transform = state.selectedSlideTransform,
+                        backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
+                            ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
+                        sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
+                            StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
+                        },
+                        colorMatrix = state.selectedSlideFilterMatrix,
+                        textElements = state.selectedSlideTextElements,
+                        selectedElement = state.selectedTextElement,
+                        elementMenu = state.elementContextMenu,
+                        stickers = state.selectedSlideStickers,
+                        selectedStickerId = state.selectedStickerId,
+                        strokes = state.selectedSlideStrokes,
+                        isDrawingActive = state.isDrawingActive,
+                        drawColorHex = state.drawColorHex,
+                        drawWidthDesign = state.drawWidthDesign,
+                        onStrokeCaptured = viewModel::onStrokeCaptured,
+                        onTransform = viewModel::onCanvasTransform,
+                        onElementTap = viewModel::onSelectTextElement,
+                        onElementLongPress = viewModel::onOpenElementMenu,
+                        onElementMenuAction = viewModel::onElementMenuAction,
+                        onElementMenuDismiss = viewModel::onDismissElementMenu,
+                        onElementDrag = viewModel::onTextElementMoved,
+                        onElementDragEnd = viewModel::onTextElementDragEnd,
+                        onElementTransform = viewModel::onTextElementTransform,
+                        onElementRemove = viewModel::onRemoveTextElement,
+                        onElementTextChange = viewModel::onTextChange,
+                        onStickerTap = viewModel::onSelectSticker,
+                        onStickerDrag = viewModel::onStickerMoved,
+                        onStickerTransform = viewModel::onStickerTransform,
+                        onStickerRemove = viewModel::onRemoveSticker,
+                        onBackgroundTap = {
+                            viewModel.onDeselectTextElement()
+                            viewModel.onDeselectSticker()
+                        },
+                        snapFeedback = state.snapFeedback,
+                        modifier = sceneModifier,
+                    )
                 },
-                snapFeedback = state.snapFeedback,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                floatingToolbar = {
-                    state.selectedTextElement?.let { element ->
+                footer = {
+                    val editedText = state.selectedTextElement
+                    if (state.isDrawingActive) {
+                        StoryDrawingToolbar(
+                            activeColorHex = state.drawColorHex,
+                            activeWidthDesign = state.drawWidthDesign,
+                            canUndo = state.drawingBoard.canUndo,
+                            onColorSelected = viewModel::onDrawColorSelected,
+                            onWidthSelected = viewModel::onDrawWidthSelected,
+                            onUndo = viewModel::onDrawUndo,
+                            onDone = viewModel::onExitDrawingMode,
+                        )
+                    } else if (editedText != null) {
                         TextStyleToolbar(
-                            element = element,
-                            onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
-                            onColor = { color -> viewModel.onTextElementColor(element.id, color) },
-                            onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
-                            onBackground = { bg -> viewModel.onTextElementBackground(element.id, bg) },
-                            onCycleSize = { viewModel.onTextElementCycleSize(element.id) },
-                            onCycleOutline = { viewModel.onTextElementCycleOutline(element.id) },
-                            onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(element.id) },
-                            onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(element.id) },
-                            onCycleStart = { viewModel.onTextElementCycleStart(element.id) },
-                            onCycleDuration = { viewModel.onTextElementCycleDuration(element.id) },
-                            onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
-                            onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
+                            element = editedText,
+                            onStyle = { style -> viewModel.onTextElementStyle(editedText.id, style) },
+                            onColor = { color -> viewModel.onTextElementColor(editedText.id, color) },
+                            onAlign = { align -> viewModel.onTextElementAlign(editedText.id, align) },
+                            onBackground = { bg -> viewModel.onTextElementBackground(editedText.id, bg) },
+                            onCycleSize = { viewModel.onTextElementCycleSize(editedText.id) },
+                            onCycleOutline = { viewModel.onTextElementCycleOutline(editedText.id) },
+                            onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(editedText.id) },
+                            onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(editedText.id) },
+                            onCycleStart = { viewModel.onTextElementCycleStart(editedText.id) },
+                            onCycleDuration = { viewModel.onTextElementCycleDuration(editedText.id) },
+                            onDuplicate = { viewModel.onDuplicateTextElement(editedText.id) },
+                            onReorder = { op -> viewModel.onReorderTextElement(editedText.id, op) },
+                            onDone = viewModel::onDeselectTextElement,
+                        )
+                    } else {
+                        // The slide CAPTION only: a text object is written on the scene itself
+                        // (ComposerInlineTextField), so this field never silently changes role.
+                        OutlinedTextField(
+                            value = state.editorText,
+                            onValueChange = viewModel::onTextChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(stringResource(R.string.stories_composer_text_caption)) },
+                            placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
+                            isError = !state.draft.isWithinLimit,
+                            supportingText = {
+                                Text(
+                                    text = state.errorMessage
+                                        ?: stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.End,
+                                )
+                            },
+                        )
+                    }
+
+                    if (!state.isDrawingActive && (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty())) {
+                        MediaPreviewRow(
+                            attachments = state.selectedSlideAttachments,
+                            pending = state.selectedSlidePending,
+                            backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
+                            backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
+                            backgroundLoop = state.selectedSlideBackgroundLoop,
+                            onRemove = viewModel::onRemoveMedia,
+                            onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
+                            onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
                         )
                     }
                 },
+                panel = {
+                    if (ComposerBandTools.showsPanel(state.isDrawingActive, state.isEditingTextElement)) {
+                        ComposerToolPanel(
+                            band = state.band,
+                            visibility = state.draft.visibility,
+                            selectedFilter = state.selectedSlideFilter,
+                            filterIntensity = state.selectedSlideFilterIntensity,
+                            slideDurationSeconds = state.selectedSlideDurationSeconds,
+                            selectedBackground = state.selectedSlideBackground,
+                            canAddText = state.deck.selectedCanAddTextElement,
+                            canAddSticker = state.deck.selectedCanAddSticker,
+                            isUploadingMedia = state.isUploadingMedia,
+                            isMediaFull = state.draft.isMediaFull,
+                            mediaCount = state.draft.mediaIds.size,
+                            hasMedia = state.draft.hasMedia,
+                            onDismiss = viewModel::onBandDismiss,
+                            onAddText = viewModel::onAddTextElement,
+                            onAddSticker = { showStickerPicker = true },
+                            onPickMedia = {
+                                when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
+                                    StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
+                                    StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
+                                    StoryMediaPickMode.None -> Unit
+                                }
+                            },
+                            onEnterDrawing = viewModel::onEnterDrawingMode,
+                            onSelectVisibility = viewModel::onVisibilityChange,
+                            onSelectFilter = viewModel::onSelectFilter,
+                            onFilterIntensityChange = viewModel::onFilterIntensityChange,
+                            onSlideDurationChange = viewModel::onSlideDurationChange,
+                            onSelectBackground = viewModel::onSlideBackgroundChange,
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             )
 
-            if (state.isDrawingActive) {
-                StoryDrawingToolbar(
-                    activeColorHex = state.drawColorHex,
-                    activeWidthDesign = state.drawWidthDesign,
-                    canUndo = state.drawingBoard.canUndo,
-                    onColorSelected = viewModel::onDrawColorSelected,
-                    onWidthSelected = viewModel::onDrawWidthSelected,
-                    onUndo = viewModel::onDrawUndo,
-                    onDone = viewModel::onExitDrawingMode,
-                )
-            } else {
-                OutlinedTextField(
-                    value = state.editorText,
-                    onValueChange = viewModel::onTextChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = if (state.isEditingTextElement) {
-                        { Text(stringResource(R.string.stories_composer_add_text)) }
-                    } else {
-                        { Text(stringResource(R.string.stories_composer_text_caption)) }
-                    },
-                    placeholder = {
-                        Text(
-                            stringResource(
-                                if (state.isEditingTextElement) {
-                                    R.string.stories_composer_text_placeholder
-                                } else {
-                                    R.string.stories_composer_placeholder
-                                },
-                            ),
-                        )
-                    },
-                    isError = !state.draft.isWithinLimit,
-                    supportingText = {
-                        Text(
-                            text = state.errorMessage
-                                ?: stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining),
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.End,
-                        )
-                    },
-                )
-            }
-
-            if (!state.isDrawingActive && (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty())) {
-                MediaPreviewRow(
-                    attachments = state.selectedSlideAttachments,
-                    pending = state.selectedSlidePending,
-                    backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
-                    backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
-                    backgroundLoop = state.selectedSlideBackgroundLoop,
-                    onRemove = viewModel::onRemoveMedia,
-                    onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
-                    onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
-                )
-            }
-
             if (!state.isDrawingActive) {
-                ComposerControlsLayer(
+                ComposerToolBand(
                     band = state.band,
                     badges = ComposerBandTools.badges(
                         mediaCount = state.draft.mediaIds.size,
@@ -281,37 +331,10 @@ fun StoryComposerScreen(
                         strokeCount = state.selectedSlideStrokes.size,
                         hasBackground = state.selectedSlideBackground != null,
                     ),
-                    visibility = state.draft.visibility,
-                    selectedFilter = state.selectedSlideFilter,
-                    filterIntensity = state.selectedSlideFilterIntensity,
-                    slideDurationSeconds = state.selectedSlideDurationSeconds,
-                    selectedBackground = state.selectedSlideBackground,
-                    canAddText = state.deck.selectedCanAddTextElement,
-                    canAddSticker = state.deck.selectedCanAddSticker,
-                    isUploadingMedia = state.isUploadingMedia,
-                    isMediaFull = state.draft.isMediaFull,
-                    mediaCount = state.draft.mediaIds.size,
-                    hasMedia = state.draft.hasMedia,
                     onToolTap = viewModel::onBandToolTap,
                     onToolSwipeUp = viewModel::onBandToolSwipeUp,
                     onHideChrome = viewModel::onBandSwipeDown,
                     onShowChrome = viewModel::onBandShowChrome,
-                    onDismiss = viewModel::onBandDismiss,
-                    onAddText = viewModel::onAddTextElement,
-                    onAddSticker = { showStickerPicker = true },
-                    onPickMedia = {
-                        when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
-                            StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
-                            StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
-                            StoryMediaPickMode.None -> Unit
-                        }
-                    },
-                    onEnterDrawing = viewModel::onEnterDrawingMode,
-                    onSelectVisibility = viewModel::onVisibilityChange,
-                    onSelectFilter = viewModel::onSelectFilter,
-                    onFilterIntensityChange = viewModel::onFilterIntensityChange,
-                    onSlideDurationChange = viewModel::onSlideDurationChange,
-                    onSelectBackground = viewModel::onSlideBackgroundChange,
                 )
             }
         }

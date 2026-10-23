@@ -1,0 +1,2916 @@
+{
+ "version": 1,
+ "source": "scripts/icons/extract_sf_symbols.py -> sf-symbols-candidates.txt",
+ "symbols": [
+  {
+   "symbol": "airplane",
+   "status": "mapped",
+   "role": "Flight",
+   "reason": "Icons.Filled.Flight"
+  },
+  {
+   "symbol": "airplayaudio",
+   "status": "not-applicable",
+   "reason": "AirPlay est propre à Apple ; la sortie audio Android passe par le sélecteur système"
+  },
+  {
+   "symbol": "antenna.radiowaves.left.and.right",
+   "status": "mapped",
+   "role": "AntennaCell",
+   "reason": "Icons.Filled.CellTower"
+  },
+  {
+   "symbol": "apps.iphone",
+   "status": "mapped",
+   "role": "Apps",
+   "reason": "Icons.Filled.Apps"
+  },
+  {
+   "symbol": "arrow.2.squarepath",
+   "status": "mapped",
+   "role": "Repeat",
+   "reason": "Icons.Filled.Repeat"
+  },
+  {
+   "symbol": "arrow.clockwise",
+   "status": "mapped",
+   "role": "Refresh",
+   "reason": "Icons.Filled.Refresh"
+  },
+  {
+   "symbol": "arrow.clockwise.circle.fill",
+   "status": "mapped",
+   "role": "Refresh",
+   "reason": "Icons.Filled.Refresh; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "arrow.counterclockwise",
+   "status": "mapped",
+   "role": "Replay",
+   "reason": "Icons.Filled.Replay"
+  },
+  {
+   "symbol": "arrow.down",
+   "status": "mapped",
+   "role": "ArrowDown",
+   "reason": "Icons.Filled.ArrowDownward"
+  },
+  {
+   "symbol": "arrow.down.circle.fill",
+   "status": "mapped",
+   "role": "ArrowCircleDownFilled",
+   "reason": "Icons.Filled.ArrowCircleDown; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "arrow.down.doc.fill",
+   "status": "mapped",
+   "role": "Download",
+   "reason": "Icons.Filled.Download; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "arrow.down.right",
+   "status": "mapped",
+   "role": "ArrowDownRight",
+   "reason": "Icons.Filled.SouthEast"
+  },
+  {
+   "symbol": "arrow.down.right.circle",
+   "status": "mapped",
+   "role": "ArrowDownRight",
+   "reason": "Icons.Filled.SouthEast; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "arrow.down.to.line",
+   "status": "mapped",
+   "role": "Download",
+   "reason": "Icons.Filled.Download"
+  },
+  {
+   "symbol": "arrow.forward.circle.fill",
+   "status": "mapped",
+   "role": "Forward",
+   "reason": "Icons.AutoMirrored.Filled.ArrowForward (rôle directionnel, miroité en RTL); variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "arrow.forward.square.fill",
+   "status": "mapped",
+   "role": "Forward",
+   "reason": "Icons.AutoMirrored.Filled.ArrowForward (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "arrow.left.and.right",
+   "status": "mapped",
+   "role": "SwapHorizontal",
+   "reason": "Icons.Filled.SwapHoriz"
+  },
+  {
+   "symbol": "arrow.triangle.2.circlepath",
+   "status": "mapped",
+   "role": "Sync",
+   "reason": "Icons.Filled.Sync"
+  },
+  {
+   "symbol": "arrow.triangle.2.circlepath.camera",
+   "status": "mapped",
+   "role": "FlipCamera",
+   "reason": "Icons.Filled.FlipCameraAndroid"
+  },
+  {
+   "symbol": "arrow.triangle.swap",
+   "status": "mapped",
+   "role": "SwapHorizontal",
+   "reason": "Icons.Filled.SwapHoriz"
+  },
+  {
+   "symbol": "arrow.triangle.turn.up.right.diamond.fill",
+   "status": "mapped",
+   "role": "Directions",
+   "reason": "Icons.Filled.Directions; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "arrow.turn.down.left",
+   "status": "mapped",
+   "role": "ReturnKey",
+   "reason": "Icons.AutoMirrored.Filled.KeyboardReturn (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "arrow.turn.up.left",
+   "status": "mapped",
+   "role": "Reply",
+   "reason": "Icons.AutoMirrored.Filled.Reply (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "arrow.up",
+   "status": "mapped",
+   "role": "ArrowUp",
+   "reason": "Icons.Filled.ArrowUpward"
+  },
+  {
+   "symbol": "arrow.up.and.down",
+   "status": "mapped",
+   "role": "SwapVertical",
+   "reason": "Icons.Filled.SwapVert"
+  },
+  {
+   "symbol": "arrow.up.circle.fill",
+   "status": "mapped",
+   "role": "ArrowCircleUpFilled",
+   "reason": "Icons.Filled.ArrowCircleUp; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "arrow.up.left.and.arrow.down.right",
+   "status": "mapped",
+   "role": "OpenInFull",
+   "reason": "Icons.Filled.OpenInFull"
+  },
+  {
+   "symbol": "arrow.up.right",
+   "status": "mapped",
+   "role": "ArrowUpRight",
+   "reason": "Icons.AutoMirrored.Filled.CallMade (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "arrow.up.right.circle",
+   "status": "mapped",
+   "role": "ArrowUpRight",
+   "reason": "Icons.AutoMirrored.Filled.CallMade (rôle directionnel, miroité en RTL); variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "arrow.up.right.square",
+   "status": "mapped",
+   "role": "OpenExternal",
+   "reason": "Icons.AutoMirrored.Filled.OpenInNew (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "arrow.uturn.backward",
+   "status": "mapped",
+   "role": "Undo",
+   "reason": "Icons.AutoMirrored.Filled.Undo (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "arrow.uturn.backward.circle",
+   "status": "mapped",
+   "role": "Undo",
+   "reason": "Icons.AutoMirrored.Filled.Undo (rôle directionnel, miroité en RTL); variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "arrow.uturn.forward",
+   "status": "mapped",
+   "role": "Redo",
+   "reason": "Icons.AutoMirrored.Filled.Redo (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "arrowshape.turn.up.left",
+   "status": "mapped",
+   "role": "Reply",
+   "reason": "Icons.AutoMirrored.Filled.Reply (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "arrowshape.turn.up.left.fill",
+   "status": "mapped",
+   "role": "Reply",
+   "reason": "Icons.AutoMirrored.Filled.Reply (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "arrowshape.turn.up.right",
+   "status": "mapped",
+   "role": "ForwardMessage",
+   "reason": "Icons.AutoMirrored.Filled.Forward (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "arrowshape.turn.up.right.fill",
+   "status": "mapped",
+   "role": "ForwardMessage",
+   "reason": "Icons.AutoMirrored.Filled.Forward (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "at",
+   "status": "mapped",
+   "role": "Mention",
+   "reason": "Icons.Filled.AlternateEmail"
+  },
+  {
+   "symbol": "bag",
+   "status": "mapped",
+   "role": "Shopping",
+   "reason": "Icons.Outlined.ShoppingBag"
+  },
+  {
+   "symbol": "bag.fill",
+   "status": "mapped",
+   "role": "ShoppingFilled",
+   "reason": "Icons.Filled.ShoppingBag; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "bell",
+   "status": "mapped",
+   "role": "Bell",
+   "reason": "Icons.Outlined.Notifications"
+  },
+  {
+   "symbol": "bell.fill",
+   "status": "mapped",
+   "role": "BellFilled",
+   "reason": "Icons.Filled.Notifications; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "bell.slash.fill",
+   "status": "mapped",
+   "role": "BellOff",
+   "reason": "Icons.Filled.NotificationsOff; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "bold",
+   "status": "mapped",
+   "role": "Bold",
+   "reason": "Icons.Filled.FormatBold"
+  },
+  {
+   "symbol": "bolt.fill",
+   "status": "mapped",
+   "role": "Bolt",
+   "reason": "Icons.Filled.Bolt; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "bookmark",
+   "status": "mapped",
+   "role": "Bookmark",
+   "reason": "Icons.Outlined.BookmarkBorder"
+  },
+  {
+   "symbol": "bubble.left.and.bubble.right",
+   "status": "mapped",
+   "role": "Forum",
+   "reason": "Icons.Outlined.Forum"
+  },
+  {
+   "symbol": "bubble.left.and.bubble.right.fill",
+   "status": "mapped",
+   "role": "ForumFilled",
+   "reason": "Icons.Filled.Forum; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "bubble.left.fill",
+   "status": "custom",
+   "role": "BubbleTail",
+   "reason": "aucun équivalent Material fidèle : vecteur maison MeeshyVectorIcons.BubbleTail (24 dp)"
+  },
+  {
+   "symbol": "bubble.right",
+   "status": "custom",
+   "role": "BubbleTailOutline",
+   "reason": "aucun équivalent Material fidèle : vecteur maison MeeshyVectorIcons.BubbleTailOutline (24 dp)"
+  },
+  {
+   "symbol": "camera.fill",
+   "status": "mapped",
+   "role": "Camera",
+   "reason": "Icons.Filled.PhotoCamera; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "camera.filters",
+   "status": "mapped",
+   "role": "PhotoFilter",
+   "reason": "Icons.Filled.PhotoFilter"
+  },
+  {
+   "symbol": "cellularbars",
+   "status": "mapped",
+   "role": "SignalCellular",
+   "reason": "Icons.Filled.SignalCellularAlt"
+  },
+  {
+   "symbol": "character.book.closed.fill",
+   "status": "mapped",
+   "role": "Dictionary",
+   "reason": "Icons.AutoMirrored.Filled.MenuBook (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "character.bubble",
+   "status": "custom",
+   "role": "TranslateBubble",
+   "reason": "aucun équivalent Material fidèle : vecteur maison MeeshyVectorIcons.TranslateBubble (24 dp)"
+  },
+  {
+   "symbol": "chart.bar.fill",
+   "status": "mapped",
+   "role": "ChartBar",
+   "reason": "Icons.Filled.BarChart; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "chart.xyaxis.line",
+   "status": "mapped",
+   "role": "ChartLine",
+   "reason": "Icons.AutoMirrored.Filled.ShowChart (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "checkmark",
+   "status": "mapped",
+   "role": "Check",
+   "reason": "Icons.Filled.Check"
+  },
+  {
+   "symbol": "checkmark.circle",
+   "status": "mapped",
+   "role": "CheckCircle",
+   "reason": "Icons.Outlined.CheckCircle; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "checkmark.circle.fill",
+   "status": "mapped",
+   "role": "CheckCircleFilled",
+   "reason": "Icons.Filled.CheckCircle; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "checkmark.seal",
+   "status": "mapped",
+   "role": "Verified",
+   "reason": "Icons.Outlined.Verified"
+  },
+  {
+   "symbol": "checkmark.seal.fill",
+   "status": "mapped",
+   "role": "VerifiedFilled",
+   "reason": "Icons.Filled.Verified; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "checkmark.shield.fill",
+   "status": "mapped",
+   "role": "VerifiedUser",
+   "reason": "Icons.Filled.VerifiedUser; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "chevron.backward",
+   "status": "mapped",
+   "role": "ChevronBackward",
+   "reason": "Icons.AutoMirrored.Filled.KeyboardArrowLeft (rôle directionnel, miroité en RTL)",
+   "aliases": [
+    "Back"
+   ]
+  },
+  {
+   "symbol": "chevron.down",
+   "status": "mapped",
+   "role": "ChevronDown",
+   "reason": "Icons.Filled.KeyboardArrowDown"
+  },
+  {
+   "symbol": "chevron.forward",
+   "status": "mapped",
+   "role": "ChevronForward",
+   "reason": "Icons.AutoMirrored.Filled.KeyboardArrowRight (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "chevron.left.forwardslash.chevron.right",
+   "status": "mapped",
+   "role": "Code",
+   "reason": "Icons.Filled.Code"
+  },
+  {
+   "symbol": "chevron.up",
+   "status": "mapped",
+   "role": "ChevronUp",
+   "reason": "Icons.Filled.KeyboardArrowUp"
+  },
+  {
+   "symbol": "chevron.up.chevron.down",
+   "status": "mapped",
+   "role": "UnfoldMore",
+   "reason": "Icons.Filled.UnfoldMore"
+  },
+  {
+   "symbol": "circle.dashed",
+   "status": "mapped",
+   "role": "RadioUnchecked",
+   "reason": "Icons.Filled.RadioButtonUnchecked"
+  },
+  {
+   "symbol": "clock",
+   "status": "mapped",
+   "role": "Schedule",
+   "reason": "Icons.Outlined.Schedule"
+  },
+  {
+   "symbol": "clock.arrow.circlepath",
+   "status": "mapped",
+   "role": "History",
+   "reason": "Icons.Filled.History"
+  },
+  {
+   "symbol": "clock.badge.xmark",
+   "status": "mapped",
+   "role": "TimerOff",
+   "reason": "Icons.Filled.TimerOff; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "clock.fill",
+   "status": "mapped",
+   "role": "ScheduleFilled",
+   "reason": "Icons.Filled.Schedule; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "cloud",
+   "status": "mapped",
+   "role": "Cloud",
+   "reason": "Icons.Outlined.Cloud"
+  },
+  {
+   "symbol": "cpu.fill",
+   "status": "mapped",
+   "role": "Memory",
+   "reason": "Icons.Filled.Memory; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "crown.fill",
+   "status": "mapped",
+   "role": "Premium",
+   "reason": "Icons.Filled.WorkspacePremium; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "cursorarrow.click",
+   "status": "not-applicable",
+   "reason": "pointeur Mac/iPad : Android tactile n'a pas de curseur ; le geste tactile est Touch"
+  },
+  {
+   "symbol": "delete.left.fill",
+   "status": "mapped",
+   "role": "Backspace",
+   "reason": "Icons.AutoMirrored.Filled.Backspace (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "diamond",
+   "status": "mapped",
+   "role": "Diamond",
+   "reason": "Icons.Outlined.Diamond"
+  },
+  {
+   "symbol": "diamond.fill",
+   "status": "mapped",
+   "role": "DiamondFilled",
+   "reason": "Icons.Filled.Diamond; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "doc.fill",
+   "status": "mapped",
+   "role": "Document",
+   "reason": "Icons.Filled.Description; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "doc.on.doc",
+   "status": "mapped",
+   "role": "Copy",
+   "reason": "Icons.Filled.ContentCopy"
+  },
+  {
+   "symbol": "doc.plaintext.fill",
+   "status": "mapped",
+   "role": "Article",
+   "reason": "Icons.AutoMirrored.Filled.Article (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "dot.radiowaves.left.and.right",
+   "status": "mapped",
+   "role": "Sensors",
+   "reason": "Icons.Filled.Sensors"
+  },
+  {
+   "symbol": "ellipsis",
+   "status": "mapped",
+   "role": "MoreHorizontal",
+   "reason": "Icons.Filled.MoreHoriz"
+  },
+  {
+   "symbol": "ellipsis.circle.fill",
+   "status": "mapped",
+   "role": "MoreHorizontal",
+   "reason": "Icons.Filled.MoreHoriz; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "ellipsis.message.fill",
+   "status": "mapped",
+   "role": "TextBubble",
+   "reason": "Icons.Filled.Textsms; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "envelope",
+   "status": "mapped",
+   "role": "Mail",
+   "reason": "Icons.Outlined.Email"
+  },
+  {
+   "symbol": "envelope.badge.fill",
+   "status": "mapped",
+   "role": "MailUnread",
+   "reason": "Icons.Filled.MarkEmailUnread; variante .fill rendue en Filled; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "envelope.circle.fill",
+   "status": "mapped",
+   "role": "MailFilled",
+   "reason": "Icons.Filled.Email; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "envelope.fill",
+   "status": "mapped",
+   "role": "MailFilled",
+   "reason": "Icons.Filled.Email; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "envelope.open.fill",
+   "status": "mapped",
+   "role": "MailOpen",
+   "reason": "Icons.Filled.Drafts; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "exclamationmark.arrow.triangle.2.circlepath",
+   "status": "mapped",
+   "role": "SyncProblem",
+   "reason": "Icons.Filled.SyncProblem"
+  },
+  {
+   "symbol": "exclamationmark.circle",
+   "status": "mapped",
+   "role": "Error",
+   "reason": "Icons.Outlined.ErrorOutline; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "exclamationmark.circle.fill",
+   "status": "mapped",
+   "role": "ErrorFilled",
+   "reason": "Icons.Filled.Error; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "exclamationmark.shield",
+   "status": "mapped",
+   "role": "GppMaybe",
+   "reason": "Icons.Filled.GppMaybe"
+  },
+  {
+   "symbol": "exclamationmark.shield.fill",
+   "status": "mapped",
+   "role": "GppMaybe",
+   "reason": "Icons.Filled.GppMaybe; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "exclamationmark.triangle",
+   "status": "mapped",
+   "role": "Warning",
+   "reason": "Icons.Outlined.Warning"
+  },
+  {
+   "symbol": "exclamationmark.triangle.fill",
+   "status": "mapped",
+   "role": "WarningFilled",
+   "reason": "Icons.Filled.Warning; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "eye",
+   "status": "mapped",
+   "role": "Eye",
+   "reason": "Icons.Outlined.Visibility"
+  },
+  {
+   "symbol": "eye.fill",
+   "status": "mapped",
+   "role": "EyeFilled",
+   "reason": "Icons.Filled.Visibility; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "eye.slash",
+   "status": "mapped",
+   "role": "EyeOff",
+   "reason": "Icons.Outlined.VisibilityOff"
+  },
+  {
+   "symbol": "eye.slash.fill",
+   "status": "mapped",
+   "role": "EyeOffFilled",
+   "reason": "Icons.Filled.VisibilityOff; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "face.dashed",
+   "status": "mapped",
+   "role": "FaceOff",
+   "reason": "Icons.Filled.FaceRetouchingOff"
+  },
+  {
+   "symbol": "face.smiling",
+   "status": "mapped",
+   "role": "Emoji",
+   "reason": "Icons.Outlined.EmojiEmotions"
+  },
+  {
+   "symbol": "face.smiling.fill",
+   "status": "mapped",
+   "role": "EmojiFilled",
+   "reason": "Icons.Filled.EmojiEmotions; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "film",
+   "status": "mapped",
+   "role": "Movie",
+   "reason": "Icons.Filled.Movie"
+  },
+  {
+   "symbol": "flame",
+   "status": "mapped",
+   "role": "Flame",
+   "reason": "Icons.Outlined.LocalFireDepartment"
+  },
+  {
+   "symbol": "flame.fill",
+   "status": "mapped",
+   "role": "FlameFilled",
+   "reason": "Icons.Filled.LocalFireDepartment; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "folder.badge.minus",
+   "status": "mapped",
+   "role": "FolderOff",
+   "reason": "Icons.Filled.FolderOff; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "folder.badge.plus",
+   "status": "mapped",
+   "role": "FolderAdd",
+   "reason": "Icons.Filled.CreateNewFolder; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "folder.fill",
+   "status": "mapped",
+   "role": "FolderFilled",
+   "reason": "Icons.Filled.Folder; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "forward.fill",
+   "status": "mapped",
+   "role": "FastForward",
+   "reason": "Icons.Filled.FastForward; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "gamecontroller.fill",
+   "status": "mapped",
+   "role": "Gamepad",
+   "reason": "Icons.Filled.SportsEsports; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "gearshape.fill",
+   "status": "mapped",
+   "role": "SettingsFilled",
+   "reason": "Icons.Filled.Settings; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "gift.fill",
+   "status": "mapped",
+   "role": "Gift",
+   "reason": "Icons.Filled.CardGiftcard; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "globe",
+   "status": "mapped",
+   "role": "Globe",
+   "reason": "Icons.Outlined.Language"
+  },
+  {
+   "symbol": "globe.europe.africa.fill",
+   "status": "mapped",
+   "role": "Public",
+   "reason": "Icons.Filled.Public; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "gobackward.10",
+   "status": "mapped",
+   "role": "Replay10",
+   "reason": "Icons.Filled.Replay10"
+  },
+  {
+   "symbol": "gobackward.5",
+   "status": "mapped",
+   "role": "Replay5",
+   "reason": "Icons.Filled.Replay5"
+  },
+  {
+   "symbol": "goforward.10",
+   "status": "mapped",
+   "role": "Forward10",
+   "reason": "Icons.Filled.Forward10"
+  },
+  {
+   "symbol": "goforward.5",
+   "status": "mapped",
+   "role": "Forward5",
+   "reason": "Icons.Filled.Forward5"
+  },
+  {
+   "symbol": "hand.raised.fill",
+   "status": "mapped",
+   "role": "Hand",
+   "reason": "Icons.Filled.PanTool; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "hand.raised.slash.fill",
+   "status": "mapped",
+   "role": "Block",
+   "reason": "Icons.Filled.Block; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "hand.tap",
+   "status": "mapped",
+   "role": "Touch",
+   "reason": "Icons.Filled.TouchApp"
+  },
+  {
+   "symbol": "heart",
+   "status": "mapped",
+   "role": "Heart",
+   "reason": "Icons.Outlined.FavoriteBorder"
+  },
+  {
+   "symbol": "heart.fill",
+   "status": "mapped",
+   "role": "HeartFilled",
+   "reason": "Icons.Filled.Favorite; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "hourglass",
+   "status": "mapped",
+   "role": "Hourglass",
+   "reason": "Icons.Filled.HourglassEmpty"
+  },
+  {
+   "symbol": "hourglass.circle",
+   "status": "mapped",
+   "role": "Hourglass",
+   "reason": "Icons.Filled.HourglassEmpty; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "infinity",
+   "status": "mapped",
+   "role": "AllInclusive",
+   "reason": "Icons.Filled.AllInclusive"
+  },
+  {
+   "symbol": "info.circle",
+   "status": "mapped",
+   "role": "Info",
+   "reason": "Icons.Outlined.Info; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "info.circle.fill",
+   "status": "mapped",
+   "role": "InfoFilled",
+   "reason": "Icons.Filled.Info; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "iphone",
+   "status": "mapped",
+   "role": "Smartphone",
+   "reason": "Icons.Filled.Smartphone"
+  },
+  {
+   "symbol": "key.fill",
+   "status": "mapped",
+   "role": "Key",
+   "reason": "Icons.Filled.VpnKey; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "laptopcomputer.and.iphone",
+   "status": "mapped",
+   "role": "Devices",
+   "reason": "Icons.Filled.Devices"
+  },
+  {
+   "symbol": "line.3.horizontal",
+   "status": "mapped",
+   "role": "Menu",
+   "reason": "Icons.Filled.Menu"
+  },
+  {
+   "symbol": "line.3.horizontal.decrease.circle",
+   "status": "mapped",
+   "role": "FilterList",
+   "reason": "Icons.Filled.FilterList; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "line.3.horizontal.decrease.circle.fill",
+   "status": "mapped",
+   "role": "FilterList",
+   "reason": "Icons.Filled.FilterList; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "link",
+   "status": "mapped",
+   "role": "Link",
+   "reason": "Icons.Filled.Link"
+  },
+  {
+   "symbol": "link.badge.plus",
+   "status": "mapped",
+   "role": "AddLink",
+   "reason": "Icons.Filled.AddLink; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "list.bullet.clipboard",
+   "status": "mapped",
+   "role": "ListChecklist",
+   "reason": "Icons.AutoMirrored.Filled.ListAlt (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "list.bullet.rectangle",
+   "status": "mapped",
+   "role": "ListChecklist",
+   "reason": "Icons.AutoMirrored.Filled.ListAlt (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "location.circle.fill",
+   "status": "mapped",
+   "role": "MyLocation",
+   "reason": "Icons.Filled.MyLocation; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "location.fill",
+   "status": "mapped",
+   "role": "MyLocation",
+   "reason": "Icons.Filled.MyLocation; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "location.magnifyingglass",
+   "status": "mapped",
+   "role": "Search",
+   "reason": "Icons.Filled.Search"
+  },
+  {
+   "symbol": "location.slash.fill",
+   "status": "mapped",
+   "role": "LocationOff",
+   "reason": "Icons.Filled.LocationOff; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "lock",
+   "status": "mapped",
+   "role": "Lock",
+   "reason": "Icons.Outlined.Lock"
+  },
+  {
+   "symbol": "lock.fill",
+   "status": "mapped",
+   "role": "LockFilled",
+   "reason": "Icons.Filled.Lock; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "lock.open",
+   "status": "mapped",
+   "role": "LockOpen",
+   "reason": "Icons.Outlined.LockOpen"
+  },
+  {
+   "symbol": "lock.open.fill",
+   "status": "mapped",
+   "role": "LockOpenFilled",
+   "reason": "Icons.Filled.LockOpen; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "lock.rotation",
+   "status": "mapped",
+   "role": "LockReset",
+   "reason": "Icons.Filled.LockReset"
+  },
+  {
+   "symbol": "lock.shield",
+   "status": "mapped",
+   "role": "Security",
+   "reason": "Icons.Filled.Security"
+  },
+  {
+   "symbol": "lock.shield.fill",
+   "status": "mapped",
+   "role": "LockFilled",
+   "reason": "Icons.Filled.Lock; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "macwindow",
+   "status": "not-applicable",
+   "reason": "fenêtre macOS/iPadOS : Android n'expose pas de gestion de fenêtres équivalente dans l'app"
+  },
+  {
+   "symbol": "macwindow.badge.plus",
+   "status": "not-applicable",
+   "reason": "ouverture d'une fenêtre supplémentaire (Stage Manager/Mac) : sans équivalent Android"
+  },
+  {
+   "symbol": "macwindow.on.rectangle",
+   "status": "not-applicable",
+   "reason": "gestion de fenêtres iPadOS/macOS : sans équivalent Android"
+  },
+  {
+   "symbol": "magnifyingglass",
+   "status": "mapped",
+   "role": "Search",
+   "reason": "Icons.Filled.Search"
+  },
+  {
+   "symbol": "map.fill",
+   "status": "mapped",
+   "role": "Map",
+   "reason": "Icons.Filled.Map; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "mappin",
+   "status": "mapped",
+   "role": "Location",
+   "reason": "Icons.Outlined.LocationOn"
+  },
+  {
+   "symbol": "mappin.and.ellipse",
+   "status": "mapped",
+   "role": "Location",
+   "reason": "Icons.Outlined.LocationOn"
+  },
+  {
+   "symbol": "mappin.circle.fill",
+   "status": "mapped",
+   "role": "LocationFilled",
+   "reason": "Icons.Filled.LocationOn; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "megaphone.fill",
+   "status": "mapped",
+   "role": "Campaign",
+   "reason": "Icons.Filled.Campaign; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "message.fill",
+   "status": "mapped",
+   "role": "MessageFilled",
+   "reason": "Icons.AutoMirrored.Filled.Message (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "mic.fill",
+   "status": "mapped",
+   "role": "Mic",
+   "reason": "Icons.Filled.Mic; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "mic.slash",
+   "status": "mapped",
+   "role": "MicOff",
+   "reason": "Icons.Filled.MicOff"
+  },
+  {
+   "symbol": "mic.slash.fill",
+   "status": "mapped",
+   "role": "MicOff",
+   "reason": "Icons.Filled.MicOff; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "minus",
+   "status": "mapped",
+   "role": "Remove",
+   "reason": "Icons.Filled.Remove"
+  },
+  {
+   "symbol": "minus.circle.fill",
+   "status": "mapped",
+   "role": "RemoveCircleFilled",
+   "reason": "Icons.Filled.RemoveCircle; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "minus.magnifyingglass",
+   "status": "mapped",
+   "role": "ZoomOut",
+   "reason": "Icons.Filled.ZoomOut"
+  },
+  {
+   "symbol": "minus.square",
+   "status": "mapped",
+   "role": "IndeterminateBox",
+   "reason": "Icons.Filled.IndeterminateCheckBox"
+  },
+  {
+   "symbol": "music.note",
+   "status": "mapped",
+   "role": "MusicNote",
+   "reason": "Icons.Filled.MusicNote"
+  },
+  {
+   "symbol": "music.note.list",
+   "status": "mapped",
+   "role": "QueueMusic",
+   "reason": "Icons.AutoMirrored.Filled.QueueMusic (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "nosign",
+   "status": "mapped",
+   "role": "Block",
+   "reason": "Icons.Filled.Block"
+  },
+  {
+   "symbol": "number",
+   "status": "mapped",
+   "role": "Tag",
+   "reason": "Icons.Filled.Tag"
+  },
+  {
+   "symbol": "paintpalette",
+   "status": "mapped",
+   "role": "Palette",
+   "reason": "Icons.Filled.Palette"
+  },
+  {
+   "symbol": "paperclip",
+   "status": "mapped",
+   "role": "AttachFile",
+   "reason": "Icons.Filled.AttachFile"
+  },
+  {
+   "symbol": "paperplane.fill",
+   "status": "mapped",
+   "role": "Send",
+   "reason": "Icons.AutoMirrored.Filled.Send (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "pause.fill",
+   "status": "mapped",
+   "role": "Pause",
+   "reason": "Icons.Filled.Pause; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "pencil",
+   "status": "mapped",
+   "role": "Edit",
+   "reason": "Icons.Outlined.Edit"
+  },
+  {
+   "symbol": "pencil.circle.fill",
+   "status": "mapped",
+   "role": "EditFilled",
+   "reason": "Icons.Filled.Edit; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "person.2",
+   "status": "mapped",
+   "role": "Group",
+   "reason": "Icons.Outlined.Group"
+  },
+  {
+   "symbol": "person.2.arrow.trianglehead.counterclockwise",
+   "status": "mapped",
+   "role": "History",
+   "reason": "Icons.Filled.History"
+  },
+  {
+   "symbol": "person.2.badge.gearshape",
+   "status": "mapped",
+   "role": "ManageAccounts",
+   "reason": "Icons.Filled.ManageAccounts; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "person.2.fill",
+   "status": "mapped",
+   "role": "GroupFilled",
+   "reason": "Icons.Filled.Group; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "person.2.slash",
+   "status": "mapped",
+   "role": "GroupOff",
+   "reason": "Icons.Filled.GroupOff"
+  },
+  {
+   "symbol": "person.2.wave.2.fill",
+   "status": "mapped",
+   "role": "RecordVoice",
+   "reason": "Icons.Filled.RecordVoiceOver; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "person.3",
+   "status": "mapped",
+   "role": "Groups",
+   "reason": "Icons.Outlined.Groups"
+  },
+  {
+   "symbol": "person.3.fill",
+   "status": "mapped",
+   "role": "GroupsFilled",
+   "reason": "Icons.Filled.Groups; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "person.and.background.dotted",
+   "status": "custom",
+   "role": "PersonBackgroundDotted",
+   "reason": "aucun équivalent Material fidèle : vecteur maison MeeshyVectorIcons.PersonBackgroundDotted (24 dp)"
+  },
+  {
+   "symbol": "person.badge.minus",
+   "status": "mapped",
+   "role": "PersonRemove",
+   "reason": "Icons.Filled.PersonRemove; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "person.badge.plus",
+   "status": "mapped",
+   "role": "PersonAdd",
+   "reason": "Icons.Filled.PersonAdd; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "person.badge.shield.checkmark.fill",
+   "status": "mapped",
+   "role": "AdminPanel",
+   "reason": "Icons.Filled.AdminPanelSettings; variante .fill rendue en Filled; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "person.circle.fill",
+   "status": "mapped",
+   "role": "AccountFilled",
+   "reason": "Icons.Filled.AccountCircle; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "person.crop.circle",
+   "status": "mapped",
+   "role": "Account",
+   "reason": "Icons.Outlined.AccountCircle; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "person.crop.circle.badge.checkmark",
+   "status": "mapped",
+   "role": "PersonVerified",
+   "reason": "Icons.Filled.HowToReg; variante .circle repliée sur l'icône de base; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "person.crop.circle.badge.exclamationmark",
+   "status": "mapped",
+   "role": "Person",
+   "reason": "Icons.Outlined.Person; variante .circle repliée sur l'icône de base; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "person.crop.circle.badge.plus",
+   "status": "mapped",
+   "role": "PersonAdd",
+   "reason": "Icons.Filled.PersonAdd; variante .circle repliée sur l'icône de base; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "person.crop.circle.fill",
+   "status": "mapped",
+   "role": "AccountFilled",
+   "reason": "Icons.Filled.AccountCircle; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "person.fill",
+   "status": "mapped",
+   "role": "PersonFilled",
+   "reason": "Icons.Filled.Person; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "person.fill.checkmark",
+   "status": "mapped",
+   "role": "PersonVerified",
+   "reason": "Icons.Filled.HowToReg"
+  },
+  {
+   "symbol": "person.fill.xmark",
+   "status": "mapped",
+   "role": "PersonOff",
+   "reason": "Icons.Filled.PersonOff"
+  },
+  {
+   "symbol": "person.slash",
+   "status": "mapped",
+   "role": "PersonOff",
+   "reason": "Icons.Filled.PersonOff"
+  },
+  {
+   "symbol": "person.wave.2",
+   "status": "mapped",
+   "role": "RecordVoice",
+   "reason": "Icons.Filled.RecordVoiceOver"
+  },
+  {
+   "symbol": "phone.badge.plus",
+   "status": "mapped",
+   "role": "AddCall",
+   "reason": "Icons.Filled.AddIcCall; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "phone.down.fill",
+   "status": "mapped",
+   "role": "CallEnd",
+   "reason": "Icons.Filled.CallEnd; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "phone.fill",
+   "status": "mapped",
+   "role": "Call",
+   "reason": "Icons.Filled.Call; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "photo",
+   "status": "mapped",
+   "role": "Photo",
+   "reason": "Icons.Outlined.Image"
+  },
+  {
+   "symbol": "photo.artframe",
+   "status": "mapped",
+   "role": "Wallpaper",
+   "reason": "Icons.Filled.Wallpaper"
+  },
+  {
+   "symbol": "photo.badge.exclamationmark",
+   "status": "mapped",
+   "role": "BrokenImage",
+   "reason": "Icons.Filled.BrokenImage; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "photo.badge.plus",
+   "status": "mapped",
+   "role": "AddPhoto",
+   "reason": "Icons.Filled.AddPhotoAlternate; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "photo.fill",
+   "status": "mapped",
+   "role": "PhotoFilled",
+   "reason": "Icons.Filled.Image; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "photo.on.rectangle",
+   "status": "mapped",
+   "role": "PhotoLibrary",
+   "reason": "Icons.Filled.PhotoLibrary"
+  },
+  {
+   "symbol": "photo.on.rectangle.angled",
+   "status": "mapped",
+   "role": "PhotoLibrary",
+   "reason": "Icons.Filled.PhotoLibrary"
+  },
+  {
+   "symbol": "photo.stack",
+   "status": "mapped",
+   "role": "PhotoLibrary",
+   "reason": "Icons.Filled.PhotoLibrary"
+  },
+  {
+   "symbol": "pin",
+   "status": "mapped",
+   "role": "Pin",
+   "reason": "Icons.Outlined.PushPin"
+  },
+  {
+   "symbol": "pin.fill",
+   "status": "mapped",
+   "role": "PinFilled",
+   "reason": "Icons.Filled.PushPin; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "play.circle",
+   "status": "mapped",
+   "role": "PlayCircle",
+   "reason": "Icons.Outlined.PlayCircle; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "play.circle.fill",
+   "status": "mapped",
+   "role": "PlayCircleFilled",
+   "reason": "Icons.Filled.PlayCircle; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "play.fill",
+   "status": "mapped",
+   "role": "Play",
+   "reason": "Icons.Filled.PlayArrow; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "play.rectangle.on.rectangle",
+   "status": "mapped",
+   "role": "Slideshow",
+   "reason": "Icons.Filled.Slideshow"
+  },
+  {
+   "symbol": "play.rectangle.on.rectangle.fill",
+   "status": "mapped",
+   "role": "Slideshow",
+   "reason": "Icons.Filled.Slideshow; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "plus",
+   "status": "mapped",
+   "role": "Add",
+   "reason": "Icons.Filled.Add"
+  },
+  {
+   "symbol": "plus.circle",
+   "status": "mapped",
+   "role": "AddCircle",
+   "reason": "Icons.Outlined.AddCircle; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "plus.circle.dashed",
+   "status": "mapped",
+   "role": "AddCircle",
+   "reason": "Icons.Outlined.AddCircle; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "plus.circle.fill",
+   "status": "mapped",
+   "role": "AddCircleFilled",
+   "reason": "Icons.Filled.AddCircle; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "plus.magnifyingglass",
+   "status": "mapped",
+   "role": "ZoomIn",
+   "reason": "Icons.Filled.ZoomIn"
+  },
+  {
+   "symbol": "plus.rectangle.on.rectangle",
+   "status": "mapped",
+   "role": "AddToPhotos",
+   "reason": "Icons.Filled.AddToPhotos"
+  },
+  {
+   "symbol": "qrcode",
+   "status": "mapped",
+   "role": "QrCode",
+   "reason": "Icons.Filled.QrCode"
+  },
+  {
+   "symbol": "questionmark.folder",
+   "status": "mapped",
+   "role": "Folder",
+   "reason": "Icons.Outlined.Folder"
+  },
+  {
+   "symbol": "quote.opening",
+   "status": "mapped",
+   "role": "Quote",
+   "reason": "Icons.Filled.FormatQuote"
+  },
+  {
+   "symbol": "record.circle",
+   "status": "mapped",
+   "role": "Record",
+   "reason": "Icons.Filled.FiberManualRecord ; passé par un paramètre symbol: (CallView+Recording), que l'extracteur de littéraux ne voit pas"
+  },
+  {
+   "symbol": "rectangle.2.swap",
+   "status": "mapped",
+   "role": "SwapHorizontal",
+   "reason": "Icons.Filled.SwapHoriz"
+  },
+  {
+   "symbol": "rectangle.compress.vertical",
+   "status": "mapped",
+   "role": "UnfoldLess",
+   "reason": "Icons.Filled.UnfoldLess"
+  },
+  {
+   "symbol": "rectangle.expand.vertical",
+   "status": "mapped",
+   "role": "UnfoldMore",
+   "reason": "Icons.Filled.UnfoldMore"
+  },
+  {
+   "symbol": "rectangle.on.rectangle",
+   "status": "mapped",
+   "role": "FlipToFront",
+   "reason": "Icons.Filled.FlipToFront"
+  },
+  {
+   "symbol": "rectangle.portrait.and.arrow.forward",
+   "status": "mapped",
+   "role": "SignIn",
+   "reason": "Icons.AutoMirrored.Filled.Login (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "rectangle.portrait.and.arrow.right",
+   "status": "mapped",
+   "role": "SignOut",
+   "reason": "Icons.AutoMirrored.Filled.Logout (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "rectangle.stack",
+   "status": "mapped",
+   "role": "Layers",
+   "reason": "Icons.Outlined.Layers"
+  },
+  {
+   "symbol": "rectangle.stack.badge.plus",
+   "status": "mapped",
+   "role": "LibraryAdd",
+   "reason": "Icons.Filled.LibraryAdd; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "repeat",
+   "status": "mapped",
+   "role": "Repeat",
+   "reason": "Icons.Filled.Repeat"
+  },
+  {
+   "symbol": "scissors",
+   "status": "mapped",
+   "role": "Cut",
+   "reason": "Icons.Filled.ContentCut"
+  },
+  {
+   "symbol": "shield",
+   "status": "mapped",
+   "role": "Shield",
+   "reason": "Icons.Outlined.Shield"
+  },
+  {
+   "symbol": "shield.checkered",
+   "status": "mapped",
+   "role": "Security",
+   "reason": "Icons.Filled.Security"
+  },
+  {
+   "symbol": "shield.fill",
+   "status": "mapped",
+   "role": "ShieldFilled",
+   "reason": "Icons.Filled.Shield; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "shield.lefthalf.filled.badge.checkmark",
+   "status": "mapped",
+   "role": "VerifiedUser",
+   "reason": "Icons.Filled.VerifiedUser; variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "shield.slash.fill",
+   "status": "mapped",
+   "role": "ShieldOff",
+   "reason": "Icons.Filled.RemoveModerator; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "shuffle",
+   "status": "mapped",
+   "role": "Shuffle",
+   "reason": "Icons.Filled.Shuffle"
+  },
+  {
+   "symbol": "slider.horizontal.3",
+   "status": "mapped",
+   "role": "Tune",
+   "reason": "Icons.Filled.Tune"
+  },
+  {
+   "symbol": "slider.horizontal.below.rectangle",
+   "status": "mapped",
+   "role": "Tune",
+   "reason": "Icons.Filled.Tune"
+  },
+  {
+   "symbol": "sparkle",
+   "status": "mapped",
+   "role": "Sparkles",
+   "reason": "Icons.Filled.AutoAwesome"
+  },
+  {
+   "symbol": "sparkles",
+   "status": "mapped",
+   "role": "Sparkles",
+   "reason": "Icons.Filled.AutoAwesome"
+  },
+  {
+   "symbol": "sparkles.rectangle.stack",
+   "status": "mapped",
+   "role": "SparklesStack",
+   "reason": "Icons.Filled.AutoAwesomeMotion"
+  },
+  {
+   "symbol": "speaker.fill",
+   "status": "mapped",
+   "role": "Speaker",
+   "reason": "Icons.Filled.Speaker; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "speaker.slash.fill",
+   "status": "mapped",
+   "role": "VolumeOff",
+   "reason": "Icons.AutoMirrored.Filled.VolumeOff (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "speaker.wave.3.fill",
+   "status": "mapped",
+   "role": "VolumeUp",
+   "reason": "Icons.AutoMirrored.Filled.VolumeUp (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "square",
+   "status": "mapped",
+   "role": "CheckBoxBlank",
+   "reason": "Icons.Filled.CheckBoxOutlineBlank"
+  },
+  {
+   "symbol": "square.and.arrow.down",
+   "status": "mapped",
+   "role": "Download",
+   "reason": "Icons.Filled.Download"
+  },
+  {
+   "symbol": "square.and.arrow.up",
+   "status": "mapped",
+   "role": "Share",
+   "reason": "Icons.Filled.IosShare"
+  },
+  {
+   "symbol": "square.and.arrow.up.fill",
+   "status": "mapped",
+   "role": "Share",
+   "reason": "Icons.Filled.IosShare; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "square.and.pencil",
+   "status": "mapped",
+   "role": "ComposeNew",
+   "reason": "Icons.Outlined.EditNote"
+  },
+  {
+   "symbol": "square.dashed",
+   "status": "mapped",
+   "role": "SelectAll",
+   "reason": "Icons.Filled.SelectAll"
+  },
+  {
+   "symbol": "square.grid.2x2",
+   "status": "mapped",
+   "role": "GridView",
+   "reason": "Icons.Outlined.GridView"
+  },
+  {
+   "symbol": "square.grid.2x2.fill",
+   "status": "mapped",
+   "role": "GridViewFilled",
+   "reason": "Icons.Filled.GridView; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "square.grid.3x3.fill",
+   "status": "mapped",
+   "role": "Apps",
+   "reason": "Icons.Filled.Apps; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "square.on.square.dashed",
+   "status": "mapped",
+   "role": "SelectAll",
+   "reason": "Icons.Filled.SelectAll"
+  },
+  {
+   "symbol": "square.stack",
+   "status": "mapped",
+   "role": "Layers",
+   "reason": "Icons.Outlined.Layers"
+  },
+  {
+   "symbol": "square.stack.fill",
+   "status": "mapped",
+   "role": "LayersFilled",
+   "reason": "Icons.Filled.Layers; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "square.text.square",
+   "status": "mapped",
+   "role": "Notes",
+   "reason": "Icons.AutoMirrored.Filled.Notes (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "star",
+   "status": "mapped",
+   "role": "Star",
+   "reason": "Icons.Outlined.StarOutline"
+  },
+  {
+   "symbol": "star.circle",
+   "status": "mapped",
+   "role": "StarFilled",
+   "reason": "Icons.Filled.Star; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "star.fill",
+   "status": "mapped",
+   "role": "StarFilled",
+   "reason": "Icons.Filled.Star; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "star.slash",
+   "status": "custom",
+   "role": "StarSlash",
+   "reason": "aucun équivalent Material fidèle : vecteur maison MeeshyVectorIcons.StarSlash (24 dp)"
+  },
+  {
+   "symbol": "star.slash.fill",
+   "status": "custom",
+   "role": "StarSlash",
+   "reason": "aucun équivalent Material fidèle : vecteur maison MeeshyVectorIcons.StarSlash (24 dp)"
+  },
+  {
+   "symbol": "stop.circle.fill",
+   "status": "mapped",
+   "role": "StopCircle",
+   "reason": "Icons.Filled.StopCircle ; passé par un paramètre symbol: (CallView+Recording), que l'extracteur de littéraux ne voit pas"
+  },
+  {
+   "symbol": "stop.fill",
+   "status": "mapped",
+   "role": "Stop",
+   "reason": "Icons.Filled.Stop; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "sun.max",
+   "status": "mapped",
+   "role": "Brightness",
+   "reason": "Icons.Outlined.LightMode"
+  },
+  {
+   "symbol": "sun.max.fill",
+   "status": "mapped",
+   "role": "BrightnessFilled",
+   "reason": "Icons.Filled.LightMode; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "sun.min",
+   "status": "mapped",
+   "role": "Brightness",
+   "reason": "Icons.Outlined.LightMode"
+  },
+  {
+   "symbol": "tag.fill",
+   "status": "mapped",
+   "role": "TagFilled",
+   "reason": "Icons.Filled.LocalOffer; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "text.alignleft",
+   "status": "mapped",
+   "role": "AlignLeft",
+   "reason": "Icons.AutoMirrored.Filled.FormatAlignLeft (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "text.badge.plus",
+   "status": "mapped",
+   "role": "AddToList",
+   "reason": "Icons.AutoMirrored.Filled.PlaylistAdd (rôle directionnel, miroité en RTL); variante .badge repliée sur l'icône la plus proche"
+  },
+  {
+   "symbol": "text.bubble",
+   "status": "mapped",
+   "role": "Chat",
+   "reason": "Icons.AutoMirrored.Filled.Chat (rôle directionnel, miroité en RTL)"
+  },
+  {
+   "symbol": "text.bubble.fill",
+   "status": "mapped",
+   "role": "Chat",
+   "reason": "Icons.AutoMirrored.Filled.Chat (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "text.magnifyingglass",
+   "status": "mapped",
+   "role": "Search",
+   "reason": "Icons.Filled.Search"
+  },
+  {
+   "symbol": "text.quote",
+   "status": "mapped",
+   "role": "Quote",
+   "reason": "Icons.Filled.FormatQuote"
+  },
+  {
+   "symbol": "text.word.spacing",
+   "status": "mapped",
+   "role": "SpaceBar",
+   "reason": "Icons.Filled.SpaceBar"
+  },
+  {
+   "symbol": "textformat",
+   "status": "mapped",
+   "role": "TextFields",
+   "reason": "Icons.Filled.TextFields"
+  },
+  {
+   "symbol": "textformat.size.larger",
+   "status": "mapped",
+   "role": "TextLarger",
+   "reason": "Icons.Filled.TextIncrease"
+  },
+  {
+   "symbol": "textformat.size.smaller",
+   "status": "mapped",
+   "role": "TextSmaller",
+   "reason": "Icons.Filled.TextDecrease"
+  },
+  {
+   "symbol": "theatermasks.fill",
+   "status": "mapped",
+   "role": "Theater",
+   "reason": "Icons.Filled.TheaterComedy; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "timer",
+   "status": "mapped",
+   "role": "Timer",
+   "reason": "Icons.Filled.Timer"
+  },
+  {
+   "symbol": "translate",
+   "status": "mapped",
+   "role": "Translate",
+   "reason": "Icons.Filled.Translate"
+  },
+  {
+   "symbol": "trash",
+   "status": "mapped",
+   "role": "Delete",
+   "reason": "Icons.Outlined.Delete"
+  },
+  {
+   "symbol": "trash.circle.fill",
+   "status": "mapped",
+   "role": "DeleteFilled",
+   "reason": "Icons.Filled.Delete; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "trash.fill",
+   "status": "mapped",
+   "role": "DeleteFilled",
+   "reason": "Icons.Filled.Delete; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "tray.fill",
+   "status": "mapped",
+   "role": "Inbox",
+   "reason": "Icons.Filled.Inbox; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "triangle.fill",
+   "status": "mapped",
+   "role": "Triangle",
+   "reason": "Icons.Filled.ChangeHistory; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "trophy.fill",
+   "status": "mapped",
+   "role": "Trophy",
+   "reason": "Icons.Filled.EmojiEvents; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "video.fill",
+   "status": "mapped",
+   "role": "Video",
+   "reason": "Icons.Filled.Videocam; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "video.slash",
+   "status": "mapped",
+   "role": "VideoOff",
+   "reason": "Icons.Filled.VideocamOff"
+  },
+  {
+   "symbol": "video.slash.fill",
+   "status": "mapped",
+   "role": "VideoOff",
+   "reason": "Icons.Filled.VideocamOff; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "wand.and.rays",
+   "status": "mapped",
+   "role": "MagicWand",
+   "reason": "Icons.Filled.AutoFixHigh"
+  },
+  {
+   "symbol": "wand.and.rays.inverse",
+   "status": "mapped",
+   "role": "MagicWand",
+   "reason": "Icons.Filled.AutoFixHigh"
+  },
+  {
+   "symbol": "wand.and.stars",
+   "status": "mapped",
+   "role": "MagicWand",
+   "reason": "Icons.Filled.AutoFixHigh"
+  },
+  {
+   "symbol": "waveform",
+   "status": "mapped",
+   "role": "Waveform",
+   "reason": "Icons.Filled.GraphicEq"
+  },
+  {
+   "symbol": "waveform.and.magnifyingglass",
+   "status": "mapped",
+   "role": "Search",
+   "reason": "Icons.Filled.Search"
+  },
+  {
+   "symbol": "waveform.and.mic",
+   "status": "custom",
+   "role": "WaveformMic",
+   "reason": "aucun équivalent Material fidèle : vecteur maison MeeshyVectorIcons.WaveformMic (24 dp)"
+  },
+  {
+   "symbol": "waveform.circle.fill",
+   "status": "mapped",
+   "role": "Waveform",
+   "reason": "Icons.Filled.GraphicEq; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "wifi.exclamationmark",
+   "status": "mapped",
+   "role": "WifiProblem",
+   "reason": "Icons.Filled.SignalWifiConnectedNoInternet4"
+  },
+  {
+   "symbol": "wifi.slash",
+   "status": "mapped",
+   "role": "WifiOff",
+   "reason": "Icons.Filled.WifiOff"
+  },
+  {
+   "symbol": "xmark",
+   "status": "mapped",
+   "role": "Close",
+   "reason": "Icons.Filled.Close"
+  },
+  {
+   "symbol": "xmark.circle",
+   "status": "mapped",
+   "role": "CloseCircle",
+   "reason": "Icons.Outlined.Cancel; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "xmark.circle.fill",
+   "status": "mapped",
+   "role": "CloseCircleFilled",
+   "reason": "Icons.Filled.Cancel; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "xmark.octagon.fill",
+   "status": "mapped",
+   "role": "Dangerous",
+   "reason": "Icons.Filled.Dangerous; variante .fill rendue en Filled"
+  }
+ ],
+ "roles": {
+  "Account": {
+   "origin": "material",
+   "directional": false
+  },
+  "AccountFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Add": {
+   "origin": "material",
+   "directional": false
+  },
+  "AddCall": {
+   "origin": "material",
+   "directional": false
+  },
+  "AddCircle": {
+   "origin": "material",
+   "directional": false
+  },
+  "AddCircleFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "AddLink": {
+   "origin": "material",
+   "directional": false
+  },
+  "AddPhoto": {
+   "origin": "material",
+   "directional": false
+  },
+  "AddToList": {
+   "origin": "material",
+   "directional": true
+  },
+  "AddToPhotos": {
+   "origin": "material",
+   "directional": false
+  },
+  "AdminPanel": {
+   "origin": "material",
+   "directional": false
+  },
+  "AlignLeft": {
+   "origin": "material",
+   "directional": true
+  },
+  "AllInclusive": {
+   "origin": "material",
+   "directional": false
+  },
+  "AntennaCell": {
+   "origin": "material",
+   "directional": false
+  },
+  "Apps": {
+   "origin": "material",
+   "directional": false
+  },
+  "ArrowCircleDownFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "ArrowCircleUpFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "ArrowDown": {
+   "origin": "material",
+   "directional": false
+  },
+  "ArrowDownRight": {
+   "origin": "material",
+   "directional": false
+  },
+  "ArrowUp": {
+   "origin": "material",
+   "directional": false
+  },
+  "ArrowUpRight": {
+   "origin": "material",
+   "directional": true
+  },
+  "Article": {
+   "origin": "material",
+   "directional": true
+  },
+  "AttachFile": {
+   "origin": "material",
+   "directional": false
+  },
+  "Back": {
+   "origin": "material",
+   "directional": true
+  },
+  "Backspace": {
+   "origin": "material",
+   "directional": true
+  },
+  "Bell": {
+   "origin": "material",
+   "directional": false
+  },
+  "BellFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "BellOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "Block": {
+   "origin": "material",
+   "directional": false
+  },
+  "Bold": {
+   "origin": "material",
+   "directional": false
+  },
+  "Bolt": {
+   "origin": "material",
+   "directional": false
+  },
+  "Bookmark": {
+   "origin": "material",
+   "directional": false
+  },
+  "Brightness": {
+   "origin": "material",
+   "directional": false
+  },
+  "BrightnessFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "BrokenImage": {
+   "origin": "material",
+   "directional": false
+  },
+  "Call": {
+   "origin": "material",
+   "directional": false
+  },
+  "CallEnd": {
+   "origin": "material",
+   "directional": false
+  },
+  "Camera": {
+   "origin": "material",
+   "directional": false
+  },
+  "Campaign": {
+   "origin": "material",
+   "directional": false
+  },
+  "ChartBar": {
+   "origin": "material",
+   "directional": false
+  },
+  "ChartLine": {
+   "origin": "material",
+   "directional": true
+  },
+  "Chat": {
+   "origin": "material",
+   "directional": true
+  },
+  "Check": {
+   "origin": "material",
+   "directional": false
+  },
+  "CheckBoxBlank": {
+   "origin": "material",
+   "directional": false
+  },
+  "CheckCircle": {
+   "origin": "material",
+   "directional": false
+  },
+  "CheckCircleFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "ChevronBackward": {
+   "origin": "material",
+   "directional": true
+  },
+  "ChevronDown": {
+   "origin": "material",
+   "directional": false
+  },
+  "ChevronForward": {
+   "origin": "material",
+   "directional": true
+  },
+  "ChevronUp": {
+   "origin": "material",
+   "directional": false
+  },
+  "Close": {
+   "origin": "material",
+   "directional": false
+  },
+  "CloseCircle": {
+   "origin": "material",
+   "directional": false
+  },
+  "CloseCircleFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Cloud": {
+   "origin": "material",
+   "directional": false
+  },
+  "Code": {
+   "origin": "material",
+   "directional": false
+  },
+  "ComposeNew": {
+   "origin": "material",
+   "directional": false
+  },
+  "Copy": {
+   "origin": "material",
+   "directional": false
+  },
+  "Cut": {
+   "origin": "material",
+   "directional": false
+  },
+  "Dangerous": {
+   "origin": "material",
+   "directional": false
+  },
+  "Delete": {
+   "origin": "material",
+   "directional": false
+  },
+  "DeleteFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Devices": {
+   "origin": "material",
+   "directional": false
+  },
+  "Diamond": {
+   "origin": "material",
+   "directional": false
+  },
+  "DiamondFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Dictionary": {
+   "origin": "material",
+   "directional": true
+  },
+  "Directions": {
+   "origin": "material",
+   "directional": false
+  },
+  "Document": {
+   "origin": "material",
+   "directional": false
+  },
+  "Download": {
+   "origin": "material",
+   "directional": false
+  },
+  "Edit": {
+   "origin": "material",
+   "directional": false
+  },
+  "EditFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Emoji": {
+   "origin": "material",
+   "directional": false
+  },
+  "EmojiFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Error": {
+   "origin": "material",
+   "directional": false
+  },
+  "ErrorFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Eye": {
+   "origin": "material",
+   "directional": false
+  },
+  "EyeFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "EyeOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "EyeOffFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "FaceOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "FastForward": {
+   "origin": "material",
+   "directional": false
+  },
+  "FilterList": {
+   "origin": "material",
+   "directional": false
+  },
+  "Flame": {
+   "origin": "material",
+   "directional": false
+  },
+  "FlameFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Flight": {
+   "origin": "material",
+   "directional": false
+  },
+  "FlipCamera": {
+   "origin": "material",
+   "directional": false
+  },
+  "FlipToFront": {
+   "origin": "material",
+   "directional": false
+  },
+  "Folder": {
+   "origin": "material",
+   "directional": false
+  },
+  "FolderAdd": {
+   "origin": "material",
+   "directional": false
+  },
+  "FolderFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "FolderOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "Forum": {
+   "origin": "material",
+   "directional": false
+  },
+  "ForumFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Forward": {
+   "origin": "material",
+   "directional": true
+  },
+  "Forward10": {
+   "origin": "material",
+   "directional": false
+  },
+  "Forward5": {
+   "origin": "material",
+   "directional": false
+  },
+  "ForwardMessage": {
+   "origin": "material",
+   "directional": true
+  },
+  "Gamepad": {
+   "origin": "material",
+   "directional": false
+  },
+  "Gift": {
+   "origin": "material",
+   "directional": false
+  },
+  "Globe": {
+   "origin": "material",
+   "directional": false
+  },
+  "GppMaybe": {
+   "origin": "material",
+   "directional": false
+  },
+  "GridView": {
+   "origin": "material",
+   "directional": false
+  },
+  "GridViewFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Group": {
+   "origin": "material",
+   "directional": false
+  },
+  "GroupFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "GroupOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "Groups": {
+   "origin": "material",
+   "directional": false
+  },
+  "GroupsFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Hand": {
+   "origin": "material",
+   "directional": false
+  },
+  "Heart": {
+   "origin": "material",
+   "directional": false
+  },
+  "HeartFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "History": {
+   "origin": "material",
+   "directional": false
+  },
+  "Hourglass": {
+   "origin": "material",
+   "directional": false
+  },
+  "Inbox": {
+   "origin": "material",
+   "directional": false
+  },
+  "IndeterminateBox": {
+   "origin": "material",
+   "directional": false
+  },
+  "Info": {
+   "origin": "material",
+   "directional": false
+  },
+  "InfoFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Key": {
+   "origin": "material",
+   "directional": false
+  },
+  "Layers": {
+   "origin": "material",
+   "directional": false
+  },
+  "LayersFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "LibraryAdd": {
+   "origin": "material",
+   "directional": false
+  },
+  "Link": {
+   "origin": "material",
+   "directional": false
+  },
+  "ListChecklist": {
+   "origin": "material",
+   "directional": true
+  },
+  "Location": {
+   "origin": "material",
+   "directional": false
+  },
+  "LocationFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "LocationOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "Lock": {
+   "origin": "material",
+   "directional": false
+  },
+  "LockFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "LockOpen": {
+   "origin": "material",
+   "directional": false
+  },
+  "LockOpenFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "LockReset": {
+   "origin": "material",
+   "directional": false
+  },
+  "MagicWand": {
+   "origin": "material",
+   "directional": false
+  },
+  "Mail": {
+   "origin": "material",
+   "directional": false
+  },
+  "MailFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "MailOpen": {
+   "origin": "material",
+   "directional": false
+  },
+  "MailUnread": {
+   "origin": "material",
+   "directional": false
+  },
+  "ManageAccounts": {
+   "origin": "material",
+   "directional": false
+  },
+  "Map": {
+   "origin": "material",
+   "directional": false
+  },
+  "Memory": {
+   "origin": "material",
+   "directional": false
+  },
+  "Mention": {
+   "origin": "material",
+   "directional": false
+  },
+  "Menu": {
+   "origin": "material",
+   "directional": false
+  },
+  "MessageFilled": {
+   "origin": "material",
+   "directional": true
+  },
+  "Mic": {
+   "origin": "material",
+   "directional": false
+  },
+  "MicOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "MoreHorizontal": {
+   "origin": "material",
+   "directional": false
+  },
+  "Movie": {
+   "origin": "material",
+   "directional": false
+  },
+  "MusicNote": {
+   "origin": "material",
+   "directional": false
+  },
+  "MyLocation": {
+   "origin": "material",
+   "directional": false
+  },
+  "Notes": {
+   "origin": "material",
+   "directional": true
+  },
+  "OpenExternal": {
+   "origin": "material",
+   "directional": true
+  },
+  "OpenInFull": {
+   "origin": "material",
+   "directional": false
+  },
+  "Palette": {
+   "origin": "material",
+   "directional": false
+  },
+  "Pause": {
+   "origin": "material",
+   "directional": false
+  },
+  "Person": {
+   "origin": "material",
+   "directional": false
+  },
+  "PersonAdd": {
+   "origin": "material",
+   "directional": false
+  },
+  "PersonFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "PersonOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "PersonRemove": {
+   "origin": "material",
+   "directional": false
+  },
+  "PersonVerified": {
+   "origin": "material",
+   "directional": false
+  },
+  "Photo": {
+   "origin": "material",
+   "directional": false
+  },
+  "PhotoFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "PhotoFilter": {
+   "origin": "material",
+   "directional": false
+  },
+  "PhotoLibrary": {
+   "origin": "material",
+   "directional": false
+  },
+  "Pin": {
+   "origin": "material",
+   "directional": false
+  },
+  "PinFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Play": {
+   "origin": "material",
+   "directional": false
+  },
+  "PlayCircle": {
+   "origin": "material",
+   "directional": false
+  },
+  "PlayCircleFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Premium": {
+   "origin": "material",
+   "directional": false
+  },
+  "Public": {
+   "origin": "material",
+   "directional": false
+  },
+  "QrCode": {
+   "origin": "material",
+   "directional": false
+  },
+  "QueueMusic": {
+   "origin": "material",
+   "directional": true
+  },
+  "Quote": {
+   "origin": "material",
+   "directional": false
+  },
+  "RadioUnchecked": {
+   "origin": "material",
+   "directional": false
+  },
+  "Record": {
+   "origin": "material",
+   "directional": false
+  },
+  "RecordVoice": {
+   "origin": "material",
+   "directional": false
+  },
+  "Redo": {
+   "origin": "material",
+   "directional": true
+  },
+  "Refresh": {
+   "origin": "material",
+   "directional": false
+  },
+  "Remove": {
+   "origin": "material",
+   "directional": false
+  },
+  "RemoveCircleFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Repeat": {
+   "origin": "material",
+   "directional": false
+  },
+  "Replay": {
+   "origin": "material",
+   "directional": false
+  },
+  "Replay10": {
+   "origin": "material",
+   "directional": false
+  },
+  "Replay5": {
+   "origin": "material",
+   "directional": false
+  },
+  "Reply": {
+   "origin": "material",
+   "directional": true
+  },
+  "ReturnKey": {
+   "origin": "material",
+   "directional": true
+  },
+  "Schedule": {
+   "origin": "material",
+   "directional": false
+  },
+  "ScheduleFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Search": {
+   "origin": "material",
+   "directional": false
+  },
+  "Security": {
+   "origin": "material",
+   "directional": false
+  },
+  "SelectAll": {
+   "origin": "material",
+   "directional": false
+  },
+  "Send": {
+   "origin": "material",
+   "directional": true
+  },
+  "Sensors": {
+   "origin": "material",
+   "directional": false
+  },
+  "SettingsFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Share": {
+   "origin": "material",
+   "directional": false
+  },
+  "Shield": {
+   "origin": "material",
+   "directional": false
+  },
+  "ShieldFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "ShieldOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "Shopping": {
+   "origin": "material",
+   "directional": false
+  },
+  "ShoppingFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Shuffle": {
+   "origin": "material",
+   "directional": false
+  },
+  "SignIn": {
+   "origin": "material",
+   "directional": true
+  },
+  "SignOut": {
+   "origin": "material",
+   "directional": true
+  },
+  "SignalCellular": {
+   "origin": "material",
+   "directional": false
+  },
+  "Slideshow": {
+   "origin": "material",
+   "directional": false
+  },
+  "Smartphone": {
+   "origin": "material",
+   "directional": false
+  },
+  "SpaceBar": {
+   "origin": "material",
+   "directional": false
+  },
+  "Sparkles": {
+   "origin": "material",
+   "directional": false
+  },
+  "SparklesStack": {
+   "origin": "material",
+   "directional": false
+  },
+  "Speaker": {
+   "origin": "material",
+   "directional": false
+  },
+  "Star": {
+   "origin": "material",
+   "directional": false
+  },
+  "StarFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Stop": {
+   "origin": "material",
+   "directional": false
+  },
+  "StopCircle": {
+   "origin": "material",
+   "directional": false
+  },
+  "SwapHorizontal": {
+   "origin": "material",
+   "directional": false
+  },
+  "SwapVertical": {
+   "origin": "material",
+   "directional": false
+  },
+  "Sync": {
+   "origin": "material",
+   "directional": false
+  },
+  "SyncProblem": {
+   "origin": "material",
+   "directional": false
+  },
+  "Tag": {
+   "origin": "material",
+   "directional": false
+  },
+  "TagFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "TextBubble": {
+   "origin": "material",
+   "directional": false
+  },
+  "TextFields": {
+   "origin": "material",
+   "directional": false
+  },
+  "TextLarger": {
+   "origin": "material",
+   "directional": false
+  },
+  "TextSmaller": {
+   "origin": "material",
+   "directional": false
+  },
+  "Theater": {
+   "origin": "material",
+   "directional": false
+  },
+  "Timer": {
+   "origin": "material",
+   "directional": false
+  },
+  "TimerOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "Touch": {
+   "origin": "material",
+   "directional": false
+  },
+  "Translate": {
+   "origin": "material",
+   "directional": false
+  },
+  "Triangle": {
+   "origin": "material",
+   "directional": false
+  },
+  "Trophy": {
+   "origin": "material",
+   "directional": false
+  },
+  "Tune": {
+   "origin": "material",
+   "directional": false
+  },
+  "Undo": {
+   "origin": "material",
+   "directional": true
+  },
+  "UnfoldLess": {
+   "origin": "material",
+   "directional": false
+  },
+  "UnfoldMore": {
+   "origin": "material",
+   "directional": false
+  },
+  "Verified": {
+   "origin": "material",
+   "directional": false
+  },
+  "VerifiedFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "VerifiedUser": {
+   "origin": "material",
+   "directional": false
+  },
+  "Video": {
+   "origin": "material",
+   "directional": false
+  },
+  "VideoOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "VolumeOff": {
+   "origin": "material",
+   "directional": true
+  },
+  "VolumeUp": {
+   "origin": "material",
+   "directional": true
+  },
+  "Wallpaper": {
+   "origin": "material",
+   "directional": false
+  },
+  "Warning": {
+   "origin": "material",
+   "directional": false
+  },
+  "WarningFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Waveform": {
+   "origin": "material",
+   "directional": false
+  },
+  "WifiOff": {
+   "origin": "material",
+   "directional": false
+  },
+  "WifiProblem": {
+   "origin": "material",
+   "directional": false
+  },
+  "ZoomIn": {
+   "origin": "material",
+   "directional": false
+  },
+  "ZoomOut": {
+   "origin": "material",
+   "directional": false
+  },
+  "BubbleTail": {
+   "origin": "custom",
+   "directional": true
+  },
+  "BubbleTailOutline": {
+   "origin": "custom",
+   "directional": true
+  },
+  "PersonBackgroundDotted": {
+   "origin": "custom",
+   "directional": false
+  },
+  "StarSlash": {
+   "origin": "custom",
+   "directional": false
+  },
+  "TranslateBubble": {
+   "origin": "custom",
+   "directional": true
+  },
+  "WaveformMic": {
+   "origin": "custom",
+   "directional": false
+  }
+ }
+}

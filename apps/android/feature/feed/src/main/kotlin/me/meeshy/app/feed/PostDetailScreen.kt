@@ -2,6 +2,11 @@ package me.meeshy.app.feed
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,6 +69,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.PostReactionPaletteState
+import me.meeshy.sdk.model.PostReactionPick
+import me.meeshy.ui.component.reaction.PostReactionPalette
+import me.meeshy.ui.component.reaction.PostReactionPaletteAnchor
+import me.meeshy.ui.modifier.reactionPaletteTrigger
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.sdk.model.PostAbsenceReason
@@ -97,7 +107,9 @@ fun PostDetailScreen(
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     LaunchedEffect(state.errorMessage) {
         // Sans post, l'echec a son propre ecran (PostDetailAbsenceView) : pas de snackbar doublon.
@@ -163,6 +175,11 @@ fun PostDetailScreen(
                         onOpenPost = onOpenPost,
                         onRepost = viewModel::repost,
                         onQuote = viewModel::beginQuote,
+                        onLike = viewModel::toggleLike,
+                        quickEmojis = quickEmojis,
+                        onReact = viewModel::react,
+                        onBookmark = viewModel::toggleBookmark,
+                        onCommentNotice = { notice -> snackbar.showSnackbar(context.getString(notice.messageRes)) },
                     )
                 }
             }
@@ -187,8 +204,15 @@ private fun PostDetailContent(
     onOpenPost: (String) -> Unit,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
+    onLike: () -> Unit,
+    quickEmojis: List<String>,
+    onReact: (PostReactionPick) -> Unit,
+    onBookmark: () -> Unit,
+    onCommentNotice: suspend (CommentNotice) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
+    var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }
+    gallery?.let { opened -> FeedImageViewerHost(gallery = opened, onDismiss = { gallery = null }) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -258,7 +282,13 @@ private fun PostDetailContent(
 
                 if (post.images.isNotEmpty()) {
                     Spacer(Modifier.height(MeeshySpacing.md))
-                    PostImageLayout(images = post.images, layout = post.layout, onImageTap = null)
+                    PostImageLayout(
+                        images = post.images,
+                        layout = post.layout,
+                        onImageTap = { index ->
+                            gallery = FeedMediaGallery.of(post, index).takeUnless(FeedGallery::isEmpty)
+                        },
+                    )
                 }
 
                 post.repostEmbed?.let { embed ->
@@ -290,12 +320,16 @@ private fun PostDetailContent(
                     isReposted = isReposted,
                     onRepost = onRepost,
                     onQuote = onQuote,
+                    onLike = onLike,
+                    quickEmojis = quickEmojis,
+                    onReact = onReact,
+                    onBookmark = onBookmark,
                 )
             }
         }
 
         Spacer(Modifier.height(MeeshySpacing.lg))
-        PostCommentsSection()
+        PostCommentsSection(onNotice = onCommentNotice)
     }
 }
 
@@ -341,18 +375,44 @@ private fun DetailStatsRow(
     isReposted: Boolean,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
+    onLike: () -> Unit,
+    quickEmojis: List<String>,
+    onReact: (PostReactionPick) -> Unit,
+    onBookmark: () -> Unit,
 ) {
+    var palette by remember { mutableStateOf(PostReactionPaletteState()) }
     Row(
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box {
         DetailStat(
             icon = { tint ->
-                Icon(Icons.Filled.Favorite, contentDescription = stringResource(R.string.feed_like), tint = tint, modifier = Modifier.size(18.dp))
+                Icon(
+                    if (post.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    contentDescription = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like),
+                    tint = tint,
+                    modifier = Modifier.size(20.dp),
+                )
             },
             count = post.likeCount,
             active = post.isLiked,
+            activeTint = MeeshyPalette.Error,
+            onClick = onLike,
+            triggerModifier = Modifier.reactionPaletteTrigger(onOpen = { palette = palette.opened() }),
         )
+        PostReactionPalette(
+            isOpen = palette.isOpen,
+            onDismiss = { palette = palette.dismissed() },
+            onPick = { emoji ->
+                val (next, pick) = palette.picked(emoji)
+                palette = next
+                pick?.let(onReact)
+            },
+            emojis = quickEmojis,
+            anchor = PostReactionPaletteAnchor.Start,
+        )
+        }
         DetailStat(
             icon = { tint ->
                 Icon(Icons.Filled.ChatBubbleOutline, contentDescription = stringResource(R.string.feed_comments), tint = tint, modifier = Modifier.size(18.dp))
@@ -368,10 +428,16 @@ private fun DetailStatsRow(
         )
         DetailStat(
             icon = { tint ->
-                Icon(Icons.Outlined.BookmarkBorder, contentDescription = stringResource(R.string.feed_bookmark), tint = tint, modifier = Modifier.size(18.dp))
+                Icon(
+                    if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    contentDescription = stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark),
+                    tint = tint,
+                    modifier = Modifier.size(20.dp),
+                )
             },
             count = post.bookmarkCount,
             active = post.isBookmarked,
+            onClick = onBookmark,
         )
     }
 }
@@ -381,9 +447,19 @@ private fun DetailStat(
     icon: @Composable (Color) -> Unit,
     count: Int,
     active: Boolean,
+    activeTint: Color = MeeshyPalette.Indigo500,
+    onClick: (() -> Unit)? = null,
+    triggerModifier: Modifier = Modifier,
 ) {
-    val tint = if (active) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val tint = if (active) activeTint else MeeshyTheme.tokens.textSecondary
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = triggerModifier
+            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .let { base -> if (onClick == null) base else base.clickable(role = Role.Button, onClick = onClick) }
+            .padding(horizontal = MeeshySpacing.xs),
+    ) {
         icon(tint)
         if (count > 0) {
             Spacer(Modifier.width(MeeshySpacing.xs))

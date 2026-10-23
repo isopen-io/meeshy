@@ -87,36 +87,56 @@ final class ConversationMediaGalleryMenuTests: XCTestCase {
 
     // MARK: - Deux verbes, deux transports
 
-    func test_theMenu_carriesExactlyTwoVerbs_andBothHaveARealTransport() throws {
+    /// **Trois verbes depuis #12420** : « Enregistrer » et « Transférer » vivent
+    /// dans le rail ET dans le ⋯ (demande porteur 2026-10-23), et « Partager »
+    /// reste au ⋯ seul. Transférer n'est listé que si l'hôte sait transférer.
+    func test_theMenu_carriesSaveForwardAndShare_andEachHasARealTransport() throws {
         let menu = try body(of: "var overflowMenu: some View {")
 
         XCTAssertEqual(
-            menu.components(separatedBy: "Button {").count - 1, 2,
-            "deux verbes, pas trois : « Enregistrer sans la marque » n'existe pas (#6146)"
+            menu.components(separatedBy: "Button {").count - 1, 3,
+            "trois verbes : Enregistrer, Transférer, Partager — « Enregistrer sans la marque » n'existe pas (#6146)"
         )
         let saveVerb = try body(of: "private var saveVerb: String {")
         let shareVerb = try body(of: "private var shareVerb: String {")
         XCTAssertTrue(
             saveVerb.contains("media.save.title") && shareVerb.contains("gallery.menu.share"),
-            "les deux verbes sont « Enregistrer » et « Partager hors de Meeshy »"
+            "les verbes sont « Enregistrer » et « Partager »"
         )
         XCTAssertTrue(
-            menu.contains("requestSaveCurrent()") && menu.contains("shareCurrentOutsideMeeshy()"),
+            menu.contains("requestSaveCurrent()") && menu.contains("shareCurrentOutsideMeeshy()")
+                && menu.contains("forwardCurrent()"),
             "aucune entrée n'est listée sans chemin — chacune appelle son transport"
         )
+        XCTAssertTrue(menu.contains("MessageActionVerb.forward"),
+                      "« Transférer » dit le mot et l'icône du fil — un seul vocabulaire")
 
-        // Le `.accessibilityLabel` du menu LUI-MÊME nomme le glyphe ⋯, pas une
-        // entrée : on compte donc entrée par entrée, en découpant sur `Button {`.
-        // Un compte global aurait été satisfait par trois libellés posés
-        // n'importe où — y compris deux sur le même bouton.
         let entries = menu.components(separatedBy: "Button {").dropFirst()
-        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries.count, 3)
         for entry in entries {
             XCTAssertTrue(
                 entry.contains(".accessibilityLabel("),
                 "chaque entrée porte son libellé VoiceOver"
             )
         }
+    }
+
+    /// **« Partager », tout simplement** (demande porteur 2026-10-23, #12420) :
+    /// le verbe ne dit plus « hors de Meeshy », dans aucune des sept locales.
+    func test_theShareVerb_saysShare_inEveryShippedLocale() throws {
+        let catalog = try JSONSerialization.jsonObject(
+            with: try Data(contentsOf: Self.appRoot.appendingPathComponent(Self.catalogPath)))
+        let strings = ((catalog as? [String: Any])?["strings"] as? [String: Any]) ?? [:]
+        let localizations = ((strings["gallery.menu.share"] as? [String: Any])?["localizations"] as? [String: Any]) ?? [:]
+        let expected = ["ar": "مشاركة", "de": "Teilen", "en": "Share", "es": "Compartir",
+                        "fr": "Partager", "it": "Condividi", "pt-BR": "Compartilhar"]
+        XCTAssertEqual(Set(expected.keys), Set(Self.shippedLocales))
+        for (locale, value) in expected {
+            let unit = (localizations[locale] as? [String: Any])?["stringUnit"] as? [String: Any]
+            XCTAssertEqual(unit?["value"] as? String, value, "`gallery.menu.share` en \(locale)")
+        }
+        XCTAssertTrue(try body(of: "private var shareVerb: String {").contains("defaultValue: \"Partager\""),
+                      "le texte de repli est le même mot")
     }
 
     func test_bothTransports_reuseTheExistingSaveFlow_ratherThanReimplementIt() throws {

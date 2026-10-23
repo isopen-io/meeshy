@@ -24,11 +24,13 @@ import { InstitutionalPage } from './page';
 describe('InstitutionalPage — l’en-tête et le pied de meeshy.me (#10071)', () => {
   const html = render(<InstitutionalPage page={PAGE_ABOUT} version="3.1.0" />);
 
-  test('l’en-tête est celui de la landing : la marque, la navigation, se connecter, sans porte d’entrée anonyme (#10784)', () => {
+  test('l’en-tête est celui de la landing : la marque, la navigation, mes conversations, sans porte d’entrée anonyme (#10784, #12500)', () => {
     expect(html).toContain('class="ld-header"');
     expect(html).toContain('<img src="/brand/logo.png" alt="" width="36" height="36"/>');
     expect(html).toContain('<span class="ld-wordmark">Meeshy</span>');
-    expect(html).toMatch(/<a href="\/login"[^>]*>Se connecter<\/a>/);
+    expect(html).toMatch(/<a href="\/chats"[^>]*>Mes conversations<\/a>/);
+    expect(html).not.toContain('href="/login"');
+    expect(html).not.toContain('Se connecter');
     expect(html).not.toContain('Entrer sans compte');
     expect(html).not.toContain('#rejoindre');
     expect(html).toContain('href="/#world"');

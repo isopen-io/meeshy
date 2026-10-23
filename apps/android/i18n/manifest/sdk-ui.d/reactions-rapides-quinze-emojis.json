@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "ui", "iosKey": "emoji.category.reactions", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "emoji.category.faces", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "emoji.category.gestures", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "emoji.category.hearts", "status": "adopted"}
+      ]
+    }
+  }
+}

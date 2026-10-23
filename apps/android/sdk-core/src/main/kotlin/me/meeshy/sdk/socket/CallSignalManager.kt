@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -172,7 +173,7 @@ class CallSignalManager @Inject constructor(
             .put("type", if (isVideo) "video" else "audio")
         val raw = withTimeoutOrNull(INITIATE_ACK_TIMEOUT_MS) {
             suspendCancellableCoroutine { continuation ->
-                socketManager.emit("call:initiate", payload) { args ->
+                socketManager.emit(SocketEventNames.CALL_INITIATE, payload) { args ->
                     if (continuation.isActive) {
                         continuation.resume((args.firstOrNull() as? JSONObject)?.toString())
                     }
@@ -194,7 +195,7 @@ class CallSignalManager @Inject constructor(
         if (!awaitSocketConnected()) return CallJoinResult.Failure(SOCKET_OFFLINE)
         val raw = withTimeoutOrNull(JOIN_ACK_TIMEOUT_MS) {
             suspendCancellableCoroutine { continuation ->
-                socketManager.emit("call:join", JSONObject().put("callId", callId)) { args ->
+                socketManager.emit(SocketEventNames.CALL_JOIN, JSONObject().put("callId", callId)) { args ->
                     if (continuation.isActive) {
                         continuation.resume((args.firstOrNull() as? JSONObject)?.toString())
                     }
@@ -220,10 +221,10 @@ class CallSignalManager @Inject constructor(
         } != null
 
     /** Join the call room after answering / on reconnect (fire-and-forget). */
-    fun emitJoin(callId: String) = emit("call:join", callId)
+    fun emitJoin(callId: String) = emit(SocketEventNames.CALL_JOIN, callId)
 
     /** Leave the call room without ending the call for the peer. */
-    fun emitLeave(callId: String) = emit("call:leave", callId)
+    fun emitLeave(callId: String) = emit(SocketEventNames.CALL_LEAVE, callId)
 
     /** End the call for every participant. */
     /**
@@ -234,21 +235,21 @@ class CallSignalManager @Inject constructor(
      */
     fun emitEnd(callId: String, reason: String? = null) =
         socketManager.emit(
-            "call:end",
+            SocketEventNames.CALL_END,
             JSONObject().put("callId", callId).apply { reason?.let { put("reason", it) } },
         )
 
     /** Signal the peer that the local microphone was muted/unmuted. */
     fun emitToggleAudio(callId: String, enabled: Boolean) =
-        socketManager.emit("call:toggle-audio", JSONObject().put("callId", callId).put("enabled", enabled))
+        socketManager.emit(SocketEventNames.CALL_TOGGLE_AUDIO, JSONObject().put("callId", callId).put("enabled", enabled))
 
     /** Signal the peer that the local camera was turned off/on. */
     fun emitToggleVideo(callId: String, enabled: Boolean) =
-        socketManager.emit("call:toggle-video", JSONObject().put("callId", callId).put("enabled", enabled))
+        socketManager.emit(SocketEventNames.CALL_TOGGLE_VIDEO, JSONObject().put("callId", callId).put("enabled", enabled))
 
     /** Forward an SDP/ICE [signal] to the peer through the gateway relay. */
     fun emitSignal(callId: String, signal: JSONObject) =
-        socketManager.emit("call:signal", JSONObject().put("callId", callId).put("signal", signal))
+        socketManager.emit(SocketEventNames.CALL_SIGNAL, JSONObject().put("callId", callId).put("signal", signal))
 
     /** Send the local SDP offer (caller, after the peer joins). iOS payload parity. */
     fun emitOffer(callId: String, sdp: String, to: String, from: String, negotiationId: Int) =
@@ -298,7 +299,7 @@ class CallSignalManager @Inject constructor(
      * with `call:ice-servers-refreshed`. Fired on the TURN-credential-TTL refresh
      * timer and on ICE-restart. Parity with iOS `emitRequestIceServers`.
      */
-    fun emitRequestIceServers(callId: String) = emit("call:request-ice-servers", callId)
+    fun emitRequestIceServers(callId: String) = emit(SocketEventNames.CALL_REQUEST_ICE_SERVERS, callId)
 
     /**
      * Le device passe en arrière-plan pendant CET appel — le gateway étend la
@@ -309,14 +310,14 @@ class CallSignalManager @Inject constructor(
      */
     fun emitBackgrounded(callId: String, participantId: String) =
         socketManager.emit(
-            "call:backgrounded",
+            SocketEventNames.CALL_BACKGROUNDED,
             JSONObject().put("callId", callId).put("participantId", participantId),
         )
 
     /** Retour au premier plan pendant CET appel — tolérance heartbeat normale. */
     fun emitForegrounded(callId: String, participantId: String) =
         socketManager.emit(
-            "call:foregrounded",
+            SocketEventNames.CALL_FOREGROUNDED,
             JSONObject().put("callId", callId).put("participantId", participantId),
         )
 
@@ -330,7 +331,7 @@ class CallSignalManager @Inject constructor(
      */
     fun emitScreenCaptureDetected(callId: String, participantId: String, isCapturing: Boolean) =
         socketManager.emit(
-            "call:screen-capture-detected",
+            SocketEventNames.CALL_SCREEN_CAPTURE_DETECTED,
             JSONObject()
                 .put("callId", callId)
                 .put("participantId", participantId)
@@ -347,7 +348,7 @@ class CallSignalManager @Inject constructor(
      * sans lui, un callee Android qui (re)connecte mid-ring laisse l'appel
      * sonner dans le vide jusqu'au missed.
      */
-    fun emitCheckActive() = socketManager.emit("call:check-active", JSONObject())
+    fun emitCheckActive() = socketManager.emit(SocketEventNames.CALL_CHECK_ACTIVE, JSONObject())
 
     /**
      * Télémétrie de cycle de vie émise UNE fois à la fin de l'appel (parité iOS
@@ -357,7 +358,7 @@ class CallSignalManager @Inject constructor(
      * que le transport (l'enveloppe JSON + la clé `callId`).
      */
     fun emitAnalytics(callId: String, fields: Map<String, Any>) =
-        socketManager.emit("call:analytics", JSONObject(fields).put("callId", callId))
+        socketManager.emit(SocketEventNames.CALL_ANALYTICS, JSONObject(fields).put("callId", callId))
 
     /**
      * Liveness beat the gateway uses to detect a dead peer (heartbeat timeout →
@@ -365,7 +366,7 @@ class CallSignalManager @Inject constructor(
      * iOS `emitCallHeartbeat` — the gateway resolves the participant from the
      * socket's userId, so no from/to payload is needed.
      */
-    fun emitHeartbeat(callId: String) = emit("call:heartbeat", callId)
+    fun emitHeartbeat(callId: String) = emit(SocketEventNames.CALL_HEARTBEAT, callId)
 
     /**
      * Report the periodic quality + cumulative data-usage snapshot. The `stats`
@@ -376,7 +377,7 @@ class CallSignalManager @Inject constructor(
      */
     fun emitQualityReport(callId: String, report: CallQualityReport) =
         socketManager.emit(
-            "call:quality-report",
+            SocketEventNames.CALL_QUALITY_REPORT,
             JSONObject().put("callId", callId).put("stats", JSONObject(report.statsFields())),
         )
 
@@ -387,7 +388,7 @@ class CallSignalManager @Inject constructor(
      */
     fun emitReconnecting(callId: String, participantId: String, attempt: Int) =
         socketManager.emit(
-            "call:reconnecting",
+            SocketEventNames.CALL_RECONNECTING,
             JSONObject().put("callId", callId).put("participantId", participantId).put("attempt", attempt),
         )
 
@@ -397,7 +398,7 @@ class CallSignalManager @Inject constructor(
      */
     fun emitReconnected(callId: String, participantId: String) =
         socketManager.emit(
-            "call:reconnected",
+            SocketEventNames.CALL_RECONNECTED,
             JSONObject().put("callId", callId).put("participantId", participantId),
         )
 
@@ -457,28 +458,28 @@ class CallSignalManager @Inject constructor(
         const val SOCKET_OFFLINE = "socket not connected"
 
         /** The single inbound frame that also carries incoming-offer identity. */
-        const val INITIATED_EVENT = "call:initiated"
+        const val INITIATED_EVENT = SocketEventNames.CALL_INITIATED
 
         /** The inbound frame carrying the SDP/ICE payload the WebRTC engine consumes. */
-        const val SIGNAL_EVENT = "call:signal"
+        const val SIGNAL_EVENT = SocketEventNames.CALL_SIGNAL
 
         /** The gateway's reply to [emitRequestIceServers], carrying fresh TURN/STUN. */
-        const val ICE_SERVERS_REFRESHED_EVENT = "call:ice-servers-refreshed"
+        const val ICE_SERVERS_REFRESHED_EVENT = SocketEventNames.CALL_ICE_SERVERS_REFRESHED
 
         /** A participant left the room without ending the call (group calls). */
-        const val PARTICIPANT_LEFT_EVENT = "call:participant-left"
+        const val PARTICIPANT_LEFT_EVENT = SocketEventNames.CALL_PARTICIPANT_LEFT
 
         /** The gateway flagging the REMOTE peer's sustained bad network. */
-        const val QUALITY_ALERT_EVENT = "call:quality-alert"
+        const val QUALITY_ALERT_EVENT = SocketEventNames.CALL_QUALITY_ALERT
 
         /** The remote peer started/stopped a screen capture of the call. */
-        const val SCREEN_CAPTURE_ALERT_EVENT = "call:screen-capture-alert"
+        const val SCREEN_CAPTURE_ALERT_EVENT = SocketEventNames.CALL_SCREEN_CAPTURE_ALERT
 
         /** A live (optionally translated) caption segment from the remote speaker. */
-        const val TRANSLATED_SEGMENT_EVENT = "call:translated-segment"
+        const val TRANSLATED_SEGMENT_EVENT = SocketEventNames.CALL_TRANSLATED_SEGMENT
 
         /** The remote peer muted/unmuted the mic or toggled the camera. */
-        const val MEDIA_TOGGLED_EVENT = "call:media-toggled"
+        const val MEDIA_TOGGLED_EVENT = SocketEventNames.CALL_MEDIA_TOGGLED
 
         /**
          * The server removing THIS device from a call it no longer has the
@@ -494,7 +495,7 @@ class CallSignalManager @Inject constructor(
          * peer to those who REMAIN, and our sockets have just been evicted
          * from the call room anyway.
          */
-        const val FORCE_LEAVE_EVENT = "call:force-leave"
+        const val FORCE_LEAVE_EVENT = SocketEventNames.CALL_FORCE_LEAVE
 
         val INBOUND_EVENTS = listOf(
             INITIATED_EVENT,
@@ -505,12 +506,12 @@ class CallSignalManager @Inject constructor(
             SCREEN_CAPTURE_ALERT_EVENT,
             TRANSLATED_SEGMENT_EVENT,
             MEDIA_TOGGLED_EVENT,
-            "call:participant-joined",
-            "call:ended",
-            "call:missed",
+            SocketEventNames.CALL_PARTICIPANT_JOINED,
+            SocketEventNames.CALL_ENDED,
+            SocketEventNames.CALL_MISSED,
             FORCE_LEAVE_EVENT,
-            "call:error",
-            "call:already-answered",
+            SocketEventNames.CALL_ERROR,
+            SocketEventNames.CALL_ALREADY_ANSWERED,
         )
     }
 }

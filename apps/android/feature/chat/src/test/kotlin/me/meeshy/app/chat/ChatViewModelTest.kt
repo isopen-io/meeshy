@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import me.meeshy.sdk.model.EmojiCatalog
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.justRun
@@ -500,6 +501,40 @@ class ChatViewModelTest {
     )
 
     @Test
+    fun a_plain_member_of_a_public_conversation_may_join_a_call_but_never_start_one() = runTest(dispatcher) {
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = slowConversation(role = "member").copy(type = "public"),
+        )
+        advanceUntilIdle()
+
+        val entry = h.vm.callEntry.value
+        assertThat(entry).isNotNull()
+        assertThat(entry!!.canStart).isFalse()
+    }
+
+    @Test
+    fun a_global_conversation_offers_no_call_button() = runTest(dispatcher) {
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = slowConversation(role = "admin").copy(type = "global"),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.callEntry.value).isNull()
+    }
+
+    @Test
+    fun a_group_member_may_start_a_call() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(role = "member"))
+        advanceUntilIdle()
+
+        assertThat(h.vm.callEntry.value?.canStart).isTrue()
+    }
+
+    @Test
     fun the_conversation_slow_mode_interval_populates_the_composer_state() = runTest(dispatcher) {
         val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
 
@@ -524,7 +559,7 @@ class ChatViewModelTest {
         h.vm.send()
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.composerText.value.text).isEmpty()
         assertThat(h.vm.state.value.lastSelfSentAtMillis).isEqualTo(FIXED_NOW)
         val posture = h.vm.state.value.slowModeState(FIXED_NOW)
         assertThat(posture.canSend).isFalse()
@@ -535,7 +570,7 @@ class ChatViewModelTest {
         h.vm.send()
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEqualTo("again")
+        assertThat(h.vm.composerText.value.text).isEqualTo("again")
         coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
@@ -555,7 +590,7 @@ class ChatViewModelTest {
         h.vm.send()
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.composerText.value.text).isEmpty()
         coVerify(exactly = 2) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
@@ -783,12 +818,12 @@ class ChatViewModelTest {
     fun draft_change_updates_state_and_gates_sending() = runTest(dispatcher) {
         val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
         advanceUntilIdle()
-        assertThat(vm.state.value.canSend).isFalse()
+        assertThat(vm.composerText.value.hasText).isFalse()
 
         vm.onDraftChange("hello")
 
-        assertThat(vm.state.value.draft).isEqualTo("hello")
-        assertThat(vm.state.value.canSend).isTrue()
+        assertThat(vm.composerText.value.text).isEqualTo("hello")
+        assertThat(vm.composerText.value.hasText).isTrue()
     }
 
     @Test
@@ -800,7 +835,7 @@ class ChatViewModelTest {
             val pasted = "a".repeat(2_500)
             vm.onDraftChange(pasted)
 
-            assertThat(vm.state.value.draft).isEmpty()
+            assertThat(vm.composerText.value.text).isEmpty()
             val clip = vm.state.value.clipboardContent
             assertThat(clip).isNotNull()
             assertThat(clip!!.text).isEqualTo(pasted)
@@ -815,7 +850,7 @@ class ChatViewModelTest {
 
         vm.onDraftChange("just typing along")
 
-        assertThat(vm.state.value.draft).isEqualTo("just typing along")
+        assertThat(vm.composerText.value.text).isEqualTo("just typing along")
         assertThat(vm.state.value.clipboardContent).isNull()
     }
 
@@ -824,25 +859,25 @@ class ChatViewModelTest {
         runTest(dispatcher) {
             val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
             advanceUntilIdle()
-            val revisionBeforePaste = vm.state.value.draftRevision
+            val revisionBeforePaste = vm.composerText.value.revision
 
             vm.onDraftChange("a".repeat(2_500))
 
-            assertThat(vm.state.value.draft).isEmpty()
-            assertThat(vm.state.value.draftRevision).isGreaterThan(revisionBeforePaste)
+            assertThat(vm.composerText.value.text).isEmpty()
+            assertThat(vm.composerText.value.revision).isGreaterThan(revisionBeforePaste)
         }
 
     @Test
     fun ordinary_typing_never_bumps_the_draft_revision() = runTest(dispatcher) {
         val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
         advanceUntilIdle()
-        val revisionAtStart = vm.state.value.draftRevision
+        val revisionAtStart = vm.composerText.value.revision
 
         vm.onDraftChange("h")
         vm.onDraftChange("he")
         vm.onDraftChange("hel")
 
-        assertThat(vm.state.value.draftRevision).isEqualTo(revisionAtStart)
+        assertThat(vm.composerText.value.revision).isEqualTo(revisionAtStart)
     }
 
     @Test
@@ -850,7 +885,7 @@ class ChatViewModelTest {
         val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
         advanceUntilIdle()
 
-        assertThat(vm.state.value.composerSentiment).isNull()
+        assertThat(vm.composerText.value.sentiment).isNull()
     }
 
     @Test
@@ -860,7 +895,7 @@ class ChatViewModelTest {
 
         vm.onDraftChange("i love this amazing day")
 
-        assertThat(vm.state.value.composerSentiment).isEqualTo(SentimentLevel.VERY_POSITIVE)
+        assertThat(vm.composerText.value.sentiment).isEqualTo(SentimentLevel.VERY_POSITIVE)
     }
 
     @Test
@@ -870,7 +905,7 @@ class ChatViewModelTest {
 
         vm.onDraftChange("this is awful and horrible")
 
-        assertThat(vm.state.value.composerSentiment).isEqualTo(SentimentLevel.NEGATIVE)
+        assertThat(vm.composerText.value.sentiment).isEqualTo(SentimentLevel.NEGATIVE)
     }
 
     @Test
@@ -880,7 +915,7 @@ class ChatViewModelTest {
 
         vm.onDraftChange("meeting at noon today")
 
-        assertThat(vm.state.value.composerSentiment).isEqualTo(SentimentLevel.NEUTRAL)
+        assertThat(vm.composerText.value.sentiment).isEqualTo(SentimentLevel.NEUTRAL)
     }
 
     @Test
@@ -888,11 +923,11 @@ class ChatViewModelTest {
         val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
         advanceUntilIdle()
         vm.onDraftChange("i love this")
-        assertThat(vm.state.value.composerSentiment).isNotNull()
+        assertThat(vm.composerText.value.sentiment).isNotNull()
 
         vm.onDraftChange("")
 
-        assertThat(vm.state.value.composerSentiment).isNull()
+        assertThat(vm.composerText.value.sentiment).isNull()
     }
 
     @Test
@@ -986,8 +1021,8 @@ class ChatViewModelTest {
 
         vm.onDraftChange("a".repeat(2_500))
 
-        assertThat(vm.state.value.draft).isEmpty()
-        assertThat(vm.state.value.canSend).isTrue()
+        assertThat(vm.composerText.value.text).isEmpty()
+        assertThat(vm.state.value.clipboardContent).isNotNull()
     }
 
     @Test
@@ -1119,7 +1154,7 @@ class ChatViewModelTest {
         h.vm.sendFileAttachment("PPT".toByteArray(), "deck.pptx", declaredMimeType = null)
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.composerText.value.text).isEmpty()
         coVerify(exactly = 1) {
             h.repo.sendOptimistic(
                 conversationId = any(),
@@ -1277,7 +1312,7 @@ class ChatViewModelTest {
 
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
         // The refused text is kept in the draft, never silently dropped.
-        assertThat(h.vm.state.value.draft).isEqualTo("let me in")
+        assertThat(h.vm.composerText.value.text).isEqualTo("let me in")
     }
 
     @Test
@@ -1304,7 +1339,7 @@ class ChatViewModelTest {
         vm.send()
         advanceUntilIdle()
 
-        assertThat(vm.state.value.draft).isEmpty()
+        assertThat(vm.composerText.value.text).isEmpty()
         coVerify { repo.sendOptimistic("c1", "hello", "fr", user, null) }
         coVerify { workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
@@ -1598,7 +1633,7 @@ class ChatViewModelTest {
 
         h.vm.onMentionSelected(bob)
 
-        assertThat(h.vm.state.value.draft).isEqualTo("hey @bob ")
+        assertThat(h.vm.composerText.value.text).isEqualTo("hey @bob ")
         assertThat(h.vm.state.value.mention.isActive).isFalse()
         assertThat(h.vm.state.value.mention.draftMentions).containsKey("bob")
     }
@@ -3145,7 +3180,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.quickReactions)
-            .containsExactly("❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "👍").inOrder()
+            .containsExactlyElementsIn(EmojiCatalog.defaultQuickReactions).inOrder()
     }
 
     @Test
@@ -3268,7 +3303,7 @@ class ChatViewModelTest {
         h.vm.startEdit("m1")
 
         assertThat(h.vm.state.value.editingMessageId).isEqualTo("m1")
-        assertThat(h.vm.state.value.draft).isEqualTo("salut")
+        assertThat(h.vm.composerText.value.text).isEqualTo("salut")
         assertThat(h.vm.state.value.actionMessageId).isNull()
     }
 
@@ -3286,7 +3321,7 @@ class ChatViewModelTest {
         coVerify { h.repo.editOptimistic("m1", "salut tout le monde") }
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
         assertThat(h.vm.state.value.editingMessageId).isNull()
-        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.composerText.value.text).isEmpty()
         coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 
@@ -3299,7 +3334,7 @@ class ChatViewModelTest {
         h.vm.cancelEdit()
 
         assertThat(h.vm.state.value.editingMessageId).isNull()
-        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.composerText.value.text).isEmpty()
     }
 
     @Test
@@ -3311,7 +3346,7 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEqualTo("unsent thought")
+        assertThat(h.vm.composerText.value.text).isEqualTo("unsent thought")
     }
 
     @Test
@@ -3319,7 +3354,7 @@ class ChatViewModelTest {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.composerText.value.text).isEmpty()
     }
 
     @Test
@@ -3413,7 +3448,7 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.pendingEffects.has(MessageEffectFlags.EPHEMERAL)).isTrue()
         assertThat(h.vm.state.value.pendingEffects.ephemeralDuration).isEqualTo(300)
-        assertThat(h.vm.state.value.draft).isEqualTo("")
+        assertThat(h.vm.composerText.value.text).isEqualTo("")
     }
 
     @Test
@@ -3453,7 +3488,7 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEqualTo("hola")
+        assertThat(h.vm.composerText.value.text).isEqualTo("hola")
         // The restored manual pick wins over live detection of the restored Spanish text.
         assertThat(h.vm.state.value.composerLanguageCode).isEqualTo("de")
     }
@@ -3485,7 +3520,7 @@ class ChatViewModelTest {
         h.vm.startEdit("m1")
 
         assertThat(h.vm.state.value.editingMessageId).isEqualTo("m1")
-        assertThat(h.vm.state.value.draft).isEqualTo("salut")
+        assertThat(h.vm.composerText.value.text).isEqualTo("salut")
     }
 
     @Test
@@ -3499,7 +3534,7 @@ class ChatViewModelTest {
         h.vm.startEdit("m1")
 
         assertThat(h.vm.state.value.editingMessageId).isNull()
-        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.composerText.value.text).isEmpty()
     }
 
     @Test
@@ -3614,7 +3649,7 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEqualTo("re: salut")
+        assertThat(h.vm.composerText.value.text).isEqualTo("re: salut")
         assertThat(h.vm.state.value.replyingToMessageId).isEqualTo("m1")
     }
 
@@ -3622,7 +3657,7 @@ class ChatViewModelTest {
     fun a_draft_nav_argument_seeds_the_composer_immediately() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, initialDraftArg = "Thanks!")
 
-        assertThat(h.vm.state.value.draft).isEqualTo("Thanks!")
+        assertThat(h.vm.composerText.value.text).isEqualTo("Thanks!")
     }
 
     @Test
@@ -3635,7 +3670,7 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEqualTo("Thanks!")
+        assertThat(h.vm.composerText.value.text).isEqualTo("Thanks!")
     }
 
     @Test
@@ -3648,21 +3683,21 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.draft).isEqualTo("old draft")
+        assertThat(h.vm.composerText.value.text).isEqualTo("old draft")
     }
 
     @Test
     fun a_percent_encoded_draft_nav_argument_is_decoded() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, initialDraftArg = "Call%20me%20back")
 
-        assertThat(h.vm.state.value.draft).isEqualTo("Call me back")
+        assertThat(h.vm.composerText.value.text).isEqualTo("Call me back")
     }
 
     @Test
     fun a_malformed_percent_sequence_falls_back_to_the_raw_draft_text_instead_of_crashing() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, initialDraftArg = "100% ready!")
 
-        assertThat(h.vm.state.value.draft).isEqualTo("100% ready!")
+        assertThat(h.vm.composerText.value.text).isEqualTo("100% ready!")
     }
 
     @Test
@@ -4430,7 +4465,7 @@ class ChatViewModelTest {
 
             val details = h.vm.state.value.reactionDetails!!
             assertThat(details.isLoading).isFalse()
-            val tab = details.breakdown.tabs.single()
+            val tab = details.breakdown.tabs.filterIsInstance<ReactionTab.Emoji>().single()
             assertThat(tab.count).isEqualTo(2)
             // Self floats to the top.
             assertThat(tab.reactors.first().isSelf).isTrue()
@@ -4501,7 +4536,7 @@ class ChatViewModelTest {
         val form = h.vm.state.value.reportForm
         assertThat(form).isNotNull()
         assertThat(form!!.messageId).isEqualTo("m9")
-        assertThat(form.selectedReason).isEqualTo(ReportReason.SPAM)
+        assertThat(form.selectedReason).isNull()
         assertThat(h.vm.state.value.actionMessageId).isNull()
     }
 
@@ -4530,6 +4565,11 @@ class ChatViewModelTest {
 
         h.vm.submitReport()
         advanceUntilIdle()
+        coVerify(exactly = 0) { h.reportRepo.reportMessage(any(), any(), any()) }
+        assertThat(h.vm.state.value.reportForm!!.isConfirming).isTrue()
+
+        h.vm.confirmReportSubmit()
+        advanceUntilIdle()
 
         coVerify(exactly = 1) { h.reportRepo.reportMessage("m9", ReportReason.VIOLENCE, "threatened another member") }
         assertThat(h.vm.state.value.reportForm!!.isSubmitted).isTrue()
@@ -4541,8 +4581,10 @@ class ChatViewModelTest {
         coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
         advanceUntilIdle()
         h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
 
         h.vm.submitReport()
+        h.vm.confirmReportSubmit()
         advanceUntilIdle()
 
         val form = h.vm.state.value.reportForm!!
@@ -4556,8 +4598,10 @@ class ChatViewModelTest {
         coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns null
         advanceUntilIdle()
         h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
 
         h.vm.submitReport()
+        h.vm.confirmReportSubmit()
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.reportForm!!.hasError).isTrue()
@@ -4569,12 +4613,55 @@ class ChatViewModelTest {
         coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns NetworkResult.Success(Unit)
         advanceUntilIdle()
         h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
 
         h.vm.submitReport()
-        h.vm.submitReport()
+        h.vm.confirmReportSubmit()
+        h.vm.confirmReportSubmit()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { h.reportRepo.reportMessage(any(), any(), any()) }
+    }
+
+    @Test
+    fun a_report_without_a_reason_is_never_sent() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+
+        h.vm.submitReport()
+        h.vm.confirmReportSubmit()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.reportRepo.reportMessage(any(), any(), any()) }
+    }
+
+    @Test
+    fun confirming_without_a_prior_request_sends_nothing() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
+
+        h.vm.confirmReportSubmit()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.reportRepo.reportMessage(any(), any(), any()) }
+    }
+
+    @Test
+    fun cancelling_the_confirmation_sends_nothing_and_keeps_the_sheet() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.SPAM)
+        h.vm.submitReport()
+
+        h.vm.cancelReportConfirmation()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.reportRepo.reportMessage(any(), any(), any()) }
+        assertThat(h.vm.state.value.reportForm!!.isConfirming).isFalse()
     }
 
     @Test

@@ -37,6 +37,8 @@ dependencies {
     api(project(":core:model"))
     api(project(":core:network"))
     implementation(project(":core:common"))
+    implementation(project(":core:datastore"))
+    implementation(project(":core:crypto"))
     implementation(project(":core:database"))
 
     implementation(libs.androidx.core.ktx)
@@ -50,12 +52,13 @@ dependencies {
     implementation(libs.androidx.media3.effect)
     implementation(libs.datastore.preferences)
     implementation(libs.room.ktx)
-    implementation(libs.security.crypto)
     implementation(libs.hilt.android)
     implementation(libs.hilt.work)
     implementation(libs.work.runtime)
     implementation(libs.socketio)
     implementation(libs.timber)
+    implementation(libs.mlkit.translate)
+    implementation(libs.mlkit.language.id)
     ksp(libs.hilt.compiler)
     ksp(libs.hilt.work.compiler)
 

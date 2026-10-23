@@ -17,6 +17,7 @@ import { GameNightlyJob } from './game-nightly';
 import { GameMissionWindowJob } from './game-mission-window';
 import { GamePhotoMomentsJob } from './game-photo-moments';
 import { BackupStatusCheckJob } from './backup-status-check';
+import { MediaMirrorFollowJob, processMediaMirrorFollowJob } from './media-mirror-follow';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -44,6 +45,8 @@ export class BackgroundJobsManager {
   private gamePhotoMomentsJob: GamePhotoMomentsJob;
   /** Le contrôle de la sauvegarde nocturne, chaque jour à 5 h heure de Paris (#9668). */
   private backupStatusCheckJob: BackupStatusCheckJob;
+  /** Le miroir continu des médias vers le seau S3 (#11267) : éteint sans MEDIA_S3_MIRROR_FOLLOW=on. */
+  private mediaMirrorFollowJob: MediaMirrorFollowJob;
   /**
    * Le balayage des sessions expirées n'a pas de classe à lui : c'est UNE
    * requête, sans état ni dépendance. Une classe n'ajouterait qu'un emballage
@@ -84,6 +87,7 @@ export class BackgroundJobsManager {
     this.gameMissionWindowJob = new GameMissionWindowJob(prisma);
     this.gamePhotoMomentsJob = new GamePhotoMomentsJob(prisma);
     this.backupStatusCheckJob = new BackupStatusCheckJob({ prisma, emailService });
+    this.mediaMirrorFollowJob = processMediaMirrorFollowJob(prisma, logger);
   }
 
   /**
@@ -108,6 +112,7 @@ export class BackgroundJobsManager {
     this.gameMissionWindowJob.start();
     this.gamePhotoMomentsJob.start();
     this.backupStatusCheckJob.start();
+    this.mediaMirrorFollowJob.start();
 
     // Toutes les six heures : une session dont l'échéance est passée cesse de
     // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
@@ -205,6 +210,7 @@ export class BackgroundJobsManager {
     this.gameMissionWindowJob.stop();
     this.gamePhotoMomentsJob.stop();
     this.backupStatusCheckJob.stop();
+    this.mediaMirrorFollowJob.stop();
 
     if (this.sessionSweepInterval) {
       clearInterval(this.sessionSweepInterval);

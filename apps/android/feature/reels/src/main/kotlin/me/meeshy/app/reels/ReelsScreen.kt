@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,10 +55,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.reels.R
+import me.meeshy.sdk.model.PostReactionPaletteState
+import me.meeshy.sdk.model.PostReactionPick
+import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.ReelMediaLayout
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import me.meeshy.ui.component.reaction.PostReactionPalette
+import me.meeshy.ui.modifier.reactionPaletteTrigger
+import androidx.compose.runtime.remember
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyRadius
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 
 /** How many reels from the end of the thread trigger the next cursor page. */
 private const val LOAD_MORE_THRESHOLD = 3
@@ -73,9 +89,11 @@ fun ReelsScreen(
     seed: String? = null,
     onClose: () -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: (String) -> Unit = {},
     viewModel: ReelsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     // Muet par defaut (autoplay poli) ; le toggle vaut pour toute la session Reels.
     var muted by rememberSaveable { mutableStateOf(true) }
     val shareContext = LocalContext.current
@@ -123,23 +141,38 @@ fun ReelsScreen(
                 ) { page ->
                     val reel = state.reels[page]
                     Box(Modifier.fillMaxSize()) {
-                        ReelVideoSurface(
-                            mediaUrl = reel.videoUrl,
-                            isActive = page == pagerState.currentPage,
-                            modifier = Modifier.fillMaxSize(),
-                            muted = muted,
-                        )
+                        (reel.imageUrls.firstOrNull() ?: reel.posterUrl)
+                            ?.takeIf { reel.layout !is ReelMediaLayout.Video }
+                            ?.let { backdrop ->
+                                AsyncImage(
+                                    model = backdrop,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        reel.videoUrl?.let { playable ->
+                            ReelVideoSurface(
+                                mediaUrl = playable,
+                                isActive = page == pagerState.currentPage,
+                                modifier = Modifier.fillMaxSize(),
+                                muted = muted,
+                            )
+                        }
                         ReelOverlay(
                             reel = reel,
                             onLike = { viewModel.toggleLike(reel.id) },
+                            quickEmojis = quickEmojis,
+                            onReact = { pick -> viewModel.react(reel.id, pick) },
                             onComments = { commentsReelId = reel.id },
                             onRepost = { viewModel.repost(reel.id) },
                             onBookmark = { viewModel.toggleBookmark(reel.id) },
+                            onOpenAuthor = reel.authorId?.let { id -> { onOpenProfile(id) } },
                             onShare = {
                                 viewModel.recordShare(reel.id)
                                 val send = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, "https://meeshy.me/post/${'$'}{reel.id}")
+                                    putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(reel.id))
                                 }
                                 shareContext.startActivity(Intent.createChooser(send, null))
                             },
@@ -199,10 +232,13 @@ fun ReelsScreen(
 private fun ReelOverlay(
     reel: ReelPresentation,
     onLike: () -> Unit,
+    quickEmojis: List<String>,
+    onReact: (PostReactionPick) -> Unit,
     onComments: () -> Unit,
     onRepost: () -> Unit,
     onBookmark: () -> Unit,
     onShare: () -> Unit,
+    onOpenAuthor: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.padding(MeeshySpacing.lg)) {
@@ -212,8 +248,15 @@ private fun ReelOverlay(
                 .align(Alignment.BottomStart)
                 .fillMaxWidth(0.72f),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MeeshyAvatar(name = reel.authorName ?: "?", size = 36.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MeeshyRadius.pill))
+                    .let { base -> if (onOpenAuthor == null) base else base.clickable(role = Role.Button, onClick = onOpenAuthor) }
+                    .heightIn(min = 44.dp)
+                    .padding(end = MeeshySpacing.sm),
+            ) {
+                MeeshyAvatar(name = reel.authorName ?: "?", size = 36.dp, imageUrl = reel.authorAvatarUrl)
                 Spacer(Modifier.width(MeeshySpacing.sm))
                 Text(
                     text = reel.authorName ?: "",
@@ -229,6 +272,17 @@ private fun ReelOverlay(
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // Prisme : un indicateur discret dit que la légende est traduite.
+                if (reel.isCaptionTranslated) {
+                    Icon(
+                        imageVector = Icons.Filled.Translate,
+                        contentDescription = stringResource(R.string.reels_caption_translated),
+                        tint = MeeshyPalette.White.copy(alpha = 0.7f),
+                        modifier = Modifier
+                            .padding(top = MeeshySpacing.xs)
+                            .size(14.dp),
+                    )
+                }
             }
         }
 
@@ -238,13 +292,27 @@ private fun ReelOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
-            ReelAction(
-                icon = if (reel.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                tint = if (reel.isLiked) MeeshyPalette.Error else MeeshyPalette.White,
-                count = reel.likeCount,
-                contentDescription = stringResource(R.string.reels_like),
-                onClick = onLike,
-            )
+            var palette by remember(reel.id) { mutableStateOf(PostReactionPaletteState()) }
+            Box {
+                ReelAction(
+                    icon = if (reel.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    tint = if (reel.isLiked) MeeshyPalette.Error else MeeshyPalette.White,
+                    count = reel.likeCount,
+                    contentDescription = stringResource(R.string.reels_like),
+                    onClick = onLike,
+                    buttonModifier = Modifier.reactionPaletteTrigger(onOpen = { palette = palette.opened() }),
+                )
+                PostReactionPalette(
+                    isOpen = palette.isOpen,
+                    onDismiss = { palette = palette.dismissed() },
+                    onPick = { emoji ->
+                        val (next, pick) = palette.picked(emoji)
+                        palette = next
+                        pick?.let(onReact)
+                    },
+                    emojis = quickEmojis,
+                )
+            }
             ReelAction(
                 icon = Icons.AutoMirrored.Filled.Comment,
                 tint = MeeshyPalette.White,
@@ -286,9 +354,10 @@ private fun ReelAction(
     count: Int?,
     contentDescription: String? = null,
     onClick: () -> Unit = {},
+    buttonModifier: Modifier = Modifier,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(onClick = onClick) {
+        IconButton(onClick = onClick, modifier = buttonModifier) {
             Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(30.dp))
         }
         if (count != null) {

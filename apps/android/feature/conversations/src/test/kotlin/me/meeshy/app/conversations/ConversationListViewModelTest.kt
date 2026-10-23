@@ -194,6 +194,9 @@ class ConversationListViewModelTest {
         repo, messageRepo, socket, relay, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
         storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
+        me.meeshy.sdk.network.InMemoryNetworkMonitor(),
+        io.mockk.mockk(relaxed = true),
+        idleRowSignalsSource(),
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(
@@ -767,6 +770,22 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun a_failed_refresh_over_a_populated_list_leaves_no_phantom_error_for_a_later_filter() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        coEvery { repo.refresh() } throws RuntimeException("Network unavailable")
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+        vm.selectFilter(me.meeshy.sdk.model.ConversationFilter.UNREAD)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(ConversationListContent.of(vm.state.value)).isEqualTo(ConversationListContent.FilteredEmpty)
+    }
+
+    @Test
     fun refresh_failure_surfaces_the_error_message() = runTest(dispatcher) {
         val repo = repositoryReturning(flowOf(CacheResult.Empty))
         coEvery { repo.refresh() } throws RuntimeException("Network unavailable")
@@ -881,6 +900,49 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun the_launch_does_not_flash_offline_while_the_socket_makes_its_first_connection() = runTest(dispatcher) {
+        val connection = MutableStateFlow(SocketConnectionState.DISCONNECTED)
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val vm = viewModel(repo, connectionSocket(connection))
+        runCurrent()
+
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
+
+        connection.value = SocketConnectionState.CONNECTING
+        runCurrent()
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
+
+        connection.value = SocketConnectionState.CONNECTED
+        runCurrent()
+        connection.value = SocketConnectionState.DISCONNECTED
+        runCurrent()
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
+
+        advanceTimeBy(ConversationListConnectionObserver.RECONNECT_GRACE_MILLIS + 1)
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.RECONNECTING)
+    }
+
+    @Test
+    fun a_socket_that_never_connects_is_announced_connecting_after_the_grace_period() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val vm = viewModel(repo, connectionSocket(MutableStateFlow(SocketConnectionState.DISCONNECTED)))
+        runCurrent()
+
+        advanceTimeBy(ConversationListViewModel.CONNECTION_GRACE_MILLIS + 1)
+
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.CONNECTING)
+    }
+
+    @Test
+    fun a_silent_background_revalidation_never_pushes_a_syncing_strip() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Stale(listOf(ApiConversation(id = "c1")), ageMillis = 999_999)))
+        val vm = viewModel(repo, connectionSocket(MutableStateFlow(SocketConnectionState.CONNECTED)))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
+    }
+
+    @Test
     fun the_banner_follows_the_socket_connection_state() = runTest(dispatcher) {
         val connection = MutableStateFlow(SocketConnectionState.CONNECTING)
         val repo = repositoryReturning(
@@ -894,7 +956,7 @@ class ConversationListViewModelTest {
         val vm = viewModel(repo, connectionSocket(connection))
         advanceUntilIdle()
 
-        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.RECONNECTING)
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.CONNECTING)
 
         connection.value = SocketConnectionState.CONNECTED
         advanceUntilIdle()
@@ -1376,6 +1438,40 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.previewFor("c1")).isEqualTo(recent)
+    }
+
+    @Test
+    fun a_locked_conversation_preview_reads_no_message_at_all() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val messageRepo = messageRepository(listOf(LocalMessage(message = ApiMessage(id = "m", conversationId = "c1"))))
+        val locks = me.meeshy.sdk.lock.InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "1234")
+        }
+        val vm = viewModel(repo, messageRepo = messageRepo, lockStore = locks)
+        advanceUntilIdle()
+
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { messageRepo.recentMessages("c1", any()) }
+        assertThat(vm.state.value.previewFor("c1")).isNull()
+    }
+
+    @Test
+    fun a_lock_set_after_the_preview_loaded_seals_what_was_already_read() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val messageRepo = messageRepository(listOf(LocalMessage(message = ApiMessage(id = "m", conversationId = "c1"))))
+        val locks = me.meeshy.sdk.lock.InMemoryConversationLockStore().apply { setMasterPin("123456") }
+        val vm = viewModel(repo, messageRepo = messageRepo, lockStore = locks)
+        advanceUntilIdle()
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        locks.setLock("c1", "1234")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.previewFor("c1")).isNull()
     }
 
     @Test

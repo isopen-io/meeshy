@@ -110,6 +110,9 @@ internal fun ConversationContextMenu(
     onCreateCategory: (String) -> Unit,
     isLocked: Boolean,
     onLockToggle: () -> Unit,
+    onViewInfo: (() -> Unit)? = null,
+    onViewProfile: (() -> Unit)? = null,
+    onCreateShareLink: (() -> Unit)? = null,
 ) {
     var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
@@ -125,12 +128,40 @@ internal fun ConversationContextMenu(
             isPinned = isPinned,
             isMuted = isMuted,
             messages = previewMessages,
+            isSealed = isLocked,
             showSender = previewShowSender,
             currentUserId = currentUserId,
             currentUserPrefs = currentUserPrefs,
             labels = previewLabels,
         )
         HorizontalDivider()
+        onViewInfo?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.row_menu_info)) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
+        onViewProfile?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.row_menu_view_profile)) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
+        onCreateShareLink?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_create_share_link)) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
         DropdownMenuItem(
             text = {
                 Text(
@@ -552,6 +583,7 @@ private fun ConversationPreviewCard(
     isPinned: Boolean,
     isMuted: Boolean,
     messages: List<LocalMessage>?,
+    isSealed: Boolean,
     showSender: Boolean,
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
@@ -595,6 +627,21 @@ private fun ConversationPreviewCard(
         }
         Spacer(Modifier.height(MeeshySpacing.xs))
         when {
+            isSealed -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = MeeshyTheme.tokens.textMuted,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .padding(end = MeeshySpacing.xs),
+                )
+                Text(
+                    text = stringResource(R.string.conversations_lock_title_open),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MeeshyTheme.tokens.textMuted,
+                )
+            }
             messages == null -> Text(
                 text = stringResource(R.string.conversations_preview_loading),
                 style = MaterialTheme.typography.bodySmall,

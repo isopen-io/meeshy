@@ -51,4 +51,17 @@ object BrandMarkGeometry {
         Dash(startX = 262f, endX = 662f, y = 512f, restingAlpha = 1f, breathingAlpha = 0.85f, revealDelayMillis = 100),
         Dash(startX = 262f, endX = 562f, y = 640f, restingAlpha = 0.75f, breathingAlpha = 1f, revealDelayMillis = 200),
     )
+
+    /** Le cadre encré en espace 1024 (bouts ronds compris) : left, top, right, bottom. */
+    data class Bounds(val left: Float, val top: Float, val right: Float, val bottom: Float)
+
+    fun inkBounds(): Bounds {
+        val half = REFERENCE_SIDE * LINE_WIDTH_RATIO / 2f
+        return Bounds(
+            left = dashes.minOf { it.startX } - half,
+            top = dashes.minOf { it.y } - half,
+            right = dashes.maxOf { it.endX } + half,
+            bottom = dashes.maxOf { it.y } + half,
+        )
+    }
 }

@@ -6,6 +6,14 @@ import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, Ana
 import { getCacheStore } from '../../services/CacheStore';
 import { coerceCallAnalytics, coerceCallFeedback, summarizeCallFeedback, summarizeCallReliability } from '../../services/callAnalyticsAggregate';
 import { coerceCallQuality, summarizeCallQuality } from '../../services/callQualityAggregate';
+import { readPlaybackQoeRows, summarizePlaybackQoe } from '../../services/social/playbackQoeAggregate';
+import { utcDayOf } from '../../services/social/contentEvents';
+import {
+  PLAYBACK_QOE_DEFAULT_WINDOW_DAYS,
+  PLAYBACK_QOE_MAX_WINDOW_DAYS,
+  PLAYBACK_QOE_MIN_DEVICES,
+  type PlaybackQoeSummary,
+} from '@meeshy/shared/types/playback-qoe';
 import { requirePermission } from '../../middleware/authorize';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 
@@ -473,6 +481,46 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
     } catch (error) {
       logError(fastify.log, 'Get call reliability analytics error:', error);
       return sendInternalError(reply, 'Erreur lors de la récupération des métriques d\'appels');
+    }
+  });
+
+  /**
+   * GET /api/admin/analytics/playback?days=7
+   * Temps-à-première-image et rebuffer (#11280), p50/p95 par surface × tier
+   * d'appareil × jour, lus sur les sessions `playback` rangées par l'ingestion v2.
+   * k-anonymat : une cellule sous 20 comptes distincts n'est pas servie, seul
+   * son nombre l'est. Fenêtre ≤ 30 j (la conservation du brut). Cache 10 min.
+   */
+  fastify.get('/playback', {
+    onRequest: [fastify.authenticate, requireAnalyticsPermission]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const rawDays = Number((request.query as { days?: string }).days ?? PLAYBACK_QOE_DEFAULT_WINDOW_DAYS);
+      const days = Number.isFinite(rawDays)
+        ? Math.min(PLAYBACK_QOE_MAX_WINDOW_DAYS, Math.max(1, Math.floor(rawDays)))
+        : PLAYBACK_QOE_DEFAULT_WINDOW_DAYS;
+
+      const cacheKey = `admin:analytics:playback:v2:${days}`;
+      const cached = await getCacheStore().get(cacheKey);
+      if (cached) {
+        return sendSuccess(reply, JSON.parse(cached));
+      }
+
+      const ROW_CAP = 50_000;
+      const sinceDay = utcDayOf(new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000));
+      const rows = await readPlaybackQoeRows(fastify.prisma, { sinceDay, cap: ROW_CAP });
+      const data: PlaybackQoeSummary = {
+        windowDays: days,
+        sampled: rows.length >= ROW_CAP,
+        minDevices: PLAYBACK_QOE_MIN_DEVICES,
+        ...summarizePlaybackQoe(rows, { minDevices: PLAYBACK_QOE_MIN_DEVICES }),
+      };
+
+      getCacheStore().set(cacheKey, JSON.stringify(data), CACHE_TTL.daily).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
+      return sendSuccess(reply, data);
+    } catch (error) {
+      logError(fastify.log, 'Get playback QoE analytics error:', error);
+      return sendInternalError(reply, 'Erreur lors de la récupération de la qualité de lecture');
     }
   });
 }

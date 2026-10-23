@@ -8,6 +8,7 @@ import type { ApiResult } from '@/lib/api/http';
 import { createPackGestureGuard, newPurchaseRequestId } from '@/lib/api/packs';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { unlockText } from '@/lib/packs/unlock-texts';
 
 /**
  * **LA BOUTIQUE DE PACKS, UNE POUR TOUS LES DOMAINES** (#10149, LP1) — la
@@ -54,6 +55,10 @@ export type PackShopAdapter<P extends ShopPack> = {
    * puis à la confirmation du serveur (`{ balance }`, `null` si le serveur ne l'a pas dit).
    */
   applyPurchased?(queryClient: QueryClient, pack: P, confirmed: { readonly balance: number | null } | null): void;
+  /** Ce qui reste à débloquer, en une ligne (W18) ; `null` ou absent = rien à dire. */
+  unlock?(pack: P): string | null;
+  /** `true` = le pack n'est pas encore débloqué : ni « Installer » ni « Acheter » ne s'offrent (le serveur refuserait). */
+  locked?(pack: P): boolean;
 };
 
 type Notice = 'install' | 'insufficient' | 'purchase' | null;
@@ -98,6 +103,7 @@ export function PackShop<P extends ShopPack>({
     staleTime: 5 * 60 * 1000,
   });
 
+  const unlockOf = (pack: P): string | null => adapter.unlock?.(pack) ?? null;
   const needsPurchase = (pack: P): boolean =>
     adapter.purchase !== undefined && (adapter.price?.(pack) ?? null) !== null && adapter.owned?.(pack) === false;
 
@@ -236,11 +242,20 @@ export function PackShop<P extends ShopPack>({
                   <p className="line-clamp-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
                     {adapter.description(pack)}
                   </p>
+                  {unlockOf(pack) === null ? null : (
+                    <p data-shop-unlock className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+                      {unlockOf(pack)}
+                    </p>
+                  )}
                   <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
                     {[...adapter.meta(pack), ...(price === null ? [] : [adapter.owned?.(pack) === false ? translateStickerPacks(language, 'packs.price', { price: String(price) }) : translateStickerPacks(language, 'packs.owned')])].join(' · ')}
                   </p>
                 </div>
-                {pack.installed && !toBuy && adapter.removable?.(pack) === false ? (
+                {adapter.locked?.(pack) === true && !pack.installed ? (
+                  <span data-shop-locked={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+                    {unlockText(language, 'locked')}
+                  </span>
+                ) : pack.installed && !toBuy && adapter.removable?.(pack) === false ? (
                   <span data-shop-included={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
                     {translateStickerPacks(language, 'packs.included')}
                   </span>

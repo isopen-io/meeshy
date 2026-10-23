@@ -102,15 +102,17 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     }
   });
 
-  test('l’en-tête est celui de la landing, dans la langue du lecteur : se connecter, sans porte d’entrée anonyme (#10071, #10784)', () => {
+  test('l’en-tête est celui de la landing, dans la langue du lecteur : mes conversations, sans porte d’entrée anonyme (#10071, #10784, #12500)', () => {
     const fr = renderToStaticMarkup(<DownloadPage language="fr" />);
     expect(fr).toContain('class="ld-header"');
     expect(fr).toContain('<span class="ld-wordmark">Meeshy</span>');
-    expect(fr).toMatch(/<a href="\/login"[^>]*>Se connecter<\/a>/);
+    expect(fr).toMatch(/<a href="\/chats"[^>]*>Mes conversations<\/a>/);
+    expect(fr).not.toContain('href="/login"');
     expect(fr).not.toContain('Entrer sans compte');
     expect(fr).not.toContain('#rejoindre');
     const en = renderToStaticMarkup(<DownloadPage language="en" />);
-    expect(en).toMatch(/<a href="\/login"[^>]*>Sign in<\/a>/);
+    expect(en).toMatch(/<a href="\/chats"[^>]*>My conversations<\/a>/);
+    expect(en).not.toContain('Sign in');
     expect(en).not.toContain('Join without an account');
     expect(en).toContain('href="/en#world"');
   });
