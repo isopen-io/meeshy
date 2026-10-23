@@ -9,9 +9,6 @@ import androidx.core.telecom.CallControlScope
 import androidx.core.telecom.CallEndpointCompat
 import androidx.core.telecom.CallsManager
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelChildren
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -54,19 +51,15 @@ class JetpackTelecomCallsGateway @Inject constructor(
             if (info.isOutgoing) CallAttributesCompat.DIRECTION_OUTGOING else CallAttributesCompat.DIRECTION_INCOMING,
             if (info.isVideo) CallAttributesCompat.CALL_TYPE_VIDEO_CALL else CallAttributesCompat.CALL_TYPE_AUDIO_CALL,
         )
-        coroutineScope {
-            val callScope = this
-            callsManager.addCall(
-                attributes,
-                { _ -> handlers.onAnswer() },
-                { cause -> handlers.onDisconnect(disconnectKindOf(cause.code)) },
-                { handlers.onSetActive() },
-                { handlers.onSetInactive() },
-            ) {
-                val control = ScopeControl(this)
-                callScope.launch { block(control) }
-            }
-            callScope.coroutineContext[Job]?.cancelChildren()
+        callsManager.addCall(
+            attributes,
+            { _ -> handlers.onAnswer() },
+            { cause -> handlers.onDisconnect(disconnectKindOf(cause.code)) },
+            { handlers.onSetActive() },
+            { handlers.onSetInactive() },
+        ) {
+            val control = ScopeControl(this)
+            launch { block(control) }
         }
     }
 
