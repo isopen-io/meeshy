@@ -24,7 +24,6 @@ beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadStickerPacksCatalog('fr');
-  await loadStickerPacksCatalog('en');
 });
 
 afterAll(async () => {
@@ -60,6 +59,14 @@ const gatewayDeps = (answer: Answer): { deps: ConversationsDeps; calls: HttpRequ
 const pack = (slug: string, extra: Record<string, unknown> = {}) => ({ slug, name: `Pack ${slug}`, installed: false, ...extra });
 const shopOf = (packs: readonly unknown[], balance = 50) => ({ ok: true as const, data: { domains: [{ domain: 'wallpaper', packs }], balance } });
 
+const mountShop = (deps: ConversationsDeps, initialDomain?: 'wallpaper' | 'sticker') =>
+  mounter.mount(
+    <QueryClientProvider client={appQueryClient}>
+      <UnifiedShop language="fr" deps={deps} initialDomain={initialDomain} />
+    </QueryClientProvider>,
+  );
+
+const buyButton = (host: HTMLElement, slug = 'wallpaper:w1') => host.querySelector<HTMLElement>(`[data-shop-toggle="${slug}"]`);
 
 const season = (met: boolean) => ({ met, reward: { kind: 'season', number: 3, met }, window: null });
 
