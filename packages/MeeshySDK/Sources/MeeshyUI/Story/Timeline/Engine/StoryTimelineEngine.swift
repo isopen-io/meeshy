@@ -180,8 +180,13 @@ public final class StoryTimelineEngine {
     /// L'élément de la composition locale suit la politique média vivante
     /// (#11984), comme tout lecteur de lecture : la chaleur et l'économie
     /// d'énergie règlent aussi la timeline, y compris en cours de lecture.
-    static func makeCompositionItem(asset: AVAsset, monitor: MediaPolicyMonitor = .shared) -> AVPlayerItem {
+    /// `monitor` : un moniteur injecté (témoins) ; sinon le moniteur partagé.
+    static func makeCompositionItem(asset: AVAsset, monitor: MediaPolicyMonitor? = nil) -> AVPlayerItem {
         let item = AVPlayerItem(asset: asset)
+        guard let monitor else {
+            MediaPolicyMonitor.shared.adopt(item, role: .watched)
+            return item
+        }
         monitor.adopt(item, role: .watched)
         return item
     }
