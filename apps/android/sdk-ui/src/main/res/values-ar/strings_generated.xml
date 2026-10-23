@@ -2,8 +2,10 @@
 <resources>
     <string name="audio_fullscreen_dial">الموضع في الرسالة الصوتية</string>
     <string name="avatar_a11y_mood">المزاج %s</string>
+    <string name="common_cancel">إلغاء</string>
     <string name="common_clearSearch">مسح البحث</string>
     <string name="common_close">إغلاق</string>
+    <string name="common_done">تم</string>
     <string name="emoji_category_activities">الأنشطة</string>
     <string name="emoji_category_animals">الحيوانات</string>
     <string name="emoji_category_flags">الأعلام</string>

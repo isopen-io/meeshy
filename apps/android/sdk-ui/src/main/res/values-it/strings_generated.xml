@@ -2,8 +2,10 @@
 <resources>
     <string name="audio_fullscreen_dial">Posizione nel messaggio vocale</string>
     <string name="avatar_a11y_mood">umore %s</string>
+    <string name="common_cancel">Annulla</string>
     <string name="common_clearSearch">Cancella la ricerca</string>
     <string name="common_close">Chiudi</string>
+    <string name="common_done">Fatto</string>
     <string name="emoji_category_activities">Attività</string>
     <string name="emoji_category_animals">Animali</string>
     <string name="emoji_category_flags">Bandiere</string>
