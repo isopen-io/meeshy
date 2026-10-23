@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.scene.StoryTextDirection
@@ -131,10 +130,12 @@ internal fun TextElementLayer(
     ) {
         val typography = element.style.typography()
         val textColor = hexColor(element.color, Color.White)
-        // The pure model carries the base size in wire "design units" (1080-referential,
-        // iOS parity); the on-canvas preview shows it scaled to sp, and the element's own
-        // graphicsLayer `scale` above multiplies on top — mirroring iOS `fontSize × scale`.
-        val canvasFontSize = (element.size.designSize * STORY_TEXT_CANVAS_FONT_FACTOR).sp
+        // The base size in wire design units (1080-referential) mapped onto the REAL scene
+        // width — the reader's own law (StoryTextMetrics) — with the element's graphicsLayer
+        // `scale` above multiplying on top: iOS `fontSize × scale`, identical on both sides.
+        val density = LocalDensity.current
+        val canvasFontSizePx = element.previewFontPx(canvasWidthPx)
+        val canvasFontSize = with(density) { canvasFontSizePx.toSp() }
         val displayText = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) }
         // Base writing direction is derived from the caption (iOS-parity render-time
         // derivation via the pure StoryTextBidi), so an Arabic/Hebrew caption lays its
@@ -147,7 +148,6 @@ internal fun TextElementLayer(
         // other clients, projected at the canvas font size. The "neon" preset of this
         // composer carries the glow until it gets its own effect control; it is also
         // what `toTextObject` publishes, so what the author sees is what leaves.
-        val canvasFontSizePx = with(LocalDensity.current) { canvasFontSize.toPx() }
         val baseStyle = LocalTextStyle.current.copy(
             shadow = element.style.presetEffect().composeShadow(canvasFontSizePx, textColor),
             textDirection = textDirection,
@@ -253,10 +253,3 @@ internal fun StoryTextFontFamily.toFontFamily(): FontFamily = when (this) {
     StoryTextFontFamily.MONOSPACE -> FontFamily.Monospace
     StoryTextFontFamily.CURSIVE -> FontFamily.Cursive
 }
-
-/**
- * Maps a text element's wire "design-unit" size ([StoryTextSize.designSize], 1080-referential)
- * to the on-canvas preview size in sp. The medium default (96 design units) previews at 18 sp;
- * the element's own `scale` multiplies on top. Preview-only — the wire carries the design units.
- */
-internal const val STORY_TEXT_CANVAS_FONT_FACTOR = 0.1875f

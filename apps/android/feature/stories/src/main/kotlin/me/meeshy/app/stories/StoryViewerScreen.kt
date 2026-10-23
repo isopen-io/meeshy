@@ -80,12 +80,14 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -120,7 +122,6 @@ private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 private const val FOREGROUND_WIDTH_FRACTION = 0.45f
 
 /** Wire `StoryTextObject.fontSize` is authored in this 1080-referential design space (iOS parity); the on-screen size scales it by the canvas width. */
-private const val TEXT_DESIGN_CANVAS_WIDTH = 1080f
 
 /**
  * Minimal but real story viewer: segmented progress, tap-to-advance/dismiss,
@@ -1045,10 +1046,8 @@ private fun StoryTextObjectLayer(
             "right" -> TextAlign.End
             else -> TextAlign.Center
         }
-        val fontSizePx = (animated.fontSize * animated.scale)
-            .toFloat()
-            .times(canvasWidthPx / TEXT_DESIGN_CANVAS_WIDTH)
-            .coerceAtLeast(1f)
+        val fontSizePx = animated.fontPx(canvasWidthPx)
+        val typography = animated.style.typography()
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -1068,7 +1067,10 @@ private fun StoryTextObjectLayer(
                 text = animated.text,
                 color = color,
                 textAlign = textAlign,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight(typography.fontWeight),
+                fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                fontFamily = typography.family.toFontFamily(),
+                letterSpacing = typography.letterSpacingEm.em,
                 fontSize = with(density) { fontSizePx.toSp() },
                 // The EFFECT axis (#4870) — the same table as the composer preview
                 // and the two other clients, at the glyphs' real pixel size.
