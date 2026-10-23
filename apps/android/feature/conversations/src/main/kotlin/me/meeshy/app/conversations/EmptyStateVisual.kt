@@ -22,13 +22,12 @@ enum class EmptyStateCopy {
 }
 
 /**
- * The empty-state subtitle is either a fixed resource string (generic guidance)
- * or a dynamic literal — the server's own error message, shown verbatim so the
- * user sees the real failure rather than a generic one.
+ * The empty-state subtitle: always a translated resource. A transport or server
+ * error text (« Unable to resolve host … ») is never shown to the user — parity iOS
+ * `ConversationListView+EmptyState`, which always renders `conversations.error.subtitle`.
  */
 sealed interface EmptyStateSubtitle {
     data class Resource(val copy: EmptyStateCopy) : EmptyStateSubtitle
-    data class Literal(val text: String) : EmptyStateSubtitle
 }
 
 /**
@@ -53,9 +52,7 @@ data class EmptyStateVisual(
             is ConversationListContent.Error -> EmptyStateVisual(
                 glyph = EmptyStateGlyph.Error,
                 title = EmptyStateCopy.ErrorTitle,
-                subtitle = content.message.trim().takeIf { it.isNotEmpty() }
-                    ?.let { EmptyStateSubtitle.Literal(it) }
-                    ?: EmptyStateSubtitle.Resource(EmptyStateCopy.ErrorSubtitle),
+                subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.ErrorSubtitle),
                 cta = EmptyStateCopy.Retry,
             )
 

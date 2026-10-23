@@ -1580,4 +1580,64 @@ class PostCommentsViewModelTest {
         assertThat(remote.queries).containsExactly("al")
         assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("alice", "alan").inOrder()
     }
+
+    // --- What the reader sees when the thread fails (iOS FeedCommentsSheet+Loading, toasts) ---
+
+    @Test
+    fun `a failed first load draws the error state with a retry`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Failure(ApiError(message = "boom"))
+        val vm = viewModel()
+
+        assertThat(vm.state.value.loadFailed).isTrue()
+        assertThat(vm.state.value.isEmpty).isFalse()
+
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
+        vm.retryLoad()
+
+        assertThat(vm.state.value.loadFailed).isFalse()
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a")
+    }
+
+    @Test
+    fun `a failed send says so and gives the text back to the composer`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
+        coEvery { repository.addComment("p1", any(), any(), any()) } returns NetworkResult.Failure(ApiError(message = "nope"))
+        val vm = viewModel()
+
+        vm.compose("Mon commentaire")
+
+        assertThat(vm.state.value.notice).isEqualTo(CommentNotice.SEND_FAILED)
+        assertThat(vm.state.value.draft).isEqualTo("Mon commentaire")
+    }
+
+    @Test
+    fun `a failed reply says so and gives the text back to the composer`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", any(), any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.addComment("p1", any(), "c1", any()) } returns NetworkResult.Failure(ApiError(message = "nope"))
+        val vm = viewModel()
+        vm.beginReply("c1")
+
+        vm.compose("Ma réponse")
+
+        assertThat(vm.state.value.notice).isEqualTo(CommentNotice.REPLY_FAILED)
+        assertThat(vm.state.value.draft).isEqualTo("Ma réponse")
+    }
+
+    @Test
+    fun `a deleted comment is confirmed, a refused delete is said`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a"), comment("b")))
+        coEvery { repository.deleteComment("p1", "a") } returns NetworkResult.Success(Unit)
+        coEvery { repository.deleteComment("p1", "b") } returns NetworkResult.Failure(ApiError(message = "nope"))
+        val vm = viewModel()
+
+        vm.deleteComment("a")
+        val afterDelete = vm.state.value.notice
+        vm.consumeNotice()
+        vm.deleteComment("b")
+
+        assertThat(afterDelete).isEqualTo(CommentNotice.DELETED)
+        assertThat(vm.state.value.notice).isEqualTo(CommentNotice.DELETE_FAILED)
+    }
 }

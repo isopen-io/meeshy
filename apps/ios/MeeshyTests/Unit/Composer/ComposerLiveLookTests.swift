@@ -1,6 +1,7 @@
 import XCTest
 import AVFoundation
 import CoreImage
+import MeeshySDK
 @testable import Meeshy
 
 /// **Les filtres et les cadres se choisissent EN DIRECT dans le viseur** (#9329).
