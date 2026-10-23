@@ -110,6 +110,13 @@ class StoryRepository @Inject constructor(
         return true
     }
 
+    /**
+     * Les stories déjà en main dans le cache de la barre, sans réseau : le lecteur s'ouvre
+     * sur ce que l'anneau touché montrait, hors ligne compris (iOS
+     * `StoryViewerContainer.ensureGroupAvailable`, cache d'abord).
+     */
+    suspend fun cachedStories(): List<ApiPost> = cacheSource.readLocal()
+
     suspend fun list(cursor: String? = null, limit: Int = 50): NetworkResult<List<ApiPost>> =
         apiCall { storyApi.list(cursor, limit) }
 
