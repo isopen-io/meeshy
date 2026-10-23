@@ -205,7 +205,7 @@ private fun PrivacyToggleRow(toggle: PrivacyToggle, checked: Boolean, viewModel:
         checked = checked,
         onCheckedChange = { viewModel.setToggle(toggle, it) },
         info = topic?.let { settingsInfo(it, title) },
-        onInfo = topic?.let { { viewModel.showInfo(it) } },
+        onInfo = topic?.let { shown -> { _: SettingsInfo -> viewModel.showInfo(shown) } },
     )
 }
 
