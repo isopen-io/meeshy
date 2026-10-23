@@ -9,7 +9,6 @@
 # Marque (logo, mot-symbole) : le nom propre ne se traduit pas, mais la description d'accessibilité
 # du logo gagnera sa clé quand l'accessibilité sera passée en revue.
 contentDescription | sdk-ui/src/main/kotlin/me/meeshy/ui/component/BrandLogo.kt | Meeshy
-Text | sdk-ui/src/main/kotlin/me/meeshy/ui/component/BrandLogo.kt | M
 contentDescription | sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/MeeshySplashScreen.kt | Meeshy
 Text | sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/MeeshySplashScreen.kt | Meeshy
 
