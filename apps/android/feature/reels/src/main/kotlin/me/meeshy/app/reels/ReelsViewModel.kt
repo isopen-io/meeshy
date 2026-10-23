@@ -12,6 +12,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.QualifiedView
+import me.meeshy.sdk.model.ReelThreadOrder
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.toContentFetchFailure
@@ -129,7 +130,11 @@ class ReelsViewModel @Inject constructor(
             .orEmpty()
         val seedInCache = seed != null && cachedFeed.any { it.id == seed }
         val cached = ReelBuilder.withSeedFirst(cachedFeed, seed)
-        _state.update { it.copy(reels = cached, isLoading = cached.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = cached.isNotEmpty()) }
+        _state.update {
+            // Une relecture garde ce que le lecteur affiche deja : l'ordre ne bouge que par refreshed.
+            val shown = if (cached.isEmpty()) it.reels else cached
+            it.copy(reels = shown, isLoading = shown.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = shown.isNotEmpty())
+        }
 
         if (seed != null && !seedInCache) loadSeedAndPrepend(seed)
 
@@ -142,13 +147,11 @@ class ReelsViewModel @Inject constructor(
                     hasMoreReels = page.hasMore
                     val fresh = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
                     _state.update { current ->
-                        val existingIds = current.reels.mapTo(HashSet()) { it.id }
-                        val seedAlreadyPresent = seed != null && seed in existingIds
-                        val reels = if (seedAlreadyPresent) {
-                            current.reels + fresh.filter { it.id !in existingIds }
-                        } else {
-                            fresh
-                        }
+                        val seedAlreadyPresent = seed != null && current.reels.any { it.id == seed }
+                        // Le reel regarde et ceux qui le precedent ne bougent jamais ; sans reel
+                        // regarde, une graine presente garde tout le fil deja a l'ecran.
+                        val anchorId = currentReelId ?: current.reels.lastOrNull()?.id.takeIf { seedAlreadyPresent }
+                        val reels = ReelThreadOrder.refreshed(current.reels, anchorId, fresh) { it.id }
                         current.copy(reels = reels, isLoading = false, loadFailure = null, hasLoadedOnce = true)
                     }
                 }
@@ -157,8 +160,8 @@ class ReelsViewModel @Inject constructor(
                     // a network failure degrades to what the Feed already had, never to blank.
                     it.copy(
                         isLoading = false,
-                        errorMessage = if (cached.isEmpty()) result.error.message else it.errorMessage,
-                        loadFailure = if (cached.isEmpty()) result.error.toContentFetchFailure() else it.loadFailure,
+                        errorMessage = if (it.reels.isEmpty()) result.error.message else it.errorMessage,
+                        loadFailure = if (it.reels.isEmpty()) result.error.toContentFetchFailure() else it.loadFailure,
                     )
                 }
             }
@@ -208,10 +211,8 @@ class ReelsViewModel @Inject constructor(
                     val page = result.data
                     nextCursor = page.nextCursor
                     hasMoreReels = page.hasMore
-                    val existingIds = _state.value.reels.mapTo(HashSet()) { it.id }
                     val appended = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
-                        .filter { it.id !in existingIds }
-                    _state.update { it.copy(reels = it.reels + appended, isLoadingMore = false) }
+                    _state.update { it.copy(reels = ReelThreadOrder.appended(it.reels, appended) { reel -> reel.id }, isLoadingMore = false) }
                 }
                 is NetworkResult.Failure -> _state.update { it.copy(isLoadingMore = false) }
             }
@@ -303,6 +304,12 @@ class ReelsViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.postUnliked.collect { event ->
                 applyLiveLike(event.postId, event.likesCount, mine(event.userId, liked = false))
+            }
+        }
+        viewModelScope.launch {
+            // Un reel supprime en direct quitte le pager (cote iOS : `post:deleted` retire la page).
+            socialSocket.postDeleted.collect { event ->
+                _state.update { state -> state.copy(reels = state.reels.filter { it.id != event.postId }) }
             }
         }
         viewModelScope.launch {
