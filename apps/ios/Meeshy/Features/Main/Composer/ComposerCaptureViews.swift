@@ -255,35 +255,10 @@ struct ComposerCaptureChrome: View {
                     }
                     .allowsHitTesting(!finishing)
             }
-            if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
-                GeometryReader { proxy in
-                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
-                                                      framed: session.editFramesScene, playback: session.offersEditPlayback)
-                    ComposerCropBrackets(scene: ComposerEditScene.rect(aspect: aspect, in: zone), area: zone) { cadre in
-                        guard cadre.height > 0 else { return }
-                        session.setEditAspect(cadre.width / cadre.height)
-                    }
-                }
-                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
-                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
-                .transition(.opacity)
-            }
+            cropBrackets
             if !finishing, session.offersEditPlayback { editPlayback }
-            // **Les formats, PAR-DESSUS le cadre** (#10930), au bas de la scène.
-            if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
-                GeometryReader { proxy in
-                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
-                                                      framed: session.editFramesScene, playback: session.offersEditPlayback)
-                    let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
-                    }
-                    .frame(width: rangee.width, height: rangee.height)
-                    .position(x: rangee.midX, y: rangee.midY)
-                }
-                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
-                .transition(.opacity)
-            }
+            cropPresets
+            ComposerEditTextLayer(session: session, board: session.retouchTexts)
             VStack(spacing: 0) {
                 // Toujours montée, jamais retirée de l'arbre : une rangée insérée
                 // et retirée au gré des outils peut rester peinte le temps d'une
@@ -329,6 +304,43 @@ struct ComposerCaptureChrome: View {
                 if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }
             }
             Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) { ComposerCaptureDiscardFlow.keep(session) }
+        }
+    }
+
+    /// Les quatre crochets du recadrage, sur la scène.
+    @ViewBuilder
+    private var cropBrackets: some View {
+        if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
+            GeometryReader { proxy in
+                let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
+                                                  framed: session.editFramesScene, playback: session.offersEditPlayback)
+                ComposerCropBrackets(scene: ComposerEditScene.rect(aspect: aspect, in: zone), area: zone) { cadre in
+                    guard cadre.height > 0 else { return }
+                    session.setEditAspect(cadre.width / cadre.height)
+                }
+            }
+            .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
+            .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
+            .transition(.opacity)
+        }
+    }
+
+    /// **Les formats, PAR-DESSUS le cadre** (#10930), au bas de la scène.
+    @ViewBuilder
+    private var cropPresets: some View {
+        if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
+            GeometryReader { proxy in
+                let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
+                                                  framed: session.editFramesScene, playback: session.offersEditPlayback)
+                let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
+                }
+                .frame(width: rangee.width, height: rangee.height)
+                .position(x: rangee.midX, y: rangee.midY)
+            }
+            .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
+            .transition(.opacity)
         }
     }
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef } from 'react';
 
 import type { ParsedVCard, PublicContactAccount } from '@meeshy/shared/types/contact-card';
 
-import { contactInitials, vcardFieldRows, type ContactAction, type VCardFieldRow } from '@/lib/contact-card/view';
+import { vcardFieldRows, type ContactAction, type VCardFieldRow } from '@/lib/contact-card/view';
 import { translate } from '@/lib/i18n-catalog';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -10,7 +10,7 @@ import { LONG_PRESS_MS } from '@/lib/view/long-press';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
-import { ContactAccountRow } from './contact-card-account';
+import { ContactAccountRow, ContactFace } from './contact-card-account';
 import { Glyph, GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 
@@ -119,13 +119,7 @@ export function ContactCardSheet({
           }}
         >
           <header className="flex items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="grid shrink-0 place-items-center rounded-full text-body font-semibold"
-              style={{ width: 48, height: 48, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }}
-            >
-              {contactInitials(card.formattedName)}
-            </span>
+            <ContactFace card={card} account={accounts[0]} size={48} language={language} />
             <div className="min-w-0 flex-1">
               <h2 id={titleId} className="text-title font-bold" style={{ overflowWrap: 'anywhere' }}>
                 {card.formattedName}
@@ -168,9 +162,9 @@ export function ContactCardSheet({
               {/* Un fond OPAQUE sous les gestes : l'encre de marque des boutons ne
                   tient pas le contraste sur le verre seul (`glass-contrast.mjs`,
                   MinimalHeader : 2,78:1 au pire cas). */}
-              {accounts.map((account) => (
+              {accounts.map((account, index) => (
                 <div key={account.userId} className="rounded-card p-3" style={{ backgroundColor: 'var(--color-ios-card)' }}>
-                  <ContactAccountRow account={account} language={language} variant="full" busy={busy} onAction={onAction} />
+                  <ContactAccountRow account={account} language={language} variant="full" busy={busy} onAction={onAction} showAvatar={index > 0} />
                 </div>
               ))}
             </section>

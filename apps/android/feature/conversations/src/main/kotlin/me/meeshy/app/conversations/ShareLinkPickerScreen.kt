@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.displayedAvatar
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -173,7 +174,11 @@ private fun PickerRow(
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MeeshyAvatar(name = title, containerColor = hexColor(conversation.accentColorPalette().primary))
+        MeeshyAvatar(
+            name = title,
+            containerColor = hexColor(conversation.accentColorPalette().primary),
+            imageUrl = conversation.displayedAvatar(currentUserId),
+        )
         Column(modifier = Modifier.weight(1f).padding(horizontal = MeeshySpacing.md)) {
             Text(
                 text = title,

@@ -11,7 +11,6 @@ import { AdminButton } from '@/components/admin/button';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminInlineNotice } from '@/components/admin/states';
 import { BRAND, EDGE, INK2, SURFACE } from '@/components/admin/tone';
-import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { interpretPostState, interpretPostType, interpretPostVisibility } from '@/lib/admin/interpret/enums';
 import { personLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -191,7 +190,7 @@ export function AdminPostsPanel({
         language={language}
         title={translateAdmin(language, 'admin.nav.posts')}
         subtitle={translateAdmin(language, 'admin.posts.subtitle')}
-        crumbs={[{ label: translateAdmin(language, `admin.group.${adminGroupOf('posts')}`) }, { label: translateAdmin(language, 'admin.nav.posts') }]}
+        place={{ section: 'posts' }}
       />
       <AdminPostsStatsBand language={language} deps={deps} period={periodFilter === 'all' ? undefined : periodFilter} enabled={reach.opens('posts')} now={now} />
       <div className="grid gap-4">

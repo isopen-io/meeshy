@@ -1,0 +1,28 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_recording_accept">Accept</string>
+    <string name="call_recording_active">Recording in progress</string>
+    <string name="call_recording_ask">%s wants to record the call</string>
+    <string name="call_recording_askDetail">Recording only starts if everyone agrees, and it is then added to the conversation.</string>
+    <string name="call_recording_askDetail_video">The call screen and all its sound are recorded only if everyone agrees, then added to the conversation.</string>
+    <string name="call_recording_ask_video">%s wants to record the call on video</string>
+    <string name="call_recording_cancel">Cancel</string>
+    <string name="call_recording_caption">Record</string>
+    <string name="call_recording_close">Close</string>
+    <string name="call_recording_hint">Asks every participant for consent before recording</string>
+    <string name="call_recording_kind_audio">Audio only</string>
+    <string name="call_recording_kind_hint">Choose what will be recorded; each participant must then agree</string>
+    <string name="call_recording_kind_video">Audio and video</string>
+    <string name="call_recording_refuse">Decline</string>
+    <string name="call_recording_saveFailed">The recording could not be added</string>
+    <string name="call_recording_saved">The recording was added to the conversation</string>
+    <string name="call_recording_someone">A participant</string>
+    <string name="call_recording_start">Record the call</string>
+    <string name="call_recording_stop">Stop recording</string>
+    <string name="call_recording_stopped_joined">Someone joined the call: recording stopped</string>
+    <string name="call_recording_stopped_other">Recording stopped</string>
+    <string name="call_recording_stopped_refused">Recording declined</string>
+    <string name="call_recording_stopped_timeout">Not everyone answered: no recording</string>
+    <string name="call_recording_unavailable">Recording is not available right now</string>
+    <string name="call_recording_waiting">Waiting for everyone’s consent…</string>
+</resources>

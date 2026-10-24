@@ -1,35 +1,12 @@
 package me.meeshy.app;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
-/** Le fond des barres systeme suit le theme de l'app sous Android 15 (#9533). */
+/** Le fond derriere les barres systeme suit le theme de l'app (#9533, #12447). */
 public class SystemBarPaintTest {
-
-    @Test
-    public void belowAndroid15TheStatusBarIsPaintedByTheShell() {
-        assertTrue(SystemBarPaint.paintsStatus(24));
-        assertTrue(SystemBarPaint.paintsStatus(34));
-    }
-
-    @Test
-    public void fromAndroid15TheWebPageAlreadyPaintsBehindTheBars() {
-        assertFalse(SystemBarPaint.paintsStatus(35));
-        assertFalse(SystemBarPaint.paintsNavigation(35));
-        assertFalse(SystemBarPaint.paintsNavigation(36));
-    }
-
-    @Test
-    public void theNavigationBarIsPaintedOnlyWhereItsButtonsCanTurnDark() {
-        assertFalse(SystemBarPaint.paintsNavigation(24));
-        assertFalse(SystemBarPaint.paintsNavigation(25));
-        assertTrue(SystemBarPaint.paintsNavigation(26));
-        assertTrue(SystemBarPaint.paintsNavigation(34));
-    }
 
     @Test
     public void theThemeColorOfThePageBecomesAnOpaqueColour() {

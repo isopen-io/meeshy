@@ -45,7 +45,7 @@ export function AdminSortControl({
           onChange={(event) => {
             if (event.target.value !== sort) onSort(event.target.value);
           }}
-          className="rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="w-full rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK, outlineColor: BRAND }}
         >
           {options.map((option) => (

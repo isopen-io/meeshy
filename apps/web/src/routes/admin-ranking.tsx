@@ -187,7 +187,7 @@ export function AdminRankingPanel({ language, deps = apiDeps, now = defaultNow }
         language={language}
         title={translateAdmin(language, 'admin.nav.ranking')}
         subtitle={translateAdmin(language, 'admin.ranking.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.growth') }, { label: translateAdmin(language, 'admin.nav.ranking') }]}
+        place={{ section: 'ranking' }}
       />
       <AdminOfflineNotice language={language} />
 

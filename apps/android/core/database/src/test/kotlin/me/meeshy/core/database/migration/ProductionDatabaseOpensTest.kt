@@ -55,7 +55,9 @@ class ProductionDatabaseOpensTest {
         val db = database.openHelper.writableDatabase
 
         assertThat(db.version).isEqualTo(MeeshyMigrations.CURRENT_VERSION)
-        assertThat(DURABLE_QUERIES.map(db::rows)).isEqualTo(before)
+        assertThat(V16_DURABLE_QUERIES.map(db::rows)).isEqualTo(before)
+        assertThat(db.rows("SELECT nextAttemptAt, lastError, waitingSince, cancelRequestedAt, ownerId FROM outbox").flatten())
+            .containsExactlyElementsIn(List(10) { null })
         database.close()
     }
 

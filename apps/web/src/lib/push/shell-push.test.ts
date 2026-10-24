@@ -30,6 +30,7 @@ function fakePlugin(options: { readonly permission?: ShellPushPermission; readon
   const handlers: Handlers = {};
   const calls: string[] = [];
   const channels: string[] = [];
+  const channelOptions: Parameters<ShellPushPlugin['createChannel']>[0][] = [];
   let tokenSeq = 0;
   const plugin: ShellPushPlugin = {
     checkPermissions: async () => ({ receive: options.permission ?? 'granted' }),
@@ -47,6 +48,7 @@ function fakePlugin(options: { readonly permission?: ShellPushPermission; readon
     },
     createChannel: async (channel) => {
       channels.push(channel.id);
+      channelOptions.push(channel);
     },
     addListener: (async (eventName: string, listener: (event: never) => void) => {
       handlers[eventName] = listener;
@@ -54,7 +56,7 @@ function fakePlugin(options: { readonly permission?: ShellPushPermission; readon
     }) as ShellPushPlugin['addListener'],
   };
   const fire = (eventName: string, event: unknown): void => handlers[eventName]?.(event as never);
-  return { plugin, calls, channels, fire };
+  return { plugin, calls, channels, channelOptions, fire };
 }
 
 const authenticated = (id: string): SessionState => ({
@@ -103,6 +105,12 @@ describe('startShellPush — le jeton FCM de la coque part sous le compte couran
     await h.start();
     expect(h.channels).toEqual([SHELL_PUSH_CHANNEL_ID]);
     expect(SHELL_PUSH_CHANNEL_ID).toBe('meeshy_notifications');
+  });
+
+  test('le canal des messages vibre, comme une bannière web sur Android et iOS en mode vibreur (#12566)', async () => {
+    const h = harness(anonymous);
+    await h.start();
+    expect(h.channelOptions.map((channel) => channel.vibration)).toEqual([true]);
   });
 
   test('une session enregistrée enregistre le jeton par le port d’iOS, en android/fcm', async () => {
@@ -277,6 +285,15 @@ describe('la coque accuse la remise d’un message reçu UNE fois, en natif (#11
     const received = service.slice(service.indexOf('public void onMessageReceived('), service.indexOf('private void acknowledgeDelivery('));
     expect(received).toContain('forward("sendRemoteMessage"');
     expect(received).toContain('acknowledgeDelivery(PushDeliveryReceipt.of(');
+  });
+
+  test('l’accusé part hors du fil des pushs, comme `accuserRemise` en parallèle de la bannière (#12623)', () => {
+    const service = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../android/app/src/main/java/me/meeshy/app/MeeshyMessagingService.java'),
+      'utf8',
+    );
+    const acknowledge = service.slice(service.indexOf('private void acknowledgeDelivery('), service.indexOf('public void onNewToken('));
+    expect(acknowledge).toContain('ReceiptDispatch.run(');
   });
 });
 

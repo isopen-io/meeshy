@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { QueueEvents } from 'bullmq';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { attachmentSocketSelect } from '../attachmentIncludes';
+import { MESSAGE_SIDE_PROTECTION_SELECT } from '../mediaSideContent';
 import { emitAttachmentUpdated } from '../../../socketio/emitAttachmentUpdated';
 import { serializeAttachmentForSocket, type SocketAttachmentRow } from '../../../socketio/serializeAttachmentForSocket';
 import type { ConversationRoomEmitter } from '../../../socketio/emitToConversationParticipants';
@@ -47,7 +48,10 @@ export function mediaReadyPorts(deps: MediaReadyListenerDeps): MediaReadyPorts {
     loadMessageAttachment: async (id) => {
       const row = await deps.prisma.messageAttachment.findUnique({
         where: { id },
-        select: { ...attachmentSocketSelect, processingState: true, message: { select: { conversationId: true } } },
+        // `message` REMPLACE celui d'`attachmentSocketSelect` : il garde donc la
+        // protection du porteur, sans quoi `servedDescription` servirait la
+        // description d'une pièce d'un message protégé (#12333).
+        select: { ...attachmentSocketSelect, processingState: true, message: { select: { conversationId: true, ...MESSAGE_SIDE_PROTECTION_SELECT } } },
       });
       return row as never;
     },

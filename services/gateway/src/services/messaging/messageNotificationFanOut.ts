@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isEndToEndMode } from './e2eePlaintextAdmission';
 import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import {
   maskedAttachment,
@@ -369,11 +370,32 @@ export async function notifyMessageRecipients(params: {
     const deadFor = await loadQuoteCascadeAudience(prisma, message.replyToId);
     const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !deadFor.has(id));
 
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        title: true,
+        type: true,
+        encryptionMode: true,
+        participants: {
+          where: { isActive: true, type: 'user' },
+          select: { userId: true },
+        },
+      },
+    });
+    if (!conversation) return;
+
     // Le contenu qu'un message PROTÉGÉ (éphémère, vue unique, flouté, chiffré)
     // est autorisé à montrer sur un écran verrouillé — jamais le contenu lui-même.
+    //
+    // #12518 — le chiffrement se lit sur le MODE DE LA CONVERSATION, pas sur les
+    // seuls champs de la ligne : un message hérité, ou écrit par un chemin qui
+    // n'a pas posé `encryptionMode`, ne rouvre pas l'écran verrouillé.
     const protectedOverride = protectedPreview({
       messageType: message.messageType,
-      isEncrypted: message.isEncrypted === true || message.encryptionMode === 'e2ee',
+      isEncrypted:
+        message.isEncrypted === true
+        || isEndToEndMode(message.encryptionMode)
+        || isEndToEndMode(conversation.encryptionMode),
       isViewOnce: message.isViewOnce,
       isBlurred: message.isBlurred,
       effectFlags: message.effectFlags,
@@ -391,19 +413,6 @@ export async function notifyMessageRecipients(params: {
 
     const sender = await resolveNotificationSender({ prisma, senderParticipantId });
     if (!sender) return;
-
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: {
-        title: true,
-        type: true,
-        participants: {
-          where: { isActive: true, type: 'user' },
-          select: { userId: true },
-        },
-      },
-    });
-    if (!conversation) return;
 
     const memberIds = conversation.participants
       .map(p => p.userId)

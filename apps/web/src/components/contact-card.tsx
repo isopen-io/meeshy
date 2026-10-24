@@ -12,11 +12,10 @@ import { contactResolveQueryOptions, type ContactResolveDeps } from '@/lib/conta
 import { saveContactFile, type ContactFileOutcome } from '@/lib/contact-card/save-contact-file';
 import { useContactActions, type ContactActionPorts } from '@/lib/contact-card/use-contact-actions';
 import { vcardQueryOptions, type FetchText } from '@/lib/contact-card/vcard-file';
-import { contactInitials } from '@/lib/contact-card/view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
-import { ContactAccountRow } from './contact-card-account';
+import { ContactAccountRow, ContactFace } from './contact-card-account';
 import { ContactCardSheet, type ClipboardWriter } from './contact-card-sheet';
 import { Glyph } from './glyph';
 
@@ -142,13 +141,7 @@ export default function ContactCard({
         aria-label={translate(language, 'contactCard.open', { name: card.formattedName })}
         data-contact-open=""
       >
-        <span
-          aria-hidden="true"
-          className="grid shrink-0 place-items-center rounded-full text-body font-semibold"
-          style={{ width: 40, height: 40, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-brand)' }}
-        >
-          {contactInitials(card.formattedName)}
-        </span>
+        <ContactFace card={card} account={accounts[0]} size={40} language={language} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-body font-semibold" data-contact-name="">
             {card.formattedName}
@@ -163,7 +156,7 @@ export default function ContactCard({
 
       {accounts[0] !== undefined ? (
         <div className="rounded-card p-3" style={{ backgroundColor: 'var(--color-ios-card)' }}>
-          <ContactAccountRow account={accounts[0]} language={language} variant="compact" busy={actions.busy} onAction={actions.run} />
+          <ContactAccountRow account={accounts[0]} language={language} variant="compact" showAvatar={false} busy={actions.busy} onAction={actions.run} />
         </div>
       ) : null}
 

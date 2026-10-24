@@ -61,6 +61,10 @@ nonisolated struct ConversationListPrefetchRequest: Sendable {
     let candidates: [ConversationPrefetchCandidate]
     let owner: ConversationPrefetchOwner
     let stillOwner: @MainActor @Sendable () -> Bool
+    /// #11387 — une conversation verrouillée PENDANT la passe ne se demande
+    /// ni ne s'écrit : reposée avant la requête et avant l'écriture. Posée par
+    /// le préchargeur (`schedule`), jamais par l'appelant.
+    var isContentLocked: @MainActor @Sendable (String) -> Bool = { _ in false }
 }
 
 // MARK: - La base locale vue par le préchargement
@@ -178,15 +182,42 @@ final class ConversationListMessagePrefetcher {
     /// Un échec n'y entre pas : la passe suivante le retente.
     private var prefetchedMarks: [String: String] = [:]
     private var armedForNextReload = false
+    /// #11387 — le jeu des conversations verrouillées par PIN, relu à chaque
+    /// passe et avant chaque requête.
+    private let contentLocks: @MainActor @Sendable () -> Set<String>
 
     nonisolated deinit {}
 
     init(
         messageService: any MessageServiceProviding = MessageService.shared,
-        store: any ConversationListPrefetchStoreProviding = ConversationListPrefetchStore()
+        store: any ConversationListPrefetchStoreProviding = ConversationListPrefetchStore(),
+        contentLocks: @escaping @MainActor @Sendable () -> Set<String> = {
+            ConversationLockManager.shared.lockedConversationIds
+        }
     ) {
         self.messageService = messageService
         self.store = store
+        self.contentLocks = contentLocks
+    }
+
+    /// **« Aucun préchargement ne met en cache les messages d'une conversation
+    /// verrouillée »** (décision porteur, #11387). Le verrou
+    /// s'applique ICI, à l'entrée de toute passe : aucun appelant ne peut
+    /// l'oublier. Une conversation verrouillée sort des candidats, et celle qui
+    /// se verrouille pendant la passe n'est ni demandée ni écrite.
+    nonisolated static func excludingContentLocks(
+        _ request: ConversationListPrefetchRequest,
+        contentLocks: @escaping @MainActor @Sendable () -> Set<String>,
+        lockedNow: Set<String>
+    ) -> ConversationListPrefetchRequest {
+        ConversationListPrefetchRequest(
+            candidates: request.candidates.filter {
+                !ConversationLockManager.hidesContent(of: $0.conversationId, lockedConversationIds: lockedNow)
+            },
+            owner: request.owner,
+            stillOwner: request.stillOwner,
+            isContentLocked: { ConversationLockManager.hidesContent(of: $0, lockedConversationIds: contentLocks()) }
+        )
     }
 
     /// Les lignes à précharger : les premières à identifiant NON VIDE, dans l'ordre.
@@ -215,6 +246,7 @@ final class ConversationListMessagePrefetcher {
     }
 
     func schedule(_ request: ConversationListPrefetchRequest) {
+        let request = Self.excludingContentLocks(request, contentLocks: contentLocks, lockedNow: contentLocks())
         guard inFlight == nil else {
             pending = request
             return
@@ -306,6 +338,7 @@ final class ConversationListMessagePrefetcher {
         store: any ConversationListPrefetchStoreProviding
     ) async -> String? {
         guard await request.stillOwner(),
+              !(await request.isContentLocked(candidate.conversationId)),
               let held = await store.heldWindow(
                   conversationId: candidate.conversationId, ownerId: request.owner.userId, limit: pageLimit
               ),
@@ -319,7 +352,9 @@ final class ConversationListMessagePrefetcher {
                 includeReplies: true,
                 includeTranslations: true
             )
-            guard response.success, await request.stillOwner() else { return nil }
+            guard response.success,
+                  await request.stillOwner(),
+                  !(await request.isContentLocked(candidate.conversationId)) else { return nil }
             let persisted = await store.persist(response.data, conversationId: candidate.conversationId, owner: request.owner)
             return persisted ? candidate.latestMark : nil
         } catch {

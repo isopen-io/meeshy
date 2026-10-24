@@ -5,10 +5,14 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.content.IntentCompat
 import dagger.hilt.android.AndroidEntryPoint
 import me.meeshy.app.chat.ShareTargetScreen
+import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.theme.MeeshyTheme
+import javax.inject.Inject
 
 /**
  * `ACTION_SEND` receiver — Android's share-sheet counterpart to iOS's
@@ -25,6 +29,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 @AndroidEntryPoint
 class ShareTargetActivity : ComponentActivity() {
 
+    @Inject
+    lateinit var config: MeeshyConfig
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sharedText = intent?.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
@@ -34,12 +41,14 @@ class ShareTargetActivity : ComponentActivity() {
         val sharedAttachmentMimeType = intent?.type
         setContent {
             MeeshyTheme {
-                ShareTargetScreen(
-                    sharedText = sharedText,
-                    onFinished = ::finish,
-                    sharedAttachmentUri = sharedAttachmentUri,
-                    sharedAttachmentMimeType = sharedAttachmentMimeType,
-                )
+                CompositionLocalProvider(LocalMediaBaseUrl provides config.apiBaseUrl) {
+                    ShareTargetScreen(
+                        sharedText = sharedText,
+                        onFinished = ::finish,
+                        sharedAttachmentUri = sharedAttachmentUri,
+                        sharedAttachmentMimeType = sharedAttachmentMimeType,
+                    )
+                }
             }
         }
     }

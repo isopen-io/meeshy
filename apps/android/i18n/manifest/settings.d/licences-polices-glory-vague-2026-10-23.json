@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {"androidName": "licenses_glory_fonts_row_description", "status": "android-only"},
+        {"androidName": "licenses_glory_fonts_title", "status": "android-only"}
+      ]
+    }
+  }
+}

@@ -123,10 +123,11 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
       }}
     >
       {/* `initialsOf`, jamais un `slice(0, 2)` maison : c'est la MÊME fonction
-          que `StoryTile` sur la tuile voisine, et deux façons de réduire un
-          libellé à deux lettres divergent au premier nom composé. */}
+          que `StoryTile` sur la tuile voisine. Appliquée à MON NOM (#12571,
+          `userName` côté iOS) — le libellé « ma story » donnait « YS » à tout
+          le monde. */}
       <Avatar
-        initials={initialsOf(translate(language, 'stories.mine'))}
+        initials={initialsOf(entry.displayName ?? '')}
         color={'var(--color-ios-brand)'}
         size={size}
         /* MA PHOTO (#6975) — résolue par `selfRailEntry`, pas ici : cette

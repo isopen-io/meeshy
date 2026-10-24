@@ -56,9 +56,8 @@ describe('normalizeLensLut', () => {
   it('une LUT 16 bits sort en 16 bits, chaque valeur intacte', async () => {
     const width = 32;
     const height = 8;
-    const raw16 = Buffer.alloc(width * height * 3 * 2);
-    for (let index = 0; index < width * height * 3; index += 1) raw16.writeUInt16LE((index * 977) % 65_536, index * 2);
-    const source = await sharp(raw16, { raw: { width, height, channels: 3, depth: 'ushort' } }).toColourspace('rgb16').png().toBuffer();
+    const raw16 = Uint16Array.from({ length: width * height * 3 }, (_, index) => (index * 977) % 65_536);
+    const source = await sharp(raw16, { raw: { width, height, channels: 3 } }).toColourspace('rgb16').png().toBuffer();
 
     const outcome = await normalizeLensLut(source);
 
@@ -68,5 +67,15 @@ describe('normalizeLensLut', () => {
     const expected = await sharp(source).raw({ depth: 'ushort' }).toBuffer();
     expect(Buffer.compare(out, expected)).toBe(0);
   });
-});
 
+  it('une source CMYK est refusée : la convertir en RVB changerait chaque valeur de la table (#12329 R4)', async () => {
+    const cmyk = await sharp(gradient(64, 8), { raw: { width: 64, height: 8, channels: 3 } }).toColourspace('cmyk').jpeg({ quality: 100 }).toBuffer();
+    expect((await sharp(cmyk).metadata()).space).toBe('cmyk');
+    expect(await normalizeLensLut(cmyk)).toEqual({ ok: false, reason: 'not-an-image' });
+  });
+
+  it('une table en niveaux de gris reste acceptée', async () => {
+    const grey = await sharp(gradient(64, 8), { raw: { width: 64, height: 8, channels: 3 } }).toColourspace('b-w').png().toBuffer();
+    expect((await normalizeLensLut(grey)).ok).toBe(true);
+  });
+});

@@ -7,7 +7,7 @@ import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.presence.ConversationHere
+import me.meeshy.sdk.model.avatar.ConversationHere
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.StoryRingState
 
@@ -98,10 +98,16 @@ internal data class ConversationRowModel(
     val isLocked: Boolean,
     /** The list's minute clock: relative time, preview countdowns and heat age with it. */
     val nowMillis: Long,
+    /** Tablette: la rangée ouverte porte une barre d'accent, jamais un fond. */
+    val isSelected: Boolean = false,
+    /** Rangée tenue à la main pour un glisser-déposer. */
+    val isDragging: Boolean = false,
+    /** Le pair d'une directe a l'écran de CETTE conversation ouvert (annonce serveur `viewing:*`, point « ici »). */
+    val here: ConversationHere = ConversationHere.ABSENT,
+    /** La phrase des points d'engagement, déjà localisée, lue par TalkBack. */
+    val spokenPoints: String? = null,
     /** Une mutation de la conversation (épingle, muet, archive, section) n'est pas encore livrée. */
     val hasPendingSync: Boolean = false,
-    /** Le pair d'une directe a l'écran de CETTE conversation ouvert (annonce serveur `viewing:*`). */
-    val peerHere: ConversationHere = ConversationHere.ABSENT,
     /** Un appel est en cours et rejoignable dans cette conversation. */
     val callInProgress: Boolean = false,
 )

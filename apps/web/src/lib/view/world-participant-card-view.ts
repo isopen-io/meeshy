@@ -47,6 +47,8 @@ export type WorldParticipantCardView = {
     readonly kind: 'anonymous' | 'account' | 'bot';
     readonly kindLabel: string;
     readonly initials: string;
+    /** La photo servie (#12571), `null` ⇒ les initiales. */
+    readonly avatar: string | null;
   };
   readonly withheldNotice: string | null;
   readonly sections: readonly WorldParticipantCardSection[];
@@ -200,6 +202,7 @@ export function worldParticipantCardView(
       kind,
       kindLabel: t(`worldCard.kind.${kind}`),
       initials: initialsOf(card.displayName),
+      avatar: card.avatar,
     },
     withheldNotice: withheld ? t('worldCard.withheld.note') : null,
     sections: [world, languages, origin, ...account],

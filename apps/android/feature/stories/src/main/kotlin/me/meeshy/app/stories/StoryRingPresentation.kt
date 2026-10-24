@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.PostServedRing
@@ -89,7 +90,7 @@ object StoryTrayBuilder {
         return StoryRing(
             userId = id,
             displayName = username,
-            avatarUrl = coverOf(this)?.let { resolveMediaUrl(it, mediaBaseUrl) },
+            avatarUrl = resolveServedImageUrl(coverOf(this), mediaBaseUrl),
             accentHex = avatarColor,
             hasUnviewed = unviewed > 0,
             storyCount = live.size,

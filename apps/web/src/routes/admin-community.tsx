@@ -11,7 +11,7 @@ import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { BRAND, EDGE, INK2 } from '@/components/admin/tone';
-import { adminGroupOf, type AdminTarget } from '@/lib/admin/admin-routes';
+import type { AdminTarget } from '@/lib/admin/admin-routes';
 import { withoutMembersList } from '@/lib/admin/community-members-list';
 import {
   ADMIN_COMMUNITY_SECTION_GLYPHS,
@@ -22,7 +22,6 @@ import {
 } from '@/lib/admin/community-summaries';
 import { communityStateOf, communityVisibilityOf } from '@/lib/admin/community-state';
 import { interpretConversationType, interpretParticipantRole } from '@/lib/admin/interpret/enums';
-import { personInitials } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { communityRef, conversationRef, personRef } from '@/lib/admin/post-entities';
@@ -35,7 +34,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { navigate, useParams } from '@/lib/router';
-import { participantAvatarOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { AdminAnnouncement } from '@/components/admin/announcement';
@@ -284,11 +283,7 @@ export function AdminCommunityPanel({
     <AdminPageHeader
       language={language}
       title={name ?? section}
-      crumbs={[
-        { label: translateAdmin(language, `admin.group.${adminGroupOf('communities')}`) },
-        { label: section, target: { kind: 'section', section: 'communities' } },
-        ...(name === null ? [] : [{ label: name }]),
-      ]}
+      place={{ section: 'communities', fiche: true }}
     />
   );
 
@@ -359,7 +354,7 @@ export function AdminCommunityPanel({
               language={language}
               title={ref.label}
               {...(ref.secondary === null || ref.secondary === undefined ? {} : { secondary: ref.secondary })}
-              avatar={{ initials: personInitials(ref.label), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) }}
+              avatar={{ initials: initialsOf(ref.label), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) }}
               badges={
                 <>
                   <AdminInterpretedBadge value={communityVisibilityOf(fiche.isPrivate, language)} />

@@ -66,3 +66,28 @@ class SignalApiRoutesTest {
         assertThat(response.data?.message).isEqualTo("E2EE session established successfully")
     }
 }
+
+/** Les variantes à `data` brute partent sur les mêmes routes et ne coercent rien. */
+class SignalApiObjectRoutesTest {
+    private val bundle = SignalPreKeyBundle(
+        identityKey = "ik", registrationId = 1, deviceId = 1, signedPreKeyId = 7,
+        signedPreKeyPublic = "spk", signedPreKeySignature = "sig",
+    )
+
+    @Test
+    fun `les trois variantes objet utilisent les memes verbes et chemins`() = kotlinx.coroutines.test.runTest {
+        val http = RecordingHttp(responseBody = """{"success":true,"data":{"registrationId":"1","message":"ok"}}""")
+        val api = http.serve(SignalApi::class.java)
+
+        val upload = api.uploadKeysObject(bundle)
+        api.keysForObject("u9")
+        api.establishSessionObject(EstablishSessionRequest("u2", "c1"))
+
+        assertThat(http.requests.map { it.method to it.path }).containsExactly(
+            "POST" to "/api/v1/signal/keys",
+            "GET" to "/api/v1/signal/keys/u9",
+            "POST" to "/api/v1/signal/session/establish",
+        ).inOrder()
+        assertThat(upload.data?.get("registrationId").toString()).isEqualTo("\"1\"")
+    }
+}

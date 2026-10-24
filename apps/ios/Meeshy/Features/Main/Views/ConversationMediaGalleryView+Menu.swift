@@ -50,7 +50,7 @@ enum GallerySaveSubject {
         }
     }
 
-    /// **« Partager hors de Meeshy » ne s'offre QUE sur une pièce**, et c'est
+    /// **« Partager » ne s'offre QUE sur une pièce**, et c'est
     /// une décision, pas un oubli. Ce verbe va DROIT à la share sheet système
     /// avec l'URL de la requête ; sur une page scène cette URL est la vignette
     /// du média, donc le partage sortirait exactement le fichier que #6709 a
@@ -101,43 +101,23 @@ extension ConversationMediaGalleryView {
     }
 
     /// **Le menu ⋯ — ce que la page sait faire, et ce que chacun fera dit sous
-    /// lui.**
+    /// lui.** Enregistrer, Transférer (#12420 : aussi dans le rail) et Partager.
     ///
-    /// Il remplace le bouton d'enregistrement direct (directive porteur : « plutôt
-    /// un menu hamburger … vertical », avec l'option de partager hors de
-    /// l'application). Un second verbe n'avait aucune place où se poser dans un
-    /// couloir de 56 pt sans l'encombrer ; le menu en porte deux sans rien
-    /// prendre à la scène.
+    /// **Il n'y a pas d'entrée « Enregistrer sans la marque »** : la marque se
+    /// déduit de l'ORIGINE du média (#6146, `MeeshyMediaSaveBranding.stamps`), et
+    /// un média de conversation est `.transmitted` — offrir le choix serait un
+    /// contrôle sans effet (loi 4).
     ///
-    /// **Il n'y a pas d'entrée « Enregistrer sans la marque », et c'est une
-    /// conséquence, pas un oubli.** La marque ne se choisit plus : elle se
-    /// déduit de l'ORIGINE du média (#6146, `MeeshyMediaSaveBranding.stamps`),
-    /// et un média de conversation est toujours `.transmitted` — donc jamais
-    /// marqué. Offrir le choix ici serait un contrôle sans effet, ce que la loi
-    /// 4 de la planche interdit.
+    /// **Aucune entrée n'est listée sans chemin.** Sur une PIÈCE, Enregistrer et
+    /// Partager passent par le composant unifié `mediaSaveFlow` — la sheet de
+    /// destinations, ou droit à sa destination `.share`. Sur une SCÈNE,
+    /// « Enregistrer » part sur la chaîne d'export de story (#7052) et
+    /// « Partager » n'est pas listé (`GallerySaveSubject.offersExternalShare`).
+    /// Transférer est le chemin de l'hôte (`onForwardMedia`).
     ///
-    /// **Aucune entrée n'est listée sans chemin.** Sur une PIÈCE, les deux
-    /// passent par le composant unifié `mediaSaveFlow` : « Enregistrer » ouvre
-    /// sa sheet de destinations, « Partager hors de Meeshy » va droit à sa
-    /// destination `.share`, qui stage une copie lisible puis présente la share
-    /// sheet système. Rien n'est réécrit — le second verbe n'est qu'un raccourci
-    /// vers une destination que le flux savait déjà servir. Sur une SCÈNE,
-    /// « Enregistrer » part sur la chaîne d'export de story (#7052) et le second
-    /// verbe n'est pas listé : voir `requestSaveCurrent()` et
-    /// `GallerySaveSubject.offersExternalShare`.
-    ///
-    /// **Une page SCÈNE le monte depuis #7052**, et le second verbe s'y retire.
-    /// Le menu n'a jamais porté « deux verbes » comme une propriété : il porte
-    /// ce que la page sait TENIR (`GallerySaveSubject.offersExternalShare`).
-    /// Une scène sait s'enregistrer — l'œuvre bakée, sans prélude ni outro —
-    /// et ne sait pas encore se partager.
-    ///
-    /// **Et une pièce que la loi de sortie retient n'a pas de menu** (#9573).
-    /// Ses deux verbes sont deux SORTIES — enregistrer, partager hors de
-    /// Meeshy — et l'hôte dit par `contentExitGate` quelles pièces peuvent
-    /// sortir : la photo d'une flamme ou d'une vue unique n'en fait pas partie.
-    /// Le portillon se lit par `GalleryExitGatedMenu`, dans l'environnement,
-    /// parce qu'une extension ne peut pas déclarer `@Environment`.
+    /// **Une pièce que la loi de sortie retient n'a pas de menu** (#9573) : la
+    /// photo d'une flamme ou d'une vue unique ne sort pas. Le portillon se lit par
+    /// `GalleryExitGatedMenu`, dans l'environnement.
     @ViewBuilder
     var overflowMenu: some View {
         if let subject = currentSaveSubject {
@@ -155,6 +135,15 @@ extension ConversationMediaGalleryView {
                     }
                     .accessibilityLabel(saveVerb)
                     .accessibilityHint(brandingNote)
+
+                    if currentOffersForward {
+                        Button {
+                            forwardCurrent()
+                        } label: {
+                            Label(MessageActionVerb.forward.label, systemImage: MessageActionVerb.forward.filledSymbol)
+                        }
+                        .accessibilityLabel(MessageActionVerb.forward.label)
+                    }
 
                     if subject.offersExternalShare {
                         Button {
@@ -183,31 +172,18 @@ extension ConversationMediaGalleryView {
 
     // MARK: - Les deux transports
 
-    /// **UN verbe, DEUX chemins — celui de la page décide** (#7052).
+    /// **UN verbe, DEUX chemins — celui de la page décide** (#7052). Une pièce
+    /// ouvre la sheet de destinations du composant unifié ; une SCÈNE part sur la
+    /// chaîne d'export de story (`StoryPhotoSaveService.save(scene:)`, sans prélude
+    /// ni outro) — le coordinateur enregistre un FICHIER DISTANT, et une œuvre
+    /// composée n'en a aucun tant qu'elle n'est pas bakée. Le rail et le ⋯
+    /// appellent ce même transport (#12420) : deux boutons, un seul chemin.
     ///
-    /// Une pièce ouvre la sheet de destinations du composant unifié (Photos /
-    /// Fichiers / Partager), inchangée depuis le bouton direct qu'elle servait.
-    ///
-    /// Une SCÈNE part sur la chaîne d'export de story — le MÊME bake, le même
-    /// anneau, la même annulation, le même nettoyage du MP4 périmé — par
-    /// `StoryPhotoSaveService.save(scene:)`, qui tient déjà « sans prélude ni
-    /// outro ». Elle ne passe pas par le coordinateur, et ce n'est pas une
-    /// exception qu'on s'autorise : le coordinateur enregistre un FICHIER
-    /// DISTANT, et une œuvre composée n'en a aucun tant qu'elle n'est pas
-    /// bakée.
-    ///
-    /// L'aiguillage vit ICI, dans le transport, plutôt qu'en amont dans le
-    /// bouton : le menu ne porte qu'UN verbe « Enregistrer », et deux boutons
-    /// qui promettent le même mot se mettraient à diverger sur le libellé, la
-    /// note ou le haptique.
-    ///
-    /// **Pas d'anneau de progression sur ce ⋯, et c'est mesuré, pas oublié.**
-    /// L'état d'un bake vit sur `StoryPhotoSaveService.jobs` ; l'observer
-    /// depuis la galerie republierait la racine à chaque tour de progression,
-    /// sous le doigt d'un pager qui doit tenir ses 60 images. Le retour
-    /// immédiat est le haptique, la fin est le toast du service — comme sur la
-    /// ligne « Mes stories » quand son anneau n'est pas à l'écran. Un second
-    /// tap pendant le bake est ignoré par `bakeThenSave` (garde `jobs`).
+    /// **Pas d'anneau de progression, et c'est mesuré** : observer
+    /// `StoryPhotoSaveService.jobs` republierait la racine à chaque tour de
+    /// progression, sous un pager qui doit tenir ses 60 images. Le retour immédiat
+    /// est le haptique, la fin est le toast du service ; un second tap pendant le
+    /// bake est ignoré par `bakeThenSave` (garde `jobs`).
     func requestSaveCurrent() {
         guard let subject = currentSaveSubject, saveCoordinator.mayLeave(currentExitContentId) else { return }
         HapticFeedback.light()
@@ -219,13 +195,25 @@ extension ConversationMediaGalleryView {
         }
     }
 
-    /// Va DROIT à la share sheet système, sans passer par le choix de
-    /// destination : c'est tout ce que « Partager hors de Meeshy » promet, et
-    /// lui faire traverser une sheet intermédiaire trahirait le verbe.
+    /// Va DROIT à la share sheet système : c'est tout ce que « Partager » promet.
     func shareCurrentOutsideMeeshy() {
         guard let request = currentSaveRequest, saveCoordinator.mayLeave(currentExitContentId) else { return }
         HapticFeedback.light()
         Task { await saveCoordinator.pick(.share, request: request) }
+    }
+
+    /// **Transférer** (#12420) : l'hôte résout le porteur et ouvre son écran de
+    /// partage ; la galerie ne connaît que la pièce.
+    var currentOffersForward: Bool {
+        guard onForwardMedia != nil, let att = currentAttachment,
+              !ComposableAttachment.isProtected(att) else { return false }
+        return forwardableMedia?(att) ?? true
+    }
+
+    func forwardCurrent() {
+        guard currentOffersForward, let att = currentAttachment else { return }
+        HapticFeedback.light()
+        onForwardMedia?(att)
     }
 
     /// **Un seul site compose la requête**, que les deux verbes partagent. Deux
@@ -287,8 +275,7 @@ extension ConversationMediaGalleryView {
     }
 
     private var shareVerb: String {
-        String(localized: "gallery.menu.share",
-               defaultValue: "Partager hors de Meeshy", bundle: .main)
+        String(localized: "gallery.menu.share", defaultValue: "Partager", bundle: .main)
     }
 
     /// Annonce VoiceOver de l'état d'enregistrement. Vide au repos — un lecteur

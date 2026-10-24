@@ -146,6 +146,17 @@ final class ComposerLiveLookTests: XCTestCase {
                                                       timeRange: Self.coupe, audioGain: 0.5), .render)
     }
 
+    /// **Un texte posé par-dessus touche aux échantillons** (#12591) : sans le raccourci fermé, une
+    /// vidéo intacte repartirait SANS son texte.
+    func test_plan_unTexteParDessus_seRend_memeIntacteOuCoupeSeule() {
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: ComposerPhotoLook(), framing: .identity,
+                                                      timeRange: nil, audioGain: 1, hasOverlay: true), .render)
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: ComposerPhotoLook(), framing: .identity,
+                                                      timeRange: Self.coupe, audioGain: 1, hasOverlay: true), .render)
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: ComposerPhotoLook(), framing: .identity,
+                                                      timeRange: Self.coupe, audioGain: 1, hasOverlay: false), .trimOnly(Self.coupe))
+    }
+
     func test_coupeSansReencodage_laPisteLeDit_etLExportCopie() throws {
         let piste = try Self.code("Meeshy/Features/Main/Composer/ComposerTrimTrack.swift")
         XCTAssertTrue(piste.contains("if cutsOnKeyframe { keyframeNote }"), "l'interface dit la précision de la coupe")

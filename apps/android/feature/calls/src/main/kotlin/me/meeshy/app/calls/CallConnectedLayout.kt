@@ -130,7 +130,7 @@ internal fun CallConnectedColumn(
     overlayContext: CallOverlayContext,
     chrome: CallChromeController,
     videoStage: Boolean,
-    avatarUrl: String?,
+    peer: CallPeerVisual,
     modifier: Modifier = Modifier,
 ) {
     val extensions = viewModel.extensions
@@ -141,7 +141,9 @@ internal fun CallConnectedColumn(
     val controlsVisible = visibility.isVisible(CallChromeElement.Controls)
     val isVideoStage = callIsVideoStage(state)
 
-    val offered = remember(state) { dispatcher.offered(state) }
+    val recordingViewModel: CallRecordingViewModel = hiltViewModel()
+    val recording by recordingViewModel.state.collectAsStateWithLifecycle()
+    val offered = remember(state, recording) { dispatcher.offered(state) }
     val items = remember(state, offered) { CallPillModel.items(state, offered) }
     val available = remember(state, items) { CallPillModel.available(state, items, dispatcher::isRegistered) }
     LaunchedEffect(available) { chrome.reconcile(available) }
@@ -152,7 +154,8 @@ internal fun CallConnectedColumn(
     LaunchedEffect(state.isVideoCall) { routeViewModel.onEvent(CallAudioRouteUiEvent.Start(state.isVideoCall)) }
 
     val onAction: (CallAction) -> Unit = { action ->
-        CallScreenPanel.entries.firstOrNull { it.action == action }?.let(chrome::open)
+        val stopsRecording = action == CallAction.Recording && recording.phase.isActive
+        CallScreenPanel.entries.firstOrNull { it.action == action && !stopsRecording }?.let(chrome::open)
         CallScreenMode.entries.firstOrNull { it.action == action }?.let(chrome::enter)
         if (action == CallAction.Camera) viewModel.toggleCamera() else dispatcher.dispatch(action)
     }
@@ -175,7 +178,7 @@ internal fun CallConnectedColumn(
             if (videoStage) {
                 CallPeerBlock(state = state, accent = accent, videoStage = true)
             } else {
-                CallAudioStage(state = state, peerAvatarUrl = avatarUrl)
+                CallAudioStage(state = state, peer = peer)
             }
 
             state.captionText?.let { caption -> CallCaption(caption) }
@@ -203,6 +206,16 @@ internal fun CallConnectedColumn(
                         onAction = onAction,
                         onBackToMenu = chrome::backToMenu,
                         onClosePanel = chrome::close,
+                        panelContent = { panel ->
+                            if (panel == CallScreenPanel.Record) {
+                                CallRecordingKindPanel(
+                                    onPick = { kind ->
+                                        recordingViewModel.onEvent(CallRecordingUiEvent.Pick(kind))
+                                        chrome.close()
+                                    },
+                                )
+                            }
+                        },
                     )
                 }
             }

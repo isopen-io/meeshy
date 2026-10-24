@@ -92,8 +92,9 @@ fun CallScreen(
     val chromeVisibility = rememberCallChromeVisibility(chrome, state)
     val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
     val reduceMotion = rememberCallReduceMotion()
-    val avatarUrl = config.peerAvatarUrl
-    val backdropUrl = if (remoteVideo == null) config.peerBannerUrl?.takeIf { it.isNotBlank() } ?: avatarUrl else null
+    val peer by viewModel.peerVisual.collectAsStateWithLifecycle()
+    val avatarUrl = peer.avatarUrl
+    val backdropUrl = if (remoteVideo == null) peer.backdropUrl else null
     val close = {
         viewModel.dismiss()
         onClose()
@@ -151,13 +152,13 @@ fun CallScreen(
                     overlayContext = overlayContext,
                     chrome = chrome,
                     videoStage = videoStage,
-                    avatarUrl = avatarUrl,
+                    peer = peer,
                     modifier = content,
                 )
                 state.status == CallStatus.INCOMING -> IncomingCallScreen(
                     state = state,
                     accent = accent,
-                    avatarUrl = avatarUrl,
+                    peer = peer,
                     reduceMotion = reduceMotion,
                     onAccept = {
                         permissionGate.answerIncoming(config.isVideo) { answer -> answerIncoming(viewModel, answer) }
@@ -167,20 +168,20 @@ fun CallScreen(
                 )
                 state.status == CallStatus.OUTGOING_RINGING -> CallOutgoingRingingScreen(
                     state = state,
-                    avatarUrl = avatarUrl,
+                    peer = peer,
                     reduceMotion = reduceMotion,
                     onHangUp = viewModel::hangUp,
                 )
                 state.isEnded -> CallEndedPanel(
                     state = state,
-                    avatarUrl = avatarUrl,
+                    peer = peer,
                     onRetry = viewModel::retry,
                     onClose = close,
                     modifier = content,
                 )
                 else -> CallConnectingScreen(
                     state = state,
-                    avatarUrl = avatarUrl,
+                    peer = peer,
                     reduceMotion = reduceMotion,
                     onHangUp = viewModel::hangUp,
                     modifier = content,

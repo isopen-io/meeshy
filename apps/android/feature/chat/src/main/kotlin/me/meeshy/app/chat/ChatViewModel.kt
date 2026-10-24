@@ -916,6 +916,7 @@ class ChatViewModel @Inject constructor(
         conversationName = _state.value.conversationTitle,
         conversationAccentColor = _state.value.accentColorHex,
         senderName = senderName,
+        senderAvatarUrl = latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.sender?.resolvedAvatar,
         contentPreview = text,
         attachmentKind = when {
             images.isNotEmpty() -> StarredAttachmentKind.IMAGE

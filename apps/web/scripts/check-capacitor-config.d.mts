@@ -42,3 +42,25 @@ export declare function auditWebViewFloor(input: Readonly<{
   readonly publicFiles: readonly string[];
   readonly mainSource: string;
 }>): readonly string[];
+
+export declare function androidShellPlugins(
+  packageJson: Readonly<{
+    readonly dependencies?: Readonly<Record<string, string>>;
+    readonly devDependencies?: Readonly<Record<string, string>>;
+  }>,
+  manifestOf: (name: string) => unknown,
+): readonly string[];
+
+export declare function auditReadableManifests(
+  packageJson: Readonly<{
+    readonly dependencies?: Readonly<Record<string, string>>;
+    readonly devDependencies?: Readonly<Record<string, string>>;
+  }>,
+  manifestOf: (name: string) => unknown,
+): readonly string[];
+
+export declare function auditAndroidShellLinks(input: Readonly<{
+  readonly plugins: readonly string[];
+  readonly settingsGradle: string;
+  readonly buildGradle: string;
+}>): readonly string[];

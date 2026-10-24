@@ -465,7 +465,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           hasSticker: Boolean(stickerFromMetadata(message.metadata)),
           content: message.content,
           messageType: message.messageType,
-          replyToId: message.replyToId
+          replyToId: message.replyToId,
+          encryptionMode: participantShareLink.conversation?.encryptionMode ?? null
         },
         originalLanguage,
         onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)

@@ -17,7 +17,9 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.friend.FriendshipPages
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationCountsSocketEvent
@@ -52,8 +54,8 @@ class ChromeViewModelTest {
     }
 
     private fun viewModel(cache: FriendshipCache = FriendshipCache()): ChromeViewModel {
-        coEvery { friendRepository.receivedRequests(any(), any()) } returns NetworkResult.Success(emptyList())
-        coEvery { friendRepository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+        coEvery { friendRepository.friendshipGraph(any()) } returns
+            NetworkResult.Success(FriendshipPages(sent = emptyList(), received = emptyList()))
         every { notificationRepository.notificationsStream(any(), any()) } returns
             MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
         return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager, me.meeshy.sdk.net.MeeshyConfig())
@@ -104,35 +106,36 @@ class ChromeViewModelTest {
 
         vm.warmUpIfAuthenticated(false)
 
-        coVerify(exactly = 0) { friendRepository.receivedRequests(any(), any()) }
-        coVerify(exactly = 0) { friendRepository.sentRequests(any(), any()) }
+        coVerify(exactly = 0) { friendRepository.friendshipGraph(any()) }
         verify(exactly = 0) { notificationRepository.notificationsStream(any(), any()) }
     }
 
     @Test
-    fun `warm-up hydrates FriendshipCache from receivedRequests plus sentRequests exactly once, even if warmUpIfAuthenticated(true) is called again`() = runTest {
+    fun `warm-up hydrates FriendshipCache from the friendship graph exactly once, even if warmUpIfAuthenticated(true) is called again`() = runTest {
         val vm = viewModel()
 
         vm.warmUpIfAuthenticated(true)
         vm.warmUpIfAuthenticated(true)
 
-        coVerify(exactly = 1) { friendRepository.receivedRequests(offset = 0, limit = 100) }
-        coVerify(exactly = 1) { friendRepository.sentRequests(offset = 0, limit = 100) }
+        coVerify(exactly = 1) { friendRepository.friendshipGraph(any()) }
         verify(exactly = 1) { notificationRepository.notificationsStream(any(), any()) }
     }
 
     @Test
-    fun `warm-up hydrates with the same page depth ContactsListViewModel uses, not the API's own default`() = runTest {
-        val vm = viewModel()
+    fun `warm-up counts an accepted relation the user RECEIVED as a friend`() = runTest {
+        every { sessionRepository.currentUserId } returns "me"
+        val cache = FriendshipCache()
+        val vm = viewModel(cache)
+        coEvery { friendRepository.friendshipGraph("me") } returns NetworkResult.Success(
+            FriendshipPages(
+                sent = emptyList(),
+                received = listOf(FriendRequest(id = "in", status = "accepted", senderId = "alice", receiverId = "me")),
+            ),
+        )
 
         vm.warmUpIfAuthenticated(true)
 
-        // La valeur EXACTE compte : le defaut de FriendRepository.receivedRequests
-        // est 20, ce qui tronquerait le graphe d'amitie (FriendshipCache.hydrate
-        // REMPLACE tout le graphe) pour tout utilisateur ayant plus de 20 demandes
-        // dans un sens. `any()` sur ce parametre ne l'aurait jamais attrape.
-        coVerify(exactly = 1) { friendRepository.receivedRequests(offset = 0, limit = 100) }
-        coVerify(exactly = 1) { friendRepository.sentRequests(offset = 0, limit = 100) }
+        assertThat(cache.isFriend("alice")).isTrue()
     }
 
     @Test
@@ -146,14 +149,15 @@ class ChromeViewModelTest {
 
     @Test
     fun `warm-up re-arms after a logout so the next authenticated account re-hydrates`() = runTest {
-        val vm = viewModel()
+        val cache = FriendshipCache()
+        val vm = viewModel(cache)
 
         vm.warmUpIfAuthenticated(true)
+        cache.clear()
         vm.warmUpIfAuthenticated(false)
         vm.warmUpIfAuthenticated(true)
 
-        coVerify(exactly = 2) { friendRepository.receivedRequests(offset = 0, limit = 100) }
-        coVerify(exactly = 2) { friendRepository.sentRequests(offset = 0, limit = 100) }
+        coVerify(exactly = 2) { friendRepository.friendshipGraph(any()) }
         verify(exactly = 2) { notificationRepository.notificationsStream(any(), any()) }
     }
 }

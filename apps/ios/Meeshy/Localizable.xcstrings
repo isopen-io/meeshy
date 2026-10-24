@@ -17920,6 +17920,100 @@
         }
       }
     },
+    "composer.capture.text.add": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة نص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text hinzufügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add text"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir texto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un texte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi testo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar texto"
+          }
+        }
+      }
+    },
+    "composer.capture.tool.text": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto"
+          }
+        }
+      }
+    },
     "composer.capture.tool.trim": {
       "extractionState": "manual",
       "localizations": {
@@ -22997,6 +23091,53 @@
         }
       }
     },
+    "media.forward.rail.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يرسل هذه الوسائط إلى محادثة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sendet dieses Medium in eine andere Unterhaltung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sends this media to another conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envía este contenido a otra conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoie ce média dans une autre conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invia questo contenuto in un'altra conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envia esta mídia para outra conversa."
+          }
+        }
+      }
+    },
     "media.save.alreadyInPhotos": {
       "extractionState": "manual",
       "localizations": {
@@ -23040,6 +23181,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Já está no Fotos"
+          }
+        }
+      }
+    },
+    "media.save.rail.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحفظ هذه الوسائط على الجهاز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichert dieses Medium auf dem Gerät."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saves this media to the device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda este contenido en el dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistre ce média sur l'appareil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salva questo contenuto sul dispositivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salva esta mídia no dispositivo."
           }
         }
       }
@@ -124775,43 +124963,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المشاركة خارج Meeshy"
+            "value": "مشاركة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Außerhalb von Meeshy teilen"
+            "value": "Teilen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Share outside Meeshy"
+            "value": "Share"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartir fuera de Meeshy"
+            "value": "Compartir"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Partager hors de Meeshy"
+            "value": "Partager"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Condividi fuori da Meeshy"
+            "value": "Condividi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartilhar fora do Meeshy"
+            "value": "Compartilhar"
           }
         }
       }

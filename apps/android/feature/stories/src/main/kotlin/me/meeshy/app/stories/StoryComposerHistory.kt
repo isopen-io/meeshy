@@ -46,7 +46,7 @@ internal class ComposerHistory private constructor(
         val tip = store.current ?: return false
         return tip.attachments == snapshot.attachments &&
             tip.deck.selectedId != snapshot.deck.selectedId &&
-            tip.deck.copy(selectedId = snapshot.deck.selectedId) == snapshot.deck
+            tip.deck.slides == snapshot.deck.slides
     }
 
     fun undone(): Pair<ComposerHistory, ComposerSnapshot>? =

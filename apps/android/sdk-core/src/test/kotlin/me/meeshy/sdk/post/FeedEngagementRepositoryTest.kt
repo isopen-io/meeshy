@@ -9,7 +9,10 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.SocialEventsReceipt
 import me.meeshy.sdk.model.analytics.ContentSurface
 import me.meeshy.sdk.model.analytics.SocialEvent
+import me.meeshy.sdk.model.analytics.SocialEventStamp
 import me.meeshy.sdk.model.analytics.SocialEventsBody
+import me.meeshy.sdk.model.analytics.StampedSocialEvent
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.SocialEventsApi
 import org.junit.Test
 
@@ -100,5 +103,32 @@ class FeedEngagementRepositoryTest {
 
         assertThat(repository().recordImpressions(emptyList(), ContentSurface.FEED)).isEqualTo(ImpressionDelivery(0, 0))
         assertThat(bodies).isEmpty()
+    }
+
+    @Test
+    fun `deliver envoie les enveloppes telles quelles pour qu'un rejeu garde ses identifiants`() = runTest {
+        accepting()
+        val stamped = StampedSocialEvent(
+            event = SocialEvent.Impression(postId = "s1", source = "story", surface = ContentSurface.STORY_RAIL),
+            stamp = SocialEventStamp("0b8f6f6e-4a39-4c1e-9d55-6b3c1f0f6a01", 1_757_928_000_000L),
+        )
+
+        val result = repository().deliver(listOf(stamped))
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat(bodies.single().events).containsExactly(stamped)
+        assertThat(tokens.single()).isNull()
+    }
+
+    @Test
+    fun `deliver rend l'echec au lieu de l'avaler`() = runTest {
+        coEvery { api.record(any(), any()) } throws IOException("offline")
+
+        val result = repository().deliver(listOf(StampedSocialEvent(
+            event = SocialEvent.Impression(postId = "s1", source = "story"),
+            stamp = SocialEventStamp.minted(null),
+        )))
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
     }
 }

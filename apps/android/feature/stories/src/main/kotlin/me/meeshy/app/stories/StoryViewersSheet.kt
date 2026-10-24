@@ -120,6 +120,7 @@ private fun ViewerRow(viewer: StoryViewer) {
             name = viewer.displayName,
             size = 40.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(viewer.displayName)),
+            imageUrl = viewer.avatarUrl,
         )
         Text(
             text = viewer.displayName,

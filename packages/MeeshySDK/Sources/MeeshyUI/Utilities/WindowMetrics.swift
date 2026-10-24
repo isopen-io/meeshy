@@ -52,7 +52,7 @@ public enum WindowMetrics {
     }
 
     /// Trame de la fenêtre active en coordonnées d'ÉCRAN — l'espace des trames de clavier. `nil` sans fenêtre.
-    static var activeWindowFrameInScreen: CGRect? {
+    public static var activeWindowFrameInScreen: CGRect? {
         guard let window = activeWindow else { return nil }
         return window.convert(window.bounds, to: window.screen.coordinateSpace)
     }

@@ -340,7 +340,7 @@ final class StoryTrayMediaPreloader {
     nonisolated deinit {}
 
     /// Télécharge les URL d'une story ; rend celles que la politique a sautées.
-    typealias Fetch = @Sendable ([String], StoryItem, Bool) async -> [String]
+    typealias Fetch = @Sendable @concurrent ([String], StoryItem, Bool) async -> [String]
 
     private(set) var claimedURLs: Set<String> = []
     private let activity: PreloadActivityGate
@@ -363,11 +363,11 @@ final class StoryTrayMediaPreloader {
         let groupsToPreload = Array(groups.prefix(8))
         let activity = activity
         passes = [
-            Task(priority: .userInitiated) {
-                await activity.runWhileActive { [weak self] in await self?.preloadFirstSlides(of: groupsToPreload) }
+            Task(priority: .userInitiated) { [weak self] in
+                await activity.runWhileActive { await self?.preloadFirstSlides(of: groupsToPreload) }
             },
-            Task(priority: .utility) {
-                await activity.runWhileActive { [weak self] in await self?.preloadUpcomingSlides(of: groupsToPreload) }
+            Task(priority: .utility) { [weak self] in
+                await activity.runWhileActive { await self?.preloadUpcomingSlides(of: groupsToPreload) }
             },
         ]
     }

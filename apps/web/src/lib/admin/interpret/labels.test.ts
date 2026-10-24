@@ -8,7 +8,6 @@ import {
   excerptOf,
   guestLabel,
   invitationLabel,
-  personInitials,
   personLabel,
   personSecondary,
   postLabel,
@@ -44,13 +43,6 @@ describe('personLabel — le vrai nom, jamais un identifiant', () => {
     expect(personSecondary('awa')).toBe('@awa');
     expect(personSecondary('')).toBeNull();
     expect(personSecondary(null)).toBeNull();
-  });
-
-  test('personInitials : deux lettres au plus, « ? » sans nom', () => {
-    expect(personInitials('Awa Diop')).toBe('AD');
-    expect(personInitials('@awa')).toBe('A');
-    expect(personInitials('Jean-Luc Martin Dupont')).toBe('JM');
-    expect(personInitials('')).toBe('?');
   });
 
   test('guestLabel : « Invité sans nom » sans pseudonyme', () => {

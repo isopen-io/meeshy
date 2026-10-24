@@ -58,12 +58,16 @@ import me.meeshy.feature.reels.R
 import me.meeshy.sdk.model.PostReactionPaletteState
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.model.PostShareLink
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import me.meeshy.ui.component.reaction.PostReactionPalette
 import me.meeshy.ui.modifier.reactionPaletteTrigger
 import androidx.compose.runtime.remember
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.hexColor
+import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyRadius
 import androidx.compose.foundation.clickable
@@ -137,13 +141,33 @@ fun ReelsScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) { page ->
                     val reel = state.reels[page]
+                    val stage = reel.stage
                     Box(Modifier.fillMaxSize()) {
-                        ReelVideoSurface(
-                            mediaUrl = reel.videoUrl,
-                            isActive = page == pagerState.currentPage,
-                            modifier = Modifier.fillMaxSize(),
-                            muted = muted,
-                        )
+                        when (val backdrop = stage.backdrop) {
+                            is ReelBackdrop.Picture -> AsyncImage(
+                                model = backdrop.url,
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            ReelBackdrop.AudioCanvas -> ReelAudioCanvas(
+                                accent = hexColor(
+                                    DynamicColorGenerator.colorForName(reel.authorName ?: reel.id),
+                                    MeeshyPalette.Indigo500,
+                                ),
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            ReelBackdrop.None -> Unit
+                        }
+                        stage.playableUrl?.let { playable ->
+                            ReelVideoSurface(
+                                mediaUrl = playable,
+                                isActive = page == pagerState.currentPage,
+                                modifier = Modifier.fillMaxSize(),
+                                muted = muted,
+                                showsPicture = stage.showsVideoSurface,
+                            )
+                        }
                         ReelOverlay(
                             reel = reel,
                             onLike = { viewModel.toggleLike(reel.id) },

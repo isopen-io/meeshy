@@ -3,6 +3,7 @@ import {
   ANONYMOUS_V2_TYPES,
   SAMPLEABLE_V2_TYPES,
   type CaptureKind,
+  type DeviceTier as PlaybackDeviceTier,
   type NotificationChannel,
   type PlaybackExitReason,
   type RankingSource,
@@ -91,6 +92,15 @@ export type PlaybackSummary = {
   /** Bitmask : 1 = 25 %, 2 = 50 %, 4 = 75 %, 8 = 100 %. */
   readonly quartiles: number;
   readonly exitReason: PlaybackExitReason;
+  /** W11 (#11317) — le tier de l'appareil (`capability-tier.ts`), accepté par la passerelle depuis S25. */
+  readonly deviceTier?: PlaybackDeviceTier;
+  /** W11 (#11317) — Web Vitals de la page et longues images de la séance ; la passerelle les ignore tant qu'elle ne les lit pas. */
+  readonly lcpMs?: number;
+  readonly cls?: number;
+  readonly inpMs?: number;
+  readonly longFrames?: number;
+  readonly longFramesBlockingMs?: number;
+  readonly longFrameWorstMs?: number;
 };
 
 export type VisibleTarget = { readonly kind: TargetKind; readonly id: string; readonly visibleFraction: number };

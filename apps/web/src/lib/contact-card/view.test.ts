@@ -4,7 +4,7 @@ import { parseVCard } from '@meeshy/shared/utils/vcard';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { contactInitials, contactRelationView, vcardFieldRows } from './view';
+import { contactRelationView, vcardFieldRows } from './view';
 
 /**
  * CE QUE LA CARTE MONTRE ET OFFRE (#8101). Les libellés se lisent sur un
@@ -64,11 +64,3 @@ describe('vcardFieldRows', () => {
   });
 });
 
-describe('contactInitials', () => {
-  test('deux initiales au plus, un dièse sans lettre', () => {
-    expect(contactInitials('Awa Diallo')).toBe('AD');
-    expect(contactInitials('Élodie')).toBe('É');
-    expect(contactInitials('Jean Paul Kouassi')).toBe('JK');
-    expect(contactInitials('+33 6 12')).toBe('#');
-  });
-});

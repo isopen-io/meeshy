@@ -14,7 +14,7 @@ import { guardedInterval, type TimerErrorLogger } from '../utils/guarded-timer.j
 import { processMediaObjectStores } from '../services/storage/objects/mediaObjectStoreFactory';
 import { followMediaMirrorOnce, mediaMirrorFollowMode, type MediaMirrorFollowMode } from '../services/storage/objects/mediaMirrorFollow';
 import { MIRROR_LOCK_TTL_MS, mediaMirrorSources, mirrorLockFile } from '../services/storage/objects/mediaMirrorCli';
-import { withMirrorLock } from '../services/storage/objects/mediaMirrorLock';
+import { withLockHeartbeat, withMirrorLock } from '../services/storage/objects/mediaMirrorLock';
 import { processMediaBucketMetrics, recordSweepReport } from '../services/metrics/mediaBucketMetrics';
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -73,17 +73,6 @@ export class MediaMirrorFollowJob {
   }
 }
 
-/** Repousse l'échéance du verrou tant que le passage tourne : une passe complète peut dépasser l'échéance. */
-async function withHeartbeat<T>(renew: () => Promise<void>, run: () => Promise<T>): Promise<T> {
-  const heartbeat = setInterval(() => void renew().catch(() => undefined), MIRROR_LOCK_TTL_MS / 3);
-  heartbeat.unref();
-  try {
-    return await run();
-  } finally {
-    clearInterval(heartbeat);
-  }
-}
-
 /** Le job du processus : le stockage, la base et l'horloge réels. */
 export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLogger): MediaMirrorFollowJob {
   let lastSweepAt: Date | null = null;
@@ -97,7 +86,7 @@ export function processMediaMirrorFollowJob(prisma: PrismaClient, logger: JobLog
       if (stores.mirror === null) return;
       const uploadRoot = process.env.UPLOAD_PATH || 'uploads/attachments';
       const mirror = stores.mirror;
-      const locked = await withMirrorLock({ file: mirrorLockFile(uploadRoot), owner: `gateway:${os.hostname()}:${process.pid}`, ttlMs: MIRROR_LOCK_TTL_MS }, (renew) => withHeartbeat(renew, () => followMediaMirrorOnce({
+      const locked = await withMirrorLock({ file: mirrorLockFile(uploadRoot), owner: `gateway:${os.hostname()}:${process.pid}`, ttlMs: MIRROR_LOCK_TTL_MS }, (renew) => withLockHeartbeat({ renew, everyMs: MIRROR_LOCK_TTL_MS / 3, logger }, () => followMediaMirrorOnce({
         sources: mediaMirrorSources(prisma),
         local: stores.local,
         mirror,

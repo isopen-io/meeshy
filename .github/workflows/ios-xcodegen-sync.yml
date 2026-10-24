@@ -7,11 +7,14 @@
 # projet avant de compiler : seul le fichier committé manque.
 #
 # Déclenchement : un push sur une branche de travail dont le commit de tête
-# contient « [xcodegen] » dans son message. Le job lance `xcodegen generate`,
+# contient « [xcodegen] » dans son message ET qui touche `apps/ios/**`,
+# `packages/MeeshySDK/**` ou ce fichier. Un commit VIDE marqué « [xcodegen] »
+# ne déclenche donc rien : le marqueur voyage avec la poussée qui ajoute ou
+# retire les fichiers Swift. Le job lance `xcodegen generate`,
 # rejoue les gardes du pbxproj, puis commite le résultat sur la même branche.
 # Ce commit, poussé par GITHUB_TOKEN, ne relance pas la CI : l'auteur pousse
 # ensuite un commit (vide au besoin) dont le sujet contient « run test ».
-name: iOS — pbxproj régénéré à la demande
+name: iOS · pbxproj régénéré sur [xcodegen]
 
 on:
   push:
@@ -19,6 +22,10 @@ on:
       - 'lot/**'
       - 'fix/**'
       - 'claude/**'
+    paths:
+      - 'apps/ios/**'
+      - 'packages/MeeshySDK/**'
+      - '.github/workflows/ios-xcodegen-sync.yml'
 
 permissions:
   contents: write

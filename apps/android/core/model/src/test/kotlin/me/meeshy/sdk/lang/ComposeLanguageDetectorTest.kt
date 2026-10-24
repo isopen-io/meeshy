@@ -184,6 +184,60 @@ class ComposeLanguageDetectorTest {
         val result = ComposeLanguageDetector.detect("Olá, tudo bem com você", "fr", identifier("pt-BR", 0.9))
         assertThat(result).isEqualTo("pt")
     }
+
+    // --- un signal faible ne relabellise jamais (#12484) -----------------------------------------
+
+    @Test
+    fun `a draft whose only signal is a one-letter word keeps the sender language`() {
+        assertThat(ComposeLanguageDetector.detect("Recette o", fallback = "fr")).isEqualTo("fr")
+        assertThat(ComposeLanguageDetector.detect("Test e", fallback = "fr")).isEqualTo("fr")
+        assertThat(ComposeLanguageDetector.detect("Photo a", fallback = "fr")).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a french text without stopwords keeps the sender language`() {
+        assertThat(ComposeLanguageDetector.detect("Recette offline Android", fallback = "fr")).isEqualTo("fr")
+        assertThat(ComposeLanguageDetector.detect("Commentaire test", fallback = "fr")).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a one-letter word still counts beside a real signal`() {
+        assertThat(ComposeLanguageDetector.detect("Vou a praia com o meu irmão", fallback = "fr")).isEqualTo("pt")
+    }
+
+    // --- la langue gravée à l'envoi (messages ET commentaires) --------------------------------------
+
+    @Test
+    fun `at send a manual pick always wins`() = runTest {
+        val result = ComposeLanguageDetector.originalLanguageAtSend(
+            text = "Recette offline Android", manual = "es", senderLanguage = "fr", identifier = identifier("pt", 0.99),
+        )
+        assertThat(result).isEqualTo("es")
+    }
+
+    @Test
+    fun `at send a weak identification falls back to the sender language`() = runTest {
+        val result = ComposeLanguageDetector.originalLanguageAtSend(
+            text = "Recette offline Android", manual = null, senderLanguage = "fr", identifier = identifier("pt", 0.4),
+        )
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `at send without an identifier a weak heuristic falls back to the sender language`() = runTest {
+        val result = ComposeLanguageDetector.originalLanguageAtSend(
+            text = "Commentaire test", manual = null, senderLanguage = "fr", identifier = LanguageIdentifying.Unavailable,
+        )
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `at send a confident identification is kept`() = runTest {
+        val result = ComposeLanguageDetector.originalLanguageAtSend(
+            text = "Hello there my friend", manual = null, senderLanguage = "fr", identifier = identifier("en", 0.9),
+        )
+        assertThat(result).isEqualTo("en")
+    }
 }
 
 private object LanguageResolverSupport {

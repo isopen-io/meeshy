@@ -155,6 +155,9 @@ struct ConversationMediaGalleryView: View {
     /// affichent pas.
     var onReactToMedia: ((MessageAttachment, String) -> Void)?
 
+    /// **Transférer la pièce** (#12420) — rail et ⋯. `nil` ⇒ aucune entrée (loi 4).
+    var onForwardMedia: ((MessageAttachment) -> Void)?
+
     /// **La publication dont la galerie montre les SCÈNES** — `nil` hors
     /// d'un post. Une pièce dont l'identité est dans `scenes` est une page scène
     /// (`+ScenePage.swift`) ; toutes les autres restent des pièces jointes.
@@ -175,6 +178,9 @@ struct ConversationMediaGalleryView: View {
     /// le bouton n'y existe pas (loi 4). Hors fenêtre, l'index la repeint.
     var reactableMedia: ((MessageAttachment) -> Bool)?
 
+    /// **« Transférer » existe-t-il sur CETTE pièce ?** `nil` ⇒ sur toutes.
+    var forwardableMedia: ((MessageAttachment) -> Bool)?
+
     /// **Où la colonne d'actions est posée sur le plateau** — mesurée, parce
     /// que la hauteur du bloc auteur et légende qui la porte change avec la page.
     /// Elle décide du fond que la colonne a sous elle
@@ -186,8 +192,7 @@ struct ConversationMediaGalleryView: View {
     /// dit où ils sont peints. `internal` : `+Geometry.swift` l'écrit.
     @State var cadreRegionSize: CGSize = .zero
 
-    /// #10352 — le viewport RÉEL de la galerie, mesuré sur son fond : le solveur
-    /// le lit (`stageViewport`), la fenêtre n'étant qu'un repli avant la mesure.
+    /// #10352 — le viewport RÉEL de la galerie, mesuré sur son fond (`stageViewport`), la fenêtre en repli.
     @State var measuredViewport: CGSize = .zero
 
     /// `id → position`, construite une fois à la présentation. Remplace les
@@ -200,8 +205,9 @@ struct ConversationMediaGalleryView: View {
     @Environment(\.dismiss) private var dismiss
     /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
     @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
-    /// Les marges de la fenêtre qui porte la galerie, la fenêtre clé en repli.
-    var galleryInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
+    /// Publiées par la racine, sinon MESURÉES hors de `body` (`GallerySafeArea`, #12422).
+    var galleryInsets: EdgeInsets { GallerySafeArea.resolve(published: sceneSafeAreaInsets, measured: measuredSafeArea) }
+    @State var measuredSafeArea: EdgeInsets?
     /// `internal` — le couloir bas du plateau le PILOTE depuis
     /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
     /// celui payé par les pages, et pour la même raison.
@@ -281,9 +287,11 @@ struct ConversationMediaGalleryView: View {
         onSendReplyToMedia: ((MessageAttachment, String, String) -> Void)? = nil,
         replyCitation: ((MessageAttachment) -> ReplyReference?)? = nil,
         onReactToMedia: ((MessageAttachment, String) -> Void)? = nil,
+        onForwardMedia: ((MessageAttachment) -> Void)? = nil,
         replyableMedia: ((MessageAttachment) -> Bool)? = nil,
         composableMedia: ((MessageAttachment) -> Bool)? = nil,
         reactableMedia: ((MessageAttachment) -> Bool)? = nil,
+        forwardableMedia: ((MessageAttachment) -> Bool)? = nil,
         sceneContext: GallerySceneContext? = nil,
         entryPresentation: StagePresentation? = nil
     ) {
@@ -306,6 +314,8 @@ struct ConversationMediaGalleryView: View {
         self.replyableMedia = replyableMedia
         self.composableMedia = composableMedia
         self.reactableMedia = reactableMedia
+        self.onForwardMedia = onForwardMedia
+        self.forwardableMedia = forwardableMedia
         self.sceneContext = sceneContext
         let positions = Dictionary(uniqueKeysWithValues: pages.enumerated().map { ($0.element.id, $0.offset) })
         self.indexByID = positions
@@ -336,7 +346,7 @@ struct ConversationMediaGalleryView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { measuredViewport = $0 }
+                .modifier(GalleryMeasurement(viewport: $measuredViewport, safeArea: $measuredSafeArea))
 
             // **LE SOL d'une page scène** : on préserve le même fond que pour la story.
             // Le noir ci-dessus reste le sol des pages image et vidéo ; une page
@@ -698,10 +708,8 @@ struct ConversationMediaGalleryView: View {
     }
 
     /// Bas du CADRE : auteur du média, sa date, sa ligne format / dimensions /
-    /// poids, puis la légende. **Pas d'actions** : réagir · répondre ·
-    /// composer sont montées au-dessus de ce bloc, en colonne verticale à droite
-    /// (`cadreActionColumn`). Ce qui reste ici est exactement ce que le porteur a
-    /// demandé de garder sous le voile.
+    /// poids, puis la légende. **Pas d'actions** : elles vivent dans le rail, à
+    /// droite de ce bloc (`cadreActionColumn`, #12420).
     ///
     /// **La pellicule n'est pas là** : elle vit dans le couloir bas du
     /// plateau (`railCorridor`, `+Geometry.swift`), où plus aucune légende
@@ -781,16 +789,19 @@ struct ConversationMediaGalleryView: View {
     /// en concurrence avec le geste d'ÉDITION. En lecture il n'y a aucune édition à
     /// protéger, et le lecteur de story pose sa colonne sur son canvas.
     ///
-    /// Le retrait bas n'existe pas : `bottomMetadataOverlay` porte déjà ses
-    /// 12 pt de `padding(.top)`, qui valent la gouttière. Une colonne vide ne
-    /// prend donc RIEN — ni largeur, ni hauteur (loi 4).
+    /// Une colonne vide ne prend RIEN — ni largeur, ni hauteur (loi 4).
     var cadreActionColumn: some View {
         FullscreenActionRail {
             if currentIndex < allAttachments.count {
                 mediaActions(allAttachments[currentIndex])
+                // #12420 — Enregistrer et Transférer : dans le rail ET dans le ⋯.
+                GalleryRailExitActions(contentId: allAttachments[currentIndex].id,
+                                       offersSave: currentSaveSubject != nil,
+                                       offersForward: currentOffersForward,
+                                       onSave: requestSaveCurrent,
+                                       onForward: forwardCurrent)
             }
-            // #9577 — le son et (...) ont quitté la ligne de la barre : ils
-            // se rangent ici, sous « Composer » (`+Transport.swift`).
+            // #9577 — le son et (...) se rangent sous les actions (`+Transport.swift`).
             cadreTransportRail
         }
         // La colonne MESURE sa place sur le plateau : c'est elle, et non le
@@ -800,7 +811,7 @@ struct ConversationMediaGalleryView: View {
         } action: { cadre in
             actionColumnFrame = cadre
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
+        .fixedSize()
         .padding(.trailing, MediaGalleryStage.gutter)
         // La colonne est POSÉE sur le plateau : sa teinte suit
         // la luminance de ce qu'elle a SOUS elle — le média, la bande du

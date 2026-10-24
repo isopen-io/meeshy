@@ -4,7 +4,6 @@ import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import io.mockk.mockk
 import org.junit.Test
-import org.webrtc.EglBase
 import org.webrtc.PeerConnectionFactory
 
 class WebRtcEngineLazyInitTest {
@@ -16,7 +15,7 @@ class WebRtcEngineLazyInitTest {
             appContext = mockk<Context>(relaxed = true),
             stackProvider = {
                 builds++
-                WebRtcStack(mockk<EglBase>(relaxed = true), mockk<PeerConnectionFactory>(relaxed = true))
+                WebRtcStack(InertEglBase(), mockk<PeerConnectionFactory>(relaxed = true))
             },
             activityGate = gate,
         )

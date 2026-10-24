@@ -185,11 +185,7 @@ export function AdminBroadcastPanel({ language, broadcastId, deps = apiDeps, now
       <AdminPageHeader
         language={language}
         title={title}
-        crumbs={[
-          { label: translateAdmin(language, 'admin.group.growth') },
-          { label: translateAdmin(language, 'admin.nav.broadcasts'), target: listTarget },
-          { label: title },
-        ]}
+        place={{ section: 'broadcasts', fiche: true }}
       />
       <AdminOfflineNotice language={language} />
       {broadcast.status === 'FAILED' || inAppFailed ? (

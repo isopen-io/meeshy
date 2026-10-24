@@ -60,6 +60,20 @@ describe('focusComposerWhenReady', () => {
     expect(doc.activeElement).toBe(field);
   });
 
+  test('pose le curseur sans faire défiler le fil, comme le web (#12499)', () => {
+    const doc = document;
+    const timers = stepTimers();
+    const field = composer(doc);
+    const options: Array<FocusOptions | undefined> = [];
+    field.focus = (given?: FocusOptions) => {
+      options.push(given);
+    };
+
+    focusComposerWhenReady({ conversationId: 'c1', doc, path: () => '/c/c1', timers, now: () => 0 });
+    timers.tick();
+    expect(options).toEqual([{ preventScroll: true }]);
+  });
+
   test('abandonne passé le délai, sans rien focaliser', () => {
     const doc = document;
     const timers = stepTimers();

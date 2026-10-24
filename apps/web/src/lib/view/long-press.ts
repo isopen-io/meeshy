@@ -223,7 +223,9 @@ const swallowHeldContextMenu = (until: { current: number }): (() => void) => {
  * hôte qui SAIT d'avance qu'il n'ouvrira rien (mode sélection du fil) passe
  * `enabled: false` : ni pression, ni minuteur, ni vibration — le menu du
  * navigateur reste coupé. `pressFeedback: false` retire la seule pression
- * (la visionneuse plein écran, dont chaque toucher bascule le chrome).
+ * (la visionneuse plein écran, dont chaque toucher bascule le chrome), et
+ * `haptic: false` la vibration de l'ouverture (la même visionneuse : afficher
+ * ou masquer ses détails ne vibre pas, #12424 — jumelle iOS #12421).
  * Un appui tenu au doigt sur Android
  * émet AUSSI `contextmenu` pendant la tenue (vers 500 ms, avant ou juste
  * après un `pointercancel` selon le moteur) : tant que le doigt qui a ouvert
@@ -236,6 +238,7 @@ export function useLongPress(options: {
   readonly onOpen: (anchor: LongPressAnchor) => unknown;
   readonly enabled?: boolean;
   readonly pressFeedback?: boolean;
+  readonly haptic?: boolean;
 }) {
   const stateRef = useRef<PressState>({ phase: 'idle' });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -265,6 +268,8 @@ export function useLongPress(options: {
   enabledRef.current = options.enabled ?? true;
   const pressFeedbackRef = useRef(options.pressFeedback ?? true);
   pressFeedbackRef.current = options.pressFeedback ?? true;
+  const hapticRef = useRef(options.haptic ?? true);
+  hapticRef.current = options.haptic ?? true;
 
   const release = useCallback((settle: 'animate' | 'snap' = 'animate') => {
     if (timerRef.current !== null) {
@@ -281,7 +286,7 @@ export function useLongPress(options: {
       release('snap');
       stateRef.current = { phase: 'open' };
       const opened = onOpenRef.current({ element: target, rect: target.getBoundingClientRect() });
-      if (opened !== false) impact('medium');
+      if (opened !== false && hapticRef.current) impact('medium');
     },
     [release],
   );

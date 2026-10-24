@@ -49,7 +49,8 @@ import { emptyMirrorCounts, runMirrorBatch, type MirrorCounts, type MirrorRowSou
 import { mediaObjectStoresFromEnv } from './mediaObjectStoreFactory';
 import { isPorteurApproval } from './mediaObjectStoreConfig';
 import { collectReferencedKeys, sweepBucket, type SweepReport } from './mediaBucketSweep';
-import { withMirrorLock } from './mediaMirrorLock';
+import { withLockHeartbeat, withMirrorLock } from './mediaMirrorLock';
+import type { TimerErrorLogger } from '../../../utils/guarded-timer.js';
 import type { S3ObjectStore } from './S3ObjectStore';
 
 export type MirrorOptions = { readonly apply: boolean; readonly batchSize: number; readonly limit: number | null; readonly reset: boolean };
@@ -62,6 +63,8 @@ const MAX_BATCH = 5_000;
 export const FOLLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** L'échéance du verrou du miroir : un processus mort ne bloque pas plus longtemps ; un passage vivant la repousse. */
 export const MIRROR_LOCK_TTL_MS = 10 * 60 * 1000;
+
+const CLI_TIMER_LOGGER: TimerErrorLogger = { error: (message) => console.error(message) };
 
 /** Le verrou que la ligne de commande et le job partagent, à côté du fichier d'état. */
 export function mirrorLockFile(uploadRoot: string): string {
@@ -238,15 +241,9 @@ export async function runMediaMirrorCli(argv: readonly string[], env: Readonly<R
   };
   try {
     if (!parsed.apply) return await pass(async () => undefined);
-    const locked = await withMirrorLock({ file: mirrorLockFile(uploadRoot), owner: `cli:${process.pid}`, ttlMs: MIRROR_LOCK_TTL_MS }, async (renew) => {
-      const heartbeat = setInterval(() => void renew().catch(() => undefined), MIRROR_LOCK_TTL_MS / 3);
-      heartbeat.unref();
-      try {
-        return await pass(renew);
-      } finally {
-        clearInterval(heartbeat);
-      }
-    });
+    const locked = await withMirrorLock({ file: mirrorLockFile(uploadRoot), owner: `cli:${process.pid}`, ttlMs: MIRROR_LOCK_TTL_MS }, (renew) =>
+      withLockHeartbeat({ renew, everyMs: MIRROR_LOCK_TTL_MS / 3, logger: CLI_TIMER_LOGGER }, () => pass(renew)),
+    );
     if (locked.kind === 'busy') {
       console.error(`Refusé : un autre passage du miroir tourne déjà sur ce volume (${locked.holder}).`);
       return 2;

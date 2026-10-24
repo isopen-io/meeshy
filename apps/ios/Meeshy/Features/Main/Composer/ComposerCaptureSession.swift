@@ -65,6 +65,8 @@ final class ComposerCaptureSession: ObservableObject {
     /// Les proportions de ce que le viseur montre : l'aperçu les mesure,
     /// tout ce qui part les garde. Une carte 9:16 tant que rien n'est monté.
     var canvasAspect = ComposerLookPainter.designAspect
+    /// Le texte de la retouche (#12591) : une planche d'objets, peinte au-dessus du cadre.
+    let retouchTexts = ComposerRetouchTextBoard()
     /// Le cadrage de la prise ; la retouche le règle.
     @Published var framing = ComposerFraming.identity
     /// On vise, ou on retouche.

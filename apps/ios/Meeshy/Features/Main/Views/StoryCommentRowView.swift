@@ -158,33 +158,17 @@ struct StoryCommentRowView: View, Equatable {
         }
     }
 
-    @ViewBuilder
     private var avatar: some View {
-        Group {
-            if let avatarURL = comment.authorAvatarURL,
-               let url = MeeshyConfig.resolveMediaURL(avatarURL) {
-                CachedAsyncImage(url: url.absoluteString, targetSize: CGSize(width: 32, height: 32)) {
-                    Circle().fill(bubbleColor)
-                }
-            } else {
-                Circle()
-                    .fill(bubbleColor)
-                    .overlay(
-                        Text(String(comment.author.prefix(1)).uppercased())
-                            // Doctrine 82i : monogramme dans un cercle d'avatar de
-                            // dimension fixe 32×32 → taille figée (scaler ferait
-                            // déborder l'initiale du cercle). Nom d'auteur lisible
-                            // par ailleurs dans `headerRow`.
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-            }
-        }
-        .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-        .clipShape(Circle())
+        CachedAvatarImage(
+            urlString: comment.authorAvatarURL,
+            name: comment.author,
+            size: MeeshyControlSize.compact,
+            accentColor: comment.authorColor
+        )
         .overlay(Circle().strokeBorder(bubbleColor.opacity(MeeshyOpacity.strong), lineWidth: 1))
         // Halo de séparation : l'avatar reste détaché même sur une story claire.
         .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
+        .accessibilityHidden(true)
     }
 
     private var headerRow: some View {

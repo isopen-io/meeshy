@@ -109,6 +109,7 @@ internal fun ForwardPickerSheet(
                         name = target.title,
                         size = 40.dp,
                         containerColor = hexColor(target.accentHex).takeIf { it != Color.Unspecified } ?: accentColor,
+                        imageUrl = target.avatar,
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

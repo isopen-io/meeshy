@@ -23,6 +23,10 @@ import { LIVE_MESSAGE_MARK } from '../services/messaging/liveMessage';
 import { refuserCommeIntrouvable } from './conversations/utils/access-control';
 import { actorHasMinimumRole } from '../utils/conversation-authority';
 import { MemberRole } from '@meeshy/shared/types/role-types';
+import {
+  ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
+  mayActivateConversationEncryption,
+} from '../utils/encryption-activation-policy';
 const logger = enhancedLogger.child({ module: 'ConversationEncryptionRoutes' });
 
 // EncryptionMode type - defined locally to avoid build order issues
@@ -131,7 +135,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
   /**
    * POST /api/v1/conversations/:conversationId/encryption
-   * Enable encryption for a conversation (immutable - cannot be disabled)
+   * Enable encryption for a conversation (immutable - cannot be disabled).
+   * Restricted to platform ANALYST and above (#12517, #12588, utils/encryption-activation-policy.ts).
    */
   fastify.post<{
     Params: EncryptionStatusParams;
@@ -197,6 +202,12 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         const member = conversation.participants.find(m => m.userId === authContext.userId);
         if (!member) {
           return sendForbidden(reply, 'Not a member of this conversation');
+        }
+
+        if (!mayActivateConversationEncryption({ platformRole: member.user?.role })) {
+          return sendForbidden(reply, 'Encryption can only be enabled by a platform staff role (ANALYST or above) for now', {
+            code: ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
+          });
         }
 
         const isDirectConversation = conversation.type === 'direct';

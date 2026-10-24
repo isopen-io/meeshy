@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -111,18 +110,7 @@ fun RepostEmbedCell(
         Spacer(Modifier.height(MeeshySpacing.sm))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(contentAlignment = Alignment.Center) {
-                MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp)
-                if (!embed.authorAvatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = embed.authorAvatarUrl,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape),
-                    )
-                }
-            }
+            MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp, imageUrl = embed.authorAvatarUrl)
             Spacer(Modifier.width(MeeshySpacing.sm))
             Column(Modifier.weight(1f)) {
                 Text(

@@ -95,6 +95,7 @@ import androidx.compose.material.icons.filled.Forum as FiForum
 import androidx.compose.material.icons.filled.Forward10 as FiForward10
 import androidx.compose.material.icons.filled.Forward5 as FiForward5
 import androidx.compose.material.icons.filled.GppMaybe as FiGppMaybe
+import androidx.compose.material.icons.filled.FiberManualRecord as FiFiberManualRecord
 import androidx.compose.material.icons.filled.GraphicEq as FiGraphicEq
 import androidx.compose.material.icons.filled.GridView as FiGridView
 import androidx.compose.material.icons.filled.Group as FiGroup
@@ -179,6 +180,7 @@ import androidx.compose.material.icons.filled.Speaker as FiSpeaker
 import androidx.compose.material.icons.filled.SportsEsports as FiSportsEsports
 import androidx.compose.material.icons.filled.Star as FiStar
 import androidx.compose.material.icons.filled.Stop as FiStop
+import androidx.compose.material.icons.filled.StopCircle as FiStopCircle
 import androidx.compose.material.icons.filled.SwapHoriz as FiSwapHoriz
 import androidx.compose.material.icons.filled.SwapVert as FiSwapVert
 import androidx.compose.material.icons.filled.Sync as FiSync
@@ -447,6 +449,7 @@ public object MeeshyIcons {
     public val QrCode: ImageVector get() = Icons.Filled.FiQrCode
     public val Quote: ImageVector get() = Icons.Filled.FiFormatQuote
     public val RadioUnchecked: ImageVector get() = Icons.Filled.FiRadioButtonUnchecked
+    public val Record: ImageVector get() = Icons.Filled.FiFiberManualRecord
     public val RecordVoice: ImageVector get() = Icons.Filled.FiRecordVoiceOver
     public val Refresh: ImageVector get() = Icons.Filled.FiRefresh
     public val Remove: ImageVector get() = Icons.Filled.FiRemove
@@ -479,6 +482,7 @@ public object MeeshyIcons {
     public val Star: ImageVector get() = Icons.Outlined.OuStarOutline
     public val StarFilled: ImageVector get() = Icons.Filled.FiStar
     public val Stop: ImageVector get() = Icons.Filled.FiStop
+    public val StopCircle: ImageVector get() = Icons.Filled.FiStopCircle
     public val SwapHorizontal: ImageVector get() = Icons.Filled.FiSwapHoriz
     public val SwapVertical: ImageVector get() = Icons.Filled.FiSwapVert
     public val Sync: ImageVector get() = Icons.Filled.FiSync

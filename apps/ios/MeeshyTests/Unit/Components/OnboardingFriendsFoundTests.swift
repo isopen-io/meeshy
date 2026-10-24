@@ -24,7 +24,6 @@ final class OnboardingFriendsFoundTests: XCTestCase {
     }
 
     func test_contactSheetInitials_addressBookName_keepsOnlyLetters() {
-        XCTAssertEqual(ContactCardDetailSheet.initials("Théo (foot)"), "TF")
         XCTAssertEqual(MeeshyAvatar.initials(for: "Théo (foot)"), "TF")
     }
 }
