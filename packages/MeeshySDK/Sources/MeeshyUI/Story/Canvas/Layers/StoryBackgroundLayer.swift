@@ -276,8 +276,8 @@ public final class StoryBackgroundLayer: CALayer {
     }
 
     public override nonisolated init() {
-        super.init()
         self.playbackQoE = StoryBackgroundPlaybackQoE()
+        super.init()
         // Clip le contenu interne aux bounds du backgroundLayer pour le
         // pinch/pan "INSIDE the bg" (style Instagram) — sinon scaler le
         // content fait déborder l'image / vidéo au-delà du canvas et le user
@@ -285,8 +285,8 @@ public final class StoryBackgroundLayer: CALayer {
         self.masksToBounds = true
     }
     public override nonisolated init(layer: Any) {
-        super.init(layer: layer)
         self.playbackQoE = StoryBackgroundPlaybackQoE()
+        super.init(layer: layer)
         self.masksToBounds = true
     }
 
