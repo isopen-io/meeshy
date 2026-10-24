@@ -66,6 +66,7 @@ import androidx.compose.material.icons.filled.Close as FiClose
 import androidx.compose.material.icons.filled.Code as FiCode
 import androidx.compose.material.icons.filled.ContentCopy as FiContentCopy
 import androidx.compose.material.icons.filled.ContentCut as FiContentCut
+import androidx.compose.material.icons.filled.Crop as FiCrop
 import androidx.compose.material.icons.filled.CreateNewFolder as FiCreateNewFolder
 import androidx.compose.material.icons.filled.Dangerous as FiDangerous
 import androidx.compose.material.icons.filled.Delete as FiDelete
@@ -341,6 +342,7 @@ public object MeeshyIcons {
     public val Code: ImageVector get() = Icons.Filled.FiCode
     public val ComposeNew: ImageVector get() = Icons.Outlined.OuEditNote
     public val Copy: ImageVector get() = Icons.Filled.FiContentCopy
+    public val Crop: ImageVector get() = Icons.Filled.FiCrop
     public val Cut: ImageVector get() = Icons.Filled.FiContentCut
     public val Dangerous: ImageVector get() = Icons.Filled.FiDangerous
     public val Delete: ImageVector get() = Icons.Outlined.OuDelete

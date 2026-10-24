@@ -14,12 +14,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ContentCut
-import androidx.compose.material.icons.rounded.Crop
-import androidx.compose.material.icons.rounded.TextFields
-import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +38,7 @@ import me.meeshy.sdk.model.composer.look.ComposerEditTool
 import me.meeshy.sdk.model.composer.look.ComposerEditTools
 import me.meeshy.sdk.model.composer.look.ComposerRetouchState
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 
 /** (x) « Annuler » à gauche, « Terminé » à droite — ils cèdent la place aux éléments d'édition. */
 @Composable
@@ -55,7 +50,7 @@ internal fun RetouchTopRow(finishing: Boolean, onCancel: () -> Unit, onDone: () 
     ) {
         val cancel = stringResource(R.string.common_cancel)
         IconButton(onClick = onCancel, modifier = Modifier.size(48.dp).semantics { contentDescription = cancel }) {
-            Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White)
+            Icon(MeeshyIcons.Close, contentDescription = null, tint = Color.White)
         }
         TextButton(onClick = onDone, enabled = !finishing, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
             Text(
@@ -107,10 +102,10 @@ private fun RailEntry(icon: ImageVector, name: String, chosen: Boolean, enabled:
 }
 
 private fun toolIcon(tool: ComposerEditTool): ImageVector = when (tool) {
-    ComposerEditTool.CROP -> Icons.Rounded.Crop
-    ComposerEditTool.TEXT -> Icons.Rounded.TextFields
-    ComposerEditTool.TRIM -> Icons.Rounded.ContentCut
-    ComposerEditTool.SOUND -> Icons.Rounded.VolumeUp
+    ComposerEditTool.CROP -> MeeshyIcons.Crop
+    ComposerEditTool.TEXT -> MeeshyIcons.TextFields
+    ComposerEditTool.TRIM -> MeeshyIcons.Cut
+    ComposerEditTool.SOUND -> MeeshyIcons.Waveform
 }
 
 private fun toolName(tool: ComposerEditTool): Int = when (tool) {

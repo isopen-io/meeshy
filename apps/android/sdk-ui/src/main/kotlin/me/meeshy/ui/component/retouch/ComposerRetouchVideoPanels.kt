@@ -5,9 +5,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.VolumeOff
-import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -25,6 +22,7 @@ import me.meeshy.sdk.model.composer.look.ComposerTakeSound
 import me.meeshy.sdk.model.composer.look.ComposerVideoEdit
 import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.component.media.MediaTrimContent
 import me.meeshy.ui.component.media.MediaTrimStrip
 
@@ -58,7 +56,7 @@ internal fun RetouchSoundPanel(sound: ComposerTakeSound, enabled: Boolean, onGai
     val percent = "${ComposerTakeSound.percent(sound.gain)} %"
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onMute, enabled = enabled, modifier = Modifier.size(48.dp).semantics { contentDescription = muteLabel }) {
-            Icon(if (sound.muted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, contentDescription = null, tint = Color.White)
+            Icon(if (sound.muted) MeeshyIcons.VolumeOff else MeeshyIcons.VolumeUp, contentDescription = null, tint = Color.White)
         }
         Slider(
             value = sound.gain.toFloat(),
