@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.chrome.unreadBadgeLabel
 import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshyPalette
 
@@ -33,7 +34,7 @@ internal fun chromeAvatarUsesPhoto(avatarUrl: String?): Boolean = !avatarUrl.isN
  * against the API base; `null` when there is no photo. Pur, teste en JVM.
  */
 internal fun chromeAvatarModel(avatar: String?, apiBaseUrl: String): String? =
-    avatar?.takeIf(::chromeAvatarUsesPhoto)?.let { resolveMediaUrl(it, apiBaseUrl) }
+    resolveServedImageUrl(avatar, apiBaseUrl)
 
 /**
  * Couleurs de l'anneau du bouton droit au repos : parite iOS — indigo600->indigo300

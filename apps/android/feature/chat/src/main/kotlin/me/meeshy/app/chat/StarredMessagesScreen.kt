@@ -216,7 +216,12 @@ private fun StarredRow(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MeeshyAvatar(name = name, size = 44.dp, containerColor = accent)
+            MeeshyAvatar(
+                name = message.senderName?.takeIf { it.isNotBlank() } ?: name,
+                size = 44.dp,
+                containerColor = accent,
+                imageUrl = message.senderAvatarUrl,
+            )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

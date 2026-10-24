@@ -300,7 +300,7 @@ private fun MemberRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        MeeshyAvatar(name = name, size = 40.dp, containerColor = accentColor)
+        MeeshyAvatar(name = name, size = 40.dp, containerColor = accentColor, imageUrl = member.avatar)
 
         Column(modifier = Modifier.weight(1f)) {
             Row(

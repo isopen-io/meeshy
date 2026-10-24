@@ -130,7 +130,7 @@ private fun ShareTargetRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        MeeshyAvatar(name = target.title, size = 40.dp, containerColor = hexColor(target.accentHex))
+        MeeshyAvatar(name = target.title, size = 40.dp, containerColor = hexColor(target.accentHex), imageUrl = target.avatar)
 
         Text(
             text = target.title,

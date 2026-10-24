@@ -1,6 +1,6 @@
 package me.meeshy.ui.component
 
-import me.meeshy.sdk.util.resolveSafeMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 
 /**
  * L'état du chargement d'une photo d'avatar, tel que le moteur d'image le rapporte. Aucun état
@@ -70,11 +70,8 @@ private fun String.isLocalUri(): Boolean = LOCAL_URI_SCHEMES.any { startsWith(it
  * L'adresse chargeable d'une référence SERVIE, ou `null` (⇒ initiales) quand rien n'est servi, quand
  * c'est un URI local, ou quand la politique d'URL média (https, pas d'adresse privée) la refuse. Pur.
  */
-internal fun avatarPhotoModel(imageUrl: String?, apiBaseUrl: String?): String? {
-    val raw = imageUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    if (raw.isLocalUri()) return null
-    return resolveSafeMediaUrl(raw, apiBaseUrl)
-}
+internal fun avatarPhotoModel(imageUrl: String?, apiBaseUrl: String?): String? =
+    resolveServedImageUrl(imageUrl, apiBaseUrl)
 
 /** Une photo choisie localement : `file:` / `content:` seulement. */
 internal fun avatarLocalPhotoModel(localPhotoUri: String?): String? =

@@ -60,6 +60,7 @@ fun NotificationToastHost(
                 title = notificationToastSubtitle(notification),
                 modifier = modifier,
                 avatarName = notificationToastSenderName(notification),
+                avatarUrl = notification.actor?.avatar ?: notification.context?.conversationAvatar,
                 onTap = {
                     onOpen(notification)
                     viewModel.dismiss()

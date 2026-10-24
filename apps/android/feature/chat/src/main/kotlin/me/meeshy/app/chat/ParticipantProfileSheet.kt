@@ -98,7 +98,7 @@ internal fun ParticipantProfileSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
-                MeeshyAvatar(name = displayName, size = 56.dp, containerColor = accentColor)
+                MeeshyAvatar(name = displayName, size = 56.dp, containerColor = accentColor, imageUrl = state.profile?.avatar)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = state.profile?.displayName ?: displayName,

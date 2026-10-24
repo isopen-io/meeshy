@@ -1,5 +1,7 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.theme.accentColorPalette
+import me.meeshy.sdk.model.displayedAvatar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -306,6 +308,8 @@ private fun SearchResults(
             GlobalSearchTab.MESSAGES -> items(state.results.messages, key = { it.message.id }) { hit ->
                 MessageHitRow(
                     hit = hit,
+                    avatarUrl = state.results.conversations.firstOrNull { it.id == hit.message.conversationId }
+                        ?.displayedAvatar(state.currentUserId),
                     query = state.resultsQuery,
                     onClick = { onOpenConversation(hit.message.conversationId) },
                 )
@@ -341,9 +345,9 @@ private fun ResultCard(onClick: () -> Unit, content: @Composable androidx.compos
 }
 
 @Composable
-private fun MessageHitRow(hit: MessageSearchHit, query: String, onClick: () -> Unit) {
+private fun MessageHitRow(hit: MessageSearchHit, avatarUrl: String?, query: String, onClick: () -> Unit) {
     ResultCard(onClick = onClick) {
-        MeeshyAvatar(name = hit.conversationTitle, size = 40.dp)
+        MeeshyAvatar(name = hit.conversationTitle, size = 40.dp, imageUrl = avatarUrl)
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -397,7 +401,12 @@ private val SEARCH_HIGHLIGHT_WASH = MeeshyPalette.Warning.copy(alpha = 0.45f)
 private fun ConversationHitRow(conversation: ApiConversation, currentUserId: String?, onClick: () -> Unit) {
     val title = conversation.displayTitle(currentUserId)
     ResultCard(onClick = onClick) {
-        MeeshyAvatar(name = title, size = 40.dp)
+        MeeshyAvatar(
+            name = title,
+            size = 40.dp,
+            containerColor = hexColor(conversation.accentColorPalette().primary),
+            imageUrl = conversation.displayedAvatar(currentUserId),
+        )
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -439,7 +448,7 @@ private fun ConversationHitRow(conversation: ApiConversation, currentUserId: Str
 @Composable
 private fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
     ResultCard(onClick = onClick) {
-        MeeshyAvatar(name = user.displayName ?: user.username, size = 40.dp)
+        MeeshyAvatar(name = user.displayName ?: user.username, size = 40.dp, imageUrl = user.avatar)
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(

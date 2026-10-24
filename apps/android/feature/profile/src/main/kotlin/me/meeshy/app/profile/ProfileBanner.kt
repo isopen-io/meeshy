@@ -27,7 +27,7 @@ import me.meeshy.ui.appearance.BannerDesignView
 import me.meeshy.ui.appearance.BannerFrameView
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
-import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -66,12 +66,19 @@ internal fun ProfileBanner(user: MeeshyUser, modifier: Modifier = Modifier, view
             .clip(RoundedCornerShape(MeeshyRadius.lg)),
     ) {
         when (val paint = content.paint) {
-            is ProfileBannerPaint.Photo -> AsyncImage(
-                model = resolveMediaUrl(paint.url, apiBaseUrl),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
+            is ProfileBannerPaint.Photo -> {
+                val photo = resolveServedImageUrl(paint.url, apiBaseUrl)
+                if (photo != null) {
+                    AsyncImage(
+                        model = photo,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Box(Modifier.fillMaxSize().background(MeeshyTheme.tokens.backgroundTertiary))
+                }
+            }
             is ProfileBannerPaint.Design -> BannerDesignView(
                 design = paint.design,
                 isDark = isDark,
