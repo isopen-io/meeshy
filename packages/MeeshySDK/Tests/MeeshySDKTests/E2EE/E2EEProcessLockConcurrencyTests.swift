@@ -63,6 +63,71 @@ final class E2EEProcessLockConcurrencyTests: XCTestCase {
 
         XCTAssertEqual(inside.maximumConcurrency, 1)
     }
+
+    /// Un fichier dont le verrou n'exclut personne (deux fils sur un même
+    /// descripteur) : seul le verrou intra-processus tient encore les fils.
+    func test_theLocalLockExcludesThreadsWhenTheFileLockDoesNot() throws {
+        let lock = E2EEProcessLock(path: E2EETestDevice.temporaryPath("lock"), fileLock: NonExcludingFileLock())
+        let inside = OpenedLedger()
+
+        DispatchQueue.concurrentPerform(iterations: 40) { _ in
+            try? lock.withLock {
+                inside.enter()
+                usleep(500)
+                inside.leave()
+            }
+        }
+
+        XCTAssertEqual(inside.maximumConcurrency, 1)
+    }
+
+    func test_aNestedTakeOfTheSameLock_throwsInsteadOfDeadlocking() throws {
+        let lock = E2EEProcessLock(path: E2EETestDevice.temporaryPath("lock"))
+        var innerRan = false
+
+        XCTAssertThrowsError(try lock.withLock { try lock.withLock { innerRan = true } }) { error in
+            XCTAssertEqual(error as? E2EEProcessLockError, .reentrant)
+        }
+        XCTAssertFalse(innerRan)
+        XCTAssertEqual(try lock.withLock { 7 }, 7, "le verrou se reprend après le refus")
+    }
+
+    func test_aNestedTakeThroughAnotherInstanceOfTheSameFile_throwsInsteadOfDeadlocking() throws {
+        let path = E2EETestDevice.temporaryPath("lock")
+        let outer = E2EEProcessLock(path: path)
+        let inner = E2EEProcessLock(path: path)
+
+        XCTAssertThrowsError(try outer.withLock { try inner.withLock {} }) { error in
+            XCTAssertEqual(error as? E2EEProcessLockError, .reentrant)
+        }
+    }
+
+    func test_twoLocksOfDifferentFiles_nest() throws {
+        let outer = E2EEProcessLock(path: E2EETestDevice.temporaryPath("lock"))
+        let inner = E2EEProcessLock(path: E2EETestDevice.temporaryPath("lock"))
+
+        XCTAssertEqual(try outer.withLock { try inner.withLock { "ok" } }, "ok")
+    }
+
+    func test_shared_servesOneInstancePerAppGroup() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let group = "group.test.\(UUID().uuidString)"
+
+        let first = try E2EEProcessLock.shared(appGroup: group) { _ in directory }
+        let second = try E2EEProcessLock.shared(appGroup: group) { _ in directory }
+        let other = try E2EEProcessLock.shared(appGroup: group) { _ in directory.appendingPathComponent("autre") }
+
+        XCTAssertTrue(first === second)
+        XCTAssertFalse(first === other)
+    }
+
+    func test_shared_withoutAnAppGroupContainer_throws() {
+        XCTAssertThrowsError(try E2EEProcessLock.shared(appGroup: "group.absent") { _ in nil })
+    }
+}
+
+private struct NonExcludingFileLock: E2EEFileLocking {
+    func hold<T>(_ path: String, _ body: () throws -> T) throws -> T { try body() }
 }
 
 private final class OpenedLedger: @unchecked Sendable {
