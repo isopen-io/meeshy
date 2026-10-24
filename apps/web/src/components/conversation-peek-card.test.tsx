@@ -418,9 +418,48 @@ describe('conversation-peek.css — le fond sous la carte (#12633)', () => {
     expect(rule('.conversation-peek-card > .thread-backdrop:not([data-appearance])')).toContain('display: none');
   });
 
-  test('sur un fond peint, l’en-tête pose un matériau quasi opaque de la surface de la carte', () => {
+  test('sur un fond peint, l’en-tête garde la surface opaque de la carte', () => {
+    expect(rule('.conversation-peek-card[data-peek-backdrop] .conversation-peek-header')).toContain('background-color: var(--color-ios-card);');
+  });
+
+  test('l’en-tête tient AA (4,5:1) sur toute photo, en clair et en sombre', () => {
+    const TOKENS = readFileSync(new URL('../../../../packages/design-tokens/ios.css', import.meta.url), 'utf8');
+    const light = TOKENS.indexOf(':root.light');
+    const tokenOf = (name: string, scheme: 'dark' | 'light'): string => {
+      const scope = scheme === 'light' ? TOKENS.slice(light) : TOKENS.slice(0, light);
+      const found = new RegExp(`--${name}: ([^;]+);`).exec(scope);
+      if (found?.[1] === undefined) throw new Error(`jeton absent : ${name} (${scheme})`);
+      return found[1];
+    };
+    type Rgb = readonly [number, number, number];
+    const hex = (value: string): Rgb => {
+      const channel = (offset: number): number => Number.parseInt(value.replace('#', '').slice(offset, offset + 2), 16) / 255;
+      return [channel(0), channel(2), channel(4)];
+    };
+    const over = (top: Rgb, alpha: number, bottom: Rgb): Rgb => {
+      const blend = (index: 0 | 1 | 2): number => top[index] * alpha + bottom[index] * (1 - alpha);
+      return [blend(0), blend(1), blend(2)];
+    };
+    const ink = (value: string, surface: Rgb): Rgb => {
+      const mixed = /color-mix\(in srgb, (#[0-9a-f]{6}) (\d+)%, transparent\)/i.exec(value);
+      return mixed?.[1] === undefined ? hex(value) : over(hex(mixed[1]), Number(mixed[2]) / 100, surface);
+    };
+    const luminance = (rgb: Rgb): number => {
+      const linear = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2]);
+    };
+    const contrast = (a: Rgb, b: Rgb): number => {
+      const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05);
+    };
     const header = rule('.conversation-peek-card[data-peek-backdrop] .conversation-peek-header');
-    const mix = /color-mix\(in srgb, var\(--color-ios-card\) (\d+)%, transparent\)/.exec(header);
-    expect(Number(mix?.[1])).toBeGreaterThanOrEqual(88);
+    const opacity = header.includes('background-color: var(--color-ios-card);') ? 1 : 0;
+    const measured = (['dark', 'light'] as const).flatMap((scheme) =>
+      [hex('#000000'), hex('#ffffff')].flatMap((photo) => {
+        const surface = over(hex(tokenOf('ios-surface-card', scheme)), opacity, photo);
+        return [contrast(ink(tokenOf('ios-ink', scheme), surface), surface), contrast(ink(tokenOf('ios-ink-3', scheme), surface), surface)];
+      }),
+    );
+    expect(Math.min(...measured)).toBeGreaterThanOrEqual(4.5);
   });
 });
