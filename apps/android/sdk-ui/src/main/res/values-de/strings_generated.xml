@@ -91,6 +91,16 @@
     <string name="retouch_style_redcarpet">Roter Teppich</string>
     <string name="retouch_style_screen">Bildschirm</string>
     <string name="retouch_style_strip">Fotoautomat</string>
+    <string name="retouch_text_add">Text hinzufügen</string>
+    <string name="retouch_text_align_center">ZENTRIERT</string>
+    <string name="retouch_text_align_left">LINKS</string>
+    <string name="retouch_text_align_right">RECHTS</string>
+    <string name="retouch_text_color">Textfarbe</string>
+    <string name="retouch_text_style_bold">FETT</string>
+    <string name="retouch_text_style_classic">KLASSISCH</string>
+    <string name="retouch_text_style_handwriting">HANDSCHRIFT</string>
+    <string name="retouch_text_style_neon">NEON</string>
+    <string name="retouch_text_style_typewriter">SCHREIBMASCHINE</string>
     <string name="retouch_tool_crop">Ausschnitt</string>
     <string name="retouch_tool_sound">Ton</string>
     <string name="retouch_tool_text">Text</string>

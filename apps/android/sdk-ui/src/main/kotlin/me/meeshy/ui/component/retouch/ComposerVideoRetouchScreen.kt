@@ -45,7 +45,13 @@ import me.meeshy.sdk.model.composer.look.ComposerEditTools
 import me.meeshy.sdk.model.composer.look.ComposerLookCanvas
 import me.meeshy.sdk.model.composer.look.ComposerRetouchDelivery
 import me.meeshy.sdk.model.composer.look.ComposerRetouchState
+import me.meeshy.sdk.model.composer.look.ComposerRetouchTextBoard
 import me.meeshy.sdk.model.composer.look.ComposerTakeGain
+import me.meeshy.sdk.model.imageedit.CropRect
+import java.util.UUID
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Ce qu'une vidéo prise déclare : sa durée, ses dimensions debout, et si elle porte du son. */
 public data class RetouchVideoProbe(val durationSeconds: Double, val width: Int, val height: Int, val hasAudio: Boolean) {
@@ -90,7 +96,7 @@ public fun ComposerVideoRetouchScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val tools = remember(probe) { listOf(ComposerEditTool.CROP, ComposerEditTool.TRIM, ComposerEditTool.SOUND) }
+    val tools = remember(probe) { listOf(ComposerEditTool.CROP, ComposerEditTool.TEXT, ComposerEditTool.TRIM, ComposerEditTool.SOUND) }
     var state by remember {
         mutableStateOf(
             ComposerRetouchState.opening(ComposerEditTake.Video(probe.hasAudio), RetouchRenderableEffects, tools, probe.durationSeconds, lookFamilies = false),
@@ -98,6 +104,8 @@ public fun ComposerVideoRetouchScreen(
     }
     var finishing by remember { mutableStateOf(false) }
     var lockedPreset by remember { mutableStateOf<ComposerCropPreset?>(null) }
+    var text by remember { mutableStateOf(ComposerRetouchTextBoard()) }
+    val newTextId = { UUID.randomUUID().toString() }
     val scope = rememberCoroutineScope()
     val player = remember(source) {
         ExoPlayer.Builder(context).build().apply {
@@ -133,9 +141,16 @@ public fun ComposerVideoRetouchScreen(
         finishing = true
         scope.launch {
             val video = settled.video
+            val written = text.endingTyping().written
             val result = when {
-                settled.delivery == ComposerRetouchDelivery.ORIGINAL || video == null -> ComposerVideoRetouchResult.Original
-                else -> runCatching { RetouchVideoExporter.export(context, source, video.copy(crop = settled.crop), output) }
+                video == null || (settled.delivery == ComposerRetouchDelivery.ORIGINAL && written.isEmpty()) -> ComposerVideoRetouchResult.Original
+                else -> runCatching {
+                    val crop = settled.crop
+                    val overlay = withContext(Dispatchers.Default) {
+                        RetouchTextPainter.overlay(written, ((crop?.width ?: 1f) * probe.width).roundToInt(), ((crop?.height ?: 1f) * probe.height).roundToInt())
+                    }
+                    RetouchVideoExporter.export(context, source, video.copy(crop = crop), output, overlay)
+                }
                     .map { ComposerVideoRetouchResult.Rendered(output) }
                     .getOrNull()
             }
@@ -150,7 +165,15 @@ public fun ComposerVideoRetouchScreen(
     }
 
     val cropping = ComposerEditTools.showsBrackets(state.activeTools)
-    BackHandler(enabled = !state.settled) { if (cropping) state = state.tappingTool(ComposerEditTool.CROP) else cancel() }
+    val writing = ComposerEditTool.TEXT in state.activeTools
+    BackHandler(enabled = !state.settled) {
+        when {
+            text.typingId != null -> text = text.endingTyping()
+            writing -> state = state.tappingTool(ComposerEditTool.TEXT)
+            cropping -> state = state.tappingTool(ComposerEditTool.CROP)
+            else -> cancel()
+        }
+    }
 
     Box(modifier.fillMaxSize().background(Color.Black).semantics { testTag = "retouch.video" }) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -165,8 +188,13 @@ public fun ComposerVideoRetouchScreen(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+            val display = with(LocalDensity.current) { ComposerLookCanvas.displayRect(maxWidth.toPx(), maxHeight.toPx(), probe.width, probe.height) }
+            val kept = state.crop?.let { crop ->
+                CropRect(display.left + crop.x * display.width, display.top + crop.y * display.height, crop.width * display.width, crop.height * display.height)
+            } ?: display
+            if (!cropping && state.crop != null) RetouchCropMask(kept)
+            if (!cropping) RetouchTextLayer(board = text, display = kept, interactive = writing && !finishing, newId = newTextId, onBoard = { text = it })
             if (cropping) {
-                val display = with(LocalDensity.current) { ComposerLookCanvas.displayRect(maxWidth.toPx(), maxHeight.toPx(), probe.width, probe.height) }
                 RetouchCropBrackets(
                     crop = state.crop,
                     aspect = lockedPreset?.aspect(probe.width.toDouble(), probe.height.toDouble()),
@@ -179,6 +207,7 @@ public fun ComposerVideoRetouchScreen(
             RetouchTopRow(finishing = finishing, onCancel = ::cancel, onDone = ::done, modifier = Modifier.align(Alignment.TopCenter))
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
+            if (writing) RetouchTextToolbar(board = text, newId = newTextId, onBoard = { text = it })
             ComposerEditTools.panels(familyOpen = false, active = state.activeTools).forEach { panel ->
                 when (panel) {
                     ComposerEditPanel.PRESETS -> RetouchCropPresets(chosen = state.cropPreset, enabled = !finishing) { preset ->
@@ -197,10 +226,25 @@ public fun ComposerVideoRetouchScreen(
                     ComposerEditPanel.NONE, ComposerEditPanel.BAND -> Unit
                 }
             }
-            RetouchRail(state = state, enabled = !finishing, onFamily = {}, onTool = { tool -> state = state.tappingTool(tool) })
+            RetouchRail(state = state, enabled = !finishing, onFamily = {}, onTool = { tool ->
+                state = state.tappingTool(tool)
+                text = if (ComposerEditTool.TEXT in state.activeTools) text.begin(newTextId()) else text.endingTyping()
+            })
         }
     }
 }
 
 private const val LOOP_POLL_MS = 50L
 private const val LOOP_SLACK_MS = 250L
+
+/** Ce qui part d'une vidéo recadrée : le reste de l'image s'assombrit (l'aperçu ne recadre pas le lecteur). */
+@Composable
+private fun RetouchCropMask(kept: CropRect) {
+    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+        val veil = Color.Black.copy(alpha = 0.72f)
+        drawRect(veil, size = androidx.compose.ui.geometry.Size(size.width, kept.top))
+        drawRect(veil, topLeft = androidx.compose.ui.geometry.Offset(0f, kept.top + kept.height), size = androidx.compose.ui.geometry.Size(size.width, size.height - kept.top - kept.height))
+        drawRect(veil, topLeft = androidx.compose.ui.geometry.Offset(0f, kept.top), size = androidx.compose.ui.geometry.Size(kept.left, kept.height))
+        drawRect(veil, topLeft = androidx.compose.ui.geometry.Offset(kept.left + kept.width, kept.top), size = androidx.compose.ui.geometry.Size(size.width - kept.left - kept.width, kept.height))
+    }
+}
