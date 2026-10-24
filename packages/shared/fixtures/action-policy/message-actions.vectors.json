@@ -775,6 +775,87 @@
       }
     },
     {
+      "_label": "groupe-admin-plateforme-non-membre-retire-sans-modifier",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "ADMIN",
+          "conversationRole": null,
+          "isActiveMember": false,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [],
+          "more": [
+            "sentiment"
+          ],
+          "moderation": [
+            "remove"
+          ],
+          "destructive": []
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": false,
+          "remove": {
+            "reasonRequired": true
+          },
+          "pin": null,
+          "report": false,
+          "canReact": false,
+          "canReply": false,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
       "_label": "groupe-role-plateforme-en-minuscules-ne-modere-pas",
       "input": {
         "message": {

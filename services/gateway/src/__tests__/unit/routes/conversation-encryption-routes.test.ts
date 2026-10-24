@@ -285,6 +285,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
   it.each([
     ['un ADMIN de plateforme membre d’un groupe', { role: 'member', user: { role: 'ADMIN' } }, 'group'],
     ['un BIGBOSS de plateforme membre d’un groupe', { role: 'member', user: { role: 'BIGBOSS' } }, 'group'],
+    ['un MODERATOR de plateforme simple membre d’un groupe — privilégié comme ADMIN (#11217)', { role: 'member', user: { role: 'MODERATOR' } }, 'group'],
     ['un ADMIN de plateforme dans un tête-à-tête, rôle en minuscules', { role: 'member', user: { role: 'admin' } }, 'direct'],
     ['un BIGBOSS de plateforme créateur du groupe', { role: 'creator', user: { role: 'BIGBOSS' } }, 'group'],
     ['un MODERATOR de plateforme dans un tête-à-tête', { role: 'member', user: { role: 'MODERATOR' } }, 'direct'],
@@ -306,7 +307,6 @@ describe('POST /conversations/:conversationId/encryption', () => {
     ['le créateur USER d’un groupe', { role: 'creator', user: { role: 'USER' } }, 'group'],
     ['un administrateur USER du groupe', { role: 'admin', user: { role: 'USER' } }, 'group'],
     ['un modérateur USER du groupe', { role: 'MODERATOR', user: { role: 'USER' } }, 'group'],
-    ['un MODERATOR de plateforme simple membre d’un groupe — rang de conversation insuffisant', { role: 'member', user: { role: 'MODERATOR' } }, 'group'],
     ['un AUDIT de plateforme simple membre d’un groupe — rang de conversation insuffisant', { role: 'member', user: { role: 'AUDIT' } }, 'group'],
     ['un ANALYST de plateforme simple membre d’un groupe — rang de conversation insuffisant', { role: 'member', user: { role: 'ANALYST' } }, 'group'],
     ['un USER dans un tête-à-tête', { role: 'member', user: { role: 'USER' } }, 'direct'],

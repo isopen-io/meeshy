@@ -705,7 +705,7 @@ describe('PATCH …/rights — l’administrateur de plateforme agit avec les dr
     return ctx.reply._body?.data;
   }
 
-  it.each(['ADMIN', 'BIGBOSS'])(
+  it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])(
     'un %s de la plateforme, simple membre de la conversation, pose les droits d’entrée',
     async (platformRole) => {
       const ctx = setup('member');
@@ -724,10 +724,10 @@ describe('PATCH …/rights — l’administrateur de plateforme agit avec les dr
     expect(ctx.reply._status).toBe(200);
   });
 
-  it('un MODERATOR de la plateforme reste un participant ordinaire', async () => {
+  it.each(['AUDIT', 'ANALYST'])('un %s de la plateforme reste un participant ordinaire (#11217)', async (platformRole) => {
     const ctx = setup('member');
 
-    await patchRightsAs(ctx, 'MODERATOR', { canSendFiles: true });
+    await patchRightsAs(ctx, platformRole, { canSendFiles: true });
 
     expect(ctx.reply._status).toBe(403);
     expect(ctx.prisma.participant.update).not.toHaveBeenCalled();

@@ -1,10 +1,10 @@
 import {
   MemberRole,
   type MemberRoleType,
-  isGlobalAdmin,
   isMemberRole,
   memberRoleLevel,
 } from '@meeshy/shared/types/role-types';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 
 /**
  * **L'autorité d'un acteur DANS une conversation** — rang de conversation et
@@ -34,10 +34,13 @@ import {
  *   ce voisin d'apparence interchangeable aurait rendu le créateur d'une
  *   conversation expulsable par n'importe quel administrateur, ce que la
  *   décision porteur ne dit pas.
- * - **« de la plateforme »** — `ADMIN` et `BIGBOSS` seulement. `MODERATOR`,
- *   `AUDIT` et `ANALYST` sont des participants ordinaires dans une
- *   conversation, exactement comme l'énonce déjà la loi de visibilité de la
- *   présence (`presence-visibility.ts`).
+ * - **« de la plateforme »** — les rôles PRIVILÉGIÉS de la table partagée
+ *   (`PRIVILEGED_PLATFORM_ROLES`, `@meeshy/shared/utils/platform-privilege`) :
+ *   `MODERATOR`, `ADMIN` et `BIGBOSS`, comparés exactement. La décision porteur
+ *   du 2026-10-24 (#11217) a rangé `MODERATOR` avec eux — il était ordinaire
+ *   ici pendant que l'édition et la suppression le privilégiaient. `AUDIT` et
+ *   `ANALYST` restent des participants ordinaires. La visibilité de la
+ *   présence, elle, garde sa propre loi (`isGlobalAdmin`).
  *
  * Type PUR : aucune requête, aucune horloge, aucun Prisma. Les routes lui
  * remettent deux chaînes.
@@ -51,7 +54,7 @@ export type ConversationActor = {
 
 /** L'acteur tient-il ses droits de la plateforme plutôt que de la conversation ? */
 export function actsWithCreatorRights(actor: ConversationActor): boolean {
-  return isGlobalAdmin(actor.platformRole ?? '');
+  return isPrivilegedPlatformRole(actor.platformRole);
 }
 
 /**

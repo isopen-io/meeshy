@@ -8,14 +8,18 @@ import Foundation
 ///
 /// Deux LECTURES, comme la loi des actions (#11205) qui en fait foi :
 /// - `init?(raw:)` compare EXACTEMENT : c'est ainsi que la passerelle décide qui
-///   MODÈRE (`PRIVILEGED_GLOBAL_ROLES`), donc un « moderator » en minuscules ne
-///   modère pas ;
+///   est PRIVILÉGIÉ (`PRIVILEGED_PLATFORM_ROLES`, `packages/shared/utils/
+///   platform-privilege.ts`), donc un « moderator » en minuscules ne modère pas ;
 /// - `init?(caseFolding:)` plie la casse : c'est ainsi que `isGlobalAdmin` et
 ///   `globalRoleLevel` décident qui ADMINISTRE et à quel niveau.
 ///
 /// FERMÉ PAR DÉFAUT : un rôle inconnu n'est aucun cas (`nil`) et vaut
 /// `minimumLevel`, sous le plus bas des rôles connus. AUDIT et ANALYST lisent ;
 /// ils n'ont aucun privilège d'ACTION — pour la loi des actions, ils valent USER.
+///
+/// `privileged` est le miroir de la table partagée (#11217, décision porteur du
+/// 2026-10-24 : MODERATOR est privilégié partout, comme ADMIN et BIGBOSS) ;
+/// `administers` ne garde que la console (`isGlobalAdmin`).
 public enum PlatformRole: String, CaseIterable, Sendable, Comparable {
     case bigboss = "BIGBOSS"
     case admin = "ADMIN"
@@ -56,14 +60,22 @@ public enum PlatformRole: String, CaseIterable, Sendable, Comparable {
         PlatformRole(caseFolding: raw)?.level ?? minimumLevel
     }
 
-    /// Modère le contenu : modifier le message d'autrui, retirer, écrire là où
-    /// le rang manque (`PRIVILEGED_GLOBAL_ROLES` de la passerelle).
-    public var moderatesContent: Bool {
-        self == .moderator || administers
+    /// Les rôles de plateforme PRIVILÉGIÉS — `PRIVILEGED_PLATFORM_ROLES`, la table
+    /// que lisent toutes les admissions de la passerelle.
+    public static let privileged: Set<PlatformRole> = [.moderator, .admin, .bigboss]
+
+    /// Privilégié : modifie et retire le message d'autrui, écrit là où le rang
+    /// manque, et vaut le créateur dans une conversation dont il est membre.
+    public var isPrivileged: Bool {
+        Self.privileged.contains(self)
     }
 
-    /// Administre la plateforme : vaut le créateur dans une conversation dont il
-    /// est membre, ouvre la console (`isGlobalAdmin`).
+    /// Modère le contenu — la lecture de `isPrivileged` par la loi des messages.
+    public var moderatesContent: Bool {
+        isPrivileged
+    }
+
+    /// Administre la plateforme : ouvre la console (`isGlobalAdmin`).
     public var administers: Bool {
         self == .admin || self == .bigboss
     }

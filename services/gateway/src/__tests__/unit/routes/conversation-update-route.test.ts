@@ -531,9 +531,20 @@ describe('Autorité de plateforme sur une conversation (#3941)', () => {
       await app.close();
     });
 
-    it('un MODERATOR de la plateforme reste un participant ordinaire', async () => {
+    it('un MODERATOR de la plateforme, simple membre, renomme comme un ADMIN (#11217)', async () => {
       const { prisma, conversationUpdate } = createMockPrisma('member');
       const app = await buildApp(prisma, 'MODERATOR');
+
+      const res = await update(app, 'PUT', { title: 'Renommé par un modérateur global' });
+
+      expect(res.statusCode).toBe(200);
+      expect(conversationUpdate).toHaveBeenCalled();
+      await app.close();
+    });
+
+    it.each(['AUDIT', 'ANALYST'])('un %s de la plateforme reste un participant ordinaire', async (platformRole) => {
+      const { prisma, conversationUpdate } = createMockPrisma('member');
+      const app = await buildApp(prisma, platformRole);
 
       const res = await update(app, 'PUT', { title: 'Renommé par un modérateur global' });
 
