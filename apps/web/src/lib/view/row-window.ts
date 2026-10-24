@@ -116,15 +116,12 @@ export function rowSlices(input: { readonly count: number; readonly range: RowRa
  * soixante rangées — que la mesure démontait aussitôt.
  */
 export function entryRanges(blocks: readonly { readonly id: string; readonly count: number }[], input: { readonly rows: number }): ReadonlyMap<string, RowRange> {
-  const { rows } = input;
+  const before = blocks.map((_, i) => blocks.slice(0, i).reduce((sum, block) => sum + block.count, 0));
   return new Map(
-    blocks.reduce<{ readonly before: number; readonly entries: readonly (readonly [string, RowRange])[] }>(
-      ({ before, entries }, block) => {
-        const end = Math.min(block.count, Math.max(0, rows - before));
-        return { before: before + block.count, entries: [...entries, [block.id, end > 0 ? { start: 0, end } : EMPTY_RANGE] as const] };
-      },
-      { before: 0, entries: [] },
-    ).entries,
+    blocks.map((block, i) => {
+      const end = Math.min(block.count, input.rows - (before[i] ?? 0));
+      return [block.id, end > 0 ? { start: 0, end } : EMPTY_RANGE] as const;
+    }),
   );
 }
 

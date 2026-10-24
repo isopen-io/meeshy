@@ -21,14 +21,13 @@ import { EMPTY_RANGE, entryRanges, rowsInView, settleRange, type RowRange } from
  *
  * LE RETOUR SUR LA LISTE : la position mémorisée est reposée par l'effet de
  * mise en page du PARENT (`useScrollportMemory`), qui court APRÈS celui-ci —
- * la mesure du montage lit donc un défileur encore en haut. L'écouteur de
- * défilement est posé dès l'effet de MISE EN PAGE (il entend la restauration
- * dans la même image), et une passe est réservée pour l'image suivante dès
- * qu'il est posé : sous Preact (le build par défaut), les rangées de la
- * position restaurée sont montées avant la première peinture, jamais une
- * image de cales vides. Sous React, la référence du défileur n'est posée
- * qu'APRÈS les effets de mise en page de ses enfants : l'effet passif prend
- * alors le relais, et la même passe court à l'image suivante.
+ * la mesure du montage lit donc un défileur encore en haut, et l'événement de
+ * défilement de la restauration part avant que l'écouteur (effet passif,
+ * posé après la peinture) ne l'entende. Le montage réserve donc une passe
+ * pour l'image qui suit : elle court avant sa peinture, après la
+ * restauration — les rangées de la position restaurée sont montées dès la
+ * première image, jamais une image de cales vides, sous Preact comme sous
+ * React.
  *
  * La passe court aussi après CHAQUE rendu : une section qui se déplie, un rail
  * qui change de hauteur ou une page qui arrive déplacent les sections sans
@@ -88,11 +87,14 @@ export function useRowWindows(input: {
     measureRef.current();
   });
 
-  const listening = useRef<{ readonly element: HTMLElement; readonly stop: () => void } | null>(null);
-  const listen = () => {
+  useLayoutEffect(() => {
+    const request = requestAnimationFrame(() => measureRef.current());
+    return () => cancelAnimationFrame(request);
+  }, []);
+
+  useEffect(() => {
     const element = frame.current;
-    if (element === null || listening.current?.element === element) return;
-    listening.current?.stop();
+    if (element === null) return undefined;
     const pending = { request: 0 };
     const schedule = () => {
       if (pending.request !== 0) return;
@@ -104,26 +106,12 @@ export function useRowWindows(input: {
     element.addEventListener('scroll', schedule, { passive: true });
     const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
     resize?.observe(element);
-    schedule();
-    listening.current = {
-      element,
-      stop: () => {
-        element.removeEventListener('scroll', schedule);
-        resize?.disconnect();
-        cancelAnimationFrame(pending.request);
-      },
+    return () => {
+      element.removeEventListener('scroll', schedule);
+      resize?.disconnect();
+      cancelAnimationFrame(pending.request);
     };
-  };
-
-  useLayoutEffect(listen);
-  useEffect(listen);
-  useEffect(
-    () => () => {
-      listening.current?.stop();
-      listening.current = null;
-    },
-    [],
-  );
+  }, [frame]);
 
   return rangeOf;
 }
