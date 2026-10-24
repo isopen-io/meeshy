@@ -81,6 +81,63 @@ const harness = (acquire: () => Promise<MediaStreamTrack> = async () => fakeTrac
   return { port, log, sent, camera, lensGetter };
 };
 
+const deferred = <T,>() => {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+};
+
+describe('LensCameraPreview — ce qui arrive pendant qu’un traitement se bâtit', () => {
+  test('une retouche faite pendant l’ouverture de la caméra est reposée dès que l’aperçu vit', async () => {
+    const opened = deferred<void>();
+    const { port, log } = harness();
+    const wrap = port.effects;
+    const gated: CameraPreviewPort = {
+      ...port,
+      effects: (lens) => {
+        const effects = wrap(lens);
+        return { ...effects, wrap: async (track) => opened.promise.then(() => effects.wrap(track)) };
+      },
+    };
+    const host = await mounter.mount(<LensCameraPreview language="fr" settings={settingsNamed('Aurore')} port={gated} />);
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-preview-try]'));
+    await mounter.rerender(host, <LensCameraPreview language="fr" settings={settingsNamed('Aurore boréale')} port={gated} />);
+    await act(async () => opened.resolve());
+    await until(() => host.querySelector('[data-lens-preview-live]') !== null);
+    await until(() => log.refreshed.includes('Aurore boréale'));
+  });
+
+  test('arrêter pendant qu’une retouche bâtit son traitement rend aussi la piste bâtie', async () => {
+    const built = deferred<MediaStreamTrack>();
+    const { port, log, sent } = harness();
+    const base = port.effects;
+    const slow: CameraPreviewPort = { ...port, effects: (lens) => ({ ...base(lens), refresh: () => built.promise }) };
+    const host = await mounter.mount(<LensCameraPreview language="fr" settings={settingsNamed('Aurore')} port={slow} />);
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-preview-try]'));
+    await until(() => host.querySelector('[data-lens-preview-live]') !== null);
+    await mounter.rerender(host, <LensCameraPreview language="fr" settings={settingsNamed('Aurore boréale')} port={slow} />);
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-preview-stop]'));
+    const output = fakeTrack('built');
+    await act(async () => built.resolve(output));
+    await act(settle);
+    expect(log.released).toEqual([sent, output]);
+    expect(log.attached.at(-1)).toBeNull();
+  });
+
+  test('un moteur qui échoue à l’ouverture rend la caméra qu’on venait d’ouvrir', async () => {
+    const stopped: string[] = [];
+    const camera = { ...fakeTrack('camera'), stop: () => void stopped.push('camera') } as unknown as MediaStreamTrack;
+    const { port } = harness(async () => camera);
+    const broken: CameraPreviewPort = { ...port, effects: (lens) => ({ ...port.effects(lens), wrap: async () => Promise.reject(new Error('pipeline')) }) };
+    const host = await mounter.mount(<LensCameraPreview language="fr" settings={settingsNamed('Aurore')} port={broken} />);
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-preview-try]'));
+    await until(() => host.querySelector('[data-lens-preview-refused]') !== null);
+    expect(stopped).toEqual(['camera']);
+  });
+});
+
 describe('LensCameraPreview', () => {
   test('la caméra ne s’ouvre qu’au geste, et son image passe par le moteur avec la lens du brouillon', async () => {
     const { port, log, sent, camera, lensGetter } = harness();

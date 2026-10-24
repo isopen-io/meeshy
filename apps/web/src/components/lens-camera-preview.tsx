@@ -14,6 +14,11 @@ import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
  * la lens rendra. Chaque retouche du brouillon est REPOSÉE (`refresh`) sur
  * l'image en cours, sans rouvrir la caméra ; arrêter ou quitter la rend
  * (`release`). Rien ne part sur le réseau.
+ *
+ * Les reposes passent UNE À UNE, chacune sur la piste que la précédente a
+ * laissée : une repose que l'arrêt a devancée rend ce qu'elle a bâti (sinon
+ * un traitement survivrait à l'aperçu), et une retouche faite pendant que la
+ * caméra s'ouvrait est reposée dès que l'aperçu vit.
  */
 export type CameraPreviewPort = {
   readonly acquire: () => Promise<MediaStreamTrack>;
@@ -53,6 +58,7 @@ export function LensCameraPreview({
   const video = useRef<HTMLVideoElement>(null);
   const current = useRef<LensSettings | null>(settings);
   const live = useRef<Live | null>(null);
+  const queue = useRef<Promise<void>>(Promise.resolve());
   const mounted = useRef(true);
 
   const stop = (): void => {
@@ -73,21 +79,35 @@ export function LensCameraPreview({
     };
   }, []);
 
-  useEffect(() => {
-    current.current = settings;
-    const shown = live.current;
-    if (shown === null) return;
-    void shown.effects.refresh(shown.sent).then((next) => {
-      if (next === shown.sent || live.current !== shown) return;
+  const repose = (): void => {
+    queue.current = queue.current.then(async () => {
+      const shown = live.current;
+      if (shown === null) return;
+      const next = await shown.effects.refresh(shown.sent).catch(() => shown.sent);
+      if (live.current !== shown) {
+        if (next !== shown.sent) shown.effects.release(next);
+        return;
+      }
+      if (next === shown.sent) return;
       live.current = { ...shown, sent: next };
       port.attach(video.current, next);
     });
+  };
+
+  useEffect(() => {
+    current.current = settings;
+    if (live.current !== null) repose();
   }, [settings, port]);
 
   const start = async (): Promise<void> => {
     setPhase('opening');
+    const camera = await port.acquire().catch(() => null);
+    if (camera === null) {
+      if (mounted.current) setPhase('refused');
+      return;
+    }
     try {
-      const camera = await port.acquire();
+      const asked = current.current;
       const effects = port.effects(() => current.current ?? undefined);
       const sent = await effects.wrap(camera);
       if (!mounted.current) {
@@ -97,7 +117,9 @@ export function LensCameraPreview({
       live.current = { sent, effects };
       port.attach(video.current, sent);
       setPhase('live');
+      if (current.current !== asked) repose();
     } catch {
+      camera.stop();
       if (mounted.current) setPhase('refused');
     }
   };
