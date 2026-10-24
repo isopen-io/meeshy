@@ -112,6 +112,9 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   metadata: true,
   isEdited: true,
   editedAt: true,
+  // #11375 — l'auteur d'une modification faite par un modérateur.
+  editedById: true,
+  editedByRole: true,
   replyToId: true,
   reactionSummary: true,
   reactionCount: true,
@@ -324,6 +327,8 @@ const syncMessageSchema = {
     metadata: { type: 'object', nullable: true, additionalProperties: true },
     isEdited: { type: 'boolean' },
     editedAt: { type: 'string', format: 'date-time', nullable: true },
+    editedById: { type: 'string', nullable: true },
+    editedByRole: { type: 'string', nullable: true },
     replyToId: { type: 'string', nullable: true },
     reactionSummary: { type: 'object', nullable: true, additionalProperties: true },
     reactionCount: { type: 'integer' },

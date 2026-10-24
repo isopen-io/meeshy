@@ -100,6 +100,7 @@ import {
   admitMessageEdit,
   editRefusalCode,
   isEditRefused,
+  editAttributionOf,
   describeEditRefusalForSocket,
 } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
@@ -846,20 +847,18 @@ export class MessageHandler {
         ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, editedLinks.trackingLinks) }
         : {};
 
-      // Optimistic-concurrency guard: only write while the message is still
-      // non-deleted. A `message:delete` landing between the read above and
-      // this write would otherwise resurrect the row with edited content
-      // (unconditional `update` by id succeeds regardless of `deletedAt`),
-      // and the gateway would broadcast MESSAGE_EDITED for a message clients
-      // already removed. Mirrors the guarded `updateMany` used by
-      // handleMessageDelete's lastMessageAt recompute.
+      // Optimistic-concurrency guard (write only while non-deleted, else a
+      // concurrent `message:delete` would be resurrected and re-broadcast).
+      // #11375 — the moderator is recorded; the author clears the mention.
       const editedAt = new Date();
+      const editedBy = editAttributionOf(admission, userId);
       const editResult = await this.prisma.message.updateMany({
         where: { id: validated.messageId, deletedAt: null },
         data: {
           content: editedContent,
           isEdited: true,
           editedAt,
+          ...editedBy,
           translations: null,
           ...nextMetadata,
         },
@@ -924,6 +923,7 @@ export class MessageHandler {
           content: editedContent,
           isEdited: true,
           editedAt,
+          editedBy,
         }),
         sender: message.sender,
       };

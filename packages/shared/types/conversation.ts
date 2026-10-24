@@ -126,6 +126,10 @@ export interface Message {
   // ===== ETAT DU MESSAGE =====
   readonly isEdited: boolean;
   readonly editedAt?: Date;
+  /** #11375 — `User.id` du tiers (modérateur de plateforme) qui a fait la dernière modification ; absent quand c'est l'auteur. */
+  readonly editedById?: string;
+  /** #11375 — son rôle global au moment de la modification. */
+  readonly editedByRole?: string;
   readonly deletedAt?: Date;
 
   // ===== REPONSE & FORWARDING =====

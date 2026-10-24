@@ -18,6 +18,7 @@ import {
   isEditRefused,
   describeEditRefusalForSocket,
   editRefusalCode,
+  editAttributionOf,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../services/messaging/messageEditAdmission';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../services/messaging/conversationWriteAdmission';
@@ -281,6 +282,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           content: editedContent,
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...nextMetadata
         }

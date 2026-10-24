@@ -262,6 +262,9 @@ export function buildMessageListSelect(options: {
         // ===== ÉDITION / SUPPRESSION =====
         isEdited: true,
         editedAt: true,
+        // #11375 — l'auteur d'une modification faite par un modérateur.
+        editedById: true,
+        editedByRole: true,
         deletedAt: true,
 
         // ===== REPLY / FORWARD =====

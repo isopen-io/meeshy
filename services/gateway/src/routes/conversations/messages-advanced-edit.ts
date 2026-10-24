@@ -30,6 +30,7 @@ import {
   isEditRefused,
   describeEditRefusalForSocket,
   editRefusalCode,
+  editAttributionOf,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../../services/messaging/messageEditAdmission';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
@@ -305,6 +306,8 @@ export function registerEditMessagePutRoute(
           ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...nextMetadata
         },
@@ -733,6 +736,8 @@ export function registerEditMessagePatchRoute(
           content: processedContent,
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...patchedMetadata
         },

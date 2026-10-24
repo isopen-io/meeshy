@@ -215,6 +215,8 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           messageSource: true,
           isEdited: true,
           editedAt: true,
+          editedById: true,
+          editedByRole: true,
           deletedAt: true,
           replyToId: true,
           forwardedFromId: true,

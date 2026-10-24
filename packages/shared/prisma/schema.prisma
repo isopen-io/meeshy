@@ -1019,6 +1019,13 @@ model Message {
   metadata                    Json?
   isEdited                    Boolean   @default(false)
   editedAt                    DateTime?
+  /// #11375 — `User.id` du TIERS (modérateur de plateforme) qui a fait la
+  /// dernière modification ; `null` (ou absent, lignes antérieures) quand c'est
+  /// l'auteur. Sa présence suffit à dire « modifié par un modérateur ».
+  /// @see packages/shared/utils/message-edit-attribution.ts
+  editedById                  String?   @db.ObjectId
+  /// #11375 — rôle GLOBAL (`User.role`) de ce tiers au moment de la modification.
+  editedByRole                String?
   deletedAt                   DateTime?
   replyToId                   String?   @db.ObjectId
   /// ID du post cité quand le message répond à un post (status/story/reel/post).
