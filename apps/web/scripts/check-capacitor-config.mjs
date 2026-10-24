@@ -285,6 +285,31 @@ export function auditSyncedPlugins(packageJson, importedPlugins) {
     );
 }
 
+/** #11229 — les dépendances dont le manifeste déclare un module Android (`capacitor.android`), comme `cap sync` les lit. */
+export function androidShellPlugins(packageJson, manifestOf) {
+  const declared = Object.keys({ ...packageJson?.dependencies, ...packageJson?.devDependencies });
+  return declared.filter((name) => manifestOf(name)?.capacitor?.android !== undefined).sort();
+}
+
+/** Le nom de module que `cap sync` donne à un plugin (`@capacitor/cli`, `android/update.js` § `getGradlePackageName`). */
+const gradleModuleOf = (name) => name.replace('@', '').replace('/', '-');
+
+/**
+ * #11229 — PURE. Un plugin déclaré mais absent des deux fichiers gradle que
+ * `cap sync` génère (et que le dépôt suit) n'entre pas dans l'APK : sa
+ * méthode n'est jamais déclarée à la coque, et le web retombe en silence sur
+ * son repli. Le gate #8090 ne le voit pas quand rien dans `src/` ne l'importe.
+ */
+export function auditAndroidShellLinks({ plugins, settingsGradle, buildGradle }) {
+  return plugins.flatMap((name) => {
+    const module = gradleModuleOf(name);
+    return [
+      ...(settingsGradle.includes(`include ':${module}'`) ? [] : [`${name} n’est pas inclus par android/capacitor.settings.gradle (lancer \`bunx cap sync android\`).`]),
+      ...(buildGradle.includes(`implementation project(':${module}')`) ? [] : [`${name} n’est pas lié par android/app/capacitor.build.gradle (lancer \`bunx cap sync android\`).`]),
+    ];
+  });
+}
+
 function sourcesUnder(dir) {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
@@ -386,6 +411,21 @@ function run() {
     violations.push(...pluginViolations);
   } else {
     console.log('✓ Tout plugin Capacitor importé par src/ est synchronisé par cap sync (#8090).');
+  }
+
+  const manifestOf = (name) => {
+    const path = join(ROOT, 'node_modules', name, 'package.json');
+    return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
+  };
+  const linkViolations = auditAndroidShellLinks({
+    plugins: androidShellPlugins(JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')), manifestOf),
+    settingsGradle: readFileSync(join(ROOT, 'android/capacitor.settings.gradle'), 'utf8'),
+    buildGradle: readFileSync(join(ROOT, 'android/app/capacitor.build.gradle'), 'utf8'),
+  });
+  if (linkViolations.length > 0) {
+    violations.push(...linkViolations.map((v) => `[android] ${v}`));
+  } else {
+    console.log('✓ La coque Android lie chaque plugin Capacitor déclaré par package.json (#11229).');
   }
 
   if (violations.length > 0) {
