@@ -2,7 +2,7 @@ import XCTest
 @testable import Meeshy
 
 /// #12591 — **un seul éditeur de texte** : la retouche monte le canvas et la barre du composer,
-/// sans « Langue » ni fond « Verre », et rien d'autre. Une garde de source : la couche est une vue
+/// sans « Langue », et rien d'autre. Une garde de source : la couche est une vue
 /// SwiftUI qu'un test unitaire ne monte pas.
 final class ComposerRetouchTextWiringTests: XCTestCase {
 
@@ -19,7 +19,7 @@ final class ComposerRetouchTextWiringTests: XCTestCase {
         let code = try source("ComposerEditTextLayer.swift")
         XCTAssertTrue(code.contains("StoryComposerCanvasView("))
         XCTAssertTrue(code.contains("StoryTextEditToolbar(viewModel:board.scene"))
-        XCTAssertTrue(code.contains("profile:.bakedIntoMedia"), "ni « Langue » ni fond « Verre » sur un texte cuit")
+        XCTAssertTrue(code.contains("profile:.bakedIntoMedia"), "pas de « Langue » sur un texte cuit")
         XCTAssertTrue(code.contains("paintsSceneBackground:false"), "le canvas est transparent : le média se voit à travers")
         XCTAssertFalse(code.contains(".language"))
     }
@@ -37,6 +37,14 @@ final class ComposerRetouchTextWiringTests: XCTestCase {
         let rangees = try XCTUnwrap(code.range(of: "VStack(spacing:0){"))
         XCTAssertLessThan(couche.lowerBound, rangees.lowerBound,
                           "sous les rangées : le canvas ne doit pas avaler les touches des outils")
+    }
+
+    /// #12602 — l'aperçu de la retouche floute la prise sous les vitres, par le même peintre.
+    func test_thePreview_paintsTheGlassPanesOfTheRetouche() throws {
+        let code = try source("ComposerCaptureViews.swift")
+        XCTAssertTrue(code.contains("overlay:session.retouchTexts.previewGlass(canvas:canvas)"))
+        let surface = try source("ComposerLiveLookSurface.swift")
+        XCTAssertTrue(surface.contains("still:sourceisComposerStillSource,overlay:overlay)"), "le peintre de l'aperçu reçoit les vitres")
     }
 
     func test_bothRenders_bakeTheOverlayAtTheOutputCanvas() throws {

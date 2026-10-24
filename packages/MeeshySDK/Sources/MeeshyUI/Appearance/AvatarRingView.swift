@@ -39,9 +39,6 @@ public struct AvatarRingView: View, Equatable {
     }
 
     nonisolated private static let box: Double = 100
-    private static let dots = 28
-    private static let dashes = 36
-    private static let arcs = 24
 
     public var body: some View {
         let plan = animates && !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) ? Self.motionPlan(design) : .still
@@ -55,84 +52,13 @@ public struct AvatarRingView: View, Equatable {
         .allowsHitTesting(false)
     }
 
+    /// Le contour fixe : LE dessin de `AvatarRingRenderer`, celui que grave aussi l'export d'une story.
     private func still(skipping: Set<Int>) -> some View {
         Canvas { context, size in
-            let scale = min(size.width, size.height) / Self.box
-            let offset = CGPoint(x: (size.width - Self.box * scale) / 2, y: (size.height - Self.box * scale) / 2)
-            let width = design.stroke.width * Self.box
-            let radius = Self.box / 2 - width / 2
-            let colors = design.stroke.colors
-            let first = Color(hex: colors[0])
-            let second = Color(hex: colors.count > 1 ? colors[1] : colors[0])
-
-            func circle(_ r: Double) -> Path {
-                Path(ellipseIn: CGRect(
-                    x: offset.x + (Self.box / 2 - r) * scale, y: offset.y + (Self.box / 2 - r) * scale,
-                    width: 2 * r * scale, height: 2 * r * scale
-                ))
-            }
-
-            switch design.stroke.style {
-            case .solid:
-                context.stroke(circle(radius), with: .color(first), lineWidth: width * scale)
-            case .double:
-                context.stroke(circle(radius), with: .color(first), lineWidth: width * scale)
-                context.stroke(circle(radius - width * 2), with: .color(second), lineWidth: width * scale)
-            case .dotted:
-                let circumference = 2 * Double.pi * radius
-                context.stroke(
-                    circle(radius), with: .color(first),
-                    style: StrokeStyle(lineWidth: width * scale, lineCap: .round, dash: [0.001, circumference / Double(Self.dots) * scale])
-                )
-            case .dashed:
-                let step = 2 * Double.pi * radius / Double(Self.dashes)
-                context.stroke(
-                    circle(radius), with: .color(first),
-                    style: StrokeStyle(lineWidth: width * scale, dash: [step * 0.6 * scale, step * 0.4 * scale])
-                )
-            case .gradient:
-                for index in 0..<Self.arcs {
-                    let from = Double(index) / Double(Self.arcs) * 2 * Double.pi - Double.pi / 2
-                    let to = Double(index + 1) / Double(Self.arcs) * 2 * Double.pi - Double.pi / 2 + 0.004
-                    var arc = Path()
-                    arc.addArc(
-                        center: CGPoint(x: offset.x + Self.box / 2 * scale, y: offset.y + Self.box / 2 * scale),
-                        radius: radius * scale, startAngle: .radians(from), endAngle: .radians(to), clockwise: false
-                    )
-                    let hex = Self.cyclicHex(colors, at: Double(index) / Double(Self.arcs))
-                    context.stroke(arc, with: .color(Color(hex: hex)), lineWidth: width * scale)
-                }
-            case .none:
-                break
-            }
-
-            for (index, stroke) in design.ornament.enumerated() where !skipping.contains(index) {
-                let path = SVGPathData.make(stroke.d)
-                    .applying(CGAffineTransform(scaleX: scale, y: scale).concatenating(CGAffineTransform(translationX: offset.x, y: offset.y)))
-                let shading = Self.shading(stroke, design: design, in: path.boundingRect)
-                var layer = context
-                layer.opacity = stroke.opacity
-                if let lineWidth = stroke.width {
-                    layer.stroke(path, with: shading, lineWidth: lineWidth * scale)
-                } else {
-                    layer.fill(path, with: shading)
-                }
+            context.withCGContext { cg in
+                AvatarRingRenderer.drawStill(design, in: CGRect(origin: .zero, size: size), skipping: skipping, context: cg)
             }
         }
-    }
-
-    /// La peinture d'un trait : son dégradé (en fractions de sa boîte) s'il est lisible, sa couleur sinon.
-    private static func shading(_ stroke: AvatarRingOrnamentPath, design: AvatarRingDesign, in box: CGRect) -> GraphicsContext.Shading {
-        let colors = design.stroke.colors
-        guard let gradient = stroke.gradient.flatMap({ design.gradients[safe: $0] ?? nil }) else {
-            return .color(Color(hex: colors[stroke.color]))
-        }
-        let stops = gradient.stops.map { Gradient.Stop(color: Color(hex: colors[safe: $0.color] ?? "#000000").opacity($0.opacity ?? 1), location: $0.at) }
-        return .linearGradient(
-            Gradient(stops: stops),
-            startPoint: CGPoint(x: box.minX + gradient.x1 * box.width, y: box.minY + gradient.y1 * box.height),
-            endPoint: CGPoint(x: box.minX + gradient.x2 * box.width, y: box.minY + gradient.y2 * box.height)
-        )
     }
 
     // MARK: Dégradé cyclique
