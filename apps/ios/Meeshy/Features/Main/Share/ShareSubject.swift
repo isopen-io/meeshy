@@ -102,6 +102,9 @@ struct ShareCard: Equatable {
     let imageURL: String?
     /// L'auteur nommé dans le texte qui part (« Story de X : lien »).
     var authorName: String?
+    /// L'identifiant de l'auteur — sa propre story ne se republie pas en story
+    /// par la feuille (#12644), comme elle ne se republie pas au rail.
+    var authorId: String? = nil
 
     /// Le texte qui part dans la conversation : la phrase de la story, sinon le lien.
     var messageText: String? {
@@ -112,14 +115,16 @@ struct ShareCard: Equatable {
 }
 
 extension ShareSubject {
-    /// Une story : elle part comme une carte, son lien se copie (D14 : pas de
-    /// republication). Le lien suivi `meeshy.me/l/<token>` la remplace dès qu'il
-    /// est résolu ; d'ici là, l'adresse directe.
-    static func story(id: String, authorName: String, imageURL: String? = nil) -> ShareSubject {
+    /// Une story : elle part comme une carte, et se republie en story, post ou
+    /// réel (D14, revue par le porteur, #12644). Le lien suivi
+    /// `meeshy.me/l/<token>` n'est frappé qu'au moment où elle PART — envoi,
+    /// copie, partage hors de Meeshy ; d'ici là, l'adresse directe.
+    static func story(id: String, authorName: String, authorId: String? = nil, imageURL: String? = nil) -> ShareSubject {
         .card(ShareCard(
             kind: .story, contentId: id,
             title: String(format: String(localized: "share.preview.story", defaultValue: "Story de %@", bundle: .meeshyShare), authorName),
-            subtitle: nil, url: URL(string: "https://meeshy.me/story/\(id)"), imageURL: imageURL, authorName: authorName
+            subtitle: nil, url: URL(string: "https://meeshy.me/story/\(id)"), imageURL: imageURL, authorName: authorName,
+            authorId: authorId
         ))
     }
 }

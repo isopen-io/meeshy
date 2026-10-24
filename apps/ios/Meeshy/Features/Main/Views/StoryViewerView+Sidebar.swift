@@ -105,14 +105,23 @@ nonisolated struct StoryExportRailButtons: Equatable {
 
 // MARK: - Republier une story d'un tap (#9953)
 
-/// **Où part une republication directe depuis le lecteur.** Le rail republie
-/// en STORY ; le menu « … » offre le post et le réel. La même mécanique pour
-/// les trois — `RepostIntent.simple` remis à `RepostPublisher` (jeton
-/// d'idempotence, file hors ligne, verrou par cible) — seule la cible change.
+/// **Où part une republication directe.** Le rail republie en STORY ; la
+/// feuille de partage Meeshy qu'ouvre « Envoyer » offre aussi le post et le
+/// réel (#12644). La même mécanique pour les trois — `RepostIntent.simple`
+/// remis à `RepostPublisher` (jeton d'idempotence, file hors ligne, verrou par
+/// cible) — seule la cible change.
 nonisolated enum StoryRepostDestination: Hashable, CaseIterable {
     case story
     case post
     case reel
+
+    init(_ target: PublicationTarget) {
+        switch target {
+        case .story: self = .story
+        case .post: self = .post
+        case .reel: self = .reel
+        }
+    }
 
     var targetType: PostType {
         switch self {
@@ -125,35 +134,45 @@ nonisolated enum StoryRepostDestination: Hashable, CaseIterable {
 
 enum StoryDirectRepost {
 
-    /// Republication SÈCHE (`isQuote: false`) : le serveur hérite de
-    /// l'audience de l'original et fige le contenu d'une source éphémère. Les
-    /// refus NOMMÉS passent par `RepostFailure` : 404 = la source a disparu,
-    /// 403 = l'audience élargirait celle de l'original.
+    /// Le geste du rail : republier, puis le DIRE par un toast local.
     static func publish(_ story: StoryItem, as destination: StoryRepostDestination) {
         HapticFeedback.light()
         Task {
             do {
-                try await RepostPublisher.shared.publish(
-                    .simple(postId: story.id, targetType: destination.targetType, visibility: nil)
-                )
+                try await republish(storyId: story.id, as: destination)
                 await MainActor.run {
-                    StoryViewerParticipationStore.shared.note(.reposted, storyId: story.id)
                     HapticFeedback.success()
                     FeedbackToastManager.shared.show(successMessage(for: destination))
                 }
             } catch {
-                let verdict = RepostFailure.classify(error)
-                await MainActor.run {
-                    switch verdict {
-                    case .sourceGone:
-                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
-                    case .audienceWidening:
-                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
-                    case .other:
-                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main))
-                    }
-                }
+                let message = failureMessage(for: error)
+                await MainActor.run { FeedbackToastManager.shared.showError(message) }
             }
+        }
+    }
+
+    /// Republication SÈCHE (`isQuote: false`) : le serveur hérite de
+    /// l'audience de l'original et fige le contenu d'une source éphémère. Le
+    /// seul écrivain — le rail et la feuille Meeshy (#12644) l'appellent.
+    static func republish(storyId: String, as destination: StoryRepostDestination) async throws {
+        try await RepostPublisher.shared.publish(
+            .simple(postId: storyId, targetType: destination.targetType, visibility: nil)
+        )
+        await MainActor.run {
+            StoryViewerParticipationStore.shared.note(.reposted, storyId: storyId)
+        }
+    }
+
+    /// Les refus NOMMÉS passent par `RepostFailure` : 404 = la source a
+    /// disparu, 403 = l'audience élargirait celle de l'original.
+    static func failureMessage(for error: Error) -> String {
+        switch RepostFailure.classify(error) {
+        case .sourceGone:
+            return String(localized: "story.repost.error.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main)
+        case .audienceWidening:
+            return String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main)
+        case .other:
+            return String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main)
         }
     }
 
@@ -222,7 +241,8 @@ struct StoryActionSidebarView: View {
     /// (directive user 2026-07-26).
     let displayedLanguageCode: String?
     /// Prisme « Exploration » : affiche la story dans la langue choisie (override éphémère).
-    let onSelectLanguageOverride: (String) -> Void
+    /// `nil` revient à la chaîne préférée du lecteur (#12646).
+    let onSelectLanguageOverride: (String?) -> Void
 
     @Binding var showEmojiStrip: Bool
     @Binding var showFullEmojiPicker: Bool
@@ -739,7 +759,7 @@ struct StoryActionSidebarView: View {
                 HapticFeedback.light()
                 if let story = currentStory, let group = currentGroup {
                     EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                    sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username))
+                    sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username, authorId: group.id))
                 }
             }
 
@@ -921,7 +941,7 @@ struct StoryActionSidebarView: View {
                             languages: availableTranslationLanguages,
                             activeLanguageCode: activeLanguageCode ?? displayedLanguageCode,
                             onSelect: { lang in
-                                onSelectLanguageOverride(lang)
+                                onSelectLanguageOverride(StoryLanguageQuickBar.override(afterTapping: lang, current: activeLanguageCode))
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     showLanguageOptions = false
                                 }
@@ -936,12 +956,11 @@ struct StoryActionSidebarView: View {
                             scrubFrameSpace: StoryScrubSpace.name,
                             onTileFrames: { languageTileFrames = $0 }
                         )
-                        // Présentée comme la barre de réaction (L292) : `.fixedSize()`
-                        // pour que la pilule ÉPOUSE son contenu, jamais une largeur
-                        // fixe vide (directive user 2026-07-26 : même taille que la
-                        // barre de réaction). Le cap/défilement éventuel est géré
-                        // À L'INTÉRIEUR de StoryLanguageQuickBar quand la liste est longue.
+                        // Comme la barre de réaction : la pilule ÉPOUSE son contenu, et
+                        // quand la liste DÉFILE elle revendique le glissé horizontal, que
+                        // le lecteur prendrait sinon pour un changement de groupe (#12646).
                         .fixedSize()
+                        .simultaneousGesture(reactionStripDragGesture)
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
                             removal: .opacity

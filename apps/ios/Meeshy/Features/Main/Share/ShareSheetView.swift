@@ -45,6 +45,8 @@ struct ShareSheetView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var searchText = ""
     @State var pendingCapture: PublicationTarget?
+    /// Le lien d'une story frappé au geste « Partager hors de Meeshy » (#12644).
+    @State var outgoingLink: ShareOutgoingLink?
     @State private var toastFired = false
 
     var isDark: Bool { colorScheme == .dark }
@@ -115,6 +117,9 @@ struct ShareSheetView: View {
                 pendingCapture = nil
             }
             Button(ShareSheetCopy.cancel, role: .cancel) { pendingCapture = nil }
+        }
+        .sheet(item: $outgoingLink) { link in
+            ShareOutActivityView(activityItems: [link.url])
         }
     }
 

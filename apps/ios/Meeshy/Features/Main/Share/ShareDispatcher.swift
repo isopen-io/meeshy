@@ -87,6 +87,17 @@ final class LiveShareDispatcher: ShareDispatching {
         )) != nil
     }
 
+    /// La republication directe du rail (`StoryDirectRepost`), vers la cible
+    /// cochée dans la feuille (#12644) — aucun second écrivain.
+    func republish(card: ShareCard, to target: PublicationTarget) async -> ShareRepublishOutcome {
+        do {
+            try await StoryDirectRepost.republish(storyId: card.contentId, as: StoryRepostDestination(target))
+            return .published
+        } catch {
+            return .refused(StoryDirectRepost.failureMessage(for: error))
+        }
+    }
+
     func resolvedLink(for card: ShareCard) async -> URL? {
         guard card.kind == .story, isOnline() else { return nil }
         let body = StoryShareLinkRequest(platform: "system", generateLink: true)

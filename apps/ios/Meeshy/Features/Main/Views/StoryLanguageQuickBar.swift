@@ -173,6 +173,16 @@ struct StoryLanguageQuickBar: View {
     /// Comparaison insensible à la casse et sur la base BCP-47 (`pt-BR` ↔ `pt`)
     /// pour que la langue lue soit toujours surlignée, variantes régionales
     /// comprises. Pur et sans effet de bord — testé isolément.
+    /// **Une langue se rechoisit autant qu'on veut** (#12646). Toucher la
+    /// langue déjà choisie la relâche : le lecteur revient à SA chaîne (le
+    /// Prisme), au lieu de rester figé sur le premier choix jusqu'à la slide
+    /// suivante. Toute autre langue se choisit.
+    nonisolated static func override(afterTapping id: String, current: String?) -> String? {
+        guard let current, current != StoryReaderContentRules.originalLanguageOverride,
+              isActive(id, active: current) else { return id }
+        return nil
+    }
+
     nonisolated static func isActive(_ id: String, active: String?) -> Bool {
         guard let active else { return false }
         let lhs = id.lowercased()
