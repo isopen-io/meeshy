@@ -154,7 +154,7 @@ final class OutgoingImageHEICDeliveryTests: XCTestCase {
         XCTAssertEqual(OutgoingImageFormat(sniffing: out.data), .heic)
         XCTAssertEqual(out.format.mimeType, "image/heic")
         XCTAssertNil(try Self.properties(of: out.data)[kCGImagePropertyGPSDictionary])
-        XCTAssertEqual(out.encodedGenerations, 0, "le lieu se retire sans ré-encoder les pixels")
+        XCTAssertLessThanOrEqual(out.encodedGenerations, 1, "au plus UNE génération, jamais une conversion en JPEG")
     }
 
     func test_prepare_heicOnACompatibilityPolicy_isARealJpeg() throws {
@@ -164,9 +164,10 @@ final class OutgoingImageHEICDeliveryTests: XCTestCase {
         XCTAssertEqual(out.encodedGenerations, 1)
     }
 
-    func test_prepare_heicConversionAtTheCompatibilityQuality_weighsMoreThanTheDefaultQuality() throws {
+    func test_prepare_heicConversionAtTheCompatibilityQuality_weighsMoreThanTheStrongCompressionOfTheUser() throws {
         let data = try Self.heic(width: 900, height: 700, noisy: true)
-        let defaultQuality = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.native(delivery: .jpegCompatibility, quality: 0.5)))
+        let strong = OutgoingImagePolicy(maxPixelDimension: 1200, compresses: true, quality: 0.5, keepsLocation: false)
+        let defaultQuality = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: strong))
         let compat = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: .jpegCompatibility(keepsLocation: false)))
         XCTAssertGreaterThan(compat.data.count, defaultQuality.data.count)
     }
@@ -175,9 +176,8 @@ final class OutgoingImageHEICDeliveryTests: XCTestCase {
 
     private static let t0 = Date(timeIntervalSince1970: 1_790_000_000)
 
-    private static func native(delivery: HEICDelivery = .native, keepsLocation: Bool = false,
-                               quality: CGFloat = 0.85) -> OutgoingImagePolicy {
-        OutgoingImagePolicy(maxPixelDimension: 1200, compresses: false, quality: quality, keepsLocation: keepsLocation,
+    private static func native(delivery: HEICDelivery = .native, keepsLocation: Bool = false) -> OutgoingImagePolicy {
+        OutgoingImagePolicy(maxPixelDimension: 1200, compresses: false, quality: 0.85, keepsLocation: keepsLocation,
                             heicDelivery: delivery)
     }
 

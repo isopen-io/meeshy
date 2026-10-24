@@ -77,7 +77,7 @@ struct TusMediaGroupUploader: MediaGroupUploading {
         await uploader.setExpectedBatch(totalFiles: items.count, totalBytes: plannedBytes)
 
         let results = try await OrderedParallelUpload.run(items) { item in
-            try await uploader.uploadFile(
+            try await uploader.uploadMessageAttachment(
                 fileURL: item.fileURL, mimeType: item.mimeType, credential: credential,
                 thumbHash: item.thumbHash, transcription: item.transcription,
                 capturedInApp: item.capturedInApp
@@ -116,5 +116,32 @@ struct TusMediaGroupUploader: MediaGroupUploading {
         let thumbKey = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString ?? thumbUrl
         await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbKey)
         DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)
+    }
+}
+
+extension TusUploadManager {
+    /// **L'envoi d'une pièce de MESSAGE** (#11291) : un HEIC part tel quel et
+    /// repart en JPEG q 0,92 si le serveur le refuse ou ne le convertit pas
+    /// (`HEICUploadFallback`). Les envois de post, de story et de commentaire
+    /// restent sur `uploadFile` : leurs photos sont déjà en JPEG de compatibilité.
+    func uploadMessageAttachment(
+        fileURL: URL, mimeType: String, credential: MeeshyRequestCredential,
+        thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil,
+        capturedInApp: Bool = false, fileName: String? = nil
+    ) async throws -> TusUploadResult {
+        try await HEICUploadFallback.upload(
+            fileURL: fileURL, mimeType: mimeType, keepsLocation: OutgoingImageLocationSetting.stored(),
+            servedMimeType: { $0.mimeType }
+        ) { sentURL, sentMimeType in
+            try await self.uploadFile(
+                fileURL: sentURL, mimeType: sentMimeType, credential: credential, thumbHash: thumbHash,
+                transcription: transcription, capturedInApp: capturedInApp,
+                fileName: sentMimeType == mimeType ? fileName : fileName.map(Self.jpegFileName)
+            )
+        }
+    }
+
+    private static func jpegFileName(from name: String) -> String {
+        (name as NSString).deletingPathExtension + ".jpg"
     }
 }

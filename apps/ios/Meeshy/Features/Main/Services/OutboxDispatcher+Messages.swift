@@ -256,7 +256,7 @@ extension OutboxDispatcher {
                     do {
                         let mime = MimeTypeResolver.mimeType(
                             forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
-                        let tusResult = try await uploader.uploadFile(
+                        let tusResult = try await uploader.uploadMessageAttachment(
                             fileURL: URL(fileURLWithPath: absolutePath),
                             mimeType: mime,
                             credential: credential, fileName: item.originalMediaName(at: index)
