@@ -493,7 +493,7 @@ struct StoryHeaderView: View {
             }
         // Exhaustif, sans `default:` : une entrée nouvelle (#11535 a ajouté
         // `.makePrivate`) ne disparaît plus du menu en silence (#11151).
-        case .fullscreen, .transcript, .compose, .share, .close:
+        case .fullscreen, .transcript, .compose, .exportVideo, .close:
             EmptyView()
         }
     }

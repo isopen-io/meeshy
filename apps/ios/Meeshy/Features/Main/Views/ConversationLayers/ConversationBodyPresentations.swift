@@ -75,19 +75,10 @@ struct ConversationBodySheets<Anchor: View, Picker: View>: ViewModifier {
     }
 }
 
-/// **Le voile de l'appui long** (#11208). Le fond se floutait à 12, plein
-/// écran : la conversation devenait illisible, et le flou s'ajoutait à
-/// l'assombrissement que l'overlay pose déjà (`MessageOverlayMenu.dismissBackground`).
-/// Le voile est désormais cet assombrissement, sur un flou léger qui ne passe
-/// jamais 8. La loi commune iOS / web (le web floute à 16 px) est tranchée par
-/// la décision-produit #11222 ; cette valeur s'y alignera.
-nonisolated enum ConversationOverlayBackdrop {
-    static let blurRadius: CGFloat = 6
-}
-
-/// **Le menu d'appui long, en `ViewModifier` NOMINAL** (LOT-10) : flou du fond
-/// AVANT l'overlay — pour ne flouter que la conversation, jamais le menu —,
-/// puis l'animation, l'overlay, la restitution du clavier à la fermeture, les
+/// **Le menu d'appui long, en `ViewModifier` NOMINAL** (LOT-10) : l'animation,
+/// l'overlay — qui pose lui-même le voile commun, le matériau système
+/// (`LongPressVeil`, #11222 : l'hôte ne floute plus la conversation) —, la
+/// restitution du clavier à la fermeture, les
 /// cadres des bulles, et le plein écran du lieu depuis la rangée plate (mêmes
 /// primitives que la bulle, présentées ICI parce que la rangée vit dans une
 /// cellule de collection).
@@ -109,7 +100,6 @@ struct ConversationBodyOverlayMenu<Piece: View, PlaceCover: View>: ViewModifier 
 
     func body(content: Content) -> some View {
         content
-            .blur(radius: overlayState.showOverlayMenu ? ConversationOverlayBackdrop.blurRadius : 0)
             .animation(.easeOut(duration: 0.28), value: overlayState.showOverlayMenu)
             .overlay { menuLayer }
             .adaptiveOnChange(of: overlayState.showOverlayMenu) { _, isShowing in

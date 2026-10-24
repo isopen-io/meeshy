@@ -290,7 +290,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// Cached metadata for the active conversation, hydrated lazily from the
     /// cache when `loadMessages` runs. Used to feed `playAudio` with the
     /// right `conversationName` / `conversationArtworkURL`.
-    @Published var currentConversation: MeeshyConversation?
+    @Published var currentConversation: MeeshyConversation? { didSet { startupDependencies.encryptedEra.conversationChanged(from: oldValue, in: self) } }
 
     #if DEBUG
     private var _testAudioCoordinator: ConversationAudioCoordinator?

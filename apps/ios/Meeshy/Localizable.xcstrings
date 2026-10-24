@@ -307644,6 +307644,54 @@
           }
         }
       }
+    },
+    "message.unencrypted.notice": {
+      "comment": "Marqueur d'un message arrivé en clair dans une conversation chiffrée de bout en bout (#11380) — fil, aperçu d'appui long, ligne de liste (VoiceOver).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة غير مشفرة — لم يتم التحقق من مرسلها"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unverschlüsselte Nachricht – der Absender ist nicht verifiziert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unencrypted message — its sender is not verified"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensaje sin cifrar: su autor no está verificado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message non chiffré — son auteur n'est pas vérifié"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messaggio non cifrato: il mittente non è verificato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensagem não criptografada — o remetente não foi verificado"
+          }
+        }
+      }
     }
   },
   "version": "1.1"
