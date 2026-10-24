@@ -39,6 +39,7 @@ const guestCard = (overrides: Partial<WorldParticipantCard> = {}): WorldParticip
   participantId: '66f0a1b2c3d4e5f6a7b8c9d0',
   participantType: 'anonymous',
   displayName: 'Awa',
+  avatar: null,
   username: null,
   conversationRole: 'member',
   accountRole: null,
@@ -88,6 +89,12 @@ describe('decodeWorldParticipantCard — jumelle zod/mini de worldParticipantCar
       const shared = worldParticipantCardSchema.safeParse(sample);
       expect(decodeWorldParticipantCard(sample)).toEqual(shared.success ? shared.data : null);
     }
+  });
+
+  test('le visage traverse le décodeur ; une passerelle qui ne le sert pas encore donne `null` (#12571)', () => {
+    expect(decodeWorldParticipantCard(guestCard({ avatar: '2026/09/awa/photo.png' }))?.avatar).toBe('2026/09/awa/photo.png');
+    const { avatar: _ancienne, ...sansVisage } = guestCard();
+    expect(decodeWorldParticipantCard(sansVisage)?.avatar).toBeNull();
   });
 
   test('une clé que le contrat ne déclare pas ne traverse pas le décodeur', () => {

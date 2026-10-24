@@ -69,14 +69,14 @@ const guestRow = () => ({
   },
 });
 
-const memberRow = (joinCountry: string | null = null) => ({
+const memberRow = (joinCountry: string | null = null, avatar: string | null = null) => ({
   id: MEMBER_ID,
   conversationId: WORLD_ID,
   type: 'user',
   userId: MEMBER_USER_ID,
   displayName: 'Awa',
   nickname: null,
-  avatar: null,
+  avatar,
   role: 'moderator',
   language: 'fr',
   isActive: false,
@@ -93,9 +93,10 @@ const memberRow = (joinCountry: string | null = null) => ({
 
 const elsewhereRow = () => ({ ...guestRow(), id: ELSEWHERE_ID, conversationId: OTHER_CONV_ID });
 
-const memberUser = (role = 'USER') => ({
+const memberUser = (role = 'USER', avatar: string | null = null) => ({
   id: MEMBER_USER_ID,
   username: 'awa',
+  avatar,
   email: 'awa@example.com',
   phoneNumber: '+221770000000',
   role,
@@ -142,10 +143,14 @@ type FixtureOptions = {
   readonly memberJoinCountry?: string | null;
   /** L'identifiant du LECTEUR — `READER_ID` par défaut. */
   readonly readerId?: string;
+  /** La photo LOCALE de la ligne de participant du compte lu (#12571). */
+  readonly memberLocalAvatar?: string | null;
+  /** La photo du COMPTE lu (#12571). */
+  readonly memberAccountAvatar?: string | null;
 };
 
 function fakePrisma(options: FixtureOptions = {}) {
-  const rows = [guestRow(), memberRow(options.memberJoinCountry ?? null), elsewhereRow()];
+  const rows = [guestRow(), memberRow(options.memberJoinCountry ?? null, options.memberLocalAvatar ?? null), elsewhereRow()];
   return {
     conversation: {
       findFirst: jest.fn(async ({ where }: { where: { identifier?: string } }) =>
@@ -157,7 +162,7 @@ function fakePrisma(options: FixtureOptions = {}) {
     },
     user: {
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
-        (where.id === MEMBER_USER_ID ? memberUser(options.memberRole) : null)),
+        (where.id === MEMBER_USER_ID ? memberUser(options.memberRole, options.memberAccountAvatar ?? null) : null)),
     },
     userSession: {
       findFirst: jest.fn(async ({ where }: { where: { userId: string } }) => (where.userId === MEMBER_USER_ID ? memberSession() : null)),
@@ -291,6 +296,7 @@ describe('ce que la fiche dit', () => {
       participantId: GUEST_ID,
       participantType: 'anonymous',
       displayName: 'nova_anon',
+      avatar: null,
       username: 'nova_anon',
       conversationRole: 'member',
       accountRole: null,
@@ -311,6 +317,7 @@ describe('ce que la fiche dit', () => {
       participantId: MEMBER_ID,
       participantType: 'user',
       displayName: 'Awa',
+      avatar: null,
       username: 'awa',
       conversationRole: 'moderator',
       accountRole: 'USER',
@@ -377,6 +384,40 @@ describe('la trace — aucune fiche ne sort sans elle', () => {
     expect(body.code).toBe(WORLD_PARTICIPANT_CARD_ERRORS.auditUnavailable);
     expect(body.data).toBeUndefined();
     expect(res.body).not.toContain('nova_anon');
+  });
+});
+
+describe('le visage — celui que le fil montre déjà, jamais retenu par la hiérarchie (#12571)', () => {
+  it('la photo du compte est servie quand la ligne de participant n’en porte pas', async () => {
+    const { body } = await read(MEMBER_ID, 'ANALYST', { memberAccountAvatar: '2026/09/awa/photo.png' });
+
+    expect(body.data.avatar).toBe('2026/09/awa/photo.png');
+  });
+
+  it('la photo LOCALE prime sur celle du compte (loi partagée resolveParticipantAvatar)', async () => {
+    const { body } = await read(MEMBER_ID, 'ANALYST', { memberLocalAvatar: 'local/awa.png', memberAccountAvatar: '2026/09/awa/photo.png' });
+
+    expect(body.data.avatar).toBe('local/awa.png');
+  });
+
+  it('une photo locale blanche ne masque pas celle du compte', async () => {
+    const { body } = await read(MEMBER_ID, 'ANALYST', { memberLocalAvatar: '   ', memberAccountAvatar: '2026/09/awa/photo.png' });
+
+    expect(body.data.avatar).toBe('2026/09/awa/photo.png');
+  });
+
+  it('le visage du fil n’est pas un détail de compte : un compte NON surclassé garde sa photo, et reste retenu pour le reste', async () => {
+    const { body } = await read(MEMBER_ID, 'ANALYST', { memberRole: 'BIGBOSS', memberAccountAvatar: '2026/09/awa/photo.png' });
+
+    expect(body.data.avatar).toBe('2026/09/awa/photo.png');
+    expect(body.data.accountDetailsWithheld).toBe(true);
+    expect(body.data.accountRole).toBeNull();
+  });
+
+  it('un invité sans photo : `null`, jamais absent', async () => {
+    const { body } = await read(GUEST_ID, 'ANALYST');
+
+    expect(body.data.avatar).toBeNull();
   });
 });
 
