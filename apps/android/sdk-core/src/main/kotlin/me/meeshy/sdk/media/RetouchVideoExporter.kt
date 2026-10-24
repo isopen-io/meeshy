@@ -1,13 +1,17 @@
 package me.meeshy.sdk.media
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.ChannelMixingAudioProcessor
 import androidx.media3.common.audio.ChannelMixingMatrix
+import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.Crop
+import androidx.media3.effect.OverlayEffect
+import com.google.common.collect.ImmutableList
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
@@ -25,7 +29,8 @@ import me.meeshy.sdk.model.imageedit.NormalizedCrop
 /**
  * **LE RENDU D'UNE VIDÉO RETOUCHÉE** (#12650) — la recette de [ComposerVideoEdit] gravée par Media3
  * Transformer : la fenêtre de coupe ([MediaItem.ClippingConfiguration]), le son (muet ⇒ piste retirée,
- * sinon un gain sur chaque canal) et le recadrage (effet [Crop], coordonnées normalisées du GPU).
+ * sinon un gain sur chaque canal), le recadrage (effet [Crop], coordonnées normalisées du GPU) et les textes
+ * cuits ([OverlayEffect]).
  */
 public object RetouchVideoExporter {
 
@@ -37,7 +42,8 @@ public object RetouchVideoExporter {
         1 - crop.y * 2,
     )
 
-    public suspend fun export(context: Context, input: File, edit: ComposerVideoEdit, output: File) {
+    /** [overlay] : les textes cuits, à la taille de la vidéo rendue (recadrage compris), posés sur chaque image. */
+    public suspend fun export(context: Context, input: File, edit: ComposerVideoEdit, output: File, overlay: Bitmap? = null) {
         withContext(Dispatchers.Main) {
             val finished = CompletableDeferred<Unit>()
             val transformer = Transformer.Builder(context).addListener(
@@ -51,7 +57,7 @@ public object RetouchVideoExporter {
                     }
                 },
             ).build()
-            transformer.start(editedItem(input, edit), output.absolutePath)
+            transformer.start(editedItem(input, edit, overlay), output.absolutePath)
             try {
                 finished.await()
             } catch (cancelled: CancellationException) {
@@ -61,7 +67,7 @@ public object RetouchVideoExporter {
         }
     }
 
-    private fun editedItem(input: File, edit: ComposerVideoEdit): EditedMediaItem {
+    private fun editedItem(input: File, edit: ComposerVideoEdit, overlay: Bitmap?): EditedMediaItem {
         val media = MediaItem.Builder()
             .setUri(Uri.fromFile(input))
             .setClippingConfiguration(
@@ -71,7 +77,10 @@ public object RetouchVideoExporter {
                     .build(),
             )
             .build()
-        val video = buildList<Effect> { edit.crop?.let { ndc(it) }?.let { add(Crop(it[0], it[1], it[2], it[3])) } }
+        val video = buildList<Effect> {
+            edit.crop?.let { ndc(it) }?.let { add(Crop(it[0], it[1], it[2], it[3])) }
+            overlay?.let { add(OverlayEffect(ImmutableList.of(BitmapOverlay.createStaticBitmapOverlay(it)))) }
+        }
         val audio = buildList<AudioProcessor> { if (!edit.removesAudio && !edit.sound.isUntouched) add(gainProcessor(edit.sound.effectiveGain.toFloat())) }
         return EditedMediaItem.Builder(media)
             .setRemoveAudio(edit.removesAudio)
