@@ -43,8 +43,10 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
             message("sealed", isEncrypted: true, content: "Q2lwaGVydGV4dGU=")
         ]
 
-        XCTAssertEqual(ConversationPreviewRenderer.unencryptedIds(of: messages, encryptionMode: "e2ee"), ["forged"])
-        XCTAssertEqual(ConversationPreviewRenderer.unencryptedIds(of: messages, encryptionMode: nil), [])
+        XCTAssertEqual(ConversationPreviewRenderer.unencryptedIds(
+            of: messages, regime: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil)
+        ), ["forged"])
+        XCTAssertEqual(ConversationPreviewRenderer.unencryptedIds(of: messages, regime: .serverReadable), [])
     }
 
     // MARK: - La face suit le mode de lecture

@@ -21,7 +21,10 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
     ) -> (sut: ConversationListPreviewLoader, service: MockMessageService, cache: MockConversationPreviewCache) {
         let service = MockMessageService()
         let cacheMock = MockConversationPreviewCache(messages: cache, translations: cachedTranslations)
-        let sut = ConversationListPreviewLoader(messageService: service, cache: cacheMock, readerPrism: { prism })
+        let sut = ConversationListPreviewLoader(
+            messageService: service, cache: cacheMock, readerPrism: { prism },
+            regimeMemory: EndToEndRegimeMemory(defaults: nil)
+        )
         return (sut, service, cacheMock)
     }
 
@@ -439,7 +442,7 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
             messages: [forged],
             translations: [messageId: [makeTranslation(target: "fr", text: "Bonjour, tout va bien")]],
             prism: ["fr"],
-            encryptionMode: "e2ee"
+            regime: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil)
         )
 
         XCTAssertTrue(snapshot.isUnencrypted(messageId))
@@ -453,19 +456,20 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         let decrypted = makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true)
 
         let snapshot = ConversationListPreviewLoader.snapshot(
-            messages: [decrypted], translations: [:], prism: ["fr"], encryptionMode: "e2ee"
+            messages: [decrypted], translations: [:], prism: ["fr"], regime: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil)
         )
 
         XCTAssertFalse(snapshot.isUnencrypted(messageId))
         XCTAssertEqual(snapshot.messages.first?.content, "Salut en clair")
     }
 
-    func test_snapshot_systemMessageInEndToEnd_isNotFlagged() {
+    func test_snapshot_structuredSystemNoticeInEndToEnd_isNotFlagged() {
         var notice = makeMessage(content: "Alice a rejoint la conversation")
         notice.messageSource = .system
+        notice.joinNotice = JoinNoticeMetadata(participantId: "p-alice", displayName: "Alice", isAnonymous: false, viaShareLink: false)
 
         let snapshot = ConversationListPreviewLoader.snapshot(
-            messages: [notice], translations: [:], prism: ["fr"], encryptionMode: "e2ee"
+            messages: [notice], translations: [:], prism: ["fr"], regime: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil)
         )
 
         XCTAssertFalse(snapshot.isUnencrypted(messageId))
@@ -476,7 +480,38 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
             messages: [makeMessage(content: "Hello", originalLanguage: "en")],
             translations: [messageId: [makeTranslation(target: "fr", text: "Bonjour")]],
             prism: ["fr"],
-            encryptionMode: nil
+            regime: .serverReadable
+        )
+
+        XCTAssertFalse(snapshot.isUnencrypted(messageId))
+        XCTAssertEqual(snapshot.servedTranslation(for: messageId)?.translatedContent, "Bonjour")
+    }
+
+    /// Un message authentiquement chiffré, déchiffré sur l'appareil : le
+    /// serveur ne le lit pas, donc aucune traduction qu'il en sert ne passe.
+    func test_snapshot_decryptedOnDeviceInEndToEnd_servesNoServerTranslation() {
+        let decrypted = makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true)
+
+        let snapshot = ConversationListPreviewLoader.snapshot(
+            messages: [decrypted],
+            translations: [messageId: [makeTranslation(target: "en", text: "Send me the code")]],
+            prism: ["en"],
+            regime: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil)
+        )
+
+        XCTAssertNil(snapshot.servedTranslation(for: messageId))
+    }
+
+    /// L'historique d'avant l'activation reste lisible, traduit, sans marqueur.
+    func test_snapshot_historyBeforeActivation_isOrdinary_andKeepsItsTranslation() {
+        let history = makeMessage(content: "Hello", originalLanguage: "en")
+        let regime = EndToEndRegime(encryptionMode: "e2ee", enabledAt: history.createdAt.addingTimeInterval(60))
+
+        let snapshot = ConversationListPreviewLoader.snapshot(
+            messages: [history],
+            translations: [messageId: [makeTranslation(target: "fr", text: "Bonjour")]],
+            prism: ["fr"],
+            regime: regime
         )
 
         XCTAssertFalse(snapshot.isUnencrypted(messageId))
@@ -490,7 +525,7 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
             translations: #"[{"id":"t-fr","messageId":"\#(messageId)","targetLanguage":"fr","translatedContent":"Tout va bien","sourceLanguage":"en"}]"#
         ))
 
-        await sut.load(for: conversationId, intent: .open, encryptionMode: "e2ee")
+        await sut.load(for: conversationId, intent: .open, regime: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil))
 
         let snapshot = sut.state(for: conversationId).snapshot
         XCTAssertEqual(snapshot?.isUnencrypted(messageId), true)

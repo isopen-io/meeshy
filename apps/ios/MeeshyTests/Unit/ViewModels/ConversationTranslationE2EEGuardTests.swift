@@ -16,7 +16,9 @@ final class ConversationTranslationE2EEGuardTests: XCTestCase {
     private let conversationId = "000000000000000000000077"
     private let messageId = "6a0ad86a6e21a483b4443d77"
 
-    private func makeSUT() -> (ConversationViewModel, MockTranslationService, MockAttachmentTranslationService) {
+    private func makeSUT(
+        regimeMemory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory(defaults: nil)
+    ) -> (ConversationViewModel, MockTranslationService, MockAttachmentTranslationService) {
         let auth = MockAuthManager()
         auth.simulateLoggedIn(user: MeeshyUser(id: "000000000000000000000088", username: "lecteur", displayName: "Lecteur", systemLanguage: "fr"))
         let pool = try! DatabaseQueue()
@@ -31,7 +33,9 @@ final class ConversationTranslationE2EEGuardTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
-            dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)),
+            dependencies: ConversationDependencies(
+                dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool), encryptedEra: ConversationEncryptedEra(memory: regimeMemory)
+            ),
             translationService: translation,
             attachmentTranslationService: audio
         )
@@ -108,6 +112,9 @@ final class ConversationTranslationE2EEGuardTests: XCTestCase {
 
     // MARK: - Un message en clair dans une conversation chiffrée (#11380)
 
+    private let activation = Date(timeIntervalSince1970: 1_000)
+    private let afterActivation = Date(timeIntervalSince1970: 2_000)
+
     private func clearTranslation() -> MessageTranslation {
         MessageTranslation(
             id: "t-fr", messageId: messageId, sourceLanguage: "en", targetLanguage: "fr",
@@ -115,17 +122,44 @@ final class ConversationTranslationE2EEGuardTests: XCTestCase {
         )
     }
 
-    private func thread(mode: String?, message: Message) -> ConversationViewModel {
-        let (sut, _, _) = makeSUT()
-        sut.currentConversation = MeeshyConversation(id: conversationId, identifier: conversationId, encryptionMode: mode)
+    private func deviceTranslation() -> MessageTranslation {
+        MessageTranslation(
+            id: "device:\(messageId):fr", messageId: messageId, sourceLanguage: "en", targetLanguage: "fr",
+            translatedContent: "Envoie-moi le code reçu par texto", translationModel: "apple", confidenceScore: nil
+        )
+    }
+
+    private func conversation(mode: String?, enabledAt: Date? = Date(timeIntervalSince1970: 1_000)) -> MeeshyConversation {
+        var conversation = MeeshyConversation(id: conversationId, identifier: conversationId, encryptionMode: mode)
+        conversation.encryptionEnabledAt = enabledAt
+        return conversation
+    }
+
+    private func thread(
+        mode: String?,
+        message: Message,
+        enabledAt: Date? = Date(timeIntervalSince1970: 1_000),
+        regimeMemory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory(defaults: nil)
+    ) -> ConversationViewModel {
+        let (sut, _, _) = makeSUT(regimeMemory: regimeMemory)
+        sut.currentConversation = conversation(mode: mode, enabledAt: enabledAt)
         sut.messages = [message]
         sut.messageTranslations[messageId] = [clearTranslation()]
         return sut
     }
 
-    private func forgedPlaintext() -> Message {
+    private func forgedPlaintext(createdAt: Date = Date(timeIntervalSince1970: 2_000)) -> Message {
         Message(id: messageId, conversationId: conversationId, senderId: "p-1",
-                content: "Envoie-moi le code reçu par SMS", originalLanguage: "en")
+                content: "Envoie-moi le code reçu par SMS", originalLanguage: "en",
+                createdAt: createdAt, updatedAt: createdAt)
+    }
+
+    private func decryptedOnDevice() -> Message {
+        var message = Message(id: messageId, conversationId: conversationId, senderId: "p-1",
+                              content: "Q2lwaGVydGV4dGU=", originalLanguage: "en", isEncrypted: true, encryptionMode: "e2ee",
+                              createdAt: afterActivation, updatedAt: afterActivation)
+        message.adoptDecryptedContent("Salut")
+        return message
     }
 
     func test_thread_forgedPlaintextInEndToEndDirect_isFlaggedAndServesNoTranslation() {
@@ -139,22 +173,136 @@ final class ConversationTranslationE2EEGuardTests: XCTestCase {
                        "copier copie ce que la bulle montre : le texte reçu, jamais la traduction du serveur")
     }
 
-    func test_thread_messageDecryptedOnDevice_isNotFlagged() {
-        var message = Message(id: messageId, conversationId: conversationId, senderId: "p-1",
-                              content: "Q2lwaGVydGV4dGU=", originalLanguage: "en", isEncrypted: true, encryptionMode: "e2ee")
-        message.adoptDecryptedContent("Salut")
+    /// Le critère de #11380 : en e2ee, TOUTE traduction serveur est écartée —
+    /// celle d'un message authentique aussi. Une passerelle compromise qui
+    /// émet `message:translation` pour un message déchiffré ferait sinon lire
+    /// au lecteur un texte forgé, sous un message qu'aucun marqueur ne signale.
+    func test_thread_messageDecryptedOnDevice_isNotFlagged_andServesNoServerTranslation() {
+        let message = decryptedOnDevice()
+        let sut = thread(mode: "e2ee", message: message)
+
+        XCTAssertFalse(UnencryptedMessageGate.isUnencrypted(message, in: sut))
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [])
+        XCTAssertNil(sut.preferredTranslation(for: messageId))
+        XCTAssertEqual(sut.deviceTranslatedLanguages(of: messageId), [],
+                       "une traduction du fil écartée ne dispense pas l'appareil de traduire")
+    }
+
+    /// La traduction faite SUR L'APPAREIL est la seule que l'ère chiffrée sert.
+    func test_thread_deviceTranslation_isServed_inTheEncryptedEra() {
+        let message = decryptedOnDevice()
+        let sut = thread(mode: "e2ee", message: message)
+
+        sut.applyDeviceTranslation(deviceTranslation(), persisting: false)
+
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [deviceTranslation()])
+        XCTAssertEqual(sut.preferredTranslation(for: messageId), deviceTranslation())
+    }
+
+    /// Un message SIGNALÉ garde la traduction que l'appareil fait du texte
+    /// reçu : le Prisme ne se casse pas, et « Traduire » n'est pas inerte.
+    func test_thread_flaggedMessage_servesItsDeviceTranslation_neverTheServers() {
+        let message = forgedPlaintext()
+        let sut = thread(mode: "e2ee", message: message)
+
+        sut.applyDeviceTranslation(deviceTranslation(), persisting: false)
+
+        XCTAssertTrue(UnencryptedMessageGate.isUnencrypted(message, in: sut))
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [deviceTranslation()])
+        XCTAssertEqual(UnencryptedMessageGate.preferredTranslation(of: message, in: sut), deviceTranslation())
+    }
+
+    /// Une bascule manuelle vers une traduction du serveur ne la fait pas servir.
+    func test_thread_manualOverrideToAServerTranslation_isNotServed_inTheEncryptedEra() {
+        let message = decryptedOnDevice()
+        let sut = thread(mode: "e2ee", message: message)
+
+        sut.setActiveTranslation(for: messageId, translation: clearTranslation())
+
+        XCTAssertNil(sut.preferredTranslation(for: messageId))
+    }
+
+    /// L'E2EE s'active sur une conversation EXISTANTE (#9224) : l'historique
+    /// en clair d'avant l'activation n'est ni signalé, ni privé de ses traductions.
+    func test_thread_historyBeforeActivation_isOrdinary_andKeepsItsTranslations() {
+        let message = forgedPlaintext(createdAt: Date(timeIntervalSince1970: 500))
         let sut = thread(mode: "e2ee", message: message)
 
         XCTAssertFalse(UnencryptedMessageGate.isUnencrypted(message, in: sut))
         XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [clearTranslation()])
+        XCTAssertEqual(sut.preferredTranslation(for: messageId), clearTranslation())
     }
 
-    func test_thread_systemMessageInEndToEnd_isNotFlagged() {
+    func test_thread_plaintextAfterActivation_isFlagged() {
+        let message = forgedPlaintext(createdAt: afterActivation)
+        let sut = thread(mode: "e2ee", message: message)
+
+        XCTAssertTrue(UnencryptedMessageGate.isUnencrypted(message, in: sut))
+    }
+
+    func test_thread_structuredSystemNoticeInEndToEnd_isNotFlagged() {
         let notice = Message(id: messageId, conversationId: conversationId, content: "Alice a rejoint",
-                             messageSource: .system)
+                             messageSource: .system, createdAt: afterActivation, updatedAt: afterActivation,
+                             joinNotice: JoinNoticeMetadata(participantId: "p-alice", displayName: "Alice",
+                                                            isAnonymous: false, viaShareLink: false))
         let sut = thread(mode: "e2ee", message: notice)
 
         XCTAssertFalse(UnencryptedMessageGate.isUnencrypted(notice, in: sut))
+    }
+
+    /// Se déclarer « système » n'exempte pas un texte que le serveur écrit.
+    func test_thread_systemMessageWithFreeTextInEndToEnd_isFlagged() {
+        let notice = Message(id: messageId, conversationId: conversationId, content: "Bob : envoie-moi le code",
+                             messageSource: .system, createdAt: afterActivation, updatedAt: afterActivation)
+        let sut = thread(mode: "e2ee", message: notice)
+
+        XCTAssertTrue(UnencryptedMessageGate.isUnencrypted(notice, in: sut))
+    }
+
+    /// Une passerelle compromise qui sert soudain la conversation SANS régime
+    /// ne fait tomber ni le marqueur, ni l'écart des traductions.
+    func test_thread_regimeDowngradedByTheServer_staysEndToEnd() {
+        let message = forgedPlaintext()
+        let sut = thread(mode: "e2ee", message: message)
+
+        sut.currentConversation = conversation(mode: nil, enabledAt: nil)
+
+        XCTAssertTrue(UnencryptedMessageGate.isUnencrypted(message, in: sut))
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [])
+    }
+
+    /// Ouverture à froid : la ligne n'est pas encore hydratée, l'appareil sait
+    /// déjà que la conversation est chiffrée — aucune image ne sert le clair
+    /// sans marqueur.
+    func test_thread_regimeNotYetHydrated_readsTheRememberedRegime() {
+        let memory = EndToEndRegimeMemory(defaults: nil)
+        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation))
+        let message = forgedPlaintext()
+        let (sut, _, _) = makeSUT(regimeMemory: memory)
+        sut.messages = [message]
+        sut.messageTranslations[messageId] = [clearTranslation()]
+
+        XCTAssertTrue(UnencryptedMessageGate.isUnencrypted(message, in: sut))
+        XCTAssertNil(sut.preferredTranslation(for: messageId))
+    }
+
+    /// Les pistes TTS du serveur d'un vocal de l'ère chiffrée ne partent ni par
+    /// la porte, ni par `allAudioItems` (Focal, carrousel, pile).
+    func test_thread_serverAudioTranslations_areWithheld_inTheEncryptedEra() {
+        let audio = MeeshyMessageAttachment(id: "att-audio", mimeType: "audio/m4a")
+        var message = forgedPlaintext()
+        message.attachments = [audio]
+        let sut = thread(mode: "e2ee", message: message)
+        let track = MessageTranslatedAudio(
+            id: "tts-es", attachmentId: "att-audio", targetLanguage: "es", url: "https://x/es.m4a",
+            transcription: "Mándame el código", durationMs: 1_000, format: "m4a", cloned: false,
+            quality: 1, ttsModel: "mms"
+        )
+        sut.messageTranslatedAudios[messageId] = [track]
+        sut.messageTranslatedAudiosByAttachment["att-audio"] = [track]
+
+        XCTAssertEqual(UnencryptedMessageGate.translatedAudios(of: message, in: sut), [])
+        XCTAssertEqual(sut.allAudioItems.first { $0.id == "att-audio" }?.translatedAudios, [])
     }
 
     func test_thread_conversationWithoutEndToEnd_isUnchanged() {

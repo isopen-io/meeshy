@@ -126,10 +126,8 @@ enum ConversationPreviewRenderer {
 
     /// Les messages arrivés EN CLAIR dans une conversation chiffrée
     /// (`EndToEndPlaintextLaw`, #11380) : la rangée porte leur marqueur.
-    static func unencryptedIds(of messages: [Message], encryptionMode: String?) -> Set<String> {
-        Set(messages.filter {
-            EndToEndPlaintextLaw.standing(of: $0, conversationEncryptionMode: encryptionMode).isUnencrypted
-        }.map(\.id))
+    static func unencryptedIds(of messages: [Message], regime: EndToEndRegime) -> Set<String> {
+        Set(messages.filter { EndToEndPlaintextLaw.standing(of: $0, in: regime).isUnencrypted }.map(\.id))
     }
 
     static func contentWidth(cardWidth: CGFloat) -> CGFloat {

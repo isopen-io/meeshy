@@ -62,10 +62,11 @@ struct ConversationPreviewLine: View {
         preferredLanguages: [String],
         now: Date,
         strings: ConversationPreviewStrings = ConversationPreviewCatalog.strings(),
-        receipts: EphemeralReceiptRecording = EphemeralReceiptLedger.shared
+        receipts: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
+        memory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
     ) -> ConversationPreview {
         let input = ConversationPreviewInput(
-            conversation: servedSource(of: conversation),
+            conversation: servedSource(of: conversation, memory: memory),
             viewerId: viewerId,
             language: strings.language.rawValue,
             preferredLanguages: preferredLanguages,
@@ -75,17 +76,27 @@ struct ConversationPreviewLine: View {
         return ConversationPreviewComposer.compose(input, strings: strings)
     }
 
-    /// Le dernier message est-il arrivé EN CLAIR dans une conversation chiffrée
-    /// (`EndToEndPlaintextLaw`, #11380) ? La ligne le marque, comme le fil.
-    nonisolated static func isUnencrypted(_ conversation: Conversation) -> Bool {
-        EndToEndPlaintextLaw.lastMessageStanding(of: conversation).isUnencrypted
+    /// Le dernier message est-il arrivé EN CLAIR dans l'ère chiffrée de la
+    /// conversation (`EndToEndPlaintextLaw`, #11380) ? La ligne le marque,
+    /// comme le fil — sous le régime servi ET retenu sur l'appareil, qu'une
+    /// ligne servie sans régime ne fait pas tomber.
+    nonisolated static func isUnencrypted(
+        _ conversation: Conversation,
+        memory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
+    ) -> Bool {
+        let remembered = memory.resolve(conversationId: conversation.id, served: EndToEndRegime(conversation: conversation))
+        return EndToEndPlaintextLaw.lastMessageStanding(of: conversation, remembered: remembered).isUnencrypted
     }
 
-    /// La conversation telle que le composeur la lit : un dernier message
-    /// arrivé en clair dans une conversation chiffrée n'y emporte aucune
-    /// traduction du serveur — la ligne sert son texte, marqué.
-    nonisolated static func servedSource(of conversation: Conversation) -> Conversation {
-        guard isUnencrypted(conversation) else { return conversation }
+    /// La conversation telle que le composeur la lit : un dernier message de
+    /// l'ère chiffrée — arrivé en clair ou déchiffré sur l'appareil —
+    /// n'emporte aucune traduction du serveur, qui ne le lit pas (#11380).
+    nonisolated static func servedSource(
+        of conversation: Conversation,
+        memory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
+    ) -> Conversation {
+        let regime = memory.resolve(conversationId: conversation.id, served: EndToEndRegime(conversation: conversation))
+        guard regime.governs(createdAt: conversation.lastMessageAt) else { return conversation }
         var source = conversation
         source.lastMessageTranslations = nil
         return source

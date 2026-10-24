@@ -85,7 +85,8 @@ struct ConversationOverlayMenu: View {
             onExportImage: { quick in actions.export(msg, quick) },
             onExpandFullPicker: {
                 overlayState.fullReactionPickerMessage = msg
-            }
+            },
+            isUnencrypted: UnencryptedMessageGate.isUnencrypted(msg, in: viewModel)
         )
     }
 }

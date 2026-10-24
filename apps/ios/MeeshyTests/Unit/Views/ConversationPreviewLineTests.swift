@@ -38,9 +38,9 @@ final class ConversationPreviewLineTests: XCTestCase {
 
     // MARK: - Un dernier message en clair dans une conversation chiffrée (#11380)
 
-    private func conversation(mode: String?) -> Conversation {
+    private func conversation(mode: String?, id: String = "c1") -> Conversation {
         var conversation = Conversation(
-            id: "c1", identifier: "c1", encryptionMode: mode,
+            id: id, identifier: id, encryptionMode: mode,
             lastMessagePreview: "Envoie-moi le code",
             lastMessageId: "m1",
             lastMessageSenderName: "Bob",
@@ -52,25 +52,39 @@ final class ConversationPreviewLineTests: XCTestCase {
         return conversation
     }
 
-    private func line(_ conversation: Conversation) -> String {
+    private func line(_ conversation: Conversation, memory: EndToEndRegimeMemory = EndToEndRegimeMemory(defaults: nil)) -> String {
         ConversationPreviewLine.preview(
-            for: conversation, viewerId: "me", preferredLanguages: ["fr"], now: start, strings: strings()
+            for: conversation, viewerId: "me", preferredLanguages: ["fr"], now: start, strings: strings(), memory: memory
         ).segments.map(\.text).joined(separator: " ")
     }
 
     func test_preview_plaintextInEndToEnd_isFlaggedAndServesNoServerTranslation() {
         let encrypted = conversation(mode: "e2ee")
+        let memory = EndToEndRegimeMemory(defaults: nil)
 
-        XCTAssertTrue(ConversationPreviewLine.isUnencrypted(encrypted))
-        XCTAssertTrue(line(encrypted).contains("Envoie-moi le code"))
-        XCTAssertFalse(line(encrypted).contains("Tout va bien"), "une traduction du serveur peut dire autre chose")
+        XCTAssertTrue(ConversationPreviewLine.isUnencrypted(encrypted, memory: memory))
+        XCTAssertTrue(line(encrypted, memory: memory).contains("Envoie-moi le code"))
+        XCTAssertFalse(line(encrypted, memory: memory).contains("Tout va bien"), "une traduction du serveur peut dire autre chose")
     }
 
     func test_preview_conversationWithoutEndToEnd_keepsThePrism() {
         let plain = conversation(mode: nil)
+        let memory = EndToEndRegimeMemory(defaults: nil)
 
-        XCTAssertFalse(ConversationPreviewLine.isUnencrypted(plain))
-        XCTAssertTrue(line(plain).contains("Tout va bien"))
+        XCTAssertFalse(ConversationPreviewLine.isUnencrypted(plain, memory: memory))
+        XCTAssertTrue(line(plain, memory: memory).contains("Tout va bien"))
+    }
+
+    /// Une ligne que le serveur sert soudain sans régime reste jugée : l'appareil
+    /// se souvient que la conversation est chiffrée.
+    func test_preview_downgradedByTheServer_staysFlagged() {
+        let memory = EndToEndRegimeMemory(defaults: nil)
+        XCTAssertTrue(ConversationPreviewLine.isUnencrypted(conversation(mode: "e2ee", id: "c-down"), memory: memory))
+
+        let downgraded = conversation(mode: nil, id: "c-down")
+
+        XCTAssertTrue(ConversationPreviewLine.isUnencrypted(downgraded, memory: memory))
+        XCTAssertFalse(line(downgraded, memory: memory).contains("Tout va bien"))
     }
 
     // MARK: - L'iconographie

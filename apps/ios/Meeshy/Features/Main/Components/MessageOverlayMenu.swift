@@ -88,6 +88,9 @@ struct MessageOverlayMenu: View {
     var onExportImage: ((Bool) -> Void)? = nil
     /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
     var onExpandFullPicker: (() -> Void)? = nil
+    /// Arrivé EN CLAIR dans l'ère chiffrée de la conversation (#11380) :
+    /// l'aperçu porte le marqueur que la cellule montre dans le fil.
+    var isUnencrypted: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openURL) private var openURL
@@ -462,6 +465,7 @@ struct MessageOverlayMenu: View {
                 accentHex: bubbleAccentHex
             )
             .equatable()
+            .modifier(UnencryptedMessageMarking(isUnencrypted: isUnencrypted, isDark: isDark))
             .environment(\.bubbleSkin, previewSkin)
             .environment(\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)
             .frame(width: previewSize.width, alignment: message.isMe ? .trailing : .leading)

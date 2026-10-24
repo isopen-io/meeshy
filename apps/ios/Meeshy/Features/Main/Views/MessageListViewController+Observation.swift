@@ -70,7 +70,7 @@ extension MessageListViewController {
             }
             .store(in: &cancellables)
 
-        Publishers.CombineLatest(vm.$currentSearchQuery, vm.$currentConversation.map { $0?.encryptionMode })
+        Publishers.CombineLatest(vm.$currentSearchQuery, vm.$currentConversation.map { EndToEndRegime(conversation: $0) })
             .removeDuplicates(by: ==)
             .receive(on: DispatchQueue.main)
             .dropFirst()

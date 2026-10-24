@@ -172,9 +172,11 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// tomber (l'aperçu ouvert garderait sinon ce que le cache avait).
     private var inFlight: [String: InFlight] = [:]
     private var provenance: [String: Provenance] = [:]
-    /// Le régime de chiffrement de chaque conversation chargée, tel que la
-    /// liste le connaît : la loi du clair (#11380) le lit à chaque publication.
-    private var encryptionModes: [String: String] = [:]
+    /// Le régime de chiffrement de chaque conversation chargée — celui que la
+    /// liste sert, fusionné avec celui que l'appareil retient : la loi du clair
+    /// (#11380) le lit à chaque publication.
+    private var regimes: [String: EndToEndRegime] = [:]
+    private let regimeMemory: any EndToEndRegimeMemoryProviding
 
     private struct InFlight {
         let token: UUID
@@ -190,9 +192,11 @@ final class ConversationListPreviewLoader: ObservableObject {
         messageService: MessageServiceProviding,
         cache: ConversationPreviewCacheProviding = LiveConversationPreviewCache(),
         readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) },
-        isLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.isLocked($0) }
+        isLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.isLocked($0) },
+        regimeMemory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
     ) {
         self.messageService = messageService
+        self.regimeMemory = regimeMemory
         self.cache = cache
         self.readerPrism = readerPrism
         self.isLocked = isLocked
@@ -219,10 +223,10 @@ final class ConversationListPreviewLoader: ObservableObject {
     func load(
         for conversationId: String,
         intent: LoadIntent,
-        encryptionMode: String? = nil,
+        regime: EndToEndRegime = .serverReadable,
         currentUserId: @escaping @MainActor @Sendable () -> String = { "" }
     ) async {
-        encryptionModes[conversationId] = encryptionMode
+        regimes[conversationId] = regimeMemory.resolve(conversationId: conversationId, served: regime)
         guard !isLocked(conversationId) else {
             states[conversationId] = nil
             provenance[conversationId] = nil
@@ -283,22 +287,23 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// L'aperçu tel que le lecteur le lit : un message chiffré que sa
     /// provenance ne prouve pas déchiffré sur l'appareil n'emporte que son
     /// drapeau (jamais le cryptogramme comme texte), aucun message chiffré
-    /// n'emporte de traduction, un message arrivé en clair dans une
-    /// conversation chiffrée non plus (#11380), et chaque message sert la
+    /// n'emporte de traduction, aucun message de l'ère chiffrée d'une
+    /// conversation non plus — le serveur ne le lit pas, donc il ne le traduit
+    /// pas (#11380) —, et chaque message sert la
     /// traduction que `ReaderPrism` élit — `nil` ⇒ l'original, jamais
     /// `translations.first`.
     static func snapshot(
         messages: [Message],
         translations: [String: [MessageTranslation]],
         prism: [String],
-        encryptionMode: String? = nil
+        regime: EndToEndRegime = .serverReadable
     ) -> ConversationPreviewSnapshot {
         let sealed = messages.map { Self.isReadableOnDevice($0) ? $0 : Self.sealedForPreview($0) }
-        let unencrypted = Set(sealed.filter {
-            EndToEndPlaintextLaw.standing(of: $0, conversationEncryptionMode: encryptionMode).isUnencrypted
-        }.map(\.id))
+        let unencrypted = Set(sealed.filter { EndToEndPlaintextLaw.standing(of: $0, in: regime).isUnencrypted }.map(\.id))
+        let wireWithheld = Set(sealed.filter { !regime.admitsWireTranslations(forMessageCreatedAt: $0.createdAt) }.map(\.id))
         let withheldIds = Set(sealed.filter { $0.isEncrypted || Self.holdsBurnOnRead($0) }.map(\.id))
             .union(unencrypted)
+            .union(wireWithheld)
         let readable = translations.filter { !withheldIds.contains($0.key) }
         let served = sealed.reduce(into: [String: MessageTranslation]()) { served, message in
             guard let candidates = readable[message.id],
@@ -380,7 +385,7 @@ final class ConversationListPreviewLoader: ObservableObject {
     ) {
         let snapshot = Self.snapshot(
             messages: messages, translations: translations, prism: readerPrism(),
-            encryptionMode: encryptionModes[conversationId]
+            regime: regimes[conversationId] ?? regimeMemory.resolve(conversationId: conversationId, served: .serverReadable)
         )
         states[conversationId] = messages.isEmpty ? .empty : .loaded(snapshot)
     }

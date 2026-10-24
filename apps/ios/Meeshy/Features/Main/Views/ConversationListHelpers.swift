@@ -294,7 +294,12 @@ struct ConversationPreviewView: View {
             recentMessages(
                 cachedMessages, translations: [:], served: [:],
                 phase: cachedMessages.isEmpty ? .empty : .loaded,
-                unencrypted: ConversationPreviewRenderer.unencryptedIds(of: cachedMessages, encryptionMode: conversation.encryptionMode)
+                unencrypted: ConversationPreviewRenderer.unencryptedIds(
+                    of: cachedMessages,
+                    regime: EndToEndRegimeMemory.shared.resolve(
+                        conversationId: conversation.id, served: EndToEndRegime(conversation: conversation)
+                    )
+                )
             )
         }
     }

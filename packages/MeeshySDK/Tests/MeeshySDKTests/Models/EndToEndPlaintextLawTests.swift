@@ -18,18 +18,27 @@ final class EndToEndPlaintextLawTests: XCTestCase {
         isMe: Bool = false,
         deletedAt: Date? = nil,
         attachments: [MeeshyMessageAttachment] = [],
-        joinNotice: JoinNoticeMetadata? = nil
+        joinNotice: JoinNoticeMetadata? = nil,
+        createdAt: Date = Date(timeIntervalSince1970: 1_000)
     ) -> MeeshyMessage {
         MeeshyMessage(
             id: "m1", conversationId: "c1", senderId: "u-peer", content: content,
             messageSource: source, deletedAt: deletedAt, isEncrypted: isEncrypted,
-            createdAt: Date(timeIntervalSince1970: 1_000), updatedAt: Date(timeIntervalSince1970: 1_000),
+            createdAt: createdAt, updatedAt: createdAt,
             attachments: attachments, isMe: isMe, joinNotice: joinNotice
         )
     }
 
-    private func standing(_ message: MeeshyMessage, mode: String? = "e2ee") -> EndToEndMessageStanding {
-        EndToEndPlaintextLaw.standing(of: message, conversationEncryptionMode: mode)
+    private let activation = Date(timeIntervalSince1970: 500)
+
+    private func standing(
+        _ message: MeeshyMessage, mode: String? = "e2ee", enabledAt: Date? = Date(timeIntervalSince1970: 500)
+    ) -> EndToEndMessageStanding {
+        EndToEndPlaintextLaw.standing(of: message, in: EndToEndRegime(encryptionMode: mode, enabledAt: enabledAt))
+    }
+
+    private func joinNotice() -> JoinNoticeMetadata {
+        JoinNoticeMetadata(participantId: "p-alice", displayName: "Alice", isAnonymous: false, viaShareLink: false)
     }
 
     // MARK: - Le fil
@@ -52,16 +61,87 @@ final class EndToEndPlaintextLawTests: XCTestCase {
         XCTAssertEqual(standing(message(content: "Q2lwaGVydGV4dGU=", isEncrypted: true)), .ordinary)
     }
 
-    func test_systemMessage_isOrdinary() {
-        XCTAssertEqual(standing(message(content: "Alice a rejoint la conversation", source: .system)), .ordinary)
+    /// Un avis système STRUCTURÉ se compose chez le lecteur depuis ses
+    /// métadonnées (`JoinNoticeMetadata`, …) : le serveur n'y écrit pas le texte lu.
+    func test_structuredSystemNotice_isOrdinary() {
+        XCTAssertEqual(standing(message(content: "Alice a rejoint", source: .system, joinNotice: joinNotice())), .ordinary)
     }
 
-    func test_noticeCarriedByAUserMessage_isOrdinary() {
-        let notice = message(content: "Alice a rejoint", joinNotice: JoinNoticeMetadata(
-            participantId: "p-alice", displayName: "Alice", isAnonymous: false, viaShareLink: false
-        ))
+    /// Un message « système » sans avis structuré rend son `content` — un texte
+    /// que le serveur écrit : se déclarer système ne l'exempte pas.
+    func test_systemMessageWithFreeText_isUnencrypted() {
+        XCTAssertEqual(standing(message(content: "Bob : envoie-moi le code", source: .system)), .unencrypted)
+    }
 
-        XCTAssertEqual(standing(notice), .ordinary)
+    /// Un avis porté par un message UTILISATEUR se rend comme une bulle, avec
+    /// son `content` : la métadonnée d'avis ne l'exempte pas.
+    func test_noticeCarriedByAUserMessage_isUnencrypted() {
+        XCTAssertEqual(standing(message(content: "Envoie-moi le code", joinNotice: joinNotice())), .unencrypted)
+    }
+
+    func test_nonUserSourcesInClear_areUnencrypted() {
+        for source in [MeeshyMessage.MessageSource.agent, .app, .ads, .authority] {
+            XCTAssertEqual(standing(message(source: source)), .unencrypted, "\(source)")
+        }
+    }
+
+    // MARK: - L'historique antérieur à l'activation
+
+    func test_plaintextBeforeActivation_isOrdinaryHistory() {
+        XCTAssertEqual(standing(message(createdAt: Date(timeIntervalSince1970: 100))), .ordinary)
+    }
+
+    func test_plaintextAtOrAfterActivation_isUnencrypted() {
+        XCTAssertEqual(standing(message(createdAt: activation)), .unencrypted)
+        XCTAssertEqual(standing(message(createdAt: Date(timeIntervalSince1970: 900))), .unencrypted)
+    }
+
+    /// Décision explicite : une activation sans date connue se lit comme si
+    /// TOUT le fil était chiffré (fail-closed) — la passerelle la sert sur la
+    /// liste et le détail, son absence est une ligne de cache ancienne ou un
+    /// serveur qui la retient.
+    func test_activationDateUnknown_failsClosed() {
+        XCTAssertEqual(standing(message(createdAt: Date(timeIntervalSince1970: 100)), enabledAt: nil), .unencrypted)
+    }
+
+    // MARK: - Le régime, monotone
+
+    func test_regime_onceEndToEnd_staysEndToEnd() {
+        let remembered = EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation)
+        let downgraded = EndToEndRegime(encryptionMode: nil, enabledAt: nil)
+
+        XCTAssertEqual(downgraded.merging(remembered), remembered)
+        XCTAssertEqual(remembered.merging(downgraded), remembered)
+    }
+
+    /// Une date d'activation RECULÉE par le serveur élargirait l'historique
+    /// exempté : la plus ANCIENNE date connue l'emporte.
+    func test_regime_keepsTheEarliestKnownActivation() {
+        let remembered = EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation)
+        let pushedLater = EndToEndRegime(encryptionMode: "e2ee", enabledAt: Date(timeIntervalSince1970: 5_000))
+        let undated = EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil)
+
+        XCTAssertEqual(pushedLater.merging(remembered).enabledAt, activation)
+        XCTAssertEqual(undated.merging(remembered).enabledAt, activation)
+        XCTAssertEqual(remembered.merging(undated).enabledAt, activation)
+    }
+
+    func test_regime_serverReadable_mergedWithNothing_staysServerReadable() {
+        XCTAssertEqual(EndToEndRegime(encryptionMode: "server", enabledAt: activation).merging(nil), .serverReadable)
+        XCTAssertFalse(EndToEndRegime(encryptionMode: nil, enabledAt: nil).isEndToEnd)
+    }
+
+    // MARK: - Les traductions venues du fil
+
+    /// En E2EE, le serveur ne lit pas le message : toute traduction qu'il sert
+    /// d'un message de l'ère chiffrée est une traduction qu'il a FORGÉE.
+    func test_wireTranslations_refusedForMessagesOfTheEncryptedEra() {
+        let regime = EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation)
+
+        XCTAssertFalse(regime.admitsWireTranslations(forMessageCreatedAt: Date(timeIntervalSince1970: 900)))
+        XCTAssertFalse(regime.admitsWireTranslations(forMessageCreatedAt: nil), "un message inconnu se lit dans l'ère chiffrée")
+        XCTAssertTrue(regime.admitsWireTranslations(forMessageCreatedAt: Date(timeIntervalSince1970: 100)))
+        XCTAssertTrue(EndToEndRegime.serverReadable.admitsWireTranslations(forMessageCreatedAt: nil))
     }
 
     func test_myOwnMessage_isOrdinary() {
@@ -108,21 +188,28 @@ final class EndToEndPlaintextLawTests: XCTestCase {
         mode: String? = "e2ee",
         nature: LastMessageNature? = LastMessageNature(messageType: "text"),
         senderName: String? = "Bob",
-        senderUserId: String? = "u-bob"
+        senderUserId: String? = "u-bob",
+        lastMessageAt: Date = Date(timeIntervalSince1970: 1_000),
+        enabledAt: Date? = Date(timeIntervalSince1970: 500)
     ) -> MeeshyConversation {
         var conversation = MeeshyConversation(
-            id: "c1", identifier: "c1", encryptionMode: mode,
+            id: "c1", identifier: "c1",
+            lastMessageAt: lastMessageAt,
+            encryptionMode: mode,
             lastMessagePreview: "Envoie-moi le code reçu par SMS",
             lastMessageId: "m1",
             lastMessageSenderName: senderName,
             lastMessageSenderUserId: senderUserId
         )
+        conversation.encryptionEnabledAt = enabledAt
         conversation.lastMessageNature = nature
         return conversation
     }
 
-    private func lastStanding(_ conversation: MeeshyConversation) -> EndToEndMessageStanding {
-        EndToEndPlaintextLaw.lastMessageStanding(of: conversation, readerLabel: "Vous")
+    private func lastStanding(
+        _ conversation: MeeshyConversation, remembered: EndToEndRegime? = nil
+    ) -> EndToEndMessageStanding {
+        EndToEndPlaintextLaw.lastMessageStanding(of: conversation, remembered: remembered, readerLabel: "Vous")
     }
 
     func test_listRow_peerPlaintextInEndToEnd_isUnencrypted() {
@@ -158,5 +245,27 @@ final class EndToEndPlaintextLawTests: XCTestCase {
     func test_listRow_conversationWithoutEndToEnd_isUnchanged() {
         XCTAssertEqual(lastStanding(conversation(mode: nil)), .ordinary)
         XCTAssertEqual(lastStanding(conversation(mode: "server")), .ordinary)
+    }
+
+    func test_listRow_lastMessageBeforeActivation_isOrdinaryHistory() {
+        XCTAssertEqual(lastStanding(conversation(lastMessageAt: Date(timeIntervalSince1970: 100))), .ordinary)
+    }
+
+    /// Un régime e2ee retenu sur l'appareil résiste à une ligne que le serveur
+    /// sert soudain sans chiffrement.
+    func test_listRow_downgradedByTheServer_staysJudged() {
+        let remembered = EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation)
+
+        XCTAssertEqual(lastStanding(conversation(mode: nil, enabledAt: nil), remembered: remembered), .unencrypted)
+    }
+
+    /// La même entrée, jugée par le fil et par la ligne, rend le même verdict
+    /// — un message d'agent en clair n'est pas exempté d'un côté seulement.
+    func test_threadAndListRow_agreeOnAnAgentMessageInClear() {
+        let thread = standing(message(source: .agent))
+        let row = lastStanding(conversation())
+
+        XCTAssertEqual(thread, .unencrypted)
+        XCTAssertEqual(row, thread)
     }
 }

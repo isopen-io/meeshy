@@ -59,31 +59,31 @@ struct UnencryptedMessageMarking: ViewModifier {
 }
 
 /// **Ce que les surfaces du FIL lisent d'un message pour le servir** (#11380) :
-/// le verdict de `EndToEndPlaintextLaw` sur le régime de la conversation
-/// chargée, et ses traductions — aucune pour un message arrivé en clair dans
-/// une conversation chiffrée, car une traduction du serveur peut dire autre
-/// chose que le texte qu'elle prétend traduire. La cellule, le menu d'appui
-/// long, la feuille « Plus » et la copie passent par ici, jamais par le
-/// dictionnaire du modèle de vue en direct.
+/// le verdict de `EndToEndPlaintextLaw` sous le régime que le modèle de vue
+/// tient (servi + retenu sur l'appareil), et ses traductions SERVIES — dans
+/// l'ère chiffrée, celles de l'appareil seulement, aucune du serveur, que le
+/// message soit signalé ou authentiquement déchiffré
+/// (`ConversationEncryptedEra`). La cellule, le menu d'appui long,
+/// son aperçu, la feuille « Plus » et la copie passent par ici, jamais par les
+/// dictionnaires du modèle de vue en direct.
 enum UnencryptedMessageGate {
     static func isUnencrypted(_ message: Message, in viewModel: ConversationViewModel?) -> Bool {
-        EndToEndPlaintextLaw.standing(
-            of: message, conversationEncryptionMode: viewModel?.currentConversation?.encryptionMode
-        ).isUnencrypted
+        guard let viewModel else { return false }
+        let regime = viewModel.startupDependencies.encryptedEra.regime(of: viewModel)
+        return EndToEndPlaintextLaw.standing(of: message, in: regime).isUnencrypted
     }
 
     static func translations(of message: Message, in viewModel: ConversationViewModel?) -> [MessageTranslation] {
-        guard !isUnencrypted(message, in: viewModel) else { return [] }
-        return viewModel?.messageTranslations[message.id] ?? []
+        guard let viewModel else { return [] }
+        return viewModel.startupDependencies.encryptedEra.servedTranslations(for: message.id, in: viewModel)
     }
 
     static func preferredTranslation(of message: Message, in viewModel: ConversationViewModel?) -> MessageTranslation? {
-        guard !isUnencrypted(message, in: viewModel) else { return nil }
-        return viewModel?.preferredTranslation(for: message.id)
+        viewModel?.preferredTranslation(for: message.id)
     }
 
     static func translatedAudios(of message: Message, in viewModel: ConversationViewModel?) -> [MessageTranslatedAudio] {
-        guard !isUnencrypted(message, in: viewModel) else { return [] }
-        return viewModel?.messageTranslatedAudios[message.id] ?? []
+        guard let viewModel else { return [] }
+        return viewModel.startupDependencies.encryptedEra.servedTranslatedAudios(for: message.id, in: viewModel)
     }
 }

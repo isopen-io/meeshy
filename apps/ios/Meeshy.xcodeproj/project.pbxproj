@@ -491,6 +491,7 @@
 		1FA2B2D1BECDC9019BA26326 /* CallZoomIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 228CF464541A6253355726FC /* CallZoomIndicator.swift */; };
 		1FA9FB9C637102DFE3B09CFF /* ComposerDescriptionLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 555DAF86D4368F5781C5EF63 /* ComposerDescriptionLayer.swift */; };
 		1FC62450C7BF0A45BB298834 /* MessageExitTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441DE8742D9F8B52F02B7EDF /* MessageExitTransport.swift */; };
+		AB545CFB17138DC96C50690C /* EndToEndRegimeMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D070BE4C0B5F4EFB622AD7 /* EndToEndRegimeMemory.swift */; };
 		1FC855236FA4DFDA372B4348 /* StarredMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353450F62264AA9373DE1298 /* StarredMessagesView.swift */; };
 		1FCFF0BC78942C0E3203EE78 /* NotificationCallBackActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D50CC2AAD1A71B64317392 /* NotificationCallBackActionTests.swift */; };
 		1FD88C667076A5F2CF7815E8 /* BubbleStandardLayout+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4937F432D49B989DB5F1DA /* BubbleStandardLayout+Media.swift */; };
@@ -3336,6 +3337,7 @@
 		D9B32A61E78B177A93959BE6 /* CallProviderIconTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D247E22464A72EF66B5D4F5F /* CallProviderIconTests.swift */; };
 		D9BE141E8B4D4A72F49DA4D3 /* CallContextValueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8344CCF1BD4577558A4BF1 /* CallContextValueTests.swift */; };
 		D9CDCE085D44C01CFE298DE7 /* ConversationViewModel+DeviceTranslation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 301D02926C42288E72651F2D /* ConversationViewModel+DeviceTranslation.swift */; };
+		5E3B6D84FA46B85D1FF31768 /* ConversationEncryptedEra.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF7383B31A89C3AF2144654 /* ConversationEncryptedEra.swift */; };
 		D9ED0BE845CF504BC7B3FE79 /* GameRulesAtlas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 129E216879F9E42F428EC1C9 /* GameRulesAtlas.swift */; };
 		D9F98C15D9D38F65A598AF15 /* PostDetailViewModel+PostActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B181A80838010F4C2EA5CA1 /* PostDetailViewModel+PostActions.swift */; };
 		DA063DB4B99C98F468D458EC /* CallAwaitingOfferPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE63DCCB25516DFAE66DEAA /* CallAwaitingOfferPolicyTests.swift */; };
@@ -4763,6 +4765,7 @@
 		30160D74851F3D5C204FA59C /* ShareSenderFanoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSenderFanoutTests.swift; sourceTree = "<group>"; };
 		30176D6CD06B77100C42DE83 /* ComposerViewfinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerViewfinder.swift; sourceTree = "<group>"; };
 		301D02926C42288E72651F2D /* ConversationViewModel+DeviceTranslation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationViewModel+DeviceTranslation.swift"; sourceTree = "<group>"; };
+		3BF7383B31A89C3AF2144654 /* ConversationEncryptedEra.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationEncryptedEra.swift; sourceTree = "<group>"; };
 		30348483957C3B5B45417F14 /* GameWave2ModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameWave2ModelTests.swift; sourceTree = "<group>"; };
 		303C8A844B0F98A92CE2CE52 /* IncomingCallViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallViewTests.swift; sourceTree = "<group>"; };
 		303F6788F278799451455333 /* CallColorLookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallColorLookTests.swift; sourceTree = "<group>"; };
@@ -5081,6 +5084,7 @@
 		43EAF66DE9ABCE0447AD7C72 /* StoryReaderBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryReaderBackground.swift; sourceTree = "<group>"; };
 		4402FEF4C2EEF349E76C4C89 /* ReadingModeCardsMountGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingModeCardsMountGuardTests.swift; sourceTree = "<group>"; };
 		441DE8742D9F8B52F02B7EDF /* MessageExitTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageExitTransport.swift; sourceTree = "<group>"; };
+		45D070BE4C0B5F4EFB622AD7 /* EndToEndRegimeMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndRegimeMemory.swift; sourceTree = "<group>"; };
 		445B584000D3C4B8E2CEB953 /* ComposerLookStripPaintingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLookStripPaintingTests.swift; sourceTree = "<group>"; };
 		446C17DB44BE795C97E26474 /* SyncPillPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillPlacement.swift; sourceTree = "<group>"; };
 		44A8DAAD4FB52A3176377372 /* ComposerLongPressOpensV3Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLongPressOpensV3Tests.swift; sourceTree = "<group>"; };
@@ -8047,6 +8051,7 @@
 				BBA291D23E78A92CA374A91C /* ConversationViewModel+AudioQueue.swift */,
 				29018E68DAABC9D0D88ADB55 /* ConversationViewModel+CallLauncher.swift */,
 				301D02926C42288E72651F2D /* ConversationViewModel+DeviceTranslation.swift */,
+				3BF7383B31A89C3AF2144654 /* ConversationEncryptedEra.swift */,
 				3AF7C1947D7185C4620CF02D /* ConversationViewModel+EphemeralExpiry.swift */,
 				2DA5EE461171609C4F53B67C /* ConversationViewModel+FullscreenReply.swift */,
 				5F5D7EC277A25DDD60C71329 /* ConversationViewModel+InitialLoad.swift */,
@@ -12035,6 +12040,7 @@
 				4C42F142B9C0642560892C41 /* MeeshyFocusFilter.swift */,
 				4CDFD7DD6ACDB3DEB4A29AC0 /* MessageDraftMediaStore.swift */,
 				441DE8742D9F8B52F02B7EDF /* MessageExitTransport.swift */,
+				45D070BE4C0B5F4EFB622AD7 /* EndToEndRegimeMemory.swift */,
 				472CBEECC003EF110637E2D1 /* MessageForwardService.swift */,
 				312E52C770058E1521A437F3 /* MessageRecord+OptimisticText.swift */,
 				05CFD90DB0BEF97F4EE511F7 /* MultiAttachmentSendPlanner.swift */,
@@ -14204,6 +14210,7 @@
 				4F91FFE157915D543F570B38 /* ConversationViewModel+AudioQueue.swift in Sources */,
 				B85535BE8C6FD9E73D99036A /* ConversationViewModel+CallLauncher.swift in Sources */,
 				D9CDCE085D44C01CFE298DE7 /* ConversationViewModel+DeviceTranslation.swift in Sources */,
+				5E3B6D84FA46B85D1FF31768 /* ConversationEncryptedEra.swift in Sources */,
 				653049F87FC0D1C1D2CFDCB3 /* ConversationViewModel+EphemeralExpiry.swift in Sources */,
 				F7EAEC240881F074E3DAB670 /* ConversationViewModel+FullscreenReply.swift in Sources */,
 				829189176060AF6B9FE6E445 /* ConversationViewModel+InitialLoad.swift in Sources */,
@@ -14672,6 +14679,7 @@
 				218DEA8A4A180D772C4C2D09 /* MessageEditsDetailView.swift in Sources */,
 				E4D6B9AEBA0AB792A397387C /* MessageEffectModifiers.swift in Sources */,
 				1FC62450C7BF0A45BB298834 /* MessageExitTransport.swift in Sources */,
+				AB545CFB17138DC96C50690C /* EndToEndRegimeMemory.swift in Sources */,
 				FF436DAC2F3E354528561A0C /* MessageForwardService.swift in Sources */,
 				5519BDD18D94653CC95E1BA8 /* MessageFrameTracker.swift in Sources */,
 				D682F6DF6A6D362A5CB0F59C /* MessageGroupRules.swift in Sources */,
