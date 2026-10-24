@@ -363,11 +363,11 @@ final class StoryTrayMediaPreloader {
         let groupsToPreload = Array(groups.prefix(8))
         let activity = activity
         passes = [
-            Task(priority: .userInitiated) {
-                await activity.runWhileActive { [weak self] in await self?.preloadFirstSlides(of: groupsToPreload) }
+            Task(priority: .userInitiated) { [weak self] in
+                await activity.runWhileActive { await self?.preloadFirstSlides(of: groupsToPreload) }
             },
-            Task(priority: .utility) {
-                await activity.runWhileActive { [weak self] in await self?.preloadUpcomingSlides(of: groupsToPreload) }
+            Task(priority: .utility) { [weak self] in
+                await activity.runWhileActive { await self?.preloadUpcomingSlides(of: groupsToPreload) }
             },
         ]
     }
