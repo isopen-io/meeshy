@@ -157,6 +157,21 @@ final class OutgoingImageHEICDeliveryTests: XCTestCase {
         XCTAssertLessThanOrEqual(out.encodedGenerations, 1, "au plus UNE génération, jamais une conversion en JPEG")
     }
 
+    func test_removeLocation_heicFileWithGPS_neverLeavesWithItsLocation() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("outgoing-\(UUID().uuidString).heic")
+        try Self.heic(gps: true).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        switch OutgoingImageLocationRemoval.removeLocation(fromFileAt: url) {
+        case .removed:
+            XCTAssertNil(try Self.properties(of: Data(contentsOf: url))[kCGImagePropertyGPSDictionary])
+        case .failed:
+            XCTAssertNotNil(try Self.properties(of: Data(contentsOf: url))[kCGImagePropertyGPSDictionary],
+                            "un échec laisse l'original en place, et l'hôte ne le fait pas partir")
+        case .untouched:
+            XCTFail("un HEIC qui porte un lieu n'est jamais rendu intact")
+        }
+    }
+
     func test_prepare_heicOnACompatibilityPolicy_isARealJpeg() throws {
         let out = try XCTUnwrap(OutgoingImagePreparer().prepare(try Self.heic(), policy: .jpegCompatibility(keepsLocation: false)))
         XCTAssertEqual(out.format, .jpeg)
