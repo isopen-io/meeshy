@@ -51,7 +51,7 @@ import { announceConversationLanguageChange } from '../message-translation/conve
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
 import { isE2eePlaintextRefusal } from './e2eePlaintextAdmission';
-import { isServerAtRestUnavailable } from './serverAtRest';
+import { isServerAtRestCiphertextRefusal, isServerAtRestUnavailable } from './serverAtRest';
 import { isE2eeRelayRefusal } from '../e2ee/e2ee-relay-errors';
 import { persistableEncryption } from './e2eeRelayPayload';
 
@@ -216,23 +216,25 @@ export class MessagingService {
           corr
         );
         if (earlyHit) {
+          // #11381 — la ligne relue est servie (et retraduite) en CLAIR, comme les deux autres chemins de dédup.
+          const openedHit = await this.processor.revealStored(earlyHit);
           // Flag the in-process dedup marker so the caller (MessageHandler)
           // suppresses the `message:new` re-broadcast / agent-notify / stats
           // side effects. Without it, a sequential retry on the same
           // clientMessageId re-broadcasts the bubble to every recipient. This
           // mirrors the P2002 concurrent-retry path in MessageProcessor.saveMessage.
-          (earlyHit as { isDuplicate?: boolean }).isDuplicate = true;
-          const translations = (earlyHit as { translations?: unknown }).translations;
+          (openedHit as { isDuplicate?: boolean }).isDuplicate = true;
+          const translations = (openedHit as { translations?: unknown }).translations;
           if (this.isTranslationsEmpty(translations)) {
-            void this.queueTranslation(earlyHit, earlyHit.originalLanguage ?? 'fr').catch((err) =>
+            void this.queueTranslation(openedHit, openedHit.originalLanguage ?? 'fr').catch((err) =>
               logger.error('background re-translation failed on early dedup', err as Error)
             );
           }
           logger.info('perf:messaging.handleMessage', {
             ...corr, step: 'messaging.handleMessage', phase: 'end',
-            durationMs: Date.now() - startTime, messageId: earlyHit.id, earlyDedupHit: true
+            durationMs: Date.now() - startTime, messageId: openedHit.id, earlyDedupHit: true
           });
-          return this.createSuccessResponse(earlyHit);
+          return this.createSuccessResponse(openedHit);
         }
       }
 
@@ -552,6 +554,10 @@ export class MessagingService {
       // #11381 — sans clé maîtresse, un message server/hybrid est refusé, jamais écrit en clair.
       if (isServerAtRestUnavailable(error)) {
         logger.warn('server at-rest encryption unavailable', { ...corr, reason: error.reason });
+        return this.createErrorResponse(error.message, error.code);
+      }
+      if (isServerAtRestCiphertextRefusal(error)) {
+        logger.warn('client at-rest ciphertext refused', { ...corr });
         return this.createErrorResponse(error.message, error.code);
       }
       // #3706 — un envoi libsignal refusé (Sesame, appareil, ancien client) : son code et son écart voyagent.

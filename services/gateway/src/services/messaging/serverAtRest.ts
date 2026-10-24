@@ -74,6 +74,28 @@ export class ServerAtRestUnreadableError extends Error {
 export const isServerAtRestUnavailable = (error: unknown): error is ServerAtRestUnavailableError =>
   error instanceof ServerAtRestUnavailableError;
 
+export const SERVER_AT_REST_CIPHERTEXT_REFUSED = 'SERVER_AT_REST_CIPHERTEXT_REFUSED';
+
+export const SERVER_AT_REST_CIPHERTEXT_REFUSAL_MESSAGE =
+  'Le chiffrement sur le serveur est l’affaire de la passerelle : envoyez ce message en clair';
+
+/**
+ * Un chiffré au repos ne s'écrit que par la passerelle. Un client qui en
+ * apporte un choisit son `keyId` : la lecture le ferait ouvrir sous la clé
+ * d'une autre conversation (oracle). Refusé, avec un code stable.
+ */
+export class ServerAtRestCiphertextRefusedError extends Error {
+  readonly code = SERVER_AT_REST_CIPHERTEXT_REFUSED;
+
+  constructor() {
+    super(SERVER_AT_REST_CIPHERTEXT_REFUSAL_MESSAGE);
+    this.name = 'ServerAtRestCiphertextRefusedError';
+  }
+}
+
+export const isServerAtRestCiphertextRefusal = (error: unknown): error is ServerAtRestCiphertextRefusedError =>
+  error instanceof ServerAtRestCiphertextRefusedError;
+
 const MASTER_KEY_BYTES = 32;
 
 export function readMasterKey(encoded: string | undefined): MasterKeyState {
@@ -87,6 +109,24 @@ const SERVER_AT_REST_MODES: ReadonlySet<string> = new Set(['server', 'hybrid']);
 /** Le mode arrive avec la casse de son émetteur, comme `isEndToEndMode`. */
 export const isServerAtRestMode = (mode: string | null | undefined): boolean =>
   typeof mode === 'string' && SERVER_AT_REST_MODES.has(mode.toLowerCase());
+
+/**
+ * Un chiffré apporté par le CLIENT est-il admissible hors bout en bout ? Non
+ * s'il se déclare `server`/`hybrid`, ni dans une conversation `server`/`hybrid` :
+ * dans les deux cas, seule la passerelle écrit le chiffré.
+ */
+export function assertNoClientAtRestCiphertext(params: {
+  readonly conversationMode: string | null | undefined;
+  readonly declaredMetadata: unknown;
+}): void {
+  const declared = typeof params.declaredMetadata === 'object' && params.declaredMetadata !== null
+    ? (params.declaredMetadata as Record<string, unknown>)['mode']
+    : undefined;
+  const declaredMode = typeof declared === 'string' ? declared : null;
+  if (isServerAtRestMode(declaredMode) || isServerAtRestMode(params.conversationMode)) {
+    throw new ServerAtRestCiphertextRefusedError();
+  }
+}
 
 export const AT_REST_AAD_V1 = 'conversation:v1';
 
@@ -293,11 +333,14 @@ function logUnreadable<T extends AtRestReadableRow>(row: T, error: unknown): T {
 
 type WithQuote = AtRestReadableRow & { readonly replyTo?: AtRestReadableRow | null };
 
+/** Une ligne, et la citation qu'elle porte. */
+export async function revealAtRestWithQuote<T extends WithQuote>(row: T, keyring: AtRestKeyring): Promise<T> {
+  const served = await revealAtRest(row, keyring);
+  if (!row.replyTo) return served;
+  return { ...served, replyTo: await revealAtRest(row.replyTo, keyring) };
+}
+
 /** Une page de lignes, et la citation que chacune porte. */
 export function revealAtRestRows<T extends WithQuote>(rows: readonly T[], keyring: AtRestKeyring): Promise<T[]> {
-  return Promise.all(rows.map(async (row) => {
-    const served = await revealAtRest(row, keyring);
-    if (!row.replyTo) return served;
-    return { ...served, replyTo: await revealAtRest(row.replyTo, keyring) };
-  }));
+  return Promise.all(rows.map((row) => revealAtRestWithQuote(row, keyring)));
 }

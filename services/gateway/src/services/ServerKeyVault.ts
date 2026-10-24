@@ -7,6 +7,19 @@ const logger = enhancedLogger.child({ module: 'EncryptionService' });
 
 let masterKeyAbsenceLogged = false;
 
+type WrappedKeyRow = { readonly encryptedKey: string; readonly iv: string; readonly authTag: string };
+
+/** Désenveloppe une clé de données ; `null` quand la clé maîtresse n'est pas la sienne. */
+function unwrapDataKey(masterKey: Buffer, row: WrappedKeyRow): Buffer | null {
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, Buffer.from(row.iv, 'base64'));
+    decipher.setAuthTag(Buffer.from(row.authTag, 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(row.encryptedKey, 'base64')), decipher.final()]);
+  } catch {
+    return null;
+  }
+}
+
 /** Dit au démarrage, une fois, que les modes `server`/`hybrid` refuseront tout (#11381). */
 function logMasterKeyAbsenceOnce(state: MasterKeyState): void {
   if ('key' in state || masterKeyAbsenceLogged) return;
@@ -15,6 +28,18 @@ function logMasterKeyAbsenceOnce(state: MasterKeyState): void {
     reason: state.reason,
   });
 }
+
+/** Ce que le coffre rend d'une clé : son octet ET la conversation à laquelle elle appartient. */
+export type LoadedKey =
+  | { readonly status: 'ok'; readonly key: Buffer; readonly owner: string | null }
+  /** Aucune ligne `ServerEncryptionKey` sous cet id. */
+  | { readonly status: 'missing' }
+  /** La ligne existe mais la clé maîtresse présente ne la désenveloppe pas (ancienne clé maîtresse). */
+  | { readonly status: 'unwrap-failed' }
+  /** Clé maîtresse absente, ou base injoignable : rien n'est conclu sur la clé. */
+  | { readonly status: 'unavailable' };
+
+const MAX_DESIGNATION_CACHE = 2000;
 
 /**
  * Server Key Vault - Manages encryption keys with database persistence
@@ -26,8 +51,10 @@ function logMasterKeyAbsenceOnce(state: MasterKeyState): void {
 export class ServerKeyVault {
   private prisma: PrismaClient;
   private masterKeyState: MasterKeyState;
-  private keyCache: Map<string, { key: Buffer; lastAccessed: number }> = new Map();
+  private keyCache: Map<string, { key: Buffer; lastAccessed: number; owner: string | null }> = new Map();
   private conversationKeyMap: Map<string, string> = new Map();
+  /** `Conversation.serverEncryptionKeyId`, relu au besoin : la clé que l'ACTIVATION a désignée. */
+  private designationCache: Map<string, string> = new Map();
   private readonly CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
   private readonly MAX_CACHE_SIZE = 500;
 
@@ -118,7 +145,7 @@ export class ServerKeyVault {
       });
 
       // Cache the key in memory
-      this.cacheKey(keyId, key);
+      this.cacheKey(keyId, key, conversationId ?? null);
 
       logger.debug('Encryption key generated and persisted', { keyId, purpose });
       return { keyId, key };
@@ -132,55 +159,113 @@ export class ServerKeyVault {
    * Get a key by ID (from cache or database)
    */
   async getKey(keyId: string): Promise<Buffer | undefined> {
-    // Check cache first
+    const loaded = await this.loadKey(keyId);
+    return loaded.status === 'ok' ? loaded.key : undefined;
+  }
+
+  /**
+   * #11381 — la clé, SEULEMENT si elle appartient à cette conversation : sa
+   * ligne la rattache à elle, ou la conversation la désigne
+   * (`serverEncryptionKeyId`, posé par l'activation). Sans ce contrôle, une
+   * enveloppe dont l'expéditeur choisit le `keyId` ferait déchiffrer à la
+   * passerelle le chiffré d'une AUTRE conversation.
+   */
+  async getKeyFor(keyId: string, conversationId: string): Promise<Buffer | undefined> {
+    const loaded = await this.loadKey(keyId);
+    if (loaded.status !== 'ok') return undefined;
+    if (loaded.owner === conversationId) return loaded.key;
+    if ((await this.designatedKeyId(conversationId)) === keyId) return loaded.key;
+    logger.warn('clé de chiffrement au repos refusée : elle n’appartient pas à cette conversation', { keyId, conversationId });
+    return undefined;
+  }
+
+  /** Ce que le coffre sait d'une clé, sans rien conclure d'une panne. */
+  async loadKey(keyId: string): Promise<LoadedKey> {
     const cached = this.keyCache.get(keyId);
     if (cached) {
       cached.lastAccessed = Date.now();
       logger.trace('Key retrieved from cache', { keyId });
-      return cached.key;
+      return { status: 'ok', key: cached.key, owner: cached.owner };
     }
 
-    if (!this.masterKeyState.available) return undefined;
+    if (!this.masterKeyState.available) return { status: 'unavailable' };
     const masterKey = this.masterKeyState.key;
 
-    // Load from database
     logger.debug('Loading key from database', { keyId });
-    try {
-      const keyRecord = await this.prisma.serverEncryptionKey.findUnique({
-        where: { id: keyId },
-      });
-
-      if (!keyRecord) {
-        logger.warn('Key not found in database', { keyId });
-        return undefined;
-      }
-
-      // Decrypt the key using master key
-      const encryptedKey = Buffer.from(keyRecord.encryptedKey, 'base64');
-      const iv = Buffer.from(keyRecord.iv, 'base64');
-      const authTag = Buffer.from(keyRecord.authTag, 'base64');
-
-      const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
-      decipher.setAuthTag(authTag);
-      const key = Buffer.concat([decipher.update(encryptedKey), decipher.final()]);
-
-      // Cache for future use
-      this.cacheKey(keyId, key);
-
-      // Update last accessed timestamp (fire-and-forget)
-      this.prisma.serverEncryptionKey.update({
-        where: { id: keyId },
-        data: { lastAccessedAt: new Date() },
-      }).catch((err) => {
-        logger.warn('Failed to update key lastAccessedAt', { keyId, error: err.message });
-      });
-
-      logger.debug('Key loaded from database', { keyId });
-      return key;
-    } catch (error) {
+    const keyRecord = await this.prisma.serverEncryptionKey.findUnique({ where: { id: keyId } }).catch((error: unknown) => {
       logger.error('Failed to load key from database', error, { keyId });
       return undefined;
+    });
+    if (keyRecord === undefined) return { status: 'unavailable' };
+    if (keyRecord === null) {
+      logger.warn('Key not found in database', { keyId });
+      return { status: 'missing' };
     }
+
+    const key = unwrapDataKey(masterKey, keyRecord);
+    if (!key) {
+      logger.warn('Data key does not unwrap under the current master key', { keyId });
+      return { status: 'unwrap-failed' };
+    }
+
+    const owner = keyRecord.conversationId ?? null;
+    this.cacheKey(keyId, key, owner);
+
+    this.prisma.serverEncryptionKey.update({
+      where: { id: keyId },
+      data: { lastAccessedAt: new Date() },
+    }).catch((err: Error) => {
+      logger.warn('Failed to update key lastAccessedAt', { keyId, error: err.message });
+    });
+
+    logger.debug('Key loaded from database', { keyId });
+    return { status: 'ok', key, owner };
+  }
+
+  /** La clé que la conversation désigne (`Conversation.serverEncryptionKeyId`), relue en base au premier besoin. */
+  async designatedKeyId(conversationId: string): Promise<string | null> {
+    const cached = this.designationCache.get(conversationId);
+    if (cached) return cached;
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { serverEncryptionKeyId: true },
+    }).catch(() => null);
+    const keyId = conversation?.serverEncryptionKeyId ?? null;
+    if (keyId) this.rememberDesignation(conversationId, keyId);
+    return keyId;
+  }
+
+  /**
+   * Remplace la clé que la conversation désigne, en compare-et-échange : une
+   * autre instance qui a déjà remplacé gagne, et sa clé est rendue.
+   */
+  async redesignate(conversationId: string, previousKeyId: string, nextKeyId: string): Promise<string> {
+    const swapped = await this.prisma.conversation.updateMany({
+      where: { id: conversationId, serverEncryptionKeyId: previousKeyId },
+      data: { serverEncryptionKeyId: nextKeyId },
+    });
+    this.designationCache.delete(conversationId);
+    const designated = swapped.count > 0 ? nextKeyId : await this.designatedKeyId(conversationId);
+    if (designated) this.rememberDesignation(conversationId, designated);
+    return designated ?? nextKeyId;
+  }
+
+  /** Rattache à sa conversation une clé d'activation qui ne l'était pas : ses messages restent les siens. */
+  async adoptOrphanKey(conversationId: string, keyId: string): Promise<void> {
+    await this.prisma.serverEncryptionKey.updateMany({
+      where: { id: keyId, conversationId: null },
+      data: { conversationId },
+    }).catch((error: unknown) => logger.warn('Failed to adopt orphan conversation key', { keyId, conversationId, error }));
+    const cached = this.keyCache.get(keyId);
+    if (cached && cached.owner === null) cached.owner = conversationId;
+  }
+
+  private rememberDesignation(conversationId: string, keyId: string): void {
+    if (this.designationCache.size >= MAX_DESIGNATION_CACHE) {
+      const oldest = this.designationCache.keys().next().value;
+      if (oldest !== undefined) this.designationCache.delete(oldest);
+    }
+    this.designationCache.set(conversationId, keyId);
   }
 
   /**
@@ -188,6 +273,8 @@ export class ServerKeyVault {
    */
   async setConversationKey(conversationId: string, keyId: string): Promise<void> {
     this.conversationKeyMap.set(conversationId, keyId);
+    const cached = this.keyCache.get(keyId);
+    if (cached) cached.owner = conversationId;
 
     // Update database record with conversation association
     try {
@@ -214,13 +301,13 @@ export class ServerKeyVault {
   /**
    * Cache a key in memory with LRU eviction
    */
-  private cacheKey(keyId: string, key: Buffer): void {
+  private cacheKey(keyId: string, key: Buffer, owner: string | null): void {
     // Evict oldest entries if cache is full
     if (this.keyCache.size >= this.MAX_CACHE_SIZE) {
       this.evictOldestCacheEntries();
     }
 
-    this.keyCache.set(keyId, { key, lastAccessed: Date.now() });
+    this.keyCache.set(keyId, { key, lastAccessed: Date.now(), owner });
   }
 
   /**
@@ -276,6 +363,7 @@ export class ServerKeyVault {
     // Clear caches and mappings
     this.keyCache.clear();
     this.conversationKeyMap.clear();
+    this.designationCache.clear();
 
     // Zeroize master key
     if (this.masterKeyState.available) {

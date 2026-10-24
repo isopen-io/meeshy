@@ -9,7 +9,7 @@
  * Encryption Modes:
  * - e2ee: Full end-to-end encryption (Signal Protocol) - NO translation
  * - server: Server-side encryption (AES-256-GCM) - translation supported
- * - hybrid: Double encryption (E2EE + server layer) - translation supported
+ * - hybrid: chiffré AU REPOS comme server (#11374) — jamais de bout en bout - translation supported
  */
 
 import { FastifyInstance } from 'fastify';
@@ -253,7 +253,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         // Get or create server encryption key (for server and hybrid modes)
         let serverEncryptionKeyId: string | null = null;
         if (mode === 'server' || mode === 'hybrid') {
-          serverEncryptionKeyId = await encryptionService.getOrCreateConversationKey();
+          // #11381 — la clé est RATTACHÉE à sa conversation : elle n'ouvre rien ailleurs.
+          serverEncryptionKeyId = await encryptionService.getOrCreateConversationKey(conversationId);
         }
 
         // Enable encryption (immutable operation)

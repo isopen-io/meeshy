@@ -37,21 +37,41 @@ const SECRET = 'Le rendez-vous est déplacé à 18 h, porte B';
 
 const keyStore = () => {
   const rows = new Map<string, KeyRow>();
-  const designated: { keyId: string | null } = { keyId: null };
+  const designations = new Map<string, string>();
+  const designated = {
+    get keyId(): string | null { return designations.get(CONVERSATION) ?? null; },
+    set keyId(value: string | null) { if (value) designations.set(CONVERSATION, value); else designations.delete(CONVERSATION); },
+  };
   const prisma = {
     conversation: {
-      findUnique: async () => designated.keyId
-        ? { serverEncryptionKeyId: designated.keyId, encryptionMode: 'server', serverEncryptionKey: rows.get(designated.keyId) }
-        : null,
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        const keyId = designations.get(where.id);
+        return keyId ? { serverEncryptionKeyId: keyId, encryptionMode: 'server', serverEncryptionKey: rows.get(keyId) } : null;
+      },
+      updateMany: async ({ where, data }: { where: { id: string; serverEncryptionKeyId: string }; data: { serverEncryptionKeyId: string } }) => {
+        if (designations.get(where.id) !== where.serverEncryptionKeyId) return { count: 0 };
+        designations.set(where.id, data.serverEncryptionKeyId);
+        return { count: 1 };
+      },
     },
     serverEncryptionKey: {
       create: async ({ data }: { data: KeyRow }) => { rows.set(data.id, data); return data; },
       findUnique: async ({ where }: { where: { id: string } }) => rows.get(where.id) ?? null,
       findMany: async () => [...rows.values()],
-      update: async ({ where }: { where: { id: string } }) => rows.get(where.id) ?? null,
+      update: async ({ where, data }: { where: { id: string }; data: Partial<KeyRow> }) => {
+        const row = rows.get(where.id);
+        if (row && 'conversationId' in data) rows.set(where.id, { ...row, conversationId: data.conversationId ?? null });
+        return rows.get(where.id) ?? null;
+      },
+      updateMany: async ({ where, data }: { where: { id: string; conversationId: null }; data: { conversationId: string } }) => {
+        const row = rows.get(where.id);
+        if (!row || row.conversationId !== null) return { count: 0 };
+        rows.set(where.id, { ...row, conversationId: data.conversationId });
+        return { count: 1 };
+      },
     },
   };
-  return { rows, designated, prisma: prisma as unknown as PrismaClient };
+  return { rows, designations, designated, prisma: prisma as unknown as PrismaClient };
 };
 
 const withMasterKey = (value: string | undefined): EncryptionService => {
@@ -229,5 +249,85 @@ describe('revealAtRest — ce qui sort', () => {
     const [served] = await revealAtRestRows([{ ...(await sealedRow(service)), replyTo: quoted }], service);
     expect(served.content).toBe(SECRET);
     expect(served.replyTo).toMatchObject({ content: SECRET, isEncrypted: false });
+  });
+});
+
+describe('une clé ne parle que pour SA conversation (oracle de déchiffrement)', () => {
+  const translationOf = async (conversationId: string, text: string) => {
+    const translated = await new EncryptionHelper(store.prisma).encryptTranslation(text, conversationId);
+    return {
+      ciphertext: translated.encryptedContent,
+      keyId: String(translated.encryptionKeyId),
+      iv: String(translated.encryptionIv),
+      authTag: String(translated.encryptionAuthTag),
+    };
+  };
+
+  const rowPointingAt = (envelope: { ciphertext: string; keyId: string; iv: string; authTag: string }): AtRestReadableRow => ({
+    id: 'm-oracle',
+    conversationId: OTHER_CONVERSATION,
+    content: '',
+    isEncrypted: true,
+    encryptionMode: 'server',
+    encryptedContent: envelope.ciphertext,
+    encryptionMetadata: { mode: 'server', keyId: envelope.keyId, iv: envelope.iv, authTag: envelope.authTag },
+  });
+
+  it('une traduction recopiée dans une autre conversation sort SCELLÉE, sous la clé désignée par l’activation', async () => {
+    const service = withMasterKey(MASTER_A);
+    store.designated.keyId = await service.getOrCreateConversationKey();
+    const envelope = await translationOf(CONVERSATION, 'The vault code is 4471');
+    const served = await revealAtRest(rowPointingAt(envelope), service);
+    expect(served).toMatchObject({ content: '', isEncrypted: true });
+    expect(JSON.stringify(served)).not.toContain('4471');
+  });
+
+  it('une traduction recopiée dans une autre conversation sort SCELLÉE, sous une clé de conversation du coffre', async () => {
+    const service = withMasterKey(MASTER_A);
+    const keyId = await service.getOrCreateConversationKey(CONVERSATION);
+    store.designated.keyId = keyId;
+    const envelope = await translationOf(CONVERSATION, 'The vault code is 4471');
+    await expect(service.openAtRest(envelope, OTHER_CONVERSATION)).rejects.toMatchObject({ code: SERVER_AT_REST_UNREADABLE });
+  });
+
+  it('la même traduction s’ouvre dans SA conversation', async () => {
+    const service = withMasterKey(MASTER_A);
+    store.designated.keyId = await service.getOrCreateConversationKey();
+    const envelope = await translationOf(CONVERSATION, 'The vault code is 4471');
+    expect(await service.openAtRest(envelope, CONVERSATION)).toBe('The vault code is 4471');
+  });
+});
+
+describe('une clé de conversation qui ne s’ouvre plus est REMPLACÉE, jamais un verrou à vie', () => {
+  it('clé désignée enveloppée sous une autre clé maîtresse : l’envoi passe sous une nouvelle clé, désignée à sa place', async () => {
+    const former = withMasterKey(MASTER_B);
+    const lost = await former.getOrCreateConversationKey();
+    store.designated.keyId = lost;
+    const service = withMasterKey(MASTER_A);
+
+    const sealed = await service.sealAtRest({ plaintext: SECRET, conversationId: CONVERSATION, preferredKeyId: lost });
+
+    expect(sealed.metadata.keyId).not.toBe(lost);
+    expect(store.designations.get(CONVERSATION)).toBe(sealed.metadata.keyId);
+    expect(store.rows.get(sealed.metadata.keyId)?.conversationId).toBe(CONVERSATION);
+    expect(await service.openAtRest({ ...sealed.metadata, ciphertext: sealed.ciphertext }, CONVERSATION)).toBe(SECRET);
+  });
+
+  it('clé désignée absente de la base : même remplacement', async () => {
+    const service = withMasterKey(MASTER_A);
+    store.designated.keyId = 'cle-disparue';
+    const sealed = await service.sealAtRest({ plaintext: SECRET, conversationId: CONVERSATION, preferredKeyId: 'cle-disparue' });
+    expect(sealed.metadata.keyId).not.toBe('cle-disparue');
+    expect(store.designations.get(CONVERSATION)).toBe(sealed.metadata.keyId);
+  });
+
+  it('sans clé maîtresse, rien n’est remplacé : l’envoi reste refusé', async () => {
+    const former = withMasterKey(MASTER_B);
+    const lost = await former.getOrCreateConversationKey();
+    store.designated.keyId = lost;
+    const service = withMasterKey(undefined);
+    await expect(service.sealAtRest({ plaintext: SECRET, conversationId: CONVERSATION, preferredKeyId: lost }))
+      .rejects.toMatchObject({ code: SERVER_AT_REST_UNAVAILABLE });
+    expect(store.designations.get(CONVERSATION)).toBe(lost);
   });
 });

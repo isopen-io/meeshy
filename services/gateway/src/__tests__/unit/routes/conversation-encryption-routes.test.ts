@@ -422,6 +422,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
     expect(res.statusCode).toBe(200);
     expect(mockGetOrCreateConversationKey).toHaveBeenCalledTimes(1);
+    expect(mockGetOrCreateConversationKey).toHaveBeenCalledWith(CONV_ID);
     await app.close();
   });
 

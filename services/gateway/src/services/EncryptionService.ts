@@ -7,7 +7,7 @@
  * Encryption Modes:
  * - 'e2ee': End-to-end encryption only (client-side Signal Protocol) - NO translation
  * - 'server': Server-side encryption only (AES-256-GCM) - translation supported
- * - 'hybrid': Double encryption - E2EE + server layer - translation supported
+ * - 'hybrid': chiffré AU REPOS comme 'server' (#11374) — jamais de bout en bout - translation supported
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -248,9 +248,7 @@ export class EncryptionService implements AtRestKeyring {
     if (!this.keyVault.masterKeyAvailable) {
       throw new ServerAtRestUnavailableError('missing');
     }
-    const keyId = params.preferredKeyId || await this.getOrCreateConversationKey(params.conversationId);
-    const key = await this.keyVault.getKey(keyId);
-    if (!key) throw new ServerAtRestUnavailableError('key-unavailable');
+    const { keyId, key } = await this.writableConversationKey(params.conversationId, params.preferredKeyId ?? null);
     const iv = crypto.randomBytes(12);
     const sealed = sealBytes({ key, iv, plaintext: Buffer.from(params.plaintext, 'utf8'), aad: atRestAad(params.conversationId) });
     return {
@@ -265,10 +263,38 @@ export class EncryptionService implements AtRestKeyring {
     };
   }
 
+  /**
+   * La clé sous laquelle ÉCRIRE dans cette conversation. Une clé désignée qui
+   * ne s'ouvre plus — absente, ou enveloppée sous une ancienne clé maîtresse
+   * (la clé éphémère de développement d'avant #11381) — verrouillerait la
+   * conversation à vie, son chiffrement étant immuable : elle est REMPLACÉE
+   * par une clé neuve, rattachée à la conversation. Les messages d'avant
+   * restent scellés ; ceux d'après passent. Une panne (base injoignable) ne
+   * remplace rien : l'envoi est refusé.
+   */
+  private async writableConversationKey(conversationId: string, preferredKeyId: string | null): Promise<{ keyId: string; key: Buffer }> {
+    const keyId = preferredKeyId || await this.getOrCreateConversationKey(conversationId);
+    const loaded = await this.keyVault.loadKey(keyId);
+    if (loaded.status === 'ok') return { keyId, key: loaded.key };
+    if (loaded.status === 'unavailable') throw new ServerAtRestUnavailableError('key-unavailable');
+    const fresh = await this.keyVault.generateKey(conversationId, 'conversation');
+    await this.keyVault.setConversationKey(conversationId, fresh.keyId);
+    logger.warn('clé de conversation illisible remplacée : les messages d’avant restent scellés', {
+      conversationId, previousKeyId: keyId, nextKeyId: fresh.keyId, reason: loaded.status,
+    });
+    if (!preferredKeyId) return fresh;
+    await this.keyVault.adoptOrphanKey(conversationId, preferredKeyId);
+    const designated = await this.keyVault.redesignate(conversationId, preferredKeyId, fresh.keyId);
+    if (designated === fresh.keyId) return fresh;
+    const winner = await this.keyVault.getKeyFor(designated, conversationId);
+    if (!winner) throw new ServerAtRestUnavailableError('key-unavailable');
+    return { keyId: designated, key: winner };
+  }
+
   /** Ouvre un chiffré au repos ; tout échec est EXPLICITE (`ServerAtRestUnreadableError`). */
   async openAtRest(envelope: AtRestEnvelope, conversationId: string): Promise<string> {
     if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnreadableError('master-key-unavailable');
-    const key = await this.keyVault.getKey(envelope.keyId);
+    const key = await this.keyVault.getKeyFor(envelope.keyId, conversationId);
     if (!key) throw new ServerAtRestUnreadableError('data-key-unavailable');
     try {
       return openBytes({

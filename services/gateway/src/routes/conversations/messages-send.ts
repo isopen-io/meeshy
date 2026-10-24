@@ -41,7 +41,7 @@ import { admitMessageAttachments } from '../../services/messaging/attachmentSend
 import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import { E2EE_PLAINTEXT_REFUSED } from '../../services/messaging/e2eePlaintextAdmission';
-import { SERVER_AT_REST_UNAVAILABLE } from '../../services/messaging/serverAtRest';
+import { SERVER_AT_REST_CIPHERTEXT_REFUSED, SERVER_AT_REST_UNAVAILABLE } from '../../services/messaging/serverAtRest';
 import { relayRefusalStatus } from '../../services/e2ee/e2ee-relay-errors';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
@@ -500,7 +500,7 @@ export function registerSendMessageRoute(
         if (result.code === SERVER_AT_REST_UNAVAILABLE) {
           return sendError(reply, 503, result.error || 'Chiffrement sur le serveur indisponible', { code: result.code });
         }
-        if (isForwardRefusalCode(result.code) || result.code === E2EE_PLAINTEXT_REFUSED) {
+        if (isForwardRefusalCode(result.code) || result.code === E2EE_PLAINTEXT_REFUSED || result.code === SERVER_AT_REST_CIPHERTEXT_REFUSED) {
           return sendBadRequest(reply, result.error || 'Invalid message request', { code: result.code });
         }
         return sendBadRequest(reply, result.error || 'Invalid message request');
