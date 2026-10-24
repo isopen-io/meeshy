@@ -93522,49 +93522,96 @@
         }
       }
     },
-    "conversation.encrypted": {
+    "conversation.encryption.endToEnd": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محادثة مشفّرة"
+            "value": "مشفّرة من طرف إلى طرف"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verschlüsselte Unterhaltung"
+            "value": "Ende-zu-Ende-verschlüsselt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted conversation"
+            "value": "End-to-end encrypted"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversación cifrada"
+            "value": "Cifrado de extremo a extremo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation chiffrée"
+            "value": "Chiffré de bout en bout"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversazione crittografata"
+            "value": "Crittografato end-to-end"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversa criptografada"
+            "value": "Criptografado de ponta a ponta"
+          }
+        }
+      }
+    },
+    "conversation.encryption.server": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفّرة على الخادم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Server verschlüsselt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted on the server"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado en el servidor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffré sur le serveur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografato sul server"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografado no servidor"
           }
         }
       }
