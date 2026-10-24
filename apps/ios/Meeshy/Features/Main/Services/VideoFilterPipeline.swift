@@ -42,6 +42,13 @@ nonisolated struct VideoFilterConfig: Equatable, Sendable {
         backgroundBlurEnabled || skinSmoothingEnabled || faceEffect.isStylized
     }
 
+    /// Un filtre CHOISI : une teinte (`isEnabled`) ou un filtre avancé — le
+    /// flou et le lissage ne posent jamais `isEnabled` (§14.1). Le pipeline
+    /// s'en sert pour s'ouvrir ET pour étalonner (#11298).
+    var hasChosenFilters: Bool {
+        isEnabled || hasAdvancedFilters
+    }
+
     static let `default` = VideoFilterConfig()
 }
 
@@ -312,7 +319,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         // whenever a user enabled one without ever picking a preset.
         // #8695 — a dark scene is lifted even with no filter chosen, unless
         // the device saves power or the pipeline is already over budget.
-        let hasChosenFilters = cfg.isEnabled || cfg.hasAdvancedFilters
+        let hasChosenFilters = cfg.hasChosenFilters
         let ladder = degradation
         let isConstrained = isPowerConstrained()
         let lowLightBoost = CallVideoLowLight.boost(
@@ -399,7 +406,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
                     timestamp: clock()
                 )
             } : nil,
-            colorimetry: cfg.isEnabled || cfg.hasAdvancedFilters ? { image in
+            colorimetry: cfg.hasChosenFilters ? { image in
                 VideoFilterColorimetry.graded(image, config: cfg)
             } : nil,
             faceEffect: faceEffect.isStylized ? { [faceEffects] image in

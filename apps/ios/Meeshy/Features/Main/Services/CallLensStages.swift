@@ -4,7 +4,9 @@ import MeeshyUI
 /// **Les étages de lens d'une trame d'appel** (#11298) : le flou de fond, la
 /// colorimétrie et l'effet stylisé du visage, remis à `LensPainter` — le peintre
 /// du composer —, qui les peint dans l'ordre de toute lens : segmentation →
-/// LUT → visage. Le fond flouté est donc étalonné avec la personne.
+/// LUT → visage. Le flou floutant la trame elle-même, les deux ordres rendent
+/// à peu près la même image ; l'ordre compte pour un fond qui REMPLACE la
+/// trame, que l'étalonnage doit alors harmoniser avec la personne.
 ///
 /// Les corrections du CAPTEUR (retouche de la peau, scène sombre) ne sont pas
 /// des étages : elles corrigent la source avant la lens. La politique — quand
