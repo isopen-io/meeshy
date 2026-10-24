@@ -491,7 +491,9 @@ struct StoryHeaderView: View {
             } label: {
                 Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
             }
-        default:
+        // Exhaustif, sans `default:` : une entrée nouvelle (#11535 a ajouté
+        // `.makePrivate`) ne disparaît plus du menu en silence (#11151).
+        case .fullscreen, .transcript, .compose, .share, .close:
             EmptyView()
         }
     }

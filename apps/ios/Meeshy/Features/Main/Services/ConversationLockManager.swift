@@ -14,6 +14,16 @@ struct ConversationLockSecrets {
     let delete: (String) -> Void
 }
 
+// MARK: - Le contenu masqué (#11387)
+
+extension Notification.Name {
+    /// Le jeu des conversations verrouillées a changé : ce qui publie du
+    /// contenu HORS de l'app (widget, cliché lu par l'extension de
+    /// notification) se republie sans attendre la prochaine mise à jour de la
+    /// liste.
+    static let conversationContentLocksDidChange = Notification.Name("meeshy.conversationContentLocksDidChange")
+}
+
 // MARK: - La porte du routeur (#11386)
 
 /// La SEULE question que le routeur pose au verrou avant de poser une
@@ -349,7 +359,12 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    static let shared = ConversationLockManager()
+    static let shared = ConversationLockManager(
+        contentLockMirror: UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName),
+        purgeDeliveredBanners: { conversationId in
+            NotificationActionHandler.removeDeliveredBanners(forThreadOf: .conversation(id: conversationId))
+        }
+    )
 
     /// Durée de vie d'une ouverture autorisée et pas encore consommée.
     static let openingPassLifetime: TimeInterval = 60
@@ -363,6 +378,13 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     private let biometrics: BiometricUnlocking
     private let iterations: Int
     private let now: () -> Date
+    /// #11387 — le jeu COMPLET des conversations verrouillées, miroité dans
+    /// l'App Group pour l'extension de notification (le cliché de la liste
+    /// n'en couvre que les pages chargées). `nil` : aucun miroir (tests).
+    private let contentLockMirror: UserDefaults?
+    /// #11387 — verrouiller retire du Centre de notifications les bannières
+    /// DÉJÀ délivrées de la conversation : elles montraient son contenu.
+    private let purgeDeliveredBanners: @MainActor (String) -> Void
 
     private let masterPinKey = "meeshy_master_pin"
     private let biometricStateKey = "meeshy_lock_biometric_state"
@@ -376,13 +398,17 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         defaults: UserDefaults = .standard,
         biometrics: BiometricUnlocking = DeviceBiometricUnlocker(),
         iterations: Int = ConversationPinCredential.defaultIterations,
-        now: @escaping () -> Date = { Date() }
+        now: @escaping () -> Date = { Date() },
+        contentLockMirror: UserDefaults? = nil,
+        purgeDeliveredBanners: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.vault = vault
         self.defaults = defaults
         self.biometrics = biometrics
         self.iterations = iterations
         self.now = now
+        self.contentLockMirror = contentLockMirror
+        self.purgeDeliveredBanners = purgeDeliveredBanners
         loadLockedIds()
         wireAuthLogoutHook()
     }
@@ -482,11 +508,29 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         lockedConversationIds.contains(conversationId)
     }
 
+    /// **LA décision « contenu masqué »** (#11387 : le verrou PIN protège le
+    /// CONTENU, pas seulement l'ouverture). Sans PIN, une conversation verrouillée ne montre ni son
+    /// dernier message, ni la frappe, ni le brouillon, ni vignette, ni aperçu
+    /// d'appui long, et rien ne la précharge. La rangée, le chargeur d'aperçu,
+    /// le widget et le cliché de l'extension de notification la consultent ;
+    /// aucun ne réécrit la règle.
+    ///
+    /// Un PIN donné n'ouvre qu'UNE fois (`admitsOpening`) : revenu à la liste,
+    /// le contenu est de nouveau masqué.
+    nonisolated static func hidesContent(of conversationId: String, lockedConversationIds: Set<String>) -> Bool {
+        lockedConversationIds.contains(conversationId)
+    }
+
+    func hidesContent(of conversationId: String) -> Bool {
+        Self.hidesContent(of: conversationId, lockedConversationIds: lockedConversationIds)
+    }
+
     func setLock(conversationId: String, pin: String) {
         store(pin, under: lockKey(conversationId))
         openingPasses[conversationId] = nil
         lockedConversationIds.insert(conversationId)
         saveLockedIds()
+        purgeDeliveredBanners(conversationId)
     }
 
     /// Un essai sur le code d'une conversation. Accordé, il vaut UNE ouverture
@@ -625,10 +669,16 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     private func saveLockedIds() {
         defaults.set(Array(lockedConversationIds), forKey: lockedIdsDefaultsKey)
+        NSEAttachmentPolicy.mirrorLockedConversationIds(lockedConversationIds, into: contentLockMirror)
+        NotificationCenter.default.post(name: .conversationContentLocksDidChange, object: nil)
     }
 
+    /// Le miroir se réécrit aussi au lancement : un verrou posé avant que le
+    /// miroir existe (mise à jour de l'app) rejoint l'extension sans attendre
+    /// le prochain changement.
     private func loadLockedIds() {
         let ids = defaults.stringArray(forKey: lockedIdsDefaultsKey) ?? []
         lockedConversationIds = Set(ids)
+        NSEAttachmentPolicy.mirrorLockedConversationIds(lockedConversationIds, into: contentLockMirror)
     }
 }

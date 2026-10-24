@@ -498,6 +498,10 @@ export const messageSchema = {
       description: 'Encryption metadata (IV, auth tag, key version)',
       additionalProperties: true
     },
+    e2eeUpgradeRequired: {
+      type: 'boolean',
+      description: 'True when the message is end-to-end encrypted: a client without libsignal (#3706) cannot read it and shows an update prompt instead of an empty bubble'
+    },
 
     // View-once limit
     maxViewOnceCount: {

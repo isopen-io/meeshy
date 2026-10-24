@@ -159,16 +159,11 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
 
   if (fiche === undefined) {
     const title = translateAdmin(language, 'admin.convDetail.title');
-    const crumbs = [
-      { label: translateAdmin(language, 'admin.group.exchanges') },
-      { label: translateAdmin(language, 'admin.nav.conversations'), target: listTarget },
-      { label: title },
-    ];
 
     if (query.isPending) {
       return (
         <div className="grid gap-6" aria-busy="true" aria-label={translateAdmin(language, 'admin.conversation.fiche.loading')} data-admin-conversation-loading>
-          <AdminPageHeader language={language} title={title} crumbs={crumbs} />
+          <AdminPageHeader language={language} title={title} place={{ section: 'conversations', fiche: true, object: null }} />
           <AdminSkeleton rows={4} />
         </div>
       );
@@ -198,7 +193,7 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
 
     return (
       <div className="grid gap-6" data-admin-conversation-fiche-error>
-        <AdminPageHeader language={language} title={title} crumbs={crumbs} />
+        <AdminPageHeader language={language} title={title} place={{ section: 'conversations', fiche: true, object: null }} />
         <AdminErrorState language={language} onRetry={() => void query.refetch()} />
         {reading}
       </div>
@@ -301,11 +296,7 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
       <AdminPageHeader
         language={language}
         title={name}
-        crumbs={[
-          { label: translateAdmin(language, 'admin.group.exchanges') },
-          { label: translateAdmin(language, 'admin.nav.conversations'), target: listTarget },
-          { label: name },
-        ]}
+        place={{ section: 'conversations', fiche: true }}
       />
       <AdminOfflineNotice language={language} />
       <AdminFiche

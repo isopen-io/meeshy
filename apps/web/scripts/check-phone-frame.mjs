@@ -278,7 +278,7 @@ const mesure = async (context, adresse) => {
   const page = await context.newPage();
   const network = reseauDe(page);
   await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-  const m = await waitForValueSettled(page, releve, undefined, { network });
+  const m = await waitForValueSettled(page, releve, undefined, { network, pret: (r) => r.perceptible });
   await page.close();
   return m;
 };
@@ -331,7 +331,7 @@ const progression = (viewport, langue) => async (constate) => {
   for (const adresse of PROGRESSION_PAGES) {
     const tag = `${adresse} @ ${viewport.width} px, ${langue}, valeurs longues`;
     await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-    const m = await waitForValueSettled(page, sidewaysReleve, undefined, { network });
+    const m = await waitForValueSettled(page, sidewaysReleve, undefined, { network, pret: (r) => !r.sansContenu });
     if (m === undefined || m.sansContenu) {
       constate(false, `${tag} : la page n'a rien peint de mesurable — le témoin ne mesure rien`);
       continue;
@@ -361,7 +361,7 @@ const texteEntier = (viewport, langue) => async (constate) => {
   ]) {
     const tag = `${adresse} @ ${viewport.width} px, ${langue}`;
     await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-    const m = await waitForValueSettled(page, releveTextes, selecteurs, { network });
+    const m = await waitForValueSettled(page, releveTextes, selecteurs, { network, pret: (r) => r.every((t) => !t.absent) });
     if (m === undefined) {
       constate(false, `${tag} : le relevé du texte ne s'est jamais stabilisé`);
       continue;
