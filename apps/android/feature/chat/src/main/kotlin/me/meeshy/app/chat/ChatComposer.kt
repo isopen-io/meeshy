@@ -125,12 +125,26 @@ internal fun ChatComposer(
         stage(listOf(uri))
         withContext(Dispatchers.IO) { runCatching { context.contentResolver.delete(uri, null, null) } }
     }
+    var videoRetouch by remember { mutableStateOf<ChatVideoRetouchPending?>(null) }
+    suspend fun deliverVideo(pending: ChatVideoRetouchPending, file: File) {
+        val stage = onStageCapturedUris
+        if (stage != null) {
+            stage(listOf(context.captureUri(file)))
+        } else {
+            withContext(Dispatchers.IO) { runCatching { file.readBytes() }.getOrNull() }?.let { bytes ->
+                onPickFile(bytes, file.name, ChatRetouchDelivery.VIDEO_MIME)
+            }
+        }
+        withContext(Dispatchers.IO) { pending.discard() }
+    }
     val chatCameraCapture = rememberChatCameraCapture(
         onCaptured = { uri, isVideo ->
             val stage = onStageCapturedUris
             val picked = if (isVideo) null else withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }
             val pending = picked?.let { withContext(Dispatchers.Default) { ChatRetouchPending.of(it.bytes, it.fileName, it.mimeType) } }
+            val video = if (isVideo) ChatVideoRetouchPending.of(context, uri, System.currentTimeMillis()) else null
             when {
+                video != null -> videoRetouch = video
                 pending != null -> retouch = pending
                 stage != null -> stage(listOf(uri))
                 else -> (picked ?: withContext(Dispatchers.IO) { readPickedAttachment(context, uri) })?.let { file ->
@@ -147,6 +161,19 @@ internal fun ChatComposer(
                 retouch = null
             },
             onDismiss = { retouch = null },
+        )
+    }
+    videoRetouch?.let { pending ->
+        ChatVideoRetouchHost(
+            pending = pending,
+            onDeliver = { file ->
+                ioScope.launch { deliverVideo(pending, file) }
+                videoRetouch = null
+            },
+            onDismiss = {
+                pending.discard()
+                videoRetouch = null
+            },
         )
     }
     val showMic = !isEditing && draft.isBlank() && clipboardContent == null && !hasPendingAttachments && affordances.canSendAudios

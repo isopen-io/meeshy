@@ -13,7 +13,9 @@ import me.meeshy.sdk.model.composer.look.ComposerLookCanvas
 import me.meeshy.sdk.model.composer.look.ComposerLookColorimetry
 import me.meeshy.sdk.model.composer.look.ComposerPhotoFrame
 import me.meeshy.sdk.model.composer.look.ComposerPhotoLook
+import me.meeshy.sdk.model.imageedit.NormalizedCrop
 import me.meeshy.ui.component.imageedit.ColorMatrixFallback
+import kotlin.math.roundToInt
 
 /** L'auteur tel que les cadres l'écrivent, et ce qu'ils datent : la séance de la prise, jamais l'instant du rendu. */
 public data class ComposerLookAuthor(val id: String, val name: String, val handle: String?, val caption: CallMontageCaption, val date: String)
@@ -30,11 +32,22 @@ public object ComposerLookPainter {
      * La prise retouchée, dont le grand côté fait au plus [longSide]. `null` si la toile est impossible ou si le
      * cadre choisi ne se peint pas — jamais une photo sans le cadre que l'auteur voyait.
      */
-    public fun paint(source: Bitmap, look: ComposerPhotoLook, author: ComposerLookAuthor, longSide: Int): Bitmap? {
-        val size = ComposerLookCanvas.fitted(source.width, source.height, longSide) ?: return null
-        val scaled = runCatching { Bitmap.createScaledBitmap(source, size.width, size.height, true) }.getOrNull() ?: return null
+    public fun paint(source: Bitmap, look: ComposerPhotoLook, author: ComposerLookAuthor, longSide: Int, crop: NormalizedCrop? = null): Bitmap? {
+        val kept = cropped(source, crop) ?: return null
+        val size = ComposerLookCanvas.fitted(kept.width, kept.height, longSide) ?: return null
+        val scaled = runCatching { Bitmap.createScaledBitmap(kept, size.width, size.height, true) }.getOrNull() ?: return null
         val graded = ColorMatrixFallback.render(scaled, ComposerLookColorimetry.recipe(look.filter))
         return framed(graded, look.frame, author)
+    }
+
+    /** Le recadrage d'abord : le look se pose sur la prise recadrée, aux proportions qu'elle garde. */
+    internal fun cropped(source: Bitmap, crop: NormalizedCrop?): Bitmap? {
+        if (crop == null) return source
+        val left = (crop.x * source.width).roundToInt().coerceIn(0, source.width - 1)
+        val top = (crop.y * source.height).roundToInt().coerceIn(0, source.height - 1)
+        val right = ((crop.x + crop.width) * source.width).roundToInt().coerceIn(left + 1, source.width)
+        val bottom = ((crop.y + crop.height) * source.height).roundToInt().coerceIn(top + 1, source.height)
+        return runCatching { Bitmap.createBitmap(source, left, top, right - left, bottom - top) }.getOrNull()
     }
 
     private fun framed(graded: Bitmap, frame: ComposerPhotoFrame, author: ComposerLookAuthor): Bitmap? {

@@ -147,6 +147,54 @@
           "iosKey": "call.capture.style.heart",
           "androidName": "retouch_style_heart",
           "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.crop",
+          "androidName": "retouch_tool_crop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.crop.original",
+          "androidName": "retouch_crop_original",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.tool.trim",
+          "androidName": "retouch_tool_trim",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.tool.sound",
+          "androidName": "retouch_tool_sound",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.sound.mute",
+          "androidName": "retouch_sound_mute",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.sound.unmute",
+          "androidName": "retouch_sound_unmute",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.sound.volume",
+          "androidName": "retouch_sound_volume",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.tool.text",
+          "androidName": "retouch_tool_text",
+          "status": "adopted"
         }
       ]
     }

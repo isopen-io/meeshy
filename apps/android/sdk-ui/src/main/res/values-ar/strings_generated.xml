@@ -75,6 +75,7 @@
     <string name="presence_offline">غير متصل</string>
     <string name="presence_online">متصل</string>
     <string name="reactions_more">مزيد من التفاعلات</string>
+    <string name="retouch_crop_original">الأصلي</string>
     <string name="retouch_family_effects">تأثيرات</string>
     <string name="retouch_family_filters">المرشّحات</string>
     <string name="retouch_family_frames">الإطارات</string>
@@ -86,6 +87,9 @@
     <string name="retouch_no_filter">بلا مرشّح</string>
     <string name="retouch_no_frame">بلا إطار</string>
     <string name="retouch_rendering">جارٍ تطبيق المرشّح…</string>
+    <string name="retouch_sound_mute">كتم الصوت</string>
+    <string name="retouch_sound_unmute">إعادة تشغيل الصوت</string>
+    <string name="retouch_sound_volume">مستوى الصوت</string>
     <string name="retouch_style_comic">قصة مصورة</string>
     <string name="retouch_style_cover">غلاف</string>
     <string name="retouch_style_film">شريط فيلم</string>
@@ -99,6 +103,10 @@
     <string name="retouch_style_redcarpet">السجادة الحمراء</string>
     <string name="retouch_style_screen">الشاشة</string>
     <string name="retouch_style_strip">كشك الصور</string>
+    <string name="retouch_tool_crop">تأطير</string>
+    <string name="retouch_tool_sound">الصوت</string>
+    <string name="retouch_tool_text">نص</string>
+    <string name="retouch_tool_trim">قص</string>
     <string name="settings_info_button_label">معرفة المزيد عن %s</string>
     <string name="sticker_sheet_close">إغلاق</string>
     <string name="sticker_sheet_favorites_empty">اضغط مطولاً على زخرفة لتثبيتها هنا.</string>
