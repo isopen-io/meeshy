@@ -423,6 +423,7 @@ final class DependencyContainer {
         .filter { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                ConversationListPreviewLoader.purgeAllLive() // EN TÊTE, avant toute purge attendue (#11232)
                 let invalidated = self?.sessionWasInvalidated ?? false
                 self?.sessionWasInvalidated = false
                 // La purge vise les bases QUITTÉES, que la bascule
@@ -441,8 +442,7 @@ final class DependencyContainer {
                         } catch {
                             containerLogger.error("Q3 logout message purge failed: \(error.localizedDescription, privacy: .public)")
                         }
-                        // Purge feed indépendante : un échec d'un côté
-                        // ne doit pas empêcher l'autre purge.
+                        // Purge feed indépendante : un échec d'un côté n'empêche pas l'autre.
                         // Les pièces de commentaire en attente du compte
                         // quitté partent avec sa file : rien ne reste sur le
                         // disque pour le compte suivant.
@@ -520,9 +520,6 @@ final class DependencyContainer {
         StreakReminderScheduler.shared.annulerTout()
         ConversationProtectionPreferenceStore.shared.purgeAll()
         ArrivalCelebrationController.shared.resetForLogout()
-        // Les clairs que l'aperçu d'appui long a déchiffrés, et la mémoire de
-        // son déchiffreur (#11232) : rien n'en survit au compte sortant.
-        ConversationListPreviewLoader.purgeAllLive()
     }
 
     // MARK: - Recovery (P1.5 — no more fatalError on DB init)

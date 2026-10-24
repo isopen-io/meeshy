@@ -22,7 +22,7 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         let service = MockMessageService()
         let cacheMock = MockConversationPreviewCache(messages: cache, translations: cachedTranslations)
         let sut = ConversationListPreviewLoader(
-            messageService: service, cache: cacheMock, readerPrism: { prism }, isDirectConversation: { _ in false },
+            messageService: service, cache: cacheMock, readerPrism: { prism }, directness: { _ in .notDirect },
             regimeMemory: EndToEndRegimeMemory(defaults: nil)
         )
         return (sut, service, cacheMock)
@@ -252,7 +252,7 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         let cache = MockConversationPreviewCache(messages: .stale([makeMessage(content: "en cache")], age: 4_000))
         cache.holdsNextRead = true
         let sut = ConversationListPreviewLoader(
-            messageService: service, cache: cache, readerPrism: { ["fr"] }, isDirectConversation: { _ in false }
+            messageService: service, cache: cache, readerPrism: { ["fr"] }, directness: { _ in .notDirect }
         )
         let id = conversationId
 

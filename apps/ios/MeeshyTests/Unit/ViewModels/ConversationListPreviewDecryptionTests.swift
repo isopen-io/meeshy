@@ -18,6 +18,10 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
     /// Le cryptogramme tel que le REST et le cache le portent : du base64.
     private let ciphertext = "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eA=="
     private let restVersion = Date(timeIntervalSince1970: 1_792_310_400)
+    /// Le pair de la conversation directe, tel que la rangée l'élit localement.
+    private let peerId = "user-other"
+    private let reader: @MainActor @Sendable () -> String = { "user-me" }
+    private var peer: DirectSessionPeer { DirectSessionPeer(peerUserId: peerId, readerUserId: "user-me")! }
 
     private final class PhaseLog {
         var phases: [ConversationPreviewPhase?] = []
@@ -32,14 +36,25 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
     @MainActor
     private final class TypeBox {
         nonisolated deinit {}
-        var isDirect: Bool?
-        init(isDirect: Bool?) { self.isDirect = isDirect }
+        var directness: PreviewDirectness?
+        init(directness: PreviewDirectness?) { self.directness = directness }
     }
 
     @MainActor
     private final class Observed {
         nonisolated deinit {}
         var phases: [ConversationPreviewPhase] = []
+    }
+
+    /// Vrai au premier appel seulement : la déconnexion n'arrive qu'une fois.
+    @MainActor
+    private final class Once {
+        nonisolated deinit {}
+        private var fired = false
+        func fire() -> Bool {
+            defer { fired = true }
+            return !fired
+        }
     }
 
     private final class ContentLog {
@@ -51,8 +66,8 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
     private func makeSUT(
         cache: CacheResult<[Message]> = .empty,
         cachedTranslations: [String: [MessageTranslation]] = [:],
-        decryptor: any ConversationPreviewDecrypting = MockPreviewDecryptor(),
-        isDirect: Bool? = true,
+        decryptor: any OnDeviceMessageDecrypting = MockPreviewDecryptor(),
+        directness: PreviewDirectness? = .direct(peerUserId: "user-other"),
         isLocked: @escaping @MainActor (String) -> Bool = { _ in false },
         locksDidChange: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher()
     ) -> (sut: ConversationListPreviewLoader, service: MockMessageService) {
@@ -63,29 +78,50 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             readerPrism: { ["fr"] },
             isLocked: isLocked,
             decryptor: decryptor,
-            isDirectConversation: { _ in isDirect },
+            directness: { _ in directness },
             locksDidChange: locksDidChange,
             regimeMemory: EndToEndRegimeMemory(defaults: nil)
         )
         return (sut, service)
     }
 
+    /// Le cryptogramme d'un pair tel qu'une LIGNE GRDB le rend
+    /// (`MessageRecord.toMessage`), forme que le fil sauvegarde dans
+    /// `CacheCoordinator.messages` : `senderId` est l'utilisateur résolu à
+    /// l'ingestion, et `senderUserId` est ABSENT — il n'est posé que pour le
+    /// lecteur (B1 de la revue de #12722).
     private func makeCipherMessage(
         id: String? = nil,
         content: String? = nil,
-        updatedAt: Date = Date(timeIntervalSince1970: 1_000)
+        updatedAt: Date = Date(timeIntervalSince1970: 1_000),
+        senderId: String = "user-other",
+        senderUserId: String? = nil,
+        isMe: Bool = false
     ) -> Message {
         Message(
             id: id ?? messageId,
             conversationId: conversationId,
-            senderId: "participant-other",
+            senderId: senderId,
             content: content ?? ciphertext,
             originalLanguage: "fr",
             isEncrypted: true,
             createdAt: Date(timeIntervalSince1970: 1_000),
             updatedAt: updatedAt,
-            senderUserId: "user-other"
+            senderUserId: senderUserId,
+            isMe: isMe
         )
+    }
+
+    /// Le même cryptogramme tel que le REST ou le socket le rend : `senderId`
+    /// désigne le Participant, l'utilisateur est dans `senderUserId`.
+    private func makeWireCipherMessage(id: String? = nil, content: String? = nil) -> Message {
+        makeCipherMessage(id: id, content: content, senderId: "participant-other", senderUserId: "user-other")
+    }
+
+    /// Mon propre cryptogramme, ligne GRDB : `toMessage` pose `senderUserId`
+    /// pour le lecteur seulement.
+    private func makeOwnCipherMessage(id: String, content: String? = nil) -> Message {
+        makeCipherMessage(id: id, content: content, senderId: "user-me", senderUserId: "user-me", isMe: true)
     }
 
     private func encryptedPage() -> MessagesAPIResponse {
@@ -104,7 +140,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
         let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, true, "le clair porte la provenance du déchiffrement")
@@ -119,7 +155,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let (sut, service) = makeSUT(cache: .empty, decryptor: decryptor)
         service.listResult = .success(encryptedPage())
 
-        await sut.load(for: conversationId, intent: .open)
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, true)
@@ -138,24 +174,126 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: ["user-other": key.rawBytes]))
         let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage(content: sealed)], age: 10), decryptor: decryptor)
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, true)
     }
 
-    /// La session rangée sous le PARTICIPANT n'est jamais celle qu'on cherche :
-    /// un `senderId` de message n'identifie pas le pair.
-    func test_realDecryptionActor_sessionUnderTheParticipantId_staysSealed() async throws {
+    /// Le message REST d'un pair porte son Participant dans `senderId` : la clé
+    /// se cherche sous le PAIR local, jamais sous ce que le message affirme.
+    func test_realDecryptionActor_wireMessageOfThePeer_opensUnderThePeerSession() async throws {
         let key = SymmetricKey(size: .bits256)
         let sealed = try sealedBase64("Rendez-vous à midi", with: key)
-        let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: ["participant-other": key.rawBytes]))
-        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage(content: sealed)], age: 10), decryptor: decryptor)
+        let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: [peerId: key.rawBytes, "participant-other": SymmetricKey(size: .bits256).rawBytes]))
+        let (sut, _) = makeSUT(cache: .fresh([makeWireCipherMessage(content: sealed)], age: 10), decryptor: decryptor)
+
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
+    }
+
+    /// Un message qui se dit d'un TIERS dans une directe ne s'ouvre pas, même
+    /// si l'appareil a une session sous ce tiers : l'auteur annoncé ne choisit
+    /// jamais la clé, il ne sert qu'à refuser (#12757, M1). Il reste scellé,
+    /// jamais présenté comme un clair ordinaire.
+    func test_realDecryptionActor_authorNeitherPeerNorReader_staysSealed() async throws {
+        let key = SymmetricKey(size: .bits256)
+        let sealed = try sealedBase64("Rendez-vous à midi", with: key)
+        let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: ["user-eve": key.rawBytes, peerId: key.rawBytes]))
+        let (sut, _) = makeSUT(
+            cache: .fresh([makeCipherMessage(content: sealed, senderId: "user-eve")], age: 10), decryptor: decryptor
+        )
+
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+
+        XCTAssertEqual(served(sut)?.content, "")
+        XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
+        XCTAssertTrue(ConversationPreviewRenderer.isSealed(try XCTUnwrap(served(sut))))
+    }
+
+    /// Mon propre message s'ouvre avec la session du PAIR : c'est la clé
+    /// symétrique sous laquelle `SessionManager.encryptMessage(_:for:)` l'a
+    /// scellé (m3). Aucune session n'est rangée sous le lecteur.
+    func test_realDecryptionActor_readersOwnMessage_opensUnderThePeerSession() async throws {
+        let key = SymmetricKey(size: .bits256)
+        let sealed = try sealedBase64("J'arrive", with: key)
+        let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: [peerId: key.rawBytes]))
+        let (sut, _) = makeSUT(cache: .fresh([makeOwnCipherMessage(id: messageId, content: sealed)], age: 10), decryptor: decryptor)
+
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+
+        XCTAssertEqual(served(sut)?.content, "J'arrive")
+        XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, true)
+    }
+
+    // MARK: - Le pair local inconnu : scellé, jamais le cryptogramme
+
+    func test_directConversationWithoutAKnownPeer_staysSealed_andAsksNothing() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, directness: .direct(peerUserId: nil))
+
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+
+        XCTAssertEqual(served(sut)?.content, "", "le placeholder scellé, jamais le cryptogramme")
+        let calls = await decryptor.callCount
+        XCTAssertEqual(calls, 0)
+    }
+
+    /// Le pair appris ensuite : rien n'avait été réputé réglé, `.ensure` ouvre.
+    func test_peerLearnedLater_ensureOpensWhatWasSealed() async {
+        let type = TypeBox(directness: .direct(peerUserId: nil))
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let sut = ConversationListPreviewLoader(
+            messageService: MockMessageService(),
+            cache: MockConversationPreviewCache(messages: .fresh([makeCipherMessage()], age: 10)),
+            readerPrism: { ["fr"] },
+            isLocked: { _ in false },
+            decryptor: decryptor,
+            directness: { _ in type.directness },
+            locksDidChange: Empty<Void, Never>().eraseToAnyPublisher()
+        )
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+        XCTAssertEqual(served(sut)?.content, "", "précondition : pair inconnu ⇒ scellé")
+
+        type.directness = .direct(peerUserId: peerId)
+        await sut.load(for: conversationId, intent: .ensure, currentUserId: reader)
+
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
+    }
+
+    /// Lecteur inconnu (session pas encore chargée) : aucune clé ne se cherche.
+    func test_unknownReader_staysSealed() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
 
         await sut.load(for: conversationId, intent: .prefetch)
 
         XCTAssertEqual(served(sut)?.content, "")
-        XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
+        let calls = await decryptor.callCount
+        XCTAssertEqual(calls, 0)
+    }
+
+    /// m2 : un type encore inconnu ne réputait la conversation que « cache
+    /// périmé », et la demande suivante republiait le cache PLUS ANCIEN par-dessus
+    /// la page réseau.
+    func test_typeUnknownAfterNetwork_theOlderCacheNeverCoversTheNetworkPage() async {
+        let older = Message(
+            id: "000000000000000000000a00", conversationId: conversationId, senderId: peerId,
+            content: "Ancien", originalLanguage: "fr",
+            createdAt: Date(timeIntervalSince1970: 500), updatedAt: Date(timeIntervalSince1970: 500)
+        )
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, service) = makeSUT(cache: .stale([older], age: 10_000), decryptor: decryptor, directness: nil)
+        service.listResult = .success(encryptedPage())
+
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
+        XCTAssertEqual(sut.state(for: conversationId).messages.map(\.id), [messageId], "précondition : la page réseau est servie")
+        service.listResult = .failure(URLError(.notConnectedToInternet))
+
+        await sut.load(for: conversationId, intent: .ensure, currentUserId: reader)
+
+        XCTAssertEqual(sut.state(for: conversationId).messages.map(\.id), [messageId], "le cache ancien ne recouvre jamais le réseau")
     }
 
     func test_realDecryptionActor_wrongKey_staysSealed() async throws {
@@ -164,7 +302,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: ["user-other": other.rawBytes]))
         let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage(content: sealed)], age: 10), decryptor: decryptor)
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "", "une authentification AES-GCM ratée laisse le scellé, jamais du bruit")
     }
@@ -179,18 +317,18 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
     /// se prépare déchiffré sans attendre l'hydratation du store.
     func test_rowSaysDirect_decryptsWhileTheStoreDoesNotKnowYet() async {
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
-        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, isDirect: nil)
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, directness: nil)
 
-        await sut.load(for: conversationId, intent: .prefetch, isDirect: true)
+        await sut.load(for: conversationId, intent: .prefetch, directness: .direct(peerUserId: peerId), currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
     }
 
     func test_rowSaysGroup_neverDecrypts() async {
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
-        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, isDirect: true)
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
 
-        await sut.load(for: conversationId, intent: .prefetch, isDirect: false)
+        await sut.load(for: conversationId, intent: .prefetch, directness: .notDirect, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "")
         let calls = await decryptor.callCount
@@ -200,7 +338,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
     /// Type encore inconnu : servi scellé, mais rien n'est réputé réglé — le
     /// chargement suivant retente dès que le type se sait.
     func test_typeUnknown_staysSealedThenEnsureRetries() async {
-        let type = TypeBox(isDirect: nil)
+        let type = TypeBox(directness: nil)
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
         let service = MockMessageService()
         let sut = ConversationListPreviewLoader(
@@ -209,15 +347,15 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             readerPrism: { ["fr"] },
             isLocked: { _ in false },
             decryptor: decryptor,
-            isDirectConversation: { _ in type.isDirect },
+            directness: { _ in type.directness },
             locksDidChange: Empty<Void, Never>().eraseToAnyPublisher()
         )
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
         XCTAssertEqual(served(sut)?.content, "", "précondition : type inconnu ⇒ scellé")
 
-        type.isDirect = true
-        await sut.load(for: conversationId, intent: .ensure)
+        type.directness = .direct(peerUserId: peerId)
+        await sut.load(for: conversationId, intent: .ensure, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
         XCTAssertEqual(service.listCallCount, 0, "un cache frais se redéchiffre sans réseau")
@@ -231,7 +369,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let id = conversationId
         let token = sut.$states.sink { log.phases.append($0[id]?.phase) }
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertFalse(log.phases.contains(.loading), "un cache non vide ne montre jamais de spinner")
         XCTAssertEqual(log.phases.last, .loaded)
@@ -244,7 +382,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let decryptor = MockPreviewDecryptor(failures: [messageId: .missingSession])
         let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "", "sans session, le placeholder scellé — jamais le cryptogramme")
         XCTAssertEqual(served(sut)?.isEncrypted, true)
@@ -256,7 +394,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let (sut, service) = makeSUT(cache: .empty, decryptor: decryptor)
         service.listResult = .success(encryptedPage())
 
-        await sut.load(for: conversationId, intent: .open)
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "")
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
@@ -268,7 +406,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let decryptor = MockPreviewDecryptor(undecodable: [messageId])
         let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "")
     }
@@ -277,7 +415,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: ""])
         let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
         XCTAssertTrue(ConversationPreviewRenderer.isSealed(served(sut)!))
@@ -287,9 +425,9 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
     /// montre jamais plus que lui.
     func test_groupConversation_neverDecrypts() async {
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
-        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, isDirect: false)
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, directness: .notDirect)
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "")
         let calls = await decryptor.callCount
@@ -305,7 +443,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         )
         service.listResult = .success(encryptedPage())
 
-        await sut.load(for: conversationId, intent: .open)
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
 
         XCTAssertEqual(sut.state(for: conversationId).phase, .sealed)
         XCTAssertNil(sut.state(for: conversationId).snapshot)
@@ -327,7 +465,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let id = conversationId
         let token = sut.$states.sink { log.contents.append(contentsOf: $0[id]?.snapshot?.messages.map(\.content) ?? []) }
 
-        await sut.load(for: conversationId, intent: .open)
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
         pin.isLocked = false
 
         XCTAssertFalse(log.contents.contains("Rendez-vous à midi"), "aucun état publié n'a porté le clair")
@@ -345,7 +483,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor,
             isLocked: { _ in pin.isLocked }, locksDidChange: locks.eraseToAnyPublisher()
         )
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
 
         pin.isLocked = true
@@ -362,7 +500,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let (sut, _) = makeSUT(
             cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, isLocked: { _ in pin.isLocked }
         )
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
 
         pin.isLocked = true
@@ -381,10 +519,10 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             readerPrism: { ["fr"] },
             isLocked: { _ in false },
             decryptor: factory.make(),
-            isDirectConversation: { _ in true },
+            directness: { _ in .direct(peerUserId: "user-other") },
             locksDidChange: Empty<Void, Never>().eraseToAnyPublisher()
         )
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
 
         sut.purge()
@@ -401,16 +539,51 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
         await decryptor.setOnDecrypt { sut.purge() }
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertNil(sut.state(for: conversationId).snapshot)
         XCTAssertTrue(sut.messages.isEmpty)
     }
 
+    /// m1 : un `.open` qui attendait un préchargement en vol reprend APRÈS la
+    /// purge — il ne republie rien, même sous une génération neuve.
+    func test_openWaitingOnAPrefetch_resumedAfterThePurge_publishesNothing() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, service) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
+        service.listResult = .success(encryptedPage())
+        let once = Once()
+        await decryptor.setOnDecrypt { if once.fire() { sut.purge() } }
+        let reader = self.reader
+        let id = conversationId
+
+        let prefetch = Task { await sut.load(for: id, intent: .prefetch, currentUserId: reader) }
+        await Task.yield()
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
+        await prefetch.value
+
+        XCTAssertNil(sut.state(for: conversationId).snapshot)
+        XCTAssertTrue(sut.messages.isEmpty)
+        XCTAssertEqual(service.listCallCount, 0, "rien ne revalide pour un compte sorti")
+    }
+
+    /// m1 : après la déconnexion, un chargement sans lecteur ne publie rien ;
+    /// le lecteur suivant rouvre le chargeur.
+    func test_afterLogout_aLoadWithoutAReaderPublishesNothing_untilAReaderSignsIn() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
+        ConversationListPreviewLoader.purgeAllLive()
+
+        await sut.load(for: conversationId, intent: .open, currentUserId: { "" })
+        XCTAssertNil(sut.state(for: conversationId).snapshot, "session close : rien ne se republie")
+
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "un lecteur connecté rouvre le chargeur")
+    }
+
     func test_purgeAllLive_purgesEveryLiveLoader() async {
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
         let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
 
         ConversationListPreviewLoader.purgeAllLive()
@@ -432,7 +605,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let log = PhaseLog()
         let token = sut.$states.sink { log.phases.append($0[id]?.phase) }
 
-        await sut.load(for: conversationId, intent: .open)
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
 
         XCTAssertEqual(observed.phases.first, .loaded, "le cache est servi avant que le déchiffrement ne rende")
         XCTAssertFalse(log.phases.contains(.loading), "un cache non vide ne montre jamais de spinner")
@@ -446,7 +619,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let (sut, service) = makeSUT(cache: .fresh([known], age: 10), decryptor: decryptor)
         service.listResult = .success(encryptedPage())
 
-        await sut.load(for: conversationId, intent: .open)
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "Déjà en clair")
         let calls = await decryptor.callCount
@@ -458,8 +631,8 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let (sut, service) = makeSUT(cache: .fresh([makeCipherMessage(updatedAt: restVersion)], age: 10), decryptor: decryptor)
         service.listResult = .success(encryptedPage())
 
-        await sut.load(for: conversationId, intent: .prefetch)
-        await sut.load(for: conversationId, intent: .open)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
         XCTAssertEqual(service.listCallCount, 1, "précondition : le réseau a revalidé")
@@ -476,7 +649,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let (sut, service) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
         service.listResult = .success(encryptedPage())
 
-        await sut.load(for: conversationId, intent: .open)
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
         XCTAssertEqual(service.listCallCount, 1, "une lecture, et rien d'autre")
@@ -505,7 +678,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "secret qui brûle"])
         let (sut, _) = makeSUT(cache: .fresh([burning, burningKnown], age: 10), decryptor: decryptor)
 
-        await sut.load(for: conversationId, intent: .prefetch)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         let messages = sut.state(for: conversationId).messages
         XCTAssertEqual(messages.map(\.content), ["", ""])
@@ -579,7 +752,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             decryptor: decryptor
         )
 
-        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd)
+        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd, currentUserId: reader)
 
         let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
         let message = try XCTUnwrap(served(sut))
@@ -601,7 +774,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             decryptor: decryptor
         )
 
-        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd)
+        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd, currentUserId: reader)
 
         let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
         let forged = try XCTUnwrap(snapshot.messages.first { $0.id == forgedId })
@@ -622,7 +795,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let (sut, service) = makeSUT(cache: .empty, decryptor: decryptor)
         service.listResult = .success(mixedPage())
 
-        await sut.load(for: conversationId, intent: .open, regime: endToEnd)
+        await sut.load(for: conversationId, intent: .open, regime: endToEnd, currentUserId: reader)
 
         let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
         let byId = Dictionary(uniqueKeysWithValues: snapshot.messages.map { ($0.id, $0) })
@@ -645,7 +818,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let forged = makeForgedClearMessage(id: messageId)
         let results = [DecryptionResult(messageId: messageId, plaintext: "Blanchi", error: nil)]
 
-        XCTAssertNil(ConversationListPreviewLoader.adopting(results, into: [forged]))
+        XCTAssertNil(ConversationListPreviewLoader.adopting(results, into: [forged], under: peer))
         let snapshot = ConversationListPreviewLoader.snapshot(
             messages: [forged], translations: [:], prism: ["fr"], regime: endToEnd
         )
@@ -662,7 +835,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             decryptor: decryptor
         )
 
-        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd)
+        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd, currentUserId: reader)
 
         let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
         let message = try XCTUnwrap(served(sut))
@@ -684,7 +857,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             decryptor: decryptor
         )
 
-        await sut.load(for: conversationId, intent: .prefetch, regime: .serverReadable)
+        await sut.load(for: conversationId, intent: .prefetch, regime: .serverReadable, currentUserId: reader)
 
         let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
         XCTAssertEqual(snapshot.messages.first?.content, "Envoie-moi le code")
@@ -705,7 +878,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         )
         service.listResult = .success(mixedPage())
 
-        await sut.load(for: conversationId, intent: .open, regime: endToEnd)
+        await sut.load(for: conversationId, intent: .open, regime: endToEnd, currentUserId: reader)
 
         XCTAssertEqual(sut.state(for: conversationId).phase, .sealed)
         XCTAssertNil(sut.state(for: conversationId).snapshot)
@@ -722,7 +895,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let (sut, _) = makeSUT(
             cache: .fresh([makeCipherMessage(), makeForgedClearMessage()], age: 10), decryptor: decryptor
         )
-        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd)
+        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd, currentUserId: reader)
         XCTAssertEqual(sut.state(for: conversationId).snapshot?.isUnencrypted(forgedId), true)
 
         sut.purge()
@@ -732,7 +905,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         XCTAssertNil(sut.messages[conversationId])
     }
 
-    // MARK: - Une seule construction, une purge câblée
+    // MARK: - Une seule construction
 
     private static var appRoot: URL {
         URL(fileURLWithPath: #filePath)
@@ -757,13 +930,6 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)).contains("DecryptionPayload(messageId:")
         }
         XCTAssertEqual(handBuilt.map(\.lastPathComponent), [])
-    }
-
-    func test_logoutPurgesThePreviewLoaders() throws {
-        let container = Self.appRoot.appendingPathComponent("Meeshy/Core/DependencyContainer.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: container, encoding: .utf8))
-        XCTAssertTrue(code.contains("ConversationListPreviewLoader.purgeAllLive()"),
-                      "la déconnexion doit purger les clairs de l'aperçu (resetInMemoryAccountState)")
     }
 }
 
@@ -791,7 +957,7 @@ private final class DecryptorFactory {
         self.plaintexts = plaintexts
     }
 
-    func make() -> any ConversationPreviewDecrypting {
+    func make() -> any OnDeviceMessageDecrypting {
         made += 1
         return MockPreviewDecryptor(plaintexts: plaintexts)
     }
@@ -841,4 +1007,4 @@ actor MockPreviewDecryptor {
 // Conformité posée en extension, comme `DecryptionActor` : sur la déclaration,
 // le protocole `nonisolated` rendrait l'init synchrone de l'acteur `nonisolated`,
 // ce que Swift refuse.
-extension MockPreviewDecryptor: ConversationPreviewDecrypting {}
+extension MockPreviewDecryptor: OnDeviceMessageDecrypting {}

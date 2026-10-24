@@ -230,12 +230,9 @@ extension ConversationViewModel {
     // MARK: - Decryption
 
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
-        guard isDirect else { return }
-
-        // Le constructeur UNIQUE, partagé avec l'aperçu d'appui long : la
-        // session se cherche sous l'utilisateur expéditeur, jamais sous son
-        // Participant (#11232).
-        let payloads = msgs.compactMap(DecryptionPayload.init(decrypting:))
+        // Clé sous le PAIR local, jamais sous l'expéditeur affirmé (#11232, #12757) ; pair inconnu ⇒ rien.
+        guard isDirect, let peer = DirectSessionPeer(peerUserId: participantUserId ?? currentConversation?.participantUserId, readerUserId: currentUserId) else { return }
+        let payloads = msgs.compactMap { DecryptionPayload(decrypting: $0, under: peer) }
         guard !payloads.isEmpty else { return }
 
         let results = await decryptionActor.decrypt(payloads)

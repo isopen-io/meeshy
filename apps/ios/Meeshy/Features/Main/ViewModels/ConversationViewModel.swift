@@ -444,7 +444,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     let translationService: TranslationServiceProviding
     let attachmentTranslationService: AttachmentTranslationProviding
     let messageEncryptor: DirectMessageEncrypting
-    let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
+    var decryptionActor: any OnDeviceMessageDecrypting { collaborators.decryptor }
 
     /// Captured at init so the heavy side-effects (DB observation, initial
     /// load, Combine subscriptions, singleton mutations) can be deferred out
