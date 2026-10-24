@@ -288,7 +288,7 @@ struct ConversationView: View {
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,
             isDirect: conversation?.type == .direct,
-            participantUserId: conversation?.participantUserId,
+            participantUserId: conversation?.participantUserId, encryptionMode: conversation?.encryptionMode,
             memberJoinedAt: conversation?.currentUserJoinedAt,
             // Frontière de lecture (#7198/#7222) — reprise SYNCHRONE de la
             // ligne de liste qui ouvre ce fil, même idiome que
