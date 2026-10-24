@@ -1051,6 +1051,7 @@ const pt = {
   'message.menu.more': 'Mais…',
   'message.menu.react': 'Reagir',
   'message.menu.addReaction': 'Adicionar uma reação',
+  'message.menu.preview': 'Pré-visualização da mensagem',
   'message.selection.toolbar': 'Seleção de mensagens',
   'message.selection.count': '{count} selecionadas',
   'message.detail.title': 'Detalhes da mensagem',

@@ -1,5 +1,7 @@
 import XCTest
 import CoreImage
+import UIKit
+import MeeshyUI
 @testable import Meeshy
 
 /// **Un seul peintre** (#9347, spec § 4.1) : l'aperçu, la photo et la vidéo
@@ -206,7 +208,7 @@ final class ComposerLookPainterTests: XCTestCase {
         let calque = Self.calqueRouge(at: horsCase, size: toile)
         let sans = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: look, framing: .identity, scene: scene, canvas: toile))
         let avec = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: look, framing: .identity, scene: scene,
-                                                           canvas: toile, overlay: calque))
+                                                           canvas: toile, overlay: ComposerTextOverlay(ink: calque)))
         let a = Self.pixel(try Self.rgba(CIImage(cgImage: sans), size: toile), x: horsCase.x, y: horsCase.y, width: 108)
         let b = Self.pixel(try Self.rgba(CIImage(cgImage: avec), size: toile), x: horsCase.x, y: horsCase.y, width: 108)
         XCTAssertLessThan(Int(a.red) - Int(a.green), 60, "fusible : sans calque, le décor du cadre n'est pas rouge")
@@ -218,10 +220,70 @@ final class ComposerLookPainterTests: XCTestCase {
         let toile = CGSize(width: 108, height: 192)
         let calque = Self.calqueRouge(at: (x: 108, y: 192), size: CGSize(width: 216, height: 384))
         let rendu = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: ComposerPhotoLook(), framing: .identity,
-                                                            scene: nil, canvas: toile, overlay: calque))
+                                                            scene: nil, canvas: toile, overlay: ComposerTextOverlay(ink: calque)))
         let p = Self.pixel(try Self.rgba(CIImage(cgImage: rendu), size: toile), x: 54, y: 96, width: 108)
         XCTAssertGreaterThan(Int(p.red), 200, "un calque de la taille de la définition native se ramène à la toile")
         XCTAssertLessThan(Int(p.blue), 60)
+    }
+
+    // MARK: - Le verre d'un texte floute la prise (#12602)
+
+    /// Une vitre carrée de `cote` px centrée sur (`x`, `y`), dans un masque de `size`.
+    private static func vitre(at point: (x: Int, y: Int), cote: Int = 40, size: CGSize, sigma: CGFloat = 8) -> StoryGlassPane {
+        let boite = CGRect(x: point.x - cote / 2, y: point.y - cote / 2, width: cote, height: cote)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let masque = UIGraphicsImageRenderer(size: size, format: format).image { contexte in
+            UIColor.white.setFill()
+            contexte.fill(boite)
+        }.cgImage!
+        return StoryGlassPane(mask: masque, bounds: boite, sigma: sigma)
+    }
+
+    func test_photo_glassPane_blursTheTakeUnderTheBox_andOnlyThere() throws {
+        let toile = CGSize(width: 216, height: 384)
+        let calque = ComposerTextOverlay(ink: nil, glass: [Self.vitre(at: (x: 108, y: 192), size: toile)])
+        let rendu = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: ComposerPhotoLook(), framing: .identity,
+                                                            scene: nil, canvas: toile, overlay: calque))
+        let octets = try Self.rgba(CIImage(cgImage: rendu), size: toile)
+        let frontiere = Self.pixel(octets, x: 106, y: 192, width: 216)
+        XCTAssertGreaterThan(Int(frontiere.blue), 40, "sous la vitre, le bleu voisin se mêle au rouge : la prise est floutée")
+        XCTAssertGreaterThan(Int(frontiere.red), 40)
+        let dehors = Self.pixel(octets, x: 60, y: 192, width: 216)
+        XCTAssertGreaterThan(Int(dehors.red), 240, "hors de la vitre, la prise reste nette")
+        XCTAssertLessThan(Int(dehors.blue), 10)
+    }
+
+    func test_photo_glassPaneOfAnotherSize_isScaledToTheCanvas() throws {
+        let toile = CGSize(width: 108, height: 192)
+        let calque = ComposerTextOverlay(ink: nil, glass: [Self.vitre(at: (x: 108, y: 192), cote: 40,
+                                                                      size: CGSize(width: 216, height: 384), sigma: 8)])
+        let rendu = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: ComposerPhotoLook(), framing: .identity,
+                                                            scene: nil, canvas: toile, overlay: calque))
+        let octets = try Self.rgba(CIImage(cgImage: rendu), size: toile)
+        XCTAssertGreaterThan(Int(Self.pixel(octets, x: 53, y: 96, width: 108).blue), 40, "la vitre suit la toile, au milieu")
+        XCTAssertGreaterThan(Int(Self.pixel(octets, x: 30, y: 96, width: 108).red), 240, "et ne déborde pas de sa boîte ramenée")
+    }
+
+    func test_photo_inkPaintsAboveTheBlurredGlass() throws {
+        let toile = CGSize(width: 216, height: 384)
+        let encre = Self.calqueRouge(at: (x: 112, y: 192), size: toile)
+        let calque = ComposerTextOverlay(ink: encre, glass: [Self.vitre(at: (x: 108, y: 192), size: toile)])
+        let rendu = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: ComposerPhotoLook(), framing: .identity,
+                                                            scene: nil, canvas: toile, overlay: calque))
+        let p = Self.pixel(try Self.rgba(CIImage(cgImage: rendu), size: toile), x: 112, y: 192, width: 216)
+        XCTAssertGreaterThan(Int(p.red), 240, "l'encre du texte se pose sur le verre, jamais dessous")
+        XCTAssertLessThan(Int(p.blue), 10)
+    }
+
+    func test_overlay_sameBitmaps_areEqual_aNewBakeIsNot() {
+        let toile = CGSize(width: 108, height: 192)
+        let vitre = Self.vitre(at: (x: 54, y: 96), size: toile)
+        XCTAssertEqual(ComposerTextOverlay(ink: nil, glass: [vitre]), ComposerTextOverlay(ink: nil, glass: [vitre]))
+        XCTAssertNotEqual(ComposerTextOverlay(ink: nil, glass: [vitre]),
+                          ComposerTextOverlay(ink: nil, glass: [Self.vitre(at: (x: 54, y: 96), size: toile)]),
+                          "une nouvelle cuisson repeint l'aperçu")
     }
 
     // MARK: - Relecture du lot (#9347)

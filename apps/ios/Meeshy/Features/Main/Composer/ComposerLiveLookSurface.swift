@@ -19,6 +19,8 @@ struct ComposerLiveLookSurface: UIViewRepresentable {
     let canvas: CGSize
     var fps: Int = 30
     var surfaceScale: CGFloat = 1
+    /// Les vitres des textes de la retouche (#12602) : la prise se floute dessous.
+    var overlay: ComposerTextOverlay?
     var scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared
     var onFirstFrame: (() -> Void)?
 
@@ -33,7 +35,7 @@ struct ComposerLiveLookSurface: UIViewRepresentable {
     func updateUIView(_ view: MTKView, context: Context) {
         context.coordinator.onFirstFrame = onFirstFrame
         context.coordinator.update(look: look, person: person, date: date, framing: framing, canvas: canvas,
-                                   fps: fps, surfaceScale: surfaceScale, view: view)
+                                   overlay: overlay, fps: fps, surfaceScale: surfaceScale, view: view)
     }
 
     static func dismantleUIView(_ view: MTKView, coordinator: ComposerLiveLookRenderer) {
@@ -49,6 +51,7 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
     private var look = ComposerPhotoLook()
     private var framing = ComposerFraming.identity
     private var canvas = CGSize.zero
+    private var overlay: ComposerTextOverlay?
     private var key: ComposerLookSceneKey?
     /// La scène du look courant, posée au changement de look ou à la fin de sa
     /// cuisson — jamais relue dans le cache à chaque image.
@@ -92,11 +95,12 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
     }
 
     func update(look: ComposerPhotoLook, person: CallFramePerson, date: Date, framing: ComposerFraming,
-                canvas: CGSize, fps: Int, surfaceScale: CGFloat, view: MTKView) {
-        let changed = look != self.look || framing != self.framing || canvas != self.canvas
+                canvas: CGSize, overlay: ComposerTextOverlay? = nil, fps: Int, surfaceScale: CGFloat, view: MTKView) {
+        let changed = look != self.look || framing != self.framing || canvas != self.canvas || overlay != self.overlay
         self.look = look
         self.framing = framing
         self.canvas = canvas
+        self.overlay = overlay
         gate.setFPS(fps)
         view.contentScaleFactor = max(1, view.traitCollection.displayScale * surfaceScale)
         let cle = ComposerLookSceneKey(look: look, canvas: canvas, date: date, person: person)
@@ -139,7 +143,7 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
         // repeint qu'à un changement, le suivi n'aurait pas de trame suivante.
         let peinte = ComposerLookPainter.paint(frame, look: lookPeint, framing: framing, scene: scene,
                                                canvas: canvas, declared: source.declaredSpace,
-                                               still: source is ComposerStillSource)
+                                               still: source is ComposerStillSource, overlay: overlay)
         let bounds = CGRect(origin: .zero, size: view.drawableSize)
         let ecran = ComposerLookPainter.onScreen(peinte, canvas: canvas, drawable: view.drawableSize)
         let opaque = ecran.composited(over: CIImage(color: .black).cropped(to: bounds))

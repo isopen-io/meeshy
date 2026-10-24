@@ -195,6 +195,66 @@
           "iosKey": "composer.capture.tool.text",
           "androidName": "retouch_tool_text",
           "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.classic",
+          "androidName": "retouch_text_style_classic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.bold",
+          "androidName": "retouch_text_style_bold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.neon",
+          "androidName": "retouch_text_style_neon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.typewriter",
+          "androidName": "retouch_text_style_typewriter",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.handwriting",
+          "androidName": "retouch_text_style_handwriting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align.left",
+          "androidName": "retouch_text_align_left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align.center",
+          "androidName": "retouch_text_align_center",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align.right",
+          "androidName": "retouch_text_align_right",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.text.add",
+          "androidName": "retouch_text_add",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.tool.color",
+          "androidName": "retouch_text_color",
+          "status": "adopted"
         }
       ]
     }

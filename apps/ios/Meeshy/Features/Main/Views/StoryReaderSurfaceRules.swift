@@ -37,7 +37,7 @@ enum StoryReaderSurfaceRules {
     /// qu'un geste né dans la story encore visible AU-DESSUS reste au drag
     /// parent, qui peut ainsi refermer la surface d'un glissement.
     ///
-    /// Les surfaces NON scrollables (strip d'emojis, strip de langues,
+    /// Les surfaces NON scrollables (strip d'emojis, strip de langues — qui revendique son glissé horizontal quand il défile, #12646 —,
     /// transcription) gardent, elles, le swipe de fermeture — c'est un simple
     /// bandeau, aucun recognizer concurrent ne peut voler le geste.
     /// **La légende dépliée en fait partie depuis #4831.** Son corpus est une

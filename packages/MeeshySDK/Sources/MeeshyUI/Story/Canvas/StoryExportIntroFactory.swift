@@ -32,19 +32,24 @@ public nonisolated struct StoryExportIntroSource: Equatable, Sendable {
     public let bannerURL: String?
     /// Fond de repli quand la bannière manque : un thumbHash (bannière ou avatar).
     public let backgroundThumbHash: String?
+    /// Le contour équipé, tel que servi ; la fabrique le résout dans le catalogue
+    /// embarqué (`ProfileDecorResolver.ring`). `nil` ⇒ l'avatar nu.
+    public let avatarRing: ServedProfileDecorItem?
 
     public init(userId: String?,
                 displayName: String,
                 username: String,
                 avatarURL: String? = nil,
                 bannerURL: String? = nil,
-                backgroundThumbHash: String? = nil) {
+                backgroundThumbHash: String? = nil,
+                avatarRing: ServedProfileDecorItem? = nil) {
         self.userId = userId
         self.displayName = displayName
         self.username = username
         self.avatarURL = avatarURL
         self.bannerURL = bannerURL
         self.backgroundThumbHash = backgroundThumbHash
+        self.avatarRing = avatarRing
     }
 }
 
@@ -71,7 +76,8 @@ public enum StoryExportIntroFactory {
             username: user.username,
             avatarURL: user.avatar,
             bannerURL: user.banner,
-            backgroundThumbHash: user.avatarThumbHash))
+            backgroundThumbHash: user.avatarThumbHash,
+            avatarRing: user.profileDecor?.avatarRing))
     }
 
     @MainActor
@@ -93,18 +99,21 @@ public enum StoryExportIntroFactory {
             banner: backgroundImage,
             moodEmoji: status?.moodEmoji,
             moodMessage: status?.content,
-            accentColorHex: DynamicColorGenerator.colorForName(source.username)
+            accentColorHex: DynamicColorGenerator.colorForName(source.username),
+            avatarRing: ProfileDecorResolver.ring(source.avatarRing)
         )
     }
 
     /// L'interlude SANS image — nom, pseudo, teinte de repli. Ce qu'on peint
     /// quand l'avatar et la bannière ne sont pas revenus dans la borne de
-    /// temps : un interlude sobre plutôt qu'une story sans prélude.
+    /// temps : un interlude sobre plutôt qu'une story sans prélude. Le contour
+    /// reste : il se lit dans le catalogue EMBARQUÉ, sans réseau ni attente.
     @MainActor
     public static func unresolvedContent(for source: StoryExportIntroSource) -> StoryExportIntroContent {
         StoryExportIntroContent(displayName: source.displayName,
                                 username: source.username,
-                                accentColorHex: DynamicColorGenerator.colorForName(source.username))
+                                accentColorHex: DynamicColorGenerator.colorForName(source.username),
+                                avatarRing: ProfileDecorResolver.ring(source.avatarRing))
     }
 
     /// Nom à graver sur l'interlude. Priorité au `displayName` explicite de

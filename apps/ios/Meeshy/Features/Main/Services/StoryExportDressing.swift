@@ -24,20 +24,24 @@ import MeeshyUI
 /// L'auteur d'une story qu'un lecteur emporte, tel que le site d'appel le
 /// connaît. `name` reçoit `StoryGroup.username`, qui porte en réalité
 /// `APIAuthor.name` (nom d'affichage, sinon pseudo) : le vrai pseudo vient du
-/// profil (`StoryExportAuthorIdentity`).
+/// profil (`StoryExportAuthorIdentity`). `avatarRing` est le contour servi
+/// avec le groupe (`StoryGroup.authorRing`) — le repli du contour du profil,
+/// comme sur la carte d'identité de la visionneuse.
 nonisolated struct StoryExportAuthor: Equatable, Sendable {
     let userId: String?
     let name: String
     var avatarURL: String? = nil
+    var avatarRing: ServedProfileDecorItem? = nil
 
-    init(userId: String?, name: String, avatarURL: String? = nil) {
+    init(userId: String?, name: String, avatarURL: String? = nil, avatarRing: ServedProfileDecorItem? = nil) {
         self.userId = userId
         self.name = name
         self.avatarURL = avatarURL
+        self.avatarRing = avatarRing
     }
 
     init(group: StoryGroup) {
-        self.init(userId: group.id, name: group.username, avatarURL: group.avatarURL)
+        self.init(userId: group.id, name: group.username, avatarURL: group.avatarURL, avatarRing: group.authorRing)
     }
 }
 
@@ -161,11 +165,14 @@ enum StoryExportAuthorIdentity {
     }
 
     /// Profil → identité à peindre. Sans profil, le nom que le site d'appel
-    /// tenait sert de nom ET de pseudo.
+    /// tenait sert de nom ET de pseudo. Le contour suit la règle de la carte
+    /// d'identité de la visionneuse (`StoryViewModel` : celui du profil, sinon
+    /// celui servi avec le groupe).
     nonisolated static func source(for author: StoryExportAuthor, profile: MeeshyUser?) -> StoryExportIntroSource {
         guard let profile else {
             return StoryExportIntroSource(userId: author.userId, displayName: author.name,
-                                          username: author.name, avatarURL: author.avatarURL)
+                                          username: author.name, avatarURL: author.avatarURL,
+                                          avatarRing: author.avatarRing)
         }
         return StoryExportIntroSource(
             userId: author.userId ?? profile.id,
@@ -176,7 +183,8 @@ enum StoryExportAuthorIdentity {
             username: profile.username,
             avatarURL: profile.avatar ?? author.avatarURL,
             bannerURL: profile.banner,
-            backgroundThumbHash: profile.bannerThumbHash ?? profile.avatarThumbHash)
+            backgroundThumbHash: profile.bannerThumbHash ?? profile.avatarThumbHash,
+            avatarRing: profile.profileDecor?.avatarRing ?? author.avatarRing)
     }
 
     @MainActor
