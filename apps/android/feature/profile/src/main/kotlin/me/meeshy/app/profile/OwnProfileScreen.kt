@@ -4,26 +4,26 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,246 +35,331 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.ImageUploadTarget
-import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.sdk.model.LanguageData
+import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.util.resolveServedImageUrl
+import me.meeshy.ui.component.LanguagePickerDialog
+import me.meeshy.ui.component.LanguagePickerOption
+import me.meeshy.ui.component.LocalMediaBaseUrl
+import me.meeshy.ui.component.chrome.CollapsibleHeaderActionButton
+import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.profile.ProfileFullscreenImage
+import me.meeshy.ui.profile.ProfileFullscreenImageViewer
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.R as UiR
+
+/** Durée d'affichage de la capsule d'erreur (iOS : 3 s). */
+private const val ERROR_CAPSULE_MILLIS = 3_000L
 
 /**
- * MA page de profil (`profile/me`), parite iOS `ProfileView` : elle ne lit que la session.
- * En lecture, la barre haute porte le partage et le crayon d'edition — jamais Signaler,
- * jamais les actions de mise en relation. En edition, le bouton de droite devient
- * « Enregistrer » et le retour (fleche OU retour systeme) annule l'edition au lieu de
- * fermer la page, comme le `onBack` du `CollapsibleHeader` iOS.
+ * MA page de profil (`profile/me`), parité iOS `ProfileView` : elle ne lit que la session. En-tête repliable
+ * « Profil » (retour ; Modifier <-> Enregistrer ; indicateur pendant un enregistrement ou un téléversement),
+ * puis l'en-tête bannière + avatar et les sections Identité, Contact, Langues, Statistiques, Demandes d'amis
+ * et Membre depuis. En édition, le retour (flèche OU retour système) annule l'édition au lieu de fermer la page.
+ *
+ * Les destinations encore absentes ([onOpenStats], [onOpenProgression], [onOpenDecor], [onMoodTap]) sont
+ * nulles par défaut : leur entrée ne s'affiche pas, jamais un contrôle mort.
  */
 @Composable
 fun OwnProfileScreen(
     onBack: () -> Unit,
     onViewPosts: (userId: String) -> Unit = {},
+    onOpenFriendRequests: () -> Unit = {},
+    onOpenStats: (() -> Unit)? = null,
+    onOpenProgression: (() -> Unit)? = null,
+    onOpenDecor: (() -> Unit)? = null,
+    onMoodTap: (() -> Unit)? = null,
     viewModel: OwnProfileViewModel = hiltViewModel(),
     uploadViewModel: AvatarBannerUploadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
     val onEvent = viewModel::onEvent
-    val snackbar = remember { SnackbarHostState() }
     var isSharing by rememberSaveable { mutableStateOf(false) }
-
-    val context = LocalContext.current
-    val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.contentResolver.readMediaUploadItem(it) }
-            ?.let { uploadViewModel.onImagePicked(ImageUploadTarget.AVATAR, it) }
-    }
-    val bannerPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.contentResolver.readMediaUploadItem(it) }
-            ?.let { uploadViewModel.onImagePicked(ImageUploadTarget.BANNER, it) }
-    }
-    val imageOnly = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+    var pickingSlot by rememberSaveable { mutableStateOf<OwnProfileLanguageSlot?>(null) }
+    var fullscreen by remember { mutableStateOf<ProfileFullscreenImage?>(null) }
+    val mediaBaseUrl = LocalMediaBaseUrl.current
+    val pickImage = rememberOwnProfileImagePicker(uploadViewModel)
+    val capsule = rememberOwnProfileErrorCapsule(
+        errorMessage = state.errorMessage,
+        uploadErrorMessage = uploadState.error?.let { stringResource(it.messageRes()) },
+        onUploadErrorShown = uploadViewModel::dismissError,
+    )
 
     BackHandler(enabled = state.isEditing) { onEvent(OwnProfileUiEvent.CancelEditing) }
 
-    LaunchedEffect(state.errorMessage) {
-        state.errorMessage?.let { snackbar.showSnackbar(it) }
-    }
-    val uploadErrorMessage = uploadState.error?.let { stringResource(it.messageRes()) }
-    LaunchedEffect(uploadErrorMessage) {
-        uploadErrorMessage?.let {
-            snackbar.showSnackbar(it)
-            uploadViewModel.dismissError()
-        }
-    }
-
     MeeshyBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                ProfileTopBar(
-                    onBack = { if (state.isEditing) onEvent(OwnProfileUiEvent.CancelEditing) else onBack() },
-                ) {
-                    OwnProfileTopBarActions(
-                        state = state,
-                        isUploading = uploadState.uploading != null,
-                        onShare = { isSharing = true },
-                        onEvent = onEvent,
-                    )
-                }
+        CollapsibleHeaderPage(
+            title = stringResource(R.string.profile_title),
+            onBack = { if (state.isEditing) onEvent(OwnProfileUiEvent.CancelEditing) else onBack() },
+            titleColor = MeeshyTheme.tokens.textPrimary,
+            backArrowColor = MeeshyPalette.Indigo500,
+            backgroundColor = MeeshyTheme.tokens.backgroundPrimary,
+            trailing = {
+                OwnProfileTrailing(
+                    state = state,
+                    isUploading = uploadState.uploading != null,
+                    onShare = { isSharing = true },
+                    onEvent = onEvent,
+                )
             },
-            snackbarHost = { SnackbarHost(snackbar) },
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(MeeshySpacing.xl),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
-            ) {
-                val user = state.user
-                if (user == null) {
-                    OwnProfileColdSkeleton()
-                } else {
-                    val header = remember(user) { ProfileHeaderBuilder.build(user, System.currentTimeMillis()) }
-                    if (!state.isEditing) ProfileBanner(user = user)
-                    ProfileAvatar(
-                        user = user,
-                        header = header,
-                        isEditing = state.isEditing,
-                        isUploading = uploadState.uploading == ImageUploadTarget.AVATAR,
-                        pickEnabled = uploadState.uploading == null,
-                        onPick = { avatarPicker.launch(imageOnly) },
-                    )
-                    if (state.isEditing) {
-                        OwnProfileEditor(
-                            state = state,
-                            isUploadingBanner = uploadState.uploading == ImageUploadTarget.BANNER,
-                            canPickBanner = uploadState.uploading == null,
-                            onPickBanner = { bannerPicker.launch(imageOnly) },
-                            onEvent = onEvent,
-                        )
-                    } else {
-                        ProfileReadOnlyBody(
-                            userId = user.id,
-                            header = header,
-                            stats = state.stats,
-                            timeline = state.timeline,
-                            onViewPosts = onViewPosts,
-                        )
-                    }
-                }
-            }
+        ) {
+            OwnProfileBody(
+                state = state,
+                uploading = uploadState.uploading,
+                destinations = OwnProfileDestinations(
+                    onOpenStats = onOpenStats,
+                    onOpenProgression = onOpenProgression,
+                    onOpenDecor = onOpenDecor,
+                    onOpenFriendRequests = onOpenFriendRequests,
+                    onViewPosts = onViewPosts,
+                ),
+                onPickBanner = { pickImage(ImageUploadTarget.BANNER) },
+                onPickAvatar = { pickImage(ImageUploadTarget.AVATAR) },
+                onOpenImage = { image ->
+                    fullscreen = resolveServedImageUrl(image.url, mediaBaseUrl)?.let { image.copy(url = it) }
+                },
+                onMoodTap = onMoodTap,
+                onPickLanguage = { pickingSlot = it },
+                onEvent = onEvent,
+                banner = { ProfileBanner(user = it, modifier = Modifier.fillMaxSize()) },
+            )
         }
+        OwnProfileErrorCapsule(capsule)
     }
 
-    if (isSharing) {
-        state.user?.let(ProfileShareBuilder::build)?.let { share ->
-            ProfileShareSheet(share = share, onDismiss = { isSharing = false })
-        }
+    pickingSlot?.let { slot -> OwnProfileLanguagePicker(slot, state, onEvent, onDone = { pickingSlot = null }) }
+    fullscreen?.let { image -> ProfileFullscreenImageViewer(image = image, onDismiss = { fullscreen = null }) }
+    val share = state.user?.let(ProfileShareBuilder::build)
+    if (isSharing && share != null) ProfileShareSheet(share = share, onDismiss = { isSharing = false })
+}
+
+/** Le sélecteur de photo système, branché sur le téléversement de l'avatar ou de la bannière. */
+@Composable
+private fun rememberOwnProfileImagePicker(uploadViewModel: AvatarBannerUploadViewModel): (ImageUploadTarget) -> Unit {
+    val context = LocalContext.current
+    var target by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { context.contentResolver.readMediaUploadItem(it) }
+            ?.let { uploadViewModel.onImagePicked(target, it) }
+    }
+    return { picked ->
+        target = picked
+        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 }
 
+/** La capsule d'erreur : le dernier message (enregistrement ou téléversement), effacé après 3 s. */
+@Composable
+private fun rememberOwnProfileErrorCapsule(
+    errorMessage: String?,
+    uploadErrorMessage: String?,
+    onUploadErrorShown: () -> Unit,
+): String? {
+    var capsule by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(errorMessage) { errorMessage?.let { capsule = it } }
+    LaunchedEffect(uploadErrorMessage) {
+        uploadErrorMessage?.let {
+            capsule = it
+            onUploadErrorShown()
+        }
+    }
+    LaunchedEffect(capsule) {
+        if (capsule != null) {
+            delay(ERROR_CAPSULE_MILLIS)
+            capsule = null
+        }
+    }
+    return capsule
+}
+
 /**
- * La droite de la barre : en lecture, partage + crayon ; en edition, « Enregistrer » ;
- * un indicateur pendant un enregistrement ou un televersement (parite iOS `trailing`).
+ * Le corps de MA page, sans ViewModel : le squelette d'en-tête SEULEMENT quand aucune identité n'est en
+ * mémoire ; sinon l'en-tête et les sections, peints depuis la session même pendant la relecture silencieuse.
+ * [banner] peint le fond de la bannière (photo, design, cadre).
  */
 @Composable
-private fun OwnProfileTopBarActions(
+internal fun OwnProfileBody(
+    state: OwnProfileUiState,
+    uploading: ImageUploadTarget?,
+    destinations: OwnProfileDestinations,
+    onPickBanner: () -> Unit,
+    onPickAvatar: () -> Unit,
+    onOpenImage: (ProfileFullscreenImage) -> Unit,
+    onMoodTap: (() -> Unit)?,
+    onPickLanguage: (OwnProfileLanguageSlot) -> Unit,
+    onEvent: (OwnProfileUiEvent) -> Unit,
+    banner: @Composable BoxScope.(MeeshyUser) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxl),
+    ) {
+        val user = state.user
+        if (user == null) {
+            OwnProfileSkeleton()
+        } else {
+            val canOpenStats = destinations.onOpenStats != null
+            val canOpenProgression = destinations.onOpenProgression != null
+            val canOpenDecor = destinations.onOpenDecor != null
+            val presentation = remember(
+                user, state.isEditing, state.systemLanguage, state.regionalLanguage, state.customDestinationLanguage,
+                state.stats, state.pendingFriendRequests, canOpenStats, canOpenProgression, canOpenDecor,
+            ) {
+                OwnProfileSectionsPresenter.present(
+                    OwnProfileSectionsInput(
+                        user = user,
+                        systemLanguage = state.systemLanguage,
+                        regionalLanguage = state.regionalLanguage,
+                        customDestinationLanguage = state.customDestinationLanguage,
+                        isEditing = state.isEditing,
+                        stats = state.stats,
+                        pendingFriendRequests = state.pendingFriendRequests,
+                        canOpenStats = canOpenStats,
+                        canOpenProgression = canOpenProgression,
+                        canOpenDecor = canOpenDecor,
+                    ),
+                )
+            }
+            OwnProfileHeader(
+                user = user,
+                isEditing = state.isEditing,
+                moodEmoji = state.moodEmoji,
+                uploading = uploading,
+                onPickBanner = onPickBanner,
+                onPickAvatar = onPickAvatar,
+                onOpenImage = onOpenImage,
+                onMoodTap = onMoodTap,
+                banner = { banner(this, user) },
+            )
+            OwnProfileSectionsColumn(
+                presentation = presentation,
+                state = state,
+                destinations = destinations,
+                onPickLanguage = onPickLanguage,
+                onEvent = onEvent,
+            )
+        }
+        Spacer(Modifier.height(MeeshySpacing.xxxl + MeeshySpacing.sm))
+    }
+}
+
+/** La droite de l'en-tête : partage + « Modifier » en lecture, « Enregistrer » en édition, un indicateur pendant l'envoi. */
+@Composable
+private fun OwnProfileTrailing(
     state: OwnProfileUiState,
     isUploading: Boolean,
     onShare: () -> Unit,
     onEvent: (OwnProfileUiEvent) -> Unit,
 ) {
-    when {
-        state.isSaving || isUploading ->
-            CircularProgressIndicator(
-                color = MeeshyPalette.Indigo500,
-                modifier = Modifier.padding(horizontal = MeeshySpacing.md).size(20.dp),
-            )
-        state.isEditing ->
-            TextButton(onClick = { onEvent(OwnProfileUiEvent.Save) }) {
-                Text(
-                    text = stringResource(R.string.profile_save),
-                    color = MeeshyPalette.Indigo500,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        else -> {
-            if (state.user?.let(ProfileShareBuilder::build) != null) {
-                IconButton(onClick = onShare) {
-                    Icon(MeeshyIcons.Share, contentDescription = stringResource(R.string.profile_share_action))
-                }
-            }
-            IconButton(onClick = { onEvent(OwnProfileUiEvent.StartEditing) }) {
-                Icon(MeeshyIcons.EditFilled, contentDescription = stringResource(R.string.profile_edit))
-            }
-        }
+    if (state.isSaving || isUploading) {
+        CircularProgressIndicator(
+            color = MeeshyPalette.Indigo500,
+            strokeWidth = 2.dp,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.md).size(20.dp),
+        )
+        return
+    }
+    if (!state.isEditing && state.user?.let(ProfileShareBuilder::build) != null) {
+        CollapsibleHeaderActionButton(
+            icon = MeeshyIcons.Share,
+            contentDescription = stringResource(R.string.profile_share_action),
+            onClick = onShare,
+        )
+    }
+    TextButton(onClick = { onEvent(if (state.isEditing) OwnProfileUiEvent.Save else OwnProfileUiEvent.StartEditing) }) {
+        Text(
+            text = stringResource(if (state.isEditing) R.string.profile_save else R.string.profile_edit),
+            color = MeeshyPalette.Indigo500,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
-/** Le formulaire d'edition : banniere, noms, bio et les trois langues de contenu. */
+/** Le sélecteur d'une langue de contenu (iOS `ProfileLanguagePickerSheet`) : « Aucune » pour un rang secondaire. */
 @Composable
-private fun OwnProfileEditor(
+private fun OwnProfileLanguagePicker(
+    slot: OwnProfileLanguageSlot,
     state: OwnProfileUiState,
-    isUploadingBanner: Boolean,
-    canPickBanner: Boolean,
-    onPickBanner: () -> Unit,
     onEvent: (OwnProfileUiEvent) -> Unit,
+    onDone: () -> Unit,
 ) {
-    TextButton(onClick = onPickBanner, enabled = canPickBanner, modifier = Modifier.fillMaxWidth()) {
-        if (isUploadingBanner) {
-            CircularProgressIndicator(Modifier.size(18.dp))
-            Spacer(Modifier.width(MeeshySpacing.sm))
-        }
-        Text(stringResource(R.string.profile_change_banner))
+    val current = when (slot) {
+        OwnProfileLanguageSlot.PRIMARY -> state.systemLanguage
+        OwnProfileLanguageSlot.REGIONAL -> state.regionalLanguage
+        OwnProfileLanguageSlot.CUSTOM -> state.customDestinationLanguage
     }
-    OwnProfileTextField(
-        value = state.firstName,
-        label = stringResource(R.string.profile_first_name_label),
-        onValueChange = { onEvent(OwnProfileUiEvent.FirstNameChanged(it)) },
-    )
-    OwnProfileTextField(
-        value = state.lastName,
-        label = stringResource(R.string.profile_last_name_label),
-        onValueChange = { onEvent(OwnProfileUiEvent.LastNameChanged(it)) },
-    )
-    OwnProfileTextField(
-        value = state.displayName,
-        label = stringResource(R.string.profile_display_name_label),
-        onValueChange = { onEvent(OwnProfileUiEvent.DisplayNameChanged(it)) },
-    )
-    OutlinedTextField(
-        value = state.bio,
-        onValueChange = { onEvent(OwnProfileUiEvent.BioChanged(it)) },
-        label = { Text(stringResource(R.string.profile_bio_label)) },
-        minLines = 3,
-        maxLines = 5,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    ContentLanguageField(
-        label = stringResource(R.string.profile_system_language_label),
-        selectedCode = state.systemLanguage,
-        onSelect = { onEvent(OwnProfileUiEvent.SystemLanguageChanged(it)) },
-    )
-    ContentLanguageField(
-        label = stringResource(R.string.profile_regional_language_label),
-        selectedCode = state.regionalLanguage,
-        onSelect = { onEvent(OwnProfileUiEvent.RegionalLanguageChanged(it)) },
-    )
-    ContentLanguageField(
-        label = stringResource(R.string.profile_custom_language_label),
-        selectedCode = state.customDestinationLanguage,
-        onSelect = { onEvent(OwnProfileUiEvent.CustomDestinationLanguageChanged(it)) },
+    val none = stringResource(R.string.profile_language_none)
+    val options = remember(slot, current, none) {
+        val clear = if (slot == OwnProfileLanguageSlot.PRIMARY) {
+            emptyList()
+        } else {
+            listOf(LanguagePickerOption(code = null, label = none, isSelected = current.isBlank()))
+        }
+        clear + LanguageData.allLanguagesCommonFirst.map { language ->
+            LanguagePickerOption(
+                code = language.code,
+                label = "${language.flag}  ${language.nativeName}",
+                isSelected = language.code.equals(current, ignoreCase = true),
+            )
+        }
+    }
+    LanguagePickerDialog(
+        titleText = stringResource(languageSlotTitle(slot)),
+        options = options,
+        onSelect = { code ->
+            onEvent(slot.changedEvent(code.orEmpty()))
+            onDone()
+        },
+        onDismiss = onDone,
+        dismissButtonLabel = stringResource(UiR.string.common_cancel),
     )
 }
 
-@Composable
-private fun OwnProfileTextField(value: String, label: String, onValueChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-        modifier = Modifier.fillMaxWidth(),
-    )
+private fun OwnProfileLanguageSlot.changedEvent(code: String): OwnProfileUiEvent = when (this) {
+    OwnProfileLanguageSlot.PRIMARY -> OwnProfileUiEvent.SystemLanguageChanged(code)
+    OwnProfileLanguageSlot.REGIONAL -> OwnProfileUiEvent.RegionalLanguageChanged(code)
+    OwnProfileLanguageSlot.CUSTOM -> OwnProfileUiEvent.CustomDestinationLanguageChanged(code)
 }
 
-/** Session encore vide (premier lancement) : un squelette, jamais un spinner ni des « ? » de repli. */
+/** La capsule rouge en bas de page pendant 3 s (iOS : `Capsule().fill(MeeshyColors.error.opacity(0.9))`). */
 @Composable
-private fun OwnProfileColdSkeleton() {
-    MeeshySkeletonBox(modifier = Modifier.fillMaxWidth().height(120.dp))
-    MeeshySkeletonBox(modifier = Modifier.size(96.dp), shape = CircleShape)
-    MeeshySkeletonBox(modifier = Modifier.width(160.dp).height(20.dp))
-    MeeshySkeletonBox(modifier = Modifier.width(110.dp).height(14.dp))
+private fun BoxScope.OwnProfileErrorCapsule(message: String?) {
+    AnimatedVisibility(
+        visible = message != null,
+        enter = slideInVertically { it } + fadeIn(),
+        exit = slideOutVertically { it } + fadeOut(),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .navigationBarsPadding()
+            .padding(bottom = MeeshySpacing.xxl, start = MeeshySpacing.lg, end = MeeshySpacing.lg),
+    ) {
+        Text(
+            text = message.orEmpty(),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyPalette.White,
+            modifier = Modifier
+                .clip(RoundedCornerShape(MeeshyRadius.pill))
+                .background(MeeshyPalette.Error.copy(alpha = 0.9f))
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.smPlus),
+        )
+    }
 }
