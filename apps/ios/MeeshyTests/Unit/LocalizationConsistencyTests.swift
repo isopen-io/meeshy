@@ -922,6 +922,16 @@ final class LocalizationConsistencyTests: XCTestCase {
         let mixed = forwarded + "\nlet b = label(bundle: .main)"
         XCTAssertEqual(localizedCalls(in: mixed).map(\.isModuleBundle), [false],
                        "un paramètre aussi rempli par `.main` reste compté contre le catalogue de l'app")
+
+        let labelled = """
+        static var failed: String { failed(in: .module) }
+        static func failed(in bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: labelled).map(\.isModuleBundle), [true],
+                       "le paramètre se remplit sous son ÉTIQUETTE (`in: .module`), pas sous son nom")
+        XCTAssertEqual(localizedCalls(in: labelled + "\nlet b = failed(in: .main)").map(\.isModuleBundle), [false])
     }
 
     /// Keys with at least one locale expressed as plural variations.

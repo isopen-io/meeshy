@@ -15,6 +15,8 @@ public nonisolated struct CommunityMemberSection: Identifiable, Sendable {
 }
 
 public extension MemberRole {
+    @MainActor var sectionTitle: String { sectionTitle(in: .module) }
+
     nonisolated func sectionTitle(in bundle: Bundle) -> String {
         switch self {
         case .creator:
