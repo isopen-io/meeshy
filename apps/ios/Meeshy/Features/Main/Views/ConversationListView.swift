@@ -427,10 +427,10 @@ struct ConversationListView: View {
                 sheetTargets.inviteSheet = conversation
             } : nil,
             onTap: { openConversation(conversation) },
-            onLoadPreview: { await conversationViewModel.loadPreviewMessages(for: conversation.id, intent: $0) },
+            onLoadPreview: { await conversationViewModel.loadPreviewMessages(for: conversation.id, intent: $0, isDirect: conversation.type == .direct) },
             enableAutoPreviewLoad: passContext.autoPreviewIds.contains(conversation.id),
             onLongPress: { sourceFrame in
-                Task { await conversationViewModel.loadPreviewMessages(for: conversation.id, refresh: true) }
+                Task { await conversationViewModel.loadPreviewMessages(for: conversation.id, refresh: true, isDirect: conversation.type == .direct) }
                 // Montage au REPOS invisible (scale 1, offset 0, opacité 0) :
                 // le GeometryReader de l'overlay mesure la frame de repos de
                 // la carte, puis `runContextMenuEmergence` place la carte sur
