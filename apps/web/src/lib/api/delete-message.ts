@@ -3,6 +3,7 @@ import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversati
 import * as messagesEndpoints from '@meeshy/shared/api/endpoints/messages';
 
 import { removalBody } from '@/lib/view/content-removal';
+import type { RowExit } from '@/lib/view/row-exit-motion';
 
 import { CONVERSATIONS_QUERY_KEY, findCachedConversation, patchConversation } from './conversations';
 import type { ApiResult, HttpRequest } from './http';
@@ -229,21 +230,36 @@ export function hideRowsForReader(
   return { removed, describedByList };
 }
 
-export async function performDeleteForMe(params: DeleteParams): Promise<MessageDeleteResult> {
+const NO_ROW_EXIT: RowExit = { collapse: () => null, unfold: () => {} };
+
+/**
+ * LA RANGÉE SORT EN SE REPLIANT (#12634) — `rowExit` la garde au cache le temps
+ * de son repli, puis elle le quitte ; la requête, elle, part tout de suite. Un
+ * refus la rend à sa place ET la déplie. Sans `rowExit` (ou sous « Réduire les
+ * animations »), elle quitte le fil dans l'image du geste, comme avant.
+ */
+export async function performDeleteForMe(params: DeleteParams & { readonly rowExit?: RowExit }): Promise<MessageDeleteResult> {
   const { queryClient, conversationId, messages, transport } = params;
   const [only] = messages;
   if (only === undefined) return NOTHING;
 
-  const { removed, describedByList } = hideRowsForReader(queryClient, conversationId, new Set(messages.map((m) => m.id)));
+  const rowExit = params.rowExit ?? NO_ROW_EXIT;
+  const ids: ReadonlySet<string> = new Set(messages.map((m) => m.id));
+  const leaving = rowExit.collapse(ids);
+  const hide = () => hideRowsForReader(queryClient, conversationId, ids);
+  const hiding = leaving === null ? Promise.resolve(hide()) : leaving.then(hide);
 
-  const result = await transport.request<unknown>(
+  const answer = transport.request<unknown>(
     messages.length === 1
       ? { method: 'DELETE', path: messagesEndpoints.byMessageIdDeleteForMe(only.id) }
-      : { method: 'DELETE', path: messagesEndpoints.bulkDeleteForMe, body: { messageIds: messages.map((m) => m.id) } },
+      : { method: 'DELETE', path: messagesEndpoints.bulkDeleteForMe, body: { messageIds: [...ids] } },
   );
+  const { removed, describedByList } = await hiding;
+  const result = await answer;
 
   if (!result.ok) {
     restoreRows(queryClient, removed);
+    rowExit.unfold(ids);
     return { deleted: 0, failed: messages.length, offline: result.status === 0 };
   }
 

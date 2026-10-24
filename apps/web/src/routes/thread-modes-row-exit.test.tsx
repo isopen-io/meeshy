@@ -145,7 +145,7 @@ describe('la feuille qui joue la sortie et le retour', () => {
   };
   const keyframesOf = (name: string): readonly string[] => {
     const start = sheet.indexOf(`@keyframes ${name}`);
-    const body = start === -1 ? '' : sheet.slice(start, sheet.indexOf('@', start + 1));
+    const body = start === -1 ? '' : sheet.slice(start, sheet.indexOf('\n}\n', start));
     return [...new Set([...body.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1] ?? ''))];
   };
 

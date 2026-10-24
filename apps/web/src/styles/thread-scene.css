@@ -243,6 +243,64 @@ ol:has([data-unfolded]) .unfold-stage:not([data-unfolded]) {
   }
 }
 
+/* UN MESSAGE MASQUÉ « POUR MOI » SORT DU FIL EN SE REPLIANT (#12634,
+   `lib/view/row-exit-motion.ts`) — et revient de même si le serveur refuse.
+   Le repli passe par `transform` et `opacity`, jamais par la hauteur (#11314) :
+   la rangée qui sort QUITTE LE FLUX à sa place (`position: absolute`, `top`
+   laissé à sa position statique), la hauteur mesurée de son `<li>` tombe, et
+   le virtualiseur remonte les suivantes — que `[data-rows-settling]` fait
+   GLISSER par leur `transform` au lieu de les faire sauter, pendant que la
+   sortante s'efface sur place. Au retour, elle reprend sa hauteur, les
+   suivantes redescendent en glissant et elle apparaît. La durée est
+   `ROW_EXIT_MS`, la courbe `ROW_EXIT_CURVE`. Posé sur le nœud des DEUX peaux,
+   comme l'arrivée et la combustion. */
+.thread-row-leaving {
+  position: absolute;
+  inset-inline: 0;
+  pointer-events: none;
+  transform-origin: 50% 0;
+  animation: thread-row-leave 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes thread-row-leave {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+.thread-row-returning {
+  transform-origin: 50% 0;
+  animation: thread-row-return 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes thread-row-return {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+[data-rows-settling] > li {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .thread-row-leaving {
+    animation: none;
+    opacity: 0;
+  }
+  .thread-row-returning {
+    animation: none;
+  }
+  [data-rows-settling] > li {
+    transition: none;
+  }
+}
+
 /* DANS le cadre, à sa marge (#8506) : l'identité sur la ligne d'identité
    réservée (tête de groupe) ou au-dessus de la première ligne (suite) ; la
    bande et le tampon sur la ligne basse réservée de l'élue

@@ -48,6 +48,7 @@ import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { useScreenCaptureReports } from '@/lib/capture/use-screen-capture-reports';
 import { captureProps, sealedProps } from '@/lib/view/content-exit';
 import { threadRowKeyOf, useArrivalMotion } from '@/lib/view/use-arrival-motion';
+import { useRowExit, type RowExitState } from '@/lib/view/row-exit-motion';
 
 /**
  * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE, déplacé ICI avec le
@@ -147,6 +148,19 @@ export type ThreadSummaryCapability = {
   readonly onResumeThread: () => void;
   readonly entryMenu?: SummaryEntryMenu;
 };
+
+/**
+ * LE MOUVEMENT D'UNE RANGÉE, UN SEUL À LA FOIS — la combustion d'un éphémère
+ * (#7468) prime, puis la sortie d'un message masqué « pour moi » et son retour
+ * (#12634), puis l'arrivée (#11223). Une rangée qui sort n'est plus lue : elle
+ * quitte l'arbre d'accessibilité dès le geste, l'issue se dit dans la région vivante.
+ */
+function rowMotionProps(row: { readonly destroying: boolean; readonly id: string; readonly arriving: boolean; readonly exit: RowExitState }) {
+  if (row.destroying) return { 'data-destroying': '', className: 'ephemeral-destroying' };
+  if (row.exit.leaving.has(row.id)) return { 'data-leaving': '', className: 'thread-row-leaving', 'aria-hidden': true };
+  if (row.exit.returning.has(row.id)) return { 'data-returning': '', className: 'thread-row-returning' };
+  return row.arriving ? { 'data-arriving': '', className: 'thread-row-arrival' } : {};
+}
 
 export function ThreadModes({
   mode,
@@ -366,6 +380,8 @@ export function ThreadModes({
      anticipé du Résumé, qui doit voir passer les rendus pour ne pas prendre son
      retour au fil pour une arrivée. */
   const arrivingKey = useArrivalMotion(placedMessages);
+  /* UN MESSAGE MASQUÉ « POUR MOI » SORT EN SE REPLIANT (#12634, `row-exit-motion.ts`). */
+  const rowExit = useRowExit();
 
   /**
    * LE REGISTRE DES PHASES DE RÉVÉLATION (#7142) — déclaré ICI, avant le
@@ -515,6 +531,7 @@ export function ThreadModes({
 
         <ol
           data-thread-rows={placed.length}
+          {...(rowExit.leaving.size > 0 || rowExit.returning.size > 0 ? { 'data-rows-settling': '' } : {})}
           style={{
             position: 'relative',
             width: '100%',
@@ -754,11 +771,7 @@ export function ThreadModes({
                     voisins se resserrent à mesure, sans saut de liste. Avec
                     `prefers-reduced-motion`, la feuille retombe sur un fondu. */}
                 <div
-                  {...(rowPhase === 'destroying'
-                    ? { 'data-destroying': '', className: 'ephemeral-destroying' }
-                    : threadRowKeyOf(p.message) === arrivingKey
-                      ? { 'data-arriving': '', className: 'thread-row-arrival' }
-                      : {})}
+                  {...rowMotionProps({ destroying: rowPhase === 'destroying', id: p.message.id, arriving: threadRowKeyOf(p.message) === arrivingKey, exit: rowExit })}
                   {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
                   {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
                   {...sealedProps(p.message, Date.now())}
