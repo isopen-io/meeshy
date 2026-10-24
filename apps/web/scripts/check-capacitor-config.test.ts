@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  androidShellPlugins,
+  auditAndroidShellLinks,
   auditHookDeclaration,
   auditWebViewFloor,
   auditSyncedPlugins,
@@ -177,5 +179,69 @@ describe('auditWebViewFloor — la coque exige sa WebView minimale (#11325)', ()
   test('un plancher sous le minimum de Capacitor (55) est refusé', () => {
     const low = { ...healthy, floorSource: floorSource.replace('111', '50'), capConfig: { android: { minWebViewVersion: 50 }, server: { errorPath: 'webview-update.html' } } };
     expect(auditWebViewFloor(low)[0]).toContain('≥ 55');
+  });
+});
+
+/**
+ * #11229 — un plugin SANS import dans `src/` (le pilote Haptics le lit comme
+ * la coque le DÉCLARE, par `PluginHeaders`) échappe au gate #8090 : la
+ * dépendance est posée, la coque ne la lie pas, et l'appui long vibre au
+ * navigateur sans que rien ne rougisse. Les deux fichiers gradle que `cap
+ * sync` génère sont SUIVIS : ils doivent lier chaque plugin Android déclaré.
+ */
+describe('androidShellPlugins — les dépendances qui portent un module Android', () => {
+  test('retient un paquet dont le manifeste déclare capacitor.android, ignore le reste', () => {
+    const manifests: Readonly<Record<string, unknown>> = {
+      '@capacitor/haptics': { capacitor: { android: { src: 'android' } } },
+      '@capacitor/core': {},
+      preact: {},
+    };
+    const packageJson = { dependencies: { '@capacitor/haptics': '8.0.2', '@capacitor/core': '8.5.1', preact: '10' } };
+    expect(androidShellPlugins(packageJson, (name: string) => manifests[name])).toEqual(['@capacitor/haptics']);
+  });
+
+  test('un manifeste illisible ne fait pas un plugin', () => {
+    expect(androidShellPlugins({ dependencies: { x: '1' } }, () => undefined)).toEqual([]);
+  });
+});
+
+describe('auditAndroidShellLinks — la coque Android lie chaque plugin déclaré', () => {
+  const settingsGradle = "include ':capacitor-haptics'\nproject(':capacitor-haptics').projectDir = new File('x')";
+  const buildGradle = "dependencies {\n    implementation project(':capacitor-haptics')\n}";
+
+  test('inclus ET implémenté -> aucune violation', () => {
+    expect(auditAndroidShellLinks({ plugins: ['@capacitor/haptics'], settingsGradle, buildGradle })).toEqual([]);
+  });
+
+  test('absent de capacitor.settings.gradle -> violation qui nomme le plugin et le fichier', () => {
+    const violations = auditAndroidShellLinks({ plugins: ['@capacitor/haptics'], settingsGradle: '', buildGradle });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('@capacitor/haptics');
+    expect(violations[0]).toContain('capacitor.settings.gradle');
+  });
+
+  test('absent de app/capacitor.build.gradle -> violation qui nomme le fichier', () => {
+    const violations = auditAndroidShellLinks({ plugins: ['@capacitor-community/media'], settingsGradle: "include ':capacitor-community-media'", buildGradle: '' });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('capacitor.build.gradle');
+  });
+
+  test('la coque suivie lie tous les plugins Android de package.json (Haptics compris)', async () => {
+    const { existsSync, readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const root = new URL('..', import.meta.url).pathname;
+    const manifestOf = (name: string): unknown => {
+      const path = join(root, 'node_modules', name, 'package.json');
+      return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
+    };
+    const plugins = androidShellPlugins(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')), manifestOf);
+    expect(plugins).toContain('@capacitor/haptics');
+    expect(
+      auditAndroidShellLinks({
+        plugins,
+        settingsGradle: readFileSync(join(root, 'android/capacitor.settings.gradle'), 'utf8'),
+        buildGradle: readFileSync(join(root, 'android/app/capacitor.build.gradle'), 'utf8'),
+      }),
+    ).toEqual([]);
   });
 });
