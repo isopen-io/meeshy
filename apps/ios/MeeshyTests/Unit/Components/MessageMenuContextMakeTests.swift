@@ -236,6 +236,50 @@ final class MessageMenuContextMakeTests: XCTestCase {
         XCTAssertEqual(MessageActionResolver.moreSections(ctx), [.actions([.delete])])
     }
 
+    // MARK: - Supprimer pour moi : un participant ACTIF (#11415)
+
+    private func group() -> MeeshyConversation {
+        MeeshyConversation(id: "6a0ad86a6e21a483b4443d99", identifier: "famille", type: .group)
+    }
+
+    /// La passerelle exige un participant actif (`DELETE /messages/:id/delete-for-me`) ;
+    /// un lecteur dont elle a révoqué l'accès relit son cache sans se voir offrir
+    /// un geste condamné au 403.
+    func test_make_aViewerWhoseAccessWasRevoked_isNotOfferedDeleteForMe() {
+        let user = MeeshyUser(id: viewerId, username: "lea")
+        let member = ConversationMenuAuthority.make(conversation: group(), currentUser: user, guest: nil, accessRevoked: false)
+        XCTAssertTrue(member.viewer.isActiveMember)
+        XCTAssertTrue(make(message(mine: false), member).canDeleteForMe, "témoin : un participant actif masque chez lui")
+
+        let departed = ConversationMenuAuthority.make(conversation: group(), currentUser: user, guest: nil, accessRevoked: true)
+        XCTAssertFalse(departed.viewer.isActiveMember)
+        XCTAssertFalse(make(message(mine: false), departed).canDeleteForMe)
+        XCTAssertFalse(make(message(mine: true), departed).canDeleteForMe, "son propre message non plus")
+        XCTAssertFalse(make(message(mine: true, deletedAt: now), departed).canDeleteForMe, "ni un message déjà supprimé")
+    }
+
+    /// Sans conversation connue, l'appartenance est INCONNUE : fermée.
+    func test_make_withoutAConversation_isNotOfferedDeleteForMe() {
+        let unknown = ConversationMenuAuthority.make(
+            conversation: nil, currentUser: MeeshyUser(id: viewerId, username: "lea"), guest: nil, accessRevoked: false)
+        XCTAssertFalse(unknown.viewer.isActiveMember)
+        XCTAssertFalse(make(message(mine: false), unknown).canDeleteForMe)
+    }
+
+    func test_conversationView_menuAuthority_readsTheRevokedAccess() throws {
+        let view = AppSourceGuard.stripComments(try String(
+            contentsOf: appRoot().appendingPathComponent("Meeshy/Features/Main/Views/ConversationView.swift"),
+            encoding: .utf8
+        ))
+        XCTAssertTrue(view.contains("accessRevoked: viewModel.accessRevoked"),
+                      "l'autorité du menu lit la révocation servie, jamais `conversation != nil` seul")
+        let factory = AppSourceGuard.stripComments(try String(
+            contentsOf: appRoot().appendingPathComponent("Meeshy/Features/Main/Components/MessageMenuContext+Make.swift"),
+            encoding: .utf8
+        ))
+        XCTAssertFalse(factory.contains("isActiveMember: conversation != nil"))
+    }
+
     // MARK: - Les actions du type
 
     func test_make_aLink_opensAndCopiesTheLink() {
