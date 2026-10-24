@@ -30,17 +30,32 @@
  * le budget — jamais un throw (même discipline que `await-fact.mjs`) : le
  * `expect` de l'appelant nomme alors ce qu'il a lu EN DERNIER, jamais
  * l'endroit où l'attente a buté.
+ *
+ * LE RÉSEAU DANS LA STABILITÉ (#12600). `options.network`, lu côté Node
+ * APRÈS chaque lecture, rend `undefined` tant qu'une requête de la page est
+ * en vol, sinon une empreinte de ce qui est parti et revenu. Une lecture
+ * prise réseau occupé ne compte pas, et l'empreinte entre dans la
+ * comparaison : deux lectures identiques ne concluent que si aucune requête
+ * n'est partie entre elles. C'est la garantie de `networkidle` (« la page a
+ * fini de charger ») sans sa fenêtre FIXE de 500 ms, que
+ * `check-phone-frame.mjs` payait ~740 fois par passage (~6 min en CI).
  */
 export const SETTLE_STEP_MS = 50;
 export const SETTLE_ATTEMPTS = 100;
 
 export async function waitForValueSettled(page, evaluateFn, arg, options = {}) {
-  const { attempts = SETTLE_ATTEMPTS, stepMs = SETTLE_STEP_MS } = options;
+  const { attempts = SETTLE_ATTEMPTS, stepMs = SETTLE_STEP_MS, network } = options;
   let previous;
   let hasPrevious = false;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const current = await page.evaluate(evaluateFn, arg);
-    const serialized = JSON.stringify(current);
+    const reseau = network?.();
+    if (network !== undefined && reseau === undefined) {
+      hasPrevious = false;
+      await page.waitForTimeout(stepMs);
+      continue;
+    }
+    const serialized = JSON.stringify([current, reseau]);
     if (hasPrevious && serialized === previous) return current;
     previous = serialized;
     hasPrevious = true;
