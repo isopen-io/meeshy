@@ -1,3 +1,5 @@
+import { isPrivilegedPlatformRole } from './platform-privilege.js';
+
 /**
  * **LES DEUX FORMES DE L'ABSENCE SONT ACCEPTÉES** (#6985). Sous
  * `exactOptionalPropertyTypes` — actif dans `apps/web-v2` —, `avatar?: string |
@@ -286,7 +288,7 @@ export const serializeConversationParticipant = (
       canManageGroups: isGlobalAdmin,
       canManageConversations: isGlobalAdmin,
       canViewAnalytics: isGlobalAdmin,
-      canModerateContent: isGlobalAdmin,
+      canModerateContent: isPrivilegedPlatformRole(user?.role),
       canViewAuditLogs: isGlobalAdmin,
       canManageNotifications: isGlobalAdmin,
       canManageTranslations: isGlobalAdmin,
