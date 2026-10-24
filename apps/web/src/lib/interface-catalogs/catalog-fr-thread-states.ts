@@ -21,6 +21,8 @@ const frThreadStates = {
   'message.forwarded': 'Transféré',
   'message.forwarded.fromGroup': 'Transféré depuis {name}',
   'message.forwarded.fromPerson': 'Transféré de {name}',
+  /* #11375 — la modification d'un message par un modérateur de plateforme, dite à tous. */
+  'message.editedByModerator': 'modifié par un modérateur',
   'message.send.failed': 'Non envoyé',
   'message.send.failed.reason': 'Non envoyé — {reason}',
   'message.send.retry': 'Réessayer',

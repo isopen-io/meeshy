@@ -2,7 +2,7 @@ import { quotedPieceIdOf } from '@/lib/view/quoted-preview';
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
-import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
+import { badgesOf, editedByModeratorOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { usePresence } from '@/lib/view/use-presence';
@@ -370,7 +370,7 @@ export function Bubble({
           (#5936, `BubbleStandardLayout.swift:1064-1066`). `EditedMark` porte
           déjà `aria-hidden` (revue-correction #5936, défaut majeur 8) : le
           mot est dans `rowLabel`, il ne se prononce pas une seconde fois. */}
-      {isEdited ? <EditedMark onBrandBubble={isMine && !bareBody} /> : null}
+      {isEdited ? <EditedMark onBrandBubble={isMine && !bareBody} byModerator={editedByModeratorOf(badges)} /> : null}
       {message.attachments && body.kind !== 'sticker' ? (
         <Attachments
           attachments={message.attachments}

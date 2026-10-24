@@ -991,6 +991,7 @@ const it = {
   'message.forwarded': 'Inoltrato',
   'message.forwarded.fromGroup': 'Inoltrato da {name}',
   'message.forwarded.fromPerson': 'Inoltrato da {name}',
+  'message.editedByModerator': 'modificato da un moderatore',
   'message.send.failed': 'Non inviato',
   'message.send.failed.reason': 'Non inviato — {reason}',
   'message.send.retry': 'Riprova',

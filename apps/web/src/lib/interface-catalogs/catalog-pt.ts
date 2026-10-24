@@ -995,6 +995,7 @@ const pt = {
   'message.forwarded': 'Encaminhado',
   'message.forwarded.fromGroup': 'Encaminhado de {name}',
   'message.forwarded.fromPerson': 'Encaminhado por {name}',
+  'message.editedByModerator': 'editado por um moderador',
   'message.send.failed': 'Não enviado',
   'message.send.failed.reason': 'Não enviado — {reason}',
   'message.send.retry': 'Tentar novamente',

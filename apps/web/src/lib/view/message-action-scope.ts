@@ -193,12 +193,14 @@ export const webRepliesToMessage = (message: ActionMessage, scope: ActionScope, 
   message.isViewOnce !== true && webRepliesTo(messageActionsOf(message, scope, input));
 
 /**
- * MODIFIER DEPUIS LE WEB, EN AUTEUR SEULEMENT (#11372) — la loi admet qu'un
- * rôle de plateforme réécrive le message d'un autre (`edit.asModerator`), mais
- * la passerelle n'enregistre pas l'auteur de la modification et l'interface ne
- * l'affiche pas : ce serait une réécriture silencieuse. Le web ne l'offre pas.
+ * MODIFIER DEPUIS LE WEB (#11372, #11375) — le verdict `edit` de la loi, tel
+ * quel. #11372 retirait la réécriture du message d'un autre au titre d'un rôle
+ * de plateforme (`edit.asModerator`), parce qu'elle aurait été SILENCIEUSE. La
+ * décision porteur du 2026-10-24 (#11375) l'autorise À VISAGE DÉCOUVERT : la
+ * passerelle enregistre l'auteur de la modification et son rôle, et tous les
+ * membres lisent « modifié par un modérateur ». Le web l'offre donc de nouveau.
  */
-export const webEditsAsAuthor = (actions: MessageActions): boolean => actions.verdicts.edit !== null && !actions.verdicts.edit.asModerator;
+export const webEdits = (actions: MessageActions): boolean => actions.verdicts.edit !== null;
 
 /**
  * LES OFFRES D'UNE PIÈCE, DANS CE QUE LE MESSAGE ADMET (#11210, #11372) — la
