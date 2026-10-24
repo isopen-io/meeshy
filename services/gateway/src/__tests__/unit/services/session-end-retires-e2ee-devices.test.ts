@@ -31,7 +31,7 @@ function aliceWithTwoDevices() {
       expiresAt: new Date(Date.now() + 86_400_000),
     });
     store.collections.E2EEDevice.insert({ userId: ALICE, deviceId: index + 1, registrationId: 100 + index, sessionId: id, identityKey: 'ik', platform: 'ios' });
-    store.collections.E2EEOneTimePreKey.insert({ userId: ALICE, deviceId: index + 1, kind: 'ec', keyId: 1, publicKey: 'cGs=' });
+    store.collections.E2EEOneTimePreKey.insert({ userId: ALICE, deviceId: index + 1, registrationId: 100 + index, kind: 'ec', keyId: 1, publicKey: 'cGs=' });
   });
   initSessionService(store.prisma as never);
   const active = () => store.collections.E2EEDevice.rows.filter((row) => row.retiredAt === null).map((row) => row.deviceId);
