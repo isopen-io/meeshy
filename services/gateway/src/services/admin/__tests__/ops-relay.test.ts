@@ -16,6 +16,9 @@ import {
 } from '../ops-relay';
 
 const NOW = new Date('2026-10-12T22:00:00.000Z');
+/** Le nettoyage n'est permis que de 02:00 à 06:00 heure de Paris (#11452) : NOW tombe à minuit à Paris, NIGHT à 03:00. */
+const NIGHT = new Date('2026-10-13T01:00:00.000Z');
+const PRUNE_WINDOW = { timeZone: 'Europe/Paris', startHour: 2, endHour: 6 } as const;
 const ID_A = '0b4f8a0e-6f43-4a4c-9a4b-2d2c7f7d1c11';
 const ID_B = '1c5f8a0e-6f43-4a4c-9a4b-2d2c7f7d1c22';
 
@@ -218,14 +221,15 @@ describe('createOpsRelay.submit', () => {
       code: 'OPERATION_COOLDOWN',
       availableAt: '2026-10-13T02:00:00.000Z',
     });
-    // image-prune : 1 h de délai, dernière acceptation il y a 3 h ⇒ autorisé.
-    expect((await relay.submit({ operation: 'image-prune', requestedBy: 'x', beforeDeposit: audited })).kind).toBe('queued');
+    // image-prune, à 03:00 à Paris : 1 h de délai, dernière acceptation il y a 6 h ⇒ autorisé.
+    const night = createOpsRelay({ env: env(d), now: () => NIGHT, newId: ids(ID_A) });
+    expect((await night.submit({ operation: 'image-prune', requestedBy: 'x', beforeDeposit: audited })).kind).toBe('queued');
     expect(readdirSync(d.requests)).toEqual([`${ID_A}.json`]);
   });
 
   it('refuse 409 OPERATION_IN_PROGRESS quand une demande attend ou tourne', async () => {
     const d = dirs();
-    const relay = createOpsRelay({ env: env(d), now: () => NOW, newId: ids(ID_A, ID_B) });
+    const relay = createOpsRelay({ env: env(d), now: () => NIGHT, newId: ids(ID_A, ID_B) });
     expect((await relay.submit({ operation: 'image-prune', requestedBy: 'x', beforeDeposit: audited })).kind).toBe('queued');
     expect(await relay.submit({ operation: 'image-prune', requestedBy: 'x', beforeDeposit: audited })).toEqual({
       kind: 'refused',
@@ -247,6 +251,104 @@ describe('createOpsRelay.submit', () => {
     });
   });
 
+  describe('la fenêtre du nettoyage : de 02:00 à 06:00, heure de Paris (#11452)', () => {
+    const submitAt = async (at: string, lastPrune: string | null = null) => {
+      const d = dirs();
+      writeState(d.state, { v: 1, runs: { backup: null, 'image-prune': null }, lastAcceptedAt: { backup: null, 'image-prune': lastPrune } });
+      const traces: string[] = [];
+      const relay = createOpsRelay({ env: env(d), now: () => new Date(at), newId: ids(ID_A) });
+      const result = await relay.submit({
+        operation: 'image-prune',
+        requestedBy: 'x',
+        beforeDeposit: async (requestId) => {
+          traces.push(requestId);
+          return true;
+        },
+      });
+      return { result, traced: traces.length, deposited: readdirSync(d.requests) };
+    };
+
+    it('hors fenêtre, refuse 409 OPERATION_OUTSIDE_WINDOW avant toute trace et tout dépôt, et dit la prochaine ouverture', async () => {
+      expect(await submitAt(NOW.toISOString())).toEqual({
+        result: { kind: 'refused', status: 409, code: 'OPERATION_OUTSIDE_WINDOW', availableAt: '2026-10-13T00:00:00.000Z' },
+        traced: 0,
+        deposited: [],
+      });
+      expect((await submitAt('2026-10-13T04:00:00.000Z')).result).toEqual({
+        kind: 'refused',
+        status: 409,
+        code: 'OPERATION_OUTSIDE_WINDOW',
+        availableAt: '2026-10-14T00:00:00.000Z',
+      });
+    });
+
+    it('dans la fenêtre, 02:00 inclus et 06:00 exclu, la demande est déposée', async () => {
+      expect((await submitAt('2026-10-13T00:00:00.000Z')).result.kind).toBe('queued');
+      expect((await submitAt('2026-10-13T03:59:59.000Z')).deposited).toEqual([`${ID_A}.json`]);
+    });
+
+    it('sous un délai qui finit après 06:00, c’est l’ouverture du lendemain qui répond, jamais la fin du délai', async () => {
+      expect((await submitAt('2026-10-13T03:30:00.000Z', '2026-10-13T03:15:00.000Z')).result).toEqual({
+        kind: 'refused',
+        status: 409,
+        code: 'OPERATION_COOLDOWN',
+        availableAt: '2026-10-14T00:00:00.000Z',
+      });
+      expect((await submitAt('2026-10-13T01:00:00.000Z', '2026-10-13T00:30:00.000Z')).result).toEqual({
+        kind: 'refused',
+        status: 409,
+        code: 'OPERATION_COOLDOWN',
+        availableAt: '2026-10-13T01:30:00.000Z',
+      });
+    });
+
+    it('hors fenêtre ET sous un délai : la fenêtre refuse, à la date qui satisfait les deux', async () => {
+      expect((await submitAt('2026-10-12T21:30:00.000Z', '2026-10-12T21:15:00.000Z')).result).toEqual({
+        kind: 'refused',
+        status: 409,
+        code: 'OPERATION_OUTSIDE_WINDOW',
+        availableAt: '2026-10-13T00:00:00.000Z',
+      });
+      expect((await submitAt('2026-10-12T23:30:00.000Z', '2026-10-12T23:20:00.000Z')).result).toEqual({
+        kind: 'refused',
+        status: 409,
+        code: 'OPERATION_OUTSIDE_WINDOW',
+        availableAt: '2026-10-13T00:20:00.000Z',
+      });
+    });
+
+    it('passage à l’heure d’été (29 mars 2026) : la fenêtre s’ouvre à 01:00 UTC et ferme à 04:00 UTC', async () => {
+      expect((await submitAt('2026-03-29T00:30:00.000Z')).result).toEqual({
+        kind: 'refused',
+        status: 409,
+        code: 'OPERATION_OUTSIDE_WINDOW',
+        availableAt: '2026-03-29T01:00:00.000Z',
+      });
+      expect((await submitAt('2026-03-29T01:00:00.000Z')).result.kind).toBe('queued');
+      expect((await submitAt('2026-03-29T04:00:00.000Z')).result).toMatchObject({ code: 'OPERATION_OUTSIDE_WINDOW', availableAt: '2026-03-30T00:00:00.000Z' });
+    });
+
+    it('retour à l’heure d’hiver (25 octobre 2026) : la fenêtre s’ouvre à 00:00 UTC et ferme à 05:00 UTC', async () => {
+      expect((await submitAt('2026-10-24T23:59:00.000Z')).result).toMatchObject({ code: 'OPERATION_OUTSIDE_WINDOW', availableAt: '2026-10-25T00:00:00.000Z' });
+      expect((await submitAt('2026-10-25T00:00:00.000Z')).result.kind).toBe('queued');
+      expect((await submitAt('2026-10-25T04:59:00.000Z')).result.kind).toBe('queued');
+      expect((await submitAt('2026-10-25T05:00:00.000Z')).result).toMatchObject({ code: 'OPERATION_OUTSIDE_WINDOW', availableAt: '2026-10-26T01:00:00.000Z' });
+      expect((await submitAt('2026-10-25T04:30:00.000Z', '2026-10-25T04:15:00.000Z')).result).toMatchObject({
+        code: 'OPERATION_COOLDOWN',
+        availableAt: '2026-10-26T01:00:00.000Z',
+      });
+    });
+
+    it('la sauvegarde n’est jamais restreinte par l’heure', async () => {
+      for (const at of ['2026-10-12T22:00:00.000Z', '2026-10-13T12:00:00.000Z', '2026-10-25T05:30:00.000Z', '2026-03-29T00:30:00.000Z']) {
+        const d = dirs();
+        const relay = createOpsRelay({ env: env(d), now: () => new Date(at), newId: ids(ID_A) });
+        expect((await relay.submit({ operation: 'backup', requestedBy: 'x', beforeDeposit: audited })).kind).toBe('queued');
+        expect((await relay.status()).windows.backup).toBeNull();
+      }
+    });
+  });
+
   it('deux demandes simultanées ne passent pas toutes les deux', async () => {
     const d = dirs();
     const relay = createOpsRelay({ env: env(d), now: () => NOW, newId: ids(ID_A, ID_B) });
@@ -260,7 +362,7 @@ describe('createOpsRelay.submit', () => {
 });
 
 describe('createOpsRelay.status', () => {
-  it('sert les passages, la prochaine disponibilité et l’installation du relais', async () => {
+  it('sert les passages, la prochaine disponibilité, la fenêtre et l’installation du relais', async () => {
     const d = dirs();
     writeState(d.state, {
       v: 1,
@@ -272,14 +374,33 @@ describe('createOpsRelay.status', () => {
       environment: 'staging',
       relayInstalled: true,
       runs: { backup: run(), 'image-prune': null },
-      availableAt: { backup: '2026-10-13T02:00:00.000Z', 'image-prune': null },
+      // Minuit à Paris : le délai du nettoyage est écoulé, mais la fenêtre n'ouvre qu'à 02:00.
+      availableAt: { backup: '2026-10-13T02:00:00.000Z', 'image-prune': '2026-10-13T00:00:00.000Z' },
+      windows: { backup: null, 'image-prune': { ...PRUNE_WINDOW, open: false } },
     });
+    const night = createOpsRelay({ env: env(d), now: () => NIGHT, newId: ids() });
+    const served = await night.status();
+    expect(served.availableAt).toEqual({ backup: '2026-10-13T02:00:00.000Z', 'image-prune': null });
+    expect(served.windows).toEqual({ backup: null, 'image-prune': { ...PRUNE_WINDOW, open: true } });
+  });
+
+  it('la disponibilité servie tient le délai ET la fenêtre : un délai qui finit après 06:00 renvoie à l’ouverture du lendemain (#11452)', async () => {
+    const d = dirs();
+    writeState(d.state, {
+      v: 1,
+      runs: { backup: null, 'image-prune': null },
+      lastAcceptedAt: { backup: null, 'image-prune': '2026-10-13T03:30:00.000Z' },
+    });
+    const relay = createOpsRelay({ env: env(d), now: () => new Date('2026-10-13T03:45:00.000Z'), newId: ids() });
+    const status = await relay.status();
+    expect(status.availableAt['image-prune']).toBe('2026-10-14T00:00:00.000Z');
+    expect(status.windows['image-prune']?.open).toBe(true);
   });
 
   it('montre une demande déposée que le runner n’a pas encore prise', async () => {
     const d = dirs();
     writeState(d.state, { v: 1, runs: { backup: null, 'image-prune': null }, lastAcceptedAt: { backup: null, 'image-prune': null } });
-    const relay = createOpsRelay({ env: env(d), now: () => NOW, newId: ids(ID_A) });
+    const relay = createOpsRelay({ env: env(d), now: () => NIGHT, newId: ids(ID_A) });
     await relay.submit({ operation: 'image-prune', requestedBy: 'jcnm', beforeDeposit: audited });
     const status = await relay.status();
     expect(status.runs['image-prune']).toEqual({
@@ -287,7 +408,7 @@ describe('createOpsRelay.status', () => {
       operation: 'image-prune',
       status: 'queued',
       requestedBy: 'jcnm',
-      requestedAt: NOW.toISOString(),
+      requestedAt: NIGHT.toISOString(),
       startedAt: null,
       finishedAt: null,
       reclaimedBytes: null,

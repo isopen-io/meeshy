@@ -18,6 +18,8 @@ export type SystemNoticeInput = {
   readonly senderParticipantId: string;
   /** Repli FRANÇAIS pour les surfaces sans rendu dédié ; la vérité est dans `metadata`. */
   readonly content: string;
+  /** La langue de `content` quand le repli n'est pas français (l'avis de chiffrement garde son texte historique, #11416). */
+  readonly originalLanguage?: string;
   readonly metadata: Readonly<Record<string, unknown>>;
   /** Un avis qui meurt : détruit par le balayage des éphémères (avis de capture, #9629). Absent : l'avis vit. */
   readonly expiresAt?: Date;
@@ -76,7 +78,7 @@ export async function postSystemNotice(deps: SystemNoticeDeps, input: SystemNoti
         conversationId: input.conversationId,
         senderId: input.senderParticipantId,
         content: input.content,
-        originalLanguage: 'fr',
+        originalLanguage: input.originalLanguage ?? 'fr',
         messageType: 'system',
         messageSource: 'system',
         metadata: input.metadata,

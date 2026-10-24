@@ -48,6 +48,7 @@ final class ComposerRetouchTextBoard: ObservableObject {
 
     private var model: StoryComposerViewModel?
     private var forwarding: AnyCancellable?
+    private var glassMemo: (key: String, overlay: ComposerTextOverlay?)?
 
     nonisolated deinit {}
 
@@ -134,15 +135,38 @@ final class ComposerRetouchTextBoard: ObservableObject {
         guard model != nil else { return }
         forwarding = nil
         model = nil
+        glassMemo = nil
         objectWillChange.send()
     }
 
-    /// Les textes cuits sur fond transparent à la définition de sortie ; `nil` sans texte.
-    func overlay(canvas: CGSize) -> CGImage? {
-        guard let model, !isEmpty, canvas.width >= 1, canvas.height >= 1 else { return nil }
+    /// Les textes cuits sur fond transparent à la définition de sortie, avec leurs vitres (#12602) ;
+    /// `nil` sans texte.
+    func overlay(canvas: CGSize) -> ComposerTextOverlay? {
+        guard let slide = bakedSlide, canvas.width >= 1, canvas.height >= 1,
+              let encre = StoryStaticSnapshot.foreground(slide: slide, size: canvas) else { return nil }
+        return ComposerTextOverlay(ink: encre, glass: StoryStaticSnapshot.glassPanes(slide: slide, size: canvas))
+    }
+
+    /// **Les vitres de l'aperçu** (#12602) : la prise se floute sous chaque texte Verre pendant que
+    /// le canvas peint l'encre. Cuites à la moitié de la toile — un geste en recuit une par image —,
+    /// et seulement quand un texte ou la toile change : le même calque revient sinon, l'aperçu ne
+    /// se repeint pas. `nil` sans verre.
+    func previewGlass(canvas: CGSize) -> ComposerTextOverlay? {
+        let cle = "\(fingerprint)@\(Int(canvas.width))x\(Int(canvas.height))"
+        if let glassMemo, glassMemo.key == cle { return glassMemo.overlay }
+        let demi = CGSize(width: (canvas.width / 2).rounded(), height: (canvas.height / 2).rounded())
+        let vitres = bakedSlide.map { StoryStaticSnapshot.glassPanes(slide: $0, size: demi) } ?? []
+        let calque = vitres.isEmpty ? nil : ComposerTextOverlay(ink: nil, glass: vitres)
+        glassMemo = (cle, calque)
+        return calque
+    }
+
+    /// La slide qui se cuit : les seuls textes écrits.
+    private var bakedSlide: StorySlide? {
+        guard let model, !isEmpty else { return nil }
         var slide = model.currentSlide
         slide.effects.textObjects = texts.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        return StoryStaticSnapshot.foreground(slide: slide, size: canvas)
+        return slide
     }
 
     private func addAndType() {

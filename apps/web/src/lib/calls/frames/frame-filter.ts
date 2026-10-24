@@ -1,6 +1,6 @@
 import { canUseFrame, captureFrameUsage, type FrameUsage, type FrameUseContext } from '@meeshy/shared/types/frame-usage';
 
-import { BUCKET_PEOPLE, FRAME_BUCKETS, FRAME_MOODS, type CaptureFrame, type FrameBucket, type FrameLook, type FrameMood, type FrameMotif } from './frame-spec';
+import { BUCKET_PEOPLE, FRAME_BUCKETS, FRAME_MOODS, type CaptureFrame, type FrameBucket, type FrameLook, type FrameMood, type FrameMotif, type FrameStyle } from './frame-spec';
 
 /**
  * **QUELS CADRES POUR COMBIEN DE PERSONNES** — la règle de filtrage du § 2 de
@@ -43,12 +43,13 @@ function overlay(base: FrameLook, variant: Variant): FrameLook {
   };
 }
 
-/** Ce que le motif déclare pour TOUTES ses tranches (doc 06 § 3) : qui l'a fait, où il se propose, ce qu'il coûte. */
-function motifKeys(motif: FrameMotif): Pick<CaptureFrame, 'credits' | 'surfaces' | 'cost'> {
+/** Ce que le motif déclare pour TOUTES ses tranches (doc 06 § 3) : qui l'a fait, où il se propose, ce qu'il coûte, ses déclinaisons. */
+function motifKeys(motif: FrameMotif): Pick<CaptureFrame, 'credits' | 'surfaces' | 'cost' | 'styles'> {
   return {
     ...(motif.credits === undefined ? {} : { credits: motif.credits }),
     ...(motif.surfaces === undefined ? {} : { surfaces: motif.surfaces }),
     ...(motif.cost === undefined ? {} : { cost: motif.cost }),
+    ...(motif.styles === undefined ? {} : { styles: motif.styles }),
   };
 }
 
@@ -59,6 +60,32 @@ export function expandMotif(motif: FrameMotif): readonly CaptureFrame[] {
     if (variant === undefined) return [];
     return [{ ...overlay(motif.base, variant), ...motifKeys(motif), id: `${motif.id}.${bucket}`, motif: motif.id, mood: motif.mood, name: motif.name, bucket, people: BUCKET_PEOPLE[bucket] }];
   });
+}
+
+/** Les déclinaisons d'un motif ou d'un cadre déplié (#12685) — aucune, le plus souvent. */
+export const stylesOf = (owner: { readonly styles?: readonly FrameStyle[] | undefined }): readonly FrameStyle[] => owner.styles ?? [];
+
+/**
+ * **LA DÉCLINAISON D'UN CADRE** (#12685) — le même cadre sous un autre habillage : le `look`
+ * de la déclinaison surcharge le cadre déplié clé par clé, comme une variante surcharge sa
+ * base, et l'identifiant porte le sien (`ambiance.motif.tranche.style`). Le catalogue déplié
+ * ne la liste pas (le carrousel web la découvrira avec #12692) ; le peintre la rend déjà.
+ */
+export function styledFrame(frame: CaptureFrame, style: FrameStyle): CaptureFrame {
+  const { id, motif, mood, name, bucket, people, credits, surfaces, cost, styles, ...look } = frame;
+  return {
+    ...overlay(look, style.look),
+    ...(credits === undefined ? {} : { credits }),
+    ...(surfaces === undefined ? {} : { surfaces }),
+    ...(cost === undefined ? {} : { cost }),
+    ...(styles === undefined ? {} : { styles }),
+    id: `${id}.${style.id}`,
+    motif,
+    mood,
+    name,
+    bucket,
+    people,
+  };
 }
 
 export const servesPeople = (frame: CaptureFrame, people: number): boolean => people >= frame.people[0] && people <= frame.people[1];

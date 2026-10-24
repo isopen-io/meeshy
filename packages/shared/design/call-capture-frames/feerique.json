@@ -201,59 +201,69 @@
         },
         "slot": {
           "shape": "blob",
-          "glow": "#FFD98A",
+          "glow": "#F7E27A66",
           "tilt": "gentle",
           "tone": "warm"
         },
         "background": {
           "kind": "radial",
           "colors": [
-            "#1D3530",
-            "#0C1A18",
-            "#050B0A"
+            "#1F4A3A",
+            "#0D241D",
+            "#04100C"
           ]
         },
         "ornaments": [
           {
             "kind": "fireflies",
-            "color": "#FFE9A8",
+            "color": "#FFE680",
             "density": "high",
-            "layer": "back"
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "bokeh",
-            "color": "#F6D58A33",
+            "color": "#7CFFB2",
             "density": "low",
-            "layer": "back"
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "leaves",
-            "color": "#2F5A47",
+            "color": "#2F6B4F",
             "density": "mid",
-            "layer": "back"
+            "layer": "front",
+            "motion": "loop"
+          },
+          {
+            "kind": "fireflies",
+            "color": "#FFF4B8",
+            "density": "low",
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
-          "mark": "logo",
-          "place": "top-right",
-          "color": "#FFE9A8",
-          "size": "s"
+          "mark": "wordmark",
+          "place": "bottom",
+          "color": "#FFF4B8",
+          "size": "m",
+          "font": "handwriting"
         },
         "names": {
-          "show": "handle",
+          "show": "name",
           "style": "badge",
-          "font": "curve",
-          "color": "#FFE9A8",
-          "fill": "#0A1412CC"
+          "font": "brush",
+          "color": "#FFF4B8",
+          "fill": "#0D241DCC"
         },
         "title": {
           "source": "group",
-          "font": "curve",
-          "color": "#FFE9A8",
+          "font": "handwriting",
+          "color": "#FFF4B8",
           "place": "top",
           "size": "l",
-          "effect": "glow",
-          "case": "as-is"
+          "effect": "glow"
         }
       },
       "variants": {
@@ -266,49 +276,51 @@
             "bottom": 0.1
           },
           "names": {
-            "show": "handle",
-            "style": "tag",
-            "font": "handwriting",
-            "color": "#FFE9A8",
-            "fill": "#0A1412CC"
+            "show": "name",
+            "style": "badge",
+            "font": "brush",
+            "color": "#FFF4B8",
+            "fill": "#0D241DCC"
           },
           "title": {
             "source": "names",
-            "font": "curve",
-            "color": "#FFE9A8",
+            "font": "handwriting",
+            "color": "#FFF4B8",
             "place": "top",
             "size": "l",
-            "effect": "glow",
-            "case": "as-is"
+            "effect": "glow"
           }
         },
         "comite": {},
         "groupe": {
           "layout": {
-            "arrangement": "hero",
+            "arrangement": "honeycomb",
             "margin": 0.06,
-            "gap": 0.025,
+            "gap": 0.02,
             "top": 0.15,
             "bottom": 0.1
           },
           "ornaments": [
             {
               "kind": "fireflies",
-              "color": "#FFE9A8",
+              "color": "#FFE680",
               "density": "high",
-              "layer": "back"
+              "layer": "back",
+              "motion": "loop"
             },
             {
               "kind": "bokeh",
-              "color": "#F6D58A33",
-              "density": "mid",
-              "layer": "back"
+              "color": "#7CFFB2",
+              "density": "low",
+              "layer": "back",
+              "motion": "loop"
             },
             {
-              "kind": "sparkles",
-              "color": "#FFE9A8",
+              "kind": "leaves",
+              "color": "#2F6B4F",
               "density": "low",
-              "layer": "front"
+              "layer": "front",
+              "motion": "loop"
             }
           ]
         },
@@ -316,24 +328,85 @@
           "layout": {
             "arrangement": "grid",
             "margin": 0.05,
-            "gap": 0.018,
-            "top": 0.14,
-            "bottom": 0.09
+            "gap": 0.02,
+            "top": 0.13,
+            "bottom": 0.1
           },
           "slot": {
-            "shape": "circle",
-            "glow": "#FFD98AAA",
-            "tilt": "gentle",
+            "shape": "blob",
+            "glow": "#F7E27A55",
+            "tilt": "none",
             "tone": "warm"
           },
           "names": {
-            "show": "none",
-            "style": "badge",
-            "font": "curve",
-            "color": "#FFE9A8"
+            "show": "name",
+            "style": "list",
+            "font": "brush",
+            "color": "#FFF4B8"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#143B2A",
+                "#050F0A"
+              ]
+            },
+            "slot": {
+              "shape": "blob",
+              "glow": "#C9FF6A66",
+              "shadow": true,
+              "tilt": "gentle",
+              "tone": "warm"
+            },
+            "ornaments": [
+              {
+                "kind": "fireflies",
+                "color": "#C9FF6A",
+                "density": "mid",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "fireflies",
+                "color": "#F4FFB0",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "handwriting",
+              "color": "#F4FFB0",
+              "place": "top",
+              "size": "l",
+              "effect": "glow"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/feerique_lucioles_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/feerique_lucioles_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "feerique.clair-de-lune",
@@ -348,152 +421,212 @@
           "arrangement": "orbit",
           "margin": 0.07,
           "gap": 0.03,
-          "top": 0.18,
-          "bottom": 0.12
+          "top": 0.17,
+          "bottom": 0.1
         },
         "slot": {
           "shape": "circle",
           "stroke": {
-            "color": "#F9C6D3",
-            "width": 0.006
+            "color": "#F3E8FF",
+            "width": 0.008
           },
-          "glow": "#C7B8F0",
+          "glow": "#C4B5FDAA",
           "tilt": "none",
           "tone": "cool"
         },
         "background": {
           "kind": "linear",
           "colors": [
-            "#1E2A5A",
-            "#4B4A8F",
-            "#6E5BA8"
+            "#0B0A26",
+            "#2A2466",
+            "#6A55B5",
+            "#E2B6E8"
           ],
           "angle": 0
         },
         "pattern": {
           "kind": "stars",
-          "color": "#FFFFFF",
+          "color": "#FFF6D6",
           "opacity": 0.25
         },
         "ornaments": [
           {
             "kind": "moon",
-            "color": "#FFF6D8",
+            "color": "#FFF6D6",
             "density": "low",
-            "layer": "front"
+            "layer": "front",
+            "motion": "loop"
+          },
+          {
+            "kind": "stars",
+            "color": "#FFF6D6",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "clouds",
-            "color": "#FFFFFF2E",
+            "color": "#F3E8FF",
             "density": "low",
-            "layer": "back"
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "sparkles",
-            "color": "#FFF6D8",
+            "color": "#FFE9FB",
             "density": "low",
-            "layer": "front"
-          },
-          {
-            "kind": "snow",
-            "color": "#FFFFFFB3",
-            "density": "low",
-            "layer": "back"
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
           "mark": "both",
-          "place": "bottom-left",
-          "color": "#FFF6D8",
-          "size": "s",
-          "font": "curve"
+          "place": "bottom",
+          "color": "#F3E8FF",
+          "size": "m",
+          "font": "elegant"
         },
         "names": {
           "show": "name",
           "style": "caption",
-          "font": "curve",
-          "color": "#FFFFFF"
+          "font": "elegant",
+          "color": "#FFF6D6"
         },
         "title": {
           "source": "group",
-          "font": "calligraphy",
-          "color": "#FFF6D8",
+          "font": "elegant",
+          "color": "#FFF6D6",
           "place": "top",
-          "size": "l",
+          "size": "m",
           "effect": "glow",
-          "case": "as-is"
-        },
-        "subtitle": {
-          "source": "date",
-          "font": "curve",
-          "color": "#F9C6D3",
-          "place": "top",
-          "size": "s",
-          "effect": "none",
-          "case": "as-is"
+          "case": "upper"
         }
       },
       "variants": {
         "duo": {
           "layout": {
-            "arrangement": "column",
+            "arrangement": "row",
             "margin": 0.08,
-            "gap": 0.04,
-            "top": 0.2,
-            "bottom": 0.14
+            "gap": 0.05,
+            "top": 0.17,
+            "bottom": 0.11
           },
           "title": {
             "source": "names",
-            "font": "calligraphy",
-            "color": "#FFF6D8",
+            "font": "elegant",
+            "color": "#FFF6D6",
             "place": "top",
-            "size": "l",
+            "size": "m",
             "effect": "glow",
-            "case": "as-is"
+            "case": "upper"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "calligraphy",
+            "color": "#F3E8FF",
+            "place": "top",
+            "size": "m"
           }
         },
         "comite": {},
         "groupe": {
           "layout": {
-            "arrangement": "scatter",
-            "margin": 0.06,
-            "gap": 0.025,
-            "top": 0.17,
-            "bottom": 0.12
+            "arrangement": "grid",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.1
           },
           "names": {
             "show": "name",
             "style": "badge",
-            "font": "curve",
-            "color": "#FFFFFF",
-            "fill": "#1E2A5ACC"
+            "font": "elegant",
+            "color": "#FFF6D6",
+            "fill": "#2A2466CC"
           }
         },
         "tablee": {
           "layout": {
-            "arrangement": "grid",
+            "arrangement": "honeycomb",
             "margin": 0.05,
-            "gap": 0.018,
-            "top": 0.16,
-            "bottom": 0.1
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.11
           },
           "slot": {
-            "shape": "circle",
+            "shape": "hex",
             "stroke": {
-              "color": "#F9C6D3",
-              "width": 0.004
+              "color": "#F3E8FF",
+              "width": 0.006
             },
+            "glow": "#C4B5FD88",
             "tilt": "none",
             "tone": "cool"
           },
           "names": {
-            "show": "none",
-            "style": "badge",
-            "font": "curve",
-            "color": "#FFFFFF"
+            "show": "name",
+            "style": "list",
+            "font": "elegant",
+            "color": "#FFF6D6"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "linear",
+              "colors": [
+                "#0B1030",
+                "#2A2150"
+              ],
+              "angle": 0
+            },
+            "ornaments": [
+              {
+                "kind": "stars",
+                "color": "#FFF6D6",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "elegant",
+              "color": "#F3F0FF",
+              "place": "top",
+              "size": "m",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/feerique_clair-de-lune_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/feerique_clair-de-lune_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "feerique.coeur-de-rose",
@@ -515,81 +648,158 @@
           "shape": "heart",
           "stroke": {
             "color": "#FFFFFF",
-            "width": 0.008
+            "width": 0.014
           },
-          "glow": "#FFB3C7",
+          "glow": "#FF5C8DAA",
           "tilt": "gentle",
           "tone": "warm"
         },
         "background": {
           "kind": "linear",
           "colors": [
-            "#F9C6D3",
-            "#FCE3EA",
-            "#BFE6D2"
+            "#FFB8D2",
+            "#FFE4EE",
+            "#FFC9DD"
           ],
           "angle": 0
         },
         "pattern": {
           "kind": "hearts",
           "color": "#FFFFFF",
-          "opacity": 0.35
+          "opacity": 0.4
         },
         "ornaments": [
           {
+            "kind": "hearts",
+            "color": "#FF3D7F",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
             "kind": "petals",
-            "color": "#F28FAD",
-            "density": "high",
-            "layer": "back"
+            "color": "#FF8FB1",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "sparkles",
-            "color": "#D4AF6A",
-            "density": "low",
-            "layer": "front"
+            "color": "#FFFFFF",
+            "density": "mid",
+            "layer": "front",
+            "motion": "loop"
           },
           {
             "kind": "hearts",
-            "color": "#F28BA8",
+            "color": "#E0115F",
             "density": "low",
-            "layer": "back"
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
-          "mark": "logo",
+          "mark": "both",
           "place": "bottom",
-          "color": "#8C3B5C",
-          "size": "m"
+          "color": "#C9184A",
+          "size": "m",
+          "font": "handwriting"
         },
         "names": {
           "show": "both",
           "style": "ribbon",
-          "font": "curve",
+          "font": "bubble",
           "color": "#FFFFFF",
-          "fill": "#C24D78"
+          "fill": "#FF3D7F"
         },
         "title": {
           "source": "names",
-          "font": "calligraphy",
-          "color": "#8C3B5C",
+          "font": "handwriting",
+          "color": "#C9184A",
           "place": "top",
           "size": "l",
-          "effect": "none",
-          "case": "as-is"
-        },
-        "subtitle": {
-          "source": "date",
-          "font": "handwriting",
-          "color": "#A0587A",
-          "place": "top",
-          "size": "s",
-          "effect": "none",
-          "case": "as-is"
+          "effect": "shadow"
         }
       },
       "variants": {
         "duo": {}
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#E0527E"
+            },
+            "slot": {
+              "shape": "heart",
+              "stroke": {
+                "color": "#FFE3D6",
+                "width": 0.014
+              },
+              "glow": "#FFB3C6AA",
+              "shadow": true,
+              "tilt": "gentle",
+              "tone": "warm"
+            },
+            "ornaments": [
+              {
+                "kind": "petals",
+                "color": "#FFD0DC",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "hearts",
+                "color": "#FFE3D6",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "names",
+              "font": "handwriting",
+              "color": "#FFF1EC",
+              "place": "top",
+              "size": "l",
+              "effect": "shadow"
+            },
+            "names": {
+              "show": "both",
+              "style": "ribbon",
+              "font": "bubble",
+              "color": "#7A1F3F",
+              "fill": "#FFE3D6"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/feerique_coeur-de-rose_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/feerique_coeur-de-rose_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

@@ -43,7 +43,7 @@ nonisolated enum ComposerLookVideoExporter {
                        timeRange: CMTimeRange? = nil, aspect: CGFloat = ComposerLookPainter.designAspect,
                        person: CallFramePerson, date: Date, uses: ComposerVideoUses = .gallery,
                        declaredSpaceName: String? = nil, audioGain: Float = 1,
-                       overlay: CGImage? = nil) async -> ComposerVideoRendition? {
+                       overlay: ComposerTextOverlay? = nil) async -> ComposerVideoRendition? {
         let asset = AVURLAsset(url: url)
         switch plan(look: look, framing: framing, timeRange: timeRange, audioGain: audioGain, hasOverlay: overlay != nil) {
         case .untouched: return ComposerVideoRendition(same: url, uses: uses)
@@ -59,12 +59,11 @@ nonisolated enum ComposerLookVideoExporter {
             let scene = ComposerLookPainter.scene(for: look, canvas: toile, date: date, person: person)
             if look.frame != ComposerPhotoFrame.none, scene == nil { throw UnpaintedFrame() }
             let visages = ComposerFaceEffects.export()
-            let calque = overlay.map { CIImage(cgImage: $0) }
             let composition = AVMutableVideoComposition(asset: asset) { @Sendable request in
                 let declare = declaredSpaceName.flatMap { CGColorSpace(name: $0 as CFString) }
                 let image = ComposerLookPainter.paint(request.sourceImage, look: look, framing: framing,
                                                       scene: scene, canvas: toile, declared: declare,
-                                                      faces: visages, overlay: calque)
+                                                      faces: visages, overlay: overlay)
                 request.finish(with: image.cropped(to: CGRect(origin: .zero, size: toile)), context: nil)
             }
             guard MeeshyVideoWatermarkBaker.sizesMatch(composition.renderSize, upright) else { return nil }

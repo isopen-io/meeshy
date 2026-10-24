@@ -90,6 +90,21 @@ public nonisolated struct LensPass {
         }
     }
 
+    /// **Le verre** (#12602) : ce que l'image montre SOUS le masque, flouté — le fond Verre d'un
+    /// texte posé sur une prise. Le masque se lit par son alpha, dans l'espace de l'image ; son
+    /// étendue borne le flou (un masque recadré sur sa vitre ne floute que la vitre).
+    public static func frosted(under mask: CIImage, sigma: CGFloat, stage: LensStage) -> LensPass {
+        LensPass(stage) { image, _ in
+            let vitre = mask.extent.intersection(image.extent)
+            guard sigma > 0, !vitre.isNull, !vitre.isEmpty else { return image }
+            let flou = image.clampedToExtent().applyingGaussianBlur(sigma: Double(sigma)).cropped(to: vitre)
+            return flou.applyingFilter("CIBlendWithAlphaMask", parameters: [
+                kCIInputBackgroundImageKey: image,
+                kCIInputMaskImageKey: mask,
+            ]).cropped(to: image.extent)
+        }
+    }
+
     /// Une image posée par-dessus : un cadre, un sticker, un texte, une particule.
     public static func overlay(_ overlay: CIImage, stage: LensStage) -> LensPass {
         LensPass(stage) { image, _ in overlay.composited(over: image).cropped(to: image.extent) }

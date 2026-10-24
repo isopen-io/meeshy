@@ -12,78 +12,83 @@
       "base": {
         "layout": {
           "arrangement": "grid",
-          "margin": 0.07,
+          "margin": 0.06,
           "gap": 0.025,
-          "top": 0.14,
-          "bottom": 0.08
+          "top": 0.15,
+          "bottom": 0.1
         },
         "slot": {
           "shape": "rect",
           "stroke": {
-            "color": "#22D3EE",
+            "color": "#C6FF00",
             "width": 0.004
           },
           "tilt": "none",
           "tone": "cool"
         },
         "background": {
-          "kind": "solid",
-          "color": "#05060F"
+          "kind": "linear",
+          "colors": [
+            "#0A0F0A",
+            "#030503"
+          ],
+          "angle": 0
         },
         "pattern": {
           "kind": "grid",
-          "color": "#22D3EE",
-          "opacity": 0.08
+          "color": "#C6FF00",
+          "opacity": 0.12
         },
         "border": {
           "kind": "brackets",
-          "color": "#22D3EE",
-          "width": 0.006,
+          "color": "#C6FF00",
+          "width": 0.008,
           "inset": 0.03
         },
         "ornaments": [
           {
-            "kind": "scanlines",
-            "color": "#22D3EE1A",
+            "kind": "crosshair",
+            "color": "#C6FF00",
             "density": "mid",
-            "layer": "back"
+            "layer": "front",
+            "motion": "loop"
           },
           {
-            "kind": "crosshair",
-            "color": "#22D3EE",
+            "kind": "scanlines",
+            "color": "#C6FF0014",
             "density": "low",
-            "layer": "front"
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "rec",
+            "color": "#C6FF00",
+            "density": "low",
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
-          "mark": "logo",
-          "place": "top-left",
-          "color": "#22D3EE",
-          "size": "s"
+          "mark": "wordmark",
+          "place": "top-right",
+          "color": "#C6FF00",
+          "size": "s",
+          "font": "futuristic"
         },
         "names": {
           "show": "handle",
           "style": "plate",
           "font": "futuristic",
-          "color": "#05060F",
-          "fill": "#22D3EECC"
+          "color": "#0A0F0A",
+          "fill": "#C6FF00"
         },
         "title": {
           "source": "group",
           "font": "futuristic",
-          "color": "#22D3EE",
+          "color": "#C6FF00",
           "place": "top",
-          "size": "m",
+          "size": "l",
           "effect": "glow",
-          "case": "upper"
-        },
-        "subtitle": {
-          "source": "date",
-          "font": "futuristic",
-          "color": "#E879F9",
-          "place": "top",
-          "size": "s",
-          "effect": "none",
           "case": "upper"
         }
       },
@@ -93,26 +98,34 @@
             "arrangement": "split",
             "margin": 0.07,
             "gap": 0.03,
-            "top": 0.14,
-            "bottom": 0.08
+            "top": 0.15,
+            "bottom": 0.1
           },
           "title": {
             "source": "names",
             "font": "futuristic",
-            "color": "#22D3EE",
+            "color": "#C6FF00",
             "place": "top",
-            "size": "m",
+            "size": "l",
             "effect": "glow",
+            "case": "upper"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "futuristic",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "s",
             "case": "upper"
           }
         },
         "comite": {
           "layout": {
             "arrangement": "hero",
-            "margin": 0.07,
+            "margin": 0.06,
             "gap": 0.025,
-            "top": 0.14,
-            "bottom": 0.08
+            "top": 0.15,
+            "bottom": 0.1
           }
         },
         "groupe": {
@@ -120,29 +133,29 @@
             "arrangement": "mosaic",
             "margin": 0.06,
             "gap": 0.02,
-            "top": 0.14,
-            "bottom": 0.08
+            "top": 0.15,
+            "bottom": 0.1
           },
           "names": {
             "show": "handle",
-            "style": "badge",
+            "style": "plate",
             "font": "futuristic",
-            "color": "#05060F",
-            "fill": "#22D3EECC"
+            "color": "#0A0F0A",
+            "fill": "#C6FF00"
           }
         },
         "tablee": {
           "layout": {
             "arrangement": "grid",
             "margin": 0.05,
-            "gap": 0.012,
-            "top": 0.12,
-            "bottom": 0.06
+            "gap": 0.015,
+            "top": 0.13,
+            "bottom": 0.11
           },
           "slot": {
             "shape": "rect",
             "stroke": {
-              "color": "#22D3EE",
+              "color": "#C6FF00",
               "width": 0.003
             },
             "tilt": "none",
@@ -150,13 +163,74 @@
           },
           "names": {
             "show": "handle",
-            "style": "badge",
+            "style": "list",
             "font": "futuristic",
-            "color": "#05060F",
-            "fill": "#22D3EECC"
+            "color": "#C6FF00"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#17191C"
+            },
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#7CFF4A",
+                "width": 0.004
+              },
+              "double": true,
+              "tilt": "none",
+              "tone": "cool"
+            },
+            "ornaments": [
+              {
+                "kind": "crosshair",
+                "color": "#7CFF4A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "rec",
+                "color": "#7CFF4A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "futuristic",
+              "color": "#7CFF4A",
+              "place": "top",
+              "size": "l",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/futuriste_hud_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/futuriste_hud_front.webp",
+                "slice": 0.17
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "futuriste.hologramme",
@@ -168,124 +242,235 @@
       ],
       "base": {
         "layout": {
-          "arrangement": "arch",
+          "arrangement": "grid",
           "margin": 0.07,
           "gap": 0.03,
-          "top": 0.18,
-          "bottom": 0.12
+          "top": 0.16,
+          "bottom": 0.1
         },
         "slot": {
           "shape": "round",
-          "radius": 0.06,
-          "glow": "#E879F9",
+          "radius": 0.1,
+          "stroke": {
+            "color": "#00F0FF",
+            "width": 0.006
+          },
+          "glow": "#FF00E5AA",
           "tilt": "none",
           "tone": "duotone",
           "duotone": [
-            "#1A0B3A",
-            "#7FF3FF"
+            "#5B13C9",
+            "#7DFBFF"
           ]
         },
         "background": {
           "kind": "radial",
           "colors": [
-            "#1A1040",
-            "#05060F"
+            "#3A0A6B",
+            "#14002B",
+            "#05000F"
           ]
         },
         "pattern": {
           "kind": "scanlines",
-          "color": "#22D3EE",
+          "color": "#00F0FF",
           "opacity": 0.1
+        },
+        "border": {
+          "kind": "neon",
+          "color": "#FF00E5",
+          "width": 0.006,
+          "inset": 0.025
         },
         "ornaments": [
           {
-            "kind": "bokeh",
-            "color": "#22D3EE33",
+            "kind": "glitch",
+            "color": "#FF00E5",
             "density": "mid",
-            "layer": "back"
+            "layer": "front",
+            "motion": "loop"
           },
           {
-            "kind": "glitch",
-            "color": "#E879F980",
+            "kind": "bokeh",
+            "color": "#FF00E5",
             "density": "low",
-            "layer": "back"
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "sparkles",
-            "color": "#E6FBFF",
-            "density": "low",
-            "layer": "front"
+            "color": "#00F0FF",
+            "density": "mid",
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
-          "mark": "wordmark",
+          "mark": "both",
           "place": "bottom",
-          "color": "#E879F9",
+          "color": "#00F0FF",
           "size": "m",
           "font": "futuristic"
         },
         "names": {
-          "show": "name",
+          "show": "handle",
           "style": "caption",
           "font": "neon",
-          "color": "#E879F9"
+          "color": "#FF7AF5"
         },
         "title": {
           "source": "group",
-          "font": "neon",
-          "color": "#22D3EE",
+          "font": "futuristic",
+          "color": "#00F0FF",
           "place": "top",
           "size": "l",
-          "effect": "glow"
+          "effect": "glow",
+          "case": "upper"
         }
       },
       "variants": {
         "duo": {
           "layout": {
-            "arrangement": "diagonal",
+            "arrangement": "split",
             "margin": 0.07,
             "gap": 0.03,
-            "top": 0.18,
-            "bottom": 0.12
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "hex",
+            "stroke": {
+              "color": "#00F0FF",
+              "width": 0.006
+            },
+            "glow": "#FF00E5AA",
+            "tilt": "none",
+            "tone": "duotone",
+            "duotone": [
+              "#5B13C9",
+              "#7DFBFF"
+            ]
           },
           "title": {
             "source": "names",
-            "font": "neon",
-            "color": "#22D3EE",
+            "font": "futuristic",
+            "color": "#00F0FF",
             "place": "top",
             "size": "l",
-            "effect": "glow"
+            "effect": "glow",
+            "case": "upper"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "neon",
+            "color": "#FF7AF5",
+            "place": "top",
+            "size": "s",
+            "effect": "glow",
+            "case": "upper"
           }
         },
         "comite": {},
         "groupe": {
           "layout": {
-            "arrangement": "scatter",
+            "arrangement": "honeycomb",
             "margin": 0.06,
-            "gap": 0.03,
-            "top": 0.16,
-            "bottom": 0.12
+            "gap": 0.02,
+            "top": 0.15,
+            "bottom": 0.1
           },
           "slot": {
-            "shape": "round",
-            "radius": 0.06,
-            "glow": "#E879F9",
-            "tilt": "gentle",
+            "shape": "hex",
+            "stroke": {
+              "color": "#00F0FF",
+              "width": 0.005
+            },
+            "glow": "#FF00E588",
+            "tilt": "none",
             "tone": "duotone",
             "duotone": [
-              "#1A0B3A",
-              "#7FF3FF"
+              "#5B13C9",
+              "#7DFBFF"
             ]
           },
           "names": {
-            "show": "name",
+            "show": "handle",
             "style": "badge",
             "font": "neon",
-            "color": "#E6FBFF",
-            "fill": "#05060FCC"
+            "color": "#00F0FF",
+            "fill": "#14002BCC"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#1A0A3A",
+                "#05020F"
+              ]
+            },
+            "slot": {
+              "shape": "hex",
+              "stroke": {
+                "color": "#36E3FF",
+                "width": 0.006
+              },
+              "glow": "#FF4FD8AA",
+              "tilt": "none",
+              "tone": "duotone",
+              "duotone": [
+                "#1B0A3F",
+                "#9BF3FF"
+              ]
+            },
+            "ornaments": [
+              {
+                "kind": "glitch",
+                "color": "#36E3FF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "futuristic",
+              "color": "#5AF0FF",
+              "place": "top",
+              "size": "l",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/futuriste_hologramme_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/futuriste_hologramme_front.webp",
+                "slice": 0.16
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "futuriste.orbite",
@@ -301,114 +486,196 @@
           "margin": 0.07,
           "gap": 0.03,
           "top": 0.16,
-          "bottom": 0.12
+          "bottom": 0.11
         },
         "slot": {
           "shape": "circle",
           "stroke": {
-            "color": "#E879F9",
-            "width": 0.006
+            "color": "#FFD08A",
+            "width": 0.008
           },
-          "glow": "#22D3EE",
+          "glow": "#FF5E7EAA",
           "tilt": "none",
-          "tone": "cool"
+          "tone": "warm"
         },
         "background": {
           "kind": "linear",
           "colors": [
-            "#05060F",
-            "#0B1026",
-            "#1B0B2E"
+            "#07051F",
+            "#2B0B57",
+            "#9C1F6E",
+            "#FF5E5B",
+            "#FFB347"
           ],
           "angle": 0
         },
         "pattern": {
           "kind": "stars",
-          "color": "#E6FBFF",
-          "opacity": 0.25
+          "color": "#FFFFFF",
+          "opacity": 0.3
         },
         "ornaments": [
           {
             "kind": "orbits",
-            "color": "#22D3EE66",
+            "color": "#FFD08A",
             "density": "mid",
-            "layer": "back"
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "stars",
-            "color": "#E6FBFF99",
+            "color": "#FFFFFF",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#FFD08A",
             "density": "low",
-            "layer": "back"
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
           "mark": "both",
           "place": "bottom",
-          "color": "#E6FBFF",
-          "size": "m"
+          "color": "#FFFFFF",
+          "size": "m",
+          "font": "futuristic"
         },
         "names": {
           "show": "handle",
           "style": "badge",
           "font": "futuristic",
-          "color": "#E6FBFF",
-          "fill": "#05060FCC"
+          "color": "#FFFFFF",
+          "fill": "#2B0B57CC"
         },
         "title": {
           "source": "group",
-          "font": "futuristic",
-          "color": "#E6FBFF",
+          "font": "brush",
+          "color": "#FFD08A",
           "place": "top",
-          "size": "m",
-          "effect": "glow",
-          "case": "upper"
-        },
-        "subtitle": {
-          "source": "date",
-          "font": "futuristic",
-          "color": "#22D3EE",
-          "place": "top",
-          "size": "s",
-          "effect": "none",
-          "case": "upper"
+          "size": "l",
+          "effect": "glow"
         }
       },
       "variants": {
         "duo": {
           "layout": {
-            "arrangement": "hero",
-            "margin": 0.07,
-            "gap": 0.03,
-            "top": 0.16,
-            "bottom": 0.12
+            "arrangement": "row",
+            "margin": 0.08,
+            "gap": 0.05,
+            "top": 0.17,
+            "bottom": 0.11
           },
           "names": {
             "show": "handle",
-            "style": "caption",
+            "style": "badge",
             "font": "futuristic",
-            "color": "#E6FBFF"
+            "color": "#FFFFFF",
+            "fill": "#2B0B57CC"
           },
           "title": {
             "source": "names",
-            "font": "futuristic",
-            "color": "#E6FBFF",
+            "font": "brush",
+            "color": "#FFD08A",
             "place": "top",
-            "size": "m",
-            "effect": "glow",
+            "size": "l",
+            "effect": "glow"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "futuristic",
+            "color": "#FFB8D9",
+            "place": "top",
+            "size": "s",
             "case": "upper"
           }
         },
         "comite": {},
         "groupe": {
           "layout": {
-            "arrangement": "arch",
+            "arrangement": "orbit",
             "margin": 0.06,
             "gap": 0.025,
-            "top": 0.16,
-            "bottom": 0.12
+            "top": 0.15,
+            "bottom": 0.1
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#1B1140",
+                "#03020A"
+              ]
+            },
+            "slot": {
+              "shape": "circle",
+              "stroke": {
+                "color": "#F2C86A",
+                "width": 0.008
+              },
+              "glow": "#F2C86A88",
+              "shadow": true,
+              "tilt": "none",
+              "tone": "warm"
+            },
+            "ornaments": [
+              {
+                "kind": "orbits",
+                "color": "#F2C86A",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "brush",
+              "color": "#FFE3A1",
+              "place": "top",
+              "size": "l",
+              "effect": "glow"
+            },
+            "names": {
+              "show": "handle",
+              "style": "badge",
+              "font": "futuristic",
+              "color": "#FFFFFF",
+              "fill": "#1B1140CC"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/futuriste_orbite_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/futuriste_orbite_front.webp",
+                "slice": 0.17
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "futuriste.essaim",
