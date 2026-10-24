@@ -81,6 +81,9 @@ protocol ShareDispatching: AnyObject {
     func publish(attachment: MessageAttachment, to target: PublicationTarget) async -> Bool
     /// Le lien suivi d'une carte (story) — `nil` : l'adresse directe reste.
     func resolvedLink(for card: ShareCard) async -> URL?
+    /// Republier une story en story, post ou réel (#12644) — la republication
+    /// directe du rail, vers une autre cible.
+    func republish(card: ShareCard, to target: PublicationTarget) async -> ShareRepublishOutcome
     /// L'hôte sait créer une conversation de groupe (D12). L'extension de
     /// partage ne le sait pas : l'interrupteur n'y est pas rendu (loi 4).
     var createsGroups: Bool { get }
@@ -88,5 +91,16 @@ protocol ShareDispatching: AnyObject {
 
 extension ShareDispatching {
     var createsGroups: Bool { true }
+
+    /// L'extension de partage ne reçoit jamais de story : rien à republier.
+    func republish(card: ShareCard, to target: PublicationTarget) async -> ShareRepublishOutcome {
+        .refused(String(localized: "forward.publish-failed", defaultValue: "La publication a échoué", bundle: .meeshyShare))
+    }
+}
+
+/// L'issue d'une republication : publiée, ou refusée avec la raison à dire.
+enum ShareRepublishOutcome: Equatable {
+    case published
+    case refused(String)
 }
 

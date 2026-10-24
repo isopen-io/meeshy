@@ -119,13 +119,29 @@ extension ShareSheetView {
     private func toolChip(_ tool: ShareAction, plan: SharePlan) -> some View {
         switch tool {
         case .shareOut:
-            if let url = shareURL {
+            if model.republishableStory != nil {
+                // Une story : le lien suivi se frappe AU GESTE (#12644), puis la
+                // feuille du système part avec lui.
+                Button {
+                    Task {
+                        guard let url = await model.ensureCardLink() else { return }
+                        outgoingLink = ShareOutgoingLink(url: url)
+                    }
+                } label: { toolLabel(ShareSheetCopy.shareOut, "square.and.arrow.up") }
+                    .buttonStyle(.plain)
+            } else if let url = shareURL {
                 ShareLink(item: url) { toolLabel(ShareSheetCopy.shareOut, "square.and.arrow.up") }
             } else if let text = copyableText {
                 ShareLink(item: text) { toolLabel(ShareSheetCopy.shareOut, "square.and.arrow.up") }
             }
         case .copyLink:
-            Button { copy(shareURL?.absoluteString ?? copyableText) } label: { toolLabel(ShareSheetCopy.copyLink, "link") }
+            Button {
+                if model.republishableStory != nil {
+                    Task { copy(await model.ensureCardLink()?.absoluteString) }
+                } else {
+                    copy(shareURL?.absoluteString ?? copyableText)
+                }
+            } label: { toolLabel(ShareSheetCopy.copyLink, "link") }
                 .buttonStyle(.plain)
         case .copyText:
             Button { copy(copyableText) } label: { toolLabel(ShareSheetCopy.copyText, "doc.on.doc") }
@@ -182,4 +198,25 @@ extension ShareSheetView {
         case .piece: return nil
         }
     }
+}
+
+/// Le lien prêt à partir hors de Meeshy — l'identité de la feuille présentée.
+struct ShareOutgoingLink: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+/// La feuille du système, portable : l'écran de partage est aussi compilé
+/// dans l'extension de partage, qui n'a pas le `ShareSheet` de l'app.
+struct ShareOutActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    let onFinish: () -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in onFinish() }
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

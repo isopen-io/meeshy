@@ -20,6 +20,7 @@ import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.GeolocationPermissions;
+import android.webkit.MimeTypeMap;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -300,7 +301,8 @@ public class MainActivity extends BridgeActivity {
             @Override
             @SuppressLint("NewApi")
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback, FileChooserParams params) {
-                String type = PhotoPickRules.pickerType(Build.VERSION.SDK_INT, params.getAcceptTypes(), params.isCaptureEnabled());
+                String type = PhotoPickRules.pickerType(Build.VERSION.SDK_INT, params.getAcceptTypes(), params.isCaptureEnabled(),
+                    MimeTypeMap.getSingleton()::getMimeTypeFromExtension);
                 if (type == null) return super.onShowFileChooser(webView, callback, params);
                 Intent pick = new Intent(MediaStore.ACTION_PICK_IMAGES);
                 if (!PhotoPickRules.BOTH.equals(type)) pick.setType(type);

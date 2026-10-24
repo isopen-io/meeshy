@@ -49,6 +49,13 @@ struct ConversationPreviewSnapshot {
     let messages: [Message]
     let translations: [String: [MessageTranslation]]
     let served: [String: MessageTranslation]
+    /// Les messages arrivés EN CLAIR dans une conversation chiffrée
+    /// (`EndToEndPlaintextLaw`, #11380) : marqués, et sans traduction.
+    var unencrypted: Set<String> = []
+
+    func isUnencrypted(_ messageId: String) -> Bool {
+        unencrypted.contains(messageId)
+    }
 
     func servedTranslation(for messageId: String) -> MessageTranslation? {
         served[messageId]
@@ -75,6 +82,7 @@ struct ConversationPreviewFingerprint: Equatable {
         let servedLanguage: String?
         /// Un message chiffré qui passe de scellé à déchiffré change la rangée.
         let isSealed: Bool
+        let isUnencrypted: Bool
     }
 
     let phase: ConversationPreviewPhase
@@ -90,7 +98,8 @@ struct ConversationPreviewFingerprint: Equatable {
                     editedAt: message.editedAt,
                     deletedAt: message.deletedAt,
                     servedLanguage: snapshot.servedLanguage(for: message.id),
-                    isSealed: message.isEncrypted && message.content.isEmpty
+                    isSealed: message.isEncrypted && message.content.isEmpty,
+                    isUnencrypted: snapshot.isUnencrypted(message.id)
                 )
             }
         } ?? []
@@ -178,6 +187,11 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// Avance à chaque purge : un chargement lancé avant ne publie plus rien.
     private var generation = 0
     private var lockObservation: AnyCancellable?
+    /// Le régime de chiffrement de chaque conversation chargée — celui que la
+    /// liste sert, fusionné avec celui que l'appareil retient : la loi du clair
+    /// (#11380) le lit à chaque publication. Purgé avec le compte.
+    private var regimes: [String: EndToEndRegime] = [:]
+    private let regimeMemory: any EndToEndRegimeMemoryProviding
 
     /// Les chargeurs vivants, que la déconnexion purge tous (`purgeAllLive`).
     private static let live = NSHashTable<ConversationListPreviewLoader>.weakObjects()
@@ -213,9 +227,11 @@ final class ConversationListPreviewLoader: ObservableObject {
             .publisher(for: .conversationContentLocksDidChange)
             .receive(on: DispatchQueue.main)
             .map { _ in () }
-            .eraseToAnyPublisher()
+            .eraseToAnyPublisher(),
+        regimeMemory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
     ) {
         self.messageService = messageService
+        self.regimeMemory = regimeMemory
         self.cache = cache
         self.readerPrism = readerPrism
         self.isLocked = isLocked
@@ -236,6 +252,7 @@ final class ConversationListPreviewLoader: ObservableObject {
         inFlight = [:]
         states = [:]
         provenance = [:]
+        regimes = [:]
         decryptor = makeDecryptor()
     }
 
@@ -274,9 +291,11 @@ final class ConversationListPreviewLoader: ObservableObject {
     func load(
         for conversationId: String,
         intent: LoadIntent,
+        regime: EndToEndRegime = .serverReadable,
         isDirect: Bool? = nil,
         currentUserId: @escaping @MainActor @Sendable () -> String = { "" }
     ) async {
+        regimes[conversationId] = regimeMemory.resolve(conversationId: conversationId, served: regime)
         guard !isLocked(conversationId) else {
             states[conversationId] = nil
             provenance[conversationId] = nil
@@ -402,18 +421,29 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// Le clair adopté par `adoptDecryptedContent` — l'unique porte d'un clair
     /// et de sa provenance. Un échec, un clair indécodable ou vide laisse le
     /// message tel quel : scellé à la publication, jamais le cryptogramme.
+    ///
+    /// Seul un message qu'on a DEMANDÉ de déchiffrer (`decryptionPayload`,
+    /// donc `isEncrypted`) adopte un clair. Un message qui se déclare en clair
+    /// dans une conversation chiffrée (#11380) n'est jamais blanchi par une
+    /// provenance : il garde son marqueur « non chiffré », même si un résultat
+    /// porte son identifiant.
     static func adopting(_ results: [DecryptionResult], into messages: [Message]) -> [Message]? {
         let plaintexts = results.reduce(into: [String: String]()) { map, result in
             guard result.error == nil, let plaintext = result.plaintext, !plaintext.isEmpty else { return }
             map[result.messageId] = plaintext
         }
-        guard !plaintexts.isEmpty else { return nil }
+        guard messages.contains(where: { Self.plaintext(awaitedBy: $0, in: plaintexts) != nil }) else { return nil }
         return messages.map { message in
-            guard let plaintext = plaintexts[message.id] else { return message }
+            guard let plaintext = Self.plaintext(awaitedBy: message, in: plaintexts) else { return message }
             var decrypted = message
             decrypted.adoptDecryptedContent(plaintext)
             return decrypted
         }
+    }
+
+    private static func plaintext(awaitedBy message: Message, in plaintexts: [String: String]) -> String? {
+        guard decryptionPayload(for: message) != nil else { return nil }
+        return plaintexts[message.id]
     }
 
     // MARK: - Lois pures
@@ -424,8 +454,9 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// synchronisation peut réécrire le cache depuis le REST (le
     /// cryptogramme), et le serveur forger un texte qui n'en a pas la forme.
     /// Jamais deviné à la forme du texte. Un message qui se DÉCLARE en clair
-    /// (`isEncrypted == false`) dans une conversation chiffrée n'est pas jugé
-    /// ici : le fil le montre aussi, et sa loi, commune aux deux, est #11404.
+    /// (`isEncrypted == false`) dans une conversation chiffrée est jugé par
+    /// `EndToEndPlaintextLaw` (#11380), la loi que le fil lit aussi : signalé,
+    /// pas scellé, tant que #11404 n'a pas mesuré les envois en clair légitimes.
     static func isReadableOnDevice(_ message: Message) -> Bool {
         message.isEncrypted && message.isContentDecryptedOnDevice
     }
@@ -433,22 +464,30 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// L'aperçu tel que le lecteur le lit : un message chiffré que sa
     /// provenance ne prouve pas déchiffré sur l'appareil n'emporte que son
     /// drapeau (jamais le cryptogramme comme texte), aucun message chiffré
-    /// n'emporte de traduction, et chaque message sert la traduction que
-    /// `ReaderPrism` élit — `nil` ⇒ l'original, jamais `translations.first`.
+    /// n'emporte de traduction, aucun message de l'ère chiffrée d'une
+    /// conversation non plus — le serveur ne le lit pas, donc il ne le traduit
+    /// pas (#11380) —, et chaque message sert la
+    /// traduction que `ReaderPrism` élit — `nil` ⇒ l'original, jamais
+    /// `translations.first`.
     static func snapshot(
         messages: [Message],
         translations: [String: [MessageTranslation]],
-        prism: [String]
+        prism: [String],
+        regime: EndToEndRegime = .serverReadable
     ) -> ConversationPreviewSnapshot {
         let sealed = messages.map { Self.isReadableOnDevice($0) && !Self.holdsBurnOnRead($0) ? $0 : Self.sealedForPreview($0) }
+        let unencrypted = Set(sealed.filter { EndToEndPlaintextLaw.standing(of: $0, in: regime).isUnencrypted }.map(\.id))
+        let wireWithheld = Set(sealed.filter { !regime.admitsWireTranslations(forMessageCreatedAt: $0.createdAt) }.map(\.id))
         let withheldIds = Set(sealed.filter { $0.isEncrypted || Self.holdsBurnOnRead($0) }.map(\.id))
+            .union(unencrypted)
+            .union(wireWithheld)
         let readable = translations.filter { !withheldIds.contains($0.key) }
         let served = sealed.reduce(into: [String: MessageTranslation]()) { served, message in
             guard let candidates = readable[message.id],
                   let elected = Self.servedTranslation(of: message, among: candidates, prism: prism) else { return }
             served[message.id] = elected
         }
-        return ConversationPreviewSnapshot(messages: sealed, translations: readable, served: served)
+        return ConversationPreviewSnapshot(messages: sealed, translations: readable, served: served, unencrypted: unencrypted)
     }
 
     /// **Une flamme « après lecture » reçue ne se lit pas dans la liste.** La
@@ -522,7 +561,10 @@ final class ConversationListPreviewLoader: ObservableObject {
         for conversationId: String
     ) {
         guard !isLocked(conversationId) else { return }
-        let snapshot = Self.snapshot(messages: messages, translations: translations, prism: readerPrism())
+        let snapshot = Self.snapshot(
+            messages: messages, translations: translations, prism: readerPrism(),
+            regime: regimes[conversationId] ?? regimeMemory.resolve(conversationId: conversationId, served: .serverReadable)
+        )
         states[conversationId] = messages.isEmpty ? .empty : .loaded(snapshot)
     }
 

@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.filters",
+          "androidName": "retouch_family_filters",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.effects.caption",
+          "androidName": "retouch_family_effects",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.rail.frames",
+          "androidName": "retouch_family_frames",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.band.noFilter",
+          "androidName": "retouch_no_filter",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.none",
+          "androidName": "retouch_no_frame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.looks.rendering",
+          "androidName": "retouch_rendering",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.natural",
+          "androidName": "retouch_filter_natural",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.warm",
+          "androidName": "retouch_filter_warm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.cool",
+          "androidName": "retouch_filter_cool",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.vivid",
+          "androidName": "retouch_filter_vivid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.muted",
+          "androidName": "retouch_filter_muted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.screen",
+          "androidName": "retouch_style_screen",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.cover",
+          "androidName": "retouch_style_cover",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.gold",
+          "androidName": "retouch_style_gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.redcarpet",
+          "androidName": "retouch_style_redcarpet",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.grid",
+          "androidName": "retouch_style_grid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.strip",
+          "androidName": "retouch_style_strip",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.polaroid",
+          "androidName": "retouch_style_polaroid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.magazine",
+          "androidName": "retouch_style_magazine",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.film",
+          "androidName": "retouch_style_film",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.neon",
+          "androidName": "retouch_style_neon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.noir",
+          "androidName": "retouch_style_noir",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.comic",
+          "androidName": "retouch_style_comic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.style.heart",
+          "androidName": "retouch_style_heart",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.crop",
+          "androidName": "retouch_tool_crop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.crop.original",
+          "androidName": "retouch_crop_original",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.tool.trim",
+          "androidName": "retouch_tool_trim",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.tool.sound",
+          "androidName": "retouch_tool_sound",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.sound.mute",
+          "androidName": "retouch_sound_mute",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.sound.unmute",
+          "androidName": "retouch_sound_unmute",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.sound.volume",
+          "androidName": "retouch_sound_volume",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.tool.text",
+          "androidName": "retouch_tool_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.classic",
+          "androidName": "retouch_text_style_classic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.bold",
+          "androidName": "retouch_text_style_bold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.neon",
+          "androidName": "retouch_text_style_neon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.typewriter",
+          "androidName": "retouch_text_style_typewriter",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.handwriting",
+          "androidName": "retouch_text_style_handwriting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align.left",
+          "androidName": "retouch_text_align_left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align.center",
+          "androidName": "retouch_text_align_center",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align.right",
+          "androidName": "retouch_text_align_right",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.text.add",
+          "androidName": "retouch_text_add",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.tool.color",
+          "androidName": "retouch_text_color",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -50,6 +50,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
     private func makeSUT(
         cache: CacheResult<[Message]> = .empty,
+        cachedTranslations: [String: [MessageTranslation]] = [:],
         decryptor: any ConversationPreviewDecrypting = MockPreviewDecryptor(),
         isDirect: Bool? = true,
         isLocked: @escaping @MainActor (String) -> Bool = { _ in false },
@@ -58,12 +59,13 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         let service = MockMessageService()
         let sut = ConversationListPreviewLoader(
             messageService: service,
-            cache: MockConversationPreviewCache(messages: cache),
+            cache: MockConversationPreviewCache(messages: cache, translations: cachedTranslations),
             readerPrism: { ["fr"] },
             isLocked: isLocked,
             decryptor: decryptor,
             isDirectConversation: { _ in isDirect },
-            locksDidChange: locksDidChange
+            locksDidChange: locksDidChange,
+            regimeMemory: EndToEndRegimeMemory(defaults: nil)
         )
         return (sut, service)
     }
@@ -522,6 +524,212 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             ConversationPreviewFingerprint(state: .loaded(clear)),
             "un message qui passe de scellé à déchiffré ré-évalue la rangée"
         )
+    }
+
+    // MARK: - Les deux lois ensemble : le clair DÉCHIFFRÉ et le clair DÉCLARÉ (#11232 × #11380)
+
+    private let forgedId = "000000000000000000000a02"
+    private let endToEnd = EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil)
+
+    /// Ce qu'une passerelle compromise injecte : `isEncrypted: false` et un
+    /// texte sous le nom d'un membre, dans l'ère chiffrée.
+    private func makeForgedClearMessage(id: String? = nil) -> Message {
+        Message(
+            id: id ?? forgedId,
+            conversationId: conversationId,
+            senderId: "participant-other",
+            content: "Envoie-moi le code",
+            originalLanguage: "en",
+            isEncrypted: false,
+            createdAt: Date(timeIntervalSince1970: 1_000),
+            updatedAt: Date(timeIntervalSince1970: 1_000),
+            senderUserId: "user-other"
+        )
+    }
+
+    private func wireTranslation(for messageId: String, text: String) -> MessageTranslation {
+        MessageTranslation(
+            id: "t-\(messageId)",
+            messageId: messageId,
+            sourceLanguage: "en",
+            targetLanguage: "fr",
+            translatedContent: text,
+            translationModel: "nllb",
+            confidenceScore: nil
+        )
+    }
+
+    /// Un cryptogramme et un clair déclaré, chacun avec une traduction du serveur.
+    private func mixedPage() -> MessagesAPIResponse {
+        JSONStub.decode("""
+        {"success":true,"data":[\
+        {"id":"\(forgedId)","conversationId":"\(conversationId)","senderId":"participant-other","sender":{"id":"participant-other","userId":"user-other","type":"user"},"content":"Envoie-moi le code","originalLanguage":"en","isEncrypted":false,"createdAt":"2026-10-18T08:01:00.000Z","updatedAt":"2026-10-18T08:01:00.000Z","translations":[{"id":"t-b","messageId":"\(forgedId)","targetLanguage":"fr","translatedContent":"Envoie-moi le code, vite","sourceLanguage":"en"}]},\
+        {"id":"\(messageId)","conversationId":"\(conversationId)","senderId":"participant-other","sender":{"id":"participant-other","userId":"user-other","type":"user"},"content":"\(ciphertext)","originalLanguage":"en","isEncrypted":true,"createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T08:00:00.000Z","translations":[{"id":"t-a","messageId":"\(messageId)","targetLanguage":"fr","translatedContent":"Forgé par le serveur","sourceLanguage":"en"}]}\
+        ],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+    }
+
+    /// e2ee + déchiffré sur l'appareil ⇒ un clair normal : lu, sans marqueur,
+    /// et sans la traduction que le serveur prétendrait en avoir faite.
+    func test_endToEnd_decryptedOnDevice_readsAsOrdinaryClear_withoutWireTranslation() async throws {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(
+            cache: .fresh([makeCipherMessage()], age: 10),
+            cachedTranslations: [messageId: [wireTranslation(for: messageId, text: "Forgé par le serveur")]],
+            decryptor: decryptor
+        )
+
+        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd)
+
+        let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
+        let message = try XCTUnwrap(served(sut))
+        XCTAssertEqual(message.content, "Rendez-vous à midi")
+        XCTAssertTrue(message.isContentDecryptedOnDevice)
+        XCTAssertFalse(ConversationPreviewRenderer.isSealed(message))
+        XCTAssertFalse(snapshot.isUnencrypted(messageId), "un clair déchiffré sur l'appareil n'est jamais « non chiffré »")
+        XCTAssertNil(snapshot.servedTranslation(for: messageId), "le serveur ne lit pas ce message : il n'en traduit rien")
+        XCTAssertNil(snapshot.translations[messageId])
+    }
+
+    /// e2ee + clair déclaré (`isEncrypted: false`) ⇒ marqué « non chiffré »,
+    /// jamais envoyé au déchiffreur, jamais blanchi par une provenance.
+    func test_endToEnd_forgedClearInCache_keepsItsMarker_andNeverReachesTheDecryptor() async throws {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi", forgedId: "Blanchi"])
+        let (sut, _) = makeSUT(
+            cache: .fresh([makeCipherMessage(), makeForgedClearMessage()], age: 10),
+            cachedTranslations: [forgedId: [wireTranslation(for: forgedId, text: "Envoie-moi le code, vite")]],
+            decryptor: decryptor
+        )
+
+        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd)
+
+        let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
+        let forged = try XCTUnwrap(snapshot.messages.first { $0.id == forgedId })
+        XCTAssertEqual(forged.content, "Envoie-moi le code")
+        XCTAssertFalse(forged.isContentDecryptedOnDevice)
+        XCTAssertTrue(snapshot.isUnencrypted(forgedId))
+        XCTAssertNil(snapshot.servedTranslation(for: forgedId))
+        XCTAssertEqual(snapshot.messages.first { $0.id == messageId }?.content, "Rendez-vous à midi")
+        XCTAssertFalse(snapshot.isUnencrypted(messageId))
+        let payloads = await decryptor.receivedPayloads
+        XCTAssertEqual(payloads.map(\.messageId), [messageId], "seul le cryptogramme part au déchiffreur")
+    }
+
+    /// Le même verdict sur le chemin réseau, où le REST porte les deux messages
+    /// et leurs traductions du serveur.
+    func test_endToEnd_restPage_decryptedAndForgedClear_eachKeepsItsLaw() async throws {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi", forgedId: "Blanchi"])
+        let (sut, service) = makeSUT(cache: .empty, decryptor: decryptor)
+        service.listResult = .success(mixedPage())
+
+        await sut.load(for: conversationId, intent: .open, regime: endToEnd)
+
+        let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
+        let byId = Dictionary(uniqueKeysWithValues: snapshot.messages.map { ($0.id, $0) })
+        XCTAssertEqual(byId[messageId]?.content, "Rendez-vous à midi")
+        XCTAssertEqual(byId[messageId]?.isContentDecryptedOnDevice, true)
+        XCTAssertFalse(snapshot.isUnencrypted(messageId))
+        XCTAssertEqual(byId[forgedId]?.content, "Envoie-moi le code", "le déchiffreur ne réécrit jamais un message déclaré en clair")
+        XCTAssertEqual(byId[forgedId]?.isContentDecryptedOnDevice, false)
+        XCTAssertTrue(snapshot.isUnencrypted(forgedId))
+        XCTAssertNil(snapshot.servedTranslation(for: messageId))
+        XCTAssertNil(snapshot.servedTranslation(for: forgedId))
+        let payloads = await decryptor.receivedPayloads
+        XCTAssertEqual(payloads.map(\.messageId), [messageId])
+    }
+
+    /// Un résultat qui porterait l'identifiant d'un message déclaré en clair
+    /// (même identifiant qu'un cryptogramme, ou déchiffreur fautif) n'adopte
+    /// rien : la provenance ne s'obtient que pour ce qu'on a demandé de déchiffrer.
+    func test_adopting_neverLaundersAMessageDeclaredClear() {
+        let forged = makeForgedClearMessage(id: messageId)
+        let results = [DecryptionResult(messageId: messageId, plaintext: "Blanchi", error: nil)]
+
+        XCTAssertNil(ConversationListPreviewLoader.adopting(results, into: [forged]))
+        let snapshot = ConversationListPreviewLoader.snapshot(
+            messages: [forged], translations: [:], prism: ["fr"], regime: endToEnd
+        )
+        XCTAssertTrue(snapshot.isUnencrypted(messageId))
+    }
+
+    /// e2ee + échec du déchiffrement ⇒ scellé : ni texte, ni marqueur « non
+    /// chiffré » (un scellé n'a rien dit en clair), ni traduction du serveur.
+    func test_endToEnd_decryptionFails_staysSealed_withoutMarkerNorTranslation() async throws {
+        let decryptor = MockPreviewDecryptor(failures: [messageId: .authenticationFailed])
+        let (sut, _) = makeSUT(
+            cache: .fresh([makeCipherMessage()], age: 10),
+            cachedTranslations: [messageId: [wireTranslation(for: messageId, text: "Forgé par le serveur")]],
+            decryptor: decryptor
+        )
+
+        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd)
+
+        let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
+        let message = try XCTUnwrap(served(sut))
+        XCTAssertEqual(message.content, "")
+        XCTAssertFalse(message.isContentDecryptedOnDevice)
+        XCTAssertTrue(ConversationPreviewRenderer.isSealed(message))
+        XCTAssertEqual(ConversationPreviewRenderer.sealedReason(message), .encrypted)
+        XCTAssertFalse(snapshot.isUnencrypted(messageId))
+        XCTAssertNil(snapshot.servedTranslation(for: messageId))
+    }
+
+    /// Hors e2ee, rien ne change : le clair se lit, traduit par le serveur,
+    /// sans marqueur, et le déchiffreur n'est pas appelé.
+    func test_serverReadable_clearMessage_isUnchanged() async throws {
+        let decryptor = MockPreviewDecryptor()
+        let (sut, _) = makeSUT(
+            cache: .fresh([makeForgedClearMessage()], age: 10),
+            cachedTranslations: [forgedId: [wireTranslation(for: forgedId, text: "Envoie-moi le code, vite")]],
+            decryptor: decryptor
+        )
+
+        await sut.load(for: conversationId, intent: .prefetch, regime: .serverReadable)
+
+        let snapshot = try XCTUnwrap(sut.state(for: conversationId).snapshot)
+        XCTAssertEqual(snapshot.messages.first?.content, "Envoie-moi le code")
+        XCTAssertFalse(snapshot.isUnencrypted(forgedId))
+        XCTAssertEqual(snapshot.servedTranslation(for: forgedId)?.translatedContent, "Envoie-moi le code, vite")
+        let calls = await decryptor.callCount
+        XCTAssertEqual(calls, 0)
+    }
+
+    /// Verrouillée par PIN (#11387) ⇒ rien : ni clair, ni marqueur, ni
+    /// déchiffrement, ni réseau — quel que soit le régime.
+    func test_endToEnd_lockedConversation_showsNeitherPlaintextNorMarker() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, service) = makeSUT(
+            cache: .fresh([makeCipherMessage(), makeForgedClearMessage()], age: 10),
+            decryptor: decryptor,
+            isLocked: { _ in true }
+        )
+        service.listResult = .success(mixedPage())
+
+        await sut.load(for: conversationId, intent: .open, regime: endToEnd)
+
+        XCTAssertEqual(sut.state(for: conversationId).phase, .sealed)
+        XCTAssertNil(sut.state(for: conversationId).snapshot)
+        XCTAssertNil(sut.messages[conversationId])
+        XCTAssertEqual(sut.fingerprint(for: conversationId).entries, [])
+        XCTAssertEqual(service.listCallCount, 0)
+        let calls = await decryptor.callCount
+        XCTAssertEqual(calls, 0)
+    }
+
+    /// La déconnexion purge aussi ce que la loi du clair avait servi.
+    func test_purge_afterEndToEndLoad_leavesNeitherPlaintextNorMarker() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(
+            cache: .fresh([makeCipherMessage(), makeForgedClearMessage()], age: 10), decryptor: decryptor
+        )
+        await sut.load(for: conversationId, intent: .prefetch, regime: endToEnd)
+        XCTAssertEqual(sut.state(for: conversationId).snapshot?.isUnencrypted(forgedId), true)
+
+        sut.purge()
+
+        XCTAssertEqual(sut.state(for: conversationId).phase, .loading)
+        XCTAssertNil(sut.state(for: conversationId).snapshot)
+        XCTAssertNil(sut.messages[conversationId])
     }
 
     // MARK: - Une seule construction, une purge câblée

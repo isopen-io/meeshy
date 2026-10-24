@@ -136,6 +136,12 @@ enum ConversationPreviewRenderer {
         ConversationListPreviewLoader.holdsBurnOnRead(message) ? .afterRead : .encrypted
     }
 
+    /// Les messages arrivés EN CLAIR dans une conversation chiffrée
+    /// (`EndToEndPlaintextLaw`, #11380) : la rangée porte leur marqueur.
+    static func unencryptedIds(of messages: [Message], regime: EndToEndRegime) -> Set<String> {
+        Set(messages.filter { EndToEndPlaintextLaw.standing(of: $0, in: regime).isUnencrypted }.map(\.id))
+    }
+
     static func contentWidth(cardWidth: CGFloat) -> CGFloat {
         max(0, cardWidth - 2 * margin)
     }
@@ -284,6 +290,9 @@ struct ConversationRecentMessagesPreview: View {
     /// Le fond de la conversation sous ses bulles (#11231) ; la carte garde le
     /// sien quand la conversation n'en a pas choisi.
     var backdrop: ConversationPreviewRenderer.Backdrop = .card
+    /// Les messages arrivés en clair dans une conversation chiffrée (#11380) :
+    /// marqués sous leur rangée, comme dans le fil.
+    var unencrypted: Set<String> = []
 
     @Environment(\.layoutDirection) private var layoutDirection
     /// Les heures d'une rangée au repos ne se montrent qu'au défilement : la
@@ -412,9 +421,14 @@ struct ConversationRecentMessagesPreview: View {
         if ConversationPreviewRenderer.isSealed(message) {
             sealedRow(message)
         } else {
-            switch kind {
-            case .flatRow: flatRow(message, layout: layout)
-            case .bubble: bubble(message, layout: layout)
+            VStack(spacing: 0) {
+                switch kind {
+                case .flatRow: flatRow(message, layout: layout)
+                case .bubble: bubble(message, layout: layout)
+                }
+                if unencrypted.contains(message.id) {
+                    UnencryptedMessageMarker(isDark: isDark)
+                }
             }
         }
     }

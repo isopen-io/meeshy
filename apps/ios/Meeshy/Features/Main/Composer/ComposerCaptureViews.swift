@@ -38,6 +38,16 @@ struct ComposerCapturePreview: View {
         return ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)
     }
 
+    /// La retouche peinte : la prise, son look, et la prise floutée sous les vitres des textes (#12602).
+    private func editSurface(_ source: any ComposerFrameSourcing, canvas: CGSize) -> some View {
+        ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
+                                date: session.lookDate, framing: session.framing,
+                                source: source, canvas: canvas,
+                                fps: ComposerCaptureSurfaceRule.editFPS(session.thermalBudget),
+                                overlay: session.retouchTexts.previewGlass(canvas: canvas))
+            .id(session.phase)
+    }
+
     /// Ce que le peintre lit en édition : la photo figée, ou la boucle.
     private var editedSource: (any ComposerFrameSourcing)? {
         session.phase.isEditing ? session.editSource : nil
@@ -64,11 +74,7 @@ struct ComposerCapturePreview: View {
                                 }
                             })
                         if let source = editedSource {
-                            ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
-                                                    date: session.lookDate, framing: session.framing,
-                                                    source: source, canvas: canevas,
-                                                    fps: ComposerCaptureSurfaceRule.editFPS(session.thermalBudget))
-                                .id(session.phase)
+                            editSurface(source, canvas: canevas)
                         } else {
                             if session.paintsWithMetal {
                                 ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
