@@ -12,9 +12,54 @@ extension ConversationListView {
     // (rendu Liquid Glass système) — builder ci-dessous, attaché par
     // `ConversationRowItem`. < iOS 26 : overlay custom
     // (`ConversationContextMenuView`, déclenché par `RowPressBounceModifier`
-    // → `onLongPress`). Les DEUX chemins doivent rester en parité d'actions ;
-    // la suppression arme toujours `sheetTargets.deleteTarget` (confirmation
+    // → `onLongPress`). Les DEUX chemins parcourent le MÊME catalogue
+    // (`rowMenuCatalog(for:)`, #11230) et appellent les MÊMES gestes ; la
+    // suppression arme toujours `sheetTargets.deleteTarget` (confirmation
     // système — invariants `ConversationMenuSystemDesignGuardTests`).
+
+    // MARK: - Le catalogue de la rangée (#11230)
+
+    /// Ce que le menu de CETTE rangée offre, dans quel ordre et sous quel mot :
+    /// les verdicts de la loi partagée (`rowMenuCapabilities`, #11215) et
+    /// l'état de la rangée, lus UNE fois pour les deux chemins d'OS.
+    func rowMenuCatalog(for conversation: Conversation) -> ConversationMenuCatalog {
+        ConversationMenuCatalog.make(ConversationMenuCatalog.Input(
+            capabilities: rowMenuCapabilities(for: conversation),
+            isPinned: conversation.userState.isPinned,
+            isMuted: conversation.userState.isMuted,
+            hasUnread: conversation.userState.unreadCount > 0,
+            isLocked: ConversationLockManager.shared.isLocked(conversation.id),
+            isArchived: conversation.userState.isArchived,
+            // Global d'un mineur reste aux archives : aucune bascule (#9929).
+            canToggleArchive: !conversation.isArchiveImposed,
+            isPeerBlocked: conversation.type == .direct
+                ? conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) }
+                : nil,
+            windowsAvailable: DetachedWindowOpener.shared.isAvailable,
+            // Drapeau OFF ou modes de lecture coupés (#6482) ⇒ pas de
+            // sous-menu : un mode choisi ici serait ignoré à l'ouverture.
+            offersReadingModes: LentilleFeatureFlag.isLentilleListEnabled && LentilleFeatureFlag.isReadingModesEnabled
+        ))
+    }
+
+    /// Le sous-menu « Mode de lecture » (LWS-8/I-072), l'une des DEUX portes d'UNE
+    /// préférence avec l'encoche I-071 ; `onSelected` ferme le menu custom.
+    func readingModeSubmenu(for conversation: Conversation, onSelected: @escaping () -> Void = {}) -> LentilleReadingModeSubmenu {
+        LentilleReadingModeSubmenu(
+            conversation: conversation,
+            isAnonymous: ConversationListReaderAnonymity.isAnonymous(currentUser: AuthManager.shared.currentUser),
+            onSelected: onSelected
+        )
+    }
+
+    /// « Paramètres du groupe » : les réglages de la conversation, derrière la
+    /// même porte que la fiche — une conversation verrouillée passe le PIN.
+    func presentSettings(of conversation: Conversation) {
+        guard ConversationOpenRoute.mayShowInfo(conversation.id) else {
+            return openConversation(conversation)
+        }
+        sheetTargets.settings = conversation
+    }
 
     // MARK: - Native Context Menu (iOS 26 Liquid Glass)
 
@@ -28,327 +73,111 @@ extension ConversationListView {
 
     @ViewBuilder
     func conversationContextMenu(for conversation: Conversation) -> some View {
-        // Les verdicts de la loi partagée (`ConversationActionPolicy`) — les
-        // mêmes que lit le menu custom de repli, ci-dessous (#11215).
-        let capabilities = rowMenuCapabilities(for: conversation)
+        let catalog = rowMenuCatalog(for: conversation)
         let actions = ConversationRowMenuActions.make(for: conversation, in: self)
 
-        // Sa propre fenêtre (iPad) : écrire à cette personne ou à ce groupe pendant qu'une autre conversation
-        // reste ouverte dans la fenêtre principale.
-        if DetachedWindowOpener.shared.isAvailable, ConversationOpenRoute.mayDetach(conversation.id) {
-            Button {
-                HapticFeedback.light()
-                DetachedWindowOpener.shared.open(.conversation(id: conversation.id))
+        // LA séquence de groupes que le menu custom parcourt aussi.
+        ForEach(catalog.groups) { group in
+            if group.section.opensWithDivider { Divider() }
+            nativeGroup(group, of: conversation, actions: actions)
+        }
+    }
+
+    /// Une section du catalogue en menu natif : la tête en `ControlGroup` (rangée
+    /// compacte dès iOS 26, seul OS de ce chemin), « Plus d'options » en sous-menu.
+    @ViewBuilder
+    private func nativeGroup(_ group: ConversationMenuGroup, of conversation: Conversation, actions: ConversationRowMenuActions) -> some View {
+        switch group.section {
+        case .header:
+            ControlGroup {
+                nativeMenuItems(group.entries, of: conversation, actions: actions)
+            }
+        case .more:
+            Menu {
+                nativeMenuItems(group.entries, of: conversation, actions: actions)
             } label: {
-                Label(
-                    String(localized: "window.detach.conversation", defaultValue: "Ouvrir dans une nouvelle fenêtre", bundle: .main),
-                    systemImage: "macwindow.badge.plus"
+                Label(ConversationMenuCatalog.moreLabel, systemImage: ConversationMenuCatalog.moreSymbol)
+            }
+        case .reach, .organize, .departure:
+            // Le départ arme une confirmation, jamais l'effet.
+            nativeMenuItems(group.entries, of: conversation, actions: actions)
+        }
+    }
+
+    @ViewBuilder
+    private func nativeMenuItems(
+        _ entries: [ConversationMenuEntry],
+        of conversation: Conversation,
+        actions: ConversationRowMenuActions
+    ) -> some View {
+        ForEach(entries, id: \.self) { entry in
+            nativeMenuItem(entry, of: conversation, actions: actions)
+        }
+    }
+
+    /// Une entrée du catalogue en menu natif : les sous-menus portent leur
+    /// liste, les autres entrées agissent par `actions.perform(_:)`.
+    @ViewBuilder
+    private func nativeMenuItem(
+        _ entry: ConversationMenuEntry,
+        of conversation: Conversation,
+        actions: ConversationRowMenuActions
+    ) -> some View {
+        switch entry {
+        case .readingMode:
+            readingModeSubmenu(for: conversation)
+        case .favorite:
+            Menu {
+                nativeFavoriteItems(of: conversation, actions: actions)
+            } label: {
+                Label(entry.label, systemImage: entry.displayedSymbol(hasFavorite: conversation.userState.reaction != nil))
+            }
+        case .move:
+            // Catalogue PARTAGÉ avec l'encoche de la carte de focus
+            // (voir `ConversationMoveToSectionMenuItems`).
+            Menu {
+                ConversationMoveToSectionMenuItems(
+                    categories: conversationViewModel.userCategories,
+                    currentSectionId: conversation.userState.sectionId,
+                    onMove: { sectionId in
+                        HapticFeedback.light()
+                        actions.onMove(sectionId)
+                    }
                 )
-            }
-        }
-
-        // Pin/Unpin
-        Button {
-            HapticFeedback.medium()
-            actions.onPin()
-        } label: {
-            Label(
-                conversation.userState.isPinned
-                    ? String(localized: "context.unpin", defaultValue: "Désépingler", bundle: .main)
-                    : String(localized: "context.pin", defaultValue: "Épingler", bundle: .main),
-                systemImage: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill"
-            )
-        }
-
-        // Mute/Unmute
-        Button {
-            HapticFeedback.light()
-            actions.onMute()
-        } label: {
-            Label(
-                conversation.userState.isMuted
-                    ? String(localized: "context.unmute", defaultValue: "Réactiver les notifications", bundle: .main)
-                    : String(localized: "context.mute", defaultValue: "Mettre en silence", bundle: .main),
-                systemImage: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill"
-            )
-        }
-
-        // Rechercher dans la conversation — MÊME chemin que le bouton
-        // « Rechercher » de l'aperçu du fallback custom (`onSearch`, SSOT) :
-        // la porte du verrou (`openConversation`, après le PIN) arme
-        // `pendingOpenSearch` et ouvre la conversation. Sur iOS 26+ l'aperçu natif est statique
-        // (non cliquable) — l'action vit donc dans le menu (décision 2026-07-14).
-        Button {
-            HapticFeedback.light()
-            openConversation(conversation, searching: true)
-        } label: {
-            Label(
-                String(localized: "context.search", defaultValue: "Rechercher", bundle: .main),
-                systemImage: "magnifyingglass"
-            )
-        }
-
-        // Appeler — DM uniquement (participant résolu). MÊME chemin que le
-        // bouton « Appeler » de l'aperçu custom (`onCall` → CallManager, audio).
-        if conversation.type == .direct, let calleeId = conversation.participantUserId {
-            Button {
-                HapticFeedback.medium()
-                Task {
-                    await CallManager.shared.requestPermissionsThenStartCall(
-                        conversationId: conversation.id,
-                        userId: calleeId,
-                        displayName: conversation.name,
-                        isVideo: false
-                    )
-                }
             } label: {
-                Label(
-                    String(localized: "context.call", defaultValue: "Appeler", bundle: .main),
-                    systemImage: "phone.fill"
-                )
+                Label(entry.label, systemImage: entry.symbol)
             }
-        }
-
-        Divider()
-
-        // Marquer lu / non lu
-        let hasUnread = conversation.userState.unreadCount > 0
-        Button {
-            HapticFeedback.light()
-            actions.onMarkReadToggle()
-        } label: {
-            Label(
-                hasUnread
-                    ? String(localized: "context.mark_read", defaultValue: "Marquer comme lu", bundle: .main)
-                    : String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu", bundle: .main),
-                systemImage: hasUnread ? "envelope.open.fill" : "envelope.badge.fill"
-            )
-        }
-
-        // Mode de lecture (contrat LWS-8/I-072) — sous-menu APRÈS « Marquer
-        // lu », l'une des DEUX portes d'UNE préférence (encoche de la focus
-        // card I-071, ce sous-menu — l'aperçu-menu `LentillePeekView` a été
-        // supprimé le 2026-08-21 : l'aperçu montre les derniers messages).
-        // Drapeau OFF ⇒ rien de plus ici : bit-à-bit identique au menu
-        // d'aujourd'hui, comme partout ailleurs dans la Lentille. Modes de
-        // lecture coupés (#6482) ⇒ pas de sous-menu non plus : un mode choisi
-        // ici serait ignoré à l'ouverture, qui rend Script.
-        if LentilleFeatureFlag.isLentilleListEnabled, LentilleFeatureFlag.isReadingModesEnabled {
-            LentilleReadingModeSubmenu(
-                conversation: conversation,
-                isAnonymous: ConversationListReaderAnonymity.isAnonymous(currentUser: AuthManager.shared.currentUser)
-            )
-        }
-
-        // Détails
-        Button {
-            HapticFeedback.light()
-            actions.onDetails()
-        } label: {
-            Label(
-                String(localized: "context.details", defaultValue: "Détails", bundle: .main),
-                systemImage: "info.circle.fill"
-            )
-        }
-
-        // Renommer — MODERATOR+ ou rôle de plateforme qui administre, jamais
-        // Global ni un direct : ce que la passerelle accepte (#11215).
-        if capabilities.rename {
-            Button {
-                HapticFeedback.light()
-                actions.onRename()
+        default:
+            Button(role: entry.isDestructive ? .destructive : nil) {
+                ConversationRowMenuActions.feel(entry)
+                actions.perform(entry)
             } label: {
-                Label(
-                    String(localized: "context.rename", defaultValue: "Renommer", bundle: .main),
-                    systemImage: "pencil"
-                )
-            }
-        }
-
-        // Favori (emoji)
-        Menu {
-            ForEach(["⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡"], id: \.self) { emoji in
-                Button {
-                    HapticFeedback.light()
-                    actions.onSetFavorite(emoji)
-                } label: {
-                    Text(emoji)
-                }
-            }
-            if conversation.userState.reaction != nil {
-                Divider()
-                Button(role: .destructive) {
-                    HapticFeedback.light()
-                    actions.onRemoveFavorite()
-                } label: {
-                    Label(
-                        String(localized: "context.remove_favorite", defaultValue: "Retirer le favori", bundle: .main),
-                        systemImage: "star.slash"
-                    )
-                }
-            }
-        } label: {
-            Label(
-                String(localized: "context.favorite", defaultValue: "Favori", bundle: .main),
-                systemImage: conversation.userState.reaction != nil ? "star.fill" : "star"
-            )
-        }
-
-        // Déplacer vers une catégorie — catalogue PARTAGÉ avec l'encoche de
-        // la carte de focus (voir `ConversationMoveToSectionMenuItems`).
-        Menu {
-            ConversationMoveToSectionMenuItems(
-                categories: conversationViewModel.userCategories,
-                currentSectionId: conversation.userState.sectionId,
-                onMove: { sectionId in
-                    HapticFeedback.light()
-                    actions.onMove(sectionId)
-                }
-            )
-        } label: {
-            Label(
-                String(localized: "context.move_to", defaultValue: "Déplacer vers...", bundle: .main),
-                systemImage: "folder.fill"
-            )
-        }
-
-        Divider()
-
-        // Actions secondaires — groupées pour garder ≤8 items top-level
-        // (au-delà, iOS bascule sur le style liste où les icônes disparaissent).
-        Menu {
-            conversationMoreOptionsItems(for: conversation, capabilities: capabilities, actions: actions)
-        } label: {
-            Label(
-                String(localized: "context.more_options", defaultValue: "Plus d'options", bundle: .main),
-                systemImage: "ellipsis.circle.fill"
-            )
-        }
-
-        Divider()
-
-        // Quitter le groupe — hors direct et hors Global ; confirmé par l'alerte
-        // de départ (`sheetTargets.leaveTarget`), jamais un départ direct.
-        if capabilities.leave {
-            Button(role: .destructive) {
-                HapticFeedback.heavy()
-                actions.onLeave()
-            } label: {
-                Label(ConversationContextMenuView.leaveLabel, systemImage: ConversationContextMenuView.leaveIcon)
-            }
-        }
-
-        // Supprimer — ou « Masquer la discussion » pour un membre de groupe sans
-        // droit de supprimer pour tous : arme la confirmation système (jamais
-        // de delete direct).
-        if let removal = capabilities.removal {
-            Button(role: .destructive) {
-                HapticFeedback.heavy()
-                sheetTargets.deleteTarget = conversation
-            } label: {
-                Label(
-                    ConversationContextMenuView.removalLabel(removal),
-                    systemImage: ConversationContextMenuView.removalIcon(removal)
-                )
+                Label(entry.label, systemImage: entry.symbol)
             }
         }
     }
 
-    /// « Plus d'options » du menu natif : inviter, verrouiller, archiver,
-    /// bloquer, puis signaler et l'administration — les verdicts de la loi.
+    /// Le sous-menu « Favori » : huit emojis, puis le retrait du favori posé.
     @ViewBuilder
-    private func conversationMoreOptionsItems(
-        for conversation: Conversation,
-        capabilities: ConversationRowMenuCapabilities,
-        actions: ConversationRowMenuActions
-    ) -> some View {
-        if capabilities.invite {
-            Button {
-                HapticFeedback.medium()
-                actions.onInvite()
-            } label: {
-                Label(
-                    String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main),
-                    systemImage: "person.badge.plus"
-                )
-            }
-        }
-
-        let isLocked = ConversationLockManager.shared.isLocked(conversation.id)
-        Button {
-            HapticFeedback.medium()
-            actions.onLock()
-        } label: {
-            Label(
-                isLocked
-                    ? String(localized: "context.unlock", defaultValue: "Déverrouiller", bundle: .main)
-                    : String(localized: "context.lock", defaultValue: "Verrouiller", bundle: .main),
-                systemImage: isLocked ? "lock.open.fill" : "lock.fill"
-            )
-        }
-
-        // Archiver / Désarchiver — état PAR UTILISATEUR (userState), jamais `isActive`.
-        // Global d'un mineur reste aux archives : aucune bascule (#9929).
-        let isArchived = conversation.userState.isArchived
-        if !conversation.isArchiveImposed {
-            Button {
-                HapticFeedback.medium()
-                actions.onArchive()
-            } label: {
-                Label(
-                    isArchived
-                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
-                        : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main),
-                    systemImage: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill"
-                )
-            }
-        }
-
-        // Bloquer / Débloquer (DM uniquement) — débloquer est immédiat.
-        if conversation.type == .direct, let userId = conversation.participantUserId {
-            let isBlocked = BlockService.shared.isBlocked(userId: userId)
-            Divider()
-            Button(role: isBlocked ? nil : .destructive) {
-                HapticFeedback.heavy()
-                actions.onBlock()
-            } label: {
-                Label(
-                    isBlocked
-                        ? String(localized: "context.unblock", defaultValue: "Débloquer", bundle: .main)
-                        : String(localized: "context.block", defaultValue: "Bloquer", bundle: .main),
-                    systemImage: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill"
-                )
-            }
-        }
-
-        conversationModerationItems(capabilities: capabilities, actions: actions)
-    }
-
-    /// Signaler (hors soi), puis l'administration — ADMIN et BIGBOSS seulement.
-    @ViewBuilder
-    private func conversationModerationItems(
-        capabilities: ConversationRowMenuCapabilities,
-        actions: ConversationRowMenuActions
-    ) -> some View {
-        if capabilities.report || capabilities.adminOpen {
-            Divider()
-        }
-
-        if capabilities.report {
+    private func nativeFavoriteItems(of conversation: Conversation, actions: ConversationRowMenuActions) -> some View {
+        ForEach(["⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡"], id: \.self) { emoji in
             Button {
                 HapticFeedback.light()
-                actions.onReport()
+                actions.onSetFavorite(emoji)
             } label: {
-                Label(ConversationContextMenuView.reportLabel, systemImage: ConversationContextMenuView.reportIcon)
+                Text(emoji)
             }
         }
-
-        if capabilities.adminOpen {
-            Button {
+        if conversation.userState.reaction != nil {
+            Divider()
+            Button(role: .destructive) {
                 HapticFeedback.light()
-                actions.onOpenAdmin()
+                actions.onRemoveFavorite()
             } label: {
-                Label(ConversationContextMenuView.adminOpenLabel, systemImage: ConversationContextMenuView.adminOpenIcon)
+                Label(
+                    String(localized: "context.remove_favorite", defaultValue: "Retirer le favori", bundle: .main),
+                    systemImage: "star.slash"
+                )
             }
         }
     }
@@ -425,19 +254,13 @@ extension ConversationListView {
         }
     }
 
-    /// L'appel de l'en-tête de l'aperçu — conversation directe à pair connu.
+    /// L'appel de l'en-tête de l'aperçu : le verdict ET le chemin de l'entrée
+    /// « Appeler » (ni soi-même, ni conversation terminée, ni invité).
     func previewCallAction(for conversation: Conversation) -> (() -> Void)? {
-        guard conversation.type == .direct, let uid = conversation.participantUserId else { return nil }
+        guard rowMenuCatalog(for: conversation).reach.contains(.call) else { return nil }
         return {
             dismissContextMenu()
-            Task {
-                await CallManager.shared.requestPermissionsThenStartCall(
-                    conversationId: conversation.id,
-                    userId: uid,
-                    displayName: conversation.name,
-                    isVideo: false
-                )
-            }
+            ConversationRowMenuActions.startCall(to: conversation, isVideo: false)
         }
     }
 
@@ -546,25 +369,14 @@ extension ConversationListView {
 
                         ConversationContextMenuView(
                             accentHex: conversation.accentColor,
-                            isPinned: conversation.userState.isPinned,
-                            isMuted: conversation.userState.isMuted,
-                            hasUnread: conversation.userState.unreadCount > 0,
+                            catalog: rowMenuCatalog(for: conversation),
                             currentReaction: conversation.userState.reaction,
                             categories: conversationViewModel.userCategories.map {
                                 ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
                             },
                             currentSectionId: conversation.userState.sectionId,
-                            isLocked: ConversationLockManager.shared.isLocked(conversation.id),
-                            isArchived: conversation.userState.isArchived, canToggleArchive: !conversation.isArchiveImposed,
-                            isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
-                            isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
-                            capabilities: rowMenuCapabilities(for: conversation),
                             actions: ConversationRowMenuActions.make(for: conversation, in: self),
-                            onOpenFocalBetaPreview: {
-                                // RETRAIT FOCAL iOS (2026-08-18) : l'item n'est
-                                // plus monté par ConversationContextMenuView —
-                                // closure conservée pour l'API, inerte.
-                            },
+                            readingModeMenu: readingModeSubmenu(for: conversation, onSelected: { dismissContextMenu() }),
                             onDismiss: { dismissContextMenu() }
                         )
                         // Menu : slide-up 70 pt + fondu + dé-blur, dans la MÊME
@@ -834,8 +646,30 @@ extension ConversationRowMenuActions {
             },
             onLeave: { list.sheetTargets.leaveTarget = conversation },
             onReport: { list.sheetTargets.reportTarget = conversation },
-            onOpenAdmin: { openAdminConsole(for: conversation) }
+            onOpenAdmin: { openAdminConsole(for: conversation) },
+            onDetach: { DetachedWindowOpener.shared.open(.conversation(id: conversation.id)) },
+            // MÊME chemin que la loupe de l'aperçu : la porte du verrou
+            // (`openConversation`, après le PIN) arme `pendingOpenSearch`.
+            onSearch: { list.openConversation(conversation, searching: true) },
+            onCall: { startCall(to: conversation, isVideo: false) },
+            onVideoCall: { startCall(to: conversation, isVideo: true) },
+            onGroupSettings: { list.presentSettings(of: conversation) }
         )
+    }
+
+    /// Appeler le pair d'un direct : `requestPermissionsThenStartCall` tranche
+    /// micro et caméra AVANT de composer — `startCall` brut connecterait un
+    /// appel muet.
+    static func startCall(to conversation: Conversation, isVideo: Bool) {
+        guard let calleeId = conversation.participantUserId else { return }
+        Task {
+            await CallManager.shared.requestPermissionsThenStartCall(
+                conversationId: conversation.id,
+                userId: calleeId,
+                displayName: conversation.name,
+                isVideo: isVideo
+            )
+        }
     }
 
     /// La fiche de la conversation dans la console d'administration web.

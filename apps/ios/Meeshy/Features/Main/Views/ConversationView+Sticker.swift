@@ -132,12 +132,9 @@ extension ConversationView {
         }
     }
 
-    /// Encodage PNG et écriture disque, HORS du fil principal, puis l'upload.
-    ///
-    /// La bulle est déjà là : ce qui suit ne se voit pas. Un échec — un encodage
-    /// qui ne rend rien, un disque plein — est un échec d'ENVOI : la bulle
-    /// bascule en échec (`markOptimisticMediaFailed`) au lieu de rester un
-    /// spinner fantôme pour un fichier qui n'existera jamais.
+    /// Encodage PNG et écriture disque, HORS du fil principal, puis l'upload. Un échec d'encodage
+    /// ou d'écriture est un échec d'ENVOI (bulle en échec, jamais un spinner fantôme) ; dans une
+    /// conversation chiffrée, rien ne s'écrit ni ne se téléverse en clair (#11379).
     private func encodeWriteAndSendSticker(
         image: UIImage, original: StickerSendPipeline.OriginalFile?,
         attachmentId: String, directory: URL, localKey: String,
@@ -145,6 +142,7 @@ extension ConversationView {
         relation: MessageRelation,
         originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
+        if await EndToEndPieceGuard.refuses([tempId], on: viewModel, toast: { FeedbackToastManager.shared.showError($0) }) { return }
         let écrit: StickerSendPipeline.WrittenSticker
         do {
             if let original {
