@@ -172,6 +172,7 @@ extension StoryCanvasUIView {
         // `contentReadyFired` (bug user 2026-06-11 : story vidéo figée sur
         // thumbnail, progression sans frames ni audio).
         backgroundLayer.onPlayerAttached = { [weak self] in
+            self?.beginBackgroundPlaybackQoE()
             guard let self, !self.contentReadyFired else { return }
             guard case .video = self.backgroundLayer.kind else { return }
             guard self.backgroundLayer.avPlayer != nil else { return }

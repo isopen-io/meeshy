@@ -39,6 +39,7 @@ extension StoryCanvasUIView {
         backgroundContentReady = false
         foregroundReadinessTimedOut = false
         teardownReadinessObservers()
+        if case .video = kind { markBackgroundPlaybackQoEWaiting() }
 
         // Explicit `_` placeholders on the comma-combined cases — Swift 6.2
         // under iOS 26.5 SDK no longer accepts the bare `.solidColor, .gradient`
@@ -155,6 +156,7 @@ extension StoryCanvasUIView {
     /// la readiness a déjà fire.
     func armBackgroundVideoReadinessObservation(item: AVPlayerItem?) {
         storyMediaLog.debug("arm video readiness layerReady=\(self.backgroundLayer.avPlayerLayer?.isReadyForDisplay ?? false, privacy: .public) itemStatus=\(item?.status.rawValue ?? -1, privacy: .public)")
+        beginBackgroundPlaybackQoE()
         // La progress bar ne doit démarrer que sur la PREMIÈRE FRAME
         // réellement à l'écran. `AVPlayerLayer.isReadyForDisplay`
         // (false→true une fois la frame décodée ET composée) est le seul

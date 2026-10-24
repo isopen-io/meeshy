@@ -81,4 +81,12 @@ final class StoryBackgroundPlaybackQoETests: XCTestCase {
         XCTAssertEqual(summary.deviceTier, .high)
         XCTAssertEqual(summary.mediaId, "media-1")
     }
+
+    func test_markWaiting_withoutTarget_isInert() {
+        let sink = Sink()
+        let session = makeSession(sink: sink, target: nil)
+        session.markWaiting()
+        _ = begin(session)
+        XCTAssertFalse(session.isRunning)
+    }
 }

@@ -158,6 +158,11 @@ public final class StoryBackgroundLayer: CALayer {
     /// gelée sur son thumbnail, progression sans frames ni audio.
     @MainActor public var onPlayerAttached: (() -> Void)?
 
+    /// La session de qualité de lecture du fond vidéo (#11287). Stockée ici
+    /// parce que `StoryCanvasUIView` est hors budget et qu'une extension ne
+    /// porte pas de propriété ; c'est aussi la couche qui possède le player.
+    @MainActor public let playbackQoE = StoryBackgroundPlaybackQoE()
+
     /// Marks the final bitmap as stamped and notifies `onFinalImageStamped`.
     @MainActor
     private func markFinalContentStamped() {
@@ -578,6 +583,7 @@ extension StoryBackgroundLayer {
         letterboxFillLayer?.removeFromSuperlayer()
         letterboxFillLayer = nil
         letterboxSourceImage = nil
+        playbackQoE.finish(reason: .swiped)
         avPlayerLayer?.removeFromSuperlayer()
         avPlayer?.pause()
         avPlayer = nil

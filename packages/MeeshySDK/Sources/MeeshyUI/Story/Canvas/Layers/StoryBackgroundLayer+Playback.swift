@@ -186,6 +186,7 @@ extension StoryBackgroundLayer {
     @MainActor
     public func handleAppLifecycle(active: Bool) {
         guard let player = avPlayer else { return }
+        if !active { playbackQoE.finish(reason: .backgrounded) }
         if active {
             // Reprise gated sur l'autorisation canonique : un retour
             // foreground ne doit JAMAIS relancer un player dont la lecture

@@ -325,6 +325,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // ce canvas). L'audio démarrait alors dans `setReaderContext` et on
         // entendait la story PENDANT l'interlude (bug user 2026-07-25). Naître
         // en pause supprime la course au lieu de tenter de la gagner.
+        // La QoE ne mesure que du contenu PUBLIÉ qu'on regarde : ni l'aperçu du
+        // composer (médias préchargés, id local), ni le calque sortant d'un
+        // fondu (né en `.edit`, il ne joue rien).
+        let isPublishedReading = !isOutgoing && images.isEmpty && videoURLs.isEmpty && audioURLs.isEmpty
+        view.setPlaybackQoETarget(isPublishedReading ? SocialTarget(kind: .story, id: storyItem.id) : nil)
         view.setPaused(true)
         // La position SÈME avant `setReaderContext`, le premier site qui
         // démarre quoi que ce soit (audio compris) : semée après, la vidéo

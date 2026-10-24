@@ -37,6 +37,18 @@ final class PlaybackQoEStoryObserverTests: XCTestCase {
         XCTAssertFalse(result.exitBeforeStart)
     }
 
+    func test_startup_countsTheWaitThatPrecededThePlayer_whenTheSessionIsBackdated() throws {
+        let clock = Clock()
+        let subject = PlaybackQoESubject(target: SocialTarget(kind: .story, id: "story-1"), surface: SocialSurface(.story), mediaId: "media-1")
+        let observer = PlaybackQoEObserver(subject: subject, player: AVPlayer(), mutedAtStart: true, deviceTier: nil, startedAtMs: clock.nowMs - 1_500, clockMs: { clock.nowMs })
+        let readiness = PassthroughSubject<Bool, Never>()
+        observer.observeFirstFrame(readiness: readiness.eraseToAnyPublisher())
+        clock.nowMs += 180
+        readiness.send(true)
+        let result = try summary(observer.finish(reason: .completed))
+        XCTAssertEqual(result.startupMs, 1_680)
+    }
+
     func test_firstFrameComposed_alreadyTrue_isAWarmStartAroundZero() throws {
         let clock = Clock()
         let observer = makeObserver(clock: clock)
