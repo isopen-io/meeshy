@@ -226,11 +226,90 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertNil(served["notificationLocKey"])
     }
 
-    /// Le verrou est CONSULTÉ par l'extension, avant toute décision de
-    /// catégorie ou d'enrichissement, et le corps est remplacé EN DERNIER.
-    func test_leVerrouPIN_estConsulteParLExtension() throws {
+    // MARK: - #11387 — le verrou se lit au MIROIR complet, pas à la liste chargée
+
+    /// Une conversation verrouillée HORS de la liste publiée (au-delà des 100
+    /// premières) n'a pas de cliché : seul le miroir la dit verrouillée.
+    func test_isContentLocked_aConversationAbsentFromTheSnapshot_isLockedByTheMirror() {
+        XCTAssertTrue(NSEAttachmentPolicy.isContentLocked(
+            conversationId: "coffre", mirroredLockedIds: ["coffre"], snapshotDeclaresLock: false
+        ))
+    }
+
+    func test_isContentLocked_neitherMirrorNorSnapshot_isOpen() {
+        XCTAssertFalse(NSEAttachmentPolicy.isContentLocked(
+            conversationId: "c1", mirroredLockedIds: ["autre"], snapshotDeclaresLock: false
+        ))
+        XCTAssertFalse(NSEAttachmentPolicy.isContentLocked(
+            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: false
+        ))
+        XCTAssertFalse(NSEAttachmentPolicy.isContentLocked(
+            conversationId: nil, mirroredLockedIds: ["c1"], snapshotDeclaresLock: true
+        ))
+    }
+
+    func test_isContentLocked_theSnapshotFlagStillLocks() {
+        XCTAssertTrue(NSEAttachmentPolicy.isContentLocked(
+            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: true
+        ))
+    }
+
+    func test_mirrorLockedConversationIds_writesTheFullSet_andAnEmptySetRemovesTheKey() throws {
+        let suite = "nse-lock-mirror-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        NSEAttachmentPolicy.mirrorLockedConversationIds(["b", "a"], into: defaults)
+        XCTAssertEqual(defaults.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey), ["a", "b"])
+
+        NSEAttachmentPolicy.mirrorLockedConversationIds([], into: defaults)
+        XCTAssertNil(defaults.object(forKey: NSEAttachmentPolicy.lockedConversationIdsKey))
+    }
+
+    // MARK: - #11387 — l'ordre de préparation d'une bannière
+
+    /// Scellée AVANT toute décision (catégorie, préférences, média) : sinon la
+    /// catégorie et l'enrichissement liraient une charge non protégée.
+    func test_plan_lockedConversation_sealsBeforeEveryDecision() {
+        let plan = NSEPreparationStep.plan(isLockedConversation: true)
+        XCTAssertEqual(plan.first, .sealLockedConversation)
+    }
+
+    /// Le corps est remplacé EN DERNIER : aucune réécriture (déchiffrement,
+    /// repli audio, détail, échéance) ne remet du contenu sous le verrou.
+    func test_plan_lockedConversation_replacesTheBodyAfterEveryRewrite() throws {
+        let plan = NSEPreparationStep.plan(isLockedConversation: true)
+        XCTAssertEqual(plan.last, .replaceBodyWithLockLabel)
+        let replace = try XCTUnwrap(plan.firstIndex(of: .replaceBodyWithLockLabel))
+        for rewrite in [NSEPreparationStep.rewriteBody, .applyEphemeralDeadline] {
+            let index = try XCTUnwrap(plan.firstIndex(of: rewrite), "\(rewrite) reste au plan")
+            XCTAssertLessThan(index, replace, "\(rewrite) avant le scellé du corps")
+        }
+    }
+
+    /// « Aucun préchargement ne met en cache les messages d'une conversation
+    /// verrouillée » (décision porteur 2026-10-24) : l'extension ne télécharge
+    /// ni ne pré-enregistre le message.
+    func test_plan_lockedConversation_stagesNothingOfTheMessage() {
+        let plan = NSEPreparationStep.plan(isLockedConversation: true)
+        XCTAssertFalse(plan.contains(.syncMessage))
+        XCTAssertFalse(plan.contains(.prePersistMessage))
+    }
+
+    func test_plan_openConversation_isTheHistoricalPipeline() {
+        XCTAssertEqual(NSEPreparationStep.plan(isLockedConversation: false), [
+            .applyCategory, .applyBadge, .applyThreading, .applyPreferences, .updateUnreadCount,
+            .syncMessage, .prefetchSocial, .prePersistMessage,
+            .postDeliveryReceipt, .rewriteBody, .applyEphemeralDeadline, .sweepExpiredBanners,
+        ])
+    }
+
+    /// L'extension EXÉCUTE le plan — jamais une séquence recopiée à la main
+    /// qui pourrait s'en écarter — et lit le verrou au miroir complet.
+    func test_extension_executesThePlan_andReadsTheMirror() throws {
         let source = try nseSource()
-        XCTAssertTrue(source.contains("NSEAttachmentPolicy.sealingLockedConversation"))
-        XCTAssertTrue(source.contains("NSEAttachmentPolicy.lockedConversationLocKey"))
+        XCTAssertTrue(source.contains("NSEPreparationStep.plan(isLockedConversation:"))
+        XCTAssertTrue(source.contains("NSEAttachmentPolicy.lockedConversationIdsKey"))
+        XCTAssertTrue(source.contains("NSEAttachmentPolicy.isContentLocked("))
     }
 }

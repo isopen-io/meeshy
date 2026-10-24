@@ -111,8 +111,11 @@ struct LentilleConversationRow: View {
     // au niveau du rang — jamais dans `LentilleRowAvatar`/`MeeshyAvatar`, qui
     // restent de purs relais (même discipline que L10 ci-dessous, « mood
     // gagne, présence sinon » vit dans `MeeshyAvatar`, jamais réinterprété).
-    private var effectivePresenceState: PresenceState {
-        typingUsername != nil ? .online : presenceState
+    //
+    // #11387 — sauf sous verrou PIN : une conversation verrouillée ne dit pas
+    // qu'on y écrit, ni par la ligne 2 ni par une pastille qui passe au vert.
+    var effectivePresenceState: PresenceState {
+        typingUsername != nil && !isContentLocked ? .online : presenceState
     }
 
     private var isMagnified: Bool { magnification != nil }

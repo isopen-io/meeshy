@@ -198,6 +198,91 @@ final class ConversationPreviewLockTests: XCTestCase {
         wait(for: [unlocked], timeout: 1)
     }
 
+    // MARK: - #11387 — ce que l'extension de notification voit du verrou
+
+    @MainActor
+    private final class PurgedBanners {
+        nonisolated deinit {}
+        var conversationIds: [String] = []
+    }
+
+    private func makeMirroredLockManager(
+        mirror: UserDefaults,
+        purged: PurgedBanners
+    ) -> ConversationLockManager {
+        ConversationLockManager(
+            vault: InMemoryConversationLockVault(),
+            defaults: UserDefaults(suiteName: "pin-content-\(UUID().uuidString)")!,
+            biometrics: StubBiometricUnlocker(),
+            iterations: 1_000,
+            contentLockMirror: mirror,
+            purgeDeliveredBanners: { purged.conversationIds.append($0) }
+        )
+    }
+
+    private func makeMirror() throws -> UserDefaults {
+        let suite = "pin-mirror-\(UUID().uuidString)"
+        let mirror = try XCTUnwrap(UserDefaults(suiteName: suite))
+        mirror.removePersistentDomain(forName: suite)
+        return mirror
+    }
+
+    /// Une conversation verrouillée hors de la liste chargée (un « coffre »
+    /// ancien) n'a pas de cliché : le miroir porte le jeu COMPLET, et
+    /// l'extension la voit verrouillée.
+    func test_setLock_mirrorsTheFullLockedSet_soTheExtensionSeesAConversationAbsentFromTheList() throws {
+        let mirror = try makeMirror()
+        let sut = makeMirroredLockManager(mirror: mirror, purged: PurgedBanners())
+
+        sut.setLock(conversationId: "coffre-hors-liste", pin: "1234")
+
+        let mirrored = mirror.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey)
+        XCTAssertTrue(NSEAttachmentPolicy.isContentLocked(
+            conversationId: "coffre-hors-liste", mirroredLockedIds: mirrored, snapshotDeclaresLock: false
+        ))
+    }
+
+    func test_removeLock_andLogout_clearTheMirror() throws {
+        let mirror = try makeMirror()
+        let sut = makeMirroredLockManager(mirror: mirror, purged: PurgedBanners())
+        sut.setLock(conversationId: "a", pin: "1234")
+        sut.setLock(conversationId: "b", pin: "1234")
+
+        sut.removeLock(conversationId: "a")
+        XCTAssertEqual(mirror.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey), ["b"])
+
+        sut.resetForLogout()
+        XCTAssertNil(mirror.object(forKey: NSEAttachmentPolicy.lockedConversationIdsKey))
+    }
+
+    /// Les bannières déjà délivrées montraient le contenu : verrouiller les
+    /// retire du Centre de notifications. Déverrouiller ne retire rien.
+    func test_setLock_purgesTheDeliveredBannersOfThatConversationOnly() throws {
+        let purged = PurgedBanners()
+        let sut = makeMirroredLockManager(mirror: try makeMirror(), purged: purged)
+
+        sut.setLock(conversationId: conversationId, pin: "1234")
+        sut.removeLock(conversationId: conversationId)
+
+        XCTAssertEqual(purged.conversationIds, [conversationId])
+    }
+
+    /// Le défaut de production retire bien par FIL de conversation — le
+    /// prédicat que le retrait au toucher utilise déjà.
+    func test_lockedConversationBanners_areThoseOfItsThread() {
+        let ofThread = DeliveredBanner(
+            identifier: "n1", userInfo: [:], threadIdentifier: "conversation:\(conversationId)"
+        )
+        let ofPayload = DeliveredBanner(identifier: "n2", userInfo: ["conversationId": conversationId])
+        let other = DeliveredBanner(
+            identifier: "n3", userInfo: ["conversationId": "autre"], threadIdentifier: "conversation:autre"
+        )
+        let ref = NotificationReadScope.conversation(id: conversationId)
+        XCTAssertTrue(NotificationActionHandler.bannerBelongs(ofThread, to: ref))
+        XCTAssertTrue(NotificationActionHandler.bannerBelongs(ofPayload, to: ref))
+        XCTAssertFalse(NotificationActionHandler.bannerBelongs(other, to: ref))
+    }
+
     // MARK: - #11387 — la rangée
 
     func test_rowLine2_whenContentLocked_beatsTypingDraftAndPreview() {
@@ -261,6 +346,21 @@ final class ConversationPreviewLockTests: XCTestCase {
 
         XCTAssertFalse(label.contains("1234"), label)
         XCTAssertTrue(label.contains(ConversationLockedPreviewLine.label), label)
+    }
+
+    /// La frappe ne se trahit pas non plus par la pastille : sous verrou, elle
+    /// garde la présence servie au lieu de passer au vert.
+    func test_lentilleRow_whenContentLocked_typingDoesNotForceThePresenceDot() {
+        let locked = LentilleConversationRow(
+            conversation: makeRowConversation(), presenceState: .offline,
+            typingUsername: "Alice", isContentLocked: true, preferredContentLanguages: ["fr"]
+        )
+        let open = LentilleConversationRow(
+            conversation: makeRowConversation(), presenceState: .offline,
+            typingUsername: "Alice", preferredContentLanguages: ["fr"]
+        )
+        XCTAssertEqual(locked.effectivePresenceState, .offline)
+        XCTAssertEqual(open.effectivePresenceState, .online)
     }
 
     func test_rows_reRenderWhenTheLockFlips() {

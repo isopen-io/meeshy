@@ -359,7 +359,12 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    static let shared = ConversationLockManager()
+    static let shared = ConversationLockManager(
+        contentLockMirror: UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName),
+        purgeDeliveredBanners: { conversationId in
+            NotificationActionHandler.removeDeliveredBanners(forThreadOf: .conversation(id: conversationId))
+        }
+    )
 
     /// Durée de vie d'une ouverture autorisée et pas encore consommée.
     static let openingPassLifetime: TimeInterval = 60
@@ -373,6 +378,13 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     private let biometrics: BiometricUnlocking
     private let iterations: Int
     private let now: () -> Date
+    /// #11387 — le jeu COMPLET des conversations verrouillées, miroité dans
+    /// l'App Group pour l'extension de notification (le cliché de la liste
+    /// n'en couvre que les pages chargées). `nil` : aucun miroir (tests).
+    private let contentLockMirror: UserDefaults?
+    /// #11387 — verrouiller retire du Centre de notifications les bannières
+    /// DÉJÀ délivrées de la conversation : elles montraient son contenu.
+    private let purgeDeliveredBanners: @MainActor (String) -> Void
 
     private let masterPinKey = "meeshy_master_pin"
     private let biometricStateKey = "meeshy_lock_biometric_state"
@@ -386,13 +398,17 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         defaults: UserDefaults = .standard,
         biometrics: BiometricUnlocking = DeviceBiometricUnlocker(),
         iterations: Int = ConversationPinCredential.defaultIterations,
-        now: @escaping () -> Date = { Date() }
+        now: @escaping () -> Date = { Date() },
+        contentLockMirror: UserDefaults? = nil,
+        purgeDeliveredBanners: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.vault = vault
         self.defaults = defaults
         self.biometrics = biometrics
         self.iterations = iterations
         self.now = now
+        self.contentLockMirror = contentLockMirror
+        self.purgeDeliveredBanners = purgeDeliveredBanners
         loadLockedIds()
         wireAuthLogoutHook()
     }
@@ -514,6 +530,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         openingPasses[conversationId] = nil
         lockedConversationIds.insert(conversationId)
         saveLockedIds()
+        purgeDeliveredBanners(conversationId)
     }
 
     /// Un essai sur le code d'une conversation. Accordé, il vaut UNE ouverture
@@ -652,11 +669,16 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     private func saveLockedIds() {
         defaults.set(Array(lockedConversationIds), forKey: lockedIdsDefaultsKey)
+        NSEAttachmentPolicy.mirrorLockedConversationIds(lockedConversationIds, into: contentLockMirror)
         NotificationCenter.default.post(name: .conversationContentLocksDidChange, object: nil)
     }
 
+    /// Le miroir se réécrit aussi au lancement : un verrou posé avant que le
+    /// miroir existe (mise à jour de l'app) rejoint l'extension sans attendre
+    /// le prochain changement.
     private func loadLockedIds() {
         let ids = defaults.stringArray(forKey: lockedIdsDefaultsKey) ?? []
         lockedConversationIds = Set(ids)
+        NSEAttachmentPolicy.mirrorLockedConversationIds(lockedConversationIds, into: contentLockMirror)
     }
 }
