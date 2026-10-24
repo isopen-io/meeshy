@@ -105,6 +105,10 @@ struct ShareCard: Equatable {
     /// L'identifiant de l'auteur — sa propre story ne se republie pas en story
     /// par la feuille (#12644), comme elle ne se republie pas au rail.
     var authorId: String? = nil
+    /// Une story PUBLIQUE seulement reçoit un lien suivi : `meeshy.me/l/…`
+    /// s'ouvre sans compte et élargirait l'audience d'une story FRIENDS ou
+    /// PRIVATE. Fermé par défaut.
+    var isPublicStory: Bool = false
 
     /// Le texte qui part dans la conversation : la phrase de la story, sinon le lien.
     var messageText: String? {
@@ -119,12 +123,12 @@ extension ShareSubject {
     /// réel (D14, revue par le porteur, #12644). Le lien suivi
     /// `meeshy.me/l/<token>` n'est frappé qu'au moment où elle PART — envoi,
     /// copie, partage hors de Meeshy ; d'ici là, l'adresse directe.
-    static func story(id: String, authorName: String, authorId: String? = nil, imageURL: String? = nil) -> ShareSubject {
+    static func story(id: String, authorName: String, authorId: String? = nil, isPublic: Bool = false, imageURL: String? = nil) -> ShareSubject {
         .card(ShareCard(
             kind: .story, contentId: id,
             title: String(format: String(localized: "share.preview.story", defaultValue: "Story de %@", bundle: .meeshyShare), authorName),
             subtitle: nil, url: URL(string: "https://meeshy.me/story/\(id)"), imageURL: imageURL, authorName: authorName,
-            authorId: authorId
+            authorId: authorId, isPublicStory: isPublic
         ))
     }
 }

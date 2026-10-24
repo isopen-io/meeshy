@@ -481,7 +481,8 @@ struct StoryActionSidebarView: View {
                 scrubHoveredLanguageIndex = nil
                 switch StoryScrubSelectionResolver.release(hoveredIndex: hovered, tileCount: availableTranslationLanguages.count) {
                 case .select(let index):
-                    onSelectLanguageOverride(availableTranslationLanguages[index].id)
+                    onSelectLanguageOverride(StoryLanguageQuickBar.override(afterTapping: availableTranslationLanguages[index].id,
+                                                                            current: activeLanguageCode))
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         showLanguageOptions = false
                     }
@@ -759,7 +760,7 @@ struct StoryActionSidebarView: View {
                 HapticFeedback.light()
                 if let story = currentStory, let group = currentGroup {
                     EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                    sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username, authorId: group.id))
+                    sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username, authorId: group.id, isPublic: story.isPublic))
                 }
             }
 

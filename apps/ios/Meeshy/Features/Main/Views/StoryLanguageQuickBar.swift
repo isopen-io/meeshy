@@ -169,10 +169,6 @@ struct StoryLanguageQuickBar: View {
                                          defaultValue: "Autres langues", bundle: .main)))
     }
 
-    /// Une pastille est active si sa langue est celle actuellement affichée.
-    /// Comparaison insensible à la casse et sur la base BCP-47 (`pt-BR` ↔ `pt`)
-    /// pour que la langue lue soit toujours surlignée, variantes régionales
-    /// comprises. Pur et sans effet de bord — testé isolément.
     /// **Une langue se rechoisit autant qu'on veut** (#12646). Toucher la
     /// langue déjà choisie la relâche : le lecteur revient à SA chaîne (le
     /// Prisme), au lieu de rester figé sur le premier choix jusqu'à la slide
@@ -183,6 +179,10 @@ struct StoryLanguageQuickBar: View {
         return nil
     }
 
+    /// Une pastille est active si sa langue est celle actuellement affichée.
+    /// Comparaison insensible à la casse et sur la base BCP-47 (`pt-BR` ↔ `pt`)
+    /// pour que la langue lue soit toujours surlignée, variantes régionales
+    /// comprises. Pur et sans effet de bord — testé isolément.
     nonisolated static func isActive(_ id: String, active: String?) -> Bool {
         guard let active else { return false }
         let lhs = id.lowercased()

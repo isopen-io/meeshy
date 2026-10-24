@@ -524,7 +524,11 @@ struct StoryHeaderView: View {
             ForEach(transcriptMenu.languages) { language in
                 Button {
                     HapticFeedback.light()
-                    transcriptMenu.select(language.id)
+                    // La langue déjà servie s'affiche sans rien changer d'autre :
+                    // seule une AUTRE langue fait basculer toute la story.
+                    if !StoryLanguageQuickBar.isActive(language.id, active: transcriptMenu.servedLanguage) {
+                        transcriptMenu.select(language.id)
+                    }
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAudioTranscript = true }
                 } label: {
                     if showAudioTranscript && StoryLanguageQuickBar.isActive(language.id, active: transcriptMenu.servedLanguage) {

@@ -215,22 +215,40 @@ final class ShareSheetViewModel: ObservableObject {
     /// **Le lien suivi d'une story n'est frappé qu'au moment où elle PART**
     /// (#12644) — un envoi, une copie, un partage hors de Meeshy — jamais à
     /// l'ouverture de la feuille : un lien frappé pour rien compterait un
-    /// partage qui n'a pas eu lieu. Une seule frappe par feuille, que les
-    /// gestes suivants réutilisent ; sans réseau, l'adresse directe reste.
+    /// partage qui n'a pas eu lieu. Une seule frappe réussie par feuille, que
+    /// les gestes suivants réutilisent ; un échec se retente au geste suivant.
+    /// Une story qui n'est pas publique garde son adresse directe, qui exige
+    /// un compte et l'audience de la story.
     func ensureCardLink() async -> URL? {
-        guard let story = republishableStory else {
+        guard let story = republishableStory, story.isPublicStory else {
             guard case .card(let card) = subject else { return nil }
             return card.url
         }
-        let mint = cardLinkMint ?? Task { await self.dispatcher.resolvedLink(for: story) }
+        let mint = cardLinkMint ?? mintLink(for: story)
         cardLinkMint = mint
-        guard let link = await mint.value else { return republishableStory?.url }
+        guard let link = await mint.value else {
+            cardLinkMint = nil
+            return republishableStory?.url
+        }
         if var card = republishableStory, card.url != link {
             card.url = link
             subject = .card(card)
         }
         return link
     }
+
+    /// Un réseau lent ne retient pas l'envoi plus de `linkMintDeadline` : la
+    /// frappe est annulée, et l'adresse directe part.
+    private func mintLink(for story: ShareCard) -> Task<URL?, Never> {
+        let mint = Task { await self.dispatcher.resolvedLink(for: story) }
+        Task {
+            guard await cancellableSleep(for: Self.linkMintDeadline) else { return }
+            mint.cancel()
+        }
+        return mint
+    }
+
+    static let linkMintDeadline: Duration = .milliseconds(1500)
 
     /// Recherche : le filtre local suit chaque frappe ; dès deux caractères, la
     /// recherche serveur (personnes, conversations, communautés) s'y fusionne.
@@ -336,6 +354,11 @@ final class ShareSheetViewModel: ObservableObject {
         let plan = plan
         guard plan.canSend, !hasSent else { return }
         hasSent = true
+        // Chaque ligne passe « en cours » AVANT toute attente : sans quoi
+        // `isFinished` serait vrai pendant la frappe du lien, et la feuille se
+        // refermerait avant d'avoir rien envoyé.
+        for recipient in selection { deliveries[recipient.id] = .sending }
+        for target in publications { deliveries["pub:\(target.rawValue)"] = .sending }
         if !selection.isEmpty { _ = await ensureCardLink() }
         let request = ShareSendRequest(
             subject: subject,
@@ -348,8 +371,6 @@ final class ShareSheetViewModel: ObservableObject {
         )
         let grouped = createsGroup && offersGroupCreation ? groupCandidates : []
         let individual = selection.filter { recipient in !grouped.contains { $0.id == recipient.id } }
-        for recipient in selection { deliveries[recipient.id] = .sending }
-        for target in publications { deliveries["pub:\(target.rawValue)"] = .sending }
 
         if !grouped.isEmpty { await deliverToNewGroup(grouped, request: request) }
         for recipient in individual { await deliver(request, to: recipient) }

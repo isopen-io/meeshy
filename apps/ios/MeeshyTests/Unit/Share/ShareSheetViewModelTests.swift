@@ -38,6 +38,8 @@ private final class SpyShareDispatcher: ShareDispatching {
     var republishOutcome: ShareRepublishOutcome = .published
     private(set) var republished: [(storyId: String, target: PublicationTarget)] = []
     private(set) var linkMints = 0
+    /// Ce que le test veut observer PENDANT la frappe du lien.
+    var duringMint: (() -> Void)?
 
     func deliver(_ request: ShareSendRequest, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
         delivered.append((recipient, request))
@@ -53,6 +55,7 @@ private final class SpyShareDispatcher: ShareDispatching {
     }
     func resolvedLink(for card: ShareCard) async -> URL? {
         linkMints += 1
+        duringMint?()
         return link
     }
     func republish(card: ShareCard, to target: PublicationTarget) async -> ShareRepublishOutcome {
@@ -339,7 +342,7 @@ final class ShareSheetViewModelTests: XCTestCase {
     // MARK: - Une story (#12644) : republier, recomposer, lien frappé à l'envoi
 
     func test_aStory_doesNotMintItsTrackedLink_whenTheSheetOpens() async {
-        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa", authorId: "author"))
+        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa", authorId: "author", isPublic: true))
         dispatcher.link = URL(string: "https://meeshy.me/l/abc")
 
         await sut.load()
@@ -351,7 +354,7 @@ final class ShareSheetViewModelTests: XCTestCase {
     }
 
     func test_aStory_mintsItsTrackedLink_onceItIsSent_andTheMessageCarriesIt() async {
-        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa", authorId: "author"))
+        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa", authorId: "author", isPublic: true))
         dispatcher.link = URL(string: "https://meeshy.me/l/abc")
         sut.toggle(person("lea"))
 
@@ -364,7 +367,7 @@ final class ShareSheetViewModelTests: XCTestCase {
     }
 
     func test_aStory_mintsOneLinkPerSheet_whateverTheGestures() async {
-        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa"))
+        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa", isPublic: true))
         dispatcher.link = URL(string: "https://meeshy.me/l/abc")
 
         let first = await sut.ensureCardLink()
@@ -375,13 +378,46 @@ final class ShareSheetViewModelTests: XCTestCase {
         XCTAssertEqual(dispatcher.linkMints, 1)
     }
 
-    func test_aStory_offline_keepsItsDirectAddress() async {
-        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa"))
+    func test_aStory_offline_keepsItsDirectAddress_andRetriesAtTheNextGesture() async {
+        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa", isPublic: true))
         dispatcher.link = nil
 
-        let link = await sut.ensureCardLink()
+        let offline = await sut.ensureCardLink()
+        dispatcher.link = URL(string: "https://meeshy.me/l/abc")
+        let online = await sut.ensureCardLink()
 
-        XCTAssertEqual(link?.absoluteString, "https://meeshy.me/story/s1")
+        XCTAssertEqual(offline?.absoluteString, "https://meeshy.me/story/s1")
+        XCTAssertEqual(online?.absoluteString, "https://meeshy.me/l/abc")
+        XCTAssertEqual(dispatcher.linkMints, 2, "Un échec de frappe se retente.")
+    }
+
+    /// `meeshy.me/l/…` s'ouvre sans compte : une story FRIENDS ou PRIVATE garde
+    /// son adresse directe, qui exige un compte et son audience.
+    func test_aNonPublicStory_neverMintsAnOpenLink() async {
+        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa", isPublic: false))
+        dispatcher.link = URL(string: "https://meeshy.me/l/abc")
+        sut.toggle(person("lea"))
+
+        let copied = await sut.ensureCardLink()
+        await sut.send()
+
+        XCTAssertEqual(copied?.absoluteString, "https://meeshy.me/story/s1")
+        XCTAssertEqual(dispatcher.linkMints, 0)
+    }
+
+    /// La feuille se referme dès que plus rien n'est « en cours » : pendant la
+    /// frappe, chaque ligne doit déjà l'être.
+    func test_whileTheLinkIsMinted_theSheetIsNotFinished() async {
+        let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa", isPublic: true))
+        dispatcher.link = URL(string: "https://meeshy.me/l/abc")
+        sut.toggle(person("lea"))
+        var finishedDuringMint: Bool?
+        dispatcher.duringMint = { finishedDuringMint = sut.isFinished }
+
+        await sut.send()
+
+        XCTAssertEqual(finishedDuringMint, false)
+        XCTAssertTrue(sut.isFinished)
     }
 
     func test_someoneElsesStory_republishesAsStoryPostOrReel_andGoesToTheStudio() {

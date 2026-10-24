@@ -210,9 +210,12 @@ struct ShareOutgoingLink: Identifiable {
 /// dans l'extension de partage, qui n'a pas le `ShareSheet` de l'app.
 struct ShareOutActivityView: UIViewControllerRepresentable {
     let activityItems: [Any]
+    let onFinish: () -> Void
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in onFinish() }
+        return controller
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}

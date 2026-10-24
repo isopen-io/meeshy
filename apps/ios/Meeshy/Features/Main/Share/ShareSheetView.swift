@@ -119,7 +119,7 @@ struct ShareSheetView: View {
             Button(ShareSheetCopy.cancel, role: .cancel) { pendingCapture = nil }
         }
         .sheet(item: $outgoingLink) { link in
-            ShareOutActivityView(activityItems: [link.url])
+            ShareOutActivityView(activityItems: [link.url]) { outgoingLink = nil }
         }
     }
 
