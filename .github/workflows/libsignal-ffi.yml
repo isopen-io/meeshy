@@ -56,7 +56,7 @@ jobs:
         if: steps.existing.outputs.published == 'false'
         run: |
           rustup toolchain install "$(cat "$RUNNER_TEMP/libsignal/rust-toolchain")" --profile minimal \
-            --target aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+            --target aarch64-apple-ios --target aarch64-apple-ios-sim --target x86_64-apple-ios
           brew list protobuf >/dev/null 2>&1 || brew install protobuf
       - name: Construire
         if: steps.existing.outputs.published == 'false'
