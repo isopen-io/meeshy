@@ -241,11 +241,11 @@ class MessageMergePolicyTest {
     @Test
     fun `a push seed keeps the body only when it is the real text`() {
         val plain = PushPayload(type = "new_message", messageId = "m1", conversationId = "c1", senderId = "u1", body = "salut")
-        val protected = plain.copy(notificationLocKey = "MESSAGE_VIEW_ONCE")
+        val guarded = plain.copy(notificationLocKey = "MESSAGE_VIEW_ONCE")
         val media = plain.copy(firstAttachmentUrl = "https://cdn/a.jpg", body = "Photo")
 
         assertThat(MinimalMessageSeed.fromPush(plain)?.content).isEqualTo("salut")
-        assertThat(MinimalMessageSeed.fromPush(protected)?.content).isEmpty()
+        assertThat(MinimalMessageSeed.fromPush(guarded)?.content).isEmpty()
         assertThat(MinimalMessageSeed.fromPush(media)?.content).isEmpty()
     }
 
