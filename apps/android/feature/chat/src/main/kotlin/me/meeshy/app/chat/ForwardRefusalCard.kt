@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -21,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ForwardRefusalReason
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -55,7 +54,7 @@ internal fun ForwardRefusalCard(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
         Icon(
-            imageVector = Icons.Filled.Lock,
+            imageVector = MeeshyIcons.LockFilled,
             contentDescription = null,
             tint = accentColor,
             modifier = Modifier.size(36.dp),
