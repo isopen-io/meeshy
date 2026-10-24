@@ -261,23 +261,27 @@ describe("le staging ne partage aucun réseau avec la production, hors meeshy-st
   const stagingSource = read('docker-compose.staging.yml');
   const prod = parseCompose(prodSource, 'meeshy');
   const staging = parseCompose(stagingSource, STAGING_PROJECT);
-  const mediaS3 = parseCompose(read('docker-compose.staging.media-s3.yml'), STAGING_PROJECT);
+  // Toutes les surcouches du staging (`docker-compose.staging.<nom>.yml`), présentes et futures.
+  const overlayFiles = fs.readdirSync(COMPOSE_DIR).filter((f) => /^docker-compose\.staging\.[a-z0-9-]+\.yml$/.test(f)).sort();
+  const overlays = overlayFiles.map((f) => parseCompose(read(f), STAGING_PROJECT));
+  const mediaS3 = overlays[overlayFiles.indexOf('docker-compose.staging.media-s3.yml')];
 
   it('lit bien les services et les réseaux des fichiers', () => {
     expect(prod.project).toBe('meeshy');
     expect([...prod.services.keys()]).toEqual(expect.arrayContaining([...PROD_DATA_SERVICES, 'traefik', 'gateway']));
     expect([...staging.services.keys()]).toEqual(expect.arrayContaining(['gateway-staging', 'translator-staging']));
+    expect(overlayFiles).toContain('docker-compose.staging.media-s3.yml');
     expect([...mediaS3.services.keys()]).toEqual(expect.arrayContaining(['media-s3-staging']));
     expect([...prod.networks.keys()]).toEqual(expect.arrayContaining(['meeshy-network', 'meeshy-data', STAGING_EDGE]));
   });
 
-  it('aucun service du staging (surcouche S3 comprise) ne rejoint un réseau de la production autre que meeshy-staging-edge', () => {
-    expect(isolationViolations(prod, [staging, mediaS3])).toEqual([]);
+  it('aucun service du staging (surcouches comprises) ne rejoint un réseau de la production autre que meeshy-staging-edge', () => {
+    expect(isolationViolations(prod, [staging, ...overlays])).toEqual([]);
   });
 
   it('le seul réseau externe du staging est meeshy-staging-edge, et seuls les services routés du staging y sont', () => {
     // Surcouche S3 comprise : elle pourrait déclarer son propre réseau externe.
-    expect([...mergeStaging([staging, mediaS3]).networks.values()].filter((n) => n.external).map((n) => n.realName)).toEqual([STAGING_EDGE]);
+    expect([...mergeStaging([staging, ...overlays]).networks.values()].filter((n) => n.external).map((n) => n.realName)).toEqual([STAGING_EDGE]);
     const routes = [...staging.services.keys()].filter((name) => /traefik\.enable=true/.test(serviceText(stagingSource, name))).sort();
     expect(membersOf(staging, STAGING_EDGE)).toEqual(routes);
     for (const s of ['database-staging', 'redis-staging', 'translator-staging', 'agent-staging']) {
