@@ -351,6 +351,8 @@ public actor OutboxFlusher {
         if case MeeshyError.forbidden = error { return true }
         // Limite QUOTIDIENNE de gestes (#9571) : terminale jusqu'à `resetAt`.
         if DailyGestureLimit.from(error) != nil { return true }
+        // #11379 — un clair refusé dans une conversation chiffrée ne se rejoue jamais.
+        if EndToEndSendGate.isServerPlaintextRefusal(error) { return true }
         if case let MeeshyError.server(statusCode, _) = error {
             return permanentRejectionStatusCodes.contains(statusCode)
         }
