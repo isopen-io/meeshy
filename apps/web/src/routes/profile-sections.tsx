@@ -26,7 +26,7 @@ import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translateProfileDecor } from '@/lib/i18n-profile-decor-catalog';
 import { NO_DESIGNS, type DecorDesigns } from '@/lib/profile-decor/use-decor-designs';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import type { ProfileDraft } from '@/lib/view/profile-draft';
 import { Link } from '@/routes/route-table';
 

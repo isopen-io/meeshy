@@ -9,7 +9,7 @@ import { GroupedSection, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '
 import type { CommunityConversation, CommunityDraft, CommunitySummary } from '@/lib/api/communities';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { communityAccent, compactCount, conversationTitleOf } from '@/lib/communities/view';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 
-import { initialsOf } from './initials';
+import { initialsOf } from './conversation';
 
 /**
  * **UNE SEULE FONCTION D'INITIALES** (#12571) — six jumelles divergeaient : mon
@@ -10,7 +10,7 @@ import { initialsOf } from './initials';
  * carte de contact gardait la première ET la dernière lettre et un « # » ; la
  * liste des communautés rendait une chaîne vide sans lettre. Deux écritures de la
  * même règle divergent au premier nom composé : la définition vit dans
- * `lib/view/initials.ts`, et ce témoin interdit d'en réécrire une.
+ * `lib/view/conversation.ts`, et ce témoin interdit d'en réécrire une.
  */
 describe('initialsOf — la table de la règle partagée', () => {
   const TABLE: readonly (readonly [string, string])[] = [
@@ -31,7 +31,7 @@ describe('initialsOf — la table de la règle partagée', () => {
 });
 
 const SRC = new URL('../../', import.meta.url).pathname;
-const CANONICAL = 'lib/view/initials.ts';
+const CANONICAL = 'lib/view/conversation.ts';
 
 const sources = (dir: string): readonly string[] =>
   readdirSync(dir).flatMap((entry) => {
@@ -40,7 +40,7 @@ const sources = (dir: string): readonly string[] =>
     return /\.(ts|tsx)$/.test(entry) && !entry.includes('.test.') ? [path] : [];
   });
 
-describe('aucune jumelle d’initiales hors de lib/view/initials.ts', () => {
+describe('aucune jumelle d’initiales hors de lib/view/conversation.ts', () => {
   test('aucun module ne DÉFINIT une fonction d’initiales : ils importent `initialsOf`', () => {
     const definitions = sources(SRC)
       .filter((path) => relative(SRC, path) !== CANONICAL)

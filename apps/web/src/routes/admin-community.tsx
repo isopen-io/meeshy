@@ -22,7 +22,7 @@ import {
 } from '@/lib/admin/community-summaries';
 import { communityStateOf, communityVisibilityOf } from '@/lib/admin/community-state';
 import { interpretConversationType, interpretParticipantRole } from '@/lib/admin/interpret/enums';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { communityRef, conversationRef, personRef } from '@/lib/admin/post-entities';

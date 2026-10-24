@@ -20,7 +20,7 @@ import {
   type AdminConversationSection,
 } from '@/lib/admin/conversation-summaries';
 import { interpretConversationType, interpretEncryption } from '@/lib/admin/interpret/enums';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';

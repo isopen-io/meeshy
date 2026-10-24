@@ -11,7 +11,7 @@ import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice, AdminSkeleton }
 import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { accountStateOf } from '@/lib/admin/interpret/enums';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import {
   ADMIN_MEMBER_SECTION_GLYPHS,
   ADMIN_MEMBER_SECTION_TITLES,

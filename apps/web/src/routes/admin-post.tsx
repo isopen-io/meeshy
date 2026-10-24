@@ -14,7 +14,7 @@ import { BRAND, INK2 } from '@/components/admin/tone';
 import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { interpretPostState, interpretPostType, interpretPostVisibility } from '@/lib/admin/interpret/enums';
 import { personLabel, personSecondary, postLabel } from '@/lib/admin/interpret/labels';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { communityRef, personRef, postRef } from '@/lib/admin/post-entities';

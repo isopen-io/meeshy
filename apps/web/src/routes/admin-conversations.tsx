@@ -19,7 +19,7 @@ import {
 } from '@/lib/admin/conversation-list';
 import { conversationRefOf, conversationStateOf, participantName } from '@/lib/admin/conversation-model';
 import { interpretConversationType } from '@/lib/admin/interpret/enums';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { ADMIN_PERIODS } from '@/lib/admin/period';

@@ -14,7 +14,7 @@ import { INK, INK2, TONE_COLOR } from '@/components/admin/tone';
 import { shareLinkStateOf } from '@/lib/admin/interpret/enums';
 import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import { shareLinkLabel } from '@/lib/admin/interpret/labels';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { useAdminOpen } from '@/lib/admin/use-admin-open';

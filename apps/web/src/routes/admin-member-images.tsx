@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AdminButton } from '@/components/admin/button';
 import { Avatar } from '@/components/avatar';
 import { personLabel } from '@/lib/admin/interpret/labels';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';

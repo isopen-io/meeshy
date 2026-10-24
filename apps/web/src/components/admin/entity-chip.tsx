@@ -10,7 +10,7 @@ import {
   type AdminSpace,
   type AdminTarget,
 } from '@/lib/admin/admin-routes';
-import { initialsOf } from '@/lib/view/initials';
+import { initialsOf } from '@/lib/view/conversation';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { participantAvatarOf } from '@/lib/view/conversation';
