@@ -1,5 +1,189 @@
 # @meeshy/web-v2
 
+## 2.26.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le témoin de la table des rôles privilégiés recompile — key paths sortis de #expect (Refs #11217)
+  - un refus de stockage ne décide jamais du sort d'une enveloppe, et un de mes appareils non approuvé ne me fait rien dire (#3707)
+  - réutilise des rôles MeeshyIcons déjà classés, au lieu d'en créer
+  - la nocturne attend le verrou, le gabarit de production est lié au script, la restauration témoin est propre à chaque exécution (#11509)
+  - les voisines glissent depuis l'écran, fil calé en bas compris ; garde navigateur (#12634)
+  - le gate des états du fil arrondit la hauteur de la bande de reprise avant de la comparer à 44 px (#12758)
+  - le relais d'opérations s'installe en production (#11509)
+  - OwnProfile{Header,Sections} passent par MeeshyIcons
+  - l'écho du masquage ne coupe plus le repli, un refus partiel se déplie (#12634)
+  - un message masqué pour moi sort du fil en se repliant, et revient de même (#12634)
+  - les témoins HEIC attendent l'acteur MediaCompressor — dev recompile, run test
+  - un poincon flottant compte comme decoupe du haut
+  - l'aperçu d'une conversation tenue se peint sur son fond et avec la couleur personnelle de ses bulles, comme le fil
+  - les actions d'un message et d'une conversation suivent la loi partagée
+  - le rôle de plateforme se lit comme la passerelle
+  - ma page montre bannière, identité, contact vérifié, langues et demandes d'amis
+  - toucher une personne ouvre sa fiche en feuille, d'où que l'on vienne
+  - la table des rôles privilégiés a son morceau — message-effect-flags reste dans l'entrée (#11217)
+  - ma page suit mes demandes d'amis et mon humeur, et se relit en silence
+  - la bulle prend 70 % de sa rangee et l'interface mesure la vraie fenetre
+  - ma page projette ses sections dans l'ordre iOS
+  - lois de classe de fenetre, largeur de bulle et zone sure
+  - adopter les libellés iOS de la fiche profil en feuille
+  - abandonner un envoi en échec le retire aussi de la liste, garde le focus et ne promet rien d'incertain
+  - iOS chiffre et déchiffre par appareil avec libsignal dans les conversations e2ee (#3707)
+  - la bande d'un refus permanent dit qu'elle garde « Abandonner »
+  - ChatViewModelTest importe ForwardRefusalReason au lieu d'une référence qualifiée
+  - un envoi en échec s'abandonne depuis son menu et sa bande « Non envoyé »
+  - les tests Robolectric non épinglés de :app utilisent minSdk par défaut
+  - l'aperçu d'une lens ne laisse aucun traitement derrière lui et repose la retouche faite pendant l'ouverture
+  - une lens au nom non latin a sa propre adresse, et le brouillon survit à l'import et au double clic
+  - nineSlicePieces se type-vérifie en temps raisonnable
+  - l'aperçu d'une lens se lit à l'endroit et sa couleur de texte vient du papier des stickers
+  - la carte de refus de transfert passe par MeeshyIcons
+  - un partenaire compose sa lens sans code et la voit sur sa caméra par le moteur des lens
+  - DELETE /users/register-device-token est déjà implémentée, elle quitte la liste
+  - une scène au repos retrouve son son, pas sa boucle vidéo, à la fermeture de la retouche (#12605)
+  - Robolectric résout les ressources du module :app (unitTests.isIncludeAndroidResources)
+  - le découpage profil passe par MeeshyIcons, pas des imports Material directs
+  - import AVFoundation pour la pause des lecteurs de la scène couverte (#12605)
+  - dans la coque Android, une photo prise depuis le composer ne reste pas sur le téléphone, comme dans Chrome (#12744)
+  - la tolérance de la fenêtre ne court qu'après 06:00, et la fenêtre du runner est confrontée à celle de la passerelle (#11452)
+  - la scène du studio se tait sous la retouche de la caméra et reprend à sa fermeture (#12605)
+  - la liste virtualisée dit ce qu'elle porte, et les gardes le lisent au lieu de compter des nœuds (#11228)
+  - l'écran des opérations dit la fenêtre du nettoyage et sa prochaine ouverture, bouton fermé hors fenêtre (#11452)
+  - une purge traitée hors des heures creuses est rejetée sous outside-window, même déposée par une passerelle ancienne (#11452)
+  - le nettoyage Docker n'est permis que de 02:00 à 06:00 heure de Paris — la passerelle refuse hors fenêtre (#11452)
+  - le menu d'appui long suit le message vivant (#12627)
+  - la fin d'appartenance reçue fil ouvert ferme « Supprimer pour moi » ; bun.lock rendu à dev
+  - run test — le flux d'appel lit « un filtre choisi » d'une seule source
+  - synchronise origin/dev — le rang de réglages d'un MODERATOR de plateforme membre est créateur (#11217)
+  - run test — l'appel floute son fond puis l'étalonne, peint par le peintre de lens
+  - le glissé, VoiceOver et la barre rapide suivent la loi du message — constats de la revue adversariale (#12626)
+  - les chaînes générées de l'authentification suivent de nouveau le catalogue iOS (dev rouge)
+  - « Supprimer pour moi » n'est offert qu'à un participant actif
+  - run test — la NSE ne télécharge plus une vignette vidéo AVIF qu'elle refuserait
+  - la NSE garde l'aperçu des photos image/jpg et image/heif
+  - le glissé, VoiceOver et le double toucher n'offrent que ce que la loi du message permet
+  - une vignette AVIF se déclare image/avif et part refusée par la NSE
+  - l'écran verrouillé n'attache que les images que la NSE décode
+  - le repli JPEG d'un HEIC s'encode hors de l'acteur d'envoi et répond aussi au refus d'une passerelle d'avant S8 — run test
+  - les neuf routes servies depuis le 2026-10-24 sont classées « à porter »
+  - l'iPhone envoie ses HEIC tels quels et repart en JPEG q0,92 si le serveur refuse — run test
+  - déclinaison « Relief » des 22 cadres vedettes — matière et moulure illustrées [xcodegen]
+  - « Supprimer » à un geste dans le menu d'appui long d'un message
+  - la retouche prend ses icônes chez MeeshyIcons, et le cliquet des routes classe l'annuaire E2EE par appareil (#12649)
+  - un appareil et une pré-clé naissent avec leurs nuls écrits, que le connecteur MongoDB sait retrouver (#12547, #3706)
+  - la retouche pose du texte qui part avec le média, photo et vidéo (#12651)
+  - la fenêtre d'un pack lit et écrit ses dates par WireDate, et la ligne « à débloquer » ne crée plus de formateur à chaque rendu (run test)
+  - la planche de texte de la retouche, en logique pure (#12651)
+  - le témoin d'isolement fusionne la surcouche comme Compose et refuse étiquettes et scalaires en bloc (#11451)
+  - l'aperçu d'appui long ne se touche qu'au BOUTON de lecture, et son vocal part par le ViewModel (#11339)
+  - Tab boucle sur la première entrée après le bouton de lecture de l'aperçu, et la vidéo déjà en lecture s'y peint (#11339)
+  - la retouche unique recadre une photo, coupe une vidéo et règle son son (#12650)
+  - la boutique dit ce qui reste à débloquer d'un pack et n'offre le geste qu'une fois débloqué, le sélecteur du profil écarte un pack verrouillé (run test)
+  - le témoin d'isolement refuse aussi les corps mal indentés, les clés explicites, échappées ou fusionnées (#11451)
+  - la file Mac n'occupe plus un runner Linux plus de 20 min (#12706)
+  - la passe du retour est réservée au montage, et le plafond de la liste suit les correctifs de la revue (#11228)
+  - témoin d'isolement fermé par défaut, contournements de l'audit rejoués (#11451)
+  - l'entrée d'un message arrivé glisse sans échelle, et la bande de reprise garde ses 44 px pendant l'animation (#11223)
+  - les règles maison redeviennent vertes sur dev — MeeshyE2EE se verrouille par OSAllocatedUnfairLock et ses types sont Sendable vérifiés
+  - les chaînes générées suivent l'accent corrigé du catalogue iOS
+  - les données de la production sur un réseau interne, le staging sur son seul réseau d'entrée (#11451)
+  - au retour sur la liste, la position restaurée est peuplée avant la première peinture (#11228)
+  - les chaînes générées de l'authentification suivent le catalogue iOS
+  - déclinaisons au glissement vertical, illustrations en neuf morceaux, couches animées des marques [xcodegen]
+  - chaque entrée du Résumé ouvre à l'appui long un menu Aller au message · Répondre, Répondre gardé par la loi d'actions
+  - la liste se charge depuis le cache et se répare seule
+  - les push data-only sont rendus par un pipeline extensible, sans doublon
+  - l'aperçu d'appui long lit vocaux et vidéos dans les trois modes, seule la zone de lecture se touche (#11339)
+  - état de chargement explicite et fusion des conversations récentes
+  - ma page de profil est de nouveau atteignable et éditable
+  - les sections de la bulle passent par MeeshyIcons
+  - l'aperçu d'appui long lit vocaux et vidéos, relayés au lecteur du fil (#11339)
+  - un seul catalogue pour les écrans SDK — les 22 clés recopiées dans celui de l'app le quittent, le scanner lit l'étiquette d'un bundle forwardé
+  - la bulle de message se compose de composants à responsabilité unique
+  - « Paramètres du groupe » ne s'offre plus sur Global, et les deux chemins du menu parcourent une seule séquence de groupes
+  - porte de livraison, groupes, badge et filtre local des notifications
+  - la copie transférée garde la flamme et le flou de sa source
+  - une règle unique mène à ma page de profil
+  - la bulle reçoit ses rappels groupés et un arbitre de gestes
+  - 22 cadres vedettes retravaillés, Prison et Tombe, ornements animés déclarés [xcodegen]
+  - la liste des conversations ne monte que les rangées visibles, sections épinglées comprises
+  - le menu d'une conversation se lit dans un catalogue unique, tête compacte Épingler · Sourdine · Lu
+  - sept ambiances ouvertes d'office et ornements animés en direct (en cours)
+  - l'arrivée tenue jusqu'à son échéance, jamais au-delà — rangée stable à l'accusé, courbe jumelle, câblage iOS témoin (#11223)
+  - ConversationEncryptedEra porte une deinit non isolée (#11380)
+  - la liste des comptes tient dans un téléphone — un filtre à longue option imposait 469 px à un écran de 430 ; la recette au navigateur garde la navigation de l'administration (#12670)
+  - le client TS de l'annuaire importe ses routes avec l'extension .js, comme tout module du dist ESM (#12536)
+  - la copie et la traduction sur l'appareil reconnaissent le clair déchiffré par sa provenance
+  - commentaires de l'arrivée sans date — règle maison narrative-comment tenue
+  - le détecteur à 478 points vit dans le chunk des lens et rend son modèle à la fermeture — le worker des effets reste sous son plafond (Refs #11321)
+  - dans la coque Android, une extension compte pour son type et la tuile Image d'un invité ouvre la galerie, comme Chrome (#12677)
+  - seul le dernier message arrivé s'anime à son entrée dans le fil
+  - l'emplacement ne se dit qu'une fois et le clavier va droit au menu — dès md la barre du haut ne garde que l'action de l'écran (le fil et le menu couvrent le retour), sur téléphone elle nomme le parent ; Ctrl/⌘K et / ouvrent « Aller à… » depuis tout écran (rail déplié, tiroir ouvert), ↑ ↓ Début Fin parcourent le menu (Refs #12670)
+  - l'ère chiffrée d'une conversation ne sert aucune traduction du serveur, et son historique en clair n'est plus signalé
+  - l'en-tête de page dérive son fil d'Ariane du lieu déclaré — vingt-neuf fils écrits à la main retirés, le maillon de groupe mène au tableau de bord sur ce groupe, une fiche a pour titre le nom de son objet et son genre en surtitre, le tableau de bord s'appelle comme son entrée de menu (Refs #12670)
+  - une lens ancrée au visage lit 478 points, modèle MediaPipe chargé à la première lens de visage sur un appareil de palier A (Refs #11321)
+  - la room socket d'un appareil est celle de sa génération, et le retrait en fait sortir (#12592, #12560)
+  - l'arbre réconcilié d'une story tolère un calque listé deux fois, et le dessin masqué rend son bitmap — run test
+  - Tests · web et Tests · gateway passent par zone, une voie de parité rejoue toujours leurs tests qui lisent ailleurs (#12558)
+  - le fil d'Ariane de l'administration se dérive de la table des routes — groupe › section › objet, rien pour le tableau de bord (Refs #12670)
+  - en lecture, l'arbre de calques d'une story n'est plus détaché ni le dessin rastérisé à chaque image — run test
+  - le gate des actions attend la sortie de la rangée archivée, le clavier ne vise plus une rangée sortante
+  - EndToEndRegimeLedger porte une deinit non isolée (#11379)
+  - le voile tient le cliquet des commentaires datés et son repli opaque lit le jeton généré (#11222)
+  - le relais libsignal ne naît que de la passerelle, jamais des métadonnées libres du client (#3706, #9998)
+  - plus d'avertissement de capture faible ni de where ambigu dans le préchargement des stories et la galerie
+  - dans une conversation chiffrée, un message arrivé en clair est signalé et jamais traduit par le serveur
+  - pr-verte rend 2, jamais 1, quand gh ne sait pas lire la PR (#12559)
+  - la prise photo du composer s'ouvre dans la retouche unique — filtres et cadres, dont l'Écran et la Mosaïque d'une photo seule (#12649)
+  - l'appui long voile le fond par le matériau système, une seule loi
+  - /build-info.json s'ouvre de nouveau dans le navigateur, et l'application propose la mise à jour dès que sa révision diffère de celle du serveur (#12654)
+  - une conversation archivée ou supprimée sort de la liste en se repliant, et sa pastille de non-lus se lit en toutes lettres
+  - la feuille d'une story ne se referme plus pendant la frappe du lien, et ne frappe de lien ouvert que pour une story publique (#12644, #12646)
+  - le peintre des treize classiques du Montage, dont l'Écran et la Mosaïque d'une photo seule (#12649)
+  - le refus serveur du clair ne se rejoue jamais, et le fil de réponses passe par le scelleur
+  - le verrou PIN se lit au miroir complet, ne précharge rien, retire les bannières délivrées et ne trahit plus la frappe (#11387)
+  - la bande des looks, les outils de la retouche et la colorimétrie des filtres de l'appel, en logique pure (#12649)
+  - le menu (…) de la story ne double plus le rail, la feuille Meeshy republie la story, le bouton Traductions se rechoisit (#9953, #12644, #12646)
+  - l'intro et la sortie d'une story exportée portent le contour d'avatar de l'auteur (#12645)
+  - le peintre unique floute la prise sous la vitre d'un texte Verre, à l'aperçu comme à l'export (#12602)
+  - les treize classiques du Montage, dont l'Écran et la Mosaïque d'une photo seule, en logique pure (#12648)
+  - les scripts k6 refusent la production avant toute requête
+  - deux scripts k6 jouent l'upload 5 Mo et le vocal de 30 s
+  - ce que les branches dev-vert apportaient encore à dev — menu de story exhaustif, Router isolé en test, garde du motif de retrait
+  - le cadre téléphone attend qu'une page soit PRÊTE avant de la juger stable, et le disque du Flux retourne en tranche 4 (#12622)
+  - l'archive Xcode Cloud type à nouveau la mosaïque d'une photo seule — carreaux construits par boucles aux étapes typées
+  - une conversation verrouillée par PIN ne montre ni son dernier message, ni son aperçu, ni ne se précharge sans le PIN
+  - la passerelle en trois tranches à couverture fusionnée, une action prépare Node, un seul outil juge une PR verte (#12556, #12557, #12559)
+  - la garde des liens de la coque Android rougit sur un manifeste illisible (#11229)
+  - un message d'une conversation chiffrée ne part jamais en clair quand la session manque
+  - la coque Android lie le plugin Haptics, et le gate le garde (#11229)
+  - le cadre téléphone relève trois contextes à la fois et les quatre tranches se rééquilibrent sur les durées mesurées (#12622)
+  - LibSignalClient pointe la release libsignal-ffi-v0.105.4 par sa somme de contrôle réelle, lie libc++, et ses tests trouvent leurs ressources (#12536)
+  - le module SDK MeeshyE2EE — identité, clés, annuaire, sessions libsignal sous le verrou du groupe d'apps (#12536)
+  - l'accusé de remise de la coque Android part hors du fil des pushs, comme sur le web (#12623)
+  - l'empreinte du texte se compose en pas simples (le compilateur de la CI ne tient pas le littéral)
+  - le cadre téléphone attend un réseau calme, plus une fenêtre fixe de 500 ms par relevé (#12600)
+  - tarifs opus-5-5 et haiku-5-5 dans MODEL_RATES (#12619)
+  - l'empreinte du texte ne dépend que de ce qui se voit ; la garde de la recette vidéo suit l'overlay
+  - le secours Anthropic vise claude-sonnet-5-5, modèle servi (#12619)
+  - la retouche pose du texte avec les outils de texte du composer, et le texte part avec le média
+  - la vignette « Signature » dérive du fond réel, clair et sombre (iter-75w)
+  - « Modifier » une image ou une vidéo de la scène ouvre la retouche de la caméra, et « Terminé » la remplace à sa place
+  - Écran et Mosaïque d'une photo seule — un écran d'appareil et une vraie mosaïque, signés « meeshy »
+  - un message éphémère, flouté ou à vue unique ne sort plus de Meeshy
+  - la loi de sortie du contenu (flamme, vue unique, flou) en logique pure
+  - un rôle de plateforme privilégié étranger à la conversation n'y a aucun rang ; pièce jointe et son lisent la table (#11217)
+  - l'activation du chiffrement diffuse son avis aux membres en temps réel
+  - la table des rôles privilégiés n'importe l'enum qu'en type — role-types quitte la première peinture
+  - une seule table des rôles de plateforme privilégiés, MODERATOR compris (#11217)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.44.0
+
 ## 2.25.0
 
 ### Minor Changes

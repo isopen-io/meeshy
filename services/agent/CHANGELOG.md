@@ -1,5 +1,12 @@
 # @meeshy/agent
 
+## 1.0.73
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.44.0
+
 ## 1.0.72
 
 ### Patch Changes
