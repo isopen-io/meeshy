@@ -69,6 +69,10 @@ struct ConversationOverlayMenu: View {
                 actions.compose(msg)
             },
             onSelect: { actions.beginSelection(msg.id) },
+            // « Supprimer » à un geste (#12625) : `requestDeleteMessage`
+            // abandonne un envoi raté tout de suite et ouvre, sinon, la
+            // confirmation des verdicts (pour tous / retirer / pour moi).
+            onDelete: { actions.requestDelete(msg.id) },
             isDirect: isDirect,
             preferredTranslation: viewModel.preferredTranslation(for: msg.id),
             mentionDisplayNames: viewModel.mentionDisplayNames,
