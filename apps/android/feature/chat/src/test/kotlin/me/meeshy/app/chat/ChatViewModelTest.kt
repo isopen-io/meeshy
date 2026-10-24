@@ -2721,7 +2721,46 @@ class ChatViewModelTest {
         h.vm.forwardTo("c2")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) {
+            h.repo.sendOptimistic(
+                conversationId = "c2",
+                content = "flou",
+                originalLanguage = any(),
+                sender = me,
+                forwardedFromId = "m1",
+                forwardedFromConversationId = "c1",
+                effects = MessageEffects(flags = MessageEffectFlags.BLURRED),
+            )
+        }
+    }
+
+    @Test
+    fun forwardTo_bounds_a_timed_flame_copy_by_the_source_duration() = runTest(dispatcher) {
+        val source = ApiMessage(
+            id = "m1", conversationId = "c1", senderId = "me", content = "flamme",
+            effectFlags = MessageEffectFlags.EPHEMERAL.toInt(), ephemeralDuration = 300,
+        )
+        val h = harness(refusedConversation(source), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.forward!!.refusal).isNull()
+
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+
+        val flame = MessageEffectFlags.EPHEMERAL or MessageEffectFlags.EPHEMERAL_AFTER_READ
+        coVerify(exactly = 1) {
+            h.repo.sendOptimistic(
+                conversationId = "c2",
+                content = "flamme",
+                originalLanguage = any(),
+                sender = me,
+                forwardedFromId = "m1",
+                forwardedFromConversationId = "c1",
+                effects = MessageEffects(flags = flame, ephemeralDuration = 300),
+            )
+        }
     }
 
     @Test

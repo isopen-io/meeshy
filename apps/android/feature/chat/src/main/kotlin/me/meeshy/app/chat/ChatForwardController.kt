@@ -10,7 +10,10 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ContentExitLaw
 import me.meeshy.sdk.model.ForwardRefusalReason
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.contentExitSubject
 import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
@@ -113,6 +116,10 @@ internal class ChatForwardController(
         val source = messages.value
             .firstOrNull { it.message.id == sourceMessageId && it.sendState == LocalSendState.SYNCED }
             ?.message ?: return
+        // The copy's protection, as the gateway will impose it: a timed flame keeps its
+        // flame with a duration bounded by the source, a blurred source (message or piece)
+        // hands its blur down. `null` = the law refuses: nothing is sent.
+        val copy = ContentExitLaw.forwardedCopyProtection(source.contentExitSubject, null) ?: return
         sendingForwards[sourceMessageId] = targetConversationId
         state.update { s ->
             if (s.forward?.sourceMessageId == sourceMessageId) {
@@ -130,6 +137,7 @@ internal class ChatForwardController(
                     sender = user,
                     forwardedFromId = source.id,
                     forwardedFromConversationId = conversationId,
+                    effects = MessageEffects(flags = copy.effectFlags, ephemeralDuration = copy.ephemeralDuration),
                 )
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 sendingForwards.remove(sourceMessageId)
