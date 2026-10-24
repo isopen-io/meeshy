@@ -254,14 +254,18 @@ final class OutboxUploadContextGuardTests: XCTestCase {
                 // le repli que lisent le web et Android — donc il téléverse SANS
                 // contexte, exactement comme une photo envoyée en conversation.
                 "ConversationView+Sticker.swift:uploadAndSendSticker",
-                "MediaGroupUploader.swift:upload",
+                // **Le repli HEIC (#11291)** : les deux envois de pièces de MESSAGE
+                // (envoi en ligne, rejeu hors ligne des visuels) passent par
+                // `uploadMessageAttachment`, qui rend un HEIC refusé en JPEG q 0,92.
+                // Le site `uploadFile(` est donc ICI, plus dans `upload` ni dans le
+                // rejeu — toujours une pièce de message, toujours sans contexte.
+                "MediaGroupUploader.swift:uploadMessageAttachment",
                 // **Le découpage du 2026-08-31 (`ec6591a296`) a déplacé ces deux
                 // sites** de `OutboxDispatcher.swift` vers son extension
                 // `+Messages.swift`. L'inventaire nommait l'ANCIEN fichier et la
                 // garde rougissait — bruyamment, ce qui est la bonne direction :
                 // une garde qui nomme un fichier et le perd doit tomber, jamais
                 // passer sur une chaîne vide.
-                "OutboxDispatcher+Messages.swift:dispatchSendMessage",
                 "OutboxDispatcher+Messages.swift:dispatchSendMessage"
             ],
             "Un téléversement sans contexte crée un `MessageAttachment` ; si ce site alimente le `mediaIds` "

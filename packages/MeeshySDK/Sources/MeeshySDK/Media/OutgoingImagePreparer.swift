@@ -99,16 +99,22 @@ public struct OutgoingImagePolicy: Sendable, Equatable {
     public let keepsLocation: Bool
     public let hdPixelCeiling: CGFloat
     public let byteCeiling: Int
+    /// Ce que devient un HEIC (#11291) : tel quel, ou un JPEG de compatibilité.
+    /// Le défaut est le JPEG : seul un hôte qui sait repartir en JPEG quand le
+    /// serveur refuse (`HEICUploadFallback`) passe en `.native`.
+    public let heicDelivery: HEICDelivery
 
     public init(maxPixelDimension: CGFloat, compresses: Bool, quality: CGFloat, keepsLocation: Bool,
                 hdPixelCeiling: CGFloat = OutgoingImagePolicy.defaultHDPixelCeiling,
-                byteCeiling: Int = OutgoingImagePolicy.defaultByteCeiling) {
+                byteCeiling: Int = OutgoingImagePolicy.defaultByteCeiling,
+                heicDelivery: HEICDelivery = .jpegCompatibility) {
         self.maxPixelDimension = max(maxPixelDimension, 1)
         self.compresses = compresses
         self.quality = min(max(quality, 0.5), 1)
         self.keepsLocation = keepsLocation
         self.hdPixelCeiling = max(hdPixelCeiling, self.maxPixelDimension)
         self.byteCeiling = byteCeiling
+        self.heicDelivery = heicDelivery
     }
 
     /// `imageCompressionQuality` (0–100) ramené à une qualité d'encodeur bornée.
@@ -150,6 +156,9 @@ public enum OutgoingImagePlanner {
         switch format {
         case .gif, .webp:
             return .passthrough
+        case .heic where policy.heicDelivery == .native:
+            if let resize { return .reencode(.heic, maxPixelDimension: resize) }
+            return carriesLocation && !policy.keepsLocation ? .stripLocation : .passthrough
         case .heic, .unknown:
             return .reencode(.jpeg, maxPixelDimension: resize)
         case .png:
@@ -202,8 +211,11 @@ public struct OutgoingImagePreparer: OutgoingImagePreparing {
         case .stripLocation:
             return original.withoutLocation(policy: policy)
                 ?? OutgoingImageWriter.encode(original, as: format, maxPixelDimension: nil, policy: policy)
+                ?? (format == .heic ? OutgoingImageWriter.encode(original, as: .jpeg, maxPixelDimension: nil,
+                                                                 policy: policy.forHEICConversion) : nil)
         case .reencode(let target, let maxPixelDimension):
-            return OutgoingImageWriter.encode(original, as: target, maxPixelDimension: maxPixelDimension, policy: policy)
+            let effective = format == .heic && target == .jpeg ? policy.forHEICConversion : policy
+            return OutgoingImageWriter.encode(original, as: target, maxPixelDimension: maxPixelDimension, policy: effective)
                 ?? original.fallback(policy: policy)
         case .reencodeUnlessAlreadyEfficient(let target, let maxPixelDimension):
             guard let essai = OutgoingImageWriter.encode(original, as: target, maxPixelDimension: maxPixelDimension,
