@@ -458,6 +458,10 @@ export default defineConfig({
      */
     __FIXTURES__: JSON.stringify(declaredDataSource !== 'gateway'),
     __APP_VERSION__: JSON.stringify(appVersion),
+    /* #12654 — la révision du bundle, de la MÊME `VCS_REF` que le Dockerfile
+       écrit dans `dist/build-info.json` : le contrôleur de mise à jour compare
+       les deux. Absente (build local) ⇒ `null`, jamais une valeur fabriquée. */
+    __BUILD_COMMIT__: JSON.stringify(process.env.VCS_REF?.trim() || null),
     /** La passerelle que le proxy de dev vise (#8287) — l'écran de connexion la
      * montre EN DÉVELOPPEMENT seulement, comme le sélecteur iOS au simulateur. */
     __API_PROXY_TARGET__: JSON.stringify(proxyTarget),
