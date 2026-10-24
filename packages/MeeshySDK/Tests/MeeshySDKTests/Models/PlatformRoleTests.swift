@@ -114,8 +114,10 @@ struct PlatformRoleTests {
 
     /// Miroir de `PRIVILEGED_PLATFORM_ROLES` (`packages/shared/utils/platform-privilege.ts`, #11217).
     @Test func thePrivilegedTableMirrorsTheSharedOne() {
-        #expect(Set(PlatformRole.privileged.map(\.rawValue)) == ["MODERATOR", "ADMIN", "BIGBOSS"])
-        #expect(PlatformRole.allCases.filter(\.isPrivileged).allSatisfy(\.moderatesContent))
+        let privilegedRawValues = Set(PlatformRole.privileged.map { $0.rawValue })
+        let privilegedRolesModerate = PlatformRole.allCases.filter { $0.isPrivileged }.allSatisfy { $0.moderatesContent }
+        #expect(privilegedRawValues == ["MODERATOR", "ADMIN", "BIGBOSS"])
+        #expect(privilegedRolesModerate)
     }
 
     @Test func contentRemovalReadsTheSameTable() {
