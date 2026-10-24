@@ -6,6 +6,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import me.meeshy.app.auth.AuthViewModel
+import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.settings.AboutScreen
 import me.meeshy.app.settings.AccountDeletionScreen
@@ -35,7 +36,7 @@ internal fun NavGraphBuilder.settingsNavGraph(
             // La racine bascule sur LOGIN quand la session est fermée (startDestination) :
             // naviguer ici, avant la fin de l'appel serveur, renvoyait vers la liste.
             onLogout = { authViewModel.logout() },
-            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenProfile = { userId -> ProfileRoutes.own(userId)?.let { navController.navigate(it) } },
             onOpenStarred = { navController.navigate(Routes.STARRED) },
             onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },
             onOpenShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },

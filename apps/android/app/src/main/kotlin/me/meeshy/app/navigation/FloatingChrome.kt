@@ -170,8 +170,8 @@ internal fun MeeshyFloatingChrome(
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val ladderItems = rememberMenuLadderItems(navController, chromeUnread, chromePendingFriendRequests)
     val navigateToProfile: () -> Unit = {
-        chromeCurrentUser?.id?.let { userId ->
-            navController.navigate(Routes.profile(userId)) {
+        ProfileRoutes.own(chromeCurrentUser?.id)?.let { route ->
+            navController.navigate(route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = true }
                 launchSingleTop = true
                 restoreState = true

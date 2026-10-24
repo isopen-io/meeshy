@@ -56,6 +56,7 @@ import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { INSTANT } from './lib/instant.mjs';
+import { revealRow } from './lib/reveal-row.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -178,7 +179,16 @@ const RANGS = [
   { row: 'c-deploiement', rang: 'repli — `Conversation.avatar` (un groupe porte la sienne)' },
 ];
 
+/* La liste est virtualisée (#11228) : une rangée plus bas que la première
+   fenêtre n'est dans le document qu'une fois amenée à l'écran, et sa photo
+   se charge alors. */
+const amene = async (row) => {
+  await revealRow(liste, row);
+  await liste.waitForTimeout(400);
+};
+
 for (const { row, rang } of RANGS) {
+  await amene(row);
   const mesures = await peintures(liste, `[data-row="${row}"]`);
   constate(mesures !== null, `la rangée « ${row} » est introuvable dans la Lentille`);
   constate(
@@ -196,6 +206,7 @@ for (const { row, rang } of RANGS) {
  * masquées : un PNG transparent (`photo.png`) ne montre plus de dégradé dessous.
  */
 for (const { row } of RANGS) {
+  await amene(row);
   const mesures = await peintures(liste, `[data-row="${row}"]`);
   constate(
     photoSansInitiales(mesures),
@@ -209,6 +220,7 @@ for (const { row } of RANGS) {
  * photo à servir et doit peindre ses initiales seules. Sans cette assertion,
  * le gate ne distinguerait pas une résolution juste d'un `<img>` posé partout.
  */
+await amene('c-annonces');
 const annonces = await peintures(liste, '[data-row="c-annonces"]');
 constate(annonces !== null && annonces.length > 0, 'la rangée « c-annonces » est introuvable dans la Lentille');
 constate(

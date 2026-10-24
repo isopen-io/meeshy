@@ -1,5 +1,7 @@
 package me.meeshy.app.push
 
+import me.meeshy.sdk.model.push.PushChannelCategory
+
 /**
  * Canonical Android notification-channel identifiers (ARCHITECTURE.md §18 — "~80
  * notification types map onto a curated notification-channel taxonomy"). Single
@@ -31,4 +33,27 @@ object NotificationChannelIds {
     /** v2 : les canaux sont immuables — le v1 (muet, sans sonnerie) est supprimé au passage. */
     const val CHANNEL_CALLS: String = "meeshy_calls_v2"
     const val LEGACY_CHANNEL_CALLS: String = "meeshy_calls"
+
+    /** Social family : likes, comments, stories, contacts, communities, game. */
+    const val CHANNEL_SOCIAL: String = "meeshy_social"
+
+    /** Account family : security alerts, reports, service messages. */
+    const val CHANNEL_SYSTEM: String = "meeshy_system"
+
+    /**
+     * Quiet delivery (no banner, no sound) — where a push lands when the preferences refuse an
+     * alert in the background (quiet hours, muted type, system Do-Not-Disturb), the
+     * counterpart of the iOS `.passive` interruption level.
+     */
+    const val CHANNEL_SILENT: String = "meeshy_notifications_silent"
+
+    /**
+     * The channel of a category. Messages and every unknown type stay on [CHANNEL_MESSAGES]
+     * — the id the gateway targets, so a historic install keeps its user-tuned channel.
+     */
+    fun forCategory(category: PushChannelCategory): String = when (category) {
+        PushChannelCategory.MESSAGES -> CHANNEL_MESSAGES
+        PushChannelCategory.SOCIAL -> CHANNEL_SOCIAL
+        PushChannelCategory.SYSTEM -> CHANNEL_SYSTEM
+    }
 }
