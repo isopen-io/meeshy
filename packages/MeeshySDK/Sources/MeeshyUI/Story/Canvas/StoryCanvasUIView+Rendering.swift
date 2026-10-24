@@ -130,12 +130,6 @@ extension StoryCanvasUIView {
             contentVersion: composerImageRevision
         )
 
-        // Items — détache les sublayers existants AVANT de les ré-attacher.
-        // Les layers cachés (StoryRendererCache) restent retenus côté cache
-        // et seront ré-attachés via `addSublayer` à la prochaine itération,
-        // ce qui détache automatiquement du parent précédent (O(1)).
-        itemsContainer.sublayers?.forEach { $0.removeFromSuperlayer() }
-
         // En LECTURE, le verre ne se recapture que si ce qui est dessous a
         // changé (#9864) — `refreshPlaybackGlassBackdropIfNeeded`, puis la
         // passe `feedPlaybackGlassLayers` après le rendu. Ailleurs (composer,
@@ -180,21 +174,21 @@ extension StoryCanvasUIView {
                 backdropCapture?.cropRegion(frame)
             }
         }
-        let rendered = StoryRenderer.render(slide: slide,
-                                            into: geometry,
-                                            at: currentTime,
-                                            mode: renderMode,
-                                            languages: readerContext.preferredLanguages,
-                                            resolver: readerContext.postMediaURLResolver,
-                                            imageCache: readerContext.imageCache,
-                                            playerProvider: readerContext.playerProvider,
-                                            cache: cacheForRender,
-                                            backdropProvider: editGlassProvider, contentsScale: traitCollection.storyCanvasDisplayScale, imageDecodeTiming: .offMainActor,
-                                            suppressDrawingOverlay: isDrawingOverlayActive,
-                                            outOfWindowGhostOpacity: timelineGhostOpacity)
-        for sub in rendered.sublayers ?? [] {
-            itemsContainer.addSublayer(sub)
-        }
+        // #9865 — rendu DANS `itemsContainer` : un arbre inchangé d'une image à
+        // l'autre ne détache ni ne ré-attache aucun calque.
+        _ = StoryRenderer.render(slide: slide,
+                                 into: geometry,
+                                 at: currentTime,
+                                 mode: renderMode,
+                                 languages: readerContext.preferredLanguages,
+                                 resolver: readerContext.postMediaURLResolver,
+                                 imageCache: readerContext.imageCache,
+                                 playerProvider: readerContext.playerProvider,
+                                 cache: cacheForRender,
+                                 backdropProvider: editGlassProvider, contentsScale: traitCollection.storyCanvasDisplayScale, imageDecodeTiming: .offMainActor,
+                                 suppressDrawingOverlay: isDrawingOverlayActive,
+                                 outOfWindowGhostOpacity: timelineGhostOpacity,
+                                 reusing: itemsContainer)
         if feedsGlassFromPlaybackLaw {
             feedPlaybackGlassLayers()
         }

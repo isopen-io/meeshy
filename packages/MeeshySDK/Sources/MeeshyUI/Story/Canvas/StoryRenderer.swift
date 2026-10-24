@@ -2,7 +2,6 @@ import Foundation
 import QuartzCore
 import CoreMedia
 import Metal
-import PencilKit
 import UIKit
 import MeeshySDK
 
@@ -133,12 +132,9 @@ public enum StoryRenderer {
                               contentsScale: CGFloat = StoryCanvasDisplayScale.ambient, imageDecodeTiming: StoryImageDecodeTiming = .immediate,
                               suppressDrawingOverlay: Bool = false,
                               reduceMotion: Bool = UIAccessibility.isReduceMotionEnabled,
-                              outOfWindowGhostOpacity: Float? = nil) -> CALayer {
-        let root = CALayer()
-        root.frame = CGRect(origin: .zero, size: geometry.renderSize)
-        root.anchorPoint = CGPoint(x: 0, y: 0)
-        root.contentsScale = contentsScale
-
+                              outOfWindowGhostOpacity: Float? = nil,
+                              reusing container: CALayer? = nil) -> CALayer {
+        var tree: [CALayer] = []
         for item in collectItems(from: slide).sorted(by: { $0.zIndex < $1.zIndex }) {
             let inWindow = shouldRender(item: item, at: time, mode: mode)
             guard inWindow || outOfWindowGhostOpacity != nil else { continue }
@@ -304,41 +300,23 @@ public enum StoryRenderer {
             }
 
             applyGhost(outOfWindowGhostOpacity, inWindow: inWindow, to: layer)
-            // A cached layer might still be attached to the previous frame's
-            // root layer. addSublayer auto-detaches before re-attaching, so
-            // this is safe and cheap (CALayer parenting is O(1) bookkeeping).
-            root.addSublayer(layer)
+            tree.append(layer)
         }
 
-        // Phase 3 Task 3.4 — render persisted PKDrawing as a single overlay
-        // layer above the items (zPosition 9999). The drawing is authored on
-        // the design canvas (1080×1920) and projected to the render size by
-        // PKDrawing.image(from:scale:).
-        //
-        // `suppressDrawingOverlay` est levé par le composer quand le
-        // `DrawingOverlayView` (PKCanvasView SwiftUI) est actif : sinon on
-        // rend DEUX dessins simultanément — celui du modèle persisté ici, et
-        // celui live du PKCanvasView au-dessus, désalignés car dans des
-        // coordinate spaces différents (bounds SwiftUI vs design 1080x1920).
-        // Symptôme user-reporté 2026-05-27 : "écrit en double sur le canvas
-        // et c'est la version miniature (= persistée) qui est préservée, pas
-        // là où j'ai écrit (= live overlay)".
-        // Bridge dessin (refonte 2026-05-30) : on privilégie le format moderne
-        // `drawingStrokes` (traits éditables) rasterisé par `StoryStrokeRasterizer`,
-        // et on retombe sur le legacy `drawingData` (PKDrawing) seulement quand aucun
-        // trait moderne n'est présent (stories publiées avant la refonte non encore
-        // migrées en base — la migration au decode peuple `drawingStrokes`, donc ce
-        // fallback ne sert qu'aux payloads jamais re-décodés côté client).
+        // Le dessin persisté, au-dessus des objets. `suppressDrawingOverlay` est
+        // levé par le composer quand le `DrawingOverlayView` est actif : sinon
+        // deux dessins désalignés à l'écran (bug utilisateur 2026-05-27).
         if !suppressDrawingOverlay,
-           let drawingImage = bakedDrawingImage(for: slide.effects, scale: contentsScale) {
-            let drawingLayer = CALayer()
-            drawingLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
-            drawingLayer.contents = drawingImage.cgImage
-            drawingLayer.contentsScale = contentsScale
-            drawingLayer.zPosition = 9999
-            root.addSublayer(drawingLayer)
+           let drawing = drawingOverlay(for: slide.effects, geometry: geometry,
+                                        contentsScale: contentsScale, cache: cache) {
+            tree.append(drawing)
         }
 
+        // #9865 — dans un conteneur fourni (le canevas vivant), un arbre
+        // inchangé ne touche aucun calque ; sinon racine neuve (export,
+        // instantanés, capture du verre).
+        let root = container ?? freshRoot(size: geometry.renderSize, contentsScale: contentsScale)
+        StoryLayerTree.attach(tree, to: root)
         return root
     }
 
@@ -393,22 +371,12 @@ public enum StoryRenderer {
         return hasher.finalize()
     }
 
-    /// Bake du dessin d'un slide en image (espace design 1080×1920). Privilégie
-    /// `drawingStrokes` (moderne, rasterisé) ; fallback `drawingData` (legacy PKDrawing).
-    /// Retourne `nil` si le slide n'a aucun dessin.
-    private static func bakedDrawingImage(for effects: StoryEffects, scale: CGFloat) -> UIImage? {
-        if let strokes = effects.drawingStrokes, !strokes.isEmpty {
-            return StoryStrokeRasterizer.image(strokes: strokes,
-                                               designSize: CanvasGeometry.designSize,
-                                               scale: scale)
-        }
-        if let data = effects.drawingData, let drawing = try? PKDrawing(data: data) {
-            return drawing.image(
-                from: CGRect(origin: .zero, size: CanvasGeometry.designSize),
-                scale: scale
-            )
-        }
-        return nil
+    private static func freshRoot(size: CGSize, contentsScale: CGFloat) -> CALayer {
+        let root = CALayer()
+        root.frame = CGRect(origin: .zero, size: size)
+        root.anchorPoint = CGPoint(x: 0, y: 0)
+        root.contentsScale = contentsScale
+        return root
     }
 
     private static func collectItems(from slide: StorySlide) -> [any RenderableItem] {
