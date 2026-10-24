@@ -461,6 +461,12 @@
    "reason": "Icons.Filled.Memory; variante .fill rendue en Filled"
   },
   {
+   "symbol": "crop",
+   "status": "mapped",
+   "role": "Crop",
+   "reason": "Icons.Filled.Crop"
+  },
+  {
    "symbol": "crown.fill",
    "status": "mapped",
    "role": "Premium",
@@ -2117,6 +2123,10 @@
    "directional": false
   },
   "Copy": {
+   "origin": "material",
+   "directional": false
+  },
+  "Crop": {
    "origin": "material",
    "directional": false
   },

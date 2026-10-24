@@ -82,3 +82,21 @@ describe('les cotes', () => {
     expect(html).toContain('min-height:24px');
   });
 });
+
+/**
+ * **LA PASTILLE SE LIT EN TOUTES LETTRES** (#11575) — un lecteur d'écran lisait
+ * un chiffre nu. La pastille de FLUX est une image nommée par la phrase d'iOS
+ * (`accessibility.unread_count`) ; « 99+ » se lit « plus de 99 ».
+ */
+describe('l’étiquette accessible', () => {
+  test('1, 5 et 120 se disent au singulier, au pluriel, et « plus de 99 »', () => {
+    expect(render(<UnreadBadge count={1} language="fr" />)).toContain('aria-label="1 message non lu"');
+    expect(render(<UnreadBadge count={5} language="fr" />)).toContain('aria-label="5 messages non lus"');
+    expect(render(<UnreadBadge count={120} language="fr" />)).toContain('aria-label="plus de 99 messages non lus"');
+    expect(render(<UnreadBadge count={120} language="en" />)).toContain('aria-label="more than 99 unread messages"');
+  });
+
+  test('l’étiquette nomme une image : le chiffre affiché ne se relit pas à côté', () => {
+    expect(render(<UnreadBadge count={3} language="en" />)).toContain('role="img"');
+  });
+});

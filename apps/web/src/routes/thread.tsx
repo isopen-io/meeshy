@@ -75,6 +75,7 @@ import { backdropStyleVars } from '@/lib/view/thread-backdrop';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useHeadAnchor, useOlderMessages } from '@/lib/view/use-older-messages';
+import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
 import { keepReadingInPlace } from '@/lib/view/thread-resize-compensation';
 import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
@@ -377,7 +378,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     getScrollElement: () => scroller.current,
     estimateSize: () => THREAD_ROW_ESTIMATE,
     overscan: 6,
-    getItemKey: (index) => placed[index]?.message.id ?? index,
+    getItemKey: (index) => (placed[index] === undefined ? index : threadRowKeyOf(placed[index].message)),
     anchorTo,
   });
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = keepReadingInPlace;

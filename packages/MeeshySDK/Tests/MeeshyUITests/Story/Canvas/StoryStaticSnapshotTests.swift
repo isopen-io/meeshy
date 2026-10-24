@@ -139,4 +139,59 @@ final class StoryStaticSnapshotForegroundTests: XCTestCase {
     func test_foreground_withAnEmptySize_isNil() {
         XCTAssertNil(StoryStaticSnapshot.foreground(slide: slide(), size: .zero))
     }
+
+    // MARK: - Les vitres du fond Verre (#12602)
+
+    private func vitree(_ fond: StoryTextBackgroundStyle? = .glass(radius: 24), x: Double = 0.5, y: Double = 0.5) -> StorySlide {
+        let objet = StoryTextObject(text: "Bonjour", x: x, y: y, backgroundStyle: fond)
+        return StorySlide(effects: StoryEffects(background: "FF0000", textObjects: [objet]))
+    }
+
+    func test_glassPanes_oneGlassText_givesOnePaneWhereItsBoxIs() throws {
+        let taille = CGSize(width: 360, height: 640)
+        let vitres = StoryStaticSnapshot.glassPanes(slide: vitree(x: 0.3, y: 0.6), size: taille)
+        let vitre = try XCTUnwrap(vitres.first)
+        XCTAssertEqual(vitres.count, 1)
+        XCTAssertEqual(vitre.mask.width, 360)
+        XCTAssertEqual(vitre.mask.height, 640)
+        let masque = Alpha(vitre.mask)
+        XCTAssertEqual(masque.alpha(Int(0.3 * 360), Int(0.6 * 640)), 255, "le milieu de la boîte est vitré, opaque")
+        XCTAssertEqual(masque.alpha(2, 2), 0, "hors de la boîte, rien")
+        XCTAssertEqual(vitre.bounds.midX / 360, 0.3, accuracy: 0.01)
+        XCTAssertEqual(vitre.bounds.midY / 640, 0.6, accuracy: 0.01, "origine en haut à gauche, comme la slide")
+    }
+
+    func test_glassPanes_maskIsTheBoxTheForegroundTints_withoutTheGlyphs() throws {
+        let taille = CGSize(width: 360, height: 640)
+        let vitre = try XCTUnwrap(StoryStaticSnapshot.glassPanes(slide: vitree(), size: taille).first)
+        let teinte = try XCTUnwrap(Alpha(try XCTUnwrap(StoryStaticSnapshot.foreground(slide: vitree(), size: taille))).inked)
+        let decoupe = try XCTUnwrap(Alpha(vitre.mask).inked)
+        XCTAssertEqual(decoupe.minX, teinte.minX, accuracy: 0.01, "la vitre épouse la teinte du verre")
+        XCTAssertEqual(decoupe.maxX, teinte.maxX, accuracy: 0.01)
+        XCTAssertEqual(decoupe.minY, teinte.minY, accuracy: 0.01)
+        XCTAssertEqual(decoupe.maxY, teinte.maxY, accuracy: 0.01)
+    }
+
+    func test_glassPanes_sigmaIsTheGlassRadiusAtThisDefinition() throws {
+        let taille = CGSize(width: 540, height: 960)
+        let vitre = try XCTUnwrap(StoryStaticSnapshot.glassPanes(slide: vitree(.glass(radius: 30)), size: taille).first)
+        XCTAssertEqual(vitre.sigma, CanvasGeometry(renderSize: taille).render(CGFloat(30)), accuracy: 0.001)
+    }
+
+    func test_glassPanes_withoutGlass_isEmpty() {
+        let taille = CGSize(width: 360, height: 640)
+        XCTAssertTrue(StoryStaticSnapshot.glassPanes(slide: vitree(nil), size: taille).isEmpty)
+        XCTAssertTrue(StoryStaticSnapshot.glassPanes(slide: vitree(.solid(hex: "000000")), size: taille).isEmpty)
+        XCTAssertTrue(StoryStaticSnapshot.glassPanes(slide: vitree(), size: .zero).isEmpty)
+    }
+
+    func test_glassPanes_oneGlassAmongTwoTexts_givesOnlyItsPane() throws {
+        let verre = StoryTextObject(text: "Verre", x: 0.5, y: 0.3, backgroundStyle: .glass(radius: 24))
+        let nu = StoryTextObject(text: "Nu", x: 0.5, y: 0.8)
+        let slide = StorySlide(effects: StoryEffects(textObjects: [verre, nu]))
+        let vitres = StoryStaticSnapshot.glassPanes(slide: slide, size: CGSize(width: 360, height: 640))
+        XCTAssertEqual(vitres.count, 1)
+        let masque = Alpha(try XCTUnwrap(vitres.first).mask)
+        XCTAssertEqual(masque.alpha(180, Int(0.8 * 640)), 0, "le texte sans verre ne floute rien")
+    }
 }

@@ -88,6 +88,9 @@ struct MessageOverlayMenu: View {
     var onExportImage: ((Bool) -> Void)? = nil
     /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
     var onExpandFullPicker: (() -> Void)? = nil
+    /// Arrivé EN CLAIR dans l'ère chiffrée de la conversation (#11380) :
+    /// l'aperçu porte le marqueur que la cellule montre dans le fil.
+    var isUnencrypted: Bool = false
     /// **Lire un vocal depuis l'aperçu** (#11339) — l'hôte le rend au
     /// ViewModel (`ConversationViewModel.playAudio(attachmentId:continuesQueue:)`).
     /// Sans rappel, le bouton de lecture de l'aperçu ne lance rien.
@@ -471,6 +474,7 @@ struct MessageOverlayMenu: View {
                 onPlayAudio: { playFromPreview($0) }
             )
             .equatable()
+            .modifier(UnencryptedMessageMarking(isUnencrypted: isUnencrypted, isDark: isDark))
             .environment(\.bubbleSkin, previewSkin)
             .environment(\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)
             .frame(width: previewSize.width, alignment: message.isMe ? .trailing : .leading)
@@ -647,20 +651,15 @@ struct MessageOverlayMenu: View {
         dismiss()
     }
 
-    // MARK: - Dismiss Background (dim only, no full-screen blur → glass stays vibrant)
+    // MARK: - Dismiss Background (le voile commun de l'appui long, #11222)
 
     private var dismissBackground: some View {
-        // Assombrissement NET + lueur radiale accent, SANS `.thinMaterial`
-        // plein écran. Sur iOS 26, le `glassEffect` de la pastille et du menu
-        // échantillonne le contenu RÉEL (assombri) situé derrière eux → verre
-        // VIBRANT façon iMessage. Un flou plein écran derrière le verre le
-        // faisait échantillonner du flou (flou-sur-flou) → verre plat, non
-        // natif. iMessage assombrit lui aussi sans matériau flou derrière la
-        // pastille/le menu. C'est ce voile qui porte l'appui long : l'hôte ne
-        // floute le fil que légèrement (`ConversationOverlayBackdrop`, #11208).
+        // Le voile est le MATÉRIAU SYSTÈME (`LongPressVeil`, décision porteur
+        // #11222) : la même loi que l'aperçu d'une conversation, l'aperçu d'une
+        // pièce et le web. La lueur radiale de l'accent se pose au-dessus,
+        // sans capter le toucher — elle n'est pas le voile, elle teinte la scène.
         ZStack {
-            Color.black
-                .opacity(isVisible ? (isDark ? 0.5 : 0.4) : 0)
+            LongPressVeil(visibility: isVisible ? 1 : 0, onDismiss: dismiss)
 
             RadialGradient(
                 colors: [
@@ -673,9 +672,9 @@ struct MessageOverlayMenu: View {
             )
             .opacity(isVisible ? 1 : 0)
             .blendMode(isDark ? .screen : .multiply)
+            .allowsHitTesting(false)
         }
         .animation(.easeOut(duration: 0.26), value: isVisible)
-        .onTapGesture { dismiss() }
     }
 
     // MARK: - Cluster Drag (réduction de l'aperçu, puis swipe-up → Menu 2, swipe-down → fermeture)

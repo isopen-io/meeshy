@@ -58,7 +58,11 @@ describe('planShare — entrées × actions (contenu ordinaire), la matrice de l
       ['send', 'caption', 'reorder', 'imager', 'copy-text'],
     ],
     ['une publication', { kind: 'post', url: 'https://meeshy.me/p/1' }, ['send', 'caption', 'publish-post', 'publish-story', 'copy-link', 'share-out']],
-    ['une story — pas de republication (D14)', { kind: 'story', url: 'https://meeshy.me/s/1' }, ['send', 'caption', 'copy-link', 'share-out']],
+    [
+      'une story — republiable et recomposable (D14, #12644)',
+      { kind: 'story', url: 'https://meeshy.me/s/1' },
+      ['send', 'caption', 'publish-post', 'publish-story', 'publish-reel', 'studio', 'copy-link', 'share-out'],
+    ],
     ['un réel', { kind: 'reel', url: 'https://meeshy.me/r/1' }, ['send', 'caption', 'publish-post', 'publish-story', 'copy-link', 'share-out']],
     ['un profil (D15)', { kind: 'profile', url: 'https://meeshy.me/u/lea' }, ['send', 'caption', 'copy-link', 'share-out']],
     ['une invitation', { kind: 'invitation', url: 'https://meeshy.me/join/x' }, ['send', 'caption', 'copy-link', 'share-out']],
