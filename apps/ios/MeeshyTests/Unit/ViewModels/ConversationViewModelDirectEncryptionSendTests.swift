@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
 import CryptoKit
+import Combine
 @testable import Meeshy
 import MeeshySDK
 
@@ -73,6 +74,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
             messageEncryptor: encryptor
         )
         viewModel.start()
+        viewModel.regimeLedger = EndToEndRegimeLedger()
         return SUT(viewModel: viewModel, messageService: messageService, socket: socket, queue: queue, pool: pool)
     }
 
@@ -203,9 +205,172 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
         }
         let queued = await sut.queue.enqueuedItems
         XCTAssertTrue(queued.isEmpty, "la file de relance porterait le texte en clair")
-        XCTAssertTrue(sut.socket.sendViaSocketFallbackCalls.allSatisfy { $0.content != secret && $0.isEncrypted },
-                      "le repli socket ne porte que le chiffré")
+        XCTAssertEqual(sut.socket.sendViaSocketFallbackCalls.count, 1, "un seul repli socket, et il est chiffré")
+        XCTAssertEqual(sut.socket.sendViaSocketFallbackCalls.first?.isEncrypted, true)
+        XCTAssertNotEqual(sut.socket.sendViaSocketFallbackCalls.first?.content, secret)
         XCTAssertEqual(try onlyRecord(in: sut.pool)?.state, .failed)
+    }
+
+    // MARK: - Le régime appris en cours de fil
+
+    private var serverPlaintextRefusal: MeeshyError {
+        .rejected(APIRejection(statusCode: 400, code: EndToEndSendGate.serverPlaintextRefusalCode, message: "Conversation chiffrée"))
+    }
+
+    /// Le fil ignorait le régime (ligne d'ouverture et cache muets) : le refus
+    /// serveur l'arrête net — ni repli socket, ni outbox —, et l'envoi suivant
+    /// ne part plus en clair.
+    func test_send_regimeInconnu_refusServeur_neRejoueRien_etLEnvoiSuivantNePartPlusEnClair() async throws {
+        let sut = try await makeSUT(encryptor: FailingEncryptor(), encryptionMode: nil)
+        sut.socket.isConnected = false
+        sut.messageService.sendResult = .failure(serverPlaintextRefusal)
+
+        let first = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        guard case .failure(.endToEndUnsealed(.plaintextRefusedByServer)) = first else {
+            return XCTFail("refus définitif attendu, reçu \(first)")
+        }
+        XCTAssertEqual(sut.messageService.sendCallCount, 1)
+        XCTAssertEqual(sut.socket.sendViaSocketFallbackCallCount, 0, "le clair refusé ne repart pas par le socket")
+        let queued = await sut.queue.enqueuedItems
+        XCTAssertTrue(queued.isEmpty, "le clair refusé n'entre pas dans l'outbox")
+
+        let second = await sut.viewModel.send(outgoingMessage(content: "Et le second", conversationId: conversationId))
+
+        guard case .failure(.endToEndUnsealed(.sessionUnavailable)) = second else {
+            return XCTFail("le fil a appris le régime : refus de scellement attendu, reçu \(second)")
+        }
+        XCTAssertEqual(sut.messageService.sendCallCount, 1, "plus aucun clair ne part")
+        XCTAssertEqual(sut.socket.sendViaSocketFallbackCallCount, 0)
+    }
+
+    /// Activer le chiffrement depuis la fiche du fil OUVERT : le registre du
+    /// régime le dit au fil, et l'envoi suivant est scellé.
+    func test_send_chiffrementActiveDansLeFilOuvert_lEnvoiSuivantEstScelle() async throws {
+        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil)
+        let ledger = EndToEndRegimeLedger()
+        sut.viewModel.regimeLedger = ledger
+        ledger.learn(mode: "e2ee", for: conversationId)
+
+        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        XCTAssertEqual(sut.socket.sendViaSocketFallbackCallCount, 0, "aucun socket-first en clair")
+        XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
+        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
+    }
+
+    func test_regimeLedger_unModeLisibleParLeServeur_neScelleRien() {
+        let ledger = EndToEndRegimeLedger()
+
+        ledger.learn(mode: "server", for: conversationId)
+
+        XCTAssertNil(ledger.mode(for: conversationId))
+        ledger.learn(mode: "e2ee", for: conversationId)
+        ledger.learn(mode: "server", for: conversationId)
+        XCTAssertEqual(ledger.mode(for: conversationId), "e2ee", "l'activation ne se défait pas")
+    }
+
+    /// Le geste du jour et la flamme ne se posent que pour un message qui PART.
+    func test_send_e2eeRefuse_neRejouePasLaFlamme() async throws {
+        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), isDirect: false)
+        var replays: [String] = []
+        let subscription = HeaderFlameReplay.sent.sink { replays.append($0) }
+        defer { subscription.cancel() }
+
+        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        XCTAssertFalse(replays.contains(conversationId), "rien n'est parti : la flamme ne se rejoue pas")
+    }
+
+    func test_send_sansE2EE_rejoueLaFlamme() async throws {
+        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil)
+        sut.socket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
+            messageId: "00000000000000000000cd57", clientMessageId: nil
+        )
+        var replays: [String] = []
+        let subscription = HeaderFlameReplay.sent.sink { replays.append($0) }
+        defer { subscription.cancel() }
+
+        _ = await sut.viewModel.send(outgoingMessage(content: "Salut", conversationId: conversationId))
+
+        XCTAssertTrue(replays.contains(conversationId))
+    }
+
+    // MARK: - La réponse dans un fil (ThreadView)
+
+    private final class SealedSendLog {
+        var outgoing: [OutgoingMessage] = []
+    }
+
+    private func makeThreadDispatcher(
+        sut: SUT,
+        online: Bool = true,
+        log: SealedSendLog
+    ) -> ThreadReplyDispatcher {
+        ThreadReplyDispatcher(
+            conversationId: conversationId,
+            parentMessageId: "00000000000000000000cd33",
+            requiresSeal: { sut.viewModel.endToEndSealer.requiresSeal },
+            sendThroughConversation: { outgoing in
+                log.outgoing.append(outgoing)
+                return await sut.viewModel.send(outgoing)
+            },
+            messageService: sut.messageService,
+            offlineQueue: sut.queue,
+            isOnline: { online }
+        )
+    }
+
+    /// Le fil de réponses passait À CÔTÉ du scelleur : POST en clair en ligne,
+    /// clair dans l'outbox hors ligne. En E2EE, il passe par l'envoi de la
+    /// conversation — scellé ou refusé, jamais en clair.
+    func test_threadReply_e2ee_passeParLEnvoiDeLaConversation_aucunClair() async throws {
+        let sut = try await makeSUT(encryptor: FailingEncryptor())
+        let log = SealedSendLog()
+
+        let outcome = try await makeThreadDispatcher(sut: sut, log: log).dispatch(text: secret, clientMessageId: "cid_thread")
+
+        XCTAssertEqual(outcome, .refused(EndToEndSendRefusal.sessionUnavailable.userMessage))
+        XCTAssertEqual(log.outgoing.first?.relation, .reply(to: MessageID("00000000000000000000cd33"), citing: nil))
+        XCTAssertNil(log.outgoing.first?.reusedClientMessageId, "la conversation pose sa propre bulle")
+        await assertNothingLeftInClear(sut)
+    }
+
+    func test_threadReply_e2eeHorsLigne_rienNeVaDansLaFile() async throws {
+        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), online: false)
+        let log = SealedSendLog()
+
+        let outcome = try await makeThreadDispatcher(sut: sut, online: false, log: log).dispatch(text: secret, clientMessageId: "cid_thread")
+
+        XCTAssertEqual(outcome, .refused(EndToEndSendRefusal.outboxUnsealable.userMessage))
+        await assertNothingLeftInClear(sut)
+    }
+
+    func test_threadReply_e2eeAvecSession_partChiffree() async throws {
+        let sut = try await makeSUT(encryptor: SucceedingEncryptor())
+        let log = SealedSendLog()
+
+        _ = try await makeThreadDispatcher(sut: sut, log: log).dispatch(text: secret, clientMessageId: "cid_thread")
+
+        XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
+        XCTAssertEqual(sut.messageService.lastSendRequest?.replyToId, "00000000000000000000cd33")
+        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
+    }
+
+    func test_threadReply_sansE2EE_gardeSonChemin_RESTenLigne_fileHorsLigne() async throws {
+        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil)
+        let log = SealedSendLog()
+
+        let sent = try await makeThreadDispatcher(sut: sut, log: log).dispatch(text: "Salut", clientMessageId: "cid_on")
+        let queued = try await makeThreadDispatcher(sut: sut, online: false, log: log).dispatch(text: "Hors ligne", clientMessageId: "cid_off")
+
+        XCTAssertEqual(sent, .sent)
+        XCTAssertEqual(queued, .queued)
+        XCTAssertTrue(log.outgoing.isEmpty)
+        XCTAssertEqual(sut.messageService.lastSendRequest?.content, "Salut")
+        XCTAssertEqual(sut.messageService.lastSendRequest?.replyToId, "00000000000000000000cd33")
+        let items = await sut.queue.enqueuedItems
+        XCTAssertEqual(items.map(\.content), ["Hors ligne"])
     }
 
     // MARK: - Sans E2EE

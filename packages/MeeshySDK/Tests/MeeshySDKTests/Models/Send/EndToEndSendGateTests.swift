@@ -100,4 +100,36 @@ struct EndToEndSendGateTests {
         #expect(!result.isAccepted)
         #expect(SendFailure.endToEndUnsealed(.sessionUnavailable) != .endToEndUnsealed(.outboxUnsealable))
     }
+
+    // MARK: - Le refus du SERVEUR (#11216)
+
+    private func plaintextRefusal(status: Int = 400) -> MeeshyError {
+        .rejected(APIRejection(statusCode: status, code: EndToEndSendGate.serverPlaintextRefusalCode, message: "refusé"))
+    }
+
+    @Test func serverPlaintextRefusal_isRecognisedByItsStableCode() {
+        #expect(EndToEndSendGate.serverPlaintextRefusalCode == "E2EE_PLAINTEXT_REFUSED")
+        #expect(EndToEndSendGate.isServerPlaintextRefusal(plaintextRefusal()))
+    }
+
+    @Test func serverPlaintextRefusal_otherRefusals_areNot() {
+        #expect(!EndToEndSendGate.isServerPlaintextRefusal(MeeshyError.server(statusCode: 400, message: "Validation error")))
+        #expect(!EndToEndSendGate.isServerPlaintextRefusal(MeeshyError.rejected(APIRejection(statusCode: 400, code: "VALIDATION_ERROR", message: "x"))))
+        #expect(!EndToEndSendGate.isServerPlaintextRefusal(URLError(.timedOut)))
+    }
+
+    @Test func serverEnvelopeRefusal_definitiveClientErrors_only() {
+        #expect(EndToEndSendGate.isServerEnvelopeRefusal(MeeshyError.server(statusCode: 400, message: "Validation error")))
+        #expect(EndToEndSendGate.isServerEnvelopeRefusal(MeeshyError.server(statusCode: 422, message: "x")))
+        #expect(EndToEndSendGate.isServerEnvelopeRefusal(plaintextRefusal()))
+        #expect(!EndToEndSendGate.isServerEnvelopeRefusal(MeeshyError.server(statusCode: 408, message: "x")))
+        #expect(!EndToEndSendGate.isServerEnvelopeRefusal(MeeshyError.server(statusCode: 429, message: "x")))
+        #expect(!EndToEndSendGate.isServerEnvelopeRefusal(MeeshyError.server(statusCode: 503, message: "x")))
+        #expect(!EndToEndSendGate.isServerEnvelopeRefusal(MeeshyError.server(statusCode: 0, message: "x")))
+        #expect(!EndToEndSendGate.isServerEnvelopeRefusal(URLError(.notConnectedToInternet)))
+    }
+
+    @Test func serverPlaintextRefusal_isPermanentForTheOutbox() {
+        #expect(OutboxFlusher.isPermanentServerRejection(plaintextRefusal()))
+    }
 }
