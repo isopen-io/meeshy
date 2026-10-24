@@ -30,6 +30,11 @@ final class ConversationEncryptedEra {
         self.memory = memory
     }
 
+    // Isolé au MainActor : une deinit isolée tue xctest au démontage hors
+    // d'une tâche (iOS 18.4+/26, Swift #85663).
+    // Garde : MainActorDeinitSourceGuardTests / check-ios-isolated-deinits.sh.
+    nonisolated deinit {}
+
     func regime(of viewModel: ConversationViewModel) -> EndToEndRegime {
         memory.resolve(
             conversationId: viewModel.conversationId,
