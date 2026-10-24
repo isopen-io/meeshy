@@ -303,10 +303,7 @@ public struct CachedAvatarImage: View {
             cachedFull = nil
         }
         _image = State(initialValue: cachedFull)
-
-        if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
-            _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
-        }
+        _thumbHashImage = State(initialValue: cachedFull == nil ? Self.waitingBlur(urlString: urlString, thumbHash: thumbHash) : nil)
     }
 
     public var body: some View {
@@ -320,15 +317,21 @@ public struct CachedAvatarImage: View {
         .frame(width: size, height: size).clipShape(Circle())
         .task(id: urlString) { await loadAvatar(for: urlString) }
         .adaptiveOnChange(of: urlString) { _, newUrl in
-            guard let newUrl, !newUrl.isEmpty else { image = nil; return }
+            guard let newUrl, !newUrl.isEmpty else {
+                image = nil
+                thumbHashImage = nil
+                return
+            }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
             image = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
-            thumbHashImage = image == nil ? Self.thumbHashImage(for: thumbHash) : nil
+            thumbHashImage = image == nil ? Self.waitingBlur(urlString: newUrl, thumbHash: thumbHash) : nil
         }
     }
 
-    private static func thumbHashImage(for thumbHash: String?) -> UIImage? {
-        guard let thumbHash, !thumbHash.isEmpty else { return nil }
+    /// Le flou d'attente n'annonce qu'une photo À VENIR : sans URL, la personne
+    /// n'a pas de photo et le cercle montre ses initiales (#12568).
+    static func waitingBlur(urlString: String?, thumbHash: String?) -> UIImage? {
+        guard let urlString, !urlString.isEmpty, let thumbHash, !thumbHash.isEmpty else { return nil }
         return UIImage.fromThumbHash(thumbHash)
     }
 

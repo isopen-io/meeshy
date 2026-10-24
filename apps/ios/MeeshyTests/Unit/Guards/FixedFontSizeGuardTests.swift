@@ -188,8 +188,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/CallDeviceControls.swift",
         "Features/Main/Views/CallView+Controls.swift",
         "Features/Main/Views/CallView+Header.swift",
-        "Features/Main/Views/CallView+SelfView.swift",
-        "Features/Main/Views/CallView+States.swift",
+        // #12568 : `CallView+SelfView` et `CallView+States` sortent — leurs
+        // initiales figées sous la photo laissent la place à `CachedAvatarImage`.
         "Features/Main/Views/ChangePasswordView.swift",
         "Features/Main/Views/CommunityLinkDetailView.swift",
         // RELOCALISATION pure : le bandeau « en réponse à » quitte
@@ -313,11 +313,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // — ni `totalCeiling` ni `textCeiling` — seul le NOM change ; le canvas
         // n'en porte plus aucun, il sort de la liste et n'y revient jamais.
         "Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
-        // #8582 — RELOCALISATION pure : `StoryCommentRowView` quitte
-        // `StoryViewerView+Content.swift` et emporte son site figé — le
-        // monogramme de 13 pt d'un avatar fixe de 32×32, doctrine 82i. La
-        // POPULATION ne bouge pas ; l'hôte en garde un autre et reste dans la liste.
-        "Features/Main/Views/StoryCommentRowView.swift",
+        // #12568 : `StoryCommentRowView` sort — son monogramme de 13 pt laisse la
+        // place à `CachedAvatarImage`, photo sinon initiales.
         // Cohésion de `StoryViewerView` — RELOCALISATION pure, même forme : la liste des
         // commentaires de story (`StoryCommentsOverlayView`) a QUITTÉ
         // `StoryViewerView+Content.swift` pour son propre fichier et emporte son site
@@ -349,7 +346,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // 35 → 34 (#8878) : le libellé de 10 pt du rail de la story part avec son fichier.
     // 34 → 33 (#10366) : le code pays figé de la puce de langue repasse en `.caption2`.
     // 33 → 26 (S7c, #11494) : sept emoji passent par `MeeshyFont.emoji`.
-    private static let textCeiling = 26
+    // 26 → 21 (#12568) : cinq initiales d'avatar figées (appel ×4, commentaire
+    // de story) laissent la place à `CachedAvatarImage`.
+    private static let textCeiling = 21
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -461,7 +460,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // `MessageOverlayMenu.swift` sort de `bearingFiles` (règle 4) ; le texte
     // figé ne bouge pas.
     // 185 → 178 (S7c, #11494) : les mêmes sept emoji.
-    private static let totalCeiling = 178
+    // 178 → 173 (#12568) : les mêmes cinq initiales d'avatar.
+    private static let totalCeiling = 173
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
@@ -563,8 +563,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
                           head: #"Text("\(Int(displayedProgress * 100))%")"#),
         ExactSizeTextSite(file: "Features/Main/Views/ConversationHelperViews.swift",
                           head: "Text(Self.displayedUnread(unreadCount))"),
-        ExactSizeTextSite(file: "Features/Main/Views/StoryCommentRowView.swift",
-                          head: "Text(String(comment.author.prefix(1)).uppercased())"),
         ExactSizeTextSite(file: "Features/Main/Views/GlobalSearchView.swift",
                           head: #"Text("\(result.unreadCount)")"#),
         ExactSizeTextSite(file: "Features/Main/Components/ConversationDashboardView.swift",

@@ -96,7 +96,7 @@ struct ContactCardDetailSheet: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
-            headerFace
+            face(of: model.primaryAccount, context: .custom(52))
                 .frame(width: 52, height: 52)
                 .accessibilityHidden(true)
 
@@ -136,14 +136,17 @@ struct ContactCardDetailSheet: View {
     // MARK: - Sur Meeshy
 
     private func meeshySection(_ account: PublicContactAccount) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let showsFace = model.sectionShowsFace(for: account)
+        return VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {
                 banner(account)
-                MeeshyAvatar(name: account.displayName, context: .storyViewer, accentColor: accentHex, avatarURL: account.avatarUrl, isDark: colorScheme == .dark)
-                    .padding(MeeshySpacing.xxs)
-                    .background(Circle().fill(.ultraThinMaterial))
-                    .offset(x: 12, y: 22)
-                    .accessibilityHidden(true)
+                if showsFace {
+                    face(of: account, context: .storyViewer)
+                        .padding(MeeshySpacing.xxs)
+                        .background(Circle().fill(.ultraThinMaterial))
+                        .offset(x: 12, y: 22)
+                        .accessibilityHidden(true)
+                }
             }
             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "contact-card.on-meeshy", defaultValue: "Sur Meeshy", bundle: .main))
@@ -169,7 +172,7 @@ struct ContactCardDetailSheet: View {
                     .padding(.top, MeeshySpacing.xsPlus)
             }
             .padding(.horizontal, MeeshySpacing.md)
-            .padding(.top, MeeshySpacing.xxxl)
+            .padding(.top, showsFace ? MeeshySpacing.xxxl : MeeshySpacing.md)
             .padding(.bottom, MeeshySpacing.md)
             .accessibilityElement(children: .contain)
         }
@@ -233,15 +236,11 @@ struct ContactCardDetailSheet: View {
         }
     }
 
-    /// Le visage de la fiche est celui de la bulle : la photo du compte Meeshy
-    /// associé, sinon les initiales du nom de la carte.
-    @ViewBuilder
-    private var headerFace: some View {
-        if let account = model.primaryAccount {
-            MeeshyAvatar(name: account.displayName, context: .custom(52), accentColor: accentHex, avatarURL: account.avatarUrl, isDark: colorScheme == .dark)
-        } else {
-            MeeshyAvatar(name: model.card?.displayName ?? "", context: .custom(52), accentColor: accentHex, avatarURL: nil, isDark: colorScheme == .dark)
-        }
+    /// Le visage d'un compte, celui de la bulle : sa photo, sinon ses initiales ;
+    /// sans compte associé, les initiales du nom de la carte. Site unique de
+    /// l'en-tête et des sections.
+    private func face(of account: PublicContactAccount?, context: AvatarContext) -> some View {
+        MeeshyAvatar(name: account?.displayName ?? model.card?.displayName ?? "", context: context, accentColor: accentHex, avatarURL: account?.avatarUrl, isDark: colorScheme == .dark)
     }
 }
 

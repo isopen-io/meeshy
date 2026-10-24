@@ -125,17 +125,35 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     func test_storyCommentRow_avatarIsAnAvatarComponent() throws {
         let source = try appSource("Meeshy/Features/Main/Views/StoryCommentRowView.swift")
         let avatar = try block(from: "private var avatar: some View {", upTo: "private var headerRow", in: source)
-        XCTAssertTrue(avatar.contains("MeeshyAvatar(") || avatar.contains("CachedAvatarImage("))
+        XCTAssertTrue(avatar.contains("CachedAvatarImage("), "Le visage de l'auteur : sa photo, sinon ses initiales.")
+        XCTAssertTrue(avatar.contains("urlString: comment.authorAvatarURL"))
         XCTAssertFalse(avatar.contains("CachedAsyncImage("),
                        "CachedAsyncImage n'est pas un composant d'avatar (spinner, « Réessayer », politique de téléchargement).")
+        XCTAssertFalse(avatar.contains("MeeshyAvatar("),
+                       "MeeshyAvatar porte sa propre ombre : la rangée qui défile en paierait deux par commentaire.")
+        XCTAssertEqual(avatar.components(separatedBy: ".shadow(").count - 1, 1, "Une seule ombre : le halo de la rangée.")
+        XCTAssertTrue(avatar.contains(".accessibilityHidden(true)"),
+                      "Le nom de l'auteur est lu dans l'en-tête : l'avatar ne le relit pas.")
     }
 
     func test_contactCardDetailHeader_showsTheLinkedAccountPhoto() throws {
         let source = try appSource("Meeshy/Features/Main/Components/ContactCard/ContactCardDetailSheet.swift")
-        let face = try block(from: "private var headerFace: some View {", upTo: "// MARK: - Un champ copiable", in: source)
-        XCTAssertTrue(face.contains("avatarURL: account.avatarUrl"),
-                      "L'en-tête de la fiche montre la photo du compte associé, comme la bulle.")
+        let header = try block(from: "private var header: some View {", upTo: "private var subtitle", in: source)
+        let face = try block(from: "private func face(of account: PublicContactAccount?", upTo: "// MARK: - Un champ copiable", in: source)
+        XCTAssertTrue(header.contains("face(of: model.primaryAccount"),
+                      "L'en-tête de la fiche montre le visage du compte associé, comme la bulle.")
+        XCTAssertTrue(face.contains("avatarURL: account?.avatarUrl"), "Le visage d'un compte est sa photo, sinon ses initiales.")
+        XCTAssertEqual(source.components(separatedBy: "MeeshyAvatar(").count - 1, 1,
+                       "Un seul site construit le visage d'un compte sur la fiche (en-tête et sections).")
         XCTAssertFalse(source.contains("static func initials"), "Pas de jumelle locale des initiales.")
+    }
+
+    func test_contactCardDetailSection_neverRepeatsTheHeaderFace() throws {
+        let source = try appSource("Meeshy/Features/Main/Components/ContactCard/ContactCardDetailSheet.swift")
+        let section = try block(from: "private func meeshySection(_ account: PublicContactAccount)", upTo: "private func banner(", in: source)
+        XCTAssertTrue(section.contains("model.sectionShowsFace(for: account)"),
+                      "La section « Sur Meeshy » ne pose son visage que si l'en-tête ne le montre pas déjà.")
+        XCTAssertTrue(section.contains("if showsFace {"))
     }
 
     func test_shareLinkIdentity_accountChipCarriesThePhoto() throws {

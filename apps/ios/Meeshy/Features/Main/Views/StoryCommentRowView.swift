@@ -158,17 +158,17 @@ struct StoryCommentRowView: View, Equatable {
         }
     }
 
-    @ViewBuilder
     private var avatar: some View {
-        MeeshyAvatar(
+        CachedAvatarImage(
+            urlString: comment.authorAvatarURL,
             name: comment.author,
-            context: .custom(MeeshyControlSize.compact),
-            accentColor: comment.authorColor,
-            avatarURL: comment.authorAvatarURL
+            size: MeeshyControlSize.compact,
+            accentColor: comment.authorColor
         )
         .overlay(Circle().strokeBorder(bubbleColor.opacity(MeeshyOpacity.strong), lineWidth: 1))
         // Halo de séparation : l'avatar reste détaché même sur une story claire.
         .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
+        .accessibilityHidden(true)
     }
 
     private var headerRow: some View {

@@ -1,4 +1,6 @@
 import XCTest
+import UIKit
+import MeeshySDK
 @testable import MeeshyUI
 
 /// #12568 — une personne a UN visage : les initiales montrées pendant le
@@ -48,19 +50,43 @@ final class CachedAvatarInitialsParityTests: XCTestCase {
                       "MeeshyAvatar sans photo doit peindre le même visage que le repli de CachedAvatarImage.")
     }
 
-    func test_cachedAvatarImage_refreshesItsThumbHashWhenTheURLChanges() throws {
+    private let decodableThumbHash = "1QcSHQRnh493V4dIh4eXh0h4kJUI"
+    private let photoToCome = "https://cdn.example.invalid/avatars/12568.jpg"
+
+    func test_waitingBlur_withoutPhoto_isNeverShown_evenWhenAThumbHashIsServed() {
+        XCTAssertNotNil(UIImage.fromThumbHash(decodableThumbHash), "le témoin a besoin d'un thumbHash décodable")
+        XCTAssertNil(CachedAvatarImage.waitingBlur(urlString: nil, thumbHash: decodableThumbHash),
+                     "Sans photo, le cercle montre les initiales : aucun flou, ni le sien ni celui d'une autre personne.")
+        XCTAssertNil(CachedAvatarImage.waitingBlur(urlString: "", thumbHash: decodableThumbHash))
+    }
+
+    func test_waitingBlur_withAPhotoToCome_isTheBlurOfThatPhoto() {
+        XCTAssertNotNil(CachedAvatarImage.waitingBlur(urlString: photoToCome, thumbHash: decodableThumbHash))
+        XCTAssertNil(CachedAvatarImage.waitingBlur(urlString: photoToCome, thumbHash: nil))
+        XCTAssertNil(CachedAvatarImage.waitingBlur(urlString: photoToCome, thumbHash: ""))
+    }
+
+    func test_cachedAvatarImage_initAndURLChange_shareTheWaitingBlurRule() throws {
         let src = try source("Sources/MeeshyUI/Primitives/CachedAsyncImage.swift")
         guard let start = src.range(of: "public struct CachedAvatarImage: View {"),
               let end = src.range(of: "public struct CachedBannerImage: View {") else {
             return XCTFail("CachedAvatarImage introuvable")
         }
         let avatar = String(src[start.lowerBound..<end.lowerBound])
-        guard let onChange = avatar.range(of: ".adaptiveOnChange(of: urlString)") else {
-            return XCTFail("adaptiveOnChange(of: urlString) introuvable")
+        guard let onChange = avatar.range(of: ".adaptiveOnChange(of: urlString)"),
+              let helper = avatar.range(of: "static func waitingBlur(", range: onChange.upperBound..<avatar.endIndex) else {
+            return XCTFail("adaptiveOnChange(of: urlString) ou waitingBlur introuvable")
         }
-        let tail = String(avatar[onChange.lowerBound...].prefix(700))
-        XCTAssertTrue(tail.contains("thumbHashImage ="),
-                      "Un changement d'URL ne doit pas garder le flou de la personne précédente.")
+        let initBlock = String(avatar[avatar.startIndex..<onChange.lowerBound])
+        let onChangeBlock = String(avatar[onChange.lowerBound..<helper.lowerBound])
+        XCTAssertTrue(initBlock.contains("Self.waitingBlur(urlString: urlString, thumbHash: thumbHash)"),
+                      "L'init ne pose un flou que pour une photo à venir.")
+        XCTAssertTrue(onChangeBlock.contains("Self.waitingBlur(urlString: newUrl, thumbHash: thumbHash)"),
+                      "Un changement d'URL recalcule le flou de la NOUVELLE personne.")
+        XCTAssertTrue(onChangeBlock.contains("thumbHashImage = nil"),
+                      "Une URL qui disparaît efface le flou de la personne précédente.")
+        XCTAssertEqual(avatar.components(separatedBy: "UIImage.fromThumbHash(").count - 1, 1,
+                       "Le flou ne se décode qu'en un site, waitingBlur.")
     }
 }
 

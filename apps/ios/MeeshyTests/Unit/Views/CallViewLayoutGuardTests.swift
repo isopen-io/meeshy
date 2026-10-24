@@ -223,7 +223,13 @@ final class CallViewLayoutGuardTests: XCTestCase {
         let calls = sources.flatMap { source in
             source.components(separatedBy: "CachedAsyncImage(").dropFirst().map { String($0.prefix(260)) }
         }
-        XCTAssertGreaterThanOrEqual(calls.count, 4, "fond, disque du correspondant, pastille locale, appel entrant")
+        let faces = sources.reduce(0) { $0 + $1.components(separatedBy: "CachedAvatarImage(").count - 1 }
+        XCTAssertGreaterThanOrEqual(calls.count, 1, "le fond du correspondant")
+        XCTAssertGreaterThanOrEqual(
+            faces, 4,
+            "disque du correspondant, pastille locale, vignette en pause, appel entrant : `CachedAvatarImage` " +
+            "ne passe pas par `MediaDownloadPolicy` et montre la photo OU les initiales (#12568)"
+        )
         for call in calls {
             XCTAssertTrue(
                 call.contains("autoLoad: true"),
