@@ -153,6 +153,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// callbacks playhead du timeline VM poussent directement dans la vue
     /// (aucun body SwiftUI re-évalué à 60 Hz).
     public var timelineBridge: StoryCanvasTimelineBridge?
+    /// `false` : le canvas ne peint AUCUN fond — pas la couleur de la slide, pas son média — et
+    /// reste transparent hors de ce que la slide pose. Un hôte qui superpose les objets à un média
+    /// qu'il peint lui-même (la retouche de la caméra, pour son texte) le demande ; le défaut
+    /// garde le canvas du composer tel qu'il était.
+    public var paintsSceneBackground: Bool = true
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -188,7 +193,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 canvasCornerRadius: CGFloat = 0,
                 timelineBridge: StoryCanvasTimelineBridge? = nil,
                 localMediaAliases: [String: URL] = [:],
-                inlineEditYieldsToManipulation: Bool = false) {
+                inlineEditYieldsToManipulation: Bool = false,
+                paintsSceneBackground: Bool = true) {
+        self.paintsSceneBackground = paintsSceneBackground
         self.localMediaAliases = localMediaAliases
         self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         self._slide = slide
@@ -268,6 +275,14 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
 
+    /// Le fond n'est peint que si l'hôte le veut : sinon le canvas est transparent hors des objets.
+    static func applyBackgroundPolicy(to view: StoryCanvasUIView, paintsSceneBackground: Bool) {
+        view.backgroundLayer.isHidden = !paintsSceneBackground
+        guard !paintsSceneBackground else { return }
+        view.backgroundColor = .clear
+        view.isOpaque = false
+    }
+
     public func makeUIView(context: Context) -> StoryCanvasUIView {
         let view = StoryCanvasUIView(slide: slide, mode: .edit)
         // Live preview : sur le canvas d'édition les vidéos (fond + foreground)
@@ -275,6 +290,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // la suivante. Le prefetcher hors-écran, lui aussi en `.edit`, ne lève
         // jamais ce drapeau et reste silencieux.
         view.playsVideoInEditMode = true
+        Self.applyBackgroundPolicy(to: view, paintsSceneBackground: paintsSceneBackground)
         // Troisième famille vivante sur le canvas d'édition (#4999) : une
         // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
         // comme la vidéo et le son juste au-dessus et juste en dessous.

@@ -3932,6 +3932,11 @@
 		2B60888EAEC5AE995FDD1B02 /* ComposerMediaSwapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202F00640B8267D13FC994C0 /* ComposerMediaSwapTests.swift */; };
 		7297B9A9A7B84B104F36119B /* ComposerMediaSwapRunTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC3E64613BFA9656A12B1D74 /* ComposerMediaSwapRunTests.swift */; };
 		B15277B236BA11F5E75FE54E /* ComposerSceneMediaRetouchWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCD651D9EFE69813D06F1F0 /* ComposerSceneMediaRetouchWiringTests.swift */; };
+		815AFC385C14D569BF4F40CC /* ComposerRetouchTextBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291FA93B3B082F86742765A4 /* ComposerRetouchTextBoard.swift */; };
+		B93D302495C18553363DDD24 /* ComposerEditTextLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3AE44CEBEF7131246198BEF /* ComposerEditTextLayer.swift */; };
+		8DFF63E167635A51D01696A4 /* ComposerRetouchTextBoardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1585E6C7774200BFBDD8E067 /* ComposerRetouchTextBoardTests.swift */; };
+		820C991C4793077525115AD8 /* ComposerCaptureEditTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384F8F06EE6C1D4C3AD9EF38 /* ComposerCaptureEditTextTests.swift */; };
+		0621EEFF24C168178FA3E1FE /* ComposerRetouchTextWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA9D4E40C4A23FFCC320749 /* ComposerRetouchTextWiringTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -7878,6 +7883,11 @@
 		202F00640B8267D13FC994C0 /* ComposerMediaSwapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMediaSwapTests.swift; sourceTree = "<group>"; };
 		AC3E64613BFA9656A12B1D74 /* ComposerMediaSwapRunTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMediaSwapRunTests.swift; sourceTree = "<group>"; };
 		3FCD651D9EFE69813D06F1F0 /* ComposerSceneMediaRetouchWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneMediaRetouchWiringTests.swift; sourceTree = "<group>"; };
+		291FA93B3B082F86742765A4 /* ComposerRetouchTextBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRetouchTextBoard.swift; sourceTree = "<group>"; };
+		E3AE44CEBEF7131246198BEF /* ComposerEditTextLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerEditTextLayer.swift; sourceTree = "<group>"; };
+		1585E6C7774200BFBDD8E067 /* ComposerRetouchTextBoardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRetouchTextBoardTests.swift; sourceTree = "<group>"; };
+		384F8F06EE6C1D4C3AD9EF38 /* ComposerCaptureEditTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureEditTextTests.swift; sourceTree = "<group>"; };
+		FEA9D4E40C4A23FFCC320749 /* ComposerRetouchTextWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRetouchTextWiringTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -8629,6 +8639,7 @@
 				63F1B7CEDC7BFED327508D21 /* ComposerEditedObject.swift */,
 				FED8871BB7F9E17F91B35F73 /* ComposerEditScene.swift */,
 				CFFBCB843EB19EDD2656BCA8 /* ComposerEditSources.swift */,
+				E3AE44CEBEF7131246198BEF /* ComposerEditTextLayer.swift */,
 				90EB9C450A4B7652AADE080E /* ComposerEditTools.swift */,
 				A259E3465B76930D0FFFE241 /* ComposerExportProgressVeil.swift */,
 				BB2A867B3380295E71F0B726 /* ComposerFaceEffects.swift */,
@@ -8695,6 +8706,7 @@
 				02087253D9B61C9D1E894E77 /* ComposerRailGlass.swift */,
 				691499A943B7D387CF899D5A /* ComposerRailMode.swift */,
 				E8E77ECE5F3C15C4878EFCC1 /* ComposerRetouchSeries.swift */,
+				291FA93B3B082F86742765A4 /* ComposerRetouchTextBoard.swift */,
 				05A9795AA10170524BDFC478 /* ComposerReturnMedia.swift */,
 				68642D9A6B314285DEEA7ADC /* ComposerSceneAssetCarriage.swift */,
 				4ACD91C92D1992AE3F18CB86 /* ComposerSceneBand.swift */,
@@ -10058,6 +10070,7 @@
 				6EF1366B2AA22A7E15EEA07F /* ComposerCaptureChromeLegibilityTests.swift */,
 				0902793FA7209012EF4B1849 /* ComposerCaptureDuringSwitchTests.swift */,
 				F30F903E2A8BC1FFA6B1F288 /* ComposerCaptureEditTests.swift */,
+				384F8F06EE6C1D4C3AD9EF38 /* ComposerCaptureEditTextTests.swift */,
 				60FD7D228E2A7A575B711D47 /* ComposerCaptureFixtureTests.swift */,
 				B067020AB01DF59B71A8B846 /* ComposerCaptureFocusGeometryTests.swift */,
 				00DD113900AD31DB9C044479 /* ComposerCaptureGestureTests.swift */,
@@ -10163,6 +10176,8 @@
 				F5493685E92D406608E1AB5E /* ComposerReelPublishTests.swift */,
 				0D70A51372379592026819C0 /* ComposerReferencesLiftTests.swift */,
 				96C2EA5E5591CE8260B54A9A /* ComposerRetouchSeriesTests.swift */,
+				1585E6C7774200BFBDD8E067 /* ComposerRetouchTextBoardTests.swift */,
+				FEA9D4E40C4A23FFCC320749 /* ComposerRetouchTextWiringTests.swift */,
 				5DD18218AD33F3E147585C13 /* ComposerReturnKeyTests.swift */,
 				E3CD3AEC70C66CF5FFCD136C /* ComposerReturnMediaTests.swift */,
 				83399389F8C1F7841BF32544 /* ComposerReusedComponentTitleTests.swift */,
@@ -13811,6 +13826,7 @@
 				F3FCD08FE20FAED4B0D781AC /* ComposerDropResolver.swift in Sources */,
 				4DAFDDB32A529C61ABC8498C /* ComposerEditScene.swift in Sources */,
 				28258858DBA238691606317B /* ComposerEditSources.swift in Sources */,
+				B93D302495C18553363DDD24 /* ComposerEditTextLayer.swift in Sources */,
 				603FDCC32C0398D4C701FA63 /* ComposerEditTools.swift in Sources */,
 				3B6FCD08FF8B0159A0476423 /* ComposerEditedObject.swift in Sources */,
 				4D829B4D87F311B0A25CBEE9 /* ComposerExportProgressVeil.swift in Sources */,
@@ -13889,6 +13905,7 @@
 				0A7D1CAC44A66EC7CDB82223 /* ComposerRailGlass.swift in Sources */,
 				1ABF608C9FB0028BEC3B3C2E /* ComposerRailMode.swift in Sources */,
 				908322CC8DC74DAB217D0EA3 /* ComposerRetouchSeries.swift in Sources */,
+				815AFC385C14D569BF4F40CC /* ComposerRetouchTextBoard.swift in Sources */,
 				6212235CB174AE36F5DC2E4B /* ComposerReturnKey.swift in Sources */,
 				A8D733FA3F8B70405BB70C16 /* ComposerReturnMedia.swift in Sources */,
 				CFC20D878B83ED34FE4C5460 /* ComposerSceneAssetCarriage.swift in Sources */,
@@ -15709,6 +15726,7 @@
 				1A56AC59248CEA453CBE8F15 /* ComposerCaptureChromeLegibilityTests.swift in Sources */,
 				DAE0010AB34A32AC790D3E6B /* ComposerCaptureDuringSwitchTests.swift in Sources */,
 				6798015C644AB2D23630D307 /* ComposerCaptureEditTests.swift in Sources */,
+				820C991C4793077525115AD8 /* ComposerCaptureEditTextTests.swift in Sources */,
 				66C183E17B5CD5811B42C571 /* ComposerCaptureFixtureTests.swift in Sources */,
 				79C788266EB793943D2EAA10 /* ComposerCaptureFocusGeometryTests.swift in Sources */,
 				4D7CE9BBB80A7DB111235220 /* ComposerCaptureGestureTests.swift in Sources */,
@@ -15826,6 +15844,8 @@
 				093F2580A5D1CF64B4047430 /* ComposerReelPublishTests.swift in Sources */,
 				FF16192EF2D206E673B1FFE2 /* ComposerReferencesLiftTests.swift in Sources */,
 				C6A68B14764E449C2DEA32A8 /* ComposerRetouchSeriesTests.swift in Sources */,
+				8DFF63E167635A51D01696A4 /* ComposerRetouchTextBoardTests.swift in Sources */,
+				0621EEFF24C168178FA3E1FE /* ComposerRetouchTextWiringTests.swift in Sources */,
 				B9ED2444E9194811A0B7FC38 /* ComposerReturnKeyTests.swift in Sources */,
 				296FB0043CD3197CF899A45C /* ComposerReturnMediaTests.swift in Sources */,
 				9230AF5294ECC114074DFE93 /* ComposerReusedComponentTitleTests.swift in Sources */,

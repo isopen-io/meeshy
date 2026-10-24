@@ -793,6 +793,7 @@ final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
     private var videos = 0
     private var enCours = 0
     private var pointe = 0
+    private var derniere: Data?
 
     nonisolated deinit {}
 
@@ -802,6 +803,8 @@ final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
     }
 
     var saveImageCount: Int { verrou.withLock { images } }
+    /// Les octets de la dernière image reçue (#12591).
+    var lastSavedImageData: Data? { verrou.withLock { derniere } }
     var saveVideoCount: Int { verrou.withLock { videos } }
     /// Le plus grand nombre d'enregistrements vus EN MÊME TEMPS.
     var maxConcurrentSaves: Int { verrou.withLock { pointe } }
@@ -812,6 +815,7 @@ final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
             images += 1
             enCours += 1
             pointe = max(pointe, enCours)
+            derniere = data
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
         verrou.withLock { enCours -= 1 }

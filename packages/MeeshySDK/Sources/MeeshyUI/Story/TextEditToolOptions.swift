@@ -120,12 +120,17 @@ public struct TextEditToolOptions: View {
     /// Voir `TextEditOptionsLayout`.
     let layout: TextEditOptionsLayout
 
+    /// Les fonds offerts : l'hôte qui grave le texte dans un média n'offre pas le verre.
+    let profile: StoryTextEditProfile
+
     public init(tool: TextEditTool,
                 textObject: Binding<StoryTextObject>,
-                layout: TextEditOptionsLayout = .row) {
+                layout: TextEditOptionsLayout = .row,
+                profile: StoryTextEditProfile = .composer) {
         self.tool = tool
         self._textObject = textObject
         self.layout = layout
+        self.profile = profile
     }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -500,7 +505,7 @@ public struct TextEditToolOptions: View {
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(Array(StoryTextBackgroundPresets.all.enumerated()), id: \.offset) { _, style in
+                    ForEach(Array(profile.backgrounds.enumerated()), id: \.offset) { _, style in
                         backgroundChip(style)
                     }
                 }

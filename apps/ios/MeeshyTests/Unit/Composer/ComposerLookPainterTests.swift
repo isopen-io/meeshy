@@ -175,6 +175,55 @@ final class ComposerLookPainterTests: XCTestCase {
         XCTAssertLessThan(Int(carreau.blue), 160, "un carreau garde la photo (un 0,4 de bleu), à une teinte près")
     }
 
+    // MARK: - Le texte de la retouche, à l'étage des calques (#12591)
+
+    /// Un calque transparent à la taille de la toile, avec un carré rouge plein centré sur (`x`, `y`).
+    private static func calqueRouge(at point: (x: Int, y: Int), size: CGSize) -> CGImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { contexte in
+            UIColor.red.setFill()
+            contexte.fill(CGRect(x: point.x - 6, y: point.y - 6, width: 12, height: 12))
+        }.cgImage!
+    }
+
+    func test_overlayNil_paintsExactlyAsBefore() throws {
+        let toile = CGSize(width: 108, height: 192)
+        let look = ComposerPhotoLook(filter: .warm)
+        let sans = try Self.rgba(ComposerLookPainter.paint(Self.source(), look: look, framing: .identity, scene: nil,
+                                                            canvas: toile, declared: nil), size: toile)
+        let avec = try Self.rgba(ComposerLookPainter.paint(Self.source(), look: look, framing: .identity, scene: nil,
+                                                            canvas: toile, declared: nil, overlay: nil), size: toile)
+        XCTAssertEqual(sans, avec)
+    }
+
+    func test_photo_textPaintsAboveTheFrame() throws {
+        let toile = CGSize(width: 108, height: 192)
+        let look = ComposerPhotoLook(frame: .montage(.classic(.polaroid)))
+        let scene = try XCTUnwrap(ComposerLookPainter.scene(for: look, canvas: toile, date: date, person: auteur))
+        let horsCase = try XCTUnwrap(Self.pointHorsDeLaCase(scene))
+        let calque = Self.calqueRouge(at: horsCase, size: toile)
+        let sans = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: look, framing: .identity, scene: scene, canvas: toile))
+        let avec = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: look, framing: .identity, scene: scene,
+                                                           canvas: toile, overlay: calque))
+        let a = Self.pixel(try Self.rgba(CIImage(cgImage: sans), size: toile), x: horsCase.x, y: horsCase.y, width: 108)
+        let b = Self.pixel(try Self.rgba(CIImage(cgImage: avec), size: toile), x: horsCase.x, y: horsCase.y, width: 108)
+        XCTAssertLessThan(Int(a.red) - Int(a.green), 60, "fusible : sans calque, le décor du cadre n'est pas rouge")
+        XCTAssertGreaterThan(Int(b.red), 200, "le texte est PAR-DESSUS le cadre, jamais dessous")
+        XCTAssertLessThan(Int(b.green), 60)
+    }
+
+    func test_photo_overlayOfAnotherSize_isScaledToTheCanvas() throws {
+        let toile = CGSize(width: 108, height: 192)
+        let calque = Self.calqueRouge(at: (x: 108, y: 192), size: CGSize(width: 216, height: 384))
+        let rendu = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: ComposerPhotoLook(), framing: .identity,
+                                                            scene: nil, canvas: toile, overlay: calque))
+        let p = Self.pixel(try Self.rgba(CIImage(cgImage: rendu), size: toile), x: 54, y: 96, width: 108)
+        XCTAssertGreaterThan(Int(p.red), 200, "un calque de la taille de la définition native se ramène à la toile")
+        XCTAssertLessThan(Int(p.blue), 60)
+    }
+
     // MARK: - Relecture du lot (#9347)
 
     func test_paint_uniformSourceUpscaled_keepsOpaqueUnchangedCorners() throws {
