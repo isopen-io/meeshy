@@ -26,6 +26,8 @@
 # une chaine ecrite.
 "__APP_VERSION__" = "\"0.0.0-test\""
 "__API_PROXY_TARGET__" = "\"https://proxy.test\""
+# `__BUILD_COMMIT__` — `null` sous `bun test`, comme un build local sans `VCS_REF` (#12654).
+"__BUILD_COMMIT__" = "null"
 
 # LE CATALOGUE D'INTERFACE DE LA LANGUE DU DOCUMENT, chargé avant tout témoin
 # (#6206). En production, aucun écran ne se rend avant que la route ait chargé
