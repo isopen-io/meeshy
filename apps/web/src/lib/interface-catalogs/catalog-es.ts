@@ -1047,6 +1047,7 @@ const es = {
   'message.menu.more': 'Más…',
   'message.menu.react': 'Reaccionar',
   'message.menu.addReaction': 'Añadir una reacción',
+  'message.menu.preview': 'Vista previa del mensaje',
   'message.selection.toolbar': 'Selección de mensajes',
   'message.selection.count': '{count} seleccionados',
   'message.detail.title': 'Detalles del mensaje',

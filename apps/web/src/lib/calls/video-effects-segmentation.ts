@@ -5,6 +5,9 @@ import wasmBinaryUrl from '@mediapipe/tasks-vision/vision_wasm_module_internal.w
 import modelUrl from './selfie-segmenter.tflite?url';
 import type { MaskFrame, SegmenterPort } from './video-effects-blur';
 
+/* Le modèle à 478 points (W15, #11321) partage CE chunk : même paquet MediaPipe, même WebAssembly, même régime (à la demande, jamais précaché). Deux chunks l'auraient obligé à un troisième, commun, que ni le budget ni le précache ne nomment. */
+export { loadFaceLandmarker } from './face-landmarker';
+
 /**
  * **LE MODÈLE DE SEGMENTATION** (#8471) — le « selfie segmenter » de MediaPipe
  * (Apache-2.0, ~250 Ko en float16, entrée 256 × 256), exécuté par
