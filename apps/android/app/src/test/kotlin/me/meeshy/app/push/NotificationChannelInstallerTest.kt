@@ -91,4 +91,32 @@ class NotificationChannelInstallerTest {
 
         assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_CALLS)).isNotNull()
     }
+
+    @Test
+    fun `install creates one channel per category`() {
+        installer().install()
+
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SOCIAL)).isNotNull()
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SYSTEM)).isNotNull()
+    }
+
+    @Test
+    fun `install creates the silent channel without sound nor heads-up`() {
+        installer().install()
+
+        val silent = manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SILENT)
+
+        assertThat(silent).isNotNull()
+        assertThat(silent.importance).isEqualTo(NotificationManager.IMPORTANCE_LOW)
+        assertThat(silent.sound).isNull()
+    }
+
+    @Test
+    fun `install keeps the historic messages channel the gateway targets`() {
+        installer().install()
+
+        assertThat(NotificationChannelIds.forCategory(me.meeshy.sdk.model.push.PushChannelCategory.MESSAGES))
+            .isEqualTo(NotificationChannelIds.CHANNEL_MESSAGES)
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES)).isNotNull()
+    }
 }

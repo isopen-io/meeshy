@@ -212,6 +212,51 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertNotNil(UIImage(data: result.data))
     }
 
+    // MARK: - compressImageData — HEIC natif (#11291)
+
+    /// Une passerelle qui convertit (S8, #11263) reçoit le HEIC de l'iPhone tel
+    /// quel : mêmes octets, `image/heic`, aucune génération d'encodage.
+    func test_compressImageData_nativeHEICPolicy_keepsTheHEICBytesAndMime() throws {
+        let sut = makeSUT()
+        let heicData = makeHEICData()
+        let policy = MediaContext.message.outgoingImagePolicy(compresses: false, qualityPercent: 85,
+                                                              keepsLocation: false, heicDelivery: .native)
+
+        let result = try XCTUnwrap(sut.compressImageData(heicData, policy: policy))
+
+        XCTAssertEqual(result.mimeType, "image/heic")
+        XCTAssertEqual(result.fileExtension, "heic")
+        XCTAssertEqual(result.data, heicData)
+    }
+
+    func test_compressImageData_defaultPolicy_stillTranscodesHEICToJPEG() throws {
+        let sut = makeSUT()
+        let policy = MediaContext.message.outgoingImagePolicy(compresses: false, qualityPercent: 85, keepsLocation: false)
+
+        let result = try XCTUnwrap(sut.compressImageData(makeHEICData(), policy: policy))
+
+        XCTAssertEqual(result.mimeType, "image/jpeg")
+        XCTAssertEqual([UInt8](result.data.prefix(3)), [0xFF, 0xD8, 0xFF])
+    }
+
+    /// Seul le message porte le repli d'envoi (MediaGroupUploader, rejeu hors
+    /// ligne) : les autres contextes gardent le JPEG de compatibilité.
+    func test_heicDelivery_messageFollowsTheMemo_otherContextsStayJPEG() {
+        let suite = "heic-memo-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+
+        XCTAssertEqual(MediaContext.message.heicDelivery(in: defaults, now: now), .native)
+        XCTAssertEqual(MediaContext.story.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+        XCTAssertEqual(MediaContext.feedPost.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+        XCTAssertEqual(MediaContext.avatar.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+        XCTAssertEqual(MediaContext.fullscreen.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+
+        HEICDeliveryMemo.record(.refuses, in: defaults, now: now)
+        XCTAssertEqual(MediaContext.message.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+    }
+
     // MARK: - compressImageData — HEIC downsample failure must not mislabel bytes
 
     /// If ImageIO fails to decode/downsample a genuinely HEIC-tagged buffer

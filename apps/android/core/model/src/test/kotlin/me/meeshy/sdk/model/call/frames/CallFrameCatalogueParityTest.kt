@@ -25,14 +25,14 @@ class CallFrameCatalogueParityTest {
         CallFrameMood.entries.map { Json.parseToJsonElement(File(sharedDir(), "${it.raw}.json").readText()).jsonObject }
 
     @Test
-    fun `le catalogue contient exactement les 146 cadres des JSON partages`() {
+    fun `le catalogue contient exactement les 154 cadres des JSON partages`() {
         val expected = sharedFiles().sumOf { file ->
             file["motifs"]!!.jsonArray.sumOf { it.jsonObject["variants"]!!.jsonObject.size }
         }
 
-        assertThat(CallFrameCatalogue.all).hasSize(146)
+        assertThat(CallFrameCatalogue.all).hasSize(154)
         assertThat(CallFrameCatalogue.all).hasSize(expected)
-        assertThat(CallFrameCatalogue.all.map { it.id }.toSet()).hasSize(146)
+        assertThat(CallFrameCatalogue.all.map { it.id }.toSet()).hasSize(154)
     }
 
     @Test

@@ -2,6 +2,7 @@ import type { Size } from '../call-montage-shapes';
 import { NO_CHROME_RESERVE, type FrameChromeReserve } from './frame-chrome-reserve';
 import { frameScene, paintBackdrop, paintFaces, paintOverlay, type FrameFace, type FramePaintable, type FrameScene } from './frame-paint';
 import type { Surface2D } from './frame-paint-kit';
+import { NO_IMAGES, type FrameImageStore } from './frame-scene-image';
 import type { FramePerson, FrameTexts } from './frame-text';
 
 /**
@@ -36,11 +37,11 @@ export const defaultCanvasFactory: CanvasFactory = (size) => {
 
 export type FrameLayers = { readonly scene: FrameScene; readonly backdrop: CanvasImageSource; readonly overlay: CanvasImageSource };
 
-export function renderFrameLayers(frame: FramePaintable, people: readonly FramePerson[], size: Size, texts: FrameTexts, factory: CanvasFactory = defaultCanvasFactory, reserve: FrameChromeReserve = NO_CHROME_RESERVE): FrameLayers | null {
+export function renderFrameLayers(frame: FramePaintable, people: readonly FramePerson[], size: Size, texts: FrameTexts, factory: CanvasFactory = defaultCanvasFactory, reserve: FrameChromeReserve = NO_CHROME_RESERVE, images: FrameImageStore = NO_IMAGES): FrameLayers | null {
   const backdrop = factory(size);
   const overlay = factory(size);
   if (backdrop === null || overlay === null) return null;
-  const scene = frameScene(frame, people, texts, size, reserve);
+  const scene = frameScene(frame, people, texts, size, reserve, images);
   paintBackdrop(backdrop.context, scene);
   paintOverlay(overlay.context, scene);
   return { scene, backdrop: backdrop.canvas, overlay: overlay.canvas };
@@ -63,8 +64,8 @@ export function frameLayersKey(frame: FramePaintable & { readonly id: string }, 
   return [frame.id, people.length, `${Math.round(size.width)}x${Math.round(size.height)}`, who, texts.isGroup ? 'g' : 'd', texts.groupName ?? '', texts.date, accent, `${reserve.top}/${reserve.bottom}`].join('\u0003');
 }
 
-/** Un cache LRU de couches, borné : l'entrée la moins récemment servie sort la première. */
-export function frameLayerCache(factory: CanvasFactory = defaultCanvasFactory, capacity = FRAME_LAYER_CACHE_SIZE) {
+/** Un cache LRU de couches, borné : l'entrée la moins récemment servie sort la première ; `images` sert les illustrations des cadres qu'il peint. */
+export function frameLayerCache(factory: CanvasFactory = defaultCanvasFactory, capacity = FRAME_LAYER_CACHE_SIZE, images: FrameImageStore = NO_IMAGES) {
   const entries = new Map<string, FrameLayers>();
   return {
     get(frame: FramePaintable & { readonly id: string }, people: readonly FramePerson[], size: Size, texts: FrameTexts, reserve: FrameChromeReserve = NO_CHROME_RESERVE): FrameLayers | null {
@@ -75,7 +76,7 @@ export function frameLayerCache(factory: CanvasFactory = defaultCanvasFactory, c
         entries.set(key, hit);
         return hit;
       }
-      const layers = renderFrameLayers(frame, people, size, texts, factory, reserve);
+      const layers = renderFrameLayers(frame, people, size, texts, factory, reserve, images);
       if (layers === null) return null;
       entries.set(key, layers);
       const oldest = entries.size > capacity ? entries.keys().next().value : undefined;

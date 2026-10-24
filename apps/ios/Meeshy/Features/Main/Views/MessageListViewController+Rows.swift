@@ -329,17 +329,16 @@ extension MessageListViewController {
         return focalActions
     }
 
-    func messageEditMenuActions(message: MeeshyMessage, callbacks: MessageCellCallbacks) -> [MessageEditMenuAction] {
-        let messageId = message.id
-        return MessageEditMenuAction.primaires(
-            messageId: messageId,
-            peutEditer: callbacks.canEdit?(messageId) ?? false,
+    func messageEditMenuActions(message: MeeshyMessage, callbacks: MessageCellCallbacks, offer: MessageRowOffer) -> [MessageEditMenuAction] {
+        MessageEditMenuAction.primaires(
+            messageId: message.id,
+            peutEditer: offer.canEdit,
             editer: callbacks.edit,
             selectionner: callbacks.select,
             composer: message.exitOffer.offers(.publish) ? callbacks.compose : nil,
             imager: message.exitOffer.offers(.imagine) && MessageCardSubject.isExportable(message, now: Date()) ? callbacks.imagine : nil,
-            repondre: callbacks.swipeReply,
-            transferer: message.isForwardable ? callbacks.swipeForward : nil,
+            repondre: offer.canReply ? callbacks.swipeReply : nil,
+            transferer: offer.canForward ? callbacks.swipeForward : nil,
             plus: callbacks.moreSheet
         )
     }
@@ -367,7 +366,7 @@ extension MessageListViewController {
         let pieceLongPressHandler = handlers.pieceLongPress
         let selectedIds = parts.selectedIds
         let longMessageExpansion = parts.longMessageExpansion
-        let editMenuActions = messageEditMenuActions(message: message, callbacks: callbacks)
+        let offer = callbacks.rowOffer?(message) ?? .closed // #12626 — la loi, lue une fois par configuration
         cell.contentConfiguration = UIHostingConfiguration {
             BubbleSwipeContainer(
                 isMine: message.isMe,
@@ -375,14 +374,14 @@ extension MessageListViewController {
                 isHiddenForOverlay: message.id == self.overlaidMessageId,
                 resistance: parts.inputs.hasTimebasedMedia ? .resistant : .normal,
                 uniformFlatDirection: self.readingMode.usesFlatRow,
-                onSwipeReply: { callbacks.swipeReply?(messageId) },
-                onSwipeForward: { callbacks.swipeForward?(messageId) },
+                onSwipeReply: offer.canReply ? { callbacks.swipeReply?(messageId) } : nil,
+                onSwipeForward: offer.canForward ? { callbacks.swipeForward?(messageId) } : nil,
                 onLongPress: { handlers.longPress(messageId) },
                 enableLongPress: true,
                 isSelectionModeActive: selectionModeActive,
                 isSelected: selectedIds.contains(messageId),
                 onToggleSelection: { callbacks.toggleSelection?(messageId) },
-                editMenuActions: editMenuActions
+                editMenuActions: self.messageEditMenuActions(message: message, callbacks: callbacks, offer: offer)
             ) {
                 if let focalRow {
                     focalRow.equatable().modifier(UnencryptedMessageMarking(isUnencrypted: parts.inputs.isUnencrypted, isDark: self.isDark))

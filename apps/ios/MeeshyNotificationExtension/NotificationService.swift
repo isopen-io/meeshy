@@ -707,6 +707,7 @@ class NotificationService: UNNotificationServiceExtension {
             if normalized.contains("gif") { return ("gif", "com.compuserve.gif") }
             if normalized.contains("webp") { return ("webp", "org.webmproject.webp") }
             if normalized.contains("heic") { return ("heic", "public.heic") }
+            if normalized.contains("heif") { return ("heif", "public.heif") }
             return ("jpg", "public.jpeg")
         }
         if normalized.hasPrefix("audio/") {

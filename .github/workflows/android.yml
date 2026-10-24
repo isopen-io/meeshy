@@ -294,6 +294,8 @@ jobs:
                   if not bad:
                       continue
                   total += 1
+                  first = ((bad[0].get('message') or bad[0].text or '').strip().splitlines() or [''])[0][:300]
+                  print(f"::error title=Test KO::{case.get('classname')}.{case.get('name')} — {first}")
                   print(f"\n=== {case.get('classname')}.{case.get('name')}")
                   for c in bad:
                       msg = (c.get('message') or '').strip()
