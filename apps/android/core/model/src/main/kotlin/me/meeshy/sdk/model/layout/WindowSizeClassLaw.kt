@@ -57,7 +57,7 @@ enum class WindowPosture { NORMAL, TABLETOP, BOOK }
 object WindowPostureLaw {
     fun resolve(isHalfOpened: Boolean?, isHingeHorizontal: Boolean?): WindowPosture = when {
         isHalfOpened != true || isHingeHorizontal == null -> WindowPosture.NORMAL
-        isHingeHorizontal -> WindowPosture.TABLETOP
+        isHingeHorizontal == true -> WindowPosture.TABLETOP
         else -> WindowPosture.BOOK
     }
 }
