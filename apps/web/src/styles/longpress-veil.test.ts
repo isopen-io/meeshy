@@ -41,6 +41,16 @@ describe('longpress-veil.css — le voile de l’appui long est le matériau sys
     const tint = /--longpress-veil-tint:\s*([^;]+);/.exec(reduced)?.[1] ?? '';
     expect(tint).not.toContain('transparent');
   });
+
+  test('le repli opaque lit un jeton GÉNÉRÉ, jamais un alias `@theme inline` que Tailwind peut taire', () => {
+    const tokens = read('../../../../packages/design-tokens/ios.css');
+    const reduced = LAW.slice(LAW.indexOf('@media (prefers-reduced-transparency: reduce)'));
+    const tint = /--longpress-veil-tint:\s*([^;]+);/.exec(reduced)?.[1] ?? '';
+    const names = [...tint.matchAll(/var\((--[\w-]+)/g)].map((match) => match[1]);
+    expect(names.length).toBeGreaterThan(0);
+    const undeclared = names.filter((name) => !new RegExp(`\\n\\s*${name}\\s*:`).test(tokens));
+    expect(undeclared).toEqual([]);
+  });
 });
 
 describe('les voiles de l’appui long lisent le jeton, et rien d’autre', () => {

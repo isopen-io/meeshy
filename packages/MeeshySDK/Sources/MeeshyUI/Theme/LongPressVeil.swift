@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **La loi du voile de l'appui long** (#11222, décision porteur 2026-10-24) :
+/// **La loi du voile de l'appui long** (#11222, décision porteur) :
 /// le voile est le MATÉRIAU SYSTÈME, une seule loi pour iOS et le web — la
 /// matière `.ultraThinMaterial` (le web : flou 20 px saturé), un
 /// assombrissement de 30 % dans les deux schémas, et un repli OPAQUE sous

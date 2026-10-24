@@ -5815,7 +5815,7 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 
 Les deux voiles lisent ces jetons et importent la feuille eux-mêmes (`@import './longpress-veil.css'`) : la dépendance est celle de la feuille, et les jetons ne pèsent pas sur la première peinture. Aucun voile ne garde de flou littéral ni de surcharge `:root.light`.
 
-**Les replis vivent avec la loi.** Sans `backdrop-filter`, la teinte passe à 64 %, pour que le texte du fil ne se lise plus sous le menu. Sous `prefers-reduced-transparency: reduce`, le flou tombe et le voile devient OPAQUE : la surface de l'écran assombrie des mêmes 30 %.
+**Les replis vivent avec la loi.** Sans `backdrop-filter`, la teinte passe à 64 %, pour que le texte du fil ne se lise plus sous le menu. Sous `prefers-reduced-transparency: reduce`, le flou tombe et le voile devient OPAQUE : la surface de l'écran assombrie des mêmes 30 %. Cette surface se lit sur le jeton GÉNÉRÉ `--ios-surface`, jamais sur son alias `--color-ios-surface` : `longpress-veil.css` est importée depuis JS, Tailwind ne la traite pas, et n'émet un alias `@theme inline` que si une feuille qu'il traite le cite. Un alias tu rendrait la teinte invalide et le flou nul — le fil NET sous le menu, dans le cas même qui doit être opaque. Le témoin exige que chaque variable de ce repli soit déclarée dans `packages/design-tokens/ios.css`.
 
 **Le miroir iOS.** `LongPressVeil` (MeeshyUI) pose `.ultraThinMaterial` sous le même 30 %, avec un repli opaque sous Réduire la transparence. Il voile le menu d'un message, l'aperçu d'une pièce et l'aperçu d'une conversation, et l'hôte ne floute plus la conversation (`apps/ios/decisions/2026-10-24-le-voile-de-l-appui-long-est-le-materiau-systeme.md`).
 

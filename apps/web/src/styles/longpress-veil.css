@@ -25,10 +25,13 @@
 }
 
 /* Réduire la transparence : le voile devient OPAQUE — la surface de l'écran
-   assombrie des mêmes 30 %, comme le repli opaque d'iOS. */
+   assombrie des mêmes 30 %, comme le repli opaque d'iOS. La surface est lue
+   sur le jeton GÉNÉRÉ (`--ios-surface`) et non sur son alias Tailwind : cette
+   feuille est importée depuis JS, Tailwind ne la voit pas, et n'émet un alias
+   `@theme inline` que si une feuille qu'il traite le cite. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --longpress-veil-backdrop: none;
-    --longpress-veil-tint: color-mix(in srgb, black 30%, var(--color-ios-surface));
+    --longpress-veil-tint: color-mix(in srgb, black 30%, var(--ios-surface));
   }
 }
