@@ -6,9 +6,12 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 import { conversationStore } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socket';
 import { createOutboxStore } from '@/lib/send/outbox-store';
+import { rowExitOf, rowExitStore, type RowExitSchedule } from '@/lib/view/row-exit-motion';
 import { localMessage, threadPages } from '@/test-support/thread-cache';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { performDeleteForMe } from './delete-message';
+import type { ApiResult } from './http';
 import { mediaHubConversationKey } from './media-hub-cache';
 import { messagesQueryKey } from './messages';
 import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
@@ -87,6 +90,61 @@ describe('applyMessageHiddenForMe — la rangée quitte le fil', () => {
     expect(queryClient.getQueryState(CONVERSATIONS_QUERY_KEY)?.isInvalidated).toBe(false);
     applyMessageHiddenForMe(queryClient, hidden([['m-3', 'c-a']]), VIEWER);
     expect(queryClient.getQueryState(CONVERSATIONS_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+});
+
+/**
+ * #12634 — L'ÉCHO DU GESTE LOCAL NE COUPE PAS LE REPLI. La passerelle diffuse
+ * `message:hidden-for-me` vers `user:<id>` AVANT de répondre en HTTP : l'appareil
+ * qui a fait le geste le reçoit pendant que sa rangée se replie encore. Retirée
+ * à ce moment-là, elle disparaissait d'un coup, à mi-fondu. Le geste local la
+ * retirera lui-même à la fin du repli.
+ */
+describe('applyMessageHiddenForMe — l’écho d’un repli en cours', () => {
+  const resting = () => rowExitStore.setState({ leaving: new Set(), returning: new Set() });
+
+  test('une rangée qui se replie reste au cache ; les autres messages nommés partent', () => {
+    const queryClient = seeded();
+    rowExitStore.setState({ leaving: new Set(['m-2']), returning: new Set() });
+    try {
+      applyMessageHiddenForMe(queryClient, hidden([['m-2', 'c-a'], ['m-3', 'c-a']]), VIEWER);
+      expect(idsIn(queryClient, messagesQueryKey('c-a'))).toEqual(['m-1', 'm-2']);
+    } finally {
+      resting();
+    }
+  });
+
+  test('le geste local, son écho reçu en plein repli : la rangée reste jusqu’à la fin du repli, puis part', async () => {
+    const queryClient = seeded();
+    const queue: (() => void)[] = [];
+    const schedule: RowExitSchedule = (run) => {
+      queue.push(run);
+    };
+    const rowExit = rowExitOf({ store: rowExitStore, reduceMotion: () => false, schedule });
+    const [m2] = (queryClient.getQueryData<{ pages: { messages: Message[] }[] }>(messagesQueryKey('c-a'))?.pages ?? []).flatMap((p) =>
+      p.messages.filter((m) => m.id === 'm-2'),
+    );
+    try {
+      const performed = performDeleteForMe({
+        queryClient,
+        conversationId: 'c-a',
+        messages: m2 === undefined ? [] : [m2],
+        rowExit,
+        transport: {
+          request: async <T,>() => {
+            applyMessageHiddenForMe(queryClient, hidden([['m-2', 'c-a']]), VIEWER);
+            return { ok: true, data: null } as ApiResult<T>;
+          },
+        },
+      });
+      await Promise.resolve();
+      expect(idsIn(queryClient, messagesQueryKey('c-a'))).toEqual(['m-1', 'm-2', 'm-3']);
+      queue.splice(0).forEach((run) => run());
+      expect(await performed).toEqual({ deleted: 1, failed: 0, offline: false });
+      expect(idsIn(queryClient, messagesQueryKey('c-a'))).toEqual(['m-1', 'm-3']);
+    } finally {
+      resting();
+    }
   });
 });
 

@@ -1166,6 +1166,15 @@ jobs:
           cd apps/web
           node scripts/check-thread-scroll-edges.mjs
 
+      # #12634 — un message masqué pour moi sort du fil en se repliant : les
+      # voisines glissent image par image, fil calé en bas ET remonté, et un
+      # refus les fait revenir de même. Seule la mesure à l'écran le prouve.
+      - name: Gate repli d'un message masqué pour moi (#12634)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-thread-row-exit.mjs
+
       - name: Gate couple de focus des champs (l'anneau et son contre-anneau)
         if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
