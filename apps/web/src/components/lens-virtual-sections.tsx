@@ -7,7 +7,7 @@ import { keptRowIds, rowSlices, type RowRange } from '@/lib/view/row-window';
 import { rowRoving } from '@/lib/view/row-roving';
 import { ROW_ANCHOR_ATTRIBUTE, useRowWindows } from '@/lib/view/use-row-windows';
 
-import { ROW_HEIGHT } from './lens-row';
+import { ROW_HEIGHT, type RowPlace } from './lens-row';
 import { LensSection, type LensSectionFold } from './lens-sticker';
 
 /**
@@ -27,7 +27,12 @@ import { LensSection, type LensSectionFold } from './lens-sticker';
  *  - le parcours au clavier (#11227) lit les rangées MONTÉES : la fenêtre
  *    retient l'arrêt, ses voisines et les deux bouts (`keptRowIds`) ;
  *  - l'aperçu d'un appui long (#11211) vit dans la rangée : son focus passe
- *    par elle, elle tient donc l'arrêt, donc elle reste montée.
+ *    par elle, elle tient donc l'arrêt, donc elle reste montée ;
+ *  - ce que la liste PORTE reste dit, monté ou non : chaque rangée annonce sa
+ *    place dans SA section (`aria-posinset` / `aria-setsize`, que les cales
+ *    `aria-hidden` ne comptent plus pour le lecteur d'écran), et le défileur
+ *    porte le total (`carriedRowCount`, posé en `data-row-count`) que les
+ *    gardes lisent au lieu de compter des nœuds.
  */
 
 /** La réserve de chaque côté, au-delà de la marge de la perspective — six rangées. */
@@ -38,8 +43,17 @@ type Props = {
   readonly world?: Conversation | undefined;
   readonly sections: readonly LensSectionData[];
   readonly folds: readonly (LensSectionFold | undefined)[];
-  readonly rowOf: (conversation: Conversation) => ReactElement;
+  readonly rowOf: (conversation: Conversation, place?: RowPlace) => ReactElement;
 };
+
+/** LES RANGÉES QUE LA LISTE PORTE — World Wide et les sections dépliées, montées ou tenues par une cale. */
+export const carriedRowCount = (input: {
+  readonly world?: Conversation | undefined;
+  readonly sections: readonly LensSectionData[];
+  readonly folds: readonly (LensSectionFold | undefined)[];
+}): number =>
+  (input.world === undefined ? 0 : 1) +
+  input.sections.reduce((sum, section, i) => (input.folds[i]?.folded === true ? sum : sum + section.conversations.length), 0);
 
 const gapKey = (at: number): string => `gap:${at}`;
 
@@ -48,13 +62,13 @@ function windowedRows(input: {
   readonly range: RowRange;
   readonly kept: ReadonlySet<string>;
   readonly anchor: string;
-  readonly rowOf: (conversation: Conversation) => ReactElement;
+  readonly rowOf: (conversation: Conversation, place?: RowPlace) => ReactElement;
 }): readonly ReactElement[] {
   const { items, range, kept, anchor, rowOf } = input;
   const keep = items.flatMap((conversation, index) => (kept.has(conversation.id) ? [index] : []));
   return rowSlices({ count: items.length, range, keep }).flatMap((slice) =>
     slice.kind === 'rows'
-      ? items.slice(slice.from, slice.to).map(rowOf)
+      ? items.slice(slice.from, slice.to).map((conversation, offset) => rowOf(conversation, { position: slice.from + offset + 1, size: items.length }))
       : [
           <li
             key={gapKey(slice.at)}

@@ -9,13 +9,13 @@ import { Glyph } from '@/components/glyph';
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { useRowActionNotice } from '@/lib/view/row-action-notice';
 import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
-import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
+import { LensRow, ROW_HEIGHT, type RowPlace } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { accentOf } from '@/lib/accent';
 import { titleOf } from '@/lib/view/conversation';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
-import { LensVirtualSections } from '@/components/lens-virtual-sections';
+import { carriedRowCount, LensVirtualSections } from '@/components/lens-virtual-sections';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
 import { useListReorderFlip, useScene } from '@/lib/lens/scene';
@@ -538,7 +538,7 @@ export default function ConversationsScreen() {
     foldOf(section, section.conversations.map((c) => effectiveUnreadOf(c, overrides))),
   );
   /** Les rangées que la liste PORTE — World Wide et les sections dépliées, montées ou tenues par une cale (#11228). */
-  const shownRows = (world === undefined ? 0 : 1) + sections.reduce((sum, section, i) => (folds[i]?.folded === true ? sum : sum + section.conversations.length), 0);
+  const shownRows = carriedRowCount({ world, sections, folds });
 
   /**
    * LA SENTINELLE DE DÉFILEMENT INFINI (#6195) — déclarée APRÈS `visible`
@@ -569,10 +569,11 @@ export default function ConversationsScreen() {
   /* UNE RANGÉE DE LA LENTILLE — partagée par les sections et par World Wide
      en tête (#10004) : mêmes signaux, même scène, même peau (#10191), et
      son épingle seulement si on l'a épinglée (#10347). */
-  const lensRowOf = (c: (typeof conversations)[number]) => (
+  const lensRowOf = (c: (typeof conversations)[number], place?: RowPlace) => (
     <LensRow
       key={c.id}
       conversation={c}
+      place={place}
       languages={readerLanguages}
       viewerId={viewer.id ?? ''}
       flags={effectiveFlagsOf(c, overrides)}
@@ -663,6 +664,8 @@ export default function ConversationsScreen() {
            transition, retour animé — voir son doc-comment. */
         style={{ paddingBottom: searchBarHeight, ...pullTransform(pull.phase, pull.offsetPx) }}
         {...(loading ? { 'aria-busy': true, 'aria-label': translate(interfaceLanguage, 'list.loading') } : {})}
+        /* LE TOTAL QUE LA LISTE PORTE (#11228) — virtualisée, elle n'en monte qu'une fenêtre : les gardes lisent ce compte, jamais des nœuds `[data-row]`. */
+        data-row-count={shownRows}
       >
         {/*
           LE RAIL ET LES FILTRES VIVENT DÉSORMAIS DANS LA VUE DÉFILANTE

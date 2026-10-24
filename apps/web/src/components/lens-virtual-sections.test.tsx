@@ -11,8 +11,8 @@ import { rowRoving } from '@/lib/view/row-roving';
 import { ScrollportKeyScope, useScrollportMemory } from '@/lib/view/use-scrollport-memory';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { LensRow, ROW_HEIGHT } from './lens-row';
-import { LensVirtualSections } from './lens-virtual-sections';
+import { LensRow, ROW_HEIGHT, sameRowProps, type LensRowProps } from './lens-row';
+import { carriedRowCount, LensVirtualSections } from './lens-virtual-sections';
 
 /**
  * LA LISTE DES CONVERSATIONS NE MONTE QUE CE QUI SE VOIT (#11228) — sur cinq
@@ -85,10 +85,11 @@ function List({ sections }: { readonly sections: readonly LensSectionData[] }) {
         frame={frame}
         sections={sections}
         folds={sections.map(() => undefined)}
-        rowOf={(c) => (
+        rowOf={(c, place) => (
           <LensRow
             key={c.id}
             conversation={c}
+            {...(place === undefined ? {} : { place })}
             languages={['fr']}
             viewerId="u-moi"
             flags={{ isPinned: PINNED.includes(c.id), isMuted: false, isArchived: false }}
@@ -198,6 +199,49 @@ describe('LensVirtualSections — la liste ne monte que les rangées visibles', 
     expect(mountedRows().length).toBeLessThan(40);
     const reserved = [...container.querySelectorAll<HTMLElement>('[data-row-gap]')].reduce((sum, gap) => sum + Number.parseFloat(gap.style.height || '0'), 0);
     expect(reserved + mountedRows().length * ROW_HEIGHT).toBe(500 * ROW_HEIGHT);
+  });
+
+  test('chaque rangée montée dit sa place dans SA section, cales comprises (aria-posinset / aria-setsize)', async () => {
+    const sections = sectionsOf(CORPUS, PINNED);
+    mount(sections);
+    const placesOf = (id: string) =>
+      [...section(id).querySelectorAll<HTMLElement>('[data-row]')].map((row) => [row.dataset.row, row.getAttribute('aria-posinset'), row.getAttribute('aria-setsize')]);
+    expect(placesOf('pinned')).toEqual([
+      ['c-250', '1', '2'],
+      ['c-480', '2', '2'],
+    ]);
+    const older = sections.find((s) => s.id === 'lentille.older');
+    if (older === undefined) throw new Error('section lentille.older introuvable');
+    await scrollSectionTo('lentille.older', 200);
+    const expected = older.conversations.flatMap((c, index) => (mountedRows(section('lentille.older')).includes(c.id) ? [[c.id, String(index + 1), String(older.conversations.length)]] : []));
+    expect(placesOf('lentille.older')).toEqual(expected);
+    expect(expected.length).toBeGreaterThan(10);
+  });
+
+  test('une rangée qui change de place se re-rend ; à la même place, dans un objet neuf, non', () => {
+    const onRowAction = () => {};
+    const languages = ['fr'];
+    const rowAt = (position: number, size: number): LensRowProps => ({
+      conversation: CORPUS[0] as Conversation,
+      place: { position, size },
+      languages,
+      viewerId: 'u-moi',
+      flags: { isPinned: false, isMuted: false, isArchived: false },
+      unreadCount: 0,
+      onRowAction,
+    });
+    expect(sameRowProps(rowAt(3, 18), rowAt(3, 18))).toBe(true);
+    expect(sameRowProps(rowAt(3, 18), rowAt(4, 18))).toBe(false);
+    expect(sameRowProps(rowAt(3, 18), rowAt(3, 19))).toBe(false);
+  });
+
+  test('le total des rangées que la liste PORTE compte les cales, jamais les sections repliées', () => {
+    const sections = sectionsOf(CORPUS, PINNED);
+    const [world] = CORPUS;
+    const folded = sections.map((s) => (s.id === 'pinned' ? { folded: true, unread: 0, onToggle: () => {} } : undefined));
+    expect(carriedRowCount({ sections, folds: sections.map(() => undefined) })).toBe(500);
+    expect(carriedRowCount({ world, sections, folds: sections.map(() => undefined) })).toBe(501);
+    expect(carriedRowCount({ sections, folds: folded })).toBe(498);
   });
 
   test('défiler ⇒ la fenêtre suit : les rangées du milieu se montent, celles du haut se démontent', async () => {

@@ -82,3 +82,39 @@ export const sweepRows = (page) =>
     await settle();
     return [...seen.values()].sort((a, b) => a.top - b.top).map(({ id, unread }) => ({ id, unread }));
   });
+
+/**
+ * LE TOTAL QUE LA LISTE PORTE (#11228) — `data-row-count` du défileur
+ * `#contenu` : World Wide et les rangées des sections dépliées, montées ou
+ * tenues par une cale. Une liste virtualisée n'en monte qu'une fenêtre : un
+ * témoin qui compte les conversations CHARGÉES lit ce total, jamais le nombre
+ * de nœuds `[data-row]`. `null` : la liste n'est pas montée.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<number | null>}
+ */
+export const carriedRowCount = (page) =>
+  page.evaluate(() => {
+    const raw = document.getElementById('contenu')?.getAttribute('data-row-count');
+    return raw === null || raw === undefined ? null : Number(raw);
+  });
+
+/**
+ * ATTENDRE QUE LA LISTE PORTE `exactly` rangées (ou au moins `atLeast`) —
+ * le même total que `carriedRowCount`, lu dans la page à chaque image.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ exactly?: number, atLeast?: number }} expected
+ * @param {{ timeout?: number }} [options]
+ */
+export const awaitCarriedRows = (page, expected, options = {}) =>
+  page.waitForFunction(
+    ({ exactly, atLeast }) => {
+      const raw = document.getElementById('contenu')?.getAttribute('data-row-count');
+      if (raw === null || raw === undefined) return false;
+      const count = Number(raw);
+      return exactly === undefined ? count >= (atLeast ?? 0) : count === exactly;
+    },
+    expected,
+    options,
+  );
