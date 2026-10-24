@@ -198,4 +198,39 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertTrue(source.contains("NSEAttachmentPolicy.declaresProtection"),
                       "La branche du média du message doit refuser un message protégé.")
     }
+
+    // MARK: - #11387 — une conversation verrouillée par PIN ne livre rien
+
+    /// Le verrou PIN protège le CONTENU (décision porteur 2026-10-24) : la
+    /// notification d'une conversation verrouillée DÉCLARE une protection, et
+    /// tous les seconds verrous (média, détail, vignette, lecteur audio) la
+    /// lisent sans qu'aucun n'ait à connaître le PIN.
+    func test_lockedConversation_declaresProtection_andKeepsTheRoutingKeys() {
+        let payload: [AnyHashable: Any] = [
+            "conversationId": "c1", "messageId": "m1",
+            "attachmentUrl": "https://cdn/x.jpg", "attachmentMimeType": "image/jpeg",
+        ]
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: true)
+
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: sealed))
+        XCTAssertEqual(sealed["notificationLocKey"] as? String, NSEAttachmentPolicy.lockedConversationLocKey)
+        XCTAssertEqual(sealed["conversationId"] as? String, "c1", "le toucher route toujours vers la conversation (et son PIN)")
+        XCTAssertEqual(sealed["messageId"] as? String, "m1")
+    }
+
+    func test_unlockedConversation_payloadIsUntouched() {
+        let payload: [AnyHashable: Any] = ["conversationId": "c1", "attachmentMimeType": "image/jpeg"]
+        let served = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: false)
+
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: served))
+        XCTAssertNil(served["notificationLocKey"])
+    }
+
+    /// Le verrou est CONSULTÉ par l'extension, avant toute décision de
+    /// catégorie ou d'enrichissement, et le corps est remplacé EN DERNIER.
+    func test_leVerrouPIN_estConsulteParLExtension() throws {
+        let source = try nseSource()
+        XCTAssertTrue(source.contains("NSEAttachmentPolicy.sealingLockedConversation"))
+        XCTAssertTrue(source.contains("NSEAttachmentPolicy.lockedConversationLocKey"))
+    }
 }

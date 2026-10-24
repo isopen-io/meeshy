@@ -692,4 +692,87 @@ final class WidgetConversationContractTests: XCTestCase {
         XCTAssertTrue(mirror.isPinned)
         XCTAssertEqual(mirror.accentColor, "6366F1")
     }
+
+    // MARK: - #11387 — une conversation verrouillée ne sort pas son contenu
+
+    @MainActor
+    private final class LockedIds {
+        nonisolated deinit {}
+        var ids: Set<String> = []
+    }
+
+    private func makeLockSUT(locked: LockedIds) throws -> (WidgetDataManager, UserDefaults) {
+        let suite = "group.test.meeshy.widgetlock.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let sut = WidgetDataManager(
+            suiteName: suite,
+            stagingDirectories: [],
+            preferredContentLanguages: { ["fr"] },
+            contentLocks: { locked.ids }
+        )
+        return (sut, defaults)
+    }
+
+    private func makeSecretConversation() -> MeeshyConversation {
+        makeConversation(
+            lastMessagePreview: "Mot de passe: 1234",
+            lastMessageOriginalLanguage: "fr",
+            lastMessageTranslations: nil
+        )
+    }
+
+    func test_publishConversations_lockedConversation_publishesTheLockLabel_neverItsLastMessage() throws {
+        let locked = LockedIds()
+        locked.ids = ["conv-1"]
+        let (sut, defaults) = try makeLockSUT(locked: locked)
+
+        sut.publishConversations([makeSecretConversation()])
+
+        XCTAssertEqual(try publishedPreviews(from: defaults), [ConversationLockedPreviewLine.label])
+    }
+
+    /// L'extension de notification lit le verrou dans ce cliché : sans lui, la
+    /// bannière d'une conversation verrouillée montrerait le message en clair.
+    func test_publishConversationSnapshots_lockedConversation_declaresTheLockToTheNotificationExtension() throws {
+        let locked = LockedIds()
+        locked.ids = ["conv-1"]
+        let (sut, defaults) = try makeLockSUT(locked: locked)
+
+        sut.publishConversationSnapshots([makeSecretConversation()], categoryNamesById: [:])
+
+        let data = try XCTUnwrap(defaults.data(forKey: "conversation_snapshots"))
+        let snapshots = try JSONDecoder().decode([String: ConversationSnapshotPayload].self, from: data)
+        XCTAssertEqual(snapshots["conv-1"]?.isLocked, true)
+    }
+
+    /// Verrouiller ne touche pas la liste : sans republication, le widget et
+    /// l'extension garderaient le clair jusqu'au prochain message.
+    func test_republishForContentLocks_rewritesWhatWasPublished() throws {
+        let locked = LockedIds()
+        let (sut, defaults) = try makeLockSUT(locked: locked)
+        sut.publishConversations([makeSecretConversation()])
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Mot de passe: 1234"])
+
+        locked.ids = ["conv-1"]
+        sut.republishForContentLocks()
+        XCTAssertEqual(try publishedPreviews(from: defaults), [ConversationLockedPreviewLine.label])
+
+        locked.ids = []
+        sut.republishForContentLocks()
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Mot de passe: 1234"])
+    }
+
+    /// Après la déconnexion, un changement de verrou ne republie JAMAIS les
+    /// conversations du compte sortant.
+    func test_republishForContentLocks_afterTheLogoutWipe_publishesNothing() throws {
+        let locked = LockedIds()
+        let (sut, defaults) = try makeLockSUT(locked: locked)
+        sut.publishConversations([makeSecretConversation()])
+        sut.wipeAll()
+
+        sut.republishForContentLocks()
+
+        XCTAssertNil(defaults.data(forKey: "recent_conversations"))
+    }
 }
