@@ -562,6 +562,8 @@ struct MeeshyComposerHost: View {
     /// Le fond que la prochaine prise du viseur REMPLACE — posé par
     /// « Reprendre une photo », consommé à la pose, oublié au désarmement.
     @State var sceneCaptureReplacesBackgroundId: String?
+    /// La retouche de la caméra ouverte sur un média de la scène (#12590).
+    @State var sceneMediaRetouch: ComposerSceneMediaRetouchRequest?
 
     /// **La bande contextuelle DEMANDÉE sur la surface de scène.**
     ///
