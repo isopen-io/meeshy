@@ -232,13 +232,10 @@ extension ConversationViewModel {
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
         guard isDirect else { return }
 
-        let payloads: [DecryptionPayload] = msgs.compactMap { msg in
-            guard msg.isEncrypted, !msg.senderId.isEmpty,
-                  !msg.content.isEmpty,
-                  let data = Data(base64Encoded: msg.content)
-            else { return nil }
-            return DecryptionPayload(messageId: msg.id, senderId: msg.senderId, ciphertext: data)
-        }
+        // Le constructeur UNIQUE, partagé avec l'aperçu d'appui long : la
+        // session se cherche sous l'utilisateur expéditeur, jamais sous son
+        // Participant (#11232).
+        let payloads = msgs.compactMap(DecryptionPayload.init(decrypting:))
         guard !payloads.isEmpty else { return }
 
         let results = await decryptionActor.decrypt(payloads)

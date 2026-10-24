@@ -667,7 +667,13 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Preview Messages
 
     func loadPreviewMessages(for conversationId: String, refresh: Bool = false, intent: ConversationListPreviewLoader.LoadIntent? = nil) async {
-        await previewLoader.load(for: conversationId, intent: intent ?? (refresh ? .open : .ensure), currentUserId: { [weak self] in self?.currentUserId ?? "" })
+        // Le type que la rangée connaît déjà : l'aperçu natif se prépare
+        // déchiffré sans attendre l'hydratation du store (#11232).
+        let isDirect = conversations.first { $0.id == conversationId }.map { $0.type == .direct }
+        await previewLoader.load(
+            for: conversationId, intent: intent ?? (refresh ? .open : .ensure), isDirect: isDirect,
+            currentUserId: { [weak self] in self?.currentUserId ?? "" }
+        )
     }
 
     // MARK: - Mark as Read (local update from ConversationView)

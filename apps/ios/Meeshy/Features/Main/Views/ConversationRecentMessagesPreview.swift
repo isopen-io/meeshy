@@ -124,6 +124,18 @@ enum ConversationPreviewRenderer {
         return (message.isEncrypted && message.content.isEmpty) || sealedBurn
     }
 
+    /// Pourquoi un message scellé ne se lit pas. La flamme « après lecture »
+    /// passe AVANT le chiffrement : l'appareil sait peut-être la lire, elle est
+    /// retenue parce qu'elle brûle à la lecture — dire « chiffré » mentirait.
+    enum SealedReason: Equatable {
+        case afterRead
+        case encrypted
+    }
+
+    static func sealedReason(_ message: Message) -> SealedReason {
+        ConversationListPreviewLoader.holdsBurnOnRead(message) ? .afterRead : .encrypted
+    }
+
     static func contentWidth(cardWidth: CGFloat) -> CGFloat {
         max(0, cardWidth - 2 * margin)
     }
@@ -451,12 +463,13 @@ struct ConversationRecentMessagesPreview: View {
     private func sealedRow(_ message: Message) -> some View {
         HStack(spacing: 0) {
             if message.isMe { Spacer(minLength: MeeshySpacing.xl) }
+            let isEncrypted = ConversationPreviewRenderer.sealedReason(message) == .encrypted
             Label {
-                Text(message.isEncrypted
+                Text(isEncrypted
                      ? String(localized: "protection.encrypted", bundle: .main)
                      : String(localized: "protection.afterRead", bundle: .main))
             } icon: {
-                Image(systemName: message.isEncrypted ? "lock.fill" : "flame.fill")
+                Image(systemName: isEncrypted ? "lock.fill" : "flame.fill")
             }
             .font(.footnote.weight(.medium))
             .foregroundColor(isDark ? MeeshyColors.indigo50.opacity(MeeshyOpacity.intense) : MeeshyColors.indigo950.opacity(MeeshyOpacity.intense))

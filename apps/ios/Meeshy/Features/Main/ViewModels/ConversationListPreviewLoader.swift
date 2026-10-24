@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import os
 import MeeshySDK
@@ -174,6 +175,12 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// tomber (l'aperçu ouvert garderait sinon ce que le cache avait).
     private var inFlight: [String: InFlight] = [:]
     private var provenance: [String: Provenance] = [:]
+    /// Avance à chaque purge : un chargement lancé avant ne publie plus rien.
+    private var generation = 0
+    private var lockObservation: AnyCancellable?
+
+    /// Les chargeurs vivants, que la déconnexion purge tous (`purgeAllLive`).
+    private static let live = NSHashTable<ConversationListPreviewLoader>.weakObjects()
 
     private struct InFlight {
         let token: UUID
@@ -184,27 +191,66 @@ final class ConversationListPreviewLoader: ObservableObject {
     private let cache: ConversationPreviewCacheProviding
     private let readerPrism: () -> [String]
     private let isLocked: @MainActor (String) -> Bool
-    private let decryptor: any ConversationPreviewDecrypting
+    /// Le déchiffreur, et sa mémoire des clairs : remplacé à la purge et à la
+    /// pose d'un verrou, il n'emporte aucun clair d'un compte ou d'un verrou à l'autre.
+    private var decryptor: any ConversationPreviewDecrypting
+    private let makeDecryptor: () -> any ConversationPreviewDecrypting
     /// Le fil ne déchiffre que les conversations directes (`decryptMessagesIfNeeded`) :
-    /// l'aperçu n'en montre jamais plus que lui.
-    private let isDirectConversation: @MainActor (String) async -> Bool
+    /// l'aperçu n'en montre jamais plus que lui. Repli quand la rangée ne dit
+    /// pas le type ; `nil` ⇒ encore inconnu, et rien n'est réputé réglé.
+    private let isDirectConversation: @MainActor (String) async -> Bool?
 
     init(
         messageService: MessageServiceProviding,
         cache: ConversationPreviewCacheProviding = LiveConversationPreviewCache(),
         readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) },
         isLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.hidesContent(of: $0) },
-        decryptor: any ConversationPreviewDecrypting = DecryptionActor(provider: LiveSessionProvider()),
-        isDirectConversation: @escaping @MainActor (String) async -> Bool = {
-            await ConversationStore.shared.conversation(id: $0)?.type == .direct
-        }
+        decryptor: @autoclosure @escaping () -> any ConversationPreviewDecrypting = DecryptionActor(provider: LiveSessionProvider()),
+        isDirectConversation: @escaping @MainActor (String) async -> Bool? = {
+            await ConversationStore.shared.conversation(id: $0).map { $0.type == .direct }
+        },
+        locksDidChange: AnyPublisher<Void, Never> = NotificationCenter.default
+            .publisher(for: .conversationContentLocksDidChange)
+            .receive(on: DispatchQueue.main)
+            .map { _ in () }
+            .eraseToAnyPublisher()
     ) {
         self.messageService = messageService
         self.cache = cache
         self.readerPrism = readerPrism
         self.isLocked = isLocked
-        self.decryptor = decryptor
+        self.makeDecryptor = decryptor
+        self.decryptor = decryptor()
         self.isDirectConversation = isDirectConversation
+        lockObservation = locksDidChange.sink { [weak self] _ in self?.dropLockedConversations() }
+        Self.live.add(self)
+    }
+
+    // MARK: - Purge (#11232)
+
+    /// Le compte sort : aucun clair, aucune provenance, aucun chargement en vol
+    /// ne survit, et la mémoire du déchiffreur part avec lui.
+    func purge() {
+        generation += 1
+        inFlight.values.forEach { $0.task.cancel() }
+        inFlight = [:]
+        states = [:]
+        provenance = [:]
+        decryptor = makeDecryptor()
+    }
+
+    /// Appelé par `DependencyContainer.resetInMemoryAccountState` à la déconnexion.
+    static func purgeAllLive() {
+        live.allObjects.forEach { $0.purge() }
+    }
+
+    /// Un verrou posé ne se contente pas de MASQUER (`state(for:)`) : le clair
+    /// déjà servi quitte la mémoire, et le déchiffreur oublie ce qu'il savait.
+    func dropLockedConversations() {
+        guard states.keys.contains(where: { isLocked($0) }) || provenance.keys.contains(where: { isLocked($0) }) else { return }
+        states = states.filter { !isLocked($0.key) }
+        provenance = provenance.filter { !isLocked($0.key) }
+        decryptor = makeDecryptor()
     }
 
     /// Une conversation jamais chargée se lit `.loading` : l'aperçu n'affirme
@@ -228,6 +274,7 @@ final class ConversationListPreviewLoader: ObservableObject {
     func load(
         for conversationId: String,
         intent: LoadIntent,
+        isDirect: Bool? = nil,
         currentUserId: @escaping @MainActor @Sendable () -> String = { "" }
     ) async {
         guard !isLocked(conversationId) else {
@@ -241,72 +288,115 @@ final class ConversationListPreviewLoader: ObservableObject {
         }
         guard !isSettled(conversationId, for: intent) else { return }
         let token = UUID()
+        let request = Request(conversationId: conversationId, intent: intent, isDirect: isDirect, generation: generation)
         // Le chargement se RETIRE lui-même du registre avant de rendre la
         // main : celui qui l'attendait relit donc un registre déjà à jour,
         // quel que soit l'ordre dans lequel les deux continuations reprennent.
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.perform(conversationId, intent: intent, currentUserId: currentUserId)
+            await self.perform(request, currentUserId: currentUserId)
             if self.inFlight[conversationId]?.token == token { self.inFlight[conversationId] = nil }
         }
         inFlight[conversationId] = InFlight(token: token, intent: intent, task: task)
         await task.value
     }
 
-    private func perform(
-        _ conversationId: String,
-        intent: LoadIntent,
-        currentUserId: @escaping @MainActor @Sendable () -> String
-    ) async {
+    /// Ce qu'un chargement sait de sa demande : la conversation, jusqu'où il
+    /// va, le type que la rangée connaît, et la génération qui l'a lancé.
+    private struct Request {
+        let conversationId: String
+        let intent: LoadIntent
+        let isDirect: Bool?
+        let generation: Int
+    }
+
+    /// Le chargement peut-il encore écrire ? Ni purgé depuis, ni verrouillé.
+    private func mayWrite(_ request: Request) -> Bool {
+        request.generation == generation && !isLocked(request.conversationId)
+    }
+
+    private func perform(_ request: Request, currentUserId: @escaping @MainActor @Sendable () -> String) async {
+        let conversationId = request.conversationId
         let cached = await cache.messages(for: conversationId)
         // Verrouillée PENDANT la lecture du cache (#11387) : rien de lu ne se
         // publie, et le réseau ne revalide pas.
-        guard !isLocked(conversationId) else { return }
+        guard mayWrite(request) else { return }
         // Le clair déjà servi recouvre la même version relue du cache : une
         // réouverture ne re-scelle rien et ne redéchiffre rien.
         let known = plaintextOnDevice(conversationId, sources: [])
         var plaintextSources = Self.carrying(known, onto: Self.cachedMessages(in: cached) ?? [])
         if !plaintextSources.isEmpty, provenance[conversationId] != .network {
             let translations = await cache.translations(for: plaintextSources.map(\.id))
+            guard mayWrite(request) else { return }
             publish(plaintextSources, translations: translations, for: conversationId)
             provenance[conversationId] = Self.isFresh(cached) ? .freshCache : .staleCache
             // Cache-first : le cache est DÉJÀ servi ; ce que l'appareil déchiffre
             // ensuite remplace ses placeholders scellés, sans spinner.
-            if let decrypted = await decryptedOnDevice(plaintextSources, in: conversationId) {
+            switch await decryptedOnDevice(plaintextSources, for: request) {
+            case .decrypted(let decrypted):
+                guard mayWrite(request) else { return }
                 publish(decrypted, translations: translations, for: conversationId)
                 plaintextSources = decrypted
+            case .deferred:
+                guard mayWrite(request) else { return }
+                provenance[conversationId] = nil
+            case .unchanged:
+                break
             }
         }
-        guard Self.needsNetwork(intent: intent, cached: cached) else { return }
+        guard mayWrite(request), Self.needsNetwork(intent: request.intent, cached: cached) else { return }
         if states[conversationId]?.snapshot == nil, states[conversationId]?.phase != .empty {
             states[conversationId] = .loading
         }
-        await refresh(conversationId, plaintextSources: plaintextSources, currentUserId: currentUserId)
+        await refresh(request, plaintextSources: plaintextSources, currentUserId: currentUserId)
     }
 
     // MARK: - Déchiffrement sur l'appareil (#11232)
 
-    /// Les messages, ceux qui attendaient leur déchiffrement remplacés par le
-    /// clair que `DecryptionActor` rend, provenance comprise ; `nil` si rien
-    /// n'a été déchiffré. Une conversation verrouillée ou non directe ne
-    /// déchiffre rien. Le clair ne quitte pas ce chargeur : ni cache, ni
-    /// réseau, ni journal.
-    private func decryptedOnDevice(_ messages: [Message], in conversationId: String) async -> [Message]? {
-        let payloads = messages.compactMap { Self.decryptionPayload(for: $0) }
-        guard !payloads.isEmpty, !isLocked(conversationId), await isDirectConversation(conversationId) else { return nil }
-        let results = await decryptor.decrypt(payloads)
-        guard !isLocked(conversationId) else { return nil }
-        return Self.adopting(results, into: messages)
+    private enum DecryptionOutcome {
+        case decrypted([Message])
+        case unchanged
+        /// Des cryptogrammes attendaient, mais le type de la conversation est
+        /// encore inconnu : rien n'est tenté, et rien n'est réputé réglé.
+        case deferred
+
+        var decrypted: [Message]? {
+            guard case .decrypted(let messages) = self else { return nil }
+            return messages
+        }
+
+        var isDeferred: Bool {
+            guard case .deferred = self else { return false }
+            return true
+        }
     }
 
-    /// Ce que le fil déchiffrerait : un cryptogramme base64 non vide, que
-    /// l'appareil n'a pas déjà prouvé en clair. Jamais un message supprimé, ni
-    /// une flamme « après lecture » reçue — la liste ne la livre pas.
+    /// Les messages, ceux qui attendaient leur déchiffrement remplacés par le
+    /// clair que `DecryptionActor` rend, provenance comprise. Une conversation
+    /// verrouillée ou non directe ne déchiffre rien. Le clair ne quitte pas ce
+    /// chargeur : ni cache, ni réseau, ni journal.
+    private func decryptedOnDevice(_ messages: [Message], for request: Request) async -> DecryptionOutcome {
+        let payloads = messages.compactMap { Self.decryptionPayload(for: $0) }
+        guard !payloads.isEmpty, mayWrite(request) else { return .unchanged }
+        let isDirect: Bool?
+        if let known = request.isDirect {
+            isDirect = known
+        } else {
+            isDirect = await isDirectConversation(request.conversationId)
+        }
+        guard let isDirect else { return .deferred }
+        guard isDirect, mayWrite(request) else { return .unchanged }
+        let results = await decryptor.decrypt(payloads)
+        guard mayWrite(request), let decrypted = Self.adopting(results, into: messages) else { return .unchanged }
+        return .decrypted(decrypted)
+    }
+
+    /// Ce que le fil déchiffrerait (`DecryptionPayload(decrypting:)`, le seul
+    /// constructeur, partagé avec le fil), sauf une flamme « après lecture »
+    /// reçue — la liste ne la livre pas.
     static func decryptionPayload(for message: Message) -> DecryptionPayload? {
-        guard message.isEncrypted, message.deletedAt == nil, !message.senderId.isEmpty,
-              !message.isContentDecryptedOnDevice, !holdsBurnOnRead(message),
-              let ciphertext = Data(base64Encoded: message.content), !ciphertext.isEmpty else { return nil }
-        return DecryptionPayload(messageId: message.id, senderId: message.senderId, ciphertext: ciphertext)
+        guard !holdsBurnOnRead(message) else { return nil }
+        return DecryptionPayload(decrypting: message)
     }
 
     /// Le clair adopté par `adoptDecryptedContent` — l'unique porte d'un clair
@@ -476,17 +566,18 @@ final class ConversationListPreviewLoader: ObservableObject {
     }
 
     private func refresh(
-        _ conversationId: String,
+        _ request: Request,
         plaintextSources: [Message],
         currentUserId: @MainActor @Sendable () -> String
     ) async {
+        let conversationId = request.conversationId
         let onDevice = plaintextOnDevice(conversationId, sources: plaintextSources)
         do {
             let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: Self.previewLimit,
                 includeReplies: false, includeTranslations: true
             )
-            guard !isLocked(conversationId) else { return }
+            guard mayWrite(request) else { return }
             let userId = currentUserId()
             let username = AuthManager.shared.currentUser?.username
             let prism = readerPrism()
@@ -499,17 +590,20 @@ final class ConversationListPreviewLoader: ObservableObject {
             // Le clair connu recouvre le cryptogramme AVEC sa provenance : la
             // revalidation suivante le reconnaît encore.
             let carried = Self.carrying(onDevice, onto: decoded)
-            let messages = await decryptedOnDevice(carried, in: conversationId) ?? carried
+            let outcome = await decryptedOnDevice(carried, for: request)
+            guard mayWrite(request) else { return }
+            let messages = outcome.decrypted ?? carried
             let translations = ordered.reduce(into: [String: [MessageTranslation]]()) { map, api in
                 let readable = (api.translations ?? []).filter { $0.isEncrypted != true }
                 guard !readable.isEmpty else { return }
                 map[api.id] = MessageTranslationMerge.translations(from: readable, originalLanguage: api.originalLanguage)
             }
             publish(messages, translations: translations, for: conversationId)
-            provenance[conversationId] = .network
+            // Type encore inconnu : servi scellé, mais `.ensure` revalidera.
+            provenance[conversationId] = outcome.isDeferred ? .staleCache : .network
         } catch {
             Logger.messages.warning("[ConversationList] previewMessages fetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            guard states[conversationId]?.phase == .loading else { return }
+            guard mayWrite(request), states[conversationId]?.phase == .loading else { return }
             states[conversationId] = .unavailable
         }
     }

@@ -523,6 +523,9 @@ final class DependencyContainer {
         ConversationProtectionPreferenceStore.shared.purgeAll()
         ArrivalCelebrationController.shared.resetForLogout()
         DecryptedMessageLedger.shared.removeAll()
+        // Les clairs que l'aperçu d'appui long a déchiffrés, et la mémoire de
+        // son déchiffreur (#11232) : rien n'en survit au compte sortant.
+        ConversationListPreviewLoader.purgeAllLive()
     }
 
     // MARK: - Recovery (P1.5 — no more fatalError on DB init)
