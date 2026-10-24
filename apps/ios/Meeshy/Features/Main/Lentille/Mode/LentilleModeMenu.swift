@@ -209,12 +209,13 @@ struct LentilleModeMenu: View {
 
 // MARK: - Sous-menu contextuel — deuxième point d'entrée (I-072)
 
-/// Sous-menu « Mode de lecture », prêt à être déposé dans un `.contextMenu`
-/// natif : montage UNIQUE, `conversationContextMenu(for:)`
-/// (`ConversationListView+Overlays.swift`), APRÈS « Marquer lu » (contrat
-/// LWS-8). N'existe QUE sur le chemin natif iOS 26+ (`nativeContextMenuView`)
-/// — le fallback < iOS 26 (`ConversationContextMenuView`, overlay custom)
-/// n'est pas un fichier possédé par LWS-8 (§1.4). L'aperçu d'appui long
+/// Sous-menu « Mode de lecture », construit en UN site,
+/// `readingModeSubmenu(for:onSelected:)` (`ConversationListView+Overlays.swift`),
+/// APRÈS « Marquer lu » (contrat LWS-8) — et, depuis le catalogue unique du
+/// menu (#11230), dessiné par les DEUX chemins d'OS : le menu natif iOS 26+
+/// et le menu custom de repli (`ConversationContextMenuView`), qui le ferme
+/// sur le choix (`onSelected`) et en expose les modes à VoiceOver
+/// (`selectableModes` / `select(_:)`). L'aperçu d'appui long
 /// (`LentillePeekView`, ancien troisième point d'entrée) a été SUPPRIMÉ le
 /// 2026-08-21 : l'aperçu montre les derniers messages, le choix de mode a
 /// deux portes — l'encoche et ce sous-menu.
@@ -228,20 +229,38 @@ struct LentilleReadingModeSubmenu: View {
     let conversation: Conversation
     var isAnonymous: Bool = false
     var preferenceStore: ReadingModePreferenceStoring = LentilleReadingModePreferenceCenter.shared
+    /// Appelé après un choix : le menu custom s'y ferme, le natif se ferme seul.
+    var onSelected: () -> Void = {}
 
     @State private var preference: ReadingModeOrchestrator.ReadingModePreference = .auto
 
-    private var model: LentilleModeMenuModel {
-        let capabilities = LentilleReadingModeContext.capabilities(
+    private var capabilities: ReadingModeOrchestrator.ReadingModeCapabilities {
+        LentilleReadingModeContext.capabilities(
             for: conversation, isAnonymous: isAnonymous, isLentilleFlagEnabled: true
         )
-        return LentilleModeMenuModel.build(capabilities: capabilities, currentPreference: preference)
+    }
+
+    private var model: LentilleModeMenuModel {
+        LentilleModeMenuModel.build(capabilities: capabilities, currentPreference: preference)
+    }
+
+    /// Les modes qu'on peut choisir, lus SANS la préférence chargée : une
+    /// action nommée dit ce qu'elle fera, pas ce qui est coché.
+    var selectableModes: [LentilleModeMenuModel.Entry] {
+        LentilleModeMenuModel.build(capabilities: capabilities, currentPreference: .auto)
+            .entries.filter { !$0.isDisabled }
+    }
+
+    /// Pose `preference` — le MÊME point d'écriture que le sous-menu.
+    func select(_ preference: ReadingModeOrchestrator.ReadingModePreference) {
+        LentilleModeMenuActions.select(preference, conversationId: conversation.id, store: preferenceStore)
     }
 
     var body: some View {
         Menu {
             LentilleModeMenu(model: model) { selected in
-                LentilleModeMenuActions.select(selected, conversationId: conversation.id, store: preferenceStore)
+                select(selected)
+                onSelected()
             }
         } label: {
             Label(
