@@ -21,6 +21,7 @@ private final class MockAttachmentSendHost: AttachmentSendHosting {
     var sent: [OutgoingMessage] = []
     var rekeyedWhenSending: [Bool] = []
     var acceptsSend: (OutgoingMessage) -> Bool = { _ in true }
+    var endToEndPieceRefusal: EndToEndSendRefusal?
     let journal: Journal
 
     init(journal: Journal) { self.journal = journal }
@@ -373,5 +374,43 @@ final class AttachmentSendRunnerTests: XCTestCase {
 
         XCTAssertEqual(fx.journal.entries.last, "succeeded")
         XCTAssertFalse(fx.journal.entries.contains { $0.hasPrefix("toast:") })
+    }
+    // MARK: - Conversation chiffrée de bout en bout (#11379)
+
+    func test_run_e2ee_neTeleverseNiNeMetEnFileAucunePiece() async {
+        let fx = makeSUT()
+        fx.host.endToEndPieceRefusal = .contentUnsealable
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a"]), send("t2", attachmentIds: ["b"])])
+
+        await fx.runner.run(batch)
+
+        XCTAssertFalse(fx.journal.entries.contains { $0.hasPrefix("upload:") }, "le fichier partirait en clair")
+        XCTAssertFalse(fx.journal.entries.contains { $0.hasPrefix("enqueueOffline:") || $0.hasPrefix("requeue:") })
+        XCTAssertTrue(fx.host.sent.isEmpty)
+        let reason = EndToEndSendRefusal.contentUnsealable.userMessage
+        XCTAssertEqual(fx.journal.entries.filter { $0.hasPrefix("markFailed:") }, ["markFailed:t1:\(reason)", "markFailed:t2:\(reason)"])
+        XCTAssertEqual(fx.journal.entries.filter { $0.hasPrefix("toast:") }, ["toast:\(reason)"])
+    }
+
+    func test_run_e2eeHorsLigne_rienNEntreDansLOutbox() async {
+        let fx = makeSUT(online: false)
+        fx.host.endToEndPieceRefusal = .contentUnsealable
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a"])])
+
+        await fx.runner.run(batch)
+
+        XCTAssertFalse(fx.journal.entries.contains { $0.hasPrefix("enqueueOffline:") })
+    }
+
+    func test_run_e2ee_leTexteDuLotPassePourtantParLEnvoiScelle() async {
+        let fx = makeSUT()
+        fx.host.endToEndPieceRefusal = .contentUnsealable
+        let textGroup = Planned(kind: .text, attachments: [], text: "Salut", carriesReply: false)
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a"])], textGroup: textGroup, textTempId: "t_text")
+
+        await fx.runner.run(batch)
+
+        XCTAssertEqual(fx.host.sent.map { $0.reusedClientMessageId?.rawValue }, ["t_text"])
+        XCTAssertEqual(fx.host.sent.first?.attachments.ids, nil)
     }
 }

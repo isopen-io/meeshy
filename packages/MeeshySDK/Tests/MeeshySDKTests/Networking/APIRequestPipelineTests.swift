@@ -144,6 +144,24 @@ final class APIRequestPipelineTests: XCTestCase {
         XCTAssertEqual(serverParts(error)?.message, "Pseudo pris")
     }
 
+    /// #11379 — le refus du clair dans une conversation chiffrée (#11216) garde
+    /// son code sur une adresse opaque : c'est lui qui interdit au client de
+    /// rejouer le même clair par le socket puis par l'outbox.
+    func test_classify_e2eePlaintextRefusal_keepsItsCodeOnAnOpaqueEndpoint() {
+        let body = #"{"success":false,"error":"Conversation chiffrée","code":"E2EE_PLAINTEXT_REFUSED"}"#
+        guard case MeeshyError.rejected(let rejection)? = thrown(classify(status: 400, body: body)) else {
+            return XCTFail("attendu .rejected portant le code")
+        }
+        XCTAssertEqual(rejection.statusCode, 400)
+        XCTAssertEqual(rejection.code, EndToEndSendGate.serverPlaintextRefusalCode)
+        XCTAssertEqual(rejection.message, "Conversation chiffrée")
+    }
+
+    func test_classify_opaquePolicy_anyOther400Code_staysAServerError() {
+        let error = thrown(classify(status: 400, body: #"{"error":"Validation error","code":"VALIDATION_ERROR"}"#))
+        XCTAssertEqual(serverParts(error)?.status, 400)
+    }
+
     func test_classify_403_forwardsTheBody() {
         let body = #"{"error":"Refusé","code":"CONSENT_REQUIRED"}"#
         guard case MeeshyError.forbidden(let reason, let forwarded)? = thrown(classify(status: 403, body: body, rejection: .structured)) else {
