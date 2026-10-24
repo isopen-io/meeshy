@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="profile_edit_title">Editar perfil</string>
     <string name="profile_regional_language_label">Idioma secundário</string>
     <string name="profile_custom_language_label">Idioma de tradução personalizado</string>
     <string name="profile_avatar">Avatar</string>
