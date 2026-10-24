@@ -1,4 +1,4 @@
-name: SDK Tests
+name: iOS SDK
 
 # Split out of ios-tests.yml (2026-06-07): the MeeshySDK package suite is gated
 # ONLY on packages/MeeshySDK/** so an app-only PR (apps/ios changes) is no longer
@@ -424,6 +424,7 @@ jobs:
   # si la compilation ET chaque tranche le sont, et si chaque tranche a
   # exécuté au moins un test.
   sdk-tests:
+    name: Verdict iOS SDK
     needs: [sdk-plan, sdk-build, sdk-test-shard]
     if: always()
     runs-on: ubuntu-latest

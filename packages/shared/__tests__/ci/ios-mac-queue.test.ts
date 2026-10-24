@@ -46,7 +46,7 @@ describe('file d’attente des suites iOS complètes', () => {
   });
 
   it('une suite dont il ne reste que le verdict ne bloque plus', () => {
-    expect(ahead([run(90)], [[90, [job('Tests unitaires — tranche 1', 'completed'), job('Build app + tests unitaires')]]])).toEqual([]);
+    expect(ahead([run(90)], [[90, [job('Tests unitaires — tranche 1', 'completed'), job('Verdict iOS (tests)')]]])).toEqual([]);
   });
 
   it('un run terminé ne bloque pas', () => {
