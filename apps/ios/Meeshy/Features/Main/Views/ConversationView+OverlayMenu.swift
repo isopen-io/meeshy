@@ -22,7 +22,11 @@ struct ConversationOverlayMenu: View {
     let mediaSaveCoordinator: MediaSaveCoordinator
     let actions: ConversationMessageActions
 
-    var body: some View {
+    var body: some View { overlay }
+
+    /// Le menu tel que l'hôte le monte, rappels compris : les témoins lisent
+    /// ce qui est CÂBLÉ ici, pas une liste recomposée à part (#12625).
+    var overlay: MessageOverlayMenu {
         MessageOverlayMenu(
             message: msg,
             contactColor: accentColor,
