@@ -108,7 +108,7 @@ final class LentilleFlatRowTests: XCTestCase {
     /// Au-delà de 99, la pastille AFFICHE « 99+ » (`NotificationBadge.displayed`) ;
     /// le libellé de rangée d'iOS, lui, dit le compte EXACT — jamais le texte
     /// plafonné de la pastille, jamais un compte rabattu à 99. Le web dit
-    /// « plus de 99 messages non lus » : l'écart est consigné par une issue.
+    /// « plus de 99 messages non lus » : l'écart est consigné par #12671.
     func test_accessibilityLabel_beyondNinetyNine_saysTheExactCountNeverTheBadgeCap() {
         let row = LentilleConversationRow(conversation: makeConversation(unreadCount: 120), preferredContentLanguages: ["fr"])
         let label = row.accessibilityLabel
