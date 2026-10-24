@@ -657,9 +657,10 @@ jobs:
     # serveur et son propre Chromium : rien ne les lie, la répartition ne change
     # aucun verdict. Les étapes restent LITTÉRALES (`gate-ci-parity.test.ts`,
     # `check-web-navigateur-read-set.mjs` les lisent) ; seule leur condition
-    # porte `matrix.tranche`. L'équilibre vient des durées médianes par étape
-    # (~455 s par tranche ; le cadre téléphone, ~340 s, ne partage la sienne
-    # qu'avec des gardes courtes) :
+    # porte `matrix.tranche`. L'équilibre vient des durées mesurées par étape
+    # sur dev (#12622 : runs 40081153594 et 40082491974, ~420 s de gardes par
+    # tranche ; le cadre téléphone, qui relève désormais trois contextes à la
+    # fois, ne partage la sienne qu'avec des gardes courtes) :
     # une garde NOUVELLE va dans la tranche la plus légère du dernier relevé.
     # `fail-fast: false` — même règle que `!cancelled()` plus bas : une tranche
     # rouge n'en tait pas trois autres.
@@ -808,7 +809,7 @@ jobs:
       # glisser tenu n'ouvre rien et suit le pointeur sans retard, la place
       # survit au rechargement, un réel de carte ramène au même défilement.
       - name: Gate disque du Flux (bascule, appui long, glisser)
-        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-feed-disc.mjs
@@ -851,7 +852,7 @@ jobs:
       # états, refus compris, à 360 et 390 px. Un témoin unitaire dit qu'un
       # bouton est rendu ; il ne dit pas à quelle ordonnée il tombe.
       - name: Gate jonction par lien (action primaire dans le premier écran, 360 et 390)
-        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-join-first-screen.mjs
