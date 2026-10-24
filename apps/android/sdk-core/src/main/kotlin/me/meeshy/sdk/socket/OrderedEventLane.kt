@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -23,7 +24,8 @@ class OrderedEventLane(private val scope: CoroutineScope) {
     private val lanes = mutableMapOf<String, Channel<suspend () -> Unit>>()
 
     /** Met [work] en file sur la voie de [key] ; rend `false` si la file est fermée. */
-    fun submit(key: String, work: suspend () -> Unit): Boolean = laneFor(key).trySend(work).isSuccess
+    fun submit(key: String, work: suspend () -> Unit): Boolean =
+        scope.isActive && laneFor(key).trySend(work).isSuccess
 
     /** Rend la main quand tout travail soumis à [key] AVANT l'appel est terminé (barrière des tests). */
     suspend fun barrier(key: String) {
