@@ -101,4 +101,25 @@ class PushPayloadTest {
     fun `un nombre avec espaces est tolere`() {
         assertThat(decode("unreadCount" to " 7 ").unreadCount).isEqualTo(7)
     }
+
+    @Test
+    fun `le type de conversation est decode et distingue le direct`() {
+        assertThat(decode("conversationType" to "direct").isDirectConversation).isTrue()
+        assertThat(decode("conversationType" to "group").isDirectConversation).isFalse()
+        assertThat(decode().isDirectConversation).isFalse()
+    }
+
+    @Test
+    fun `une notificationLocKey presente interdit au media de voyager`() {
+        assertThat(decode().mediaMayTravel).isTrue()
+        assertThat(decode("notificationLocKey" to "push.protected").mediaMayTravel).isFalse()
+    }
+
+    @Test
+    fun `un drapeau de cycle de vie ou une duree ephemere interdit au media de voyager`() {
+        assertThat(decode("effectFlags" to "1").mediaMayTravel).isFalse()
+        assertThat(decode("effectFlags" to "8").mediaMayTravel).isTrue()
+        assertThat(decode("ephemeralDuration" to "30").mediaMayTravel).isFalse()
+        assertThat(decode("ephemeralDuration" to "0").mediaMayTravel).isTrue()
+    }
 }

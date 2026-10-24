@@ -31,8 +31,27 @@ public data class PushPayload(
     val conversationUnread: Int? = null,
     val createdAt: String? = null,
     val isVideo: Boolean? = null,
+    /** `direct` / `group` / ... : distingue message direct et de groupe pour la table du Focus. */
+    val conversationType: String? = null,
 ) {
+    /**
+     * Le média peut-il voyager jusqu'à la bannière ? Une protection déclarée
+     * (`notificationLocKey` présent, drapeau de cycle de vie dans `effectFlags`) ou une
+     * durée éphémère interdit pièce, image et transcription — miroir de
+     * `NSEAttachmentPolicy.declaresProtection`.
+     */
+    val mediaMayTravel: Boolean
+        get() = notificationLocKey == null &&
+            ((effectFlags ?: 0) and LIFECYCLE_FLAGS_MASK) == 0 &&
+            (ephemeralDuration ?: 0) <= 0
+
+    /** La conversation est-elle directe (un à un) ? Inconnu ⇒ groupe, comme iOS. */
+    val isDirectConversation: Boolean
+        get() = conversationType.equals("direct", ignoreCase = true)
+
     public companion object {
+        private const val LIFECYCLE_FLAGS_MASK = 0b111
+
         public fun decode(data: Map<String, String>): PushPayload {
             fun text(key: String): String? = data[key]?.takeIf { it.isNotBlank() }
             fun int(key: String): Int? = text(key)?.trim()?.toIntOrNull()
@@ -66,6 +85,7 @@ public data class PushPayload(
                 conversationUnread = int("conversationUnread"),
                 createdAt = text("createdAt"),
                 isVideo = bool("isVideo"),
+                conversationType = text("conversationType"),
             )
         }
     }
