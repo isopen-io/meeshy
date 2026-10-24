@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// #11223 — décision porteur 2026-10-24 : **seul le DERNIER message arrivé s'anime**
+/// #11223 — décision porteur : **seul le DERNIER message arrivé s'anime**
 /// à son entrée dans le fil. Loi pure, sans UIKit, jumelle du web
 /// (`apps/web/src/lib/view/arrival-motion.ts`) : même énoncé, même fenêtre,
 /// mêmes quatre causes.

@@ -5,7 +5,7 @@ import UIKit
 /// UIKit. La DÉCISION est la loi pure `MessageArrivalMotion` ; ce type ne fait
 /// que l'armer à la pose du snapshot et la jouer à la réalisation de SA cellule.
 ///
-/// ROULEAU (2026-08-18) tient toujours pour le data source : la pose reste sans
+/// Le ROULEAU tient toujours pour le data source : la pose reste sans
 /// animation d'insertion. L'entrée se joue sur la couche de la CELLULE, en
 /// animation Core Animation — jamais sur ses propriétés de modèle (`alpha`,
 /// `transform`), que la pose des attributs de layout réécrit en plein vol, ni
