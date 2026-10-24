@@ -150,7 +150,7 @@ struct ConversationMessageSheets: ViewModifier {
             .sheet(isPresented: $overlayState.showReplyThread) {
                 if let parentId = overlayState.replyThreadParentId,
                    let parent = viewModel.messages.first(where: { $0.id == parentId }) {
-                    ThreadView(parentMessage: parent, conversationId: viewModel.conversationId)
+                    ThreadView(parentMessage: parent, conversationId: viewModel.conversationId, replyDispatcher: ThreadReplyDispatcher(viewModel: viewModel, parentMessageId: parent.id))
                         .environmentObject(statusViewModel)
                 }
             }

@@ -236,6 +236,7 @@ extension ConversationViewModel {
         case .failure(let refusal):
             return .failure(await endToEndSealer.refuse(refusal, localId: context.clientMessageId.rawValue, coordinator: sendCoordinator))
         }
+        markDeparture()
         let outcome: Result<SentMessageReceipt, any Error>
         do {
             outcome = .success(try await emit(outgoing, payload: payload, context: context))
@@ -245,18 +246,19 @@ extension ConversationViewModel {
         return await reconcile(outcome, outgoing: outgoing, payload: payload, context: context)
     }
 
-    /// Garde d'éligibilité partagée avec le composeur (`SendEligibility`) : un
-    /// message « lieu seul » est un envoi valide. Le geste du jour (#5902) et
-    /// le rejeu de la flamme ne se posent que pour un message qui PART — par le
-    /// réseau ou par l'outbox.
+    /// Garde d'éligibilité partagée avec le composeur (`SendEligibility`) : un message « lieu seul » est valide.
     func validate(_ outgoing: OutgoingMessage) -> SendFailure? {
         guard SendEligibility.canSend(text: outgoing.text, attachmentIds: outgoing.attachments.ids ?? [], location: outgoing.location) else {
             Logger.messages.error("SendFlow EARLY-RETURN guard=emptyContent convId=\(self.conversationId, privacy: .public)")
             return .ineligible
         }
+        return nil
+    }
+
+    /// Le geste du jour (#5902) et la flamme : seulement pour un message qui PART, donc après le scellement (#11379).
+    private func markDeparture() {
         StreakActivityMark.marquer()
         HeaderFlameReplay.messageSent(in: conversationId)
-        return nil
     }
 
     private func composedLanguage(of outgoing: OutgoingMessage) -> String {
@@ -293,6 +295,7 @@ extension ConversationViewModel {
         if let refusal = endToEndSealer.offlineRefusal(for: outgoing) {
             return .failure(await endToEndSealer.refuse(refusal, localId: clientMessageId.rawValue, coordinator: sendCoordinator))
         }
+        markDeparture()
         return await sendCoordinator.enqueueOffline(outgoing, clientMessageId: clientMessageId, intent: intent)
     }
 
@@ -318,9 +321,8 @@ extension ConversationViewModel {
         OptimisticAuthor(senderId: currentUserId, sender: authManager.currentUser)
     }
 
-    /// Prépare ce qui quitte l'appareil, selon le RÉGIME de la conversation
-    /// (#11379) : en E2EE, scellé ou refusé — jamais de repli en clair. Ne
-    /// touche aucun transport.
+    /// Ce qui quitte l'appareil selon le RÉGIME (#11379) : en E2EE, scellé ou
+    /// refusé — jamais de repli en clair. Ne touche aucun transport.
     func prepareUpload(_ outgoing: OutgoingMessage, context: SendAttemptContext) async -> Result<SealedOutgoingPayload, EndToEndSendRefusal> {
         await endToEndSealer.seal(outgoing, context: context, wireEffectFlags: wireEffectFlags(context.intent))
     }
@@ -387,7 +389,8 @@ extension ConversationViewModel {
             hooks: SendRecoveryHooks(
                 withdraw: { [weak self] in await self?.withdrawRefusedMessage(tempId: $0, restriction: $1) },
                 holdSlowMode: { [weak self] in await self?.holdForSlowMode(tempId: $0, slowMode: $1, error: $2) },
-                registerServerId: { [weak self] in self?.pendingServerIds[$0] = $1 }
+                registerServerId: { [weak self] in self?.pendingServerIds[$0] = $1 },
+                adoptEndToEnd: { [ledger = collaborators.regimeLedger, id = conversationId] in ledger.learnEndToEnd(for: id) }
             )
         )
     }

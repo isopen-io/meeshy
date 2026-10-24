@@ -103293,6 +103293,100 @@
         }
       }
     },
+    "conversation.send.e2ee.envelopeRefusedByServer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإرسال المشفّر غير مدعوم بعد: لم تُرسل الرسالة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsseltes Senden wird noch nicht unterstützt: Die Nachricht wurde nicht gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted sending isn’t supported yet: the message wasn’t sent."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El envío cifrado aún no está disponible: el mensaje no se envió."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’envoi chiffré n’est pas encore pris en charge : le message n’est pas parti."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’invio crittografato non è ancora supportato: il messaggio non è stato inviato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O envio criptografado ainda não é compatível: a mensagem não foi enviada."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.plaintextRefusedByServer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أصبحت هذه المحادثة مشفّرة: لم تُرسل الرسالة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Unterhaltung ist jetzt verschlüsselt: Die Nachricht wurde nicht gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation is now encrypted: the message wasn’t sent."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversación ahora está cifrada: el mensaje no se envió."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette conversation est désormais chiffrée : le message n’est pas parti."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa conversazione ora è crittografata: il messaggio non è stato inviato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversa agora é criptografada: a mensagem não foi enviada."
+          }
+        }
+      }
+    },
     "conversation.storyUnavailable": {
       "extractionState": "manual",
       "localizations": {

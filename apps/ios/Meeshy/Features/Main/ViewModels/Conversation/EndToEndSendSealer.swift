@@ -92,12 +92,17 @@ struct EndToEndSendSealer {
 }
 
 extension EndToEndSendSealer {
-    /// Le régime se lit à DEUX sources — la ligne qui a ouvert le fil, puis la
-    /// conversation relue du cache : il suffit que l'une dise bout en bout.
+    /// Le régime se lit à TROIS sources — la ligne qui a ouvert le fil, la
+    /// conversation relue du cache, et ce que le fil a appris depuis
+    /// (`EndToEndRegimeLedger`) : il suffit que l'une dise bout en bout.
     init(_ viewModel: ConversationViewModel) {
         self.init(
             conversationId: viewModel.conversationId,
-            encryptionModes: [viewModel.encryptionModeAtOpening, viewModel.currentConversation?.encryptionMode],
+            encryptionModes: [
+                viewModel.encryptionModeAtOpening,
+                viewModel.currentConversation?.encryptionMode,
+                viewModel.collaborators.regimeLedger.mode(for: viewModel.conversationId)
+            ],
             isDirect: viewModel.isDirect,
             peerUserId: viewModel.participantUserId,
             encryptor: viewModel.messageEncryptor
@@ -142,6 +147,12 @@ extension EndToEndSendRefusal {
         case .editUnsealable:
             String(localized: "conversation.send.e2ee.editUnsealable",
                    defaultValue: "Conversation chiffrée : un message ne peut pas encore être modifié.", bundle: .main)
+        case .plaintextRefusedByServer:
+            String(localized: "conversation.send.e2ee.plaintextRefusedByServer",
+                   defaultValue: "Cette conversation est désormais chiffrée : le message n’est pas parti.", bundle: .main)
+        case .envelopeRefusedByServer:
+            String(localized: "conversation.send.e2ee.envelopeRefusedByServer",
+                   defaultValue: "L’envoi chiffré n’est pas encore pris en charge : le message n’est pas parti.", bundle: .main)
         }
     }
 }

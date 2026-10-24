@@ -46,7 +46,8 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
         encryptor: DirectMessageEncrypting,
         encryptionMode: String? = "e2ee",
         isDirect: Bool = true,
-        online: Bool = true
+        online: Bool = true,
+        ledger: EndToEndRegimeLedger = EndToEndRegimeLedger()
     ) async throws -> SUT {
         await CacheCoordinator.shared.messages.invalidate(for: conversationId)
         let auth = MockAuthManager()
@@ -57,6 +58,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
         let queue = FakeOfflineMessageQueue()
         let pool = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: pool)
+        let persistence = MessagePersistenceActor(dbWriter: pool)
         let viewModel = ConversationViewModel(
             conversationId: conversationId,
             isDirect: isDirect,
@@ -68,13 +70,18 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: socket,
-            dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)),
+            dependencies: ConversationDependencies(
+                dbPool: pool, persistence: persistence,
+                collaborators: ConversationCollaborators(
+                    persistence: persistence, syncEngine: ConversationSyncEngine.shared,
+                    messageService: messageService, regimeLedger: ledger
+                )
+            ),
             networkMonitor: FakeNetworkMonitor(isOnline: online),
             offlineQueue: queue,
             messageEncryptor: encryptor
         )
         viewModel.start()
-        viewModel.regimeLedger = EndToEndRegimeLedger()
         return SUT(viewModel: viewModel, messageService: messageService, socket: socket, queue: queue, pool: pool)
     }
 
@@ -247,9 +254,8 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     /// Activer le chiffrement depuis la fiche du fil OUVERT : le registre du
     /// régime le dit au fil, et l'envoi suivant est scellé.
     func test_send_chiffrementActiveDansLeFilOuvert_lEnvoiSuivantEstScelle() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil)
         let ledger = EndToEndRegimeLedger()
-        sut.viewModel.regimeLedger = ledger
+        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil, ledger: ledger)
         ledger.learn(mode: "e2ee", for: conversationId)
 
         _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))

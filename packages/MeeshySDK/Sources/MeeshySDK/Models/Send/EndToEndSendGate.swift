@@ -16,6 +16,12 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     case outboxUnsealable
     /// L'édition d'un message chiffré n'a pas encore d'enveloppe (#12541).
     case editUnsealable
+    /// La passerelle a refusé un clair (`E2EE_PLAINTEXT_REFUSED`, #11216) : la
+    /// conversation est chiffrée sans que l'appareil le sût. Rien ne repart.
+    case plaintextRefusedByServer
+    /// La passerelle a refusé l'envoi SCELLÉ (4xx) : son enveloppe n'est pas
+    /// encore acceptée (#12536). Ce n'est pas une coupure réseau.
+    case envelopeRefusedByServer
 }
 
 /// La loi PURE de l'envoi sous chiffrement de bout en bout (#11379, directives
@@ -54,6 +60,31 @@ public enum EndToEndSendGate {
         if carriesUnsealableContent(outgoing) { return .contentUnsealable }
         guard isDirect, let peerUserId, !peerUserId.isEmpty else { return .recipientUnsealable }
         return nil
+    }
+
+    /// Le code stable du refus serveur d'un clair (#11216, `e2eePlaintextAdmission.ts`).
+    public static let serverPlaintextRefusalCode = "E2EE_PLAINTEXT_REFUSED"
+
+    /// La passerelle a-t-elle refusé un clair dans une conversation chiffrée ?
+    /// Le refus est DÉFINITIF : rejouer le même texte par un autre canal ou
+    /// par l'outbox l'émettrait de nouveau.
+    public static func isServerPlaintextRefusal(_ error: any Error) -> Bool {
+        guard case MeeshyError.rejected(let rejection) = error else { return false }
+        return rejection.code == serverPlaintextRefusalCode
+    }
+
+    /// Un refus du CORPS de l'envoi (4xx), que le même corps ne lèvera pas :
+    /// ni le délai (408), ni la cadence (429), ni le transport (statut 0).
+    public static func isServerEnvelopeRefusal(_ error: any Error) -> Bool {
+        switch error {
+        case MeeshyError.server(let status, _): return isDefinitiveClientStatus(status)
+        case MeeshyError.rejected(let rejection): return isDefinitiveClientStatus(rejection.statusCode)
+        default: return false
+        }
+    }
+
+    private static func isDefinitiveClientStatus(_ status: Int) -> Bool {
+        (400..<500).contains(status) && ![401, 408, 429].contains(status)
     }
 
     /// Tout ce qui partirait À CÔTÉ du texte chiffré et que le serveur lirait :
