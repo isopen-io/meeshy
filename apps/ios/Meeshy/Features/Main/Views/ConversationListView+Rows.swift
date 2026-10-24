@@ -244,6 +244,15 @@ struct ConversationRowItem: View {
         Task { await LiveCallJoiner.live.join(request) }
     }
 
+    /// #11387 — verrouillée par PIN : la rangée ne montre rien de ce que la
+    /// conversation contient. LA décision (`ConversationLockManager
+    /// .hidesContent`) est celle que le chargeur d'aperçu lit : un verrou qui
+    /// bascule fait basculer `previewFingerprint.phase` (`.sealed`), donc le
+    /// portillon `.equatable()` ci-dessous laisse passer la rangée.
+    private var isContentLocked: Bool {
+        ConversationLockManager.shared.hidesContent(of: conversation.id)
+    }
+
     /// Coeur visuel de la ligne, commun aux deux chemins de menu.
     ///
     /// MUX de rang sous drapeau (contrat LWS-7, workshop I-067) : sous
@@ -307,6 +316,7 @@ struct ConversationRowItem: View {
                     typingUsername: typingUsername,
                     isSelected: isSelected,
                     draftSummary: draftSummary,
+                    isContentLocked: isContentLocked,
                     preferredContentLanguages: preferredContentLanguages,
                     onJoinLiveCall: { joinLiveCall() },
                     magnification: context
@@ -331,6 +341,7 @@ struct ConversationRowItem: View {
                 typingUsername: typingUsername,
                 isSelected: isSelected,
                 draftSummary: draftSummary,
+                isContentLocked: isContentLocked,
                 preferredContentLanguages: preferredContentLanguages,
                 onJoinLiveCall: { joinLiveCall() }
             )

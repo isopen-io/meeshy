@@ -198,4 +198,118 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertTrue(source.contains("NSEAttachmentPolicy.declaresProtection"),
                       "La branche du média du message doit refuser un message protégé.")
     }
+
+    // MARK: - #11387 — une conversation verrouillée par PIN ne livre rien
+
+    /// Le verrou PIN protège le CONTENU (décision porteur 2026-10-24) : la
+    /// notification d'une conversation verrouillée DÉCLARE une protection, et
+    /// tous les seconds verrous (média, détail, vignette, lecteur audio) la
+    /// lisent sans qu'aucun n'ait à connaître le PIN.
+    func test_lockedConversation_declaresProtection_andKeepsTheRoutingKeys() {
+        let payload: [AnyHashable: Any] = [
+            "conversationId": "c1", "messageId": "m1",
+            "attachmentUrl": "https://cdn/x.jpg", "attachmentMimeType": "image/jpeg",
+        ]
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: true)
+
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: sealed))
+        XCTAssertEqual(sealed["notificationLocKey"] as? String, NSEAttachmentPolicy.lockedConversationLocKey)
+        XCTAssertEqual(sealed["conversationId"] as? String, "c1", "le toucher route toujours vers la conversation (et son PIN)")
+        XCTAssertEqual(sealed["messageId"] as? String, "m1")
+    }
+
+    func test_unlockedConversation_payloadIsUntouched() {
+        let payload: [AnyHashable: Any] = ["conversationId": "c1", "attachmentMimeType": "image/jpeg"]
+        let served = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: false)
+
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: served))
+        XCTAssertNil(served["notificationLocKey"])
+    }
+
+    // MARK: - #11387 — le verrou se lit au MIROIR complet, pas à la liste chargée
+
+    /// Une conversation verrouillée HORS de la liste publiée (au-delà des 100
+    /// premières) n'a pas de cliché : seul le miroir la dit verrouillée.
+    func test_isContentLocked_aConversationAbsentFromTheSnapshot_isLockedByTheMirror() {
+        XCTAssertTrue(NSEAttachmentPolicy.isContentLocked(
+            conversationId: "coffre", mirroredLockedIds: ["coffre"], snapshotDeclaresLock: false
+        ))
+    }
+
+    func test_isContentLocked_neitherMirrorNorSnapshot_isOpen() {
+        XCTAssertFalse(NSEAttachmentPolicy.isContentLocked(
+            conversationId: "c1", mirroredLockedIds: ["autre"], snapshotDeclaresLock: false
+        ))
+        XCTAssertFalse(NSEAttachmentPolicy.isContentLocked(
+            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: false
+        ))
+        XCTAssertFalse(NSEAttachmentPolicy.isContentLocked(
+            conversationId: nil, mirroredLockedIds: ["c1"], snapshotDeclaresLock: true
+        ))
+    }
+
+    func test_isContentLocked_theSnapshotFlagStillLocks() {
+        XCTAssertTrue(NSEAttachmentPolicy.isContentLocked(
+            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: true
+        ))
+    }
+
+    func test_mirrorLockedConversationIds_writesTheFullSet_andAnEmptySetRemovesTheKey() throws {
+        let suite = "nse-lock-mirror-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        NSEAttachmentPolicy.mirrorLockedConversationIds(["b", "a"], into: defaults)
+        XCTAssertEqual(defaults.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey), ["a", "b"])
+
+        NSEAttachmentPolicy.mirrorLockedConversationIds([], into: defaults)
+        XCTAssertNil(defaults.object(forKey: NSEAttachmentPolicy.lockedConversationIdsKey))
+    }
+
+    // MARK: - #11387 — l'ordre de préparation d'une bannière
+
+    /// Scellée AVANT toute décision (catégorie, préférences, média) : sinon la
+    /// catégorie et l'enrichissement liraient une charge non protégée.
+    func test_plan_lockedConversation_sealsBeforeEveryDecision() {
+        let plan = NSEPreparationStep.plan(isLockedConversation: true)
+        XCTAssertEqual(plan.first, .sealLockedConversation)
+    }
+
+    /// Le corps est remplacé EN DERNIER : aucune réécriture (déchiffrement,
+    /// repli audio, détail, échéance) ne remet du contenu sous le verrou.
+    func test_plan_lockedConversation_replacesTheBodyAfterEveryRewrite() throws {
+        let plan = NSEPreparationStep.plan(isLockedConversation: true)
+        XCTAssertEqual(plan.last, .replaceBodyWithLockLabel)
+        let replace = try XCTUnwrap(plan.firstIndex(of: .replaceBodyWithLockLabel))
+        for rewrite in [NSEPreparationStep.rewriteBody, .applyEphemeralDeadline] {
+            let index = try XCTUnwrap(plan.firstIndex(of: rewrite), "\(rewrite) reste au plan")
+            XCTAssertLessThan(index, replace, "\(rewrite) avant le scellé du corps")
+        }
+    }
+
+    /// « Aucun préchargement ne met en cache les messages d'une conversation
+    /// verrouillée » (décision porteur 2026-10-24) : l'extension ne télécharge
+    /// ni ne pré-enregistre le message.
+    func test_plan_lockedConversation_stagesNothingOfTheMessage() {
+        let plan = NSEPreparationStep.plan(isLockedConversation: true)
+        XCTAssertFalse(plan.contains(.syncMessage))
+        XCTAssertFalse(plan.contains(.prePersistMessage))
+    }
+
+    func test_plan_openConversation_isTheHistoricalPipeline() {
+        XCTAssertEqual(NSEPreparationStep.plan(isLockedConversation: false), [
+            .applyCategory, .applyBadge, .applyThreading, .applyPreferences, .updateUnreadCount,
+            .syncMessage, .prefetchSocial, .prePersistMessage,
+            .postDeliveryReceipt, .rewriteBody, .applyEphemeralDeadline, .sweepExpiredBanners,
+        ])
+    }
+
+    /// L'extension EXÉCUTE le plan — jamais une séquence recopiée à la main
+    /// qui pourrait s'en écarter — et lit le verrou au miroir complet.
+    func test_extension_executesThePlan_andReadsTheMirror() throws {
+        let source = try nseSource()
+        XCTAssertTrue(source.contains("NSEPreparationStep.plan(isLockedConversation:"))
+        XCTAssertTrue(source.contains("NSEAttachmentPolicy.lockedConversationIdsKey"))
+        XCTAssertTrue(source.contains("NSEAttachmentPolicy.isContentLocked("))
+    }
 }

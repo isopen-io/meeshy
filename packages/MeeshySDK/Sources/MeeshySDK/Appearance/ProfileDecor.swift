@@ -274,7 +274,7 @@ public enum ProfileDecorOptions {
         groups(installed: installed, builtin: catalog.bannerPacks.map { ($0.slug, $0.installedByDefault, $0.designs) })
     }
 
-    /// Les cadres posés SUR la bannière (#10936) : aucun pack n'est installé d'office.
+    /// Les cadres posés SUR la bannière (#10936) : deux packs sont installés d'office (#11165).
     public static func bannerFrames(installed: [ShopPack]?, catalog: BannerFrameCatalog = .shared) -> [OptionGroup<BannerFrameDesign>] {
         groups(installed: installed, builtin: catalog.framePacks.map { ($0.slug, $0.installedByDefault, $0.frames) })
     }

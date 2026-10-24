@@ -39,18 +39,25 @@
  * n'est partie entre elles. C'est la garantie de `networkidle` (« la page a
  * fini de charger ») sans sa fenêtre FIXE de 500 ms, que
  * `check-phone-frame.mjs` payait ~740 fois par passage (~6 min en CI).
+ *
+ * UNE LECTURE PAS PRÊTE NE COMPTE PAS (#12622). Sans requête en vol, deux
+ * lectures à 50 ms d'une page dont la route n'a pas encore rendu `#contenu`
+ * concordent — et le témoin concluait « rien de peint ». La CI l'a montré
+ * dès que trois contextes se sont partagé ses quatre cœurs. `options.pret`
+ * dit ce qu'est une lecture prête ; avant, l'attente continue, et une page
+ * qui ne l'est jamais rend `undefined` au bout du budget.
  */
 export const SETTLE_STEP_MS = 50;
 export const SETTLE_ATTEMPTS = 100;
 
 export async function waitForValueSettled(page, evaluateFn, arg, options = {}) {
-  const { attempts = SETTLE_ATTEMPTS, stepMs = SETTLE_STEP_MS, network } = options;
+  const { attempts = SETTLE_ATTEMPTS, stepMs = SETTLE_STEP_MS, network, pret } = options;
   let previous;
   let hasPrevious = false;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const current = await page.evaluate(evaluateFn, arg);
     const reseau = network?.();
-    if (network !== undefined && reseau === undefined) {
+    if ((network !== undefined && reseau === undefined) || (pret !== undefined && !pret(current))) {
       hasPrevious = false;
       await page.waitForTimeout(stepMs);
       continue;
