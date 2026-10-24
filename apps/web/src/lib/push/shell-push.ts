@@ -33,6 +33,11 @@ import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from 
  * Sur Android 8+, une notification adressée à un canal INEXISTANT est jetée en
  * silence — FCM rend un succès, rien n'apparaît. Le créer au démarrage n'est
  * donc pas un réglage : c'est la condition pour qu'une bannière existe.
+ *
+ * Il VIBRE (#12566) : le plugin crée un canal sans vibration quand on ne la
+ * demande pas, et un téléphone en mode vibreur laissait passer le message sans
+ * rien dire. Une bannière web sur Android et une notification iOS vibrent ;
+ * seul le canal muet (`SilentNotificationChannel.java`) se tait.
  */
 export const SHELL_PUSH_CHANNEL_ID = 'meeshy_notifications';
 
@@ -51,6 +56,7 @@ export type ShellPushPlugin = {
     readonly name: string;
     readonly importance?: 1 | 2 | 3 | 4 | 5;
     readonly visibility?: -1 | 0 | 1;
+    readonly vibration?: boolean;
   }): Promise<void>;
   addListener(eventName: 'registration', listener: Listener<{ readonly value: string }>): Promise<unknown>;
   addListener(eventName: 'registrationError', listener: Listener<{ readonly error: string }>): Promise<unknown>;
@@ -193,7 +199,7 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
 
   await plugin.addListener('pushNotificationReceived', ({ data }) => note(data, 'received'));
 
-  await plugin.createChannel({ id: SHELL_PUSH_CHANNEL_ID, name: 'Meeshy', importance: 4, visibility: 0 }).catch(() => undefined);
+  await plugin.createChannel({ id: SHELL_PUSH_CHANNEL_ID, name: 'Meeshy', importance: 4, visibility: 0, vibration: true }).catch(() => undefined);
 
   const opened = async (): Promise<void> => {
     const current = await plugin.checkPermissions().catch(() => ({ receive: 'denied' as const }));

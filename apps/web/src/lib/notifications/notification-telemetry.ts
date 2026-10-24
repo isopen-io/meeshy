@@ -151,3 +151,27 @@ export async function drainShellNotificationTelemetry(
   events.forEach(record);
   return events.length;
 }
+
+export type ReturningPage = {
+  readonly visibilityState: DocumentVisibilityState;
+  addEventListener(type: 'visibilitychange', listener: () => void): void;
+  removeEventListener(type: 'visibilitychange', listener: () => void): void;
+};
+
+/**
+ * **ET AU RETOUR DE LA PAGE, PAS SEULEMENT AU DÉMARRAGE** (#12585) — la coque
+ * est `singleTask` : toucher une bannière, ou revenir de l'écran d'accueil,
+ * reprend la page sans la recharger. Sans cette écoute, « reçue » et
+ * « affichée » attendaient le prochain démarrage à froid pendant que
+ * « ouverte » partait tout de suite, et la file native (100 lignes) perdait
+ * les plus anciennes. Les deux files se vident en les lisant : relancer la
+ * vidange ne renvoie rien deux fois.
+ */
+export function drainOnEachReturn(page: ReturningPage, drain: () => void): () => void {
+  const onChange = (): void => {
+    if (page.visibilityState === 'visible') drain();
+  };
+  drain();
+  page.addEventListener('visibilitychange', onChange);
+  return () => page.removeEventListener('visibilitychange', onChange);
+}

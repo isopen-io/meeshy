@@ -508,7 +508,8 @@ if (__SHELL__) {
 /**
  * L'ENTONNOIR DES NOTIFICATIONS (#10507) — ce que le service worker a noté
  * (reçue, affichée, ouverte, écartée) passe dans la file v2 au chargement ;
- * et ce que la coque Android a noté app fermée aussi (#10938).
+ * et ce que la coque Android a noté app fermée aussi (#10938). Puis à chaque
+ * retour de la page (#12585) : la coque la reprend sans la recharger.
  */
 {
   const viderNotifications = (): void => {
@@ -516,10 +517,12 @@ if (__SHELL__) {
       import('@/lib/notifications/notification-telemetry'),
       import('@/lib/view/reading-telemetry'),
       import('@/lib/native-shell'),
-    ]).then(([{ drainNotificationTelemetry, drainShellNotificationTelemetry }, { readingTelemetry }, { coqueCourante }]) => {
+    ]).then(([{ drainNotificationTelemetry, drainOnEachReturn, drainShellNotificationTelemetry }, { readingTelemetry }, { coqueCourante }]) => {
       const record = (event: Parameters<typeof readingTelemetry.recordV2>[0]): void => readingTelemetry.recordV2(event);
-      void drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, record);
-      void drainShellNotificationTelemetry(coqueCourante(), record);
+      drainOnEachReturn(document, () => {
+        void drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, record);
+        void drainShellNotificationTelemetry(coqueCourante(), record);
+      });
     });
   };
   if (document.readyState === 'complete') viderNotifications();
