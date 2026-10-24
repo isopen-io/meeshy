@@ -96,6 +96,23 @@ export const resolveThreadAnchor = (at: Date, spanMinutes: number): Date => {
   return candidate;
 };
 
+const HOUR_MS = 60 * 60_000;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * Pure (#12826) — le même instant d'horloge, le jour calendaire PARISIEN
+ * suivant celui de `at`. Ajouter 24 heures ne suffit pas : un jour de
+ * changement d'heure dure 25 heures (hiver) ou 23 (été) à Paris, et +24 h y
+ * retombe sur le même jour, ou en saute deux.
+ */
+export const nextParisDayInstant = (at: Date): Date => {
+  const target = new Date(Date.parse(`${parisCalendarDay(at)}T00:00:00.000Z`) + DAY_MS).toISOString().slice(0, 10);
+  const sameClock = new Date(at.getTime() + DAY_MS);
+  const reached = parisCalendarDay(sameClock);
+  if (reached === target) return sameClock;
+  return new Date(sameClock.getTime() + (reached < target ? HOUR_MS : -HOUR_MS));
+};
+
 /**
  * L'instant PARTAGÉ entre l'ancre du fil et tout consommateur qui a besoin
  * d'un « maintenant » cohérent avec elle — un seul `new Date()` au
