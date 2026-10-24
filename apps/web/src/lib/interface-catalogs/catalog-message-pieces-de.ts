@@ -47,6 +47,8 @@ const de = {
   'message.unpin.failed': 'Die Nachricht konnte nicht gelöst werden',
   'message.report.title': 'Diese Nachricht melden',
   'message.menu.retry': 'Erneut versuchen',
+  'message.menu.discard': 'Verwerfen',
+  'message.send.discarded': 'Nachricht verworfen',
   'message.menu.translateOnDevice': 'Auf dem Gerät übersetzen',
   'message.menu.translateOnDevice.queued': 'Übersetzung auf diesem Gerät angefordert',
   'message.menu.translateOnDevice.consent': 'Aktiviere „Auf diesem Gerät übersetzen“ in den Einstellungen',

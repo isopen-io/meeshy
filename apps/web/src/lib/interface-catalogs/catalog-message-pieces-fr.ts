@@ -51,6 +51,8 @@ const fr = {
   'message.unpin.failed': 'Le message n’a pas pu être désépinglé',
   'message.report.title': 'Signaler ce message',
   'message.menu.retry': 'Réessayer',
+  'message.menu.discard': 'Abandonner',
+  'message.send.discarded': 'Envoi abandonné',
   'message.menu.translateOnDevice': 'Traduire sur l’appareil',
   'message.menu.translateOnDevice.queued': 'Traduction demandée à cet appareil',
   'message.menu.translateOnDevice.consent': 'Activez « Traduire sur cet appareil » dans les réglages',

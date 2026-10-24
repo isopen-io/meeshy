@@ -47,6 +47,8 @@ const en = {
   'message.unpin.failed': 'The message could not be unpinned',
   'message.report.title': 'Report this message',
   'message.menu.retry': 'Retry',
+  'message.menu.discard': 'Discard',
+  'message.send.discarded': 'Message discarded',
   'message.menu.translateOnDevice': 'Translate on device',
   'message.menu.translateOnDevice.queued': 'Translation requested on this device',
   'message.menu.translateOnDevice.consent': 'Turn on “Translate on this device” in Settings',

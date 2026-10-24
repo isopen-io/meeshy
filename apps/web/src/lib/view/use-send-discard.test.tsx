@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 const enqueue = (conversationId: string, clientMessageId: string, delivery: 'pending' | 'failed') => {
-  const message = localMessageOf({ clientMessageId, conversationId, viewerId: 'u-viewer', content: 'salut', originalLanguage: 'fr' });
+  const message = localMessageOf({ clientMessageId, conversationId, viewerId: 'u-viewer', content: 'salut', originalLanguage: 'fr', now: new Date(0) });
   outboxStore.getState().enqueue(conversationId, { message, delivery: 'pending', attempts: 1, startedAt: 0 });
   if (delivery === 'failed') outboxStore.getState().markFailed(conversationId, clientMessageId, { ok: false, status: 403, error: 'refusé' });
 };

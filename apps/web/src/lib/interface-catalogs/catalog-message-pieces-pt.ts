@@ -47,6 +47,8 @@ const pt = {
   'message.unpin.failed': 'Não foi possível desafixar a mensagem',
   'message.report.title': 'Denunciar esta mensagem',
   'message.menu.retry': 'Tentar novamente',
+  'message.menu.discard': 'Descartar',
+  'message.send.discarded': 'Mensagem descartada',
   'message.menu.translateOnDevice': 'Traduzir no dispositivo',
   'message.menu.translateOnDevice.queued': 'Tradução pedida a este dispositivo',
   'message.menu.translateOnDevice.consent': 'Ative “Traduzir neste dispositivo” nas definições',

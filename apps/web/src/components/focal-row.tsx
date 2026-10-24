@@ -130,6 +130,7 @@ export const FocalRow = memo(function FocalRow({
   sendStartedAt,
   sendFailureReason,
   onRetry,
+  onDiscard,
   revealable = true,
   onJumpToMessage,
   onOpenStory,
@@ -202,6 +203,7 @@ export const FocalRow = memo(function FocalRow({
    * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
   sendFailureReason?: string;
   onRetry?: () => void;
+  onDiscard?: () => void;
   /**
    * LE CONTENU EST-IL SEULEMENT LA ? (#6862) — `false` quand la charge ne
    * PORTE PAS le texte : la lecture souveraine de l'administration retient
@@ -841,6 +843,7 @@ export const FocalRow = memo(function FocalRow({
               <FailedSendBand
                 {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
                 {...(onRetry === undefined ? {} : { onRetry })}
+                {...(onDiscard === undefined ? {} : { onDiscard })}
                 textColor="var(--color-error)"
               />
             ) : null}

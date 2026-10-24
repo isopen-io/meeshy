@@ -143,8 +143,17 @@ export function useMessageMenu(params: {
   readonly viewer: MenuViewer;
   /** LA CONVERSATION (#11210, `menuConversationOf`) — type, régime de chiffrement, écriture ; non lue, son régime est inconnu, donc chiffré. */
   readonly conversation: ActionConversation;
-  /** L'ENVOI DU FIL (#11210, `useSend`) — « Réessayer » relance un envoi en échec ; absent, rien ne s'offre. */
-  readonly send?: { readonly retry: (messageId: string) => void; readonly failed: (messageId: string) => boolean };
+  /**
+   * L'ENVOI DU FIL (#11210, `useSend`) — « Réessayer » relance un envoi en échec,
+   * jamais un refus PERMANENT (`permanent`) ; « Abandonner » le retire de
+   * l'outbox (`discard`, #12632). Absent, rien ne s'offre.
+   */
+  readonly send?: {
+    readonly retry: (messageId: string) => void;
+    readonly failed: (messageId: string) => boolean;
+    readonly permanent?: (messageId: string) => boolean;
+    readonly discard?: (messageId: string) => void;
+  };
   /**
    * ARME LA RÉPONSE — au message (`setReplyTarget`, `onCompose` jusqu'à #7555,
    * où le mot est rendu au sens iOS) ou à UNE pièce (`setReplyToMedia`, #9908,
@@ -241,9 +250,21 @@ export function useMessageMenu(params: {
   const retryableOf = useCallback(
     (messageId: string): boolean => {
       const message = messageOf(messageId);
-      return message !== undefined && failedOf(messageId) && webSendsHere(actionsOf(message));
+      return message !== undefined && failedOf(messageId) && send?.permanent?.(messageId) !== true && webSendsHere(actionsOf(message));
     },
-    [messageOf, failedOf, actionsOf],
+    [messageOf, failedOf, actionsOf, send],
+  );
+  /**
+   * « ABANDONNER » EST-IL POSSIBLE D'ICI ? (#12632) — le verdict `discard` de la
+   * loi (tout envoi en échec, refus permanent compris) et un hôte qui sait le
+   * retirer de l'outbox. Le menu et la bande « Non envoyé » lisent cette réponse.
+   */
+  const discardableOf = useCallback(
+    (messageId: string): boolean => {
+      const message = messageOf(messageId);
+      return message !== undefined && send?.discard !== undefined && failedOf(messageId) && actionsOf(message).groups.destructive.includes('discard');
+    },
+    [messageOf, failedOf, actionsOf, send],
   );
   /* D7 — la source est-elle chiffrée ? Lu dans le cache de la conversation, au moment du geste. */
   const sourceEncrypted = useCallback(
@@ -631,6 +652,10 @@ export function useMessageMenu(params: {
         if (retryableOf(messageId)) send?.retry(messageId);
         return;
       }
+      if (id === 'discard') {
+        if (discardableOf(messageId)) send?.discard?.(messageId);
+        return;
+      }
       if (id === 'translateOnDevice') {
         const message = messageOf(messageId);
         if (message === undefined || actionsOf(message).verdicts.translate !== 'device') return;
@@ -726,7 +751,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, encryptionMode, replyableOf, retryableOf, menuContextOf, transcribe],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, encryptionMode, replyableOf, retryableOf, discardableOf, menuContextOf, transcribe],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -884,7 +909,8 @@ export function useMessageMenu(params: {
     const lang = currentInterfaceLanguage();
     const ctx = {
       ...menuContextOf(message),
-      canRetry: send !== undefined,
+      canRetry: retryableOf(menuTarget.messageId),
+      canDiscard: discardableOf(menuTarget.messageId),
       deviceTranslationWanted: deviceTranslationWanted(message, { viewerId, languages: readerLanguages, conversationEncryptionMode: encryptionMode ?? null }),
       piecesLabels: isMessagePiecesCatalogLoaded(lang),
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
@@ -953,6 +979,7 @@ export function useMessageMenu(params: {
     menuContextOf,
     replyableOf,
     retryableOf,
+    discardableOf,
     reactableOf,
   };
 }

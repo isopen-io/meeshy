@@ -7,6 +7,7 @@ import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
 import { openReactorsSheet } from '@/lib/view/reactors-sheet-store';
 import { languageColor, flag, languageName } from '@/lib/languages';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
@@ -913,14 +914,23 @@ export function Quote({
  * (`routes/conversations.tsx`, l'erreur de liste). `text-mini` (11px,
  * `--ios-font-footnote`) remplace `text-check` (10px, `--ios-font-caption`) —
  * un token DÉRIVÉ plus grand (D-4), jamais une valeur inventée.
+ *
+ * `onDiscard` (#12632) — « ABANDONNER » retire l'envoi du fil et de l'outbox.
+ * Un refus permanent n'avait plus AUCUN geste : la bulle restait jusqu'au
+ * rechargement. Il le gagne, et un refus passager le gagne à côté de
+ * « Réessayer » : la bande devient alors un `<div>` qui porte DEUX boutons
+ * frères, chacun de 44 px — jamais un bouton dans un bouton. Son libellé vit
+ * dans le catalogue du fil : tant qu'il n'est pas chargé, le geste se tait.
  */
 export function FailedSendBand({
   reason,
   onRetry,
+  onDiscard,
   textColor,
 }: {
   readonly reason?: string;
   readonly onRetry?: () => void;
+  readonly onDiscard?: () => void;
   readonly textColor: string;
 }) {
   /* LES TROIS LIBELLÉS VIENNENT DU CATALOGUE (#7337) — « Non envoyé »,
@@ -945,11 +955,46 @@ export function FailedSendBand({
   /* `data-send-failed` / `-label` / `data-send-retry` : les POIGNÉES des
      gates (#7337). Ils désignaient la bande par son texte français, et ne
      pouvaient donc la trouver que tant qu'elle n'était pas traduite. */
+  const discard =
+    onDiscard === undefined || !isMessagePiecesCatalogLoaded(language) ? null : (
+      <button
+        type="button"
+        data-send-discard
+        data-variant="destructive"
+        onClick={onDiscard}
+        className="shrink-0 px-1 text-mini font-semibold"
+        style={{ minHeight: 44, minWidth: 44, color: textColor, textDecoration: 'underline' }}
+      >
+        {translateMessagePieces(language, 'message.menu.discard')}
+      </button>
+    );
+
   if (onRetry === undefined) {
     return (
       <div data-send-failed="permanent" className={className} style={style} {...titleProp}>
         <Glyph name="warningCircle" size={12} />
         <span data-send-failed-label className="flex-1">{label}</span>
+        {discard}
+      </div>
+    );
+  }
+
+  if (discard !== null) {
+    return (
+      <div className={className} style={style}>
+        <button
+          type="button"
+          data-send-failed="retryable"
+          onClick={onRetry}
+          {...titleProp}
+          className="flex flex-1 items-center gap-1.5 text-start font-semibold"
+          style={{ color: textColor, minHeight: 44 }}
+        >
+          <Glyph name="warningCircle" size={12} />
+          <span data-send-failed-label className="flex-1">{label}</span>
+          <span data-send-retry style={{ textDecoration: 'underline' }}>{translate(language, 'message.send.retry')}</span>
+        </button>
+        {discard}
       </div>
     );
   }

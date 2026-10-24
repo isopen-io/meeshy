@@ -47,6 +47,8 @@ const it = {
   'message.unpin.failed': 'Impossibile rimuovere il messaggio dai fissati',
   'message.report.title': 'Segnala questo messaggio',
   'message.menu.retry': 'Riprova',
+  'message.menu.discard': 'Scarta',
+  'message.send.discarded': 'Messaggio scartato',
   'message.menu.translateOnDevice': 'Traduci sul dispositivo',
   'message.menu.translateOnDevice.queued': 'Traduzione richiesta a questo dispositivo',
   'message.menu.translateOnDevice.consent': 'Attiva «Traduci su questo dispositivo» nelle impostazioni',

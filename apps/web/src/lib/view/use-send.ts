@@ -5,6 +5,7 @@ import { isPermanentFailure } from '@/lib/api/outcome';
 import { retrySendAction, sendAction } from '@/lib/api/query';
 import type { Message, Participant } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
+import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import type { PendingAttachment } from '@/lib/send/attachments';
@@ -91,6 +92,13 @@ export function useSend(params: {
     sticker?: MessageSticker | null,
   ) => void;
   readonly retry: (messageId: string) => void;
+  /**
+   * ABANDONNER UN ENVOI EN ÉCHEC (#12632) — retire l'entrée de l'outbox sans la
+   * compter confirmée (`outboxStore.discard`) : la bulle quitte le fil. Un envoi
+   * encore EN VOL ne s'abandonne pas, sa confirmation peut encore arriver.
+   * L'issue se dit dans la région vivante, dans le catalogue du fil.
+   */
+  readonly discard: (messageId: string) => void;
 } {
   const { conversationId, viewerId, sender, announce } = params;
   const online = useOnline();
@@ -167,6 +175,16 @@ export function useSend(params: {
     [conversationId, online],
   );
 
+  const discard = useCallback(
+    (messageId: string) => {
+      if (entries.find((entry) => entry.message.id === messageId)?.delivery !== 'failed') return;
+      outboxStore.getState().discard(conversationId, messageId);
+      const language = currentInterfaceLanguage();
+      if (isMessagePiecesCatalogLoaded(language)) announce(translateMessagePieces(language, 'message.send.discarded'));
+    },
+    [entries, conversationId, announce],
+  );
+
   const failedCount = useMemo(
     () => entries.reduce((count, entry) => (entry.delivery === 'failed' ? count + 1 : count), 0),
     [entries],
@@ -202,5 +220,5 @@ export function useSend(params: {
     previousConfirmedCount.current = confirmedCount;
   }, [failedCount, confirmedCount, entries, announce]);
 
-  return { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry };
+  return { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, discard };
 }

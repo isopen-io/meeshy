@@ -299,7 +299,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * (`useComposeLanguage`, #5828) — jamais le rang 1 du Prisme du LECTEUR
    * (`readerLocale`), qui décrit qui LIT, pas qui ÉCRIT.
    */
-  const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry } = useSend({
+  const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, discard } = useSend({
     conversationId,
     viewerId: viewer.id ?? '',
     ...(selfSender === undefined ? {} : { sender: selfSender }),
@@ -514,7 +514,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     readerLocale,
     viewer: actionScope.viewer,
     conversation: actionScope.conversation,
-    send: { retry, failed: sendFailed },
+    send: { retry, discard, failed: (id) => deliveryOf(id) === 'failed', permanent: permanentOf },
     reply: compose,
     announce: announcer.announce,
   });
@@ -842,7 +842,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             startedAtOf={startedAtOf}
             reasonOf={reasonOf}
             permanentOf={permanentOf}
-            retry={retry} retryableOf={messageMenu.retryableOf}
+            retry={retry} retryableOf={messageMenu.retryableOf} discard={discard} discardableOf={messageMenu.discardableOf}
             displayLanguageOf={messageMenu.displayLanguageOf}
             myReactionsOf={messageMenu.myReactionsOf}
             selection={messageMenu.selection}
