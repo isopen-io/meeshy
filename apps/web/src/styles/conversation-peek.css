@@ -1,8 +1,11 @@
+@import './longpress-veil.css';
+
 /*
  * L'APERÇU D'UNE CONVERSATION TENUE (#11211) — le voile, la grappe et la carte.
  *
- * Même voile que le menu d'un message (`thread-menu.css`) : noir mêlé, flou de
- * fond, une entrée en fondu. Le flou est celui du VOILE, posé sur la liste
+ * Même voile que le menu d'un message (`thread-menu.css`) : le MATÉRIAU
+ * SYSTÈME de l'appui long (#11222), lu dans les jetons de `longpress-veil.css`,
+ * et une entrée en fondu. Le flou est celui du VOILE, posé sur la liste
  * derrière : la carte, au-dessus de lui, reste nette — ni `transform`, ni
  * `filter` sur elle, et l'animation ne joue que l'opacité, pour qu'aucune
  * échelle ne reste en fin d'entrée.
@@ -17,13 +20,9 @@
   position: fixed;
   inset: 0;
   z-index: 40;
-  background-color: color-mix(in srgb, black 50%, transparent);
-  backdrop-filter: blur(16px);
+  background-color: var(--longpress-veil-tint);
+  backdrop-filter: var(--longpress-veil-backdrop);
   animation: conversationPeekIn 220ms ease-out;
-}
-
-:root.light .conversation-peek-veil {
-  background-color: color-mix(in srgb, black 40%, transparent);
 }
 
 .conversation-peek {
