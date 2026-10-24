@@ -136,6 +136,13 @@ enum ConversationPreviewRenderer {
         ConversationListPreviewLoader.holdsBurnOnRead(message) ? .afterRead : .encrypted
     }
 
+    /// Un simple appui long ne fait sortir aucun lien d'un message chiffré :
+    /// ni aperçu OpenGraph vers un site tiers, ni carte de conversation
+    /// interrogée au serveur (#11232, F3). Le clair déchiffré reste sur l'appareil.
+    static func mountsLinkEmbed(for message: Message) -> Bool {
+        !message.isEncrypted && !message.isContentDecryptedOnDevice
+    }
+
     /// Les messages arrivés EN CLAIR dans une conversation chiffrée
     /// (`EndToEndPlaintextLaw`, #11380) : la rangée porte leur marqueur.
     static func unencryptedIds(of messages: [Message], regime: EndToEndRegime) -> Set<String> {
@@ -430,6 +437,7 @@ struct ConversationRecentMessagesPreview: View {
                     UnencryptedMessageMarker(isDark: isDark)
                 }
             }
+            .environment(\.mountsLinkEmbeds, ConversationPreviewRenderer.mountsLinkEmbed(for: message))
         }
     }
 

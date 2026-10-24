@@ -530,6 +530,32 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         XCTAssertEqual(sut.state(for: conversationId).phase, .loading)
     }
 
+    /// F5 (audit de #12722) : un chargement qui passe entre la pose du verrou
+    /// et sa notification vide déjà l'état de la conversation. La notification
+    /// doit quand même reconstruire le déchiffreur, dont la mémoire garde le clair.
+    func test_lockNotifiedAfterALoadClearedTheState_stillRebuildsTheDecryptor() async {
+        let pin = PinLock()
+        let locks = PassthroughSubject<Void, Never>()
+        let factory = DecryptorFactory(plaintexts: [messageId: "Rendez-vous à midi"])
+        let sut = ConversationListPreviewLoader(
+            messageService: MockMessageService(),
+            cache: MockConversationPreviewCache(messages: .fresh([makeCipherMessage()], age: 10)),
+            readerPrism: { ["fr"] },
+            isLocked: { _ in pin.isLocked },
+            decryptor: factory.make(),
+            directness: { _ in .direct(peerUserId: "user-other") },
+            locksDidChange: locks.eraseToAnyPublisher()
+        )
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
+
+        pin.isLocked = true
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
+        locks.send(())
+
+        XCTAssertEqual(factory.made, 2, "la mémoire du déchiffreur part avec le verrou, même sans état à purger")
+    }
+
     func test_lockAppearsAfterDecryption_dropsThePlaintext() async {
         let pin = PinLock()
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
@@ -701,6 +727,33 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         XCTAssertEqual(otherCalls, 0, "aucune autre route n'est touchée")
         XCTAssertNil(sut.state(for: conversationId).snapshot?.servedTranslation(for: messageId),
                      "aucune traduction serveur ne double un clair déchiffré")
+    }
+
+    /// F3 (audit de #12722) : un appui long ne fait sortir aucun lien d'un
+    /// clair déchiffré sur l'appareil — ni OpenGraph vers un site tiers, ni
+    /// carte de conversation interrogée au serveur.
+    func test_decryptedMessageWithALink_mountsNoLinkEmbed() {
+        var decrypted = makeCipherMessage()
+        decrypted.adoptDecryptedContent("Le dossier : https://exemple.org/dossier-secret")
+        let clear = Message(
+            id: "000000000000000000000a09", conversationId: conversationId, senderId: peerId,
+            content: "Le dossier : https://exemple.org/dossier", originalLanguage: "fr"
+        )
+
+        XCTAssertFalse(ConversationPreviewRenderer.mountsLinkEmbed(for: decrypted))
+        XCTAssertFalse(ConversationPreviewRenderer.mountsLinkEmbed(for: makeCipherMessage()))
+        XCTAssertTrue(ConversationPreviewRenderer.mountsLinkEmbed(for: clear), "un clair ordinaire garde sa carte de lien")
+    }
+
+    /// La règle ne vaut que si l'unique monteur des cartes de lien la lit, et
+    /// si l'aperçu la pose par message.
+    func test_linkEmbedGate_isReadByTheEmbedAndPostedByThePreview() throws {
+        let views = Self.appRoot.appendingPathComponent("Meeshy/Features/Main/Views")
+        let embed = AppSourceGuard.stripComments(try String(contentsOf: views.appendingPathComponent("Bubble/BubbleLinkEmbed.swift"), encoding: .utf8))
+        let preview = AppSourceGuard.stripComments(try String(contentsOf: views.appendingPathComponent("ConversationRecentMessagesPreview.swift"), encoding: .utf8))
+
+        XCTAssertTrue(embed.contains("if mountsLinkEmbeds"))
+        XCTAssertTrue(preview.contains(".environment(\\.mountsLinkEmbeds, ConversationPreviewRenderer.mountsLinkEmbed(for: message))"))
     }
 
     /// Une flamme « après lecture » reçue ne se déchiffre pas pour la liste —

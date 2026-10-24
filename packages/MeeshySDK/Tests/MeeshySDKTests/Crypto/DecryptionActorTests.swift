@@ -100,6 +100,23 @@ final class DecryptionActorTests: XCTestCase {
         XCTAssertEqual(calls, 2, "la seconde demande cherche sa propre clé")
     }
 
+    /// Un lot qui demande le même identifiant sous deux clés ne dit pas
+    /// laquelle a ouvert le clair : rien n'entre au mémo, et la clé qui a
+    /// échoué n'hérite jamais du clair de l'autre.
+    func test_decrypt_sameIdUnderTwoSendersInOneBatch_neverMemoizesAcrossKeys() async {
+        let provider = KeyedSessionProvider(sessions: ["user-bob"])
+        let actor = DecryptionActor(provider: provider)
+        let ciphertext = Data("Code 4242".utf8)
+
+        _ = await actor.decrypt([
+            DecryptionPayload(messageId: "m1", senderId: "user-bob", ciphertext: ciphertext),
+            DecryptionPayload(messageId: "m1", senderId: "user-carol", ciphertext: ciphertext)
+        ])
+        let underCarol = await actor.decrypt([DecryptionPayload(messageId: "m1", senderId: "user-carol", ciphertext: ciphertext)])
+
+        XCTAssertNil(underCarol.first?.plaintext)
+    }
+
     /// Le mémo sert encore la même demande sous la même clé.
     func test_decrypt_sameMessageUnderTheSameSender_comesFromTheMemo() async {
         let provider = KeyedSessionProvider(sessions: ["user-bob"])

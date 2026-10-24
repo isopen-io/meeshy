@@ -285,12 +285,15 @@ final class ConversationListPreviewLoader: ObservableObject {
 
     /// Un verrou posé ne se contente pas de MASQUER (`state(for:)`) : le clair
     /// déjà servi quitte la mémoire, et le déchiffreur oublie ce qu'il savait.
+    /// Le déchiffreur se reconstruit SANS condition (F5) : un chargement passé
+    /// entre la pose du verrou et cette notification a pu vider l'état, pas
+    /// la mémoire du déchiffreur.
     func dropLockedConversations() {
+        decryptor = makeDecryptor()
+        awaitingPeer = awaitingPeer.filter { !isLocked($0) }
         guard states.keys.contains(where: { isLocked($0) }) || provenance.keys.contains(where: { isLocked($0) }) else { return }
         states = states.filter { !isLocked($0.key) }
         provenance = provenance.filter { !isLocked($0.key) }
-        awaitingPeer = awaitingPeer.filter { !isLocked($0) }
-        decryptor = makeDecryptor()
     }
 
     /// Une conversation jamais chargée se lit `.loading` : l'aperçu n'affirme
