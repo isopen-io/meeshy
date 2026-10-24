@@ -107,6 +107,24 @@ async function assertBinding(
   if (!valid) throw invalid;
 }
 
+/** Clé d'identité Curve25519 sérialisée par libsignal : l'octet de type 0x05 puis 32 octets. */
+const SERIALIZED_IDENTITY_KEY_BYTES = 33;
+const DJB_KEY_TYPE = 0x05;
+
+/**
+ * Une seule écriture par clé. `PublicKey.deserialize` de libsignal ignore les
+ * octets au-delà des 33 et le décodage base64 tolère un `=` de trop : sans cette
+ * garde, la même clé, écrite autrement, échapperait à toute comparaison par
+ * chaîne — la révocation d'abord (#12546).
+ */
+function assertCanonicalIdentityKey(identityKey: string): void {
+  const bytes = Buffer.from(identityKey, 'base64');
+  const canonical = bytes.length === SERIALIZED_IDENTITY_KEY_BYTES && bytes[0] === DJB_KEY_TYPE && bytes.toString('base64') === identityKey;
+  if (!canonical) {
+    throw new E2EEDirectoryError(E2EE_ERROR_CODES.IDENTITY_KEY_INVALID, 400, 'La clé d’identité n’a pas la forme sérialisée de libsignal');
+  }
+}
+
 const signedKeysOf = (request: { signedPreKey?: SignedKey; kyberLastResort?: SignedKey } & OneTimeBatches): SignedKey[] => [
   ...(request.signedPreKey ? [request.signedPreKey] : []),
   ...(request.kyberLastResort ? [request.kyberLastResort] : []),
@@ -197,12 +215,26 @@ export class E2EEDirectory {
     this.now = deps.now ?? (() => new Date());
   }
 
+  /**
+   * Enrôle l'appareil. La révocation se vérifie AVANT et APRÈS la prise de
+   * place : le retrait par le propriétaire écrit la révocation puis lit les
+   * appareils de l'identité, l'enrôlement écrit l'appareil puis relit la
+   * révocation — l'un des deux voit toujours l'autre, et l'identité révoquée ne
+   * reste jamais active (#12546).
+   */
   async enrollDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest }): Promise<{ deviceId: number; created: boolean }> {
-    const { userId, sessionId, request } = params;
+    assertCanonicalIdentityKey(params.request.identityKey);
     const at = this.now();
-    await assertBinding(this.verifier, { userId, request, now: at });
-    await assertSigned(this.verifier, request.identityKey, signedKeysOf(request));
-    await this.assertNotRevoked(userId, request.identityKey);
+    await assertBinding(this.verifier, { userId: params.userId, request: params.request, now: at });
+    await assertSigned(this.verifier, params.request.identityKey, signedKeysOf(params.request));
+    await this.assertNotRevoked(params.userId, params.request.identityKey);
+    const placed = await this.placeDevice({ ...params, at });
+    await this.undoIfRevoked(params.userId, params.request.identityKey);
+    return placed;
+  }
+
+  private async placeDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<{ deviceId: number; created: boolean }> {
+    const { userId, sessionId, request, at } = params;
     const keyFields = { ...signedPreKeyFields(request.signedPreKey, at), ...kyberLastResortFields(request.kyberLastResort) };
     const profile = { platform: request.platform, label: request.label ?? null, lastSeenAt: at };
 
@@ -286,6 +318,16 @@ export class E2EEDirectory {
       update: {},
     });
     await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
+    await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
+  }
+
+  private async undoIfRevoked(userId: string, identityKey: string): Promise<void> {
+    try {
+      await this.assertNotRevoked(userId, identityKey);
+    } catch (error) {
+      await this.retireDevices({ userId, identityKey });
+      throw error;
+    }
   }
 
   private async assertNotRevoked(userId: string, identityKey: string): Promise<void> {
@@ -333,7 +375,7 @@ export class E2EEDirectory {
     }
   }
 
-  private async retireDevices(where: { userId: string; deviceId?: number; sessionId?: string; id?: { not: string } }): Promise<number[]> {
+  private async retireDevices(where: { userId: string; deviceId?: number; sessionId?: string; identityKey?: string; id?: { not: string } }): Promise<number[]> {
     const doomed = await this.prisma.e2EEDevice.findMany({ where: { ...where, ...ACTIVE }, select: RETIRABLE_DEVICE });
     const retired = await retireDeviceRows(this.prisma, { devices: doomed, now: this.now() });
     return retired.map((device) => device.deviceId);
