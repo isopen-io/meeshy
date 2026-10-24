@@ -101,6 +101,22 @@ final class StoryLayerTreeTests: XCTestCase {
         XCTAssertTrue(other.sublayers?.isEmpty ?? true)
     }
 
+    /// Deux objets de même `id` et de même signature reçoivent du cache le MÊME
+    /// calque (en `.edit`, `reconfigure` en adopte un aussi). Une suite
+    /// d'`addSublayer` le laissait à sa dernière place ; la réconciliation doit
+    /// faire de même, sans viser un rang au-delà de la fin du conteneur.
+    func test_attach_aLayerListedTwice_takesItsLastRank_once() {
+        let container = CALayer()
+        let tree = layers(3)
+        let listed = [tree[0], tree[1], tree[0], tree[2]]
+
+        StoryLayerTree.attach(listed, to: container)
+        StoryLayerTree.attach(listed, to: container)
+
+        XCTAssertEqual(names(container), ["l1", "l0", "l2"])
+        XCTAssertEqual(tree.map(\.removals), [0, 0, 0], "la seconde passe ne déplace rien")
+    }
+
     func test_attach_anEmptyTree_emptiesTheContainer() {
         let container = CALayer()
         StoryLayerTree.attach(layers(2), to: container)

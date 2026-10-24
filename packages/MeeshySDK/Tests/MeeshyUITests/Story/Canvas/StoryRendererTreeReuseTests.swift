@@ -149,6 +149,21 @@ final class StoryRendererTreeReuseTests: XCTestCase {
         XCTAssertEqual(container.sublayers?.count, 2)
     }
 
+    /// Le composer masque le dessin pendant que l'auteur dessine : son bitmap
+    /// (1080×1920 × l'échelle de l'écran, ~75 Mo en 3x) n'est pas retenu par le
+    /// cache pendant ce temps, et se rastérise de nouveau quand il réapparaît.
+    func test_suppressedDrawing_releasesItsBitmap_untilItShowsAgain() {
+        let cache = liveCache()
+        let container = CALayer()
+        render(Self.slide(), at: 0.1, cache: cache, reusing: container)
+
+        render(Self.slide(), at: 0.2, cache: cache, reusing: container, suppressDrawing: true)
+        render(Self.slide(), at: 0.3, cache: cache, reusing: container)
+
+        XCTAssertEqual(cache.drawingBuildCount, 2, "le bitmap masqué n'est pas resté dans le cache")
+        XCTAssertNotNil(Self.drawingLayer(in: container))
+    }
+
     func test_erasedDrawing_leavesTheContainer() {
         let cache = liveCache()
         let container = CALayer()
