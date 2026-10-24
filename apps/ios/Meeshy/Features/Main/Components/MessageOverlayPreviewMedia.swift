@@ -344,3 +344,50 @@ struct ProtectedFormChip: View {
         .accessibilityLabel(label)
     }
 }
+
+// MARK: - Ce que l'aperçu laisse toucher (#11339)
+
+/// **L'aperçu d'appui long LIT les vocaux et les vidéos, dans les TROIS modes**
+/// (#11339, décision porteur du 2026-10-24, option B).
+///
+/// L'aperçu reste une image de la cellule : seule la ZONE DE LECTURE d'une
+/// pièce lisible se touche (le lecteur du vocal, la vidéo) ; partout ailleurs,
+/// le toucher ferme et le glissement réduit l'aperçu, comme avant. La face suit
+/// le mode de lecture (#11208), la zone ne le suit pas : Bulles, Script et
+/// Focal lisent ensemble, jamais un seul.
+///
+/// L'aperçu ne lit jamais ce que le fil retient : une forme protégée (vue
+/// unique, flou — du message ou d'une pièce —, chiffré scellé, échu) ne rend
+/// pas la cellule, et n'offre donc aucune zone. Un éphémère VIVANT se lit dans
+/// le fil : il se lit aussi dans l'aperçu.
+struct MessageOverlayPreviewTouch: Equatable {
+    let kind: MessageOverlayPreviewKind
+    /// Les pièces dont la zone de lecture se touche. Vide ⇒ l'aperçu est inerte.
+    let playableAttachmentIds: Set<String>
+
+    var offersPlayback: Bool { !playableAttachmentIds.isEmpty }
+
+    static func resolve(message: Message, readingMode: ConversationReadingMode, now: Date = Date()) -> MessageOverlayPreviewTouch {
+        MessageOverlayPreviewTouch(
+            kind: MessageOverlayPreviewKind.resolve(readingMode: readingMode),
+            playableAttachmentIds: playableAttachmentIds(for: message, now: now))
+    }
+
+    static func playableAttachmentIds(for message: Message, now: Date = Date()) -> Set<String> {
+        guard OverlayPreviewProtection.form(for: message, now: now) == .clear else { return [] }
+        return Set(message.attachments.filter(isPlayable).map(\.id))
+    }
+
+    static func isPlayable(_ attachment: MessageAttachment) -> Bool {
+        (attachment.type == .audio || attachment.type == .video) && !attachment.fileUrl.isEmpty
+    }
+
+    /// **Les trous du masque** : les zones de lecture des pièces lisibles,
+    /// ramenées au cadre de l'aperçu. Une zone hors du cadre ne perce rien.
+    static func holes(zones: [(attachmentId: String, frame: CGRect)], playable: Set<String>, in bounds: CGRect) -> [CGRect] {
+        zones
+            .filter { playable.contains($0.attachmentId) }
+            .map { $0.frame.intersection(bounds) }
+            .filter { !$0.isNull && !$0.isEmpty }
+    }
+}

@@ -127,6 +127,9 @@ struct MessageOverlayMenu: View {
     /// La rangée plate de l'aperçu, construite une fois par jeu d'entrées : le
     /// corps se réévalue à chaque image du glissement (#11208).
     @State private var flatRowMemo = MessageOverlayFlatRowMemo()
+    /// Le vocal que l'aperçu a lancé (#11339) : la fermeture l'arrête, et lui
+    /// seul — une lecture partie du fil avant l'appui long continue.
+    @State private var previewPlayedAttachmentId: String?
 
     /// La durée du fondu qui remplace le ressort sous « Réduire les animations ».
     static let reducedMotionFadeDuration: TimeInterval = 0.18
@@ -284,12 +287,12 @@ struct MessageOverlayMenu: View {
             let containerW = geometry.size.width
 
             // ── La face de l'aperçu : la cellule du fil, dans son mode (#11208) ──
-            let kind = MessageOverlayPreviewKind.resolve(readingMode: threadLanguage.readingMode)
+            let touch = MessageOverlayPreviewTouch.resolve(message: message, readingMode: threadLanguage.readingMode)
             let cellFrame = Self.sourceFrame(windowFrame: messageBubbleFrame, containerOrigin: geometry.frame(in: .global).origin)
             let hasSourceFrame = cellFrame != .zero
             // La rangée plate se pose sur toute la largeur (ses 16 pt de marge
             // sont dans l'aperçu) ; la bulle, sur la largeur de sa cellule.
-            let previewW: CGFloat = kind == .bubble && cellFrame.width > 0 ? cellFrame.width : containerW
+            let previewW: CGFloat = touch.kind == .bubble && cellFrame.width > 0 ? cellFrame.width : containerW
             let previewH: CGFloat = max(1, measuredPreviewHeight ?? cellFrame.height)
             let sourceRect = hasSourceFrame
                 ? cellFrame
@@ -318,7 +321,7 @@ struct MessageOverlayMenu: View {
             let nlBubbleW = previewW * nlFitScale
             let nlBubbleH = fit.visibleHeight
             let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlMenuGap + nlMenuHeight
-            let nlAnchorX: CGFloat = kind == .flatRow
+            let nlAnchorX: CGFloat = touch.kind == .flatRow
                 ? containerW / 2
                 : (message.isMe ? sourceRect.maxX - nlBubbleW / 2 : sourceRect.minX + nlBubbleW / 2)
             // Le cluster part de la cellule et remonte quand elle est trop
@@ -379,10 +382,10 @@ struct MessageOverlayMenu: View {
                 // la liste remet à la cellule. Mesurée à sa largeur, puis
                 // réduite d'un `.scaleEffect` uniforme seulement si elle ne
                 // tient pas dans la fenêtre. Gate Equatable (H3) + mémoire de
-                // la rangée plate : le drag 60 fps ne reconstruit rien. Une
-                // image de la cellule, pas un lecteur — rien ne s'y lit (#11339).
+                // la rangée plate : le drag 60 fps ne reconstruit rien. Seule la
+                // zone de lecture d'un vocal ou d'une vidéo s'y touche (#11339).
                 previewViewport(
-                    kind: kind, containerSize: geometry.size, previewSize: CGSize(width: previewW, height: previewH),
+                    touch: touch, containerSize: geometry.size, previewSize: CGSize(width: previewW, height: previewH),
                     fit: fit)
                 // #9043 — transformation de RENDU seule (aucune passe de
                 // layout par image) : le haut et le bord natif restent fixes.
@@ -393,7 +396,6 @@ struct MessageOverlayMenu: View {
                 )
                 .offset(y: clusterDragOffset)
                 .opacity(isVisible ? 1 : 0)
-                .allowsHitTesting(fit.scrollsInternally)
 
                 // Barre de réactions AU-DESSUS de l'aperçu (native-lean) — montée
                 // seulement si la loi ouvre la réaction (`canReact`).
@@ -409,8 +411,8 @@ struct MessageOverlayMenu: View {
                         .allowsHitTesting(true)
                 }
             }
-            // #9043 — le glissement vaut sur TOUTE la vue (le voile, l'aperçu,
-            // dont les touches traversent), pas seulement sur le menu : c'est
+            // #9043 — le glissement vaut sur TOUTE la vue (le voile, l'aperçu
+            // et son masque, #11339), pas seulement sur le menu : c'est
             // l'aperçu qu'on pousse vers le haut. Un tap reste un tap (seuil
             // 12 pt) ; le menu garde sa propre instance prioritaire.
             .gesture(clusterDragGesture(reveal), including: .all)
@@ -422,6 +424,7 @@ struct MessageOverlayMenu: View {
         .accessibilityAddTraits(.isModal)
         .dismissOnEscape { dismiss() }
         .onAppear { enter() }
+        .onDisappear { stopPreviewPlayback() }
     }
 
     /// **L'entrée de l'overlay** (#11208). Aucune haptique : le geste
@@ -443,7 +446,7 @@ struct MessageOverlayMenu: View {
     /// L'aperçu dans son cadre réduit : la cellule du fil, mesurée à sa largeur,
     /// posée à son bord natif, bornée à la place qui reste (`MessageOverlayPreviewFit`).
     private func previewViewport(
-        kind: MessageOverlayPreviewKind,
+        touch: MessageOverlayPreviewTouch,
         containerSize: CGSize,
         previewSize: CGSize,
         fit: MessageOverlayPreviewFit.Result
@@ -453,20 +456,68 @@ struct MessageOverlayMenu: View {
             naturalSize: previewSize,
             visibleHeight: fit.visibleHeight,
             scrolls: fit.scrollsInternally,
-            isTrailing: message.isMe
+            isTrailing: message.isMe,
+            interactive: touch.offersPlayback
         ) {
             MessageOverlayCellPreview(
-                face: previewFace(kind: kind, containerWidth: containerSize.width),
+                face: previewFace(kind: touch.kind, containerWidth: containerSize.width),
                 message: message,
                 isDark: isDark,
-                accentHex: bubbleAccentHex
+                accentHex: bubbleAccentHex,
+                onPlayAudio: { playFromPreview($0) }
             )
             .equatable()
             .environment(\.bubbleSkin, previewSkin)
             .environment(\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)
             .frame(width: previewSize.width, alignment: message.isMe ? .trailing : .leading)
+            .overlayPreferenceValue(MessagePreviewPlaybackZoneKey.self) { zones in
+                previewTouchMask(zones: zones, playable: touch.playableAttachmentIds)
+            }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
         }
+        // Le cadre défile, ou l'aperçu porte une zone de lecture (#11339) :
+        // sinon, une image que les touchers traversent jusqu'au voile.
+        .allowsHitTesting(fit.scrollsInternally || touch.offersPlayback)
+    }
+
+    /// **Le masque de l'aperçu** (#11339) : percé aux zones de lecture que la
+    /// loi laisse lire, il ferme le menu sur un toucher ailleurs — comme le
+    /// voile que l'aperçu laissait traverser.
+    @ViewBuilder
+    private func previewTouchMask(zones: [MessagePreviewPlaybackZone], playable: Set<String>) -> some View {
+        if !playable.isEmpty {
+            GeometryReader { proxy in
+                MessageOverlayPreviewTouchMask(
+                    holes: MessageOverlayPreviewTouch.holes(
+                        zones: zones.map { (attachmentId: $0.attachmentId, frame: proxy[$0.bounds]) },
+                        playable: playable,
+                        in: CGRect(origin: .zero, size: proxy.size)),
+                    onTapOutside: { dismiss() })
+            }
+        }
+    }
+
+    // MARK: - Lire un vocal depuis l'aperçu (#11339)
+
+    /// Le bouton du lecteur de la cellule appelle ici, comme dans le fil : la
+    /// piste que le fil SERT part sur le coordinateur partagé — un seul moteur,
+    /// un seul son, le mini-lecteur et la carte « À l'écoute » compris. La
+    /// cellule de l'aperçu suit le coordinateur (`AudioBubbleRouter`) et montre
+    /// la lecture en cours.
+    private func playFromPreview(_ attachmentId: String) {
+        guard let queued = Self.previewQueuedAudio(
+            attachmentId: attachmentId, message: message, served: threadLanguage.servedAudioTracks) else { return }
+        previewPlayedAttachmentId = attachmentId
+        ConversationAudioCoordinator.shared.play(
+            current: queued, tail: [], conversationName: queued.senderName, conversationArtworkURL: nil)
+    }
+
+    /// La fermeture arrête ce que l'aperçu a lancé, et seulement cela : le
+    /// coordinateur ne retient alors plus rien de l'aperçu.
+    private func stopPreviewPlayback() {
+        guard let attachmentId = previewPlayedAttachmentId,
+              ConversationAudioCoordinator.shared.isActive(attachmentId: attachmentId) else { return }
+        ConversationAudioCoordinator.shared.close()
     }
 
     // MARK: - La face de l'aperçu (#11208)
@@ -698,6 +749,31 @@ extension MessageOverlayMenu {
         served[attachment.id] ?? .original(of: attachment)
     }
 
+    /// **L'entrée de file d'un vocal lu depuis l'aperçu** (#11339) — la piste
+    /// que le fil sert (URL et langue partent ensemble), jamais celle d'une
+    /// pièce que la loi de l'aperçu ne laisse pas lire.
+    static func previewQueuedAudio(
+        attachmentId: String, message: Message, served: [String: ServedAudioTrack], now: Date = Date()
+    ) -> QueuedAudio? {
+        guard MessageOverlayPreviewTouch.playableAttachmentIds(for: message, now: now).contains(attachmentId),
+              let attachment = message.attachments.first(where: { $0.id == attachmentId && $0.type == .audio })
+        else { return nil }
+        let track = previewAudioTrack(for: attachment, served: served)
+        return QueuedAudio(
+            attachmentId: attachment.id,
+            messageId: message.id,
+            conversationId: message.conversationId,
+            fileUrl: track.url,
+            durationMs: track.durationMs ?? attachment.duration ?? 0,
+            senderName: message.senderName ?? "",
+            senderAvatarURL: message.senderAvatarURL,
+            receivedAt: message.createdAt,
+            trackLanguage: track.language ?? message.originalLanguage,
+            isTranslatedTrack: track.language != nil,
+            isProtected: ConversationViewModel.isProtectedVoice(message)
+        )
+    }
+
     /// **Ce que le fil sert pour CE message** (#9259) : la sélection du
     /// drapeau (`ConversationViewModel.bubbleLanguageSelections`), ses
     /// écrivains, les pistes qu'elle élit et le mode de lecture du fil — lus
@@ -754,6 +830,7 @@ extension MessageOverlayMenu {
         bubble.recipientCount = threadLanguage.recipientCount
         bubble.senderMoodEmoji = threadLanguage.senderMoodEmoji
         bubble.senderStoryRingState = threadLanguage.senderStoryRing
+        bubble.onPlayAudio = { playFromPreview($0) }
         return bubble
     }
 }

@@ -73,6 +73,9 @@ struct VideoAvailabilityResolver<Content: View>: View {
         content(availability) {
             downloader.start(attachment: attachment, origin: .manual, onShare: nil)
         }
+        // #11339 — la zone de lecture de la vidéo, que l'aperçu d'appui long
+        // laisse toucher (`MessageOverlayPreviewTouch`).
+        .modifier(MessagePreviewPlaybackZoneMarker(attachmentId: attachment.id))
         .task(id: AutoStartKey(attachmentId: attachment.id, mayAutoStart: mayAutoStart)) {
             // Branché sur le registre partagé AVANT toute résolution : un
             // téléchargement de cette vidéo lancé par une autre surface

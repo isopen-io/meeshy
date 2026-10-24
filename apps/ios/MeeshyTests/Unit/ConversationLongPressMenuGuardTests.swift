@@ -182,8 +182,11 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
 
     func test_preview_isChosenByTheReadingModeLaw() throws {
         let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
-        XCTAssertTrue(menu.contains("MessageOverlayPreviewKind.resolve(readingMode: threadLanguage.readingMode)"),
-                      "La face de l'aperçu se lit au mode de lecture du fil, par la loi pure.")
+        XCTAssertTrue(menu.contains("MessageOverlayPreviewTouch.resolve(message: message, readingMode: threadLanguage.readingMode)"),
+                      "La face de l'aperçu se lit au mode de lecture du fil, par la loi pure (#11339 : avec sa zone tactile).")
+        let law = try source("Features/Main/Components/MessageOverlayPreviewMedia.swift")
+        XCTAssertTrue(law.contains("MessageOverlayPreviewKind.resolve(readingMode: readingMode)"),
+                      "La loi de l'aperçu choisit sa face par la loi du mode de lecture.")
         let cell = try source("Features/Main/Components/MessageOverlayCellPreview.swift")
         XCTAssertTrue(cell.contains("FocalRow(input:"), "La face rangée plate rend la `FocalRow` du fil.")
         XCTAssertTrue(cell.contains("ThemedMessageBubble"), "La face bulle rend la `ThemedMessageBubble` du fil.")
@@ -375,5 +378,31 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
             code.contains(".onChange(of: overlayState.showOverlayMenu)"),
             "Un `.onChange` brut a remplacé `.adaptiveOnChange` — régression de la convention du dépôt."
         )
+    }
+
+    // MARK: - #11339 — l'aperçu lit vocaux et vidéos, dans les trois modes
+
+    /// Les lecteurs du fil DÉCLARENT leur zone de lecture ; l'aperçu y perce son
+    /// masque, rend le vocal au coordinateur et l'arrête à la fermeture. Les
+    /// deux faces (bulle, rangée plate) reçoivent le même rappel de lecture.
+    func test_preview_playbackZones_areDeclaredByThePlayers_andReadByTheMask() throws {
+        let router = try source("Features/Main/Views/Bubble/AudioBubbleRouter.swift")
+        XCTAssertTrue(router.contains(".modifier(MessagePreviewPlaybackZoneMarker(attachmentId: attachmentId))"),
+                      "Le lecteur du vocal déclare sa zone de lecture.")
+        let video = try source("Features/Main/Views/VideoAvailabilityResolver.swift")
+        XCTAssertTrue(video.contains(".modifier(MessagePreviewPlaybackZoneMarker(attachmentId: attachment.id))"),
+                      "Le lecteur de la vidéo déclare sa zone de lecture.")
+
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertTrue(menu.contains(".overlayPreferenceValue(MessagePreviewPlaybackZoneKey.self)"), "Le masque lit les zones.")
+        XCTAssertTrue(menu.contains("interactive: touch.offersPlayback"), "Le contenu ne se touche que s'il porte une zone.")
+        XCTAssertTrue(menu.contains("bubble.onPlayAudio = { playFromPreview($0) }"), "La bulle de l'aperçu lit le vocal.")
+        XCTAssertTrue(menu.contains("onPlayAudio: { playFromPreview($0) }"), "La rangée plate de l'aperçu lit le vocal.")
+        XCTAssertTrue(menu.contains(".onDisappear { stopPreviewPlayback() }"), "La fermeture arrête la lecture lancée.")
+
+        let cell = try source("Features/Main/Components/MessageOverlayCellPreview.swift")
+        XCTAssertTrue(cell.contains("FocalRow(input: input, actions: rowActions)"))
+        XCTAssertTrue(cell.contains("actions.onPlayAudio = onPlayAudio"))
+        XCTAssertTrue(cell.contains(".allowsHitTesting(interactive)"))
     }
 }

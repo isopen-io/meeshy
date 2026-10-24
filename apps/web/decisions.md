@@ -5804,3 +5804,17 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 - `measure-weight.mjs` (`dynamic_only: true`) rougit sur le graphe construit si un fichier produit importe le chunk statiquement.
 
 **La limite connue.** Un compte sans rôle d'administration ne voit aucune entrée vers `/adm`, car le barreau Administration du menu flottant lui est caché. Mais s'il tape l'adresse lui-même, la route charge le catalogue, parce que l'écran « Espace réservé » lit `admin.denied.*` dans ce catalogue. La passerelle reste seule juge du droit (`/admin/permissions`). Pour qu'un tel compte ne charge rien, il faudrait vérifier le rôle avant le chargement et sortir les deux libellés du refus vers le catalogue commun, qui a sept langues et un plafond serré. Ce travail se suit dans #12481.
+
+## D-226 — L'aperçu d'appui long lit les vocaux et les vidéos : son seul bouton de lecture relaie au lecteur de la rangée vivante (2026-10-24, #11339, décision porteur option B)
+
+**Le contexte.** L'aperçu du menu d'un message est un CLONE du DOM vivant (#5814), entièrement `inert` : un vocal ou une vidéo ne s'y lisait pas. Le porteur a tranché l'option B de #11339 : l'aperçu lit les vocaux et les vidéos, dans les trois modes, comme iOS.
+
+**La décision.** `lib/view/message-preview-playback.ts › armPreviewPlayback` arme le clone après sa projection (`projectMessagePreview`).
+- Seuls les boutons de LECTURE reprennent vie : `[data-voice-play]` (le bouton du vocal, `attachment-blocks.tsx`) et `[data-video-control="play-pause"]` (`video-tile.tsx`). Tout le reste du clone est rendu `inert` (le chemin vers les boutons excepté) ; l'hôte n'est plus `inert` ni `aria-hidden` et devient un groupe nommé « Aperçu du message » (`message.menu.preview`, sept langues). Sans bouton lisible, l'hôte reste l'image inerte d'avant.
+- Le bouton du clone RELAIE au bouton jumeau de la rangée vivante (même `data-attachment`), voilée sous le menu : un seul moteur, un seul son (`mediaCoordinator`), le même rapport de consommation et le même mini-lecteur que le fil. Le clone recopie l'état du bouton vivant et le temps du vocal (`MutationObserver`), et peint dans son canvas les images d'une vidéo qui joue (`requestAnimationFrame`, arrêté à la pause).
+- Le clic ne remonte pas au voile : le menu reste ouvert. La fermeture coupe les relais et met en pause ce que l'aperçu a lancé, et seulement cela.
+- Une pièce sous une forme protégée (`[data-protected]`, `[data-protected-rest]`) n'offre aucun bouton : le clone ne lit jamais ce que le fil retient.
+- Le clavier atteint le bouton : le piège de Tab du menu (`onClusterKeyDown`) insère les boutons de l'aperçu avant la première entrée (`previewTabTarget`).
+
+**Les gardes.** `lib/view/message-preview-playback.test.ts` (zone tactile, relais, inertie, arrêt à la fermeture, protection, ordre de tabulation) et `components/message-menu-preview-playback.test.tsx` (par le menu entier : clic ⇒ lecture et menu ouvert, Échap ⇒ pause, vue unique ⇒ rien, Tab ⇒ le bouton).
+
