@@ -51,6 +51,14 @@ export declare function androidShellPlugins(
   manifestOf: (name: string) => unknown,
 ): readonly string[];
 
+export declare function auditReadableManifests(
+  packageJson: Readonly<{
+    readonly dependencies?: Readonly<Record<string, string>>;
+    readonly devDependencies?: Readonly<Record<string, string>>;
+  }>,
+  manifestOf: (name: string) => unknown,
+): readonly string[];
+
 export declare function auditAndroidShellLinks(input: Readonly<{
   readonly plugins: readonly string[];
   readonly settingsGradle: string;

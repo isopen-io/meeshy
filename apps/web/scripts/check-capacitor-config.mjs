@@ -291,6 +291,19 @@ export function androidShellPlugins(packageJson, manifestOf) {
   return declared.filter((name) => manifestOf(name)?.capacitor?.android !== undefined).sort();
 }
 
+/**
+ * #11229 — PURE. `androidShellPlugins` écarte un paquet sans manifeste : sur
+ * une install partielle ou périmée, la liste des plugins serait vide et la
+ * garde des liens gradle passerait sans rien avoir vérifié. Une dépendance
+ * déclarée dont le manifeste est illisible est donc une violation à part.
+ */
+export function auditReadableManifests(packageJson, manifestOf) {
+  const declared = Object.keys({ ...packageJson?.dependencies, ...packageJson?.devDependencies }).sort();
+  return declared
+    .filter((name) => manifestOf(name) === undefined)
+    .map((name) => `manifeste illisible pour ${name} (node_modules/${name}/package.json) : lancer \`bun install --ignore-scripts\` avant le gate.`);
+}
+
 /** Le nom de module que `cap sync` donne à un plugin (`@capacitor/cli`, `android/update.js` § `getGradlePackageName`). */
 const gradleModuleOf = (name) => name.replace('@', '').replace('/', '-');
 
@@ -417,11 +430,15 @@ function run() {
     const path = join(ROOT, 'node_modules', name, 'package.json');
     return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
   };
-  const linkViolations = auditAndroidShellLinks({
-    plugins: androidShellPlugins(JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')), manifestOf),
-    settingsGradle: readFileSync(join(ROOT, 'android/capacitor.settings.gradle'), 'utf8'),
-    buildGradle: readFileSync(join(ROOT, 'android/app/capacitor.build.gradle'), 'utf8'),
-  });
+  const webPackageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const linkViolations = [
+    ...auditReadableManifests(webPackageJson, manifestOf),
+    ...auditAndroidShellLinks({
+      plugins: androidShellPlugins(webPackageJson, manifestOf),
+      settingsGradle: readFileSync(join(ROOT, 'android/capacitor.settings.gradle'), 'utf8'),
+      buildGradle: readFileSync(join(ROOT, 'android/app/capacitor.build.gradle'), 'utf8'),
+    }),
+  ];
   if (linkViolations.length > 0) {
     violations.push(...linkViolations.map((v) => `[android] ${v}`));
   } else {

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   androidShellPlugins,
   auditAndroidShellLinks,
+  auditReadableManifests,
   auditHookDeclaration,
   auditWebViewFloor,
   auditSyncedPlugins,
@@ -202,6 +203,21 @@ describe('androidShellPlugins — les dépendances qui portent un module Android
 
   test('un manifeste illisible ne fait pas un plugin', () => {
     expect(androidShellPlugins({ dependencies: { x: '1' } }, () => undefined)).toEqual([]);
+  });
+});
+
+describe('auditReadableManifests — la garde ne passe pas sur une install partielle', () => {
+  test('chaque dépendance déclarée a un manifeste lisible -> aucune violation', () => {
+    const packageJson = { dependencies: { '@capacitor/haptics': '8.0.2' }, devDependencies: { vite: '7' } };
+    expect(auditReadableManifests(packageJson, () => ({}))).toEqual([]);
+  });
+
+  test('un manifeste illisible pour une dépendance déclarée -> violation qui la nomme et dit quoi lancer', () => {
+    const packageJson = { dependencies: { '@capacitor/haptics': '8.0.2', preact: '10' } };
+    const violations = auditReadableManifests(packageJson, (name: string) => (name === 'preact' ? {} : undefined));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('@capacitor/haptics');
+    expect(violations[0]).toContain('bun install');
   });
 });
 
