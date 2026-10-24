@@ -309,7 +309,7 @@ private fun SearchResults(
             GlobalSearchTab.MESSAGES -> items(state.results.messages, key = { it.message.id }) { hit ->
                 MessageHitRow(
                     hit = hit,
-                    avatarUrl = hit.conversation?.displayedAvatar(state.currentUserId),
+                    identity = hit.identity(state.currentUserId),
                     query = state.resultsQuery,
                     onClick = { onOpenConversation(hit.message.conversationId) },
                 )
@@ -345,13 +345,13 @@ private fun ResultCard(onClick: () -> Unit, content: @Composable androidx.compos
 }
 
 @Composable
-private fun MessageHitRow(hit: MessageSearchHit, avatarUrl: String?, query: String, onClick: () -> Unit) {
+private fun MessageHitRow(hit: MessageSearchHit, identity: MessageHitIdentity, query: String, onClick: () -> Unit) {
     ResultCard(onClick = onClick) {
-        MeeshyAvatar(name = hit.conversationTitle, size = 40.dp, imageUrl = avatarUrl)
+        MeeshyAvatar(name = identity.title, size = 40.dp, imageUrl = identity.avatarUrl)
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = hit.conversationTitle.ifBlank { hit.message.sender?.displayName ?: "" },
+                text = identity.title.ifBlank { hit.message.sender?.displayName ?: "" },
                 style = MaterialTheme.typography.titleSmall,
                 color = MeeshyTheme.tokens.textPrimary,
                 maxLines = 1,
