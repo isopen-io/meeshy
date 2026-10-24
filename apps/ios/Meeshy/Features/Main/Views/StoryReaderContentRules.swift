@@ -41,14 +41,53 @@ enum StoryReaderContentRules {
     /// autant que la légende du post : avant 2026-07-25 seule la légende était
     /// consultée, si bien qu'une story faite de texte sur le canvas — le cas
     /// courant — n'offrait aucune langue à explorer malgré ses traductions.
+    ///
+    /// Les langues du SON y entrent aussi (#12646) : une langue qui n'existe
+    /// qu'en transcription ou en piste traduite se choisit au rail comme les
+    /// autres, sans quoi une story parlée n'offrait qu'un « + ».
     static func availableTranslationLanguages(of story: StoryItem?) -> [TranslationLanguage] {
         guard let story else { return [] }
-        let availableCodes = Set(StoryTextLanguageAvailability.availableLanguages(
+        let textCodes = StoryTextLanguageAvailability.availableLanguages(
             effects: story.storyEffects,
             postTranslations: story.translations
-        ))
-        guard !availableCodes.isEmpty else { return [] }
-        return TranslationLanguage.all.filter { availableCodes.contains($0.id) }
+        )
+        let soundCodes = StoryAudioTranscript.availableLanguages(effects: story.storyEffects)
+        return languages(matching: textCodes + soundCodes)
+    }
+
+    /// Les langues dans lesquelles la transcription se LIT — une transcription
+    /// vide n'en ouvre aucune. Alimente le sous-menu « Transcription » du menu
+    /// « … » (#12646).
+    static func transcriptLanguages(effects: StoryEffects?) -> [TranslationLanguage] {
+        let codes = (effects?.voiceTranscriptions ?? [])
+            .filter { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .map(\.language)
+        return languages(matching: codes)
+    }
+
+    /// Le sous-menu « Transcription » d'une story : ses langues, celle que la
+    /// chaîne du lecteur sert, et le choix que le rail partage.
+    static func transcriptMenu(of story: StoryItem?, chain: [String], select: @escaping (String?) -> Void) -> StoryTranscriptMenu {
+        let effects = story?.storyEffects
+        return StoryTranscriptMenu(
+            languages: transcriptLanguages(effects: effects),
+            servedLanguage: StoryAudioTranscript.resolve(effects: effects, preferredLanguages: chain)?.language,
+            select: select
+        )
+    }
+
+    /// Le catalogue, dans son ordre, restreint aux codes donnés — comparés sur
+    /// leur langue de base (`fr-FR` sert `fr`).
+    private static func languages(matching codes: [String]) -> [TranslationLanguage] {
+        let bases = Set(codes.compactMap(baseLanguage))
+        guard !bases.isEmpty else { return [] }
+        return TranslationLanguage.all.filter { bases.contains($0.id.lowercased()) }
+    }
+
+    private static func baseLanguage(_ code: String) -> String? {
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let base = trimmed.split(whereSeparator: { $0 == "-" || $0 == "_" }).first else { return nil }
+        return String(base)
     }
 
     static func hasTranslatableContent(_ story: StoryItem?) -> Bool {

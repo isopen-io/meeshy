@@ -281,15 +281,13 @@ extension ConversationListView {
         if let conversation = sheetTargets.contextMenu {
             ConversationPreviewMotionReader { reduceMotion in
                 ZStack {
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .ignoresSafeArea()
-                        .overlay(Color.black.opacity(MeeshyOpacity.light).ignoresSafeArea())
-                        .contentShape(Rectangle())
-                        .onTapGesture { dismissContextMenu() }
-                        // Le blur du fond s'EFFACE pendant le morph drag : la
-                        // liste réapparaît sous la carte devenue chip draggable.
-                        .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
+                    // Le voile commun de l'appui long (#11222) : il s'EFFACE
+                    // pendant le morph drag, la liste réapparaît sous la carte
+                    // devenue chip draggable.
+                    LongPressVeil(
+                        visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0,
+                        onDismiss: { dismissContextMenu() }
+                    )
 
                     VStack(spacing: MeeshySpacing.lg) {
                         // Aperçu d'appui long = la carte des DERNIERS MESSAGES

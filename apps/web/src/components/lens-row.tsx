@@ -34,6 +34,7 @@ import { THREAD_SEARCH_PARAM } from '@/lib/view/thread-search-door';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { useLongPress } from '@/lib/view/long-press';
+import { useExitMotion } from '@/lib/view/exit-presence';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
@@ -392,6 +393,9 @@ function LensRowImpl({
   const swipeSides = () =>
     conversationRowSwipeSides({ flags, unread, language: currentInterfaceLanguage(), canDelete: account });
   const swipe = useConversationRowSwipe(swipeSides);
+  /* ARCHIVÉE OU SUPPRIMÉE, LA LIGNE SE REPLIE AVANT DE PARTIR (#11574) — quand
+     l'`ExitPresence` de la liste la déclare sortante. */
+  useExitMotion(swipe.rowProps.ref);
   /* L'APPUI LONG OUVRE L'APERÇU (#11211) — `useLongPress`, sur la ligne
      entière, à côté du balayage : un doigt qui bouge de plus de 6 px annule
      l'appui avant que le balayage ne s'engage. Seuls ses gestes de POINTEUR
@@ -725,7 +729,7 @@ function LensRowImpl({
               droite que le « 1 min » de la rangée suivante. Rien ne
               s'alignait, parce que rien n'avait de colonne.
             */}
-            <UnreadBadge count={unreadCount} opacity={chromeFade} />
+            <UnreadBadge count={unreadCount} opacity={chromeFade} language={labelLanguage} />
           </span>
 
           {/*

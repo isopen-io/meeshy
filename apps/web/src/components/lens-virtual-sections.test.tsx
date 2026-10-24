@@ -77,7 +77,9 @@ afterEach(() => {
   container.remove();
 });
 
-function List({ sections }: { readonly sections: readonly LensSectionData[] }) {
+type Exits = { readonly scope: string; readonly rowMayExit: (id: string) => boolean; readonly sectionMayExit: (id: string) => boolean };
+
+function List({ sections, exits }: { readonly sections: readonly LensSectionData[]; readonly exits?: Exits }) {
   const frame = useRef<HTMLUListElement | null>(null);
   return (
     <ul ref={frame} id="contenu">
@@ -85,6 +87,7 @@ function List({ sections }: { readonly sections: readonly LensSectionData[] }) {
         frame={frame}
         sections={sections}
         folds={sections.map(() => undefined)}
+        {...(exits === undefined ? {} : { exits })}
         rowOf={(c, place) => (
           <LensRow
             key={c.id}
@@ -145,12 +148,18 @@ const oneFrame = () =>
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   });
 
-function mount(sections: readonly LensSectionData[]) {
+function mount(sections: readonly LensSectionData[], exits?: Exits) {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(<List sections={sections} />);
+    root.render(<List sections={sections} {...(exits === undefined ? {} : { exits })} />);
+  });
+}
+
+function rerender(sections: readonly LensSectionData[], exits?: Exits) {
+  act(() => {
+    root.render(<List sections={sections} {...(exits === undefined ? {} : { exits })} />);
   });
 }
 
@@ -233,6 +242,31 @@ describe('LensVirtualSections — la liste ne monte que les rangées visibles', 
     expect(sameRowProps(rowAt(3, 18), rowAt(3, 18))).toBe(true);
     expect(sameRowProps(rowAt(3, 18), rowAt(4, 18))).toBe(false);
     expect(sameRowProps(rowAt(3, 18), rowAt(3, 19))).toBe(false);
+  });
+
+  test('une conversation archivée se replie à SA place, et aucune cale ne la suit en sortie (#11574)', () => {
+    const remaining = CORPUS.filter((c) => c.id !== 'c-003');
+    const exitsOf = (alive: readonly Conversation[]): Exits => {
+      const ids = new Set(alive.map((c) => c.id));
+      return { scope: 'all', rowMayExit: (id) => !ids.has(id), sectionMayExit: () => false };
+    };
+    mount(sectionsOf(CORPUS), exitsOf(CORPUS));
+    rerender(sectionsOf(remaining), exitsOf(remaining));
+    const leaving = container.querySelector<HTMLElement>('[data-row="c-003"]');
+    expect(leaving?.hasAttribute('data-row-exiting')).toBe(true);
+    expect(container.querySelector('[data-row="c-002"]')?.hasAttribute('data-row-exiting')).toBe(false);
+    const staying = [...container.querySelectorAll<HTMLElement>('[data-row]')].filter((row) => !row.hasAttribute('data-row-exiting'));
+    const reserved = [...container.querySelectorAll<HTMLElement>('[data-row-gap]')].reduce((sum, gap) => sum + Number.parseFloat(gap.style.height || '0'), 0);
+    expect(reserved + staying.length * ROW_HEIGHT).toBe(499 * ROW_HEIGHT);
+  });
+
+  test('défiler sous ExitPresence ne laisse ni cale ni rangée en sortie : seule une conversation PARTIE sort', async () => {
+    const ids = new Set(CORPUS.map((c) => c.id));
+    mount(sectionsOf(CORPUS), { scope: 'all', rowMayExit: (id) => !ids.has(id), sectionMayExit: () => false });
+    await scrollSectionTo('lentille.older', 200);
+    expect(container.querySelectorAll('[data-row-exiting]').length).toBe(0);
+    const reserved = [...container.querySelectorAll<HTMLElement>('[data-row-gap]')].reduce((sum, gap) => sum + Number.parseFloat(gap.style.height || '0'), 0);
+    expect(reserved + mountedRows().length * ROW_HEIGHT).toBe(500 * ROW_HEIGHT);
   });
 
   test('le total des rangées que la liste PORTE compte les cales, jamais les sections repliées', () => {
