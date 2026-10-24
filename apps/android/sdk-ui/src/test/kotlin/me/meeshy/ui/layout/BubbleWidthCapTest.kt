@@ -3,7 +3,7 @@ package me.meeshy.ui.layout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertWidthIsEqualTo
@@ -29,7 +29,9 @@ class BubbleWidthCapTest {
 
     private fun showBubble(rowWidth: Int, widthClass: WindowWidthClass, gutter: Int = 0) {
         compose.setContent {
-            Box(Modifier.width(rowWidth.dp)) {
+            // requiredWidth : l'ecran Robolectric par defaut (~320 dp) bornerait un simple width() et
+            // la rangee mesuree ne serait plus celle que le test declare.
+            Box(Modifier.requiredWidth(rowWidth.dp)) {
                 Box(
                     Modifier
                         .bubbleWidthCap(widthClass, windowWidthDp = 1000f, horizontalGutter = gutter.dp)

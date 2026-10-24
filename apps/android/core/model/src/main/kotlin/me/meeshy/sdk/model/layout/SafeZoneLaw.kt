@@ -43,9 +43,6 @@ object SafeZoneLaw {
     /** Air minimal entre le bas de la decoupe et le haut d'un element pose dessous. */
     const val CUTOUT_CLEARANCE_DP: Float = 12f
 
-    /** Tolerance pour dire qu'une decoupe « touche » le bord haut de la fenetre. */
-    private const val TOP_EDGE_TOLERANCE_DP: Float = 1f
-
     fun insets(systemBars: EdgeInsetsDp, cutout: EdgeInsetsDp): EdgeInsetsDp = EdgeInsetsDp(
         left = maxOf(systemBars.left, cutout.left, 0f),
         top = maxOf(systemBars.top, cutout.top, 0f),
@@ -74,11 +71,17 @@ object SafeZoneLaw {
         return centerY.coerceIn(low, high)
     }
 
-    /** La decoupe qui touche le bord haut, la plus proche du centre horizontal ; `null` sans decoupe en haut. */
+    /**
+     * La decoupe du bord haut, la plus proche du centre horizontal ; `null` sans decoupe en haut.
+     *
+     * Une decoupe appartient au bord haut quand elle en est plus proche que des bords gauche et
+     * droit : un poincon flotte souvent a quelques dp du bord (comme l'ilot iOS, centre dans la
+     * marge haute), il ne le touche pas forcement. Une decoupe laterale (paysage) ou basse n'en est pas.
+     */
     fun topCutout(cutouts: List<RectDp>, windowWidthDp: Float): RectDp? {
         val middle = windowWidthDp / 2f
         return cutouts
-            .filter { it.top <= TOP_EDGE_TOLERANCE_DP && it.bottom > it.top }
+            .filter { it.bottom > it.top && it.top <= minOf(it.left, windowWidthDp - it.right) }
             .minByOrNull { kotlin.math.abs(it.centerX - middle) }
     }
 
