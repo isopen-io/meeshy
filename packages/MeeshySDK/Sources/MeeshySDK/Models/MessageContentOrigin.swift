@@ -14,55 +14,86 @@ import Foundation
 /// le déchiffrement (le REST rend le cryptogramme) rompt l'empreinte : la
 /// provenance ne couvre plus le texte, et le message redevient scellé.
 ///
-/// L'empreinte est un HMAC-SHA256 du clair LIÉ À L'ID du message, jamais le
-/// clair lui-même ni son SHA-256 nu : une empreinte nue se renverse par
-/// dictionnaire (« oui ») et relie deux messages au même clair. Elle ne
-/// quitte pas l'appareil — aucun producteur réseau ne la décode (`APIMessage`
-/// ne la porte pas), seul le cache local (chiffré au repos) la relit — et
-/// n'y voyage qu'À CÔTÉ du clair qu'elle couvre : un texte effacé ou réécrit
-/// emporte sa provenance avec lui (`MeeshyMessage.content`, `didSet`), donc
-/// aucune empreinte d'un clair disparu ne survit à l'effacement.
+/// L'empreinte est un HMAC-SHA256 du clair, ENCADRÉ par l'id du message, sous
+/// une clé SECRÈTE de cet appareil (`ContentOriginDeviceKey`, #11402) — jamais
+/// le clair lui-même ni son SHA-256 nu : une empreinte nue se renverse par
+/// dictionnaire (« oui ») et relie deux messages au même clair. La clé n'est
+/// pas dérivée d'une donnée publique : la passerelle, un cache réécrit ou une
+/// sauvegarde restaurée ailleurs ne recalculent pas l'empreinte d'un texte
+/// forgé. Elle ne quitte pas l'appareil — aucun producteur réseau ne la
+/// décode (`APIMessage` ne la porte pas), seul le cache local (chiffré au
+/// repos) la relit — et n'y voyage qu'À CÔTÉ du clair qu'elle couvre : un
+/// texte effacé ou réécrit emporte sa provenance avec lui
+/// (`MeeshyMessage.content`, `didSet`), donc aucune empreinte d'un clair
+/// disparu ne survit à l'effacement.
 public enum MessageContentOrigin: Sendable, Equatable {
     case wire
     case decryptedOnDevice(digest: String)
 
     /// La provenance d'un clair que l'appareil vient de déchiffrer pour CE message.
     public static func decrypted(_ plaintext: String, messageId: String) -> MessageContentOrigin {
-        .decryptedOnDevice(digest: digest(of: plaintext, messageId: messageId))
+        decrypted(plaintext, messageId: messageId, key: ContentOriginDeviceKey.current)
     }
 
-    /// Cette provenance couvre-t-elle CE texte, pour CE message ? `.wire` ne
-    /// couvre jamais rien.
+    static func decrypted(_ plaintext: String, messageId: String, key: Data) -> MessageContentOrigin {
+        .decryptedOnDevice(digest: digest(of: plaintext, messageId: messageId, key: key))
+    }
+
+    /// Cette provenance couvre-t-elle CE texte, pour CE message, sur CET
+    /// appareil ? `.wire` ne couvre jamais rien.
     public func vouches(for content: String, messageId: String) -> Bool {
-        guard case .decryptedOnDevice(let digest) = self else { return false }
-        return digest == Self.digest(of: content, messageId: messageId)
+        vouches(for: content, messageId: messageId, key: ContentOriginDeviceKey.current)
     }
 
-    private static let domain = "meeshy.message.contentOrigin.v1:"
+    func vouches(for content: String, messageId: String, key: Data) -> Bool {
+        guard case .decryptedOnDevice(let digest) = self else { return false }
+        return Self.constantTimeEquals(digest, Self.digest(of: content, messageId: messageId, key: key))
+    }
 
-    private static func digest(of content: String, messageId: String) -> String {
-        let key = SymmetricKey(data: Data((domain + messageId).utf8))
-        return HMAC<SHA256>.authenticationCode(for: Data(content.utf8), using: key)
+    private static let domain = Data("meeshy.message.contentOrigin.v2".utf8)
+
+    /// `domaine ‖ longueur(id) sur 4 octets ‖ id ‖ clair` : l'id et le clair
+    /// ne se recombinent pas l'un dans l'autre.
+    private static func digest(of content: String, messageId: String, key: Data) -> String {
+        let id = Data(messageId.utf8)
+        let idLength = withUnsafeBytes(of: UInt32(id.count).bigEndian) { Data($0) }
+        let framed = domain + idLength + id + Data(content.utf8)
+        return HMAC<SHA256>.authenticationCode(for: framed, using: SymmetricKey(data: key))
             .map { String(format: "%02x", $0) }
             .joined()
+    }
+
+    private static func constantTimeEquals(_ lhs: String, _ rhs: String) -> Bool {
+        let left = Array(lhs.utf8)
+        let right = Array(rhs.utf8)
+        guard left.count == right.count else { return false }
+        return zip(left, right).reduce(UInt8(0)) { acc, pair in acc | (pair.0 ^ pair.1) } == 0
     }
 }
 
 // MARK: - Codage (cache local)
 
+/// `decryptedOnDevice.v2` porte une empreinte sous la clé de l'appareil. Une
+/// ligne écrite par #11382 (`decryptedOnDevice`, clé dérivée de l'id, que
+/// n'importe qui recalcule) n'est plus vérifiable : elle se relit `.wire` —
+/// le texte reste affiché, seule la provenance tombe (fail-closed). Un ancien
+/// client qui relit une ligne `v2` n'en connaît pas le genre et la relit
+/// `.wire` de même.
 extension MessageContentOrigin: Codable {
     private enum CodingKeys: String, CodingKey {
         case kind, digest
     }
 
     private enum Kind: String, Codable {
-        case wire, decryptedOnDevice
+        case wire
+        case idKeyedLegacy = "decryptedOnDevice"
+        case decryptedOnDevice = "decryptedOnDevice.v2"
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         switch try c.decode(Kind.self, forKey: .kind) {
-        case .wire:
+        case .wire, .idKeyedLegacy:
             self = .wire
         case .decryptedOnDevice:
             self = .decryptedOnDevice(digest: try c.decode(String.self, forKey: .digest))

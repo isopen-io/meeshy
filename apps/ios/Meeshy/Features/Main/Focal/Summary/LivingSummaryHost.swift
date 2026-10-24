@@ -23,6 +23,7 @@ struct LivingSummaryHost: View {
     var onReplyToPerson: (FaceRampEntry) -> Void
     var onOpenEpisode: (ConversationEpisode) -> Void
     var onResumeThread: () -> Void
+    var entryMenu: SummaryEntryMenu?
 
     @StateObject private var viewModel: LivingSummaryViewModel
 
@@ -37,13 +38,15 @@ struct LivingSummaryHost: View {
         protections: [SummaryProtectionEntry] = [],
         onReplyToPerson: @escaping (FaceRampEntry) -> Void,
         onOpenEpisode: @escaping (ConversationEpisode) -> Void,
-        onResumeThread: @escaping () -> Void
+        onResumeThread: @escaping () -> Void,
+        entryMenu: SummaryEntryMenu? = nil
     ) {
         self.isDark = isDark
         self.protections = protections
         self.onReplyToPerson = onReplyToPerson
         self.onOpenEpisode = onOpenEpisode
         self.onResumeThread = onResumeThread
+        self.entryMenu = entryMenu
         _viewModel = StateObject(wrappedValue: LivingSummaryAssembly.makeViewModel(
             LivingSummaryAssembly.Input(
                 messages: messages,
@@ -66,7 +69,8 @@ struct LivingSummaryHost: View {
             protections: protections,
             onReplyToPerson: onReplyToPerson,
             onOpenEpisode: onOpenEpisode,
-            onResumeThread: onResumeThread
+            onResumeThread: onResumeThread,
+            entryMenu: entryMenu
         )
     }
 }

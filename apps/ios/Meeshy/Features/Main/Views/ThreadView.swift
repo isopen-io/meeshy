@@ -6,6 +6,9 @@ import MeeshyUI
 struct ThreadView: View {
     let parentMessage: MeeshyMessage
     let conversationId: String
+    /// Le chemin de la réponse : par la conversation (scellée ou refusée) quand
+    /// elle est chiffrée de bout en bout, sinon REST ou outbox (#11379).
+    let replyDispatcher: ThreadReplyDispatcher
 
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
@@ -308,6 +311,10 @@ struct ThreadView: View {
     /// durably enqueued via the SAME `ofq_*` outbox row
     /// `OutboxDispatcher.dispatchSendMessage` already replays for
     /// `ConversationViewModel`, instead of being attempted (and lost).
+    ///
+    /// #11379 — dans une conversation chiffrée, `replyDispatcher` passe par
+    /// l'envoi de la conversation : la bulle (en échec, renvoyable) vit au
+    /// fil principal, et le fil de réponses dit pourquoi rien n'est parti.
     private func sendReply() {
         let text = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
@@ -318,8 +325,33 @@ struct ThreadView: View {
         sendError = nil
 
         let clientMessageId = ClientMessageId.generate()
+        let sealed = replyDispatcher.requiresSeal()
+        if !sealed { replies.append(optimisticReply(text: text, clientMessageId: clientMessageId)) }
+
+        Task {
+            do {
+                switch try await replyDispatcher.dispatch(text: text, clientMessageId: clientMessageId) {
+                case .sent:
+                    isSending = false
+                    await loadReplies()
+                case .queued:
+                    isSending = false
+                case .refused(let reason):
+                    sendError = reason
+                    isSending = false
+                }
+            } catch {
+                replies.removeAll { $0.id == clientMessageId }
+                replyText = savedText
+                sendError = error.localizedDescription
+                isSending = false
+            }
+        }
+    }
+
+    private func optimisticReply(text: String, clientMessageId: String) -> MeeshyMessage {
         let user = AuthManager.shared.currentUser
-        let optimisticReply = MeeshyMessage(
+        return MeeshyMessage(
             id: clientMessageId,
             clientMessageId: clientMessageId,
             conversationId: conversationId,
@@ -333,41 +365,5 @@ struct ThreadView: View {
             deliveryStatus: .sending,
             isMe: true
         )
-        replies.append(optimisticReply)
-
-        Task {
-            guard NetworkMonitor.shared.isOnline else {
-                let queueItem = OfflineQueueItem(
-                    conversationId: conversationId,
-                    content: text,
-                    clientMessageId: clientMessageId,
-                    replyToId: parentMessage.id
-                )
-                do {
-                    try await OfflineQueue.shared.enqueue(queueItem)
-                    isSending = false
-                } catch {
-                    replies.removeAll { $0.id == clientMessageId }
-                    replyText = savedText
-                    sendError = error.localizedDescription
-                    isSending = false
-                }
-                return
-            }
-            do {
-                let request = SendMessageRequest(content: text, replyToId: parentMessage.id, clientMessageId: clientMessageId)
-                _ = try await MessageService.shared.send(
-                    conversationId: conversationId,
-                    request: request
-                )
-                isSending = false
-                await loadReplies()
-            } catch {
-                replies.removeAll { $0.id == clientMessageId }
-                replyText = savedText
-                sendError = error.localizedDescription
-                isSending = false
-            }
-        }
     }
 }

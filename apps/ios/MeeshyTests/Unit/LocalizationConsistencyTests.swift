@@ -176,6 +176,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
+        // #11230 — les libellés du menu d'une rangée ont quitté le menu custom
+        // pour le catalogue que les deux chemins d'OS lisent : le cliquet suit.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMenuCatalog.swift",
         "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",  // 20
         "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
@@ -922,6 +925,16 @@ final class LocalizationConsistencyTests: XCTestCase {
         let mixed = forwarded + "\nlet b = label(bundle: .main)"
         XCTAssertEqual(localizedCalls(in: mixed).map(\.isModuleBundle), [false],
                        "un paramètre aussi rempli par `.main` reste compté contre le catalogue de l'app")
+
+        let labelled = """
+        static var failed: String { failed(in: .module) }
+        static func failed(in bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: labelled).map(\.isModuleBundle), [true],
+                       "le paramètre se remplit sous son ÉTIQUETTE (`in: .module`), pas sous son nom")
+        XCTAssertEqual(localizedCalls(in: labelled + "\nlet b = failed(in: .main)").map(\.isModuleBundle), [false])
     }
 
     /// Keys with at least one locale expressed as plural variations.

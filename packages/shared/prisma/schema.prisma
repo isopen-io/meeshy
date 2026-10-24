@@ -3261,6 +3261,116 @@ model SignalPreKeyBundle {
 }
 
 /// =====================================================
+/// ANNUAIRE E2EE PAR APPAREIL — libsignal (#3706)
+/// Spec docs/superpowers/specs/2026-10-23-e2ee-libsignal-ios-macos.md § 3.3, § 4.3.
+/// Le serveur ne détient QUE des clés publiques et des enveloppes opaques.
+/// Aucun de ces modèles ne déclare de clé non publique (témoin e2ee-directory-schema.test.ts).
+/// =====================================================
+
+/// Un appareil enrôlé (iPhone, Mac) : son identité publique, sa pré-clé signée
+/// EC et sa pré-clé Kyber de dernier recours, toutes deux signées XEdDSA par
+/// l'identité. `deviceId` = une place 1…E2EE_MAX_ACTIVE_DEVICES ; un appareil retiré
+/// rend la sienne, jamais à la même registrationId (#12543).
+model E2EEDevice {
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String @db.ObjectId
+  deviceId       Int
+  registrationId Int
+
+  /// Clé d'identité Curve25519 publique sérialisée par libsignal (33 octets), base64.
+  identityKey String
+
+  signedPreKeyId        Int
+  signedPreKey          String
+  signedPreKeySignature String
+
+  kyberLastResortId        Int
+  kyberLastResort          String
+  kyberLastResortSignature String
+
+  /// La session UserSession (claim `sid`) qui a enrôlé l'appareil : seule elle
+  /// écrit ses clés, lit ses enveloppes et envoie en son nom.
+  sessionId String @db.ObjectId
+
+  /// Lien vers PushToken pour le routage du push par appareil (lot NSE, #12537).
+  pushTokenId String? @db.ObjectId
+
+  platform String
+  label    String?
+
+  createdAt             DateTime  @default(now())
+  lastSeenAt            DateTime  @default(now())
+  signedPreKeyRotatedAt DateTime  @default(now())
+  retiredAt             DateTime?
+
+  @@unique([userId, deviceId])
+  @@index([sessionId])
+  @@index([userId, retiredAt])
+}
+
+/// Une identité d'appareil RETIRÉE par le propriétaire du compte (DELETE
+/// /e2ee/devices/:id) : elle ne se réenrôle plus jamais sur ce compte, même avec
+/// une preuve de liaison fraîche. Distincte de E2EEDevice, dont la ligne se
+/// reprend par une autre installation : la révocation survit à la reprise.
+model E2EERevokedIdentity {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  /// Clé d'identité publique révoquée, base64.
+  identityKey String
+  revokedAt   DateTime @default(now())
+
+  @@unique([userId, identityKey])
+}
+
+/// Une pré-clé à usage unique (EC ou Kyber), un document par clé. Réservée UNE
+/// fois, atomiquement (findAndModify sur usedAt: null).
+model E2EEOneTimePreKey {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String  @db.ObjectId
+  deviceId  Int
+  /// La génération de l'appareil qui l'a publiée : une place reprise par une
+  /// autre installation ne sert ni n'efface jamais les pré-clés de la précédente.
+  registrationId Int
+  /// "ec" | "kyber"
+  kind      String
+  keyId     Int
+  publicKey String
+  /// Signature XEdDSA par l'identité (Kyber seulement).
+  signature String?
+
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+  /// User.id du demandeur qui a reçu la clé.
+  usedBy    String?   @db.ObjectId
+
+  @@unique([userId, deviceId, registrationId, kind, keyId])
+  @@index([userId, deviceId, registrationId, kind, usedAt])
+}
+
+/// Une enveloppe libsignal opaque adressée à UN appareil destinataire. Effacée à
+/// l'accusé de réception de cet appareil, au plus tard à 30 jours.
+model MessageEnvelope {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId         String   @db.ObjectId
+  conversationId    String   @db.ObjectId
+  recipientUserId   String   @db.ObjectId
+  recipientDeviceId Int
+  /// La génération destinataire : seul l'appareil de cette registrationId la lit.
+  recipientRegistrationId Int
+  senderUserId      String   @db.ObjectId
+  senderDeviceId    Int
+  /// 2 = SignalMessage, 3 = PreKeySignalMessage
+  type              Int
+  /// Le chiffré libsignal, base64.
+  body              String
+  createdAt         DateTime @default(now())
+
+  @@unique([messageId, recipientUserId, recipientDeviceId])
+  @@index([recipientUserId, recipientDeviceId, createdAt])
+  @@index([createdAt])
+}
+
+/// =====================================================
 /// CONVERSATION PUBLIC KEY - E2EE KEY EXCHANGE
 /// =====================================================
 

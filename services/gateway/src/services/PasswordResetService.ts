@@ -28,6 +28,7 @@ import { validatePasswordStrength } from '../utils/password-strength';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
 import { emailProofFields, settleEmailAddressProof } from './auth/email-address-proof';
 import { scheduleContactJoinedAnnouncement } from './notifications/contact-joined';
+import { retireDevicesAfterSessionEnd } from './e2ee/device-retirement';
 import { emailSecretLink } from '../utils/email-secret-link';
 import {
   createResetSecondFactorAttempts,
@@ -500,6 +501,9 @@ export class PasswordResetService {
           }
         });
       });
+      // #12543 — les appareils chiffrés des sessions fermées cessent d'être destinataires.
+      await retireDevicesAfterSessionEnd(this.prisma, { userId: user.id }, (error) =>
+        logger.warn('e2ee devices not retired after password reset; the sweep will', { error }));
 
       if (mailboxProof.emailVerifiedAt) {
         await settleEmailAddressProof(
