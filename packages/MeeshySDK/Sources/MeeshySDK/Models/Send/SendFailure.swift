@@ -9,4 +9,7 @@ public enum SendFailure: Error, Equatable, Sendable {
     case recipientBlocked
     case queuedForRetry(reason: String)
     case retryEnqueueFailed(reason: String)
+    /// Conversation chiffrée de bout en bout : rien n'est parti, rien n'est
+    /// mis en file en clair (#11379). La bulle reste en échec, renvoyable.
+    case endToEndUnsealed(EndToEndSendRefusal)
 }

@@ -13,9 +13,9 @@ import MeeshyUI
 // (`GuestAttachmentRefusal`, `ConversationView+AttachmentHandlers`).
 extension ConversationView {
 
-    /// Ce que CET écrivain peut joindre — sans restriction pour un compte.
+    /// Ce que CET écrivain peut joindre — sans restriction pour un compte, rien en E2EE (#11379).
     var guestAttachmentAllowance: GuestAttachmentAllowance {
-        anonymousSession?.attachmentAllowance ?? .unrestricted
+        (anonymousSession?.attachmentAllowance ?? .unrestricted).sealing(viewModel.endToEndPieceRefusal)
     }
 
     /// Une porte du composeur n'existe que si la famille qu'elle produit est
@@ -80,7 +80,7 @@ extension ConversationView {
         }
         if let refusal = screened.refusals.first {
             FeedbackToastManager.shared.showError(
-                GuestAttachmentCopy.refusal(
+                viewModel.endToEndPieceRefusal?.userMessage ?? GuestAttachmentCopy.refusal(
                     fileName: refusal.fileName,
                     reason: refusal.reason,
                     kinds: guestAttachmentAllowance.kinds ?? []

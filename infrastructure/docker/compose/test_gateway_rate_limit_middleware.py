@@ -6,7 +6,7 @@ existe mais n'est attaché à aucun routeur gateway.
 provider `file` de Traefik — chargé par `docker-compose.prod.yml`
 (`--providers.file.filename=/dynamic.yaml`). `docker-compose.staging.yml` ne
 possède pas son propre service Traefik : `gateway-staging` rejoint le réseau
-externe `meeshy-network` que Traefik (démarré par la stack prod) publie, donc
+externe `meeshy-staging-edge` que Traefik (démarré par la stack prod) partage (#11451), donc
 `rate-limit@file` y est également disponible.
 
 Sans ce middleware sur le routeur, la seule protection de débit à la porte

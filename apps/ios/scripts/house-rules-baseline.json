@@ -11,7 +11,7 @@
     "foreground-color": 2401,
     "idiom": 0,
     "logger-subsystem": 0,
-    "narrative-comment": 2478,
+    "narrative-comment": 2474,
     "nonisolated-unsafe": 110,
     "nslock": 39,
     "nslog": 0,
@@ -23,7 +23,7 @@
     "try-sleep": 50,
     "uiscreen-main": 1,
     "unchecked-sendable": 126,
-    "viewmodel-shared": 584
+    "viewmodel-shared": 583
   },
   "version": 1
 }
