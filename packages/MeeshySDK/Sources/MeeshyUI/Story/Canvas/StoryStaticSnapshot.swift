@@ -63,6 +63,14 @@ public enum StoryStaticSnapshot {
         }.cgImage
     }
 
+    /// **Les vitres des textes à fond Verre** (#12602) : pour chacun, la découpe exacte de son
+    /// fond (blanc opaque sur transparent, même pipeline que `foreground`), la boîte qui l'englobe
+    /// et le flou demandé, en pixels de `size`. Un peintre qui pose `foreground` sur un média
+    /// floute ce média sous chaque vitre : `render(in:)` ne voit pas le flou d'une couche.
+    public static func glassPanes(slide: StorySlide, size: CGSize) -> [StoryGlassPane] {
+        []
+    }
+
     /// Le rendu est UN COUP : un bitmap qu'une tâche poserait une frame plus tard n'atteindrait
     /// jamais l'image. `ComposerImageCacheReader` est le seul lecteur que les couches lisent de
     /// façon SYNCHRONE — c'est par lui que le bitmap d'un sticker collé et celui d'un média de
@@ -130,5 +138,20 @@ public enum StoryStaticSnapshot {
         ctx.clip(to: rect)
         image.draw(in: CGRect(origin: origin, size: scaledSize))
         ctx.restoreGState()
+    }
+}
+
+/// **Une vitre** (#12602) : là où un texte à fond Verre floute ce qu'il y a dessous.
+/// `mask` : la découpe (alpha), à la taille demandée ; `bounds` : sa boîte englobante, en
+/// pixels, origine en HAUT à gauche ; `sigma` : le flou, en pixels de la même taille.
+public nonisolated struct StoryGlassPane: Sendable {
+    public let mask: CGImage
+    public let bounds: CGRect
+    public let sigma: CGFloat
+
+    public init(mask: CGImage, bounds: CGRect, sigma: CGFloat) {
+        self.mask = mask
+        self.bounds = bounds
+        self.sigma = sigma
     }
 }
