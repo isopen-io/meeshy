@@ -77,6 +77,7 @@ final class MessageRowOfferLawTests: XCTestCase {
     private func message(
         id: String = "6a0ad86a6e21a483b4443d11",
         messageSource: Message.MessageSource = .user,
+        deletedAt: Date? = nil,
         effects: MessageEffects = .none,
         deliveryStatus: Message.DeliveryStatus = .sent,
         mine: Bool = false
@@ -87,6 +88,7 @@ final class MessageRowOfferLawTests: XCTestCase {
             senderId: mine ? "6a0ad86a6e21a483b4443da1" : "6a0ad86a6e21a483b4443da2",
             content: "Bonjour",
             messageSource: messageSource,
+            deletedAt: deletedAt,
             effects: effects,
             createdAt: now.addingTimeInterval(-3600),
             updatedAt: now.addingTimeInterval(-3600),
@@ -158,22 +160,40 @@ final class MessageRowOfferLawTests: XCTestCase {
         XCTAssertEqual(offer.accessibilityActions, [.reply])
     }
 
-    // MARK: - Même message, même verdict que le menu
+    // MARK: - D8 (#10949) : un flouté se transfère, flou hérité
 
-    func test_offer_neverOffersWhatTheMenuRefuses() {
-        let cases: [(Message, ConversationMenuAuthority)] = [
-            (message(), authority()),
-            (message(effects: MessageEffects(flags: .viewOnce)), authority()),
-            (message(id: ClientMessageId.generate(), deliveryStatus: .sending), authority()),
-            (message(messageSource: .system), authority()),
-            (message(), authority(isAnnouncementChannel: true)),
-            (message(), authority(encryptionMode: "e2ee"))
+    func test_offer_aBlurredMessage_forwardsWithItsBlur() {
+        let offer = lawOffer(message(effects: MessageEffects(flags: .blurred)), authority())
+        XCTAssertTrue(offer.canForward, "D8 : un flouté se transfère au glissé, la passerelle impose le flou à la copie")
+        XCTAssertTrue(offer.canReply, "répondre reste offert : la citation masque un contenu protégé")
+        XCTAssertEqual(offer.accessibilityActions, [.reply, .forward])
+    }
+
+    // MARK: - Même message, même verdict : la loi énoncée, le menu et la rangée
+
+    /// Les attendus sont ÉNONCÉS, jamais recalculés : la rangée ET la feuille
+    /// « Plus… » se comparent à la loi (`verdicts.canReply`, `verdicts.forward`
+    /// composé avec la loi de sortie, D8 pour le flou), pas l'une à l'autre.
+    func test_offer_andMenu_followTheStatedLaw() {
+        let cases: [(name: String, message: Message, authority: ConversationMenuAuthority, reply: Bool, forward: Bool)] = [
+            ("texte nominal", message(), authority(), true, true),
+            ("flouté (D8)", message(effects: MessageEffects(flags: .blurred)), authority(), true, true),
+            ("vue unique", message(effects: MessageEffects(flags: .viewOnce)), authority(), false, false),
+            ("envoi cid_", message(id: ClientMessageId.generate(), deliveryStatus: .sending), authority(), false, false),
+            ("envoi raté", message(deliveryStatus: .failed), authority(), false, false),
+            ("supprimé", message(deletedAt: now.addingTimeInterval(-60)), authority(), false, false),
+            ("avis système", message(messageSource: .system), authority(), false, false),
+            ("annonce, membre", message(), authority(isAnnouncementChannel: true), false, true),
+            ("annonce, admin", message(), authority(conversationRole: "admin", isAnnouncementChannel: true), true, true),
+            ("E2EE", message(), authority(encryptionMode: "e2ee"), true, false)
         ]
-        for (msg, auth) in cases {
-            let menu = menuOffers(msg, auth)
-            let offer = lawOffer(msg, auth)
-            XCTAssertEqual(offer.canReply, menu.contains(.reply), "glissé et menu divergent sur « Répondre » (\(msg.id))")
-            XCTAssertEqual(offer.canForward, menu.contains(.forward), "glissé et menu divergent sur « Transférer » (\(msg.id))")
+        for c in cases {
+            let offer = lawOffer(c.message, c.authority)
+            let menu = menuOffers(c.message, c.authority)
+            XCTAssertEqual(offer.canReply, c.reply, "glissé « Répondre » — \(c.name)")
+            XCTAssertEqual(offer.canForward, c.forward, "glissé « Transférer » — \(c.name)")
+            XCTAssertEqual(menu.contains(.reply), c.reply, "menu « Répondre » — \(c.name)")
+            XCTAssertEqual(menu.contains(.forward), c.forward, "menu « Transférer » — \(c.name)")
         }
     }
 
@@ -206,11 +226,24 @@ final class MessageRowOfferLawTests: XCTestCase {
         XCTAssertEqual(forwardOnly.committed(directedOffset: -distance), .forward)
     }
 
-    func test_arms_aRefusedSide_keepsTheBubbleInPlace() {
+    /// Un côté refusé ne s'arme pas, mais l'horodatage reste lisible : la bulle
+    /// suit le doigt SOUS le seuil — ni icône d'action, ni haptique, ni validation.
+    func test_tracking_aRefusedSide_staysUnderTheThreshold_andKeepsTheStamp() {
         let replyOnly = MessageRowOffer(canReply: true, canForward: false)
-        XCTAssertTrue(replyOnly.arms(directedOffset: 30))
-        XCTAssertFalse(replyOnly.arms(directedOffset: -30), "la bulle ne suit pas le doigt vers un côté refusé")
-        XCTAssertFalse(MessageRowOffer.closed.armsAnySide, "sans verdict, aucun glissé ne s'engage")
+        let far: CGFloat = 140
+        XCTAssertEqual(replyOnly.trackedOffset(far, replyDirection: 1), far, "le côté offert suit le doigt")
+        let refused = replyOnly.trackedOffset(-far, replyDirection: 1)
+        XCTAssertLessThan(refused, -8, "l'horodatage du glissé reste visible")
+        XCTAssertFalse(BubbleSwipeResistance.commits(offset: abs(refused)), "ni icône d'action, ni haptique")
+        XCTAssertNil(replyOnly.committed(directedOffset: refused), "le côté refusé ne se valide pas")
+
+        let mirrored = replyOnly.trackedOffset(far, replyDirection: -1)
+        XCTAssertFalse(BubbleSwipeResistance.commits(offset: abs(mirrored)), "la direction de réponse est lue, pas le signe brut")
+
+        let closed = MessageRowOffer.closed.trackedOffset(far, replyDirection: 1)
+        XCTAssertGreaterThan(closed, 8, "sans verdict, le glissé montre encore quand le message est parti")
+        XCTAssertFalse(BubbleSwipeResistance.commits(offset: closed))
+        XCTAssertFalse(MessageRowOffer.closed.armsAnySide, "sans verdict, aucune action ne s'arme")
         XCTAssertEqual(MessageRowOffer.closed.accessibilityActions, [])
     }
 
@@ -230,13 +263,26 @@ final class MessageRowOfferLawTests: XCTestCase {
             "les deux `triggerReply` (message entier, pièce citée) refusent ce que la loi refuse"
         )
         let layer = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift")
-        XCTAssertTrue(layer.contains("MessageRowOffer.of(msg, authority: authority).canForward"),
-                      "le transfert au glissé relit le verdict de la loi, pas la seule loi de sortie")
+        XCTAssertTrue(layer.contains("MessageRowOffer.of(msg, authority: authority()).canForward"),
+                      "le transfert au glissé relit le verdict de la loi, à l'autorité VIVANTE, pas la seule loi de sortie")
+        XCTAssertTrue(layer.contains("let authority: () -> ConversationMenuAuthority"),
+                      "l'autorité se relit au moment d'agir : une valeur capturée survit aux closures que `.equatable()` garde")
         XCTAssertFalse(layer.contains("msg.isForwardable else { return }"))
         let rows = try AppSourceGuard.unit("Meeshy/Features/Main/Views/MessageListViewController+Rows.swift")
         XCTAssertTrue(rows.contains("onSwipeReply: offer.canReply ?"), "sans verdict, le glissé vers « Répondre » ne s'arme pas")
         XCTAssertTrue(rows.contains("onSwipeForward: offer.canForward ?"), "sans verdict, le glissé vers « Transférer » ne s'arme pas")
         XCTAssertTrue(rows.contains("repondre: offer.canReply ? callbacks.swipeReply : nil"), "le double toucher suit le même verdict")
         XCTAssertTrue(rows.contains("transferer: offer.canForward ? callbacks.swipeForward : nil"))
+    }
+
+    /// La barre de réaction rapide est une porte de plus : « Répondre » n'y est
+    /// rendu que si la loi l'offre (un bouton sans effet n'existe pas), et
+    /// « Transférer » lit le verdict de la loi, pas la seule loi de sortie.
+    func test_quickReactionBar_readsTheSameOffer() throws {
+        let row = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView+MessageRow.swift"))
+        XCTAssertTrue(row.contains("let offer = viewModel.messageIndex(for: messageId).map { MessageRowOffer.of(viewModel.messages[$0], authority: menuAuthority) } ?? .closed"))
+        XCTAssertTrue(row.contains("if offer.canReply {"), "« Répondre » n'est rendu que si la loi l'offre")
+        XCTAssertTrue(row.contains("if offer.canForward {"), "« Transférer » lit le verdict de la loi")
+        XCTAssertFalse(row.contains("viewModel.messages[$0].isForwardable"), "la barre ne relit plus la seule loi de sortie")
     }
 }

@@ -330,9 +330,8 @@ extension MessageListViewController {
     }
 
     func messageEditMenuActions(message: MeeshyMessage, callbacks: MessageCellCallbacks, offer: MessageRowOffer) -> [MessageEditMenuAction] {
-        let messageId = message.id
-        return MessageEditMenuAction.primaires(
-            messageId: messageId,
+        MessageEditMenuAction.primaires(
+            messageId: message.id,
             peutEditer: offer.canEdit,
             editer: callbacks.edit,
             selectionner: callbacks.select,
@@ -364,10 +363,10 @@ extension MessageListViewController {
         let messageBubble = parts.bubble.equatable()
         let makeThemedBubble = parts.makeBubble
         let selectionModeActive = parts.selectionModeActive
+        let pieceLongPressHandler = handlers.pieceLongPress
         let selectedIds = parts.selectedIds
         let longMessageExpansion = parts.longMessageExpansion
         let offer = callbacks.rowOffer?(message) ?? .closed // #12626 — la loi, lue une fois par configuration
-        let editMenuActions = messageEditMenuActions(message: message, callbacks: callbacks, offer: offer)
         cell.contentConfiguration = UIHostingConfiguration {
             BubbleSwipeContainer(
                 isMine: message.isMe,
@@ -382,7 +381,7 @@ extension MessageListViewController {
                 isSelectionModeActive: selectionModeActive,
                 isSelected: selectedIds.contains(messageId),
                 onToggleSelection: { callbacks.toggleSelection?(messageId) },
-                editMenuActions: editMenuActions
+                editMenuActions: self.messageEditMenuActions(message: message, callbacks: callbacks, offer: offer)
             ) {
                 if let focalRow {
                     focalRow.equatable()
@@ -395,7 +394,7 @@ extension MessageListViewController {
             .environmentObject(statuses)
             .environment(\.bubbleSkin, skin)
             .environment(\.bubbleContainerWidth, self.collectionView.bounds.width > 0 ? self.collectionView.bounds.width : nil)
-            .environment(\.messagePieceLongPress, selectionModeActive ? nil : handlers.pieceLongPress)
+            .environment(\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)
             .environment(\.pieceSpotlight, self.pieceSpotlight.eraseToAnyPublisher())
             .conversationListObject(convList).announcesCaptures() // #9617 — le fil déclare ce qu'il montre
             .environmentObject(timestampReveal)

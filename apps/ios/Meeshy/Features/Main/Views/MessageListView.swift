@@ -75,12 +75,19 @@ struct MessageRowOffer: Equatable {
         (canReply ? [Action.reply] : []) + (canForward ? [Action.forward] : [])
     }
 
-    /// La bulle suit-elle le doigt vers ce côté ? `directedOffset` est orienté
-    /// vers la réponse (positif) ; un côté refusé laisse la bulle en place.
-    func arms(directedOffset: CGFloat) -> Bool {
-        if directedOffset > 0 { return canReply }
-        if directedOffset < 0 { return canForward }
-        return armsAnySide
+    /// Jusqu'où la bulle suit le doigt d'un côté que la loi refuse : assez pour
+    /// lire l'horodatage du glissé, jamais jusqu'au seuil — ni icône d'action,
+    /// ni haptique, ni validation.
+    static var stampReach: CGFloat { BubbleSwipeResistance.commitDistance - 1 }
+
+    /// Le décalage que la bulle prend pour `tracked`. `replyDirection` oriente
+    /// vers la réponse ; un côté offert suit le doigt, un côté refusé s'arrête
+    /// sous le seuil.
+    func trackedOffset(_ tracked: CGFloat, replyDirection: CGFloat) -> CGFloat {
+        let directed = tracked * replyDirection
+        let armed = directed > 0 ? canReply : canForward
+        guard !armed, abs(tracked) > Self.stampReach else { return tracked }
+        return tracked < 0 ? -Self.stampReach : Self.stampReach
     }
 
     /// L'action que valide un glissé relâché, ou `nil`.
@@ -409,10 +416,10 @@ struct BubbleSwipeContainer<Content: View>: View {
                     ),
                     resistance: resistance
                 ) else { return }
-                let tracked = BubbleSwipeResistance.trackedOffset(translation: h)
-                // Un côté que la loi refuse ne s'arme pas : la bulle reste
-                // posée plutôt que d'annoncer une action qui ne partira pas.
-                offset = offer.arms(directedOffset: tracked * replyDirection) ? tracked : 0
+                // Un côté que la loi refuse ne s'arme pas : la bulle s'arrête
+                // sous le seuil, l'horodatage reste lisible, aucune action ne
+                // s'annonce qui ne partirait pas (#12626).
+                offset = offer.trackedOffset(BubbleSwipeResistance.trackedOffset(translation: h), replyDirection: replyDirection)
                 // Light haptic the moment we cross the commit threshold
                 // (and only once per drag) so the user feels the bubble
                 // "snap" into the action zone before they let go.

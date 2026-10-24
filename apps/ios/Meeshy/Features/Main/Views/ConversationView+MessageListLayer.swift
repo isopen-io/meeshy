@@ -59,7 +59,10 @@ struct ConversationMessageListLayer: View {
     let insets: ConversationListInsets
     let isHeaderExpanded: Bool
     let readingMode: ReadingModeOrchestrator.ConversationReadingMode
-    let authority: ConversationMenuAuthority
+    /// Relue au moment d'agir (#12626) : `MessageListView` est monté derrière
+    /// `.equatable()`, qui garde les closures de la dernière mise à jour — une
+    /// valeur capturée y survivrait à un changement de rôle ou de chiffrement.
+    let authority: () -> ConversationMenuAuthority
     let messageActions: ConversationMessageActions
     let actions: ConversationMessageListActions
 
@@ -275,7 +278,7 @@ struct ConversationMessageListLayer: View {
                 overlayState.moreSheetInitialItem = nil
                 overlayState.detailSheetMessage = msg
             },
-            rowOffer: { MessageRowOffer.of($0, authority: authority) },
+            rowOffer: { MessageRowOffer.of($0, authority: authority()) },
             onAddReaction: { messageId, bubbleFrame in
                 // Exclusivité mutuelle : ouvrir la barre de quick-reaction
                 // ferme d'abord l'overlay d'appui-long s'il est visible.
@@ -387,7 +390,7 @@ struct ConversationMessageListLayer: View {
     private func swipeForward(_ messageId: String) {
         guard let index = viewModel.messageIndex(for: messageId) else { return }
         let msg = viewModel.messages[index]
-        guard MessageRowOffer.of(msg, authority: authority).canForward else { return }
+        guard MessageRowOffer.of(msg, authority: authority()).canForward else { return }
         messageActions.beginSelection(msg.id)
     }
 }
