@@ -3,8 +3,10 @@ package me.meeshy.app.profile
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.status.statusForUser
 
 /** Les sections de MA page, dans l'ordre d'iOS `ProfileView.scrollContent`. */
 enum class OwnProfileSection { IDENTITY, CONTACT, LANGUAGES, STATS, FRIEND_REQUESTS, MEMBER_SINCE }
@@ -159,4 +161,18 @@ object OwnProfileSectionsPresenter {
             friendRequests = value(StatMetric.FRIEND_REQUESTS),
         )
     }
+}
+
+/**
+ * Mon humeur sur l'avatar de MA page (parité iOS `ProfileOwnAvatar.shownMood`) : elle vient du cache
+ * des statuts déjà servi, jamais d'une requête ; une humeur vide ne peint rien, et l'édition la masque
+ * parce que le crayon occupe son coin.
+ */
+object OwnProfileMood {
+
+    fun resolve(statuses: List<StatusEntry>, userId: String): String? =
+        statuses.statusForUser(userId)?.moodEmoji?.takeIf { it.isNotBlank() }
+
+    fun shown(emoji: String?, isEditing: Boolean): String? =
+        if (isEditing) null else emoji?.takeIf { it.isNotBlank() }
 }
