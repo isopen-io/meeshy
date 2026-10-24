@@ -16,6 +16,9 @@ struct EpisodeListView: View {
     let episodes: [ConversationEpisode]
     let isDark: Bool
     var onTap: (ConversationEpisode) -> Void
+    /// #11225 — l'appui long d'un épisode : Aller au message · Répondre, sur
+    /// son premier message (celui où le toucher mène).
+    var menu: SummaryEntryMenu? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
@@ -26,6 +29,7 @@ struct EpisodeListView: View {
             VStack(spacing: MeeshySpacing.xs) {
                 ForEach(episodes) { episode in
                     EpisodeRow(episode: episode, isDark: isDark) { onTap(episode) }
+                        .modifier(SummaryEntryMenuModifier(target: SummaryEntryAction.target(of: episode), menu: menu))
                 }
             }
         }
