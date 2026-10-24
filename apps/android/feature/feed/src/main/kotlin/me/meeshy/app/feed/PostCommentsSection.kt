@@ -550,7 +550,7 @@ private fun CommentMentionStrip(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
-                    MeeshyAvatar(name = candidate.displayName, size = 32.dp)
+                    MeeshyAvatar(name = candidate.displayName, size = 32.dp, imageUrl = candidate.avatarURL)
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = candidate.displayName,
