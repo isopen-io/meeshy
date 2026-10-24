@@ -55,6 +55,19 @@ const attachment = (partial: Partial<Attachment> = {}): Attachment =>
  * 2/3) : un message reçu avec citation, 2 images, 1 audio, modifié, épinglé,
  * 2 réactions rend UN SEUL libellé, dans l'ordre iOS.
  */
+describe('composeMessageLabel — #11375, la modification d’un modérateur se prononce', () => {
+  test('« modifié par un modérateur » à la place de « modifié »', async () => {
+    await loadInterfaceCatalog('fr');
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
+      message: message({ isEdited: true, editedById: 'u-mod', editedByRole: 'MODERATOR' }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: 'sent',
+    });
+    expect(label).toBe('Bruno Bêta, Bonjour, 09:02, modifié par un modérateur');
+  });
+});
+
 describe('composeMessageLabel — l’ordre iOS', () => {
   test('reçu, citation, texte, médias, heure, modifié, épinglé, réactions', () => {
     const label = composeMessageLabel({ language: 'fr', protection: 'standard',

@@ -121,6 +121,9 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['vocal-transcriptible', vocal, {}, {}],
   ['vocal-en-conversation-serveur-transcriptible', vocal, { encryptionMode: 'server' }, {}],
   ['e2ee-texte-d-autrui-se-traduit-sur-l-appareil', {}, { encryptionMode: 'e2ee' }, {}],
+  // #11375 — le modérateur de plateforme modifie le message d'autrui à visage découvert, jamais en bout en bout.
+  ['e2ee-moderator-plateforme-ne-modifie-pas-autrui', {}, { encryptionMode: 'e2ee' }, { platformRole: 'MODERATOR' }],
+  ['serveur-moderator-plateforme-modifie-autrui', {}, { encryptionMode: 'server' }, { platformRole: 'MODERATOR' }],
   ['serveur-photo-ne-se-transfere-pas', photoOf(), { encryptionMode: 'server' }, {}],
   ['hybride-photo-ne-se-transfere-pas', photoOf(), { encryptionMode: 'hybrid' }, {}],
   ['serveur-photo-chiffree-par-le-message-ne-se-transfere-pas', photoOf({ isEncrypted: true, encryptionMode: 'server' }), {}, {}],
