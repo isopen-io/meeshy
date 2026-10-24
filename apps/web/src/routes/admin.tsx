@@ -3,7 +3,6 @@ import { AdminSectionDirectory } from '@/components/admin/section-directory';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { interpretRole } from '@/lib/admin/interpret/enums';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
-import { translate } from '@/lib/i18n-catalog';
 import { AdminDashboardPanel } from '@/routes/admin-dashboard';
 
 /**
@@ -22,7 +21,7 @@ import { AdminDashboardPanel } from '@/routes/admin-dashboard';
  *
  * ## Ce que le hub montre
  *
- * L'en-tête (le rôle SERVI, dit en mots — plus « Votre rôle : BIGBOSS »), le
+ * L'en-tête — « Tableau de bord », le nom que le menu lui donne (#12670) — (le rôle SERVI, dit en mots — plus « Votre rôle : BIGBOSS »), le
  * panneau du tableau de bord (`admin-dashboard.tsx` : la bande « À traiter » et
  * une carte résumée par zone, dont « Ouvrir » montre le détail en modale —
  * `?open=<zone>`, spec 2026-10-04 § 2), puis le répertoire des sections rangées
@@ -33,12 +32,13 @@ export default function AdminScreen() {
   suspendForAdminInterfaceCatalog(language);
 
   return (
-    <AdminSectionScreen section="dashboard" language={language} title={translate(language, 'admin.title')} back="list">
+    <AdminSectionScreen section="dashboard" language={language} title={translateAdmin(language, 'admin.nav.dashboard')} back="list">
       {(reach) => (
         <div className="grid gap-6">
           <AdminPageHeader
             language={language}
-            title={translate(language, 'admin.title')}
+            title={translateAdmin(language, 'admin.nav.dashboard')}
+            place={{ section: 'dashboard' }}
             subtitle={translateAdmin(language, 'admin.kit.hub.signedAs', { role: interpretRole(reach.role, language).label })}
           />
           <AdminDashboardPanel language={language} />

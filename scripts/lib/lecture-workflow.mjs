@@ -137,6 +137,36 @@ export const stepsOf = (job) => {
   });
 };
 
+/**
+ * Une action COMPOSITE locale (`uses: ./.github/actions/<nom>`, #12557) : ses
+ * entrées avec leur défaut, et ses étapes lues comme celles d'un job. Le bloc
+ * `runs.steps` d'un `action.yml` est indenté de deux colonnes de moins que le
+ * `steps:` d'un job ; on le décale pour réutiliser `stepsOf` tel quel, plutôt
+ * que d'écrire une seconde lecture qui divergerait de la première.
+ */
+export const compositeOf = (action) => {
+  const lines = action.split('\n');
+  const runsAt = lines.findIndex((line) => /^runs:\s*$/.test(line));
+  const runs = runsAt === -1 ? [] : blockAfter(lines, runsAt);
+  const composite = runs.some((entry) => /^ {2}using:\s*['"]?composite['"]?\s*$/.test(entry.text));
+  const stepsAt = runs.findIndex((entry) => /^ {2}steps:\s*$/.test(entry.text));
+  const body = stepsAt === -1 ? [] : runs.slice(stepsAt).map((entry) => ({ ...entry, text: entry.text === '' ? '' : `  ${entry.text}` }));
+  const inputsAt = lines.findIndex((line) => /^inputs:\s*$/.test(line));
+  const inputs = inputsAt === -1 ? [] : blockAfter(lines, inputsAt);
+  const defaults = Object.fromEntries(
+    inputs.flatMap((entry, offset) => {
+      const header = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(entry.text);
+      if (header === null) return [];
+      const rest = inputs.slice(offset + 1);
+      const end = rest.findIndex((next) => indentOf(next.text) !== null && indentOf(next.text) <= 2);
+      const own = end === -1 ? rest : rest.slice(0, end);
+      const value = own.find((next) => /^ {4}default:/.test(next.text));
+      return [[header[1], value === undefined ? '' : scalarAfter(value.text)]];
+    }),
+  );
+  return { composite, defaults, steps: stepsOf({ body }) };
+};
+
 /** Les entrées `with:` d'une étape, clé → valeur (bloc `|` compris). */
 const withOf = (lines, start) => {
   const rest = lines.slice(start + 1);
@@ -259,7 +289,7 @@ export const resolvePath = (path, context) => {
     if (path === 'false') return false;
     throw new ExpressionInconnue(`racine « ${root} » inconnue`);
   }
-  if (!ROOTS_RESOLUS.has(root)) return OPAQUE;
+  if (!ROOTS_RESOLUS.has(root) && !(root in context)) return OPAQUE;
   const value = rest.reduce(
     (current, segment) => (current && typeof current === 'object' ? current[segment] : undefined),
     context[root] ?? {},

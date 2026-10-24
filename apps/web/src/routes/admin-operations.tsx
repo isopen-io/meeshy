@@ -158,7 +158,7 @@ export function AdminOperationsPanel({
         language={language}
         title={translateAdmin(language, 'admin.nav.operations')}
         subtitle={translateAdmin(language, 'admin.ops.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.operations') }, { label: translateAdmin(language, 'admin.nav.operations') }]}
+        place={{ section: 'operations' }}
       />
       <AdminOfflineNotice language={language} />
       {snapshot === undefined ? null : (

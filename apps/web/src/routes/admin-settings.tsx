@@ -42,7 +42,7 @@ export function AdminSettingsPanel({ language, reach, deps = apiDeps }: Settings
         language={language}
         title={translateAdmin(language, 'admin.nav.settings')}
         subtitle={translateAdmin(language, 'admin.settings.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.operations') }, { label: translateAdmin(language, 'admin.nav.settings') }]}
+        place={{ section: 'settings' }}
       />
       <AdminOfflineNotice language={language} />
       <AccessBlock language={language} reach={reach} />
