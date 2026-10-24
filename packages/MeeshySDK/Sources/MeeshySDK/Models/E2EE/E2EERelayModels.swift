@@ -82,14 +82,19 @@ public struct E2EEOutgoingEnvelope: Codable, Equatable, Sendable {
     }
 }
 
-/// `encryptionMetadata` d'un envoi libsignal : le protocole et l'appareil émetteur.
+/// `encryptionMetadata` d'un envoi libsignal : le protocole, l'appareil émetteur
+/// et l'époque du régime sous laquelle le message a été scellé (#12522) — une
+/// époque périmée fait refuser l'envoi `E2EE_REGIME_CHANGED`. Absente, la
+/// passerelle ne juge pas l'envoi sur elle.
 public struct E2EEWireMetadata: Codable, Equatable, Sendable {
     public let `protocol`: String
     public let senderDeviceId: UInt32
+    public let regimeEpoch: Int?
 
-    public init(senderDeviceId: UInt32) {
+    public init(senderDeviceId: UInt32, regimeEpoch: Int? = nil) {
         self.protocol = E2EEWire.libsignalProtocol
         self.senderDeviceId = senderDeviceId
+        self.regimeEpoch = regimeEpoch
     }
 }
 
