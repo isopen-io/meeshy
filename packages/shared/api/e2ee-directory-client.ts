@@ -11,7 +11,7 @@
  * opaque (enveloppes libsignal) ; aucune clé privée ne passe par ce module.
  */
 import { z } from 'zod';
-import * as e2EeEndpoints from '../api/endpoints/e2-ee';
+import * as e2EeEndpoints from '../api/endpoints/e2-ee.js';
 import type {
   E2EEDeviceBundle,
   E2EEEnrollDeviceRequest,
