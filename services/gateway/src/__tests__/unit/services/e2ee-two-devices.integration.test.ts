@@ -199,7 +199,7 @@ describe('E2EE de bout en bout à deux appareils, libsignal réel (#3706)', () =
     const emitted: unknown[] = [];
     setE2EEEnvelopeIOProvider(() => ({
       to: (room: string) => ({ emit: (event: string, payload: unknown) => { emitted.push({ room, event, payload }); return true; } }),
-      in: () => ({ fetchSockets: async () => [] }),
+      in: () => ({ fetchSockets: async () => [], socketsLeave: () => undefined }),
     }));
 
     const users: Record<string, { userId: string; sessionId: string }> = {
