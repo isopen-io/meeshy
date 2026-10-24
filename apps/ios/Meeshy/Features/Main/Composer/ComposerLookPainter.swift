@@ -32,6 +32,28 @@ nonisolated struct ComposerLookSceneKey: Equatable, Sendable {
     }
 }
 
+/// **Ce que la retouche pose sur la prise** (#12591, #12602) : l'encre des textes (glyphes, fonds,
+/// liserés, teinte du verre) et leurs vitres, sous lesquelles le peintre floute la prise AVANT d'y
+/// poser l'encre. Les deux voyagent ensemble : une encre sans ses vitres poserait la teinte du
+/// verre sur une prise nette. L'aperçu ne remet que les vitres — le canvas de la retouche peint
+/// l'encre lui-même.
+nonisolated struct ComposerTextOverlay: Equatable, Sendable {
+    let ink: CGImage?
+    let glass: [StoryGlassPane]
+
+    init(ink: CGImage?, glass: [StoryGlassPane] = []) {
+        self.ink = ink
+        self.glass = glass
+    }
+
+    /// Deux calques sont les mêmes quand ils portent les MÊMES bitmaps : l'aperçu ne se repeint
+    /// qu'à une nouvelle cuisson.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.ink === rhs.ink && lhs.glass.count == rhs.glass.count
+            && zip(lhs.glass, rhs.glass).allSatisfy { $0.mask === $1.mask && $0.sigma == $1.sigma && $0.bounds == $1.bounds }
+    }
+}
+
 /// **Le processeur graphique de la capture, partagé** (spec § 5) : un seul
 /// `CIContext` Metal pour l'aperçu, la bande, la boucle et la photo.
 nonisolated enum ComposerLookGPU {
@@ -132,10 +154,11 @@ nonisolated enum ComposerLookPainter {
     /// effet du visage, puis cadrage et cadre.
     ///
     /// `overlay` : ce qui se pose AU-DESSUS du cadre, à l'étage `.overlays` — le texte de la
-    /// retouche (#12591). Mis à l'échelle de la toile ; `nil` ⇒ le graphe d'avant, inchangé.
+    /// retouche (#12591), la prise floutée sous ses vitres d'abord (#12602). Mis à l'échelle de la
+    /// toile ; `nil` ⇒ le graphe d'avant, inchangé.
     static func paint(_ source: CIImage, look: ComposerPhotoLook, framing: ComposerFraming,
                       scene: CallLiveFrameScene?, canvas: CGSize, declared: CGColorSpace? = nil,
-                      faces: ComposerFaceEffects = .live, still: Bool = false, overlay: CIImage? = nil) -> CIImage {
+                      faces: ComposerFaceEffects = .live, still: Bool = false, overlay: ComposerTextOverlay? = nil) -> CIImage {
         let couches = [
             LensPass(.lut) { image, _ in ComposerLiveLookRule.graded(image, filter: look.filter, declared: declared) },
             LensPass(.face) { tonifiee, _ in faces.apply(look.effect, to: tonifiee, probing: source, still: still) },
@@ -144,12 +167,34 @@ nonisolated enum ComposerLookPainter {
         return LensPainter.paint(source, passes: couches, input: LensFrameInput())
     }
 
-    private static func overlayPasses(_ overlay: CIImage?, canvas: CGSize) -> [LensPass] {
-        guard let overlay, overlay.extent.width > 0, overlay.extent.height > 0 else { return [] }
-        let etendue = overlay.extent
-        let pose = CGAffineTransform(translationX: -etendue.minX, y: -etendue.minY)
+    private static func overlayPasses(_ overlay: ComposerTextOverlay?, canvas: CGSize) -> [LensPass] {
+        guard let overlay else { return [] }
+        let vitres = overlay.glass.compactMap { frosted($0, canvas: canvas) }
+        let encre = overlay.ink.flatMap { posed(CIImage(cgImage: $0), canvas: canvas) }
+        return vitres + (encre.map { [LensPass.overlay($0, stage: .overlays)] } ?? [])
+    }
+
+    /// Un calque mis à l'échelle de la toile.
+    private static func posed(_ calque: CIImage, canvas: CGSize) -> CIImage? {
+        guard let pose = pose(calque.extent, canvas: canvas) else { return nil }
+        return calque.transformed(by: pose)
+    }
+
+    private static func pose(_ etendue: CGRect, canvas: CGSize) -> CGAffineTransform? {
+        guard etendue.width > 0, etendue.height > 0 else { return nil }
+        return CGAffineTransform(translationX: -etendue.minX, y: -etendue.minY)
             .concatenating(CGAffineTransform(scaleX: canvas.width / etendue.width, y: canvas.height / etendue.height))
-        return [LensPass.overlay(overlay.transformed(by: pose), stage: .overlays)]
+    }
+
+    /// Une vitre : sa découpe recadrée sur sa boîte (le flou ne se calcule que là), mise à
+    /// l'échelle de la toile avec son flou. La boîte a son origine en haut, Core Image en bas.
+    private static func frosted(_ vitre: StoryGlassPane, canvas: CGSize) -> LensPass? {
+        let masque = CIImage(cgImage: vitre.mask)
+        guard let pose = pose(masque.extent, canvas: canvas) else { return nil }
+        let boite = CGRect(x: vitre.bounds.minX, y: masque.extent.height - vitre.bounds.maxY,
+                           width: vitre.bounds.width, height: vitre.bounds.height)
+        let echelle = canvas.width / masque.extent.width
+        return .frosted(under: masque.cropped(to: boite).transformed(by: pose), sigma: vitre.sigma * echelle, stage: .overlays)
     }
 
     /// Le cadrage, puis la case du cadre quand la scène en a une.
@@ -179,11 +224,11 @@ nonisolated enum ComposerLookPainter {
     /// **La photo qui part** : le même graphe, rendu dans l'espace de la photo (#9327),
     /// à la résolution native de la source quand `canvas` est `nil`.
     static func photo(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming,
-                      scene: CallLiveFrameScene?, canvas: CGSize? = nil, overlay: CGImage? = nil) -> CGImage? {
+                      scene: CallLiveFrameScene?, canvas: CGSize? = nil, overlay: ComposerTextOverlay? = nil) -> CGImage? {
         let toile = canvas ?? Self.canvas(for: CGSize(width: image.width, height: image.height))
         let espace = ComposerPhotoLookRule.colorSpace(of: image)
         let peinte = paint(CIImage(cgImage: image), look: look, framing: framing, scene: scene,
-                           canvas: toile, declared: espace, still: true, overlay: overlay.map { CIImage(cgImage: $0) })
+                           canvas: toile, declared: espace, still: true, overlay: overlay)
         return ComposerLookGPU.context.createCGImage(peinte, from: CGRect(origin: .zero, size: toile),
                                                      format: .RGBA8, colorSpace: espace)
     }
@@ -208,7 +253,7 @@ nonisolated enum ComposerLookPainter {
     @concurrent
     static func renderPhoto(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming,
                             aspect: CGFloat = designAspect, person: CallFramePerson, date: Date,
-                            scenes: any ComposerLookSceneProviding, overlay: CGImage? = nil) async -> CGImage? {
+                            scenes: any ComposerLookSceneProviding, overlay: ComposerTextOverlay? = nil) async -> CGImage? {
         let toile = canvas(for: CGSize(width: image.width, height: image.height), aspect: aspect)
         let cle = ComposerLookSceneKey(look: look, canvas: toile, date: date, person: person)
         let scene = scenes.cached(cle) ?? Self.scene(for: cle)

@@ -3,6 +3,9 @@ package me.meeshy.app;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
 import org.junit.Test;
 
 /** Choisir une photo ouvre le selecteur de photos du systeme, comme Chrome (#10087). */
@@ -10,6 +13,18 @@ public class PhotoPickRulesTest {
 
     private static String[] accept(String... types) {
         return types;
+    }
+
+    private static Function<String, String> mimeTypes() {
+        Map<String, String> known = new HashMap<>();
+        known.put("jpg", "image/jpeg");
+        known.put("jpeg", "image/jpeg");
+        known.put("png", "image/png");
+        known.put("gif", "image/gif");
+        known.put("webp", "image/webp");
+        known.put("mp4", "video/mp4");
+        known.put("pdf", "application/pdf");
+        return known::get;
     }
 
     @Test
@@ -67,5 +82,22 @@ public class PhotoPickRulesTest {
         assertNull(PhotoPickRules.pickerType(34, accept("image/"), false));
         assertNull(PhotoPickRules.pickerType(34, accept("image/png", ".jpg"), false));
         assertNull(PhotoPickRules.pickerType(34, accept("imagery/png"), false));
+    }
+
+    @Test
+    public void aGuestImageTileOpensThePhotoPickerLikeChrome() {
+        String[] guestImages = accept(".jpg", ".jpeg", ".png", ".gif", ".webp", "image/jpeg", "image/png", "image/gif", "image/webp");
+        assertEquals("image/*", PhotoPickRules.pickerType(34, guestImages, false, mimeTypes()));
+        assertEquals("image/png", PhotoPickRules.pickerType(34, accept(".png", "image/png"), false, mimeTypes()));
+        assertEquals("*/*", PhotoPickRules.pickerType(34, accept(".jpg", ".mp4"), false, mimeTypes()));
+    }
+
+    @Test
+    public void anUnknownOrOtherExtensionKeepsTheFilePicker() {
+        assertNull(PhotoPickRules.pickerType(34, accept(".zzz", "image/png"), false, mimeTypes()));
+        assertNull(PhotoPickRules.pickerType(34, accept(".pdf", "image/png"), false, mimeTypes()));
+        assertNull(PhotoPickRules.pickerType(34, accept("."), false, mimeTypes()));
+        assertNull(PhotoPickRules.pickerType(32, accept(".jpg"), false, mimeTypes()));
+        assertNull(PhotoPickRules.pickerType(34, accept(".jpg"), true, mimeTypes()));
     }
 }

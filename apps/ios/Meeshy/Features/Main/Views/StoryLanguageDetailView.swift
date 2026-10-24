@@ -125,7 +125,6 @@ struct StoryLanguageDetailView: View {
 
                 panel
                     .frame(height: currentHeight(for: geo.size.height))
-                    .gesture(sheetDragGesture)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             .onAppear { containerHeight = geo.size.height }
@@ -137,7 +136,11 @@ struct StoryLanguageDetailView: View {
 
     private var panel: some View {
         VStack(spacing: 0) {
+            // Seule la POIGNÉE tire la feuille (#12646) : posé sur tout le
+            // panneau, le glissé volait celui de la liste, qui ne défilait plus.
             handle
+                .contentShape(Rectangle())
+                .gesture(sheetDragGesture)
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     currentContentCard
@@ -288,8 +291,8 @@ struct StoryLanguageDetailView: View {
 
         return Button {
             HapticFeedback.light()
+            onSelectLanguage(lang.code)
             if hasTranslation {
-                onSelectLanguage(lang.code)
                 onDismiss()
             } else {
                 translatingLanguages.insert(lang.code)

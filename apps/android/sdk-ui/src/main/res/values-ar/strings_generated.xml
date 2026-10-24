@@ -103,6 +103,16 @@
     <string name="retouch_style_redcarpet">السجادة الحمراء</string>
     <string name="retouch_style_screen">الشاشة</string>
     <string name="retouch_style_strip">كشك الصور</string>
+    <string name="retouch_text_add">إضافة نص</string>
+    <string name="retouch_text_align_center">توسيط</string>
+    <string name="retouch_text_align_left">يسار</string>
+    <string name="retouch_text_align_right">يمين</string>
+    <string name="retouch_text_color">لون النص</string>
+    <string name="retouch_text_style_bold">عريض</string>
+    <string name="retouch_text_style_classic">كلاسيكي</string>
+    <string name="retouch_text_style_handwriting">خط اليد</string>
+    <string name="retouch_text_style_neon">نيون</string>
+    <string name="retouch_text_style_typewriter">آلة كاتبة</string>
     <string name="retouch_tool_crop">تأطير</string>
     <string name="retouch_tool_sound">الصوت</string>
     <string name="retouch_tool_text">نص</string>

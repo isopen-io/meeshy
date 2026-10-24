@@ -94,6 +94,16 @@
     <string name="retouch_style_redcarpet">Tapis rouge</string>
     <string name="retouch_style_screen">Écran</string>
     <string name="retouch_style_strip">Photomaton</string>
+    <string name="retouch_text_add">Ajouter un texte</string>
+    <string name="retouch_text_align_center">CENTRÉ</string>
+    <string name="retouch_text_align_left">GAUCHE</string>
+    <string name="retouch_text_align_right">DROITE</string>
+    <string name="retouch_text_color">Couleur du texte</string>
+    <string name="retouch_text_style_bold">GRAS</string>
+    <string name="retouch_text_style_classic">CLASSIQUE</string>
+    <string name="retouch_text_style_handwriting">MANUSCRIT</string>
+    <string name="retouch_text_style_neon">NÉON</string>
+    <string name="retouch_text_style_typewriter">MACHINE</string>
     <string name="retouch_tool_crop">Recadrer</string>
     <string name="retouch_tool_sound">Son</string>
     <string name="retouch_tool_text">Texte</string>

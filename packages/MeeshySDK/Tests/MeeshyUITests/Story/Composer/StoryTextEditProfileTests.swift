@@ -2,8 +2,8 @@ import XCTest
 @testable import MeeshyUI
 import MeeshySDK
 
-/// #12591 — **un texte cuit dans un média ne propose ni « Langue » ni le fond « Verre »**, et le
-/// composer garde tout. Les atomes reçoivent le profil ; ils ne devinent rien.
+/// #12591 — **un texte cuit dans un média ne propose pas « Langue »**, et le composer garde tout ;
+/// le fond « Verre » y revient avec #12602. Les atomes reçoivent le profil ; ils ne devinent rien.
 final class StoryTextEditProfileTests: XCTestCase {
 
     func test_composer_keepsEveryToolAndEveryBackground() {
@@ -17,13 +17,13 @@ final class StoryTextEditProfileTests: XCTestCase {
         XCTAssertEqual(outils, TextEditTool.all.filter { $0 != .language }, "l'ordre appris par les doigts est gardé")
     }
 
-    func test_bakedIntoMedia_dropsTheGlassBackground() {
-        let fonds = StoryTextEditProfile.bakedIntoMedia.backgrounds
-        XCTAssertFalse(fonds.contains { if case .glass = $0 { return true } else { return false } })
-        XCTAssertEqual(fonds.count, StoryTextBackgroundPresets.all.count - 1)
+    /// #12602 — le peintre de la retouche floute la prise sous la vitre : le Verre revient.
+    func test_bakedIntoMedia_offersEveryBackground_glassIncluded() {
+        XCTAssertEqual(StoryTextEditProfile.bakedIntoMedia.backgrounds, StoryTextBackgroundPresets.all)
+        XCTAssertTrue(StoryTextEditProfile.bakedIntoMedia.backgrounds.contains { if case .glass = $0 { return true } else { return false } })
     }
 
-    func test_backgroundCycle_followsTheOfferedBackgrounds_andNeverReachesGlass() {
+    func test_backgroundCycle_followsTheOfferedBackgrounds_andReachesGlass() {
         let fonds = StoryTextEditProfile.bakedIntoMedia.backgrounds
         var texte = StoryTextObject(text: "x")
         var vus: [StoryTextBackgroundStyle] = []
@@ -31,7 +31,7 @@ final class StoryTextEditProfileTests: XCTestCase {
             StoryTextAttributeCycle.advance(.background, on: &texte, backgrounds: fonds)
             vus.append(texte.resolvedBackgroundStyle)
         }
-        XCTAssertFalse(vus.contains { if case .glass = $0 { return true } else { return false } })
+        XCTAssertTrue(vus.contains { if case .glass = $0 { return true } else { return false } })
         XCTAssertTrue(vus.allSatisfy { fonds.contains($0) })
     }
 
