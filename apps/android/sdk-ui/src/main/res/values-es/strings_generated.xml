@@ -94,6 +94,16 @@
     <string name="retouch_style_redcarpet">Alfombra roja</string>
     <string name="retouch_style_screen">Pantalla</string>
     <string name="retouch_style_strip">Fotomatón</string>
+    <string name="retouch_text_add">Añadir texto</string>
+    <string name="retouch_text_align_center">CENTRO</string>
+    <string name="retouch_text_align_left">IZQUIERDA</string>
+    <string name="retouch_text_align_right">DERECHA</string>
+    <string name="retouch_text_color">Color de texto</string>
+    <string name="retouch_text_style_bold">NEGRITA</string>
+    <string name="retouch_text_style_classic">CLÁSICA</string>
+    <string name="retouch_text_style_handwriting">MANUSCRITA</string>
+    <string name="retouch_text_style_neon">NEÓN</string>
+    <string name="retouch_text_style_typewriter">MÁQUINA</string>
     <string name="retouch_tool_crop">Encuadrar</string>
     <string name="retouch_tool_sound">Sonido</string>
     <string name="retouch_tool_text">Texto</string>

@@ -94,6 +94,16 @@
     <string name="retouch_style_redcarpet">Tapete vermelho</string>
     <string name="retouch_style_screen">Tela</string>
     <string name="retouch_style_strip">Cabine de fotos</string>
+    <string name="retouch_text_add">Adicionar texto</string>
+    <string name="retouch_text_align_center">CENTRO</string>
+    <string name="retouch_text_align_left">ESQUERDA</string>
+    <string name="retouch_text_align_right">DIREITA</string>
+    <string name="retouch_text_color">Cor do texto</string>
+    <string name="retouch_text_style_bold">NEGRITO</string>
+    <string name="retouch_text_style_classic">CLÁSSICA</string>
+    <string name="retouch_text_style_handwriting">MANUSCRITA</string>
+    <string name="retouch_text_style_neon">NÉON</string>
+    <string name="retouch_text_style_typewriter">MÁQUINA</string>
     <string name="retouch_tool_crop">Enquadrar</string>
     <string name="retouch_tool_sound">Som</string>
     <string name="retouch_tool_text">Texto</string>

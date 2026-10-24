@@ -5,6 +5,8 @@ import android.graphics.Color
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -114,5 +116,23 @@ class ComposerRetouchScreenTest {
     @Test
     fun `une video illisible ne s ouvre pas en retouche`() {
         assertThat(RetouchVideoProbe.of(java.io.File("/nonexistent/clip.mp4"))).isNull()
+    }
+
+    @Test
+    fun `Texte ouvre un texte en saisie, et le texte ecrit part dans les pixels de la photo`() {
+        show()
+        compose.onNodeWithText("Text").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Done").assertDoesNotExist()
+        compose.onNode(hasSetTextAction()).performTextInput("MEESHY")
+        compose.waitForIdle()
+        compose.onNodeWithText("Text").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Done").performClick()
+        compose.waitUntil(10_000) { delivered.isNotEmpty() }
+        val rendered = delivered.single() as ComposerRetouchResult.Rendered
+        val pixels = IntArray(rendered.bitmap.width * rendered.bitmap.height)
+        rendered.bitmap.getPixels(pixels, 0, rendered.bitmap.width, 0, 0, rendered.bitmap.width, rendered.bitmap.height)
+        assertThat(pixels.any { Color.green(it) > 150 }).isTrue()
     }
 }
