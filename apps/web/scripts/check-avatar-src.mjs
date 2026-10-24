@@ -142,8 +142,8 @@ const VISAGES_UNIQUES = [
   {
     fichier: 'routes/communities-parts.tsx',
     combien: 1,
-    preuve: 'data-avatar-initials',
-    pourquoi: "EntityAvatar : avatar CARRÉ d'une communauté (iOS kind .entity), la photo précède et masque ses initiales (avatar.css)",
+    preuve: 'avatarPhotoEvents',
+    pourquoi: "EntityAvatar : avatar CARRÉ d'une communauté (iOS kind .entity), sa photo passe par la mécanique d'`Avatar` (`avatarPhotoEvents`) qui masque ses initiales une fois chargée",
   },
   {
     fichier: 'components/conversation-link-card.tsx',

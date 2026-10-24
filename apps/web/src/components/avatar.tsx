@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type SyntheticEvent } from 'react';
 
 import '@/styles/avatar.css';
 
@@ -213,10 +213,11 @@ type AvatarProps = {
    * (`living-summary.test.tsx#expand`, qui rejoue l'arbre React sans
    * dispatcher de hooks) : un `useState` y lève « Invalid hook call ». Le
    * repli se fait donc en manipulant le DOM au `onLoad`/`onError`
-   * (`data-loaded`, `style.display`). Et l'`<img>` porte `key={résolu}` : sans
-   * elle, Preact réutilise le nœud d'une photo qui a échoué, son `display:none`
-   * survit au changement de `src`, et la photo neuve (revalidation, `user:updated`,
-   * mon propre changement de photo) restait cachée sous les initiales.
+   * (`avatarPhotoEvents` : `data-loaded`, `style.display`). Et l'`<img>` porte
+   * `key={résolu}` : sans elle, Preact réutilise le nœud d'une photo qui a
+   * échoué, son `display:none` survit au changement de `src`, et la photo
+   * neuve (revalidation, `user:updated`, mon propre changement de photo)
+   * restait cachée sous les initiales.
    */
   src?: string;
   /**
@@ -236,6 +237,24 @@ function storyRingShadow({ stroke, unseen, color, separated }: { readonly stroke
   if (!separated || !unseen) return `inset 0 0 0 ${stroke}px ${ink}`;
   return `inset 0 0 0 ${stroke - 1}px ${ink}, inset 0 0 0 ${stroke}px var(--color-ios-surface)`;
 }
+
+/**
+ * **LA PHOTO REMPLACE SES INITIALES, ÉCRIT UNE FOIS** (#12571) — les deux
+ * événements de l'`<img>` d'un visage, posés par `Avatar` et par l'avatar carré
+ * d'une communauté (`EntityAvatar`, `routes/communities-parts.tsx`) : chargée,
+ * elle porte `data-loaded` et la règle de frère d'`avatar.css` masque le
+ * placeholder d'initiales qui la SUIT dans le DOM ; en échec, elle s'efface et
+ * les initiales restent, sans retry ni spinner. Sans état ni hook, et l'hôte
+ * pose `key={adresse}` : une adresse neuve repart d'une `<img>` neuve.
+ */
+export const avatarPhotoEvents = {
+  onLoad: (event: SyntheticEvent<HTMLImageElement>): void => {
+    event.currentTarget.setAttribute('data-loaded', '');
+  },
+  onError: (event: SyntheticEvent<HTMLImageElement>): void => {
+    event.currentTarget.style.display = 'none';
+  },
+} as const;
 
 export function Avatar(props: AvatarProps) {
   const { ring, ...bare } = props;
@@ -315,8 +334,9 @@ function renderAvatar({
            la garde trente jours sans pouvoir la distinguer d'une page d'erreur.
            `mediaImageCrossOrigin` ne la pose QUE sur la route de flux : un CDN
            tiers ou le magasin statique ÉCHOUERAIT en mode `cors` sans en-tête.
-           `key` — voir le doc-comment de `src` (#12571). `alt` vide : le nom
-           est porté par la racine, une seule fois. */
+           `key` et `avatarPhotoEvents` — voir le doc-comment de `src`
+           (#12571). `alt` vide : le nom est porté par la racine, une seule
+           fois. */
         <img
           key={resolvedSrc}
           src={resolvedSrc}
@@ -325,12 +345,7 @@ function renderAvatar({
           decoding="async"
           crossOrigin={mediaImageCrossOrigin(resolvedSrc)}
           className="absolute inset-0 size-full rounded-chip object-cover"
-          onLoad={(event) => {
-            event.currentTarget.setAttribute('data-loaded', '');
-          }}
-          onError={(event) => {
-            event.currentTarget.style.display = 'none';
-          }}
+          {...avatarPhotoEvents}
         />
       ) : null}
       {/* LES INITIALES — le PLACEHOLDER du chargement et le repli de l'échec,

@@ -10,10 +10,9 @@ import {
   type AdminSpace,
   type AdminTarget,
 } from '@/lib/admin/admin-routes';
-import { initialsOf } from '@/lib/view/conversation';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { participantAvatarOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 import { AdminGlyph, type AdminGlyphName } from './admin-glyph';
