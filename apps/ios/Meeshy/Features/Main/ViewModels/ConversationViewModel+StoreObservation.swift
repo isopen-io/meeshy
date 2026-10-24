@@ -249,6 +249,5 @@ extension ConversationViewModel {
                 msgs[i].adoptDecryptedContent(plaintext)
             }
         }
-        DecryptedMessageLedger.shared.record(results.filter { $0.plaintext != nil }.map(\.messageId))
     }
 }

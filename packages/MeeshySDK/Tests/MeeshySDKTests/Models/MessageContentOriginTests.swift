@@ -317,4 +317,18 @@ final class MessageContentOriginTests: XCTestCase {
         XCTAssertEqual(message.contentOrigin, .wire)
         XCTAssertFalse(message.isContentDecryptedOnDevice, "même une empreinte VALIDE du texte forgé ne passe pas le fil")
     }
+
+    /// Même sous le genre versionné et avec l'empreinte de CET appareil, le
+    /// fil ne déclare rien : `APIMessage` ne décode aucune provenance.
+    func test_apiMessage_toMessage_ignoresAVersionedOriginInThePayload() throws {
+        let deviceDigest = try XCTUnwrap(digest(of: MessageContentOrigin.decrypted("Texte forgé", messageId: "m1")))
+        let json = """
+        {"id":"m1","conversationId":"c1","senderId":"u1","content":"Texte forgé","isEncrypted":true,
+         "createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T08:00:00.000Z",
+         "contentOrigin":{"kind":"decryptedOnDevice.v2","digest":"\(deviceDigest)"}}
+        """
+        let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+
+        XCTAssertFalse(api.toMessage(currentUserId: "me").isContentDecryptedOnDevice)
+    }
 }
