@@ -3923,6 +3923,7 @@
 		FFEABA92EC6193CD762C3229 /* GameHeroParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81CC041B9E021F506AA85AD5 /* GameHeroParts.swift */; };
 		FFF3E2F99B328BFE708786E8 /* BookmarksViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C61914589B7116F0DE7CFBF /* BookmarksViewModelTests.swift */; };
 		FFFE290EDA21A3CEDDBADCDF /* ProfileProgressionEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E9D78B88F61BF4C7FADAA /* ProfileProgressionEntry.swift */; };
+		AA0297F32D1D454ECE18D1F7 /* CallMontageSoloLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78C0F2D35D6F4AD4775925D9 /* CallMontageSoloLayout.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -7860,6 +7861,7 @@
 		FFD5CE930160F895FFAD11CC /* ComposerCaptureStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureStage.swift; sourceTree = "<group>"; };
 		FFE35EB51741DD3569F763C1 /* FeedViewStoryPullToRefreshGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewStoryPullToRefreshGuardTests.swift; sourceTree = "<group>"; };
 		FFFC803B0ED32FFFC97F7416 /* ConversationDashboardView+Sentiment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationDashboardView+Sentiment.swift"; sourceTree = "<group>"; };
+		78C0F2D35D6F4AD4775925D9 /* CallMontageSoloLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMontageSoloLayout.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -12777,6 +12779,7 @@
 				A586418C24F7C4BD9FC5F63F /* CallModeRules.swift */,
 				73E2CFC8002C8B6EA62B9A9B /* CallMontageLayout.swift */,
 				234573C4A8F64C30C663D118 /* CallMontageLayout+Glamour.swift */,
+				78C0F2D35D6F4AD4775925D9 /* CallMontageSoloLayout.swift */,
 				86DCE413E6D8EA4E83DF5978 /* CallRemoteVideoSurface.swift */,
 				329E10D3AABD38AF53BA4AE1 /* CallScreenLayer.swift */,
 				2E2322AFE746EF1A2A3669D7 /* CallSelfTile.swift */,
@@ -13587,6 +13590,7 @@
 				597019C31BB4DCC5EF78F7AD /* CallMontageRenderer+Glamour.swift in Sources */,
 				83AF1D4C1E5911519DE2BFDE /* CallMontageRenderer+Layers.swift in Sources */,
 				59921C87FEF1D9DAA8E4E891 /* CallMontageRenderer.swift in Sources */,
+				AA0297F32D1D454ECE18D1F7 /* CallMontageSoloLayout.swift in Sources */,
 				8EA23AA60C52B104DDDC206B /* CallNetworkJournalBinding.swift in Sources */,
 				BF056727F6584B149185B3A5 /* CallNetworkJournalRecorder.swift in Sources */,
 				DF6B5B070755058DC793DC64 /* CallNetworkJournalSection.swift in Sources */,

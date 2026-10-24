@@ -14,6 +14,8 @@ nonisolated struct CallMontagePortrait: @unchecked Sendable {
 nonisolated struct CallMontageCaption: Equatable, Sendable {
     let title: String
     let subtitle: String
+    /// L'heure de la séance, écrite dans la barre d'état de l'Écran d'une photo seule (#12589).
+    var clock: String? = nil
 }
 
 nonisolated enum CallMontageRenderer {

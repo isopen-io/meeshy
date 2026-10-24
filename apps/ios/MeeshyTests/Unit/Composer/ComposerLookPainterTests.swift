@@ -142,6 +142,39 @@ final class ComposerLookPainterTests: XCTestCase {
         wait(for: [deja], timeout: 10)
     }
 
+    // MARK: - Écran et Mosaïque d'une photo seule (#12589)
+
+    func test_photo_classicScreen_isNotIdenticalToNoFrame() throws {
+        let toile = CGSize(width: 108, height: 192)
+        let look = ComposerPhotoLook(frame: .montage(.classic(.screen)))
+        let scene = try XCTUnwrap(ComposerLookPainter.scene(for: look, canvas: toile, date: date, person: auteur))
+        let cadree = try XCTUnwrap(ComposerLookPainter.photo(Self.uniforme(width: 300, height: 400), look: look,
+                                                             framing: .identity, scene: scene, canvas: toile))
+        let nue = try XCTUnwrap(ComposerLookPainter.photo(Self.uniforme(width: 300, height: 400), look: ComposerPhotoLook(),
+                                                          framing: .identity, scene: nil, canvas: toile))
+        let a = try Self.rgba(CIImage(cgImage: cadree), size: toile)
+        let b = try Self.rgba(CIImage(cgImage: nue), size: toile)
+        let coinCadre = Self.pixel(a, x: 1, y: 96, width: 108)
+        let coinNu = Self.pixel(b, x: 1, y: 96, width: 108)
+        XCTAssertLessThan(Int(coinCadre.red) + Int(coinCadre.green) + Int(coinCadre.blue), 40, "le bord de l'appareil est noir")
+        XCTAssertGreaterThan(Int(coinNu.red), 150, "sans cadre, la photo va jusqu'au bord")
+        XCTAssertNotEqual(a, b, "l'Écran d'une photo seule se voit dans l'image envoyée")
+    }
+
+    func test_photo_classicGrid_paintsJointsAcrossThePhoto() throws {
+        let toile = CGSize(width: 432, height: 768)
+        let look = ComposerPhotoLook(frame: .montage(.classic(.grid)))
+        let scene = try XCTUnwrap(ComposerLookPainter.scene(for: look, canvas: toile, date: date, person: auteur))
+        let photo = try XCTUnwrap(ComposerLookPainter.photo(Self.uniforme(width: 300, height: 400), look: look,
+                                                            framing: .identity, scene: scene, canvas: toile))
+        let octets = try Self.rgba(CIImage(cgImage: photo), size: toile)
+        let mosaique = CallMontageSoloLayout.mosaic(in: CGRect(origin: .zero, size: toile))
+        let joint = Self.pixel(octets, x: Int(mosaique.tiles[0].maxX + mosaique.joint / 2), y: Int(mosaique.tiles[0].midY), width: 432)
+        let carreau = Self.pixel(octets, x: Int(mosaique.tiles[4].midX), y: Int(mosaique.tiles[4].midY), width: 432)
+        XCTAssertGreaterThan(Int(joint.blue), 190, "un joint blanc traverse la photo")
+        XCTAssertLessThan(Int(carreau.blue), 160, "un carreau garde la photo (un 0,4 de bleu), à une teinte près")
+    }
+
     // MARK: - Relecture du lot (#9347)
 
     func test_paint_uniformSourceUpscaled_keepsOpaqueUnchangedCorners() throws {
