@@ -218,8 +218,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         // Qui active le chiffrement (#11218) :
         // - un tête-à-tête : chacun des deux participants ;
         // - ailleurs : au moins modérateur DANS la conversation — créateur
-        //   compris — ou ADMIN/BIGBOSS de plateforme membre, qui y agit avec
-        //   les droits du créateur. La liste écrite à la main ignorait
+        //   compris — ou un rôle de plateforme privilégié membre (MODERATOR,
+        //   ADMIN, BIGBOSS — #11217), qui y agit avec les droits du créateur. La liste écrite à la main ignorait
         //   `creator` et le rôle de plateforme. `actorHasMinimumRole` est la
         //   loi d'autorité unique ; un rang illisible y vaut moins qu'un membre.
         const member = conversation.participants.find(m => m.userId === authContext.userId);
