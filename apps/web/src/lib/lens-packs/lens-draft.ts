@@ -80,6 +80,20 @@ export function newDraftLayer(kind: DraftLayerKind, key: string): DraftLayer {
   }
 }
 
+const LAYER_KEY = /^layer-(\d+)$/;
+
+const layerNumberOf = (key: string): number => Number(LAYER_KEY.exec(key)?.[1] ?? 0);
+
+/** Le format ne lit pas plus de `LENS_LIMITS.maxLayers` couches : l'éditeur n'en propose pas davantage. */
+export const canAddDraftLayer = (draft: LensDraft): boolean => draft.layers.length < LENS_LIMITS.maxLayers;
+
+/** Le brouillon avec une couche neuve, sous une clé qu'aucune couche présente ne porte ; inchangé une fois le plafond atteint. */
+export function withDraftLayer(draft: LensDraft, kind: DraftLayerKind): LensDraft {
+  if (!canAddDraftLayer(draft)) return draft;
+  const next = Math.max(0, ...draft.layers.map((layer) => layerNumberOf(layer.key))) + 1;
+  return { ...draft, layers: [...draft.layers, newDraftLayer(kind, `layer-${next}`)] };
+}
+
 const SCREEN_Y: Readonly<Record<ScreenPlace, number>> = { 'screen-top': 0.15, 'screen-center': 0.5, 'screen-bottom': 0.85 };
 
 const isScreenPlace = (place: LensPlace): place is ScreenPlace => (SCREEN_PLACES as readonly string[]).includes(place);
@@ -102,12 +116,28 @@ const layerOf = (layer: DraftLayer, index: number, addresses: ReadonlyMap<File, 
   }
 };
 
+const FNV_OFFSET = 0x811c9dc5;
+const FNV_PRIME = 0x01000193;
+
+const fingerprintOf = (value: string): string =>
+  Array.from(value)
+    .reduce((hash, char) => Math.imul(hash ^ (char.codePointAt(0) ?? 0), FNV_PRIME) >>> 0, FNV_OFFSET)
+    .toString(16)
+    .padStart(8, '0');
+
+/**
+ * L'adresse de la lens, tirée de son nom. Un nom sans lettre latine (arabe, chinois, emoji) ne donne aucun
+ * slug : il prend alors une empreinte de ce nom, pour que deux lens ne se disputent pas une adresse commune
+ * que le partenaire ne pourrait jamais changer — et qu'une proposition refusée, renvoyée sous le même nom, la remplace.
+ */
+const lensIdOf = (name: string): string => slugOf(name, LENS_LIMITS.maxIdLength) || `lens-${fingerprintOf(name.trim())}`;
+
 /** Le document MeeshyLens du brouillon. `parseLens` le lit dès que `lensDraftProblems` est vide. */
 export function lensDocumentOf(draft: LensDraft, context: { readonly addresses: ReadonlyMap<File, string>; readonly today: string }) {
   const layers = draft.layers.map((layer, index) => layerOf(layer, index, context.addresses));
   return {
     schema: LENS_SCHEMA_VERSION,
-    id: slugOf(draft.name, LENS_LIMITS.maxIdLength) || 'lens',
+    id: lensIdOf(draft.name),
     name: draft.name.trim(),
     credits: { author: draft.author.trim(), createdAt: context.today },
     surfaces: [...draft.surfaces],

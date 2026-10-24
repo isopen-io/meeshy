@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { parseLens } from '@meeshy/shared/types/lens-format';
+import { LENS_LIMITS, LENS_PATTERNS, parseLens } from '@meeshy/shared/types/lens-format';
 
-import { emptyLensDraft, lensDocumentOf, lensDraftAddresses, lensDraftFiles, lensDraftProblems, newDraftLayer, type DraftLayer, type LensDraft } from './lens-draft';
+import { canAddDraftLayer, emptyLensDraft, lensDocumentOf, lensDraftAddresses, lensDraftFiles, lensDraftProblems, newDraftLayer, withDraftLayer, type DraftLayer, type LensDraft } from './lens-draft';
 import { prepareLensSubmission, type Digest } from './submission';
 
 /**
@@ -30,6 +30,25 @@ describe('newDraftLayer', () => {
     expect(newDraftLayer('sticker', 'k')).toMatchObject({ kind: 'sticker', file: null, place: 'screen-center' });
     expect(newDraftLayer('text', 'k')).toMatchObject({ kind: 'text', text: '', font: 'Manrope' });
     expect(newDraftLayer('lut', 'k')).toMatchObject({ kind: 'lut', file: null, intensity: 1 });
+  });
+});
+
+describe('withDraftLayer', () => {
+  test('chaque couche ajoutée a sa propre clé, même après qu’une autre a été retirée', () => {
+    const two = withDraftLayer(withDraftLayer(draftOf(), 'text'), 'particles');
+    const removed = { ...two, layers: two.layers.slice(1) };
+    const again = withDraftLayer(removed, 'sticker');
+    const keys = again.layers.map((layer) => layer.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(again.layers.map((layer) => layer.kind)).toEqual(['particles', 'sticker']);
+  });
+
+  test('au-delà du nombre de couches que le format lit, rien ne s’ajoute', () => {
+    const full = Array.from({ length: LENS_LIMITS.maxLayers }).reduce<LensDraft>((draft) => withDraftLayer(draft, 'particles'), draftOf());
+    expect(full.layers).toHaveLength(LENS_LIMITS.maxLayers);
+    expect(canAddDraftLayer(full)).toBe(false);
+    expect(withDraftLayer(full, 'text')).toBe(full);
+    expect(parseLens(lensDocumentOf(full, { addresses: new Map(), today: '2026-10-24' })).status).toBe('ok');
   });
 });
 
@@ -65,6 +84,17 @@ describe('lensDocumentOf', () => {
     expect(prepared.ok).toBe(true);
     if (!prepared.ok) return;
     expect(Object.keys(prepared.submission.assets)).toEqual(['aaaaaaaaaaaaaaaa.png']);
+  });
+
+  test('un nom sans lettre latine prend une adresse propre à ce nom, jamais une adresse commune', () => {
+    const idOf = (name: string): string => lensDocumentOf(draftOf({ name, layers: [snow] }), { addresses: new Map(), today: '2026-10-24' }).id;
+    const eid = idOf('عيد مبارك');
+    expect(eid).toMatch(LENS_PATTERNS.id);
+    expect(eid.length).toBeLessThanOrEqual(LENS_LIMITS.maxIdLength);
+    expect(idOf('رمضان كريم')).not.toBe(eid);
+    expect(idOf('春节快乐')).not.toBe(eid);
+    expect(idOf('عيد مبارك')).toBe(eid);
+    expect(parseLens(lensDocumentOf(draftOf({ name: 'عيد مبارك', layers: [snow] }), { addresses: new Map(), today: '2026-10-24' })).status).toBe('ok');
   });
 
   test('le coût est mesuré sur les couches, jamais demandé', async () => {

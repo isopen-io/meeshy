@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 
 import { LENS_SURFACES } from '@meeshy/shared/types/lens-format';
 
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { lensEditorText } from '@/lib/lens-packs/editor-texts';
-import { DRAFT_LAYER_KINDS, emptyLensDraft, lensDocumentOf, lensDraftAddresses, lensDraftFiles, lensDraftProblems, newDraftLayer, type DraftLayer, type LensDraft } from '@/lib/lens-packs/lens-draft';
+import { canAddDraftLayer, DRAFT_LAYER_KINDS, lensDocumentOf, lensDraftAddresses, lensDraftFiles, lensDraftProblems, withDraftLayer, type DraftLayer, type LensDraft } from '@/lib/lens-packs/lens-draft';
 import type { Digest } from '@/lib/lens-packs/submission';
 import { lensSubmitText } from '@/lib/lens-packs/submit-texts';
 import { useLensPreview } from '@/lib/lens-packs/use-lens-preview';
@@ -20,45 +20,56 @@ import { LensEditorLayer } from './lens-editor-layer';
  * COURS par le moteur des effets (`lens-camera-preview.tsx`). L'envoi est
  * celui de l'import (`prepareLensSubmission`, puis la passerelle) : ce que
  * l'éditeur compose, la préparation le contrôle comme un document écrit à la main.
+ * Le brouillon appartient à l'hôte (`lens-submit.tsx`) : passer à l'import et
+ * revenir ne le perd pas. Aucun éditeur de lens n'existe côté iOS (ni
+ * `apps/ios` ni `MeeshySDK`) : la disposition reprend celle du pack de
+ * stickers (`sticker-pack-submit.tsx`).
  */
 const INPUT = 'min-h-11 rounded-xl px-3 text-body';
 const INPUT_STYLE = { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' } as const;
 
 export function LensEditor({
   language,
+  draft,
   today,
   sending,
   digest,
   preview,
+  onDraftChange,
   onSubmit,
 }: {
   readonly language: InterfaceLanguage;
+  readonly draft: LensDraft;
   readonly today: string;
   readonly sending: boolean;
   readonly digest?: Digest;
   readonly preview?: CameraPreviewPort;
-  readonly onSubmit: (documentText: string, files: readonly File[]) => void;
+  readonly onDraftChange: (update: (current: LensDraft) => LensDraft) => void;
+  readonly onSubmit: (documentText: string, files: readonly File[]) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<LensDraft>(() => emptyLensDraft(today));
-  const counter = useRef(0);
+  const composing = useRef(false);
   const problems = useMemo(() => lensDraftProblems(draft), [draft]);
   const settings = useLensPreview({ draft, today, language, ...(digest === undefined ? {} : { digest }) });
   const cost = useMemo(() => lensDocumentOf(draft, { addresses: new Map(), today }).cost, [draft, today]);
 
-  const patch = (update: Partial<Omit<LensDraft, 'layers'>>): void => setDraft((current) => ({ ...current, ...update }));
-  const setLayers = (update: (layers: readonly DraftLayer[]) => readonly DraftLayer[]): void => setDraft((current) => ({ ...current, layers: update(current.layers) }));
-  const addLayer = (kind: DraftLayer['kind']): void => {
-    counter.current += 1;
-    const key = `layer-${counter.current}`;
-    setLayers((layers) => [...layers, newDraftLayer(kind, key)]);
-  };
+  const canAdd = canAddDraftLayer(draft);
+
+  const patch = (update: Partial<Omit<LensDraft, 'layers'>>): void => onDraftChange((current) => ({ ...current, ...update }));
+  const setLayers = (update: (layers: readonly DraftLayer[]) => readonly DraftLayer[]): void => onDraftChange((current) => ({ ...current, layers: update(current.layers) }));
+  const addLayer = (kind: DraftLayer['kind']): void => onDraftChange((current) => withDraftLayer(current, kind));
   const toggleSurface = (surface: LensDraft['surfaces'][number]): void =>
     patch({ surfaces: draft.surfaces.includes(surface) ? draft.surfaces.filter((entry) => entry !== surface) : LENS_SURFACES.filter((entry) => entry === surface || draft.surfaces.includes(entry)) });
 
+  /* Le geste est tenu dès le clic, pendant l'empreinte des fichiers ET l'envoi : un double clic n'envoie qu'une proposition. */
   const submit = async (): Promise<void> => {
-    if (problems.length > 0 || sending) return;
-    const addresses = await lensDraftAddresses(draft, digest);
-    onSubmit(JSON.stringify(lensDocumentOf(draft, { addresses, today })), lensDraftFiles(draft));
+    if (problems.length > 0 || sending || composing.current) return;
+    composing.current = true;
+    try {
+      const addresses = await lensDraftAddresses(draft, digest);
+      await onSubmit(JSON.stringify(lensDocumentOf(draft, { addresses, today })), lensDraftFiles(draft));
+    } finally {
+      composing.current = false;
+    }
   };
 
   return (
@@ -104,7 +115,7 @@ export function LensEditor({
       </ul>
       <div className="flex flex-wrap gap-2">
         {DRAFT_LAYER_KINDS.map((kind) => (
-          <button key={kind} type="button" data-lens-add={kind} onClick={() => addLayer(kind)} className="min-h-11 rounded-full px-3 text-caption" style={{ backgroundColor: 'var(--color-ios-fill)' }}>
+          <button key={kind} type="button" data-lens-add={kind} disabled={!canAdd} onClick={() => addLayer(kind)} className="min-h-11 rounded-full px-3 text-caption" style={{ backgroundColor: 'var(--color-ios-fill)' }}>
             {`+ ${lensEditorText(language, `add.${kind}`)}`}
           </button>
         ))}

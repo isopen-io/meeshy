@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { LENS_SUBMISSIONS_QUERY_KEY, loadLensSubmissions, submitLens, type LensPack } from '@/lib/api/lens-packs';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { lensEditorText } from '@/lib/lens-packs/editor-texts';
-import { todayOf } from '@/lib/lens-packs/lens-draft';
+import { emptyLensDraft, todayOf, type LensDraft } from '@/lib/lens-packs/lens-draft';
 import { prepareLensSubmission, serverRefusalOf, type Digest, type ServerRefusal } from '@/lib/lens-packs/submission';
 import { lensSubmitText, type LensSubmitTextKey } from '@/lib/lens-packs/submit-texts';
 
@@ -77,33 +77,49 @@ export function LensSubmit({
   });
   const [mode, setMode] = useState<Mode>('compose');
   const [day] = useState(() => today ?? todayOf(new Date()));
+  const [draft, setDraft] = useState<LensDraft>(() => emptyLensDraft(day));
+  const inFlight = useRef(false);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [assets, setAssets] = useState<readonly File[]>([]);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
-  const send = async (documentText: string, files: readonly File[]): Promise<void> => {
-    if (sending) return;
-    setSending(true);
+  /** `true` : la proposition est partie. Un envoi à la fois — un second geste pendant le premier ne repart pas. */
+  const deliver = async (documentText: string, files: readonly File[]): Promise<boolean> => {
     const prepared = await prepareLensSubmission({ documentText, files, ...(digest === undefined ? {} : { digest }) });
     if (!prepared.ok) {
-      setSending(false);
       setNotice({ kind: 'refused', reason: prepared.reason, ...(prepared.detail === undefined ? {} : { detail: prepared.detail }) });
-      return;
+      return false;
     }
     const result = await submitLens(deps, prepared.submission);
-    setSending(false);
     if (!result.ok) {
       setNotice({ kind: 'refused', reason: serverRefusalOf(result.code) });
-      return;
+      return false;
     }
     setNotice({ kind: 'submitted' });
     queryClient.setQueryData<readonly LensPack[]>(LENS_SUBMISSIONS_QUERY_KEY, (rows) => [result.data, ...(rows ?? []).filter((row) => row.slug !== result.data.slug)]);
+    return true;
+  };
+
+  const send = async (documentText: string, files: readonly File[]): Promise<boolean> => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
+    setSending(true);
+    try {
+      return await deliver(documentText, files);
+    } finally {
+      inFlight.current = false;
+      setSending(false);
+    }
   };
 
   const submit = async (): Promise<void> => {
     if (documentFile === null) return;
     await send(await documentFile.text(), assets);
+  };
+
+  const compose = async (documentText: string, files: readonly File[]): Promise<void> => {
+    if (await send(documentText, files)) setDraft(emptyLensDraft(day));
   };
 
   const rows = submissions.data ?? [];
@@ -129,7 +145,16 @@ export function LensSubmit({
         ))}
       </div>
       {mode === 'compose' ? (
-        <LensEditor language={language} today={day} sending={sending} onSubmit={(text, files) => void send(text, files)} {...(digest === undefined ? {} : { digest })} {...(preview === undefined ? {} : { preview })} />
+        <LensEditor
+          language={language}
+          draft={draft}
+          today={day}
+          sending={sending}
+          onDraftChange={setDraft}
+          onSubmit={compose}
+          {...(digest === undefined ? {} : { digest })}
+          {...(preview === undefined ? {} : { preview })}
+        />
       ) : (
         <>
           <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>

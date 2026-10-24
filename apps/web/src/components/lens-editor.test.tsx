@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { CameraEffectsPort } from '@/lib/calls/camera-effects';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { LENS_LIMITS } from '@meeshy/shared/types/lens-format';
 import { lensEditorTextKeysOf } from '@/lib/lens-packs/editor-texts';
 import type { Digest } from '@/lib/lens-packs/submission';
 import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
@@ -160,6 +161,52 @@ describe('LensSubmit — composer sans code', () => {
       return layer?.kind === 'text' && layer.text.fr === 'Bonsoir';
     });
     expect(seen.refreshed).toBeGreaterThan(0);
+  });
+
+  test('passer à l’import puis revenir rend le brouillon tel qu’il était', async () => {
+    const { deps } = gateway(() => ({ ok: true, data: [] }));
+    const host = await mount(deps);
+    mounter.type(host, '[data-lens-name]', 'Aurore');
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-add="particles"]'));
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-add="lut"]'));
+    await choose(host.querySelector<HTMLInputElement>('[data-lens-layer-file]'), [new File(['bbbbbbbbbbbbbbbb'], 'etalonnage.png', { type: 'image/png' })]);
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-mode="import"]'));
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-mode="compose"]'));
+    expect(host.querySelector<HTMLInputElement>('[data-lens-name]')?.value).toBe('Aurore');
+    expect([...host.querySelectorAll('[data-lens-layer-kind]')].map((layer) => layer.getAttribute('data-lens-layer-kind'))).toEqual(['particles', 'lut']);
+    expect(host.querySelector('[data-lens-layer-file-name]')?.textContent).toBe('etalonnage.png');
+    expect(host.querySelector('[data-lens-problem="file"]')).toBeNull();
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-add="sticker"]'));
+    const keys = [...host.querySelectorAll('[data-lens-layer]')].map((layer) => layer.getAttribute('data-lens-layer'));
+    expect(new Set(keys).size).toBe(3);
+  });
+
+  test('un double geste sur « Proposer » n’envoie qu’une proposition, et le brouillon envoyé se vide', async () => {
+    const { calls, deps } = gateway((request) => (request.method === 'POST' ? { ok: true, data: pack } : { ok: true, data: [] }));
+    const host = await mount(deps);
+    mounter.type(host, '[data-lens-name]', 'Aurore Polaire');
+    mounter.type(host, '[data-lens-author]', 'Studio Nord');
+    await mounter.click(host.querySelector<HTMLElement>('[data-lens-add="particles"]'));
+    const button = host.querySelector<HTMLButtonElement>('[data-lens-compose-submit]');
+    expect(button?.disabled).toBe(false);
+    await act(async () => {
+      button?.click();
+      button?.click();
+    });
+    await until(() => host.querySelector('[data-lens-submitted]') !== null);
+    await act(settle);
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1);
+    expect(host.querySelector('[data-lens-refusal]')).toBeNull();
+    expect(host.querySelector<HTMLInputElement>('[data-lens-name]')?.value).toBe('');
+    expect(host.querySelector('[data-lens-layer]')).toBeNull();
+  });
+
+  test('au plafond de couches que le format lit, l’éditeur n’en propose plus', async () => {
+    const { deps } = gateway(() => ({ ok: true, data: [] }));
+    const host = await mount(deps);
+    for (let i = 0; i < LENS_LIMITS.maxLayers; i += 1) await mounter.click(host.querySelector<HTMLElement>('[data-lens-add="particles"]'));
+    expect(host.querySelectorAll('[data-lens-layer]')).toHaveLength(LENS_LIMITS.maxLayers);
+    expect([...host.querySelectorAll<HTMLButtonElement>('[data-lens-add]')].every((add) => add.disabled)).toBe(true);
   });
 
   test('le document MeeshyLens s’importe encore, pour qui l’a écrit à la main', async () => {

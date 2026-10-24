@@ -73,10 +73,16 @@ function Slider({ label, value, min, max, step, attribute, onChange }: { readonl
   );
 }
 
-function ImageInput({ language, accept, onChange }: { readonly language: InterfaceLanguage; readonly accept: string; readonly onChange: (file: File | null) => void }) {
+/** Un champ de fichier ne se remplit pas par le code : l'image déjà choisie (retour de l'import, par exemple) se dit par son nom. */
+function ImageInput({ language, accept, file, onChange }: { readonly language: InterfaceLanguage; readonly accept: string; readonly file: File | null; readonly onChange: (file: File | null) => void }) {
   return (
     <Field label={lensEditorText(language, 'image')}>
       <input data-lens-layer-file type="file" accept={accept} onChange={(event) => onChange(event.currentTarget.files?.[0] ?? null)} />
+      {file === null ? null : (
+        <span data-lens-layer-file-name className="truncate" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {file.name}
+        </span>
+      )}
     </Field>
   );
 }
@@ -102,7 +108,7 @@ function Body({ language, layer, onChange }: { readonly language: InterfaceLangu
     case 'sticker':
       return (
         <>
-          <ImageInput language={language} accept="image/png,image/webp,.png,.webp" onChange={(file) => onChange({ ...layer, file })} />
+          <ImageInput language={language} accept="image/png,image/webp,.png,.webp" file={layer.file} onChange={(file) => onChange({ ...layer, file })} />
           <Slider label={lensEditorText(language, 'size')} value={layer.size} min={0.05} max={1} step={0.05} attribute="data-lens-layer-size" onChange={(size) => onChange({ ...layer, size })} />
           <Choice language={language} label="place" value={layer.place} options={LENS_PLACES} textOf={placeText(language)} attribute="data-lens-layer-place" onChange={(place) => onChange({ ...layer, place })} />
         </>
@@ -117,7 +123,7 @@ function Body({ language, layer, onChange }: { readonly language: InterfaceLangu
     case 'lut':
       return (
         <>
-          <ImageInput language={language} accept="image/png,.png" onChange={(file) => onChange({ ...layer, file })} />
+          <ImageInput language={language} accept="image/png,.png" file={layer.file} onChange={(file) => onChange({ ...layer, file })} />
           <Slider label={lensEditorText(language, 'intensity')} value={layer.intensity} min={0} max={1} step={0.1} attribute="data-lens-layer-intensity" onChange={(intensity) => onChange({ ...layer, intensity })} />
         </>
       );
