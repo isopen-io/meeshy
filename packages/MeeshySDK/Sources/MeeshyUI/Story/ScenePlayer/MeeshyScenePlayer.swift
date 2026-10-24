@@ -287,7 +287,15 @@ public struct MeeshyScenePlayer: View {
         }
     }
 
+    /// L'identité servie à l'hôte est COMPOSÉE (porteur@scène#boucle) : la
+    /// QoE porte l'identifiant du porteur, la story réellement lue (#11287).
     var host: StoryReaderRepresentable {
+        var reader = baseHost
+        reader.playbackQoEStoryId = carrier?.id
+        return reader
+    }
+
+    private var baseHost: StoryReaderRepresentable {
         StoryReaderRepresentable(story: storyItem,
                                  preferredLanguages: languages,
                                  preloadedImages: preloadedImages,

@@ -131,18 +131,7 @@ struct StoryViewerContainer: View {
                     resolvedIndex: resolvedIndex,
                     singleGroup: singleGroup
                 )
-                StoryViewerView(
-                    viewModel: viewModel,
-                    groups: scope.groups,
-                    currentGroupIndex: scope.currentIndex,
-                    isPresented: $isPresented,
-                    onReplyToStory: onReplyToStory,
-                    initialStoryIndex: resolvedStoryIndex,
-                    startAtFirstUnviewed: startAtFirstUnviewed,
-                    initialAction: initialAction,
-                    targetCommentId: targetCommentId,
-                    targetParentCommentId: targetParentCommentId
-                )
+                publishedViewer(scope: scope, storyIndex: resolvedStoryIndex)
                 .transition(.identity)
                 .onAppear { hasPresentedViewer = true }
                 // **La porte « Composer » est PRÉSENTÉE ICI** (#6085), et pas
@@ -221,6 +210,24 @@ struct StoryViewerContainer: View {
     }
 
     // MARK: - Loading / Fallback UI
+
+    /// Le lecteur des stories PUBLIÉES, et lui seul, déclare la story qu'il
+    /// lit à la qualité de lecture (#11287) — l'aperçu du composer, plus bas, non.
+    private func publishedViewer(scope: StoryViewerScope.Resolved, storyIndex: Int) -> some View {
+        StoryViewerView(
+            viewModel: viewModel,
+            groups: scope.groups,
+            currentGroupIndex: scope.currentIndex,
+            isPresented: $isPresented,
+            onReplyToStory: onReplyToStory,
+            initialStoryIndex: storyIndex,
+            startAtFirstUnviewed: startAtFirstUnviewed,
+            initialAction: initialAction,
+            targetCommentId: targetCommentId,
+            targetParentCommentId: targetParentCommentId
+        )
+        .environment(\.readsPublishedStories, true)
+    }
 
     private var loadingOverlay: some View {
         ZStack {

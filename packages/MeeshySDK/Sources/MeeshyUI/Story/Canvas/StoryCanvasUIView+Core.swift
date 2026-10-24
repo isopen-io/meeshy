@@ -173,7 +173,6 @@ extension StoryCanvasUIView {
                 reconfigureAudioForPlayback()
                 startAudioPlayback()
             case .edit:
-                finishBackgroundPlaybackQoE()
                 unregisterFromActive()
                 stopPlayback()
                 audioMixer.pause()

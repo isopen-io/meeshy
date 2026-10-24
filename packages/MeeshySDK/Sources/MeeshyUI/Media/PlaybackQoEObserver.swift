@@ -38,6 +38,7 @@ public final class PlaybackQoEObserver {
     private weak var player: AVPlayer?
     private var lastIndicatedBitrate: Double?
     private var finished = false
+    private var firstFrameFromComposition = false
 
     public init(
         subject: PlaybackQoESubject,
@@ -121,9 +122,11 @@ public final class PlaybackQoEObserver {
     /// **La première image COMPOSÉE** (#11287) — `AVPlayerLayer.isReadyForDisplay`,
     /// le seul signal qui dit « l'utilisateur voit une image », là où
     /// `timeControlStatus == .playing` n'arrive qu'au GO de la lecture. La
-    /// première image gagne : un `.playing` ultérieur ne la déplace jamais.
-    /// `readiness` est livrée sur le fil principal.
+    /// première image gagne. Une fois armée, elle est la SEULE source de la
+    /// première image : un `.playing` arrivé avant la composition ne la
+    /// devance pas. `readiness` est livrée sur le fil principal.
     public func observeFirstFrame(readiness: AnyPublisher<Bool, Never>) {
+        firstFrameFromComposition = true
         readiness
             .filter { $0 }
             .first()
@@ -142,10 +145,10 @@ public final class PlaybackQoEObserver {
     private func noteBufferEmpty() { accumulator.noteBufferEmpty(atMs: nowMs) }
     private func noteLikelyToKeepUp() { accumulator.noteLikelyToKeepUp(atMs: nowMs) }
 
-    private func noteTimeControl(_ status: AVPlayer.TimeControlStatus) {
+    func noteTimeControl(_ status: AVPlayer.TimeControlStatus) {
         switch status {
         case .playing:
-            accumulator.noteFirstFrame(atMs: nowMs)
+            if !firstFrameFromComposition { accumulator.noteFirstFrame(atMs: nowMs) }
             accumulator.notePlaying(atMs: nowMs)
         case .paused:
             accumulator.notePaused(atMs: nowMs)

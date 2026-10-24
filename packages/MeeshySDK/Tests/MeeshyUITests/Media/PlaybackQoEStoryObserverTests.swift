@@ -83,6 +83,28 @@ final class PlaybackQoEStoryObserverTests: XCTestCase {
         XCTAssertEqual(result.startupMs, 90)
     }
 
+    func test_playingBeforeTheComposedFrame_neverTakesTheStartup() throws {
+        let clock = Clock()
+        let observer = makeObserver(clock: clock)
+        let readiness = PassthroughSubject<Bool, Never>()
+        observer.observeFirstFrame(readiness: readiness.eraseToAnyPublisher())
+        clock.nowMs += 60
+        observer.noteTimeControl(.playing)
+        clock.nowMs += 120
+        readiness.send(true)
+        let result = try summary(observer.finish(reason: .completed))
+        XCTAssertEqual(result.startupMs, 180)
+    }
+
+    func test_playing_stillTakesTheStartup_whenNoComposedFrameIsObserved() throws {
+        let clock = Clock()
+        let observer = makeObserver(clock: clock)
+        clock.nowMs += 75
+        observer.noteTimeControl(.playing)
+        let result = try summary(observer.finish(reason: .completed))
+        XCTAssertEqual(result.startupMs, 75)
+    }
+
     func test_summaryEvent_carriesStorySurfaceAndTarget() throws {
         let observer = makeObserver(clock: Clock())
         let event = try XCTUnwrap(observer.finish(reason: .closed))
