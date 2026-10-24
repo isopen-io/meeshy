@@ -20,6 +20,8 @@ if [[ "$ACTUAL" != "$TAG" ]]; then
 fi
 
 export PATH="$HOME/.cargo/bin:$PATH"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$SRC/target}"
+TARGET_DIR="$CARGO_TARGET_DIR"
 TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios)
 for target in "${TARGETS[@]}"; do
   CARGO_BUILD_TARGET="$target" "$SRC/swift/build_ffi.sh" --release
@@ -30,13 +32,13 @@ trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/headers" "$WORK/simulator"
 cp "$SRC/swift/Sources/SignalFfi/signal_ffi.h" "$SRC/swift/Sources/SignalFfi/signal_ffi_testing.h" "$SRC/swift/Sources/SignalFfi/module.modulemap" "$WORK/headers/"
 lipo -create \
-  "$SRC/target/aarch64-apple-ios-sim/release/libsignal_ffi.a" \
-  "$SRC/target/x86_64-apple-ios/release/libsignal_ffi.a" \
+  "$TARGET_DIR/aarch64-apple-ios-sim/release/libsignal_ffi.a" \
+  "$TARGET_DIR/x86_64-apple-ios/release/libsignal_ffi.a" \
   -output "$WORK/simulator/libsignal_ffi.a"
 
 rm -rf "$OUT/SignalFfi.xcframework" "$OUT/SignalFfi.xcframework.zip"
 xcodebuild -create-xcframework \
-  -library "$SRC/target/aarch64-apple-ios/release/libsignal_ffi.a" -headers "$WORK/headers" \
+  -library "$TARGET_DIR/aarch64-apple-ios/release/libsignal_ffi.a" -headers "$WORK/headers" \
   -library "$WORK/simulator/libsignal_ffi.a" -headers "$WORK/headers" \
   -output "$OUT/SignalFfi.xcframework"
 (cd "$OUT" && ditto -c -k --sequesterRsrc --keepParent SignalFfi.xcframework SignalFfi.xcframework.zip)
