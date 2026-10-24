@@ -204,13 +204,34 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
                       "La rangée de l'aperçu reçoit son révélé des heures.")
     }
 
-    /// Le voile ne floute plus le fond à 12 : un flou léger, d'au plus 8, sous
-    /// l'assombrissement de l'overlay (#11222 en fixe la loi commune).
-    func test_backdropBlur_isAtMostEight() throws {
-        let code = try source("Features/Main/Views/ConversationLayers/ConversationBodyPresentations.swift")
-        XCTAssertFalse(code.contains("showOverlayMenu ? 12 : 0"), "Le flou plein écran de 12 est retiré.")
-        XCTAssertTrue(code.contains(".blur(radius: overlayState.showOverlayMenu ? ConversationOverlayBackdrop.blurRadius : 0)"))
-        XCTAssertLessThanOrEqual(ConversationOverlayBackdrop.blurRadius, 8)
+    /// #11222 — le voile de l'appui long est le MATÉRIAU SYSTÈME, posé par UN
+    /// composant (`LongPressVeil`, MeeshyUI) sur les trois surfaces : le menu
+    /// d'un message, l'aperçu d'une pièce et l'aperçu d'une conversation. L'hôte
+    /// ne floute plus la conversation lui-même, et aucune surface ne réécrit sa
+    /// propre matière ni son propre assombrissement.
+    func test_longPressVeils_passThroughTheSystemMaterial_withoutLiteralBlur() throws {
+        let host = try source("Features/Main/Views/ConversationLayers/ConversationBodyPresentations.swift")
+        XCTAssertFalse(host.contains(".blur(radius:"), "L'hôte du menu ne floute plus la conversation : le voile est le matériau.")
+        XCTAssertFalse(host.contains("ConversationOverlayBackdrop"), "Le rayon de flou propre au fil est retiré.")
+
+        let veils = [
+            "Features/Main/Components/MessageOverlayMenu.swift",
+            "Features/Main/Components/MessagePieceOverlay.swift",
+            "Features/Main/Views/ConversationListView+Overlays.swift",
+        ]
+        for path in veils {
+            let code = try source(path)
+            XCTAssertTrue(code.contains("LongPressVeil(visibility:"), "\(path) pose le voile commun.")
+        }
+
+        let menu = try source(veils[0])
+        let piece = try source(veils[1])
+        let list = try source(veils[2])
+        XCTAssertFalse(menu.contains(".blur(radius:"), "Le menu d'un message ne pose aucun flou littéral.")
+        XCTAssertFalse(piece.contains(".blur(radius:"), "L'aperçu d'une pièce ne pose aucun flou littéral.")
+        XCTAssertFalse(menu.contains(".opacity(isVisible ? (isDark ? 0.5 : 0.4) : 0)"), "L'assombrissement propre au menu est retiré.")
+        XCTAssertFalse(piece.contains(".opacity(isVisible ? 0.62 : 0)"), "L'assombrissement propre à la pièce est retiré.")
+        XCTAssertFalse(list.contains(".fill(.ultraThinMaterial)"), "L'aperçu d'une conversation ne réécrit plus la matière.")
     }
 
     // MARK: - #11208 — le cadre de fenêtre passe dans le repère de l'overlay
