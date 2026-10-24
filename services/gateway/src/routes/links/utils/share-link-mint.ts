@@ -1,7 +1,7 @@
 import type { FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MemberRole, isGlobalAdmin } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole, type ConversationActor } from '../../../utils/conversation-authority';
+import { actorHasMinimumRole, type ConversationActor } from '@meeshy/shared/utils/conversation-authority';
 import { isConversationClosed } from '../../../services/messaging/conversationWriteAdmission';
 import { resolveConversationId } from '../../../utils/conversation-id-cache';
 import { SecuritySanitizer } from '../../../utils/sanitize';

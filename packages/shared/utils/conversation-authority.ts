@@ -4,7 +4,7 @@ import {
   isGlobalAdmin,
   isMemberRole,
   memberRoleLevel,
-} from '@meeshy/shared/types/role-types';
+} from '../types/role-types.js';
 
 /**
  * **L'autorité d'un acteur DANS une conversation** — rang de conversation et

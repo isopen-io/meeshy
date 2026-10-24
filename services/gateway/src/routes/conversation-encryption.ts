@@ -26,7 +26,7 @@ import {
   type SystemNoticeDeps,
 } from '../services/conversations/conversationNotice';
 import { refuserCommeIntrouvable } from './conversations/utils/access-control';
-import { actorHasMinimumRole } from '../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import {
   ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
