@@ -38,6 +38,8 @@ import me.meeshy.sdk.model.composer.look.ComposerEditTools
 import me.meeshy.sdk.model.composer.look.ComposerLookCanvas
 import me.meeshy.sdk.model.composer.look.ComposerRetouchDelivery
 import me.meeshy.sdk.model.composer.look.ComposerRetouchState
+import me.meeshy.sdk.model.composer.look.ComposerRetouchTextBoard
+import java.util.UUID
 
 /** Ce que « Terminé » remet à l'hôte : la prise telle quelle, ou son rendu. */
 public sealed interface ComposerRetouchResult {
@@ -48,8 +50,8 @@ public sealed interface ComposerRetouchResult {
 /** Les effets que la retouche Android sait peindre sur une prise : aucun encore (#12614 les suit). */
 public val RetouchRenderableEffects: List<CallFaceEffect> = emptyList()
 
-/** Les outils de la retouche d'une photo sur Android : Recadrer. */
-public val RetouchPhotoTools: List<ComposerEditTool> = listOf(ComposerEditTool.CROP)
+/** Les outils de la retouche d'une photo sur Android : Recadrer et Texte. */
+public val RetouchPhotoTools: List<ComposerEditTool> = listOf(ComposerEditTool.CROP, ComposerEditTool.TEXT)
 
 /**
  * **LA RETOUCHE UNIQUE D'UNE PHOTO** (#11133, #12614) — miroir de `ConversationPieceRetouch` (iOS) : la prise
@@ -69,11 +71,14 @@ public fun ComposerRetouchScreen(
     var state by remember { mutableStateOf(ComposerRetouchState.opening(ComposerEditTake.Photo, RetouchRenderableEffects, RetouchPhotoTools)) }
     var finishing by remember { mutableStateOf(false) }
     var lockedPreset by remember { mutableStateOf<ComposerCropPreset?>(null) }
+    var text by remember { mutableStateOf(ComposerRetouchTextBoard()) }
+    val newTextId = { UUID.randomUUID().toString() }
     val scope = rememberCoroutineScope()
     val previewSource = remember(source) { scaledCopy(source, ComposerLookCanvas.PREVIEW_LONG_SIDE) }
     val thumbSource = remember(source) { scaledCopy(source, ComposerLookCanvas.THUMBNAIL_LONG_SIDE) }
     var preview by remember { mutableStateOf(previewSource) }
     val cropping = ComposerEditTools.showsBrackets(state.activeTools)
+    val writing = ComposerEditTool.TEXT in state.activeTools && state.openFamily == null
     val previewCrop = if (cropping) null else state.crop
 
     val previewLook = if (cropping) state.look.withoutFrame else state.look
@@ -98,10 +103,13 @@ public fun ComposerRetouchScreen(
         state = settled
         finishing = true
         scope.launch {
-            val result = when (settled.delivery) {
-                ComposerRetouchDelivery.ORIGINAL -> ComposerRetouchResult.Original
-                ComposerRetouchDelivery.RENDERED -> withContext(Dispatchers.Default) {
+            val written = text.endingTyping().written
+            val result = if (settled.delivery == ComposerRetouchDelivery.ORIGINAL && written.isEmpty()) {
+                ComposerRetouchResult.Original
+            } else {
+                withContext(Dispatchers.Default) {
                     ComposerLookPainter.paint(source, settled.look, author, ComposerLookCanvas.EXPORT_LONG_SIDE, settled.crop)
+                        ?.let { RetouchTextPainter.composited(it, written) }
                 }?.let { ComposerRetouchResult.Rendered(it) }
             }
             if (result == null) {
@@ -117,6 +125,8 @@ public fun ComposerRetouchScreen(
         val open = state.openFamily
         when {
             open != null -> state = state.tappingFamily(open)
+            text.typingId != null -> text = text.endingTyping()
+            writing -> state = state.tappingTool(ComposerEditTool.TEXT)
             cropping -> state = state.tappingTool(ComposerEditTool.CROP)
             else -> cancel()
         }
@@ -125,9 +135,9 @@ public fun ComposerRetouchScreen(
     Box(modifier.fillMaxSize().background(Color.Black).semantics { testTag = "retouch.screen" }) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             Image(preview.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            val display = with(LocalDensity.current) { ComposerLookCanvas.displayRect(maxWidth.toPx(), maxHeight.toPx(), preview.width, preview.height) }
+            if (!cropping) RetouchTextLayer(board = text, display = display, interactive = writing && !finishing, newId = newTextId, onBoard = { text = it })
             if (cropping) {
-                val density = LocalDensity.current
-                val display = with(density) { ComposerLookCanvas.displayRect(maxWidth.toPx(), maxHeight.toPx(), preview.width, preview.height) }
                 RetouchCropBrackets(
                     crop = state.crop,
                     aspect = lockedPreset?.aspect(source.width.toDouble(), source.height.toDouble()),
@@ -150,6 +160,7 @@ public fun ComposerRetouchScreen(
                     onChoose = { item -> state = state.choosing(item) },
                 )
             }
+            if (writing) RetouchTextToolbar(board = text, newId = newTextId, onBoard = { text = it })
             if (cropping && state.openFamily == null) {
                 RetouchCropPresets(chosen = state.cropPreset, enabled = !finishing) { preset ->
                     lockedPreset = preset
@@ -160,7 +171,10 @@ public fun ComposerRetouchScreen(
                 state = state,
                 enabled = !finishing,
                 onFamily = { family -> state = state.tappingFamily(family) },
-                onTool = { tool -> state = state.tappingTool(tool) },
+                onTool = { tool ->
+                    state = state.tappingTool(tool)
+                    text = if (ComposerEditTool.TEXT in state.activeTools) text.begin(newTextId()) else text.endingTyping()
+                },
             )
         }
     }
