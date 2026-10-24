@@ -62,16 +62,23 @@ final class AvatarPhotoInventoryGuardTests: XCTestCase {
         let files = roots.flatMap(swiftFiles(under:))
         XCTAssertGreaterThan(files.count, 100, "Le balayage doit trouver les sources de l'app et du SDK.")
         var offenders: [String] = []
+        var exemptedSites: Set<String> = []
         for file in files {
             let relative = file.resolvingSymlinksInPath().path.replacingOccurrences(of: repoRoot.path + "/", with: "")
-            guard !Self.exemptions.contains(relative) else { continue }
             let source = try String(contentsOf: file, encoding: .utf8)
-            for call in Self.avatarCallArguments(in: source) where call.arguments.contains("name:") && !call.arguments.contains("avatarURL:") {
-                offenders.append("\(relative):\(call.line)")
+            let withoutPhoto = Self.avatarCallArguments(in: source)
+                .filter { $0.arguments.contains("name:") && !$0.arguments.contains("avatarURL:") }
+            guard !withoutPhoto.isEmpty else { continue }
+            if Self.exemptions.contains(relative) {
+                exemptedSites.insert(relative)
+                continue
             }
+            offenders += withoutPhoto.map { "\(relative):\($0.line)" }
         }
         XCTAssertTrue(offenders.isEmpty,
                       "MeeshyAvatar monté sans avatarURL: (la photo ne s'affichera jamais) — \(offenders.joined(separator: ", "))")
+        XCTAssertEqual(exemptedSites, Self.exemptions,
+                       "Exemption périmée : le fichier ne monte plus d'avatar sans photo, le retirer de la liste.")
     }
 
     func test_scanner_findsACallWithoutPhoto() {
