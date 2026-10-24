@@ -18,6 +18,7 @@ import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewCache
 import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.link.LinkPreviewParser
+import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.component.bubble.MessageBubble
@@ -72,6 +73,21 @@ internal fun ChatMessageRow(
     }
     val linkContext = LocalContext.current
     val messageId = bubble.messageId
+    val callbacks = remember(messageId, actions, audioPlayer, uriHandler) {
+        BubbleCallbacks(
+            onLongPress = { actions.onLongPress(messageId) },
+            onReactionClick = { emoji -> actions.onReactionClick(messageId, emoji) },
+            onReactionLongPress = { actions.onReactionLongPress(messageId) },
+            onImageClick = { index -> actions.onImageClick(messageId, index) },
+            onLocationClick = { location ->
+                location.geoUri?.let { runCatching { uriHandler.openUri(it) } }
+            },
+            onAudioClick = { audio -> audioPlayer?.toggle(audio) },
+            onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
+            onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
+            onFlagTap = { code -> actions.onFlagTap(messageId, code) },
+        )
+    }
     SwipeToReplyContainer(
         isOutgoing = bubble.isOutgoing,
         accentColor = accentColor,
@@ -85,18 +101,8 @@ internal fun ChatMessageRow(
             outgoingColor = accentColor,
             mentionDisplayNames = mentionDisplayNames,
             highlightTerm = highlightTerm,
-            onLongPress = { actions.onLongPress(messageId) },
-            onReactionClick = { emoji -> actions.onReactionClick(messageId, emoji) },
-            onReactionLongPress = { actions.onReactionLongPress(messageId) },
-            onImageClick = { index -> actions.onImageClick(messageId, index) },
-            onLocationClick = { location ->
-                location.geoUri?.let { runCatching { uriHandler.openUri(it) } }
-            },
-            onAudioClick = { audio -> audioPlayer?.toggle(audio) },
+            callbacks = callbacks,
             audioPlayback = audioPlayback,
-            onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
-            onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
-            onFlagTap = { code -> actions.onFlagTap(messageId, code) },
         )
     }
     val linkUrl = remember(bubble.text) {
