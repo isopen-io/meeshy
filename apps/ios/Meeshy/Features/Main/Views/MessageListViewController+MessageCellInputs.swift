@@ -28,6 +28,8 @@ struct MessageCellInputs {
     let isLastInGroup: Bool
     let hasTimebasedMedia: Bool
     let voiceConsentMissing: Bool
+    /// Arrivé EN CLAIR dans une conversation chiffrée (#11380) : marqué, sans traduction.
+    let isUnencrypted: Bool
 
     static func recipientCount(isDirect: Bool, serverRecipients: Int, memberCount: Int?) -> Int {
         guard !isDirect else { return 1 }
@@ -45,7 +47,7 @@ extension MessageListViewController {
     ) -> MessageCellInputs {
         let vm = conversationViewModel
         let isMine = message.isMe
-        let translatedAudios = vm?.messageTranslatedAudios[message.id] ?? []
+        let translatedAudios = UnencryptedMessageGate.translatedAudios(of: message, in: vm)
         let languageSelection = vm?.bubbleLanguageSelections[message.id]
         let user = AuthManager.shared.currentUser
         let senderRingState: StoryRingState = isMine
@@ -65,8 +67,8 @@ extension MessageListViewController {
                 serverRecipients: message.recipientCount,
                 memberCount: vm?.currentConversation?.memberCount
             ),
-            translations: vm?.messageTranslations[message.id] ?? [],
-            preferred: vm?.preferredTranslation(for: message.id),
+            translations: UnencryptedMessageGate.translations(of: message, in: vm),
+            preferred: UnencryptedMessageGate.preferredTranslation(of: message, in: vm),
             transcription: vm?.messageTranscriptions[message.id],
             translatedAudios: translatedAudios,
             highlightTerm: vm?.currentSearchQuery,
@@ -88,7 +90,7 @@ extension MessageListViewController {
                 in: store.messages
             ),
             hasTimebasedMedia: message.attachments.contains { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack },
-            voiceConsentMissing: vm?.voiceConsentMissing ?? false
+            voiceConsentMissing: vm?.voiceConsentMissing ?? false, isUnencrypted: UnencryptedMessageGate.isUnencrypted(message, in: vm)
         )
     }
 }

@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 /// `LentilleModeMenuModel` — le catalogue Auto 🪄 / Script / Résumé /
 /// Rivière (contrat LWS-8/I-072, amendé par le RETRAIT FOCAL iOS
@@ -425,10 +426,10 @@ final class ModeMenuModelTests: XCTestCase {
     }
 
     /// Critère d'acceptation LWS-8 : « sous-menu "Mode de lecture" ajouté à
-    /// `nativeContextMenuView` APRÈS "Marquer lu" ». Position vérifiée par
-    /// l'ORDRE des offsets dans le fichier — pas seulement la présence des
-    /// deux morceaux, ce qui laisserait passer un sous-menu placé n'importe
-    /// où ailleurs dans `conversationContextMenu(for:)`.
+    /// `nativeContextMenuView` APRÈS "Marquer lu" ». Depuis #11230 l'ordre ne
+    /// se lit plus aux offsets du fichier : les deux chemins d'OS parcourent
+    /// `ConversationMenuCatalog`, et c'est SON ordre qui se vérifie — Marquer
+    /// lu, puis le sous-menu, puis Détails.
     func test_readingModeSubmenu_isMountedOnce_afterMarkRead_behindTheFlag() throws {
         let raw = try overlaysSource()
 
@@ -438,35 +439,24 @@ final class ModeMenuModelTests: XCTestCase {
             "affichée d'un endroit à l'autre du même menu contextuel."
         )
 
-        let markReadRange = try XCTUnwrap(
-            raw.range(of: "context.mark_read"),
-            "Repère « Marquer lu » introuvable — l'ancrage du contrat (§LWS-8) a bougé, " +
-            "cette garde doit être re-pointée avant tout le reste."
-        )
-        let submenuRange = try XCTUnwrap(
-            raw.range(of: "LentilleReadingModeSubmenu("),
-            "Le sous-menu doit être monté dans ce fichier."
-        )
-        XCTAssertTrue(
-            submenuRange.lowerBound > markReadRange.lowerBound,
-            "Le sous-menu « Mode de lecture » doit apparaître APRÈS « Marquer lu » dans " +
-            "`conversationContextMenu(for:)`, mot pour mot le placement du contrat."
-        )
-
-        let detailsRange = try XCTUnwrap(
-            raw.range(of: "context.details"),
-            "Repère « Détails » introuvable — ancrage à re-pointer."
-        )
-        XCTAssertTrue(
-            submenuRange.lowerBound < detailsRange.lowerBound,
-            "Le sous-menu doit se glisser AVANT « Détails » — juste après « Marquer lu », " +
-            "pas ailleurs dans le menu."
-        )
+        let conversation = MeeshyConversation(id: "c1", identifier: "c1", type: .group, title: "Équipe", currentUserRole: "member")
+        let user = MeeshyUser(id: "me", username: "me", role: "USER", isAnonymous: false)
+        let entries = ConversationMenuCatalog.make(ConversationMenuCatalog.Input(
+            capabilities: ConversationRowMenuCapabilities.make(conversation: conversation, currentUser: user),
+            isPinned: false, isMuted: false, hasUnread: true, isLocked: false,
+            isArchived: false, canToggleArchive: true, isPeerBlocked: nil,
+            windowsAvailable: false, offersReadingModes: true
+        )).entries
+        let markRead = try XCTUnwrap(entries.firstIndex(of: .markRead), "« Marquer lu » doit rester au menu.")
+        let submenu = try XCTUnwrap(entries.firstIndex(of: .readingMode), "Le sous-menu doit être au catalogue.")
+        let details = try XCTUnwrap(entries.firstIndex(of: .details), "« Détails » doit rester au menu.")
+        XCTAssertTrue(markRead < submenu, "Le sous-menu « Mode de lecture » vient APRÈS « Marquer lu ».")
+        XCTAssertTrue(submenu < details, "Le sous-menu se glisse AVANT « Détails ».")
 
         let normalized = normalizedCode(raw)
         XCTAssertTrue(
-            normalized.contains("if LentilleFeatureFlag.isLentilleListEnabled, LentilleFeatureFlag.isReadingModesEnabled { LentilleReadingModeSubmenu("),
-            "Le sous-menu doit être monté DERRIÈRE le drapeau Lentille ET les modes de lecture " +
+            normalized.contains("offersReadingModes: LentilleFeatureFlag.isLentilleListEnabled && LentilleFeatureFlag.isReadingModesEnabled"),
+            "Le sous-menu doit être offert DERRIÈRE le drapeau Lentille ET les modes de lecture " +
             "(#6482) — modes coupés, un mode choisi ici serait ignoré à l'ouverture."
         )
     }

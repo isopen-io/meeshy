@@ -241,6 +241,9 @@ public struct APIConversation: Decodable, Sendable {
     public let unreadCount: Int?
     public let updatedAt: Date?
     public let encryptionMode: String?
+    /// L'activation du chiffrement de bout en bout (#11380) — servie par la
+    /// liste et le détail ; `nil` sur une passerelle antérieure.
+    public var encryptionEnabledAt: Date? = nil
     public let currentUserRole: String?
     public let currentUserJoinedAt: Date?
     /// La frontière de lecture du lecteur (#7198, #7222) — servie
@@ -509,7 +512,7 @@ extension APIConversation {
                 uniquingKeysWith: { _, latest in latest }
             )
         }
-        conversation.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        conversation.lastMessageOriginalLanguage = lastMessageOriginalLanguage; conversation.encryptionEnabledAt = encryptionEnabledAt
         conversation.lastMessageNature = lastMessage?.nature
         conversation.lastReaction = lastReaction
         conversation.lastReactionTargetsReader = lastReaction?.targets(readerId: currentUserId) ?? false

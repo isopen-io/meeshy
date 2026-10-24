@@ -81,6 +81,12 @@ export const DOMAINES = {
     'scripts/check-web-api-literals.mjs',
     'scripts/lib/',
   ],
+  // Les suites unitaires (#12558) : chacune ne lit que sa zone, ses tests qui lisent ailleurs
+  // (Swift, Kotlin, infrastructure, l'autre suite…) étant rejoués à chaque poussée par la voie
+  // de parité (`scripts/ci/voie-parite.mjs`). Le script de la voie est dans les deux zones :
+  // le changer peut retirer un test de la voie, la suite entière doit alors le prouver.
+  tests_web: ['apps/web/', 'packages/shared/', 'packages/design-tokens/', 'scripts/ci/voie-parite.mjs'],
+  tests_gateway: ['services/gateway/', 'packages/shared/', 'scripts/ci/voie-parite.mjs', 'scripts/ci/merge-jest-coverage.mjs'],
 };
 
 const toutVrai = () => Object.fromEntries(Object.keys(DOMAINES).map((domaine) => [domaine, true]));
@@ -156,7 +162,23 @@ const CAS_NAVIGATEUR = [
   ['navigateur : diff illisible', null, true],
 ];
 
+const CAS_SUITES = [
+  ['suites : iOS seul', ['apps/ios/Meeshy/App.swift'], { tests_web: false, tests_gateway: false }],
+  ['suites : Android natif seul', ['apps/android/app/src/main/Foo.kt'], { tests_web: false, tests_gateway: false }],
+  ['suites : infrastructure seule', ['infrastructure/docker/compose/docker-compose.prod.yml'], { tests_web: false, tests_gateway: false }],
+  ['suites : application web', ['apps/web/src/routes/thread.tsx'], { tests_web: true, tests_gateway: false }],
+  ['suites : passerelle', ['services/gateway/src/routes/x.ts'], { tests_web: false, tests_gateway: true }],
+  ['suites : partagé', ['packages/shared/types/user.ts'], { tests_web: true, tests_gateway: true }],
+  ['suites : la voie de parité elle-même', ['scripts/ci/voie-parite.mjs'], { tests_web: true, tests_gateway: true }],
+  ['suites : fichier global', ['bun.lock'], { tests_web: true, tests_gateway: true }],
+];
+
 const selfTest = () => {
+  const echecsSuites = CAS_SUITES.filter(([, fichiers, attendu]) =>
+    Object.entries(attendu).some(([domaine, valeur]) => domainesTouches(fichiers)[domaine] !== valeur),
+  );
+  echecsSuites.forEach(([titre, fichiers]) => console.error(`ÉCHEC : « ${titre} » rend ${JSON.stringify(domainesTouches(fichiers))}`));
+  if (echecsSuites.length > 0) process.exit(1);
   const echecs = CAS.filter(([, fichiers, attendu]) =>
     Object.entries(attendu).some(([domaine, valeur]) => domainesTouches(fichiers)[domaine] !== valeur),
   );
@@ -172,7 +194,7 @@ const selfTest = () => {
   const nouvelleBranche = fichiersChanges({ event: 'push', base: '0'.repeat(40), head: 'b' }) === null;
   if (!nonDispatch || !nouvelleBranche) console.error('ÉCHEC : un dispatch ou une branche neuve ne fait pas tout tourner');
   if (echecs.length > 0 || !nonDispatch || !nouvelleBranche) return 1;
-  console.log(`self-test : ${CAS.length + CAS_NAVIGATEUR.length} cas tenus, dispatch et branche neuve font tout tourner`);
+  console.log(`self-test : ${CAS.length + CAS_NAVIGATEUR.length + CAS_SUITES.length} cas tenus, dispatch et branche neuve font tout tourner`);
   return 0;
 };
 
