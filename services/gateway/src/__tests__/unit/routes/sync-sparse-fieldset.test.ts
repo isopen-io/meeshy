@@ -121,12 +121,18 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
       'conversationId',
       'createdAt',
       'effectFlags',
+      // #12822 — de quoi ouvrir un message `server`/`hybrid` : `content` servi en
+      // clair exige son chiffré LU (il ne sort pas : le schéma ne le déclare pas).
+      'encryptedContent',
+      'encryptionMetadata',
+      'encryptionMode',
       // #7451 — membre du bloc de protection : un client qui reçoit une ligne
       // sans elle ne sait pas que le message décompte.
       'ephemeralDuration',
       'expiresAt',
       'id',
       'isBlurred',
+      'isEncrypted',
       'isViewOnce',
       'maxViewOnceCount',
       // #9629 — la marque d'un avis de capture, épinglée pour le classer.

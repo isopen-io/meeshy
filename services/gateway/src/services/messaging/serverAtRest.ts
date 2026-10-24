@@ -358,3 +358,24 @@ export async function revealAtRestWithQuote<T extends WithQuote>(row: T, keyring
 export function revealAtRestRows<T extends WithQuote>(rows: readonly T[], keyring: AtRestKeyring): Promise<T[]> {
   return Promise.all(rows.map((row) => revealAtRestWithQuote(row, keyring)));
 }
+
+type CiphertextColumn = 'encryptedContent' | 'encryptionMetadata';
+
+const withoutCiphertext = <T extends AtRestReadableRow>(row: T): Omit<T, CiphertextColumn> => {
+  const { encryptedContent: _ciphertext, encryptionMetadata: _metadata, ...served } = row;
+  return served;
+};
+
+/**
+ * #12822 — une page servie par une surface qui ne sert PAS le chiffré (fil,
+ * citation) et ne le lit que pour ouvrir le repos : ouverte, puis délestée de
+ * `encryptedContent`/`encryptionMetadata` quel que soit le régime, citation
+ * comprise. Lire ces colonnes n'élargit donc pas ce que la surface servait.
+ */
+export async function revealAtRestRowsForWire<T extends WithQuote>(rows: readonly T[], keyring: AtRestKeyring) {
+  const opened = await revealAtRestRows(rows, keyring);
+  return opened.map((row) => ({
+    ...withoutCiphertext(row),
+    ...(row.replyTo ? { replyTo: withoutCiphertext(row.replyTo) } : {}),
+  }));
+}

@@ -42,6 +42,8 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { AT_REST_MESSAGE_SELECT, revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
@@ -524,6 +526,8 @@ export function registerMessagePinRoutes(
           translations: true,
           createdAt: true,
           updatedAt: true,
+          // #12822 — de quoi ouvrir une épingle `server`/`hybrid` ; la projection ci-dessous n'en sert rien.
+          ...AT_REST_MESSAGE_SELECT,
           // Lot 1 : un message épinglé est une bulle complète — sans
           // `metadata`, un message géolocalisé épinglé n'affiche jamais sa
           // position alors que la liste complète la restitue déjà.
@@ -604,7 +608,8 @@ export function registerMessagePinRoutes(
           .filter((uid: string | null | undefined): uid is string => !!uid)
       );
 
-      const formattedMessages = pinnedMessages.map((message: any) => {
+      const openedPins = await revealAtRestRows(pinnedMessages, gatewayKeyring(prisma));
+      const formattedMessages = openedPins.map((message: any) => {
         const sender = message.sender;
         const place = sharedPlaceFromMetadata(message.metadata);
         const sticker = stickerFromMetadata(message.metadata);
