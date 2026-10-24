@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,6 +22,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -56,7 +55,7 @@ internal fun BubbleBurnedView(isOutgoing: Boolean, modifier: Modifier = Modifier
                 .semantics(mergeDescendants = true) { contentDescription = a11y },
         ) {
             Icon(
-                imageVector = Icons.Filled.LocalFireDepartment,
+                imageVector = MeeshyIcons.FlameFilled,
                 contentDescription = null,
                 tint = MeeshyPalette.Warning,
                 modifier = Modifier.size(12.dp),

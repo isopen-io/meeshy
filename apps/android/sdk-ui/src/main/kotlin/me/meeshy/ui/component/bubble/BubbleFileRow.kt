@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,6 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -58,7 +57,7 @@ internal fun BubbleFileRow(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         Icon(
-            imageVector = Icons.Filled.AttachFile,
+            imageVector = MeeshyIcons.AttachFile,
             contentDescription = null,
             tint = onColor.copy(alpha = 0.8f),
             modifier = Modifier.size(16.dp),

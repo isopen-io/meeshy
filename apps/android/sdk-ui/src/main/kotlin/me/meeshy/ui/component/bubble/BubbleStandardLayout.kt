@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -191,7 +190,7 @@ private fun BubbleForwardedBadge(forwardedFromName: String?, onColor: Color) {
         modifier = Modifier.padding(bottom = MeeshySpacing.xs),
     ) {
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.Send,
+            imageVector = MeeshyIcons.Send,
             contentDescription = null,
             tint = onColor.copy(alpha = 0.6f),
             modifier = Modifier.size(13.dp),

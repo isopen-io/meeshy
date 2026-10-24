@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -114,8 +112,8 @@ private fun ReplyPreview(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val mediaIcon = when (mediaKind) {
-                    ReplyMediaKind.Image -> Icons.Filled.Image
-                    ReplyMediaKind.File -> Icons.Filled.AttachFile
+                    ReplyMediaKind.Image -> MeeshyIcons.PhotoFilled
+                    ReplyMediaKind.File -> MeeshyIcons.AttachFile
                     ReplyMediaKind.None -> null
                 }
                 if (mediaIcon != null && thumbnailUrl == null) {

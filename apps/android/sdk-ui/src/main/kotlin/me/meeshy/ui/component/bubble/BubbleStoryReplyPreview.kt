@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -110,7 +109,7 @@ private fun MoodReplyLine(story: BubbleStoryReply, accentColor: Color) {
 private fun StoryReplyLines(story: BubbleStoryReply, accentColor: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            imageVector = Icons.Filled.PhotoCamera,
+            imageVector = MeeshyIcons.Camera,
             contentDescription = null,
             tint = accentColor.copy(alpha = 0.8f),
             modifier = Modifier
@@ -131,7 +130,7 @@ private fun StoryReplyLines(story: BubbleStoryReply, accentColor: Color) {
         ) {
             if (story.reactionCount > 0) {
                 StoryMetric(
-                    icon = Icons.Filled.Favorite,
+                    icon = MeeshyIcons.HeartFilled,
                     value = story.reactionCount,
                     label = stringResource(R.string.bubble_story_reactions, story.reactionCount),
                     accentColor = accentColor,
