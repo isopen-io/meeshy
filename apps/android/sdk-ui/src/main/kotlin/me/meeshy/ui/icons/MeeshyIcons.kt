@@ -29,7 +29,6 @@ import androidx.compose.material.icons.automirrored.filled.ShowChart as AfShowCh
 import androidx.compose.material.icons.automirrored.filled.Undo as AfUndo
 import androidx.compose.material.icons.automirrored.filled.VolumeOff as AfVolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp as AfVolumeUp
-import androidx.compose.material.icons.filled.AccountBox as FiAccountBox
 import androidx.compose.material.icons.filled.AccountCircle as FiAccountCircle
 import androidx.compose.material.icons.filled.Add as FiAdd
 import androidx.compose.material.icons.filled.AddCircle as FiAddCircle
@@ -53,7 +52,6 @@ import androidx.compose.material.icons.filled.BarChart as FiBarChart
 import androidx.compose.material.icons.filled.Block as FiBlock
 import androidx.compose.material.icons.filled.Bolt as FiBolt
 import androidx.compose.material.icons.filled.BrokenImage as FiBrokenImage
-import androidx.compose.material.icons.filled.CalendarToday as FiCalendarToday
 import androidx.compose.material.icons.filled.Call as FiCall
 import androidx.compose.material.icons.filled.CallEnd as FiCallEnd
 import androidx.compose.material.icons.filled.Campaign as FiCampaign
@@ -114,7 +112,6 @@ import androidx.compose.material.icons.filled.Info as FiInfo
 import androidx.compose.material.icons.filled.IosShare as FiIosShare
 import androidx.compose.material.icons.filled.KeyboardArrowDown as FiKeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp as FiKeyboardArrowUp
-import androidx.compose.material.icons.filled.Language as FiLanguage
 import androidx.compose.material.icons.filled.Layers as FiLayers
 import androidx.compose.material.icons.filled.LibraryAdd as FiLibraryAdd
 import androidx.compose.material.icons.filled.LightMode as FiLightMode
@@ -143,12 +140,10 @@ import androidx.compose.material.icons.filled.OpenInFull as FiOpenInFull
 import androidx.compose.material.icons.filled.Palette as FiPalette
 import androidx.compose.material.icons.filled.PanTool as FiPanTool
 import androidx.compose.material.icons.filled.Pause as FiPause
-import androidx.compose.material.icons.filled.People as FiPeople
 import androidx.compose.material.icons.filled.Person as FiPerson
 import androidx.compose.material.icons.filled.PersonAdd as FiPersonAdd
 import androidx.compose.material.icons.filled.PersonOff as FiPersonOff
 import androidx.compose.material.icons.filled.PersonRemove as FiPersonRemove
-import androidx.compose.material.icons.filled.Phone as FiPhone
 import androidx.compose.material.icons.filled.PhotoCamera as FiPhotoCamera
 import androidx.compose.material.icons.filled.PhotoFilter as FiPhotoFilter
 import androidx.compose.material.icons.filled.PhotoLibrary as FiPhotoLibrary
@@ -301,7 +296,6 @@ public object MeeshyIcons {
 
     // Rôles neutres : Filled (iOS .fill) ou Outlined (iOS sans .fill).
     public val Account: ImageVector get() = Icons.Outlined.OuAccountCircle
-    public val AccountBoxFilled: ImageVector get() = Icons.Filled.FiAccountBox
     public val AccountFilled: ImageVector get() = Icons.Filled.FiAccountCircle
     public val Add: ImageVector get() = Icons.Filled.FiAdd
     public val AddCall: ImageVector get() = Icons.Filled.FiAddIcCall
@@ -330,7 +324,6 @@ public object MeeshyIcons {
     public val Brightness: ImageVector get() = Icons.Outlined.OuLightMode
     public val BrightnessFilled: ImageVector get() = Icons.Filled.FiLightMode
     public val BrokenImage: ImageVector get() = Icons.Filled.FiBrokenImage
-    public val CalendarFilled: ImageVector get() = Icons.Filled.FiCalendarToday
     public val Call: ImageVector get() = Icons.Filled.FiCall
     public val CallEnd: ImageVector get() = Icons.Filled.FiCallEnd
     public val Camera: ImageVector get() = Icons.Filled.FiPhotoCamera
@@ -389,7 +382,6 @@ public object MeeshyIcons {
     public val Gamepad: ImageVector get() = Icons.Filled.FiSportsEsports
     public val Gift: ImageVector get() = Icons.Filled.FiCardGiftcard
     public val Globe: ImageVector get() = Icons.Outlined.OuLanguage
-    public val GlobeFilled: ImageVector get() = Icons.Filled.FiLanguage
     public val GppMaybe: ImageVector get() = Icons.Filled.FiGppMaybe
     public val GridView: ImageVector get() = Icons.Outlined.OuGridView
     public val GridViewFilled: ImageVector get() = Icons.Filled.FiGridView
@@ -439,14 +431,12 @@ public object MeeshyIcons {
     public val OpenInFull: ImageVector get() = Icons.Filled.FiOpenInFull
     public val Palette: ImageVector get() = Icons.Filled.FiPalette
     public val Pause: ImageVector get() = Icons.Filled.FiPause
-    public val PeopleFilled: ImageVector get() = Icons.Filled.FiPeople
     public val Person: ImageVector get() = Icons.Outlined.OuPerson
     public val PersonAdd: ImageVector get() = Icons.Filled.FiPersonAdd
     public val PersonFilled: ImageVector get() = Icons.Filled.FiPerson
     public val PersonOff: ImageVector get() = Icons.Filled.FiPersonOff
     public val PersonRemove: ImageVector get() = Icons.Filled.FiPersonRemove
     public val PersonVerified: ImageVector get() = Icons.Filled.FiHowToReg
-    public val PhoneFilled: ImageVector get() = Icons.Filled.FiPhone
     public val Photo: ImageVector get() = Icons.Outlined.OuImage
     public val PhotoFilled: ImageVector get() = Icons.Filled.FiImage
     public val PhotoFilter: ImageVector get() = Icons.Filled.FiPhotoFilter

@@ -157,7 +157,7 @@ private fun OwnProfileChevron() {
 @Composable
 private fun OwnProfileIdentitySection(state: OwnProfileUiState, onEvent: (OwnProfileUiEvent) -> Unit) {
     val missing = stringResource(R.string.profile_own_value_missing)
-    OwnProfileSectionBlock(MeeshyIcons.AccountBoxFilled, stringResource(R.string.profile_section_identity), MeeshyPalette.Indigo500) {
+    OwnProfileSectionBlock(MeeshyIcons.AccountFilled, stringResource(R.string.profile_section_identity), MeeshyPalette.Indigo500) {
         OwnProfileCard {
             OwnProfileField(MeeshyIcons.PersonFilled, stringResource(R.string.profile_first_name_label), state.firstName, state.isEditing) {
                 onEvent(OwnProfileUiEvent.FirstNameChanged(it))
@@ -247,7 +247,7 @@ private fun OwnProfileContactSection(email: OwnProfileContactLine, phone: OwnPro
     OwnProfileSectionBlock(MeeshyIcons.MailFilled, stringResource(R.string.profile_section_contact), MeeshyPalette.Indigo300) {
         OwnProfileCard {
             OwnProfileContactRow(MeeshyIcons.MailFilled, stringResource(R.string.profile_email), email)
-            OwnProfileContactRow(MeeshyIcons.PhoneFilled, stringResource(R.string.profile_phone), phone)
+            OwnProfileContactRow(MeeshyIcons.Call, stringResource(R.string.profile_phone), phone)
         }
     }
 }
@@ -291,7 +291,7 @@ private fun OwnProfileVerificationBadge(verification: ContactVerification) {
 
 @Composable
 private fun OwnProfileLanguagesSection(rows: List<OwnProfileLanguageRow>, onPick: (OwnProfileLanguageSlot) -> Unit) {
-    OwnProfileSectionBlock(MeeshyIcons.GlobeFilled, stringResource(R.string.profile_section_languages), MeeshyPalette.Error) {
+    OwnProfileSectionBlock(MeeshyIcons.Globe, stringResource(R.string.profile_section_languages), MeeshyPalette.Error) {
         OwnProfileCard {
             rows.forEach { row -> OwnProfileLanguageRowView(row, onPick) }
         }
@@ -303,7 +303,7 @@ private fun OwnProfileLanguageRowView(row: OwnProfileLanguageRow, onPick: (OwnPr
     val tokens = MeeshyTheme.tokens
     val tap = if (row.isPickable) Modifier.clickable(role = Role.Button) { onPick(row.slot) } else Modifier
     OwnProfileRow(tap.semantics(mergeDescendants = true) {}) {
-        OwnProfileFieldIcon(MeeshyIcons.GlobeFilled)
+        OwnProfileFieldIcon(MeeshyIcons.Globe)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
             Text(
                 text = stringResource(languageSlotTitle(row.slot)),
@@ -476,7 +476,7 @@ private fun OwnProfileFriendRequestsSection(badge: String?, count: Int, onOpen: 
                     .clickable(role = Role.Button, onClick = onOpen)
                     .semantics(mergeDescendants = true) { if (badge != null) stateDescription = pending },
             ) {
-                OwnProfileFieldIcon(MeeshyIcons.PeopleFilled)
+                OwnProfileFieldIcon(MeeshyIcons.GroupsFilled)
                 Text(
                     text = stringResource(R.string.profile_friend_requests),
                     style = MaterialTheme.typography.bodyMedium,
@@ -506,7 +506,7 @@ private fun OwnProfileFriendRequestsSection(badge: String?, count: Int, onOpen: 
 
 @Composable
 private fun OwnProfileMemberSinceSection(memberSinceEpochMillis: Long?) {
-    OwnProfileSectionBlock(MeeshyIcons.CalendarFilled, stringResource(R.string.profile_section_member_since), MeeshyPalette.Indigo600) {
+    OwnProfileSectionBlock(MeeshyIcons.ScheduleFilled, stringResource(R.string.profile_section_member_since), MeeshyPalette.Indigo600) {
         OwnProfileCard {
             OwnProfileRow {
                 Text(
