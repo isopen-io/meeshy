@@ -4,7 +4,7 @@
  * `admitConversationWriteFor`, qui font foi : elle n'offre jamais ce qu'ils
  * refusent, et peut offrir MOINS — tenu
  * par `action-policy-parity.test.ts` (passerelle) sur `fixtures/action-policy/`.
- * Rôle de plateforme comparé EXACTEMENT, comme la passerelle (AUDIT, ANALYST,
+ * Rôle de plateforme comparé EXACTEMENT sur `PRIVILEGED_PLATFORM_ROLES` (AUDIT, ANALYST,
  * inconnu et minuscules ne modèrent pas) ; rang de conversation exact, inconnu
  * ⇒ 0. Réagir n'est pas écrire : `ReactionService.addReaction` ne lit ni rang
  * d'écriture, ni canal d'annonces, ni règle des mineurs. E2EE au sens de
@@ -15,6 +15,7 @@
 
 import { MEMBER_ROLE_HIERARCHY, WRITE_PERMISSION_HIERARCHY, isGlobalAdmin } from '../types/role-types.js';
 import { contentExitLaw, type ContentExitLaw } from './content-exit-law.js';
+import { isPrivilegedPlatformRole } from './platform-privilege.js';
 import { GLOBAL_CONVERSATION_TYPE } from './global-minor-restriction.js';
 import { messageContentKind, type MessageContentKind, type MessageContentShape, type MessageContentSubject } from './message-content-kind.js';
 import { sharedTranslationServerReadsMessage } from './shared-translation-eligibility.js';
@@ -89,6 +90,7 @@ export type ServerFeatureAbsence = 'e2ee-server-feature-absent';
 export type MessageActionVerdicts = {
   readonly edit: EditVerdict | null;
   readonly deleteForEveryone: boolean;
+  /** `DELETE /messages/:id/delete-for-me` : un inscrit, participant ACTIF (#11415) — l'appartenance inconnue se dit fermée. */
   readonly deleteForMe: boolean;
   /** Retrait par un tiers modérateur : un motif est exigé, l'auteur en est prévenu. */
   readonly remove: { readonly reasonRequired: true } | null;
@@ -121,15 +123,14 @@ const WRITE_RANKS: ReadonlyMap<string, number> = new Map(Object.entries(WRITE_PE
 const NOTICE_KINDS: ReadonlySet<MessageContentKind> = new Set(['system', 'call']);
 /** Un lieu, un sondage, un sticker : leur texte n'en porte pas la structure (`metadata`). */
 const EDITABLE_KINDS: ReadonlySet<MessageContentKind> = new Set(['text', 'link', 'image', 'video', 'audio', 'file', 'contact', 'multi']);
-/** `PRIVILEGED_GLOBAL_ROLES` et `PLATFORM_STAFF_ROLES` de la passerelle, comparés EXACTEMENT. */
-const PLATFORM_MODERATOR_ROLES: ReadonlySet<string> = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']);
 
 const msOf = (instant: Instant | null | undefined): number =>
   instant == null ? Number.NaN : (instant instanceof Date ? instant.getTime() : new Date(instant).getTime());
 
-export const platformModerates = (viewer: ActionViewer): boolean => PLATFORM_MODERATOR_ROLES.has(viewer.platformRole ?? '');
+/** `PRIVILEGED_PLATFORM_ROLES` (#11217), la table que lisent aussi les admissions de la passerelle, comparée EXACTEMENT. */
+export const platformModerates = (viewer: ActionViewer): boolean => isPrivilegedPlatformRole(viewer.platformRole);
 
-/** `isGlobalAdmin`, comme `actsWithCreatorRights` de la passerelle. */
+/** `isGlobalAdmin` : la console d'administration — jamais l'autorité dans une conversation, qui lit `platformModerates` (#11217). */
 export const platformAdministers = (viewer: ActionViewer): boolean => isGlobalAdmin(viewer.platformRole ?? '');
 
 export const viewerIsRegistered = (viewer: ActionViewer): boolean => viewer.hasAccount && !viewer.isAnonymous;

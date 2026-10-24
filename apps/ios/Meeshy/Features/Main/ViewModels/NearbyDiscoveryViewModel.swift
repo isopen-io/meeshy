@@ -47,11 +47,8 @@ enum NearbyDiscoverySection: String, CaseIterable, Sendable {
 /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests sous
 /// `nonisolated`.
 nonisolated enum NearbyDiscoverAccess {
-    static let staffRoles: Set<String> = ["BIGBOSS", "ADMIN", "MODERATOR"]
-
     static func isAllowed(role: String?) -> Bool {
-        guard let role else { return false }
-        return staffRoles.contains(role.uppercased())
+        PlatformRole(raw: role)?.isPrivileged ?? false
     }
 }
 

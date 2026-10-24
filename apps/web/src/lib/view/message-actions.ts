@@ -35,7 +35,8 @@ export { menuConversationOf, menuViewerOf, type ActionScope, type MenuViewer } f
  * - `organize` : Sélectionner, l'épingle, Imager ;
  * - `more` : ce qui déborde, « Plus… » et la mention discrète du bout en bout ;
  * - `moderation` : Retirer le message d'un autre ;
- * - `destructive` : Supprimer, séparé et dit dans la couleur de l'erreur.
+ * - `destructive` : Supprimer, ou Abandonner un envoi en échec (#12632),
+ *   séparé et dit dans la couleur de l'erreur.
  *
  * Sans la loi (aucun lecteur remis), rien de ce qu'un rôle ou un auteur
  * décide ne s'offre : seuls restent les gestes que la loi de sortie gouverne.
@@ -75,7 +76,8 @@ export type MessageActionId =
   | 'more'
   | 'e2eeNotice'
   | 'remove'
-  | 'delete';
+  | 'delete'
+  | 'discard';
 
 export type MessageMenuGlyph =
   | 'pencilSimple'
@@ -140,6 +142,7 @@ const PIECES_LABELS = {
   pin: 'message.pin.action',
   unpin: 'message.unpin.action',
   delete: 'message.delete.action',
+  discard: 'message.menu.discard',
   e2eeNotice: 'message.menu.e2eeAbsent',
 } as const satisfies Readonly<Partial<Record<MessageActionId, PlainMessagePiecesKey>>>;
 
@@ -181,6 +184,7 @@ const GLYPHS: Readonly<Record<MessageActionId, MessageMenuGlyph>> = {
   e2eeNotice: 'lockSimple',
   remove: 'prohibit',
   delete: 'trash',
+  discard: 'trash',
 };
 
 const isInterfaceId = (id: MessageActionId): id is InterfaceId => id in INTERFACE_LABELS;
@@ -229,6 +233,8 @@ export type MessageMenuContext = {
   readonly place?: SharedPlace | null;
   /** L'HÔTE SAIT RÉESSAYER CET ENVOI (`useSend.retry`, #11210). */
   readonly canRetry?: boolean;
+  /** L'HÔTE SAIT RETIRER CET ENVOI DE L'OUTBOX (`useSend.discard`, #12632). */
+  readonly canDiscard?: boolean;
   /** LE CATALOGUE DU FIL EST CHARGÉ : les libellés qui y vivent peuvent se dire. */
   readonly piecesLabels?: boolean;
   /** LE RÉGIME DE LA CONVERSATION EST CONNU (#11210) — absent ⇒ inconnu : l'écran ne prétend rien du bout en bout. */
@@ -439,13 +445,15 @@ export type MessageMenuGroups = { readonly [group in MessageMenuGroupName]: read
 
 /**
  * LES GROUPES DU MENU RAPIDE (#11210). Un message SUPPRIMÉ ou échu n'offre
- * que de le masquer chez soi ; une VUE UNIQUE ne touche pas à son contenu
+ * que de le masquer chez soi ; un envoi en ÉCHEC s'abandonne, sur le verdict
+ * `discard` de la loi, quand l'hôte sait le retirer de l'outbox (#12632) ; une VUE UNIQUE ne touche pas à son contenu
  * (#7580) : « Plus… », et ce que la loi admet de retirer ou de supprimer.
  */
 export function messageMenuGroups(ctx: MessageMenuContext): MessageMenuGroups {
   const verdicts = ctx.actions?.verdicts;
   const deletes = verdicts !== undefined && (verdicts.deleteForEveryone || verdicts.deleteForMe) && labels(ctx);
-  const destructive = deletes ? [entry('delete', 'destructive')] : [];
+  const discards = ctx.actions?.groups.destructive.includes('discard') === true && ctx.canDiscard === true && labels(ctx);
+  const destructive = [...(deletes ? [entry('delete', 'destructive')] : []), ...(discards ? [entry('discard', 'destructive')] : [])];
   if (ctx.gone === true) return { primary: [], organize: [], more: [], moderation: [], destructive };
   const moderation = verdicts?.remove != null && labels(ctx) ? [entry('remove', 'moderation')] : [];
   const notice = verdicts?.serverFeatureAbsence != null && ctx.regimeKnown === true && labels(ctx) ? [entry('e2eeNotice', 'more')] : [];

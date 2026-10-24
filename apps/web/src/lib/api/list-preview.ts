@@ -299,6 +299,29 @@ export function deleteLastMessage(
   });
 }
 
+/**
+ * L'ENVOI ABANDONNÉ QUITTE LA LIGNE (#12632) — `performSend` avait offert
+ * l'optimiste à la ligne de liste (`offerLastMessage`) ; abandonné, il n'existe
+ * ni dans le fil ni au serveur. Le SURVIVANT reprend la ligne ET son rang
+ * (`adoptLastMessage` pose son `createdAt`), à la différence d'une suppression
+ * (`deleteLastMessage`), qui laisse le rang en place parce que le message a
+ * existé. Sans survivant, la ligne ne décrit plus rien. Une ligne qui décrit
+ * déjà un autre message n'est pas touchée.
+ */
+export function withdrawLastMessage(
+  queryClient: QueryClient,
+  conversationId: string,
+  messageId: string,
+  survivor?: Message,
+): void {
+  patchConversation(queryClient, conversationId, (c) => {
+    if (c.lastMessage?.id !== messageId) return c;
+    if (survivor !== undefined) return adoptLastMessage(c, survivor, buildTranslationRecord(survivor.translations));
+    const { lastMessage: _last, lastMessageAt: _at, lastMessageOriginalLanguage: _language, ...rest } = withoutCard(c);
+    return rest as Conversation;
+  });
+}
+
 function conversationIdsDescribing(queryClient: QueryClient, messageId: string): readonly string[] {
   const data = queryClient.getQueryData<{ readonly pages: readonly { readonly conversations: readonly Conversation[] }[] }>(
     CONVERSATIONS_QUERY_KEY,
