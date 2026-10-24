@@ -138,8 +138,13 @@ const peintures = async (page, root) =>
     );
     return racines.map((racine) => {
       const img = racine.querySelector('img');
+      const placeholder = racine.querySelector('[data-avatar-initials]');
       return {
         aUneImg: img !== null,
+        /* UN SEUL VISAGE (#12571) — le placeholder d'initiales d'une photo
+           chargée doit être MASQUÉ : un PNG transparent laisserait sinon voir
+           le dégradé dessous, et deux cercles de même rayon forment un liseré. */
+        initialesVisibles: placeholder === null ? false : getComputedStyle(placeholder).visibility !== 'hidden',
         largeurNaturelle: img === null ? 0 : img.naturalWidth,
         masquee: img === null ? false : getComputedStyle(img).display === 'none',
         initiales: (racine.textContent ?? '').trim(),
@@ -150,6 +155,10 @@ const peintures = async (page, root) =>
 /** « CETTE surface peint une photo » — le verdict, pas la source. */
 const peintUnePhoto = (mesures) =>
   mesures !== null && mesures.some((m) => m.aUneImg && !m.masquee && m.largeurNaturelle === PORTRAIT_WIDTH);
+
+/** « une photo PEINTE ne laisse AUCUN pixel d'initiales dessous » (#12571). */
+const photoSansInitiales = (mesures) =>
+  mesures !== null && mesures.every((m) => !(m.aUneImg && !m.masquee && m.largeurNaturelle === PORTRAIT_WIDTH) || !m.initialesVisibles);
 
 const ouvre = async (chemin) => {
   const page = await context.newPage();
@@ -179,6 +188,18 @@ for (const { row, rang } of RANGS) {
   constate(
     peintUnePhoto(mesures),
     `LISTE DES CONVERSATIONS — aucune photo PEINTE sur « ${row} » (${rang}) : ${JSON.stringify(mesures)}`,
+  );
+}
+
+/**
+ * UN SEUL VISAGE (#12571) — là où la photo est peinte, ses initiales sont
+ * masquées : un PNG transparent (`photo.png`) ne montre plus de dégradé dessous.
+ */
+for (const { row } of RANGS) {
+  const mesures = await peintures(liste, `[data-row="${row}"]`);
+  constate(
+    photoSansInitiales(mesures),
+    `LISTE DES CONVERSATIONS — « ${row} » peint sa photo ET garde ses initiales visibles dessous (double visage) : ${JSON.stringify(mesures)}`,
   );
 }
 
