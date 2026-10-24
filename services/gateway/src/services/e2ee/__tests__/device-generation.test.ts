@@ -233,3 +233,47 @@ describe('une installation qui revient retrouve sa place (#12593)', () => {
     expect(stateOf(store, ALICE).active).toHaveLength(1);
   });
 });
+
+describe("un appareil retiré par le propriétaire du compte ne revient pas (revue de sécurité, #12546)", () => {
+  async function revokedByOwner() {
+    const store = createFakeE2EEStore();
+    [1, 2, 3].forEach((index) => openSession(store, sessionIdOf(index)));
+    const directory = directoryOn(store);
+    const keys = fakeDeviceKeys({ oneTime: 3, registrationId: 4242 });
+    const { deviceId } = await directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(1), request: enrollmentOf(keys, ALICE) });
+    await directory.retireDevice({ userId: ALICE, deviceId });
+    return { store, directory, keys };
+  }
+
+  it("refuse le réenrôlement de l'identité révoquée, même sur une session neuve avec une preuve fraîche", async () => {
+    const { store, directory, keys } = await revokedByOwner();
+
+    await expect(directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(keys, ALICE) }))
+      .rejects.toMatchObject({ code: 'E2EE_IDENTITY_REVOKED', status: 409 });
+    expect(stateOf(store, ALICE).active).toEqual([]);
+  });
+
+  it("la révocation survit à la reprise de la place par une autre installation", async () => {
+    const { directory, keys } = await revokedByOwner();
+    await directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(fakeDeviceKeys({ registrationId: 77 }), ALICE) });
+
+    await expect(directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(3), request: enrollmentOf(keys, ALICE) }))
+      .rejects.toMatchObject({ code: 'E2EE_IDENTITY_REVOKED' });
+  });
+
+  it("une nouvelle identité sur le même appareil s'enrôle normalement", async () => {
+    const { directory } = await revokedByOwner();
+
+    await expect(directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(fakeDeviceKeys({ registrationId: 4242 }), ALICE) }))
+      .resolves.toMatchObject({ created: true });
+  });
+
+  it("la purge du compte efface aussi ses identités révoquées", async () => {
+    const { store } = await revokedByOwner();
+    const { eraseE2EEDataOfUser } = await import('../device-retirement');
+
+    await eraseE2EEDataOfUser(store.prisma as never, ALICE);
+
+    expect(store.collections.E2EERevokedIdentity.rows).toHaveLength(0);
+  });
+});
