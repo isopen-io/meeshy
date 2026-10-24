@@ -65,6 +65,16 @@ export type PreKeyStock = { readonly deviceId: number; readonly oneTimePreKeys: 
 
 const ACTIVE = { retiredAt: null } as const;
 
+/**
+ * Les nuls ÉCRITS à la création. Le connecteur MongoDB de Prisma n'écrit aucun
+ * champ facultatif omis, et son filtre `{ champ: null }` ne trouve que le
+ * présent-nul : un appareil créé sans `retiredAt` n'était ni actif ni
+ * retirable, une pré-clé sans `usedAt` jamais comptée dans le stock (recette
+ * staging du 2026-10-24, #12547).
+ */
+const NEW_DEVICE = { retiredAt: null, pushTokenId: null } as const;
+const UNRESERVED = { usedAt: null, usedBy: null } as const;
+
 const objectIdOf = (value: unknown): string | null => {
   if (typeof value === 'string') return value;
   if (typeof value === 'object' && value !== null && typeof (value as { $oid?: unknown }).$oid === 'string') {
@@ -359,7 +369,7 @@ export class E2EEDirectory {
     const fresh = [...new Map(candidates.filter((key) => !taken.has(rowKey(key))).map((key) => [rowKey(key), key])).values()];
     if (fresh.length === 0) return;
     await this.assertStockRoom(generation, fresh);
-    await this.prisma.e2EEOneTimePreKey.createMany({ data: fresh.map((key) => ({ ...generationOf(generation), ...key })) });
+    await this.prisma.e2EEOneTimePreKey.createMany({ data: fresh.map((key) => ({ ...generationOf(generation), ...key, ...UNRESERVED })) });
   }
 
   private async assertStockRoom(generation: Generation, fresh: readonly OneTimeRow[]): Promise<void> {
@@ -407,7 +417,7 @@ export class E2EEDirectory {
 
   private async takeSlot(userId: string, deviceId: number, fields: DeviceFields, previous: SlotRow | undefined): Promise<boolean> {
     if (!previous) {
-      return this.prisma.e2EEDevice.create({ data: { userId, deviceId, ...fields } }).then(
+      return this.prisma.e2EEDevice.create({ data: { userId, deviceId, ...fields, ...NEW_DEVICE } }).then(
         () => true,
         (error: unknown) => {
           if (isUniqueViolation(error)) return false;
