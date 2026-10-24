@@ -118,6 +118,21 @@ nonisolated enum NSEAttachmentPolicy {
         return flags & lifecycleFlagsMask != 0
     }
 
+    /// La clé du corps d'une notification de conversation VERROUILLÉE PAR PIN
+    /// (#11387) : un libellé du catalogue de l'extension, jamais du contenu.
+    static let lockedConversationLocKey = "notification.locked_conversation"
+
+    /// **Le verrou PIN protège le CONTENU** (#11387). La charge d'une
+    /// conversation verrouillée DÉCLARE une protection (`notificationLocKey`, que `declaresProtection` lit) : le
+    /// média, le détail, la vignette et le lecteur audio la respectent sans
+    /// qu'aucun n'ait à connaître le verrou, et le corps se lit au catalogue.
+    /// Les clés de routage restent : toucher la bannière ouvre la
+    /// conversation, que la porte du routeur garde par le PIN (#11386).
+    static func sealingLockedConversation(_ userInfo: [AnyHashable: Any], isLocked: Bool) -> [AnyHashable: Any] {
+        guard isLocked else { return userInfo }
+        return userInfo.merging([AnyHashable("notificationLocKey"): lockedConversationLocKey]) { _, sealed in sealed }
+    }
+
     /// Masque des bits de cycle de vie de `MessageEffectFlags` — éphémère (0),
     /// flouté (1), vue unique (2). Écrit ici plutôt qu'importé : ce fichier ne
     /// dépend que de Foundation, et c'est cette absence de dépendance qui le

@@ -14,6 +14,16 @@ struct ConversationLockSecrets {
     let delete: (String) -> Void
 }
 
+// MARK: - Le contenu masqué (#11387)
+
+extension Notification.Name {
+    /// Le jeu des conversations verrouillées a changé : ce qui publie du
+    /// contenu HORS de l'app (widget, cliché lu par l'extension de
+    /// notification) se republie sans attendre la prochaine mise à jour de la
+    /// liste.
+    static let conversationContentLocksDidChange = Notification.Name("meeshy.conversationContentLocksDidChange")
+}
+
 // MARK: - La porte du routeur (#11386)
 
 /// La SEULE question que le routeur pose au verrou avant de poser une
@@ -482,6 +492,23 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         lockedConversationIds.contains(conversationId)
     }
 
+    /// **LA décision « contenu masqué »** (#11387 : le verrou PIN protège le
+    /// CONTENU, pas seulement l'ouverture). Sans PIN, une conversation verrouillée ne montre ni son
+    /// dernier message, ni la frappe, ni le brouillon, ni vignette, ni aperçu
+    /// d'appui long, et rien ne la précharge. La rangée, le chargeur d'aperçu,
+    /// le widget et le cliché de l'extension de notification la consultent ;
+    /// aucun ne réécrit la règle.
+    ///
+    /// Un PIN donné n'ouvre qu'UNE fois (`admitsOpening`) : revenu à la liste,
+    /// le contenu est de nouveau masqué.
+    nonisolated static func hidesContent(of conversationId: String, lockedConversationIds: Set<String>) -> Bool {
+        lockedConversationIds.contains(conversationId)
+    }
+
+    func hidesContent(of conversationId: String) -> Bool {
+        Self.hidesContent(of: conversationId, lockedConversationIds: lockedConversationIds)
+    }
+
     func setLock(conversationId: String, pin: String) {
         store(pin, under: lockKey(conversationId))
         openingPasses[conversationId] = nil
@@ -625,6 +652,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     private func saveLockedIds() {
         defaults.set(Array(lockedConversationIds), forKey: lockedIdsDefaultsKey)
+        NotificationCenter.default.post(name: .conversationContentLocksDidChange, object: nil)
     }
 
     private func loadLockedIds() {

@@ -44,6 +44,9 @@ struct LentilleConversationRow: View {
     /// barre latérale accent — JAMAIS un fond, ce serait une carte.
     var isSelected: Bool = false
     var draftSummary: DraftSummary? = nil
+    /// #11387 — verrouillée par PIN : la ligne 2 dit le verrou, rien de ce
+    /// que la conversation contient (même entrée que `ThemedConversationRow`).
+    var isContentLocked: Bool = false
     var preferredContentLanguages: [String] = []
     /// Appel en cours (Scène) — contrat LWS-2bis/§3.3, behaviour-matrix:L13.
     /// `nil` (défaut) ⇒ AUCUN rendu : zéro donnée fabriquée, exactement le
@@ -200,6 +203,7 @@ struct LentilleConversationRow: View {
     var accessibilityLabel: String {
         let base = ThemedConversationRow(
             conversation: conversation,
+            isContentLocked: isContentLocked,
             preferredContentLanguages: preferredContentLanguages
         ).conversationAccessibilityLabel
         // L'heure y est déjà ; les points aussi, toujours (#9571) — ce qui
@@ -493,23 +497,24 @@ struct LentilleConversationRow: View {
     /// ✦ la remplaçait par un décompte (« Demo · 1 message · 1 audio ») que la
     /// pastille chiffrée dit déjà — la ligne ne disait alors jamais ce qui
     /// venait de se passer, précisément quand on la regarde.
-    nonisolated enum Line2Kind: Equatable {
-        case typing, draft, preview
-
-        nonisolated static func resolve(hasTyping: Bool, hasDraft: Bool) -> Line2Kind {
-            if hasTyping { return .typing }
-            if hasDraft { return .draft }
-            return .preview
-        }
-    }
+    ///
+    /// Le verrou PIN passe devant tout (#11387) : la décision est PARTAGÉE
+    /// avec le rang historique (`ConversationRowLine2Kind`), jamais recopiée.
+    typealias Line2Kind = ConversationRowLine2Kind
 
     private var line2Kind: Line2Kind {
-        Line2Kind.resolve(hasTyping: typingUsername != nil, hasDraft: draftSummary != nil)
+        Line2Kind.resolve(
+            hasTyping: typingUsername != nil,
+            hasDraft: draftSummary != nil,
+            isContentLocked: isContentLocked
+        )
     }
 
     @ViewBuilder
     private var line2: some View {
         switch line2Kind {
+        case .locked:
+            lockedLine
         case .typing:
             typingLine
         case .draft:
@@ -517,6 +522,10 @@ struct LentilleConversationRow: View {
         case .preview:
             previewLine
         }
+    }
+
+    private var lockedLine: some View {
+        ConversationLockedPreviewLine(color: textSecondary, font: LentilleMetrics.Line2.font)
     }
 
     private var typingLine: some View {
@@ -595,6 +604,7 @@ extension LentilleConversationRow: @MainActor Equatable {
         lhs.isPeerHere == rhs.isPeerHere &&
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
+        lhs.isContentLocked == rhs.isContentLocked &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
         lhs.liveCall == rhs.liveCall &&
         // La magnification décide de TROIS lignes de rendu : elle doit passer

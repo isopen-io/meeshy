@@ -58,6 +58,13 @@ class NotificationService: UNNotificationServiceExtension {
     // MARK: - Pipeline
 
     private func prepareBestAttempt(_ content: UNMutableNotificationContent) {
+        let isLockedConversation = Self.isLockedConversation(content.userInfo)
+        // #11387 — scellée AVANT toute décision : catégorie, média, détail et
+        // vignette lisent la protection que le verrou PIN déclare.
+        content.userInfo = NSEAttachmentPolicy.sealingLockedConversation(
+            content.userInfo,
+            isLocked: isLockedConversation
+        )
         applyCategory(to: content)
         applyBadge(to: content)
         applyThreading(to: content)
@@ -81,6 +88,23 @@ class NotificationService: UNNotificationServiceExtension {
         // Une NSE s'exécute à chaque push reçu : l'occasion la plus fréquente
         // de retirer les bannières dont l'échéance est passée.
         Self.sweepExpiredDeliveredBanners()
+        // #11387 — EN DERNIER : aucune réécriture (déchiffrement, repli audio,
+        // détail, échéance) ne remet du contenu sous le verrou PIN.
+        if isLockedConversation {
+            content.body = NSLocalizedString(
+                NSEAttachmentPolicy.lockedConversationLocKey,
+                bundle: InterfaceLanguageResolver.bundle(),
+                comment: ""
+            )
+        }
+    }
+
+    /// La conversation est-elle verrouillée par PIN sur cet appareil ? L'app
+    /// le dépose dans le cliché App Group (`ConversationSnapshotPayload
+    /// .isLocked`, republié à chaque changement de verrou).
+    private static func isLockedConversation(_ userInfo: [AnyHashable: Any]) -> Bool {
+        guard let conversationId = userInfo["conversationId"] as? String else { return false }
+        return NSEDataSync.conversationDetails(forId: conversationId)?.isLocked ?? false
     }
 
     private func applyBodyRewrites(to content: UNMutableNotificationContent) {

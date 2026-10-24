@@ -709,6 +709,8 @@ final class WidgetConversationContractTests: XCTestCase {
             suiteName: suite,
             stagingDirectories: [],
             preferredContentLanguages: { ["fr"] },
+            shareDirectoryOwner: { "000000000000000000000u01" },
+            shareDirectoryPeople: { _ in [] },
             contentLocks: { locked.ids }
         )
         return (sut, defaults)
@@ -761,6 +763,27 @@ final class WidgetConversationContractTests: XCTestCase {
         locked.ids = []
         sut.republishForContentLocks()
         XCTAssertEqual(try publishedPreviews(from: defaults), ["Mot de passe: 1234"])
+    }
+
+    /// Sans compte connecté (la déconnexion lève tous les verrous), un
+    /// changement de verrou ne republie rien.
+    func test_republishForContentLocks_withoutAConnectedAccount_publishesNothing() throws {
+        let suite = "group.test.meeshy.widgetlock.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let sut = WidgetDataManager(
+            suiteName: suite,
+            stagingDirectories: [],
+            preferredContentLanguages: { ["fr"] },
+            shareDirectoryOwner: { nil },
+            contentLocks: { [] }
+        )
+        sut.publishConversations([makeSecretConversation()])
+        defaults.removeObject(forKey: "recent_conversations")
+
+        sut.republishForContentLocks()
+
+        XCTAssertNil(defaults.data(forKey: "recent_conversations"))
     }
 
     /// Après la déconnexion, un changement de verrou ne republie JAMAIS les

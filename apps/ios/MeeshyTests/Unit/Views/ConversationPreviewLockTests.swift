@@ -213,13 +213,14 @@ final class ConversationPreviewLockTests: XCTestCase {
         XCTAssertEqual(LentilleConversationRow.Line2Kind.resolve(hasTyping: false, hasDraft: false, isContentLocked: true), .locked)
     }
 
-    private func makeRowConversation() -> Conversation {
+    private func makeRowConversation(withPhoto: Bool = true) -> Conversation {
         var conversation = Conversation(
             identifier: conversationId,
             title: "Coffre",
             lastMessagePreview: "Mot de passe: 1234"
         )
         conversation.lastMessageOriginalLanguage = "fr"
+        guard withPhoto else { return conversation }
         conversation.lastMessageAttachments = [
             MeeshyMessageAttachment(id: "a", originalName: "photo.jpg", mimeType: "image/jpeg")
         ]
@@ -243,7 +244,7 @@ final class ConversationPreviewLockTests: XCTestCase {
 
     func test_themedRow_whenUnlocked_stillSpeaksTheLastMessage() {
         let label = ThemedConversationRow(
-            conversation: makeRowConversation(),
+            conversation: makeRowConversation(withPhoto: false),
             preferredContentLanguages: ["fr"]
         ).conversationAccessibilityLabel
 
