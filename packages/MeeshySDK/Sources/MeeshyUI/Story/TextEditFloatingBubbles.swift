@@ -20,6 +20,7 @@ struct TextEditFloatingBubbles: View {
     @Binding var textObject: StoryTextObject
     let expandedTool: TextEditTool?
     let onOpenPanel: (TextEditTool) -> Void
+    var profile: StoryTextEditProfile = .composer
 
     var body: some View {
         // Huit bulles tiennent sur l'écran le plus étroit supporté (337 pt
@@ -30,7 +31,7 @@ struct TextEditFloatingBubbles: View {
         // séparation en deux rangées.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: TextEditToolbarMetrics.spacing) {
-                ForEach(TextEditTool.all, id: \.self) { tool in
+                ForEach(profile.tools, id: \.self) { tool in
                     bubble(tool)
                 }
             }
@@ -57,7 +58,7 @@ struct TextEditFloatingBubbles: View {
     }
 
     private func cycle(_ tool: TextEditTool) {
-        StoryTextAttributeCycle.advance(tool, on: &textObject)
+        StoryTextAttributeCycle.advance(tool, on: &textObject, backgrounds: profile.backgrounds)
         HapticFeedback.light()
     }
 

@@ -32,18 +32,7 @@ public enum StoryStaticSnapshot {
                               bgImage: UIImage? = nil,
                               size: CGSize) -> UIImage? {
         let geometry = CanvasGeometry(renderSize: size)
-        // Le rendu est UN COUP : un bitmap qu'une tâche poserait une frame plus
-        // tard n'atteindrait jamais l'image. `ComposerImageCacheReader` est le
-        // seul lecteur que les couches lisent de façon SYNCHRONE — c'est par lui
-        // que le bitmap d'un sticker collé (`loadedImages[sticker.id]`, #4852)
-        // et celui d'un média de premier plan entrent dans la cover.
-        let imageCache = ComposerImageCacheReader(images: loadedImages, version: 0)
-        let layer = StoryRenderer.render(slide: slide,
-                                         into: geometry,
-                                         at: .zero,
-                                         mode: .edit,
-                                         imageCache: imageCache,
-                                         contentsScale: 1.0)
+        let layer = foregroundLayer(slide: slide, loadedImages: loadedImages, geometry: geometry)
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
             let cg = ctx.cgContext
@@ -57,6 +46,35 @@ public enum StoryStaticSnapshot {
             StoryAudioChipPainter().paint(slide: slide, into: geometry, at: .zero,
                                           in: cg, respectingWindow: false)
         }
+    }
+
+    /// **Les seuls objets de la slide, sur fond transparent** (#12591) : le même pipeline que
+    /// `render` — `StoryRenderer` + `render(in:)`, échelle de contenu 1 — sans fond ni puces
+    /// audio. C'est ce que la retouche de la caméra pose AU-DESSUS d'un média qu'elle peint
+    /// elle-même. `size` est en PIXELS : l'image rendue a exactement cette taille.
+    public static func foreground(slide: StorySlide, size: CGSize) -> CGImage? {
+        guard size.width >= 1, size.height >= 1 else { return nil }
+        let layer = foregroundLayer(slide: slide, loadedImages: [:], geometry: CanvasGeometry(renderSize: size))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            layer.render(in: ctx.cgContext)
+        }.cgImage
+    }
+
+    /// Le rendu est UN COUP : un bitmap qu'une tâche poserait une frame plus tard n'atteindrait
+    /// jamais l'image. `ComposerImageCacheReader` est le seul lecteur que les couches lisent de
+    /// façon SYNCHRONE — c'est par lui que le bitmap d'un sticker collé et celui d'un média de
+    /// premier plan entrent dans la cover.
+    private static func foregroundLayer(slide: StorySlide, loadedImages: [String: UIImage],
+                                        geometry: CanvasGeometry) -> CALayer {
+        StoryRenderer.render(slide: slide,
+                             into: geometry,
+                             at: .zero,
+                             mode: .edit,
+                             imageCache: ComposerImageCacheReader(images: loadedImages, version: 0),
+                             contentsScale: 1.0)
     }
 
     private static func paintBackground(slide: StorySlide,
