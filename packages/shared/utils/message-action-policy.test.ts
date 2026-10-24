@@ -74,6 +74,18 @@ describe('messageActionsFor — les verdicts alignés sur la passerelle (#11205)
     expect(actions({ message: { content: '', attachments: [{ mimeType: 'audio/m4a' }] }, conversation: { encryptionMode: 'e2ee' } }).verdicts.transcribe).toBeNull();
   });
 
+  it.each(['server', 'hybrid', 'Server'])('chiffré au repos (%s) : « Modifier » n’est pas offert — la passerelle le refuse (#11381)', (encryptionMode) => {
+    expect(actions({ message: mine, conversation: { encryptionMode } }).verdicts.edit).toBeNull();
+    expect(actions({ message: { ...mine, encryptionMode }, conversation: { encryptionMode: null } }).verdicts.edit).toBeNull();
+    expect(actions({ message: {}, conversation: { encryptionMode }, viewer: { platformRole: 'MODERATOR' } }).verdicts.edit).toBeNull();
+  });
+
+  it('chiffré au repos : les services serveur restent offerts, la traduction servie aussi', () => {
+    const { verdicts } = actions({ message: mine, conversation: { encryptionMode: 'server' } });
+    expect(verdicts.translate).toBe('served-switch');
+    expect(verdicts.serverFeatureAbsence).toBeNull();
+  });
+
   it('hors E2EE, la traduction bascule la langue servie', () => {
     expect(actions().verdicts.translate).toBe('served-switch');
   });

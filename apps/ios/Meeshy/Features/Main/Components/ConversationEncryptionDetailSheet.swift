@@ -245,7 +245,7 @@ struct ConversationEncryptionDetailSheet: View {
                           bundle: .main)
         case .hybrid:
             return String(localized: "conversation.encryption.mode.hybrid.label",
-                          defaultValue: "Hybride (E2EE + serveur)",
+                          defaultValue: "Hybride (chiffré sur le serveur)",
                           bundle: .main)
         }
     }
@@ -258,11 +258,11 @@ struct ConversationEncryptionDetailSheet: View {
                           bundle: .main)
         case .server:
             return String(localized: "conversation.encryption.mode.server.description",
-                          defaultValue: "Protégé côté serveur. La traduction reste disponible (recommandé).",
+                          defaultValue: "Chiffré sur le serveur. Le serveur peut lire les messages : la traduction reste disponible (recommandé).",
                           bundle: .main)
         case .hybrid:
             return String(localized: "conversation.encryption.mode.hybrid.description",
-                          defaultValue: "Double couche. Plus lent, traduction préservée.",
+                          defaultValue: "Chiffré sur le serveur, comme le mode Serveur : le serveur peut lire et traduire les messages.",
                           bundle: .main)
         }
     }

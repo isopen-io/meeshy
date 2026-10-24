@@ -95126,43 +95126,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "طبقة مزدوجة. أبطأ، مع الحفاظ على الترجمة."
+            "value": "مشفّر على الخادم مثل وضع الخادم: يمكن للخادم قراءة الرسائل وترجمتها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doppelte Schicht. Langsamer, Übersetzung bleibt erhalten."
+            "value": "Auf dem Server verschlüsselt, wie der Servermodus: Der Server kann Nachrichten lesen und übersetzen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double layer. Slower, translation preserved."
+            "value": "Encrypted on the server, like Server mode: the server can read and translate messages."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doble capa. Más lento, se conserva la traducción."
+            "value": "Cifrado en el servidor, como el modo Servidor: el servidor puede leer y traducir los mensajes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double couche. Plus lent, traduction préservée."
+            "value": "Chiffré sur le serveur, comme le mode Serveur : le serveur peut lire et traduire les messages."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doppio livello. Più lento, traduzione preservata."
+            "value": "Cifrato sul server, come la modalità Server: il server può leggere e tradurre i messaggi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Camada dupla. Mais lento, tradução preservada."
+            "value": "Criptografado no servidor, como o modo Servidor: o servidor pode ler e traduzir as mensagens."
           }
         }
       }
@@ -95173,43 +95173,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هجين (تشفير تام + خادم)"
+            "value": "هجين (مشفّر على الخادم)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybrid (E2EE + Server)"
+            "value": "Hybrid (auf dem Server verschlüsselt)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybrid (E2EE + server)"
+            "value": "Hybrid (encrypted on the server)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Híbrido (E2EE + servidor)"
+            "value": "Híbrido (cifrado en el servidor)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybride (E2EE + serveur)"
+            "value": "Hybride (chiffré sur le serveur)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ibrido (E2EE + server)"
+            "value": "Ibrido (cifrato sul server)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Híbrido (E2EE + servidor)"
+            "value": "Híbrido (criptografado no servidor)"
           }
         }
       }
@@ -95220,43 +95220,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محمي على الخادم. تبقى الترجمة متاحة (موصى به)."
+            "value": "مشفّر على الخادم. يمكن للخادم قراءة الرسائل، لذا تبقى الترجمة متاحة (موصى به)."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Serverseitig geschützt. Übersetzung bleibt verfügbar (empfohlen)."
+            "value": "Auf dem Server verschlüsselt. Der Server kann Nachrichten lesen, die Übersetzung bleibt verfügbar (empfohlen)."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Server protected. Translation remains available (recommended)."
+            "value": "Encrypted on the server. The server can read messages, so translation remains available (recommended)."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Protegido en el servidor. La traducción sigue disponible (recomendado)."
+            "value": "Cifrado en el servidor. El servidor puede leer los mensajes: la traducción sigue disponible (recomendado)."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Protégé côté serveur. La traduction reste disponible (recommandé)."
+            "value": "Chiffré sur le serveur. Le serveur peut lire les messages : la traduction reste disponible (recommandé)."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Protetto lato server. La traduzione resta disponibile (consigliato)."
+            "value": "Cifrato sul server. Il server può leggere i messaggi: la traduzione resta disponibile (consigliato)."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Protegido no servidor. A tradução permanece disponível (recomendado)."
+            "value": "Criptografado no servidor. O servidor pode ler as mensagens: a tradução permanece disponível (recomendado)."
           }
         }
       }
