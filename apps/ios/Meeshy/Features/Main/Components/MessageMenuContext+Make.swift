@@ -19,8 +19,14 @@ struct ConversationMenuAuthority: Equatable {
 
     /// Les rôles voyagent tels que servis ; un invité est lu à sa session,
     /// jamais à son absence de rôle. `isDeclaredMinor` n'est pas servi à
-    /// l'app : la passerelle garde seule ce refus.
-    static func make(conversation: Conversation?, currentUser: MeeshyUser?, guest: AnonymousSessionContext?) -> ConversationMenuAuthority {
+    /// l'app : la passerelle garde seule ce refus. `accessRevoked` : la
+    /// passerelle a dit que le lecteur n'est plus participant actif (#11415).
+    static func make(
+        conversation: Conversation?,
+        currentUser: MeeshyUser?,
+        guest: AnonymousSessionContext?,
+        accessRevoked: Bool = false
+    ) -> ConversationMenuAuthority {
         let viewer = ConversationViewerAuthority(
             id: guest?.participantId ?? currentUser?.id ?? "",
             participantId: guest?.participantId,
@@ -28,11 +34,21 @@ struct ConversationMenuAuthority: Equatable {
             isAnonymous: guest != nil || currentUser?.isAnonymous == true,
             platformRoleRaw: guest == nil ? currentUser?.role : nil,
             conversationRoleRaw: conversation?.currentUserRole,
-            isActiveMember: conversation != nil,
+            isActiveMember: isActiveMember(conversation: conversation, accessRevoked: accessRevoked),
             canSendMessages: guest?.permissions.canSendMessages ?? true,
             isDeclaredMinor: declaresMinor(conversation)
         )
         return ConversationMenuAuthority(viewer: viewer, conversation: policyConversation(of: conversation))
+    }
+
+    /// **Le lecteur est-il un participant ACTIF ?** (#11415) — la passerelle
+    /// ne sert l'historique qu'à un participant actif (`verdictAccesConversation`)
+    /// et exige la même chose de « Supprimer pour moi », de la réaction et du
+    /// signalement. Sans conversation, l'appartenance est inconnue : fermée.
+    /// Un refus d'appartenance servi (`accessRevoked`, 403/404 de l'historique
+    /// ou `conversation:join-error`) l'emporte sur le cache qu'on relit encore.
+    nonisolated static func isActiveMember(conversation: Conversation?, accessRevoked: Bool) -> Bool {
+        conversation != nil && !accessRevoked
     }
 
     /// **Le lecteur est-il mineur DANS cette conversation ?** La passerelle le

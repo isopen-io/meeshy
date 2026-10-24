@@ -51,7 +51,22 @@ type ScopeParticipant = {
   readonly userId?: string | undefined;
   readonly role?: string | undefined;
   readonly permissions?: { readonly canSendMessages?: boolean } | undefined;
+  readonly isActive?: boolean | undefined;
+  readonly leftAt?: Date | string | null | undefined;
 };
+
+/**
+ * LE LECTEUR EST-IL UN PARTICIPANT ACTIF ? (#11415) — la passerelle ne sert le
+ * détail qu'à un participant actif (`verdictAccesConversation`) et exige la
+ * même chose de « Supprimer pour moi », de la réaction et du signalement. Le
+ * client dit fermé ce qu'il ne sait pas (aucune conversation lue), et rien ne
+ * survit à ce que le serveur a dit : `isMember: false`, ou la ligne du lecteur
+ * servie inactive ou quittée (`Participant.isActive`, `leftAt`).
+ */
+const viewerIsActiveMember = (
+  conversation: { readonly isMember?: boolean | undefined } | undefined,
+  participant: ScopeParticipant | undefined,
+): boolean => conversation !== undefined && conversation.isMember !== false && participant?.isActive !== false && participant?.leftAt == null;
 
 /** Le lecteur de l'écran, composé UNE fois : compte, rôles et permission d'envoi viennent de ce que le serveur a servi. */
 export function menuViewerOf(input: {
@@ -78,7 +93,7 @@ export function menuViewerOf(input: {
     platformRole: hasAccount ? input.platformRole : null,
     conversationRole: conversation?.currentUserRole ?? participant?.role ?? null,
     canSendMessages: participant?.permissions?.canSendMessages ?? id !== '',
-    isActiveMember: conversation !== undefined && conversation.isMember !== false,
+    isActiveMember: viewerIsActiveMember(conversation, participant),
     isDeclaredMinor: conversation?.viewerWriteRestriction === 'minor-global',
   };
 }

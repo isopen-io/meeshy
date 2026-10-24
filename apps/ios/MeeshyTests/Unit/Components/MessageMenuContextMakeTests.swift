@@ -258,6 +258,12 @@ final class MessageMenuContextMakeTests: XCTestCase {
         XCTAssertFalse(make(message(mine: true, deletedAt: now), departed).canDeleteForMe, "ni un message déjà supprimé")
     }
 
+    func test_isActiveMember_needsAKnownConversationAndNoRevocation() {
+        XCTAssertTrue(ConversationMenuAuthority.isActiveMember(conversation: group(), accessRevoked: false))
+        XCTAssertFalse(ConversationMenuAuthority.isActiveMember(conversation: group(), accessRevoked: true))
+        XCTAssertFalse(ConversationMenuAuthority.isActiveMember(conversation: nil, accessRevoked: false))
+    }
+
     /// Sans conversation connue, l'appartenance est INCONNUE : fermée.
     func test_make_withoutAConversation_isNotOfferedDeleteForMe() {
         let unknown = ConversationMenuAuthority.make(
@@ -271,7 +277,7 @@ final class MessageMenuContextMakeTests: XCTestCase {
             contentsOf: appRoot().appendingPathComponent("Meeshy/Features/Main/Views/ConversationView.swift"),
             encoding: .utf8
         ))
-        XCTAssertTrue(view.contains("accessRevoked: viewModel.accessRevoked"),
+        XCTAssertTrue(view.contains("guest: anonymousSession, accessRevoked: viewModel.accessRevoked"),
                       "l'autorité du menu lit la révocation servie, jamais `conversation != nil` seul")
         let factory = AppSourceGuard.stripComments(try String(
             contentsOf: appRoot().appendingPathComponent("Meeshy/Features/Main/Components/MessageMenuContext+Make.swift"),
