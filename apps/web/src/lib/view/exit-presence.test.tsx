@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { ExitPresence, retainDepartures, useExitMotion } from './exit-presence';
+import { sectionMayLeave } from './list-departures';
 
 /**
  * UNE RANGÉE ARCHIVÉE OU SUPPRIMÉE SORT EN SE REPLIANT (#11574). Le FLIP de la
@@ -135,7 +136,7 @@ describe('ExitPresence + useExitMotion — la rangée sort en se repliant', () =
   };
 
   const List = ({ ids, scope = 'all' }: { readonly ids: readonly string[]; readonly scope?: string }): ReactNode =>
-    createElement('ul', null, createElement(ExitPresence, { scope }, ids.map((id) => createElement(Row, { key: id, id }))));
+    createElement('ul', null, createElement(ExitPresence, { scope, children: ids.map((id) => createElement(Row, { key: id, id })) }));
 
   const mount = (ids: readonly string[]) => {
     const host = document.createElement('div');
@@ -210,5 +211,13 @@ describe('ExitPresence + useExitMotion — la rangée sort en se repliant', () =
     rerender(['a', 'c'], 'unread');
     expect(rowsOf(host)).toEqual(['a', 'c']);
     expect(played).toEqual([]);
+  });
+});
+
+describe('sectionMayLeave — une section vidée par minuit ne laisse aucun fantôme', () => {
+  test('vidée par sa dernière sortie, elle se replie ; ses rangées vivant ailleurs, elle part sans scène', () => {
+    expect(sectionMayLeave(['a'], new Set(['b']))).toBe(true);
+    expect(sectionMayLeave(['a', 'c'], new Set(['c']))).toBe(false);
+    expect(sectionMayLeave(undefined, new Set())).toBe(true);
   });
 });
