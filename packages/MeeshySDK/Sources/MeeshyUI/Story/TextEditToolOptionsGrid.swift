@@ -193,7 +193,7 @@ extension TextEditToolOptions {
 
     var backgroundGrid: some View {
         LazyVGrid(columns: gridColumns, spacing: TextEditOptionsGridMetrics.rowSpacing) {
-            ForEach(Array(StoryTextBackgroundPresets.all.enumerated()), id: \.offset) { _, style in
+            ForEach(Array(profile.backgrounds.enumerated()), id: \.offset) { _, style in
                 backgroundGridCell(style)
             }
         }

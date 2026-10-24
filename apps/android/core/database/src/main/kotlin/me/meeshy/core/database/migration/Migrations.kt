@@ -19,13 +19,17 @@ import androidx.room.migration.Migration
 internal object MeeshyMigrations {
 
     const val BASELINE_VERSION: Int = 16
-    const val CURRENT_VERSION: Int = 17
+    const val CURRENT_VERSION: Int = 21
 
-    val upgrades: List<Migration> = listOf(Migration_16_17).map(::GuardedMigration)
+    val upgrades: List<Migration> = listOf(Migration_16_17, Migration_17_18, Migration_18_19, Migration_19_20, Migration_20_21).map(::GuardedMigration)
 
-    /** Any downgrade empties caches only; durable rows stay for the older build to read. */
+    /**
+     * Any downgrade empties caches only; durable rows stay for the older build to read. It never
+     * targets a pre-baseline version: those are wiped by fallbackToDestructiveMigrationFrom, and Room
+     * refuses to build when a migration ends on a version declared destructive.
+     */
     val downgrades: List<Migration> = (BASELINE_VERSION + 1..CURRENT_VERSION).flatMap { from ->
-        (1 until from).map { to -> CacheResetMigration(from, to) }
+        (BASELINE_VERSION until from).map { to -> CacheResetMigration(from, to) }
     }
 
     val all: Array<Migration> = (upgrades + downgrades).toTypedArray()

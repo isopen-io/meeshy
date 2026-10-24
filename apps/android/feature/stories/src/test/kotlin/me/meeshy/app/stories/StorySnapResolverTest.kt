@@ -87,7 +87,7 @@ class StorySnapResolverTest {
     fun `a centre just past the threshold from a guide drags free`() {
         val r = StorySnapResolver.resolve(0.5f + StorySnapResolver.SNAP_THRESHOLD + 0.01f, 0.5f)
 
-        assertThat(r.x).isWithin(tol).of(0.535f)
+        assertThat(r.x).isWithin(tol).of(0.5f + StorySnapResolver.SNAP_THRESHOLD + 0.01f)
         assertThat(r.verticalGuide).isNull()
     }
 
@@ -200,5 +200,11 @@ class StorySnapResolverTest {
         val r = StorySnapResolver.resolve(0.5f, 1f, horizontalGuides = emptyList())
 
         assertThat(r.withinSafeZone).isFalse()
+    }
+
+    @Test
+    fun `the magnet holds at the iOS tolerance of 0,015`() {
+        assertThat(StorySnapResolver.SNAP_THRESHOLD).isEqualTo(0.015f)
+        assertThat(StorySnapResolver.resolve(0.52f, 0.5f).verticalGuide).isNull()
     }
 }

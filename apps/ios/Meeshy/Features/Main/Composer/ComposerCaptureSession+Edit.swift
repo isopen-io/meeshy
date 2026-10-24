@@ -138,25 +138,27 @@ extension ComposerCaptureSession {
     /// le dossier temporaire.
     private func finishVideo(_ url: URL) {
         guard let source = editSource else { return }
-        let exporter = videoRender(url)
+        let enregistre = savePolicy().savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
+        let exporter = videoRender(url, uses: enregistre ? [.gallery, .delivery] : .delivery)
         let galerie = gallery
-        let politique = savePolicy()
-        let enregistre = politique.savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
         let brutEnGalerie = editRawSave
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
-            let rendue = await exporter()
-            guard let rendue else {
+            let rendition = await exporter()
+            guard let rendue = rendition?.delivery else {
                 guard isStillEditing(source) else { return }
                 isRenderingLook = false
                 HapticFeedback.error()
                 return
             }
             let neuve = rendue == url ? nil : rendue
-            if enregistre, isStillEditing(source) {
-                _ = await Self.writeVideo(rendue, original: url, originalInLibrary: await brutEnGalerie?.value ?? false,
-                                          gallery: galerie)
+            if enregistre, isStillEditing(source), let copie = rendition?.gallery {
+                _ = await ComposerVideoGalleryCopy.write(copie, original: url,
+                                                         originalInLibrary: await brutEnGalerie?.value ?? false, gallery: galerie)
+            }
+            if let reste = rendition?.galleryLeftover(original: url) {
+                FileManager.default.removeItemLogging(at: reste, context: "copie de galerie écrite", logger: .media)
             }
             guard isStillEditing(source) else {
                 if let neuve {
@@ -177,15 +179,17 @@ extension ComposerCaptureSession {
         guard let photo = editPhoto else { return nil }
         let regard = look
         let cadrage = framing
-        let auteur = lookPerson
-        let date = lookDate
+        let (auteur, date) = (lookPerson, lookDate)
         let cache = scenes
         let prise = editPhotoData
         let proportions = canvasAspect
+        let textes = retouchTexts
+        let intacte = ComposerPhotoEncoding.untouchedTake(prise, of: photo, paints: ComposerLiveLookRule.rendersLive(regard) || !cadrage.isIdentity || !textes.isEmpty, aspect: proportions)
         return { @MainActor in
-            guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
-                                                                    aspect: proportions, person: auteur,
-                                                                    date: date, scenes: cache) else { return nil }
+            if intacte != nil { return (photo, intacte) }
+            let calque = textes.overlay(canvas: ComposerLookPainter.canvas(for: CGSize(width: photo.width, height: photo.height), aspect: proportions))
+            guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage, aspect: proportions,
+                                                                    person: auteur, date: date, scenes: cache, overlay: calque) else { return nil }
             return (rendu, await ComposerPhotoEncoding.encode(rendu, like: prise))
         }
     }
@@ -193,7 +197,7 @@ extension ComposerCaptureSession {
     /// Le rendu de la vidéo retouchée — look, cadrage, découpe et son (#9754),
     /// lus dans l'espace où la boucle la lisait. « Terminé » et la flèche ⬇︎
     /// exportent par lui : une seule recette.
-    private func videoRender(_ url: URL) -> @MainActor () async -> URL? {
+    private func videoRender(_ url: URL, uses usages: ComposerVideoUses) -> @MainActor () async -> ComposerVideoRendition? {
         let regard = look
         let cadrage = framing
         let auteur = lookPerson
@@ -202,10 +206,11 @@ extension ComposerCaptureSession {
         let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
         let proportions = canvasAspect
         let gain = takeSound.effectiveGain
+        let calque = loopPlayer.flatMap { retouchTexts.overlay(canvas: ComposerLookPainter.canvas(for: $0.uprightSize, aspect: proportions)) }
         return { @MainActor in
             await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage,
-                                                   aspect: proportions, person: auteur, date: date,
-                                                   declaredSpaceName: espace, audioGain: gain)
+                                                   aspect: proportions, person: auteur, date: date, uses: usages,
+                                                   declaredSpaceName: espace, audioGain: gain, overlay: calque)
         }
     }
 
@@ -247,6 +252,7 @@ extension ComposerCaptureSession {
         trimScrubbing = false
         takeSave = Self.noTakeSave
         editRawSave = nil
+        retouchTexts.reset()
     }
 
     // MARK: - ⬇︎ Enregistrer dans Photos (#9684, #10284)
@@ -260,9 +266,14 @@ extension ComposerCaptureSession {
         String(format: "%.3f", Double(editAspect ?? canvasAspect))
     }
 
+    /// Le cadre, puis l'empreinte du texte (#12591) : un texte posé après ⬇︎ la fait revenir.
+    private var takeFrameId: String {
+        retouchTexts.isEmpty ? look.captureFrameId : look.captureFrameId + "|" + retouchTexts.fingerprint
+    }
+
     /// L'état d'enregistrement vu de la version COURANTE (cadre, format) — la loi partagée décide.
     var currentTakeSave: TakeSaveState {
-        CaptureSaveLaw.applyFormatChange(CaptureSaveLaw.applyFrameChange(takeSave, frameId: look.captureFrameId),
+        CaptureSaveLaw.applyFormatChange(CaptureSaveLaw.applyFrameChange(takeSave, frameId: takeFrameId),
                                          format: captureFormat)
     }
 
@@ -290,7 +301,7 @@ extension ComposerCaptureSession {
     /// Le brut refusé (le refus s'est dit une fois) ne fait rien tenter d'autre.
     func saveFrameTake(awaitingRaw brut: Task<Bool, Never>?) {
         guard phase.isEditing, editSource != nil else { return }
-        takeSave = CaptureSaveLaw.beginTake(.frame(frameId: look.captureFrameId, format: captureFormat))
+        takeSave = CaptureSaveLaw.beginTake(.frame(frameId: takeFrameId, format: captureFormat))
         editRawSave = brut
         writeTake(version: takeSave.currentVersion, awaitingRaw: brut, toast: true)
     }
@@ -313,12 +324,12 @@ extension ComposerCaptureSession {
                 return await galerie.saveImage(octets)
             }
         case .editing(.video(let url)):
-            let exporter = videoRender(url)
+            let exporter = videoRender(url, uses: .gallery)
             ecriture = {
-                guard let rendue = await exporter() else { return nil }
-                let enregistree = await Self.writeVideo(rendue, original: url,
-                                                        originalInLibrary: await brutEnGalerie?.value ?? false,
-                                                        gallery: galerie)
+                guard let rendue = await exporter()?.gallery else { return nil }
+                let enregistree = await ComposerVideoGalleryCopy.write(rendue, original: url,
+                                                                       originalInLibrary: await brutEnGalerie?.value ?? false,
+                                                                       gallery: galerie)
                 if rendue != url {
                     FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré par la flèche",
                                                           logger: .media)
@@ -430,6 +441,7 @@ extension ComposerCaptureSession {
         guard phase.isEditing, !isRenderingLook, editTools.contains(tool) else { return }
         activeEditTools = ComposerEditTools.toggled(activeEditTools, tapping: tool, familyOpen: openFamily != nil)
         if activeEditTools.contains(tool) { openFamily = nil }
+        if tool == .text { activeEditTools.contains(.text) ? retouchTexts.begin() : retouchTexts.endTyping() }
         HapticFeedback.light()
     }
 
@@ -557,21 +569,9 @@ extension ComposerCaptureSession {
         return editSource?.latestImage()?.extent
     }
 
-    /// Les proportions de la case où le média se pose : la découpe du cadre, la
-    /// toile du viseur sinon. La scène de l'aperçu sert si elle est cuite ; sinon
-    /// une toile de sonde, aux mêmes proportions et de la taille d'une miniature
-    /// (une milliseconde), se cuit ici — un cache froid ne doit jamais faire
-    /// cadrer plein viseur un média qui part dans une case 4:5.
+    /// Les proportions de la case où le média se pose (`ComposerLookPainter.framingAspect`).
     var framingAspect: CGFloat {
-        let neutre = canvasAspect
-        guard look.frame != ComposerPhotoFrame.none else { return neutre }
-        let sonde = ComposerLookPainter.canvas(for: ComposerLookPainter.thumbnailCanvas, aspect: neutre)
-        let cles = [ComposerLookPainter.previewCanvas(aspect: neutre), sonde].map {
-            ComposerLookSceneKey(look: look, canvas: $0, date: lookDate, person: lookPerson)
-        }
-        let scene = cles.lazy.compactMap { self.scenes.cached($0) }.first ?? ComposerLookPainter.scene(for: cles[1])
-        guard let photo = scene?.slots.first?.photo, photo.height > 0 else { return neutre }
-        return photo.width / photo.height
+        ComposerLookPainter.framingAspect(look: look, neutral: canvasAspect, date: lookDate, person: lookPerson, scenes: scenes)
     }
 
     /// Le doigt glisse : le média le suit, sans jamais sortir de sa case. Pendant

@@ -7,12 +7,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
@@ -35,7 +33,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.graphics.vector.ImageVector
+import me.meeshy.ui.theme.hexColor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,10 +72,11 @@ internal fun StoryTextStyle.labelRes(): Int = when (this) {
 }
 
 /**
- * Styling controls for the [element] currently being edited — the iOS-parity style
- * picker (five faces), the alignment toggle, and the colour swatches. Pure glue: each
- * affordance forwards its choice to a ViewModel intent ([onStyle]/[onColor]/[onAlign])
- * whose logic is unit-tested; selection highlighting reads straight off the element.
+ * Styling controls for the [element] being edited, in ONE horizontally scrolling row that
+ * lives in the band under the scene, never on it (#12298) — iOS `TextEditFloatingBubbles`
+ * parity: a single row, and a « Terminé » that closes the editor without deleting anything.
+ * Pure glue: each affordance forwards its choice to a ViewModel intent whose logic is
+ * unit-tested; selection highlighting reads straight off the element.
  */
 @Composable
 internal fun TextStyleToolbar(
@@ -93,103 +94,39 @@ internal fun TextStyleToolbar(
     onDuplicate: () -> Unit,
     onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
+    onDone: (() -> Unit)? = null,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(StoryTextStyle.entries) { style ->
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            StoryTextStyle.entries.forEach { style ->
                 FilterChip(
                     selected = element.style == style,
                     onClick = { onStyle(style) },
                     label = { Text(stringResource(style.labelRes())) },
                 )
             }
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-        ) {
             AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
             AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
             AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
-            IconButton(onClick = onCycleSize) {
-                Icon(
-                    Icons.Filled.FormatSize,
-                    contentDescription = stringResource(R.string.stories_composer_size),
-                    tint = if (element.size != StoryTextSize.DEFAULT) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            CycleButton(Icons.Filled.FormatSize, R.string.stories_composer_size, element.size != StoryTextSize.DEFAULT, onCycleSize)
+            CycleButton(Icons.Filled.BorderColor, R.string.stories_composer_outline, element.outline.isVisible, onCycleOutline)
+            STORY_TEXT_COLORS.forEach { hex ->
+                ColorSwatch(hex = hex, selected = element.color.equals(hex, ignoreCase = true), onClick = { onColor(hex) })
             }
-            IconButton(onClick = onCycleOutline) {
-                Icon(
-                    Icons.Filled.BorderColor,
-                    contentDescription = stringResource(R.string.stories_composer_outline),
-                    tint = if (element.outline.isVisible) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            StoryTextBackgroundPresets.all.forEach { preset ->
+                BackgroundSwatch(background = preset, selected = element.background == preset, onClick = { onBackground(preset) })
             }
-            IconButton(onClick = onCycleFadeIn) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Login,
-                    contentDescription = stringResource(R.string.stories_composer_fade_in),
-                    tint = if (element.fade.hasFadeIn) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onCycleFadeOut) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = stringResource(R.string.stories_composer_fade_out),
-                    tint = if (element.fade.hasFadeOut) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onCycleStart) {
-                Icon(
-                    Icons.Filled.Schedule,
-                    contentDescription = stringResource(R.string.stories_composer_timing_start),
-                    tint = if (element.timing.hasStart) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onCycleDuration) {
-                Icon(
-                    Icons.Filled.Timelapse,
-                    contentDescription = stringResource(R.string.stories_composer_timing_duration),
-                    tint = if (element.timing.isTimed) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onDuplicate) {
-                Icon(
-                    Icons.Filled.ContentCopy,
-                    contentDescription = stringResource(R.string.stories_composer_duplicate_element),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+            CycleButton(Icons.AutoMirrored.Filled.Login, R.string.stories_composer_fade_in, element.fade.hasFadeIn, onCycleFadeIn)
+            CycleButton(Icons.AutoMirrored.Filled.Logout, R.string.stories_composer_fade_out, element.fade.hasFadeOut, onCycleFadeOut)
+            CycleButton(Icons.Filled.Schedule, R.string.stories_composer_timing_start, element.timing.hasStart, onCycleStart)
+            CycleButton(Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, element.timing.isTimed, onCycleDuration)
+            CycleButton(Icons.Filled.ContentCopy, R.string.stories_composer_duplicate_element, false, onDuplicate)
             ZOrderButton(Icons.Filled.VerticalAlignBottom, R.string.stories_composer_zorder_to_back) {
                 onReorder(StoryZOrder.TO_BACK)
             }
@@ -203,24 +140,27 @@ internal fun TextStyleToolbar(
                 onReorder(StoryZOrder.TO_FRONT)
             }
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(STORY_TEXT_COLORS) { hex ->
-                ColorSwatch(
-                    hex = hex,
-                    selected = element.color.equals(hex, ignoreCase = true),
-                    onClick = { onColor(hex) },
-                )
+        if (onDone != null) {
+            val doneDescription = stringResource(R.string.stories_composer_text_finish_a11y)
+            TextButton(
+                onClick = onDone,
+                modifier = Modifier.semantics { contentDescription = doneDescription },
+            ) {
+                Text(stringResource(R.string.stories_composer_text_finish))
             }
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(StoryTextBackgroundPresets.all) { preset ->
-                BackgroundSwatch(
-                    background = preset,
-                    selected = element.background == preset,
-                    onClick = { onBackground(preset) },
-                )
-            }
-        }
+    }
+}
+
+/** One cycling attribute of the row: tinted primary while the attribute is set. Glue. */
+@Composable
+private fun CycleButton(icon: ImageVector, labelRes: Int, active: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            icon,
+            contentDescription = stringResource(labelRes),
+            tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -239,7 +179,7 @@ internal fun BackgroundSwatch(
     val ring = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     val fill = when (background) {
         StoryTextBackground.None -> Color.Transparent
-        is StoryTextBackground.Solid -> parseBackingColor(background.hex)
+        is StoryTextBackground.Solid -> hexColor(background.hex, Color.Transparent)
         is StoryTextBackground.Glass -> Color.White.copy(alpha = 0.18f)
     }
     val label = when (background) {
@@ -311,31 +251,12 @@ internal fun ColorSwatch(hex: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .size(28.dp)
             .clip(RoundedCornerShape(50))
-            .background(parseHexColor(hex))
+            .background(hexColor(hex, Color.White))
             .border(BorderStroke(if (selected) 2.dp else 1.dp, ring), RoundedCornerShape(50))
             .pointerInput(hex) { detectTapGestures { onClick() } }
             .semantics { contentDescription = "#$hex" },
     )
 }
-
-/** Parses a `RRGGBB` (or `#RRGGBB`) hex colour, falling back to white on anything unexpected. */
-internal fun parseHexColor(hex: String): Color =
-    runCatching { Color(("ff" + hex.removePrefix("#")).toLong(16)) }.getOrDefault(Color.White)
-
-/**
- * Parses a `RRGGBB` **or** `RRGGBBAA` (optionally `#`-prefixed) hex into a Compose [Color],
- * reordering the trailing alpha of the 8-digit form into Compose's `AARRGGBB`. Falls back to
- * transparent on anything unexpected so a malformed preset never crashes the canvas.
- */
-internal fun parseBackingColor(hex: String): Color = runCatching {
-    val h = hex.removePrefix("#")
-    val argb = when (h.length) {
-        8 -> h.substring(6, 8) + h.substring(0, 6)
-        6 -> "ff$h"
-        else -> return Color.Transparent
-    }
-    Color(argb.toLong(16))
-}.getOrDefault(Color.Transparent)
 
 /**
  * Paints the element's text backing behind the glyphs (glue): a rounded solid fill for
@@ -346,7 +267,7 @@ internal fun parseBackingColor(hex: String): Color = runCatching {
 internal fun Modifier.composerTextBacking(background: StoryTextBackground): Modifier = when (background) {
     StoryTextBackground.None -> this
     is StoryTextBackground.Solid ->
-        this.background(parseBackingColor(background.hex), RoundedCornerShape(10.dp))
+        this.background(hexColor(background.hex, Color.Transparent), RoundedCornerShape(10.dp))
     is StoryTextBackground.Glass ->
         this.background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
 }

@@ -19,7 +19,7 @@ final class ProfileDecorModel: ObservableObject {
     @Published private(set) var state: ProfileDecorState
     @Published private(set) var rings: [ProfileDecorOptions.OptionGroup<AvatarRingDesign>]
     @Published private(set) var banners: [ProfileDecorOptions.OptionGroup<AppearanceDesign>]
-    /// Les cadres posés SUR la bannière (#10936) : aucun pack installé d'office, donc vide avant la lecture.
+    /// Les cadres posés SUR la bannière (#10936) : avant la lecture, les packs installés d'office (#11165).
     @Published private(set) var frames: [ProfileDecorOptions.OptionGroup<BannerFrameDesign>]
     @Published private(set) var failed = false
 

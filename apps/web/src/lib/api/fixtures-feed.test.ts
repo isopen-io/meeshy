@@ -21,15 +21,13 @@ import {
   REEL_PORTRAIT,
   pageOfFeed,
 } from './fixtures-feed';
-import { VIEWER_ID } from './fixtures-base';
+import { FIXTURES_LOADED_AT, VIEWER_ID } from './fixtures-base';
 import { carrierMediaIdentity } from '@/lib/canvas/carrier';
 import { parseCanvasDocument } from '@/lib/canvas/document';
 import { feedMediaKindOf } from '@/lib/feed/layout';
 import { resolveMosaicLayout } from '@/lib/feed/mosaic-layout';
 import { isDocumentAudible } from '@/lib/feed/scene-motion';
 import { wordCountOf } from '@/lib/feed/text';
-
-const IMPORTED_AT = Date.now();
 
 describe('FEED_POSTS — le corpus exerce chaque famille du § 3.4', () => {
   test('au moins 24 posts, de quoi observer une page 1 (20) et une page 2', () => {
@@ -239,7 +237,7 @@ describe('le corpus du fil porte des scènes (§ 3.4)', () => {
     for (const id of ['post-scene-text', 'post-scenes-mixed', 'post-scenes-wave', 'post-scene-clip-a', 'post-scene-clip-b']) {
       const post = FEED_POSTS.find((p) => p.id === id);
       expect(post).toBeDefined();
-      expect(IMPORTED_AT - new Date(post!.createdAt).getTime()).toBeLessThan(70 * 60_000);
+      expect(FIXTURES_LOADED_AT.getTime() - new Date(post!.createdAt).getTime()).toBeLessThan(70 * 60_000);
     }
   });
 });

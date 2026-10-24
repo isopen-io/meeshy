@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type SyntheticEvent } from 'react';
 
 import '@/styles/avatar.css';
 
@@ -182,8 +182,17 @@ type AvatarProps = {
   /**
    * UN VRAI PORTRAIT (#5893) — `PostMedia.author.avatar`/`Viewer.avatar` :
    * une RÉFÉRENCE DE MÉDIA telle que la passerelle la sert, jamais posée pour
-   * un groupe (D-1 étend `MeeshyAvatar.swift`, qui peint la photo AU-DESSUS du
-   * dégradé d'initiales quand elle existe).
+   * un groupe sans photo.
+   *
+   * UN SEUL VISAGE (#12571) — comme `MeeshyAvatar` (iOS), le cercle rend la
+   * photo OU les initiales, jamais les deux : `CachedAvatarImage` montre les
+   * initiales À LA PLACE de la photo (`if/else`, `CachedAsyncImage.swift:311-317`),
+   * puis la photo les remplace. Ici, les initiales ne sont que le PLACEHOLDER
+   * du chargement : l'`<img>` précède leur nœud dans le DOM, `onLoad` lui pose
+   * `data-loaded`, et la règle de frère d'`avatar.css` masque alors les
+   * initiales (un PNG transparent ne laisse plus voir de dégradé dessous, et
+   * aucun liseré de deux cercles n'apparaît). Un échec cache l'`<img>` : les
+   * initiales restent, en silence, sans retry ni spinner.
    *
    * RÉSOLUE ICI, POINT DE PASSAGE UNIQUE (#6388) — `User.avatar`,
    * `Participant.avatar` et `Community.avatar` portent la CLÉ de stockage
@@ -195,20 +204,20 @@ type AvatarProps = {
    * (`net::ERR_FAILED`, puis `workbox … no-response` — mesuré sur
    * `staging.meeshy.me/notifications` le 2026-09-13). Dix appelants passent un
    * `src` venu de la passerelle ; leur demander de se souvenir de la règle,
-   * c'est la voir oubliée au onzième — le legacy a tranché pareil
-   * (`AvatarImage`, `apps/web/components/ui/avatar.tsx`). `attachmentSrc` est
-   * IDEMPOTENTE : un appelant qui résout déjà (`card-model.ts`) ne double
-   * rien, et un aperçu local (`blob:`) traverse intact.
+   * c'est la voir oubliée au onzième. `attachmentSrc` est IDEMPOTENTE : un
+   * appelant qui résout déjà (`card-model.ts`) ne double rien, et un aperçu
+   * local (`blob:`) traverse intact.
    *
    * SANS ÉTAT LOCAL, DÉLIBÉRÉMENT (revue-correction #5893) — `Avatar` est
    * appelé comme une fonction PURE par au moins un témoin du dépôt
    * (`living-summary.test.tsx#expand`, qui rejoue l'arbre React sans
-   * dispatcher de hooks pour retrouver un `onClick` réel sans bibliothèque
-   * de DOM) : un `useState` y lève « Invalid hook call ». Le repli sur les
-   * initiales se fait donc en manipulant le DOM DIRECTEMENT au `onError`
-   * (`e.currentTarget.style.display = 'none'`) plutôt qu'en re-rendant — le
-   * dégradé et les initiales restent TOUJOURS montés, juste RECOUVERTS par
-   * la photo tant qu'elle charge, et redécouverts si elle échoue.
+   * dispatcher de hooks) : un `useState` y lève « Invalid hook call ». Le
+   * repli se fait donc en manipulant le DOM au `onLoad`/`onError`
+   * (`avatarPhotoEvents` : `data-loaded`, `style.display`). Et l'`<img>` porte
+   * `key={résolu}` : sans elle, Preact réutilise le nœud d'une photo qui a
+   * échoué, son `display:none` survit au changement de `src`, et la photo
+   * neuve (revalidation, `user:updated`, mon propre changement de photo)
+   * restait cachée sous les initiales.
    */
   src?: string;
   /**
@@ -228,6 +237,24 @@ function storyRingShadow({ stroke, unseen, color, separated }: { readonly stroke
   if (!separated || !unseen) return `inset 0 0 0 ${stroke}px ${ink}`;
   return `inset 0 0 0 ${stroke - 1}px ${ink}, inset 0 0 0 ${stroke}px var(--color-ios-surface)`;
 }
+
+/**
+ * **LA PHOTO REMPLACE SES INITIALES, ÉCRIT UNE FOIS** (#12571) — les deux
+ * événements de l'`<img>` d'un visage, posés par `Avatar` et par l'avatar carré
+ * d'une communauté (`EntityAvatar`, `routes/communities-parts.tsx`) : chargée,
+ * elle porte `data-loaded` et la règle de frère d'`avatar.css` masque le
+ * placeholder d'initiales qui la SUIT dans le DOM ; en échec, elle s'efface et
+ * les initiales restent, sans retry ni spinner. Sans état ni hook, et l'hôte
+ * pose `key={adresse}` : une adresse neuve repart d'une `<img>` neuve.
+ */
+export const avatarPhotoEvents = {
+  onLoad: (event: SyntheticEvent<HTMLImageElement>): void => {
+    event.currentTarget.setAttribute('data-loaded', '');
+  },
+  onError: (event: SyntheticEvent<HTMLImageElement>): void => {
+    event.currentTarget.style.display = 'none';
+  },
+} as const;
 
 export function Avatar(props: AvatarProps) {
   const { ring, ...bare } = props;
@@ -292,49 +319,49 @@ function renderAvatar({
        44, sous le plancher tactile. `block` est sans effet partout ailleurs
        (un élément de flex est déjà blockifié), et rend la géométrie DÉRIVÉE
        vraie dans tous les contextes. */
-    <span className="avatar-root relative block shrink-0" style={{ width: size, height: size, opacity: opacity ?? 1 }}>
-      {/* LE DÉGRADÉ D'INITIALES — TOUJOURS MONTÉ (voir le doc-comment de
-          `src` ci-dessus) : c'est ce que la photo RECOUVRE tant qu'elle
-          charge, et ce que l'échec de la photo RÉVÈLE en s'effaçant. */}
-      <span
-        className="grid size-full place-items-center rounded-chip font-semibold text-ios-surface"
-        style={{
-          background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 68%, var(--color-ios-on-brand)))`,
-          fontSize: size * 0.38,
-        }}
-        aria-hidden={name === undefined || showsImage}
-        aria-label={showsImage ? undefined : spoken}
-        role={name === undefined || showsImage ? undefined : 'img'}
-      >
-        {initials}
-      </span>
+    <span
+      className="avatar-root relative block shrink-0"
+      style={{ width: size, height: size, opacity: opacity ?? 1 }}
+      {...(name === undefined ? {} : { role: 'img', 'aria-label': spoken })}
+    >
       {showsImage ? (
         /* `decoding` et `crossOrigin` — LES DEUX BOUTS DE #6973.
-           `decoding="async"` : c'était la SEULE `<img>` du dépôt sans lui
-           (`media-grid.tsx`, `reel-page.tsx`, `notification-row.tsx` et
-           `communities-parts.tsx` le posent tous), et une liste qui monte des
-           dizaines de portraits décodait donc sur le fil principal, pendant le
-           geste.
+           `decoding="async"` : une liste qui monte des dizaines de portraits
+           décodait sinon sur le fil principal, pendant le geste.
            `crossOrigin` : la passerelle rend déjà `Access-Control-Allow-Origin`
            sur sa route de flux, mais l'en-tête est INERTE tant que la requête
            part en `no-cors` — la réponse est alors OPAQUE, et le seau `medias`
            la garde trente jours sans pouvoir la distinguer d'une page d'erreur.
            `mediaImageCrossOrigin` ne la pose QUE sur la route de flux : un CDN
-           tiers ou le magasin statique (que `attachmentSrc` laisse passer
-           inchangés, par décision) ÉCHOUERAIT en mode `cors` sans en-tête, et
-           l'avatar serait retombé sur ses initiales en silence. */
+           tiers ou le magasin statique ÉCHOUERAIT en mode `cors` sans en-tête.
+           `key` et `avatarPhotoEvents` — voir le doc-comment de `src`
+           (#12571). `alt` vide : le nom est porté par la racine, une seule
+           fois. */
         <img
+          key={resolvedSrc}
           src={resolvedSrc}
-          alt={spoken ?? ''}
+          alt=""
           loading="lazy"
           decoding="async"
           crossOrigin={mediaImageCrossOrigin(resolvedSrc)}
           className="absolute inset-0 size-full rounded-chip object-cover"
-          onError={(event) => {
-            event.currentTarget.style.display = 'none';
-          }}
+          {...avatarPhotoEvents}
         />
       ) : null}
+      {/* LES INITIALES — le PLACEHOLDER du chargement et le repli de l'échec,
+          jamais un second visage sous la photo : `avatar.css` les masque dès
+          que l'`<img>` frère porte `data-loaded` (#12571). */}
+      <span
+        data-avatar-initials=""
+        className="grid size-full place-items-center rounded-chip font-semibold text-ios-surface"
+        style={{
+          background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 68%, var(--color-ios-on-brand)))`,
+          fontSize: size * 0.38,
+        }}
+        aria-hidden
+      >
+        {initials}
+      </span>
       {humeur === undefined ? (
         /* `data-presence` — L'ANCRE de la pastille (revue #5935) : elle porte
            l'ÉTAT servi (`here`/`online`/`away`/`idle`), donc « point VERT » se

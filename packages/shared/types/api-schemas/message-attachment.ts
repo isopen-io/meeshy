@@ -66,7 +66,22 @@ export const messageAttachmentSchema = {
 
     // User-provided metadata
     title: { type: 'string', nullable: true, description: 'Human-readable title' },
-    alt: { type: 'string', nullable: true, description: 'Accessibility alt text' },
+    alt: { type: 'string', nullable: true, description: 'Accessibility alt text — null when the piece or its message is protected (#12333)' },
+    altLanguage: { type: 'string', nullable: true, description: 'Source language of `alt` (#12333)' },
+    altTranslations: {
+      type: 'object',
+      nullable: true,
+      description: 'Translations of `alt`, keyed by language (#12333) — resolve with the Prisme (`resolveMediaDescription`)',
+      additionalProperties: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          translationModel: { type: 'string' },
+          confidenceScore: { type: 'number' },
+          createdAt: { type: 'string' },
+        },
+      },
+    },
     caption: { type: 'string', nullable: true, description: 'Caption/legend' },
 
     // Forwarding
@@ -104,6 +119,38 @@ export const messageAttachmentSchema = {
         },
       },
     },
+    avifVariants: {
+      type: 'array',
+      nullable: true,
+      description: 'Responsive AVIF variants (#11262), same widths as imageVariants, kept SEPARATE so older clients never receive AVIF — non-encrypted images only',
+      items: {
+        type: 'object',
+        properties: {
+          width: { type: 'number', description: 'Variant width in pixels' },
+          height: { type: 'number', description: 'Variant height in pixels' },
+          url: { type: 'string', description: 'Variant file URL' },
+          size: { type: 'number', description: 'Variant byte size' },
+          format: { type: 'string', description: 'Encoded format (avif)' },
+        },
+      },
+    },
+    processingState: { type: 'string', nullable: true, description: 'Media worker state (#11264): pending | ready | failed — absent means ready' },
+    renditions: {
+      type: 'array',
+      nullable: true,
+      description: 'Additional video renditions (#11261): H.264 compatibility rendition of an HEVC video, HDR tone-mapped to SDR BT.709 — the original fileUrl is untouched',
+      items: {
+        type: 'object',
+        properties: {
+          codec: { type: 'string', description: 'Codec of the rendition: h264 (video compatibility, #11261), heic / avif (image original, #11263)' },
+          mimeType: { type: 'string', description: 'Media type of the rendition file' },
+          url: { type: 'string', description: 'Rendition file URL' },
+          width: { type: 'number', description: 'Rendition width in pixels' },
+          height: { type: 'number', description: 'Rendition height in pixels' },
+          size: { type: 'number', description: 'Rendition byte size' },
+        },
+      },
+    },
 
     // Audio/Video metadata
     duration: { type: 'number', nullable: true, description: 'Duration in milliseconds' },
@@ -111,6 +158,7 @@ export const messageAttachmentSchema = {
     sampleRate: { type: 'number', nullable: true, description: 'Sample rate in Hz' },
     codec: { type: 'string', nullable: true, description: 'Audio codec (opus, aac, mp3)' },
     channels: { type: 'number', nullable: true, description: 'Audio channels (1=mono, 2=stereo)' },
+    loudnessLufs: { type: 'number', nullable: true, description: 'Integrated loudness (EBU R128, LUFS) of the stored audio, measured at ingestion (#11259)' },
 
     // Video-specific
     fps: { type: 'number', nullable: true, description: 'Frames per second' },

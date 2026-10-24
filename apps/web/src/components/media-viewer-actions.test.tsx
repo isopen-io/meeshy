@@ -137,18 +137,73 @@ describe('MediaViewer — la page se suit par son identité', () => {
 describe('MediaViewer — les actions de la page (#6303)', () => {
   const ALL: MediaPageOffers = { save: true, react: true, reply: true, compose: true, share: false };
 
-  test('une page qui offre tout : Enregistrer dans « … » en haut, Réagir · Créer en rail, Répondre en capsule', async () => {
-    const items = photos(['a']);
-    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, ALL, () => {}) });
-    await settle();
-    const actions = Array.from(dialog().querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
-    expect(actions).toEqual(['react', 'compose']);
+  const railOf = (): readonly (string | null)[] => Array.from(dialog().querySelectorAll('[data-viewer-rail] [data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
+  const openMenu = (): void => {
     act(() => {
       dialog().querySelector<HTMLButtonElement>('[data-viewer-menu-button]')!.click();
     });
-    expect(dialog().querySelector('[data-viewer-menu-item="save"]')?.textContent).toContain('Enregistrer');
-    expect(dialog().querySelector('[data-viewer-reply]')?.textContent).toContain('Répondre');
+  };
+
+  test('une page qui offre tout (#12424) : Réagir · Répondre · Créer · Enregistrer dans le rail, l’ordre d’iOS (#12420), Enregistrer AUSSI dans « … », aucune capsule en bas', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, ALL, () => {}) });
+    await settle();
+    expect(railOf()).toEqual(['react', 'reply', 'compose', 'save']);
+    expect(dialog().querySelector('[data-viewer-action="reply"]')?.getAttribute('aria-label')).toBe('Répondre');
+    expect(dialog().querySelector('[data-viewer-action="save"]')?.getAttribute('aria-label')).toBe('Enregistrer');
     expect(dialog().querySelector('[data-viewer-action="compose"]')?.getAttribute('aria-label')).toBe('Créer avec ce média');
+    expect(dialog().querySelector('[data-viewer-bottom-bar] [data-viewer-reply]')).toBeNull();
+    openMenu();
+    expect(dialog().querySelector('[data-viewer-menu-item="save"]')?.textContent).toContain('Enregistrer');
+  });
+
+  test('« Transférer » d’une pièce de message vit dans le rail ET dans « … », et les deux ouvrent la feuille d’envoi de l’hôte (#12424)', async () => {
+    const items = photos(['a']);
+    const forward: SendSheetRequest = {
+      intent: 'forward',
+      payload: { kind: 'attachment', conversationId: 'c-a', messageId: 'm-a', attachmentId: 'a', mime: 'image/jpeg', previewUrl: '/uploads/a.jpg', exit: { id: 'm-a', pieces: [{ id: 'a', mimeType: 'image/jpeg' }] } },
+    };
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...ALL, share: true }, () => {}, forward) });
+    await settle();
+    expect(railOf()).toEqual(['react', 'reply', 'compose', 'save', 'share']);
+    expect(dialog().querySelector('[data-viewer-action="share"]')?.getAttribute('aria-label')).toBe('Transférer');
+    openMenu();
+    const item = dialog().querySelector<HTMLElement>('[data-viewer-menu-item="share"]')!;
+    expect(item.textContent).toContain('Transférer');
+    act(() => {
+      item.click();
+    });
+    expect(sendSheetStore.getState().request).toBe(forward);
+  });
+
+  test('« Enregistrer » du rail enregistre la pièce, comme celui du menu', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...NO_MEDIA_OFFERS, save: true }) });
+    await settle();
+    expect(railOf()).toEqual(['save']);
+    const notice = (): string | null | undefined => dialog().querySelector('[data-viewer-notice]')?.getAttribute('data-viewer-notice');
+    expect(notice()).toBe('');
+    act(() => {
+      dialog().querySelector<HTMLButtonElement>('[data-viewer-action="save"]')!.click();
+    });
+    for (let tick = 0; tick < 50 && notice() === ''; tick += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    }
+    expect(['media.viewer.saved', 'media.viewer.save_failed', 'media.viewer.offline']).toContain(notice() ?? '');
+  });
+
+  test('« Répondre » du rail remet la main à l’hôte', async () => {
+    const items = photos(['a']);
+    const replied: number[] = [];
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...NO_MEDIA_OFFERS, reply: true }, () => replied.push(1)) });
+    await settle();
+    expect(railOf()).toEqual(['reply']);
+    act(() => {
+      dialog().querySelector<HTMLButtonElement>('[data-viewer-action="reply"]')!.click();
+    });
+    expect(replied).toEqual([1]);
   });
 
   test('une page protégée n’offre rien : aucun bouton, aucun chunk demandé', async () => {
@@ -177,7 +232,7 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
     expect(dialog().querySelectorAll('[data-viewer-reactions] button').length).toBeGreaterThan(0);
     expect(dialog().querySelector('[data-viewer-action="react"]')?.getAttribute('aria-pressed')).toBe('true');
     act(() => {
-      dialog().querySelector<HTMLButtonElement>('[data-viewer-reply]')!.click();
+      dialog().querySelector<HTMLButtonElement>('[data-viewer-action="reply"]')!.click();
     });
     expect(replied).toEqual([1]);
   });
@@ -223,14 +278,14 @@ describe('MediaViewer — « Partager » ouvre la feuille d’envoi commune (#88
     });
   };
 
-  test('le bouton s’appelle « Partager », sa place est le rail entre Réagir et Créer, et il remet la demande de l’hôte à la feuille', async () => {
+  test('le bouton d’une publication s’appelle « Partager », sa place est le rail après Créer, en dernier comme sur iOS, et il remet la demande de l’hôte à la feuille', async () => {
     const items = photos(['a']);
     mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...SHARE, react: true, compose: true }, undefined, REQUEST) });
     await settle();
     expect(Array.from(dialog().querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'))).toEqual([
       'react',
-      'share',
       'compose',
+      'share',
     ]);
     expect(dialog().querySelector('[data-viewer-action="share"]')?.getAttribute('aria-label')).toBe('Partager');
     press();

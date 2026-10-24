@@ -13,7 +13,8 @@ import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice, AdminSkeleton }
 import { INK, INK2, TONE_COLOR } from '@/components/admin/tone';
 import { shareLinkStateOf } from '@/lib/admin/interpret/enums';
 import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
-import { personInitials, shareLinkLabel } from '@/lib/admin/interpret/labels';
+import { shareLinkLabel } from '@/lib/admin/interpret/labels';
+import { initialsOf } from '@/lib/view/conversation';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { useAdminOpen } from '@/lib/admin/use-admin-open';
@@ -148,18 +149,14 @@ export function AdminAnonymousFiche({
   const arrived = adminMomentOf(fiche.joinedAt, moment, language);
   const languageLabel = fiche.language === '' ? translateAdmin(language, 'admin.value.noLanguage') : sentenceCase(languageName(fiche.language, language), language);
   const when = (iso: string | null) => <AdminMomentText moment={adminMomentOf(iso, moment, language)} variant="both" />;
-  const title = translateAdmin(language, 'admin.anonymous.title');
+  const title = entity.label;
 
   return (
     <div className="grid gap-6" data-admin-anonymous-one={fiche.id}>
       <AdminPageHeader
         language={language}
         title={title}
-        crumbs={[
-          { label: translateAdmin(language, 'admin.group.people') },
-          { label: translateAdmin(language, 'admin.nav.anonymous'), target: { kind: 'section', section: 'anonymous' } },
-          { label: entity.label },
-        ]}
+        place={{ section: 'anonymous', fiche: true }}
       />
       <AdminOfflineNotice language={language} />
       <AdminFiche
@@ -170,7 +167,7 @@ export function AdminAnonymousFiche({
             title={entity.label}
             secondary={translateAdmin(language, 'admin.people.anonymous.kind')}
             avatar={{
-              initials: personInitials(entity.label),
+              initials: initialsOf(entity.label),
               color: 'var(--color-ios-ink-3)',
               src: entity.avatarUrl ?? null,
               ...(entity.presence === undefined ? {} : { presence: entity.presence }),

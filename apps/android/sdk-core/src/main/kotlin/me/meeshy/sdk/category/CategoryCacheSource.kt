@@ -41,7 +41,10 @@ internal class CategoryCacheSource(
     }
 
     private companion object {
-        // The device caches the whole catalogue, so one wide page covers any realistic user.
-        const val PAGE_SIZE = 200
+        // The device caches the whole catalogue, so one wide page covers any realistic user —
+        // and the widest the gateway accepts: `GET /me/preferences/categories` declares
+        // `limit` with `maximum: 100` and answers 400 above it, which left every category
+        // section of the list empty.
+        const val PAGE_SIZE = 100
     }
 }

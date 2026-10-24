@@ -212,7 +212,8 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
    * servait déjà `serializeAttachmentForSocket`.
    */
   const SOCKET_ATTACHMENT_WIRE_KEYS = [
-    ...Object.keys(attachmentSocketSelect).filter((k) => k !== 'reactions'),
+    // `message` : la protection du porteur, chargée pour `servedDescription`, jamais servie (#12333).
+    ...Object.keys(attachmentSocketSelect).filter((k) => k !== 'reactions' && k !== 'message'),
     'reactionSummary',
     'currentUserReactions',
   ].sort();

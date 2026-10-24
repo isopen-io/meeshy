@@ -34,6 +34,11 @@ struct ThemedConversationRow: View {
     /// la ligne affiche « Brouillon : … » au lieu de l'aperçu du dernier
     /// message.
     var draftSummary: DraftSummary? = nil
+    /// #11387 — la conversation est verrouillée par PIN
+    /// (`ConversationLockManager.hidesContent`) : la seconde ligne dit
+    /// « Conversation verrouillée » à la place du dernier message, de la
+    /// frappe, du brouillon et de toute vignette — et VoiceOver aussi.
+    var isContentLocked: Bool = false
     /// B1 (Prisme Linguistique) — viewer's preferred content languages,
     /// passed by `ConversationListView` from `AuthManager.currentUser?
     /// .preferredContentLanguages`. Used to resolve `lastMessagePreview`
@@ -264,8 +269,11 @@ struct ThemedConversationRow: View {
         parts.append(String(format: String(localized: "accessibility.conversation_with", bundle: .main), conversation.name))
         // VoiceOver dit ce que l'œil lit : la MÊME valeur composée que la
         // ligne visible (`ConversationPreviewLine`), Prisme et protections
-        // compris — jamais une seconde lecture des champs bruts.
-        if let spoken = ConversationPreviewLine.spokenPreview(
+        // compris — jamais une seconde lecture des champs bruts. Verrouillée,
+        // la ligne dit le verrou, et VoiceOver avec elle (#11387).
+        if isContentLocked {
+            parts.append(ConversationLockedPreviewLine.label)
+        } else if let spoken = ConversationPreviewLine.spokenPreview(
             for: conversation, preferredLanguages: preferredContentLanguages, now: Date()
         ) {
             parts.append(String(format: String(localized: "accessibility.last_message_preview", bundle: .main), spoken))
@@ -418,42 +426,6 @@ struct ThemedConversationRow: View {
 
     // MARK: - Typing Indicator
 
-    private struct TypingDotsView: View {
-        let accentColor: String
-        // These dots pulse with `.repeatForever` — an animation that never ends
-        // on its own — right in the conversation list. Sustained motion of that
-        // kind is what Reduce Motion exists to stop (vestibular disorders), so
-        // the setting has to reach here. `@Environment` and not an observed
-        // singleton: this is a leaf view rendered once per row.
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-        @State private var isAnimating = false
-
-        var body: some View {
-            HStack(spacing: MeeshySpacing.xxs) {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .fill(Color(hex: accentColor))
-                        .frame(width: 5, height: 5)
-                        // Motion off rests at the animation's HIGH phase, never
-                        // its low one: frozen at 0.5 scale / 0.4 opacity the
-                        // dots would read as disabled rather than as "typing".
-                        .scaleEffect(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.5))
-                        .opacity(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.4))
-                        .animation(
-                            reduceMotion
-                                ? nil
-                                : Animation.easeInOut(duration: 0.5)
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(i) * 0.18),
-                            value: isAnimating
-                        )
-                }
-            }
-            .onAppear { isAnimating = true }
-            .onDisappear { isAnimating = false }
-        }
-    }
-
     @ViewBuilder
     private var typingIndicatorView: some View {
         HStack(spacing: MeeshySpacing.xs) {
@@ -463,7 +435,7 @@ struct ThemedConversationRow: View {
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .default).italic())
                 .foregroundColor(accent)
                 .lineLimit(1)
-            TypingDotsView(accentColor: accentColor)
+            MeeshyTypingDots(color: Color(hex: accentColor))
         }
     }
 
@@ -490,13 +462,28 @@ struct ThemedConversationRow: View {
 
     /// La préview — COMPOSÉE par le SDK (`ConversationPreviewComposer`, #7548).
     /// Le frappeur et le brouillon restent à la rangée, qui seule les tient.
+    /// Le verrou PIN passe devant tout (#11387) : `ConversationRowLine2Kind`.
+    private var line2Kind: ConversationRowLine2Kind {
+        ConversationRowLine2Kind.resolve(
+            hasTyping: typingUsername != nil,
+            hasDraft: draftSummary != nil,
+            isContentLocked: isContentLocked
+        )
+    }
+
     @ViewBuilder
     private var lastMessagePreviewView: some View {
-        if typingUsername != nil {
+        switch line2Kind {
+        case .locked:
+            ConversationLockedPreviewLine(
+                color: textSecondary,
+                font: MeeshyFont.relative(MeeshyFont.subheadSize)
+            )
+        case .typing:
             typingIndicatorView
-        } else if let draftSummary {
-            draftPreviewView(draftSummary)
-        } else {
+        case .draft:
+            if let draftSummary { draftPreviewView(draftSummary) }
+        case .preview:
             ConversationPreviewLine(
                 conversation: conversation,
                 preferredLanguages: preferredContentLanguages,
@@ -506,6 +493,48 @@ struct ThemedConversationRow: View {
                 onJoin: onJoinLiveCall
             )
         }
+    }
+}
+
+// MARK: - La seconde ligne d'une rangée (#11387)
+
+/// Ce que dit la seconde ligne d'une rangée de conversation, décision PURE
+/// partagée par les deux rangs (`ThemedConversationRow`,
+/// `LentilleConversationRow.Line2Kind`) : le verrou PIN d'abord, puis la
+/// frappe, le brouillon, et l'aperçu composé.
+nonisolated enum ConversationRowLine2Kind: Equatable, Sendable {
+    case locked, typing, draft, preview
+
+    nonisolated static func resolve(hasTyping: Bool, hasDraft: Bool, isContentLocked: Bool = false) -> ConversationRowLine2Kind {
+        if isContentLocked { return .locked }
+        if hasTyping { return .typing }
+        if hasDraft { return .draft }
+        return .preview
+    }
+}
+
+/// La seconde ligne d'une conversation verrouillée (#11387) : un cadenas et
+/// « Conversation verrouillée », jamais rien de ce qu'elle contient. Même
+/// libellé que l'aperçu d'appui long scellé (`preview.conversation_locked`).
+struct ConversationLockedPreviewLine: View {
+    let color: Color
+    let font: Font
+
+    static var label: String {
+        String(localized: "preview.conversation_locked", defaultValue: "Conversation verrouillée", bundle: .main)
+    }
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "lock.fill")
+                .font(font)
+                .imageScale(.small)
+                .accessibilityHidden(true)
+            Text(Self.label)
+                .font(font)
+                .lineLimit(1)
+        }
+        .foregroundStyle(color)
     }
 }
 
@@ -524,6 +553,7 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.isPeerHere == rhs.isPeerHere &&
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
+        lhs.isContentLocked == rhs.isContentLocked &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages
     }
 }

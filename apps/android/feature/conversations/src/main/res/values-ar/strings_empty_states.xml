@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="empty_states_search_no_results">لا توجد نتائج</string>
+    <string name="empty_states_search_try_other_terms">جرّب عبارات أخرى</string>
+    <string name="empty_states_new_conversation">محادثة جديدة</string>
+</resources>

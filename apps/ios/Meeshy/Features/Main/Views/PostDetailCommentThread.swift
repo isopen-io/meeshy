@@ -49,7 +49,7 @@ struct PostDetailCommentThread: View {
             },
             onEditComment: { target in onEditComment(target) },
             onRequestTranslation: { target in
-                let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
+                let lang = ReaderPrism.resolve(for: AuthManager.shared.currentUser).first?.lowercased() ?? "fr"
                 Task {
                     try? await PostService.shared.requestCommentTranslation(
                         postId: postId, commentId: target.id, targetLanguage: lang)

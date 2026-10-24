@@ -6,9 +6,12 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -21,6 +24,7 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -28,6 +32,7 @@ import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusRepository
 import me.meeshy.sdk.story.StoryRepository
 import javax.inject.Inject
 
@@ -53,10 +58,22 @@ class ConversationListViewModel @Inject constructor(
     lockStore: ConversationLockStore,
     storyRepository: StoryRepository,
     statusBarCache: StatusBarCache,
+    messagePrefetch: ConversationListMessagePrefetchTriggers,
+    networkMonitor: NetworkMonitor,
+    statusRepository: StatusRepository,
+    rowSignalsSource: ConversationListRowSignals,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
     val state: StateFlow<ConversationListUiState> = _state.asStateFlow()
+
+    /**
+     * Les signaux vivants des lignes (synchro en attente, pair a l'ecran, appel en cours) : un
+     * flux a part, pour ne pas grossir [ConversationListUiState] ni recomposer la liste a chaque
+     * battement de ces sources.
+     */
+    val rowSignals: StateFlow<ConversationRowSignals> = rowSignalsSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ConversationRowSignals())
 
     /**
      * Demandes de navigation a usage unique (tap direct ou code accepte) : un
@@ -92,6 +109,12 @@ class ConversationListViewModel @Inject constructor(
         starredStore = starredStore,
         currentUserId = { _state.value.currentUserId },
     )
+    private val pullRefresh = ConversationListPullRefresh(
+        storyRepository = storyRepository,
+        statusRepository = statusRepository,
+        statusBarCache = statusBarCache,
+        categoryRepository = categoryRepository,
+    )
     private val observers = ConversationListObservers(
         scope = viewModelScope,
         state = _state,
@@ -108,20 +131,22 @@ class ConversationListViewModel @Inject constructor(
             repository.conversationsStream(
                 onSyncError = { error ->
                     _state.update {
-                        it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
+                        it.copy(errorMessage = syncErrorFor(error), showSkeleton = false, isSyncing = false)
                     }
                 },
             ).collect { result ->
                 rawConversations = result.rawListOr(rawConversations)
+                messagePrefetch.onListLoaded(sessionRepository, rawConversations)
                 _state.update { it.applyResultFlags(result, rawConversations).withVisible(rawConversations) }
             }
         }
 
-        viewModelScope.launch {
-            socketManager.connectionState.collect { connection ->
-                _state.update { it.copy(connection = connection) }
-            }
-        }
+        ConversationListConnectionObserver(
+            scope = viewModelScope,
+            state = _state,
+            connectionState = socketManager.connectionState,
+            networkOnline = networkMonitor.isOnline,
+        ).start()
 
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
@@ -141,6 +166,7 @@ class ConversationListViewModel @Inject constructor(
         observers.startCategories()
         realtime.start()
         observers.startLive()
+        messagePrefetch.start(viewModelScope, sessionRepository, socketManager) { rawConversations }
     }
 
     /** Selects a filter tab and re-derives the visible list from the cached conversations (no network). */
@@ -196,21 +222,41 @@ class ConversationListViewModel @Inject constructor(
     /**
      * Pull-to-refresh: the visible spinner tracks the user gesture only —
      * background SWR revalidations stay silent ([ConversationListUiState.isSyncing]).
+     * The gesture also reloads the stories tray, the moods and the categories (iOS
+     * `onRefresh`), and ends once all of them are back.
      */
     fun refresh() {
         _state.update { it.copy(errorMessage = null, isSyncing = true, isUserRefreshing = true) }
         viewModelScope.launch {
             try {
-                repository.refresh()
+                coroutineScope {
+                    launch {
+                        pullRefresh.refreshSurroundings { moods -> _state.update { it.copy(moodStatuses = moods) } }
+                    }
+                    repository.refresh()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(errorMessage = e.message, showSkeleton = false)
+                    it.copy(errorMessage = syncErrorFor(e), showSkeleton = false)
                 }
             } finally {
                 _state.update { it.copy(isUserRefreshing = false, isSyncing = false) }
             }
         }
+    }
+
+    /**
+     * A failed sync only becomes an error STATE when nothing is on screen: over a populated
+     * list it stays silent, so a later filter that empties the list reads « no results »,
+     * never a stale error (parity iOS `emptyBranch`, which never recycles an old error).
+     */
+    private fun syncErrorFor(error: Throwable): String? =
+        if (rawConversations.isEmpty()) error.message.orEmpty() else null
+
+    companion object {
+        /** How long the first socket connection may take before the strip announces it. */
+        const val CONNECTION_GRACE_MILLIS: Long = ConversationListConnectionObserver.CONNECTION_GRACE_MILLIS
     }
 }

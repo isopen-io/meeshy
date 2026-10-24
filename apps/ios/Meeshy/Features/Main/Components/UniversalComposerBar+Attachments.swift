@@ -28,7 +28,6 @@ extension UniversalComposerBar {
 
     func attachmentChip(_ attachment: ComposerAttachment) -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
-            // Type icon
             Image(systemName: attachment.type.glyph)
                 .font(.caption)
                 .foregroundColor(Color(hex: attachment.thumbnailColor))
@@ -44,7 +43,6 @@ extension UniversalComposerBar {
                     .opacity(0.6)
             }
 
-            // Remove button
             Button {
                 HapticFeedback.light()
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {

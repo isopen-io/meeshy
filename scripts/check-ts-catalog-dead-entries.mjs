@@ -490,7 +490,11 @@ export const callersIn = (contents, nsNames) => {
 // ce signal (#11585), iOS dans son lot. Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le
 // 2026-10-22 en CI (Quality, run 39754795559) et en local en diffant les entrées mortes entre origin/dev
 // (275) et la branche de #11538 (276) : une seule entrée nouvelle.
-const BASELINE_DEAD_ENTRIES = 276;
+// 276 -> 277 (#11329, 2026-10-23) : `attachments.byAttachmentIdSubtitlesByLang`, la jumelle TS de l'entrée
+// Swift relevée le même jour (sous-titres WebVTT d'une pièce, servis depuis la fusion de #12375). Le lecteur
+// vidéo web la lira dans #9275. Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le 2026-10-23 en
+// local sur origin/dev : une seule entrée nouvelle.
+const BASELINE_DEAD_ENTRIES = 277;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

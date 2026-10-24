@@ -14,6 +14,8 @@ nonisolated struct CallMontagePortrait: @unchecked Sendable {
 nonisolated struct CallMontageCaption: Equatable, Sendable {
     let title: String
     let subtitle: String
+    /// L'heure de la séance, écrite dans la barre d'état de l'Écran d'une photo seule (#12589).
+    var clock: String? = nil
 }
 
 nonisolated enum CallMontageRenderer {
@@ -26,6 +28,10 @@ nonisolated enum CallMontageRenderer {
         let unit = canvas.width / 1080
 
         switch style {
+        case .screen where portraits.count == 1:
+            drawScreenSolo(context, bounds: bounds, placed: placed, caption: caption)
+        case .grid where portraits.count == 1:
+            drawMosaicSolo(context, bounds: bounds, placed: placed)
         case .screen:
             fill(context, bounds, gray: 0)
             placed.enumerated().forEach { index, pair in

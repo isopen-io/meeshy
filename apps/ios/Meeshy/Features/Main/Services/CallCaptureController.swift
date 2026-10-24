@@ -207,7 +207,8 @@ final class CallCaptureController: ObservableObject {
     }
 
     var caption: CallMontageCaption {
-        CallMontageCaption(title: Self.brand, subtitle: now().formatted(date: .abbreviated, time: .shortened))
+        CallMontageCaption(title: Self.brand, subtitle: now().formatted(date: .abbreviated, time: .shortened),
+                           clock: now().formatted(date: .omitted, time: .shortened))
     }
 
     func start(subjects: [CallCaptureSubject], tracks: [String: Any]) {

@@ -7,6 +7,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -17,6 +18,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.ParticipantCacheRepository
+import me.meeshy.sdk.model.MemberRoster
+import kotlinx.coroutines.flow.emptyFlow
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.MemberRole
@@ -101,11 +105,51 @@ class ConversationMembersViewModelTest {
         every { it.participantBanned } returns banned
     }
 
+    /**
+     * A roster cache that behaves like the real one on the network side (first page replaces,
+     * next page appends at the stored cursor) so the screen is driven through [repository].
+     */
+    private fun rosterCache(
+        repository: ConversationRepository,
+        initial: MemberRoster? = null,
+        observed: Flow<MemberRoster?> = emptyFlow(),
+    ): ParticipantCacheRepository {
+        var roster: MemberRoster? = initial
+        val cache = mockk<ParticipantCacheRepository>(relaxed = true)
+        coEvery { cache.firstPage(any(), any()) } coAnswers {
+            val cached = roster
+            if (cached != null && !secondArg<Boolean>()) return@coAnswers NetworkResult.Success(cached)
+            when (val r = repository.participants(firstArg<String>(), null, null, 30)) {
+                is NetworkResult.Success -> {
+                    val fresh = MemberRoster.EMPTY.withFirstPage(r.data)
+                    roster = fresh
+                    NetworkResult.Success(fresh)
+                }
+                is NetworkResult.Failure -> cached?.let { NetworkResult.Success(it) } ?: r
+            }
+        }
+        coEvery { cache.nextPage(any()) } coAnswers {
+            val cur = roster ?: MemberRoster.EMPTY
+            val cursor = cur.nextCursor ?: return@coAnswers NetworkResult.Success(cur)
+            when (val r = repository.participants(firstArg<String>(), null, cursor, 30)) {
+                is NetworkResult.Success -> {
+                    val merged = cur.withNextPage(r.data)
+                    roster = merged
+                    NetworkResult.Success(merged)
+                }
+                is NetworkResult.Failure -> r
+            }
+        }
+        every { cache.observe(any()) } returns observed
+        return cache
+    }
+
     private fun viewModel(
         repository: ConversationRepository = repo(),
         sessionRepository: SessionRepository = session(),
         socketManager: MessageSocketManager = socket(),
-    ) = ConversationMembersViewModel(repository, sessionRepository, socketManager)
+        participantCache: ParticipantCacheRepository = rosterCache(repository),
+    ) = ConversationMembersViewModel(repository, participantCache, sessionRepository, socketManager)
 
     // MARK: loading
 
@@ -527,5 +571,68 @@ class ConversationMembersViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.searchQuery).isEmpty()
+    }
+
+    // MARK: cache-first roster
+
+    @Test
+    fun `a cached roster is served without waiting for the network`() = runTest {
+        val repository = repo(NetworkResult.Failure(ApiError("offline")))
+        val cached = MemberRoster.EMPTY.withFirstPage(page(listOf(member("p1")), totalCount = 1))
+        val vm = viewModel(repository, participantCache = rosterCache(repository, initial = cached))
+
+        vm.load("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1")
+        assertThat(vm.state.value.status).isEqualTo(MembersLoadStatus.Loaded)
+        coVerify(exactly = 0) { repository.participants(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a silent revalidation of the cache reaches the screen`() = runTest {
+        val repository = repo()
+        val observed = MutableSharedFlow<MemberRoster?>()
+        val vm = viewModel(repository, participantCache = rosterCache(repository, observed = observed))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        observed.emit(MemberRoster.EMPTY.withFirstPage(page(listOf(member("p1"), member("p9")))))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1", "p9").inOrder()
+    }
+
+    @Test
+    fun `a role-updated event is written to the cache too`() = runTest {
+        val events = MutableSharedFlow<ParticipantRoleUpdatedEvent>()
+        val repository = repo(NetworkResult.Success(page(listOf(member("p1", userId = "u1")))))
+        val cache = rosterCache(repository)
+        val vm = viewModel(repository, socketManager = socket(roleUpdated = events), participantCache = cache)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        events.emit(ParticipantRoleUpdatedEvent(conversationId = "c1", userId = "u1", role = "moderator"))
+        advanceUntilIdle()
+
+        coVerify { cache.updateRole("c1", "u1", "moderator") }
+    }
+
+    @Test
+    fun `a left and a banned event remove the member from the cache`() = runTest {
+        val left = MutableSharedFlow<ParticipantLeftEvent>()
+        val banned = MutableSharedFlow<ParticipantBannedEvent>()
+        val repository = repo()
+        val cache = rosterCache(repository)
+        val vm = viewModel(repository, socketManager = socket(left = left, banned = banned), participantCache = cache)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        left.emit(ParticipantLeftEvent(conversationId = "c1", userId = "u1"))
+        banned.emit(ParticipantBannedEvent(conversationId = "c1", userId = "u2"))
+        advanceUntilIdle()
+
+        coVerify { cache.removeParticipant("c1", "u1") }
+        coVerify { cache.removeParticipant("c1", "u2") }
     }
 }

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "starred.messages.remove_all",
+          "androidName": "starred_remove_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "starred.messages.remove",
+          "androidName": "starred_remove",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "starred.messages.row.hint",
+          "androidName": "starred_row_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "starred.messages.more_options",
+          "androidName": "starred_more_options",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -36,6 +36,9 @@ private const val ATTACHMENT_FILE_ROUTE = "attachments/file/"
  */
 const val STATIC_STORE_SCHEME = "static:"
 
+/** Une adresse à schéma (`ftp://`, `data://`…) qui n'est ni http(s) ni file : jamais une clé de stockage. */
+private val FOREIGN_SCHEME = Regex("^(?!(?i:https?|file)://)[A-Za-z][A-Za-z0-9+.-]*://.*", RegexOption.DOT_MATCHES_ALL)
+
 /**
  * Rend l'adresse chargeable d'un média.
  *
@@ -139,3 +142,27 @@ private fun encodePathSegments(chemin: String): String =
             }
         }.joinToString("")
     }
+
+/**
+ * Comme [resolveMediaUrl], mais refuse (`null`) toute adresse que [MediaUrlPolicy] n'accepte pas :
+ * l'appelant ne lance alors AUCUNE requête (protection SSRF, miroir de `MeeshyConfig.resolveMediaURL`).
+ */
+fun resolveSafeMediaUrl(url: String, apiBaseUrl: String?): String? {
+    if (FOREIGN_SCHEME.matches(url)) return null
+    val resolved = if (url.startsWith("file:")) url else resolveMediaUrl(url, apiBaseUrl)
+    val local = me.meeshy.sdk.model.net.MediaUrlPolicy.isLocalEnvironment(apiBaseUrl)
+    return resolved.takeIf { me.meeshy.sdk.model.net.MediaUrlPolicy.isAllowed(it, local) }
+}
+
+/**
+ * L'adresse chargeable d'une image SERVIE par la passerelle (avatar, bannière), ou `null` (⇒ repli :
+ * initiales, dessin, couleur unie) quand rien n'est servi, quand la valeur est un URI local
+ * (`file:` / `content:` — une charge serveur ne désigne jamais un fichier de l'appareil) ou quand la
+ * politique média la refuse. LE site unique des images servies : aucun appelant ne passe une valeur
+ * serveur à un chargeur par un autre chemin (#12569).
+ */
+fun resolveServedImageUrl(raw: String?, apiBaseUrl: String?): String? {
+    val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    if (value.startsWith("file:", ignoreCase = true) || value.startsWith("content:", ignoreCase = true)) return null
+    return resolveSafeMediaUrl(value, apiBaseUrl)
+}

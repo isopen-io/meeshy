@@ -134,12 +134,29 @@ export type ModerationStatus = 'pending' | 'approved' | 'flagged' | 'rejected';
  * D4 — a single responsive downscaled WebP variant of an image attachment,
  * used to build a client `srcset`. @see schema.prisma MessageAttachment.imageVariants
  */
+/**
+ * Another encoding of the SAME media, next to `fileUrl` (storage key in `url`):
+ * - #11261 — `h264`: compatibility rendition of an HEVC video;
+ * - #11263 — `heic` / `avif`: the ORIGINAL of an image the server served as
+ *   JPEG (`fileUrl`), kept for clients that decode it (iOS).
+ */
+export interface MediaRendition {
+  readonly codec: 'h264' | 'heic' | 'avif';
+  /** Media type of the rendition file (absent on the first video renditions: `video/mp4`). */
+  readonly mimeType?: string;
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+  readonly size: number;
+}
+
 export interface ImageVariant {
   readonly width: number;
   readonly height: number;
   readonly url: string;
   readonly size: number;
-  readonly format: 'webp';
+  /** `webp` dans `imageVariants`, `avif` dans `avifVariants` (#11262) — jamais mélangés. */
+  readonly format: 'webp' | 'avif';
 }
 
 /**
@@ -180,6 +197,10 @@ export interface Attachment {
   // ===== METADATA =====
   readonly title?: string;          // Human-readable title
   readonly alt?: string;            // Accessibility alt text
+  /** Langue source de `alt` (#12333). */
+  readonly altLanguage?: string;
+  /** Traductions de `alt` (`{ [lang]: { text } }`, #12333) — à résoudre par `resolveMediaDescription`. */
+  readonly altTranslations?: unknown;
   readonly caption?: string;        // Display caption
 
   // ===== IMAGE METADATA =====
@@ -192,6 +213,23 @@ export interface Attachment {
    * original for inline previews.
    */
   readonly imageVariants?: readonly ImageVariant[];
+  /**
+   * #11262 — the same responsive widths encoded as AVIF, in a SEPARATE array:
+   * older clients read `imageVariants` without filtering the format, so an
+   * AVIF never lands there. A client that decodes AVIF picks these first.
+   */
+  readonly avifVariants?: readonly ImageVariant[];
+  /**
+   * #11261 — additional video renditions next to the original: an HEVC upload
+   * gets an H.264 High ≤1080p rendition (HDR tone-mapped to SDR BT.709) for
+   * readers that cannot decode HEVC. The original `fileUrl` stays untouched.
+   */
+  readonly renditions?: readonly MediaRendition[];
+  /**
+   * #11264 — `pending` while the media worker renders a deferred rendition
+   * (thumbnail, variants, video rendition); absent or `ready` otherwise.
+   */
+  readonly processingState?: 'pending' | 'ready' | 'failed';
   /**
    * #6221 — le TYPE CLIENT rattrape son contrat : la passerelle SERT ce champ
    * (`api-schemas/message-attachment.ts:91`, `schema.prisma:1010`,
@@ -208,6 +246,8 @@ export interface Attachment {
   readonly sampleRate?: number;
   readonly codec?: string;
   readonly channels?: number;
+  /** Sonie intégrée EBU R128 (LUFS) du fichier stocké, mesurée à l'ingestion (#11259). */
+  readonly loudnessLufs?: number | null;
   readonly fps?: number;
   readonly videoCodec?: string;
 
@@ -395,6 +435,7 @@ export interface UploadedAttachmentResponse {
   readonly sampleRate?: number;
   readonly codec?: string;
   readonly channels?: number;
+  readonly loudnessLufs?: number;
   readonly uploadedBy: string;
   readonly isAnonymous: boolean;
   readonly createdAt: string;
@@ -515,7 +556,9 @@ export type UploadLimits = typeof UPLOAD_LIMITS;
  * Types MIME acceptés par catégorie
  */
 export const ACCEPTED_MIME_TYPES = {
-  IMAGE: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'] as const,
+  // #11263 — HEIC/HEIF/AVIF acceptés : le serveur les sert en JPEG
+  // (`fileUrl`) et garde l'original dans `renditions`.
+  IMAGE: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'image/avif'] as const,
   DOCUMENT: [
     'application/pdf',
     'text/plain',

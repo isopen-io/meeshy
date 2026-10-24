@@ -223,40 +223,16 @@ extension CallView {
     }
 
     func avatarCircle(size: CGFloat) -> some View {
-        let name = callManager.remoteUsername ?? "?"
-        let initial = String(name.prefix(1)).uppercased()
-
-        return ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size, height: size)
-
-            Text(initial)
-                // Doctrine 86i : initiale d'avatar proportionnelle au cercle fixe `size` → figée.
-                .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
-                .foregroundStyle(Color.white)
-
-            // Vraie photo de profil par-dessus le fallback initiale (le
-            // dégradé + initiale restent visibles pendant le chargement).
-            if let avatar = remoteProfile?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: size, height: size),
-                    thumbHash: remoteProfile?.avatarThumbHash
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(Circle())
-            }
-        }
+        // Un seul visage : la photo, sinon les initiales d'un avatar sans photo
+        // (jamais les initiales sous la photo).
+        CachedAvatarImage(
+            urlString: remoteProfile?.avatar,
+            thumbHash: remoteProfile?.avatarThumbHash,
+            name: callManager.remoteUsername ?? "?",
+            size: size,
+            accentColor: MeeshyColors.brandPrimaryHex
+        )
+        .avatarRingWithin(ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing), footprint: size)
         .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
     }
 
@@ -274,36 +250,14 @@ extension CallView {
 
     private func localAvatarBadge(size: CGFloat) -> some View {
         let user = AuthManager.shared.currentUser
-        let name = user?.displayName ?? user?.username ?? "?"
-        let initial = String(name.prefix(1)).uppercased()
 
-        return ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [MeeshyColors.indigo600, MeeshyColors.indigo800],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            Text(initial)
-                .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
-                .foregroundStyle(Color.white)
-
-            if let avatar = user?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: size, height: size),
-                    thumbHash: user?.avatarThumbHash
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(Circle())
-            }
-        }
+        return CachedAvatarImage(
+            urlString: user?.avatar,
+            thumbHash: user?.avatarThumbHash,
+            name: user?.displayName ?? user?.username ?? "?",
+            size: size,
+            accentColor: MeeshyColors.brandPrimaryHex
+        )
         .frame(width: size, height: size)
         // Liseré au ton du fond : détache la pastille du grand cercle.
         .overlay(Circle().stroke(MeeshyColors.surfaceDarkDeep, lineWidth: 3))

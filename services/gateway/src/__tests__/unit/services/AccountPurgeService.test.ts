@@ -28,6 +28,9 @@ function fakePrisma(overrides: Record<string, any> = {}) {
   return {
     userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
+    ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity'].map((model) =>
+      [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
     conversationShareLink: shareLinkTable([]),
     notification: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -41,6 +44,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     // Les traductions partagées (#9899) : un compte sans participant.
     participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
     sharedTranslation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
+    callParticipant: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }), findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), count: jest.fn<any>().mockResolvedValue(0) }]),
@@ -83,18 +88,46 @@ function shareLinkTable(initial: ShareLinkRow[]) {
 }
 
 function packTables(db: ReturnType<typeof fakePackDb>) {
-  const { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack } = db;
-  return { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack };
+  const { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset } = db;
+  return { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset };
 }
 
 const NO_FILES = { packFiles: fakeFileStore([]).store };
 
 describe('purgeAccountIsolatedData', () => {
+  it('efface la télémétrie et la note de chacun de ses appels, sur tous ses participants, sans supprimer les lignes (#11277)', async () => {
+    const prisma = fakePrisma({
+      participant: { findMany: jest.fn<any>().mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]) },
+      callParticipant: { updateMany: jest.fn<any>().mockResolvedValue({ count: 4 }) },
+    });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.callParticipant.updateMany).toHaveBeenCalledWith({
+      where: { participantId: { in: ['p1', 'p2'] } },
+      data: { analytics: null, feedback: null },
+    });
+    expect(summary.callTelemetryErased).toBe(4);
+  });
+
   it('deletes every UserSession row for the account', async () => {
     const prisma = fakePrisma({ userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }) } });
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.sessionsDeleted).toBe(3);
+  });
+
+  it("efface ses appareils chiffrés, leurs pré-clés et les enveloppes qui lui sont adressées (#12543)", async () => {
+    const prisma = fakePrisma({
+      e2EEDevice: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
+      e2EEOneTimePreKey: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 150 }) },
+      messageEnvelope: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 4 }) },
+      e2EERevokedIdentity: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+    });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.e2EEDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.e2EEOneTimePreKey.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.messageEnvelope.deleteMany).toHaveBeenCalledWith({ where: { recipientUserId: USER_ID } });
+    expect(prisma.e2EERevokedIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(summary.e2eeErased).toEqual({ devices: 2, preKeys: 150, envelopes: 4 });
   });
 
   it('deletes the UserVoiceModel row for the account', async () => {

@@ -547,7 +547,9 @@ struct StoryHeaderView: View {
             } label: {
                 Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
             }
-        default:
+        // Exhaustif, sans `default:` : une entrée nouvelle (#11535 a ajouté
+        // `.makePrivate`) ne disparaît plus du menu en silence (#11151).
+        case .fullscreen, .transcript, .compose, .share, .close:
             EmptyView()
         }
     }
@@ -603,6 +605,7 @@ struct StoryHeaderView: View {
         guard demanderComposer != nil, let story = currentStory else { return nil }
         return ComposerSeedTarget(
             story: story,
+            // Défaut de COMPOSITION (langue proposée au composer, repli « fr ») — pas une lecture (#11832).
             preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         )
     }

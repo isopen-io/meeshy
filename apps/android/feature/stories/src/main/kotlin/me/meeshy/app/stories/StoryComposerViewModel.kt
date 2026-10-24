@@ -20,6 +20,8 @@ import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
@@ -60,7 +62,11 @@ class StoryComposerViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryComposerUiState())
+    private var history = ComposerHistory(_state.value.snapshot())
     val state: StateFlow<StoryComposerUiState> = _state.asStateFlow()
+
+    /** The author colour the reader paints a background-less slide with (#12314). */
+    val authorAccentHex: String get() = StorySceneFill.authorAccentHex(sessionRepository.currentUser.value)
 
     /** One-shot signal that a story was queued — the screen dismisses on it. */
     private val _published = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -104,6 +110,7 @@ class StoryComposerViewModel @Inject constructor(
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
                 ).mirrorDraftToSelection()
             }
+            resetHistory()
         }
     }
 
@@ -144,7 +151,7 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /** Routes the text field to the selected element, else the slide caption. */
-    fun onTextChange(text: String) = reduce { StoryComposerTextReducer.typed(it, text) }
+    fun onTextChange(text: String) = reduce("type") { StoryComposerTextReducer.typed(it, text) }
 
     /** Adds an empty on-canvas text element and selects it (warns at the ≤5-element cap). */
     fun onAddTextElement() {
@@ -183,7 +190,7 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /** Drags element [id] by normalised deltas with magnetic snapping. */
-    fun onTextElementMoved(id: String, dx: Float, dy: Float) = reduce { StoryComposerTextReducer.moved(it, id, dx, dy) }
+    fun onTextElementMoved(id: String, dx: Float, dy: Float) = reduce("move:$id") { StoryComposerTextReducer.moved(it, id, dx, dy) }
 
     fun onTextElementDragEnd() = reduce { StoryComposerTextReducer.dragEnded(it) }
 
@@ -211,7 +218,7 @@ class StoryComposerViewModel @Inject constructor(
     fun onTextElementCycleDuration(id: String) = reduce { StoryComposerTextReducer.durationCycled(it, id) }
 
     fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
-        reduce { StoryComposerTextReducer.transformed(it, id, scaleBy, rotateByDeg) }
+        reduce("pinch:$id") { StoryComposerTextReducer.transformed(it, id, scaleBy, rotateByDeg) }
 
     fun onReorderTextElement(id: String, op: StoryZOrder) = reduce { StoryComposerTextReducer.reordered(it, id, op) }
 
@@ -232,10 +239,10 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onRemoveSticker(id: String) = reduce { StoryComposerStickerReducer.removed(it, id) }
 
-    fun onStickerMoved(id: String, dx: Float, dy: Float) = reduce { StoryComposerStickerReducer.moved(it, id, dx, dy) }
+    fun onStickerMoved(id: String, dx: Float, dy: Float) = reduce("move:$id") { StoryComposerStickerReducer.moved(it, id, dx, dy) }
 
     fun onStickerTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
-        reduce { StoryComposerStickerReducer.transformed(it, id, scaleBy, rotateByDeg) }
+        reduce("pinch:$id") { StoryComposerStickerReducer.transformed(it, id, scaleBy, rotateByDeg) }
 
     /** Enters the drawing tool (closes the band, clears selections). */
     fun onEnterDrawingMode() = reduce { StoryComposerDrawingReducer.entered(it) }
@@ -268,19 +275,29 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(draft = it.draft.withRepostOf(sourceId)) }
     }
 
-    /** Toggles the bottom-band drawer for [category] per the pure [ComposerBandState.tapFab]. */
-    fun onBandFabTap(category: BandCategory) {
-        _state.update { it.copy(band = it.band.tapFab(category)) }
+    /** Tap on a tool of the row: opens, switches to or closes its panel per [ComposerBandState.tapTool]. */
+    fun onBandToolTap(tool: StoryToolMode) {
+        _state.update { it.copy(band = it.band.tapTool(tool)) }
     }
 
-    /** Dismisses the band drawer (swipe-down gesture) — back to FAB-only. */
+    /** Swipe up on a tool: forces its panel open. */
+    fun onBandToolSwipeUp(tool: StoryToolMode) {
+        _state.update { it.copy(band = it.band.swipeUpOnTool(tool)) }
+    }
+
+    /** Swipe down on the row: closes an open panel, otherwise hides the chrome (bare canvas). */
+    fun onBandSwipeDown() {
+        _state.update { it.copy(band = if (it.band.isPanelOpen) it.band.closeAnyPanel() else it.band.hideChrome()) }
+    }
+
+    /** Gives the chrome back after a voluntary hiding (ghost handle tap). */
+    fun onBandShowChrome() {
+        _state.update { it.copy(band = it.band.showChrome()) }
+    }
+
+    /** Closes the open panel (handle pulled under its minimum) and gives the row back. */
     fun onBandDismiss() {
-        _state.update { it.copy(band = it.band.swipeDown()) }
-    }
-
-    /** Swaps the open band to the other category (horizontal swipe); inert while hidden. */
-    fun onBandSwapCategory() {
-        _state.update { it.copy(band = it.band.swipeHorizontal()) }
+        _state.update { it.copy(band = it.band.closeAnyPanel()) }
     }
 
     /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap). */
@@ -310,6 +327,7 @@ class StoryComposerViewModel @Inject constructor(
                 pendingUploads = it.pendingUploads.filterNot { pending -> pending.cmid in droppedMedia },
             ).mirrorDraftToSelection()
         }
+        record()
         pendingToCancel.forEach { cancelDurableUpload(it) }
     }
 
@@ -323,7 +341,7 @@ class StoryComposerViewModel @Inject constructor(
      * is exactly the size needed to normalise the offset back at publish.
      */
     fun onCanvasTransform(panX: Float, panY: Float, zoom: Float, canvasWidth: Float, canvasHeight: Float) {
-        _state.update {
+        reduce("canvas") {
             it.copy(
                 deck = it.deck.updateSelectedTransform(
                     it.deck.selectedSlide.transform.apply(panX, panY, zoom, canvasWidth, canvasHeight),
@@ -338,10 +356,10 @@ class StoryComposerViewModel @Inject constructor(
     fun onSelectFilter(filter: StoryFilter?) = reduce { StoryComposerBackgroundReducer.filterSelected(it, filter) }
 
     fun onFilterIntensityChange(intensity: Float) =
-        reduce { StoryComposerBackgroundReducer.filterIntensityChanged(it, intensity) }
+        reduce("intensity") { StoryComposerBackgroundReducer.filterIntensityChanged(it, intensity) }
 
     /** Pins the selected slide's on-screen duration (bounded by the pure deck law). */
-    fun onSlideDurationChange(seconds: Double) = reduce { StoryComposerBackgroundReducer.durationChanged(it, seconds) }
+    fun onSlideDurationChange(seconds: Double) = reduce("duration") { StoryComposerBackgroundReducer.durationChanged(it, seconds) }
 
     /** Sets (or clears) the selected slide's backdrop colour. */
     fun onSlideBackgroundChange(background: me.meeshy.sdk.model.StoryBackgroundValue?) =
@@ -355,13 +373,47 @@ class StoryComposerViewModel @Inject constructor(
     fun onSetSlideBackgroundLoop(loop: Boolean) =
         reduce { StoryComposerBackgroundReducer.backgroundLoopSet(it, loop) }
 
-    private fun reduce(next: (StoryComposerUiState) -> StoryComposerUiState) {
+    /**
+     * Annule la dernière modification du deck (texte, sticker, fond, filtre, durée, médias, ordre
+     * d'empilement, dessin) — iOS `undo()` de l'historique global. Inerte pile vide.
+     */
+    fun onUndo() {
+        val (next, snapshot) = history.undone() ?: return
+        history = next
+        _state.update { it.restoredTo(snapshot).withHistoryFlags() }
+    }
+
+    fun onRedo() {
+        val (next, snapshot) = history.redone() ?: return
+        history = next
+        _state.update { it.restoredTo(snapshot).withHistoryFlags() }
+    }
+
+    private fun StoryComposerUiState.withHistoryFlags(): StoryComposerUiState =
+        copy(canUndo = history.canUndo, canRedo = history.canRedo)
+
+    /** Empile le deck courant dans l'historique ; [gesture] = changement continu (un seul cran). */
+    private fun record(gesture: String? = null) {
+        history = history.recorded(_state.value.snapshot(), gesture)
+        if (_state.value.canUndo != history.canUndo || _state.value.canRedo != history.canRedo) {
+            _state.update { it.withHistoryFlags() }
+        }
+    }
+
+    /** Repart d'un historique vierge sur l'état courant (brouillon restauré, publication). */
+    private fun resetHistory() {
+        history = ComposerHistory(_state.value.snapshot())
+        _state.update { it.withHistoryFlags() }
+    }
+
+    private fun reduce(gesture: String? = null, next: (StoryComposerUiState) -> StoryComposerUiState) {
         _state.update(next)
+        record(gesture)
     }
 
     /** Applies a structural deck transform, re-syncing the editor buffer to the selected slide. */
     private fun applyDeck(transform: (StorySlideDeck) -> StorySlideDeck) {
-        _state.update { it.withDeckTransform(transform) }
+        reduce { it.withDeckTransform(transform) }
     }
 
     /**
@@ -411,6 +463,7 @@ class StoryComposerViewModel @Inject constructor(
             it.copy(deck = deck, attachments = it.attachments + uploaded, isUploadingMedia = false)
                 .mirrorDraftToSelection()
         }
+        record()
     }
 
     /**
@@ -441,6 +494,7 @@ class StoryComposerViewModel @Inject constructor(
                     errorMessage = null,
                 ).mirrorDraftToSelection()
             }
+            record()
         }
         _state.update { it.copy(isUploadingMedia = false) }
     }
@@ -464,6 +518,7 @@ class StoryComposerViewModel @Inject constructor(
             }
             next.mirrorDraftToSelection()
         }
+        record()
         if (wasPending) cancelDurableUpload(id)
     }
 
@@ -491,6 +546,7 @@ class StoryComposerViewModel @Inject constructor(
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 draftStore.clear()
                 _state.update { StoryComposerUiState() }
+                resetHistory()
                 _published.tryEmit(Unit)
             } catch (e: CancellationException) {
                 throw e

@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.accept",
+          "androidName": "call_recording_accept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.active",
+          "androidName": "call_recording_active",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.ask",
+          "androidName": "call_recording_ask",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.ask.video",
+          "androidName": "call_recording_ask_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.askDetail",
+          "androidName": "call_recording_askDetail",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.askDetail.video",
+          "androidName": "call_recording_askDetail_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.cancel",
+          "androidName": "call_recording_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.caption",
+          "androidName": "call_recording_caption",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.close",
+          "androidName": "call_recording_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.hint",
+          "androidName": "call_recording_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.kind.audio",
+          "androidName": "call_recording_kind_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.kind.video",
+          "androidName": "call_recording_kind_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.kind.hint",
+          "androidName": "call_recording_kind_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.refuse",
+          "androidName": "call_recording_refuse",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.saveFailed",
+          "androidName": "call_recording_saveFailed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.saved",
+          "androidName": "call_recording_saved",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.someone",
+          "androidName": "call_recording_someone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.start",
+          "androidName": "call_recording_start",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.stop",
+          "androidName": "call_recording_stop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.stopped.joined",
+          "androidName": "call_recording_stopped_joined",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.stopped.other",
+          "androidName": "call_recording_stopped_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.stopped.refused",
+          "androidName": "call_recording_stopped_refused",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.stopped.timeout",
+          "androidName": "call_recording_stopped_timeout",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.unavailable",
+          "androidName": "call_recording_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.waiting",
+          "androidName": "call_recording_waiting",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_recording_end_to_end_refused",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

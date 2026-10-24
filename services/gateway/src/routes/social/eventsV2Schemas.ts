@@ -7,6 +7,7 @@ import {
   CLIENT_PLATFORMS,
   CONSENT_STATES,
   DEVICE_CLASSES,
+  DEVICE_TIERS,
   DISCOVERY_ACTIONS,
   INTERACTION_ACTIONS,
   LINK_ACTIONS,
@@ -223,6 +224,14 @@ const PlaybackSchema = base('playback', PLAYBACK_ACTIONS).extend({
   captionsOn: optionalOf(z.boolean()),
   quartiles: optionalOf(z.number().int().min(0).max(15)),
   exitReason: enumOrOther(PLAYBACK_EXIT_REASONS),
+  deviceTier: enumOrDrop(DEVICE_TIERS),
+  // W11 (#11317) — Web Vitals de la page et longues images de la séance, bornés : une valeur hors bornes est ôtée seule.
+  lcpMs: optionalOf(ms),
+  cls: optionalOf(z.number().min(0).max(10)),
+  inpMs: optionalOf(ms),
+  longFrames: optionalOf(count),
+  longFramesBlockingMs: optionalOf(ms),
+  longFrameWorstMs: optionalOf(ms),
 });
 
 const LinkSchema = base('link', LINK_ACTIONS).extend({

@@ -14,8 +14,13 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
-import { produceMediaRenditions, imageVariantsJson, type MediaRenditions } from '../../services/attachments/media-renditions';
+import { produceMediaRenditions, imageVariantsJson, renditionsJson, type MediaRenditions } from '../../services/attachments/media-renditions';
 import { runFfmpeg } from '../../services/attachments/ffmpeg-run';
+import { UnconvertibleImageError } from '../../services/attachments/heif-conversion';
+import type { MediaJobTarget } from '../../services/attachments/media-processing/jobs';
+import { mediaJobQueueFromEnv, type MediaJobQueue } from '../../services/attachments/media-processing/queue';
+import { deferrableKinds, scheduleDeferred as scheduleMediaJob } from '../../services/attachments/media-processing/dispatch';
+import { normalizeStoredAudio } from '../../services/attachments/audio-normalization';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
 import {
   resolveAnonymousUploadIdentity,
@@ -38,8 +43,11 @@ import {
 } from '../../services/attachments/ContentSignature';
 import { admittedUploadMimeType, audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from '../../services/attachments/uploadMimeType';
 import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
-import { isExifStrippable, stripExifFromImageBuffer } from '../../services/attachments/ExifStrip';
+import { stripStoredMediaMetadata } from '../../services/attachments/media-metadata-strip';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { mediaDescriptionFields } from '../../services/attachments/mediaDescriptionInput';
+import { triggerMediaAltTranslations } from '../../services/posts/mediaAltWrites';
+import { triggerMessageAttachmentAltTranslation } from '../../services/attachments/MessageAttachmentAltTranslationService';
 import { originIsAllowed } from '../../config/cors-origins';
 import { TUS_COLLECTION_METHODS, TUS_UPLOAD_METHODS } from './tus-methods';
 
@@ -81,6 +89,8 @@ const DEFAULT_UPLOADS_PATH = apiPath('/uploads');
  */
 export type TusRoutesOptions = {
   readonly basePath?: string;
+  /** #11264 — la file de médias ; absente : celle du processus (`MEDIA_QUEUE`), `null` : éteinte. */
+  readonly mediaQueue?: MediaJobQueue | null;
 };
 
 function getMaxFileSize(): number {
@@ -193,6 +203,8 @@ function persistedRenditionFields(rendered: MediaRenditions) {
     thumbnailUrl: rendered.thumbnailPath,
     thumbHash: rendered.thumbHash,
     ...(rendered.imageVariants ? { imageVariants: imageVariantsJson(rendered.imageVariants) } : {}),
+    ...(rendered.avifVariants ? { avifVariants: imageVariantsJson(rendered.avifVariants) } : {}),
+    ...(rendered.renditions ? { renditions: renditionsJson(rendered.renditions) } : {}),
   };
 }
 
@@ -209,6 +221,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
   // jamais une par site, pour qu'un futur repli ne puisse pas diverger entre
   // la construction du serveur TUS et les routes qui l'exposent.
   const uploadsPath = opts.basePath || DEFAULT_UPLOADS_PATH;
+  const mediaQueue = opts.mediaQueue === undefined ? mediaJobQueueFromEnv() : opts.mediaQueue;
 
   const metadataManager = new MetadataManager(UPLOAD_PATH);
   // Référence conservée séparément (plutôt que lue depuis `tusServer` une
@@ -488,20 +501,12 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         throw { status_code: 400, body: `${mimeVerdict.reason}\n` };
       }
 
-      let fileSize = upload.size || 0;
       const attachmentType = getAttachmentType(mimeType, filename);
-      // #3627 — EXIF/GPS retiré des photos AVANT toute persistance : c'est le
-      // fichier `destPath` qui est servi tel quel par `GET /attachments/:id`.
-      if (attachmentType === 'image' && isExifStrippable(mimeType)) {
-        try {
-          const original = await fs.readFile(destPath);
-          const stripped = await stripExifFromImageBuffer(original, mimeType);
-          await fs.writeFile(destPath, stripped);
-          fileSize = stripped.length;
-        } catch (err) {
-          logger.warn('[TUS] EXIF strip failed, keeping original bytes', { err });
-        }
-      }
+      // #3627, #11258 — GPS et métadonnées retirés des photos ET des vidéos
+      // AVANT toute persistance : `destPath` est servi tel quel par
+      // `GET /attachments/:id`. Décidé par le TYPE, pas par la catégorie : un
+      // HEIC n'est pas une `image` du catalogue et porte pourtant un EXIF.
+      const fileSize = (await stripStoredMediaMetadata({ filePath: destPath, mimeType })) ?? (upload.size || 0);
       const relPath = path.join(year, month, userId, storedName);
 
       let metadata: Record<string, any> = {};
@@ -522,12 +527,52 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // un même fichier laisse la même trace par les deux portes. Appelée
       // APRÈS les gardes de chaque branche, jamais avant : un upload refusé ne
       // laisse derrière lui ni variante ni sortie de transcodage.
-      const renderMedia = () =>
-        produceMediaRenditions(
+      // #11264 — ce qui est différé au worker de médias (file allumée seulement).
+      // Différé seulement quand un worker bat ; file muette ⇒ rendu ici.
+      const deferred = await deferrableKinds(mediaQueue, {
+        attachmentType,
+        fileSize,
+        compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
+      });
+      const processingFields = deferred.length > 0 ? { processingState: 'pending' } : {};
+      // File muette : la pièce reste `pending`, le balayage du worker la reprend.
+      const scheduleDeferred = (target: MediaJobTarget, id: string) =>
+        scheduleMediaJob({ queue: mediaQueue, target, recordId: id, kinds: deferred });
+      //
+      // #11259 — un audio est normalisé en M4A ICI, après les gardes, comme
+      // sur la porte multipart (`UploadProcessor.saveFile`) : AAC mono remuxé
+      // sans réencodage, le reste amené à −16 LUFS ; sa sonie mesurée est
+      // persistée. Le fichier normalisé remplace l'original (chemin, type,
+      // taille et métadonnées relus) ; un échec garde l'original.
+      const renderMedia = async (): Promise<{ readonly rendered: MediaRenditions; readonly loudnessLufs: number | null }> => {
+        const audio = attachmentType === 'audio' ? await normalizeStoredAudio(destPath) : null;
+        const stored = audio === null
+          ? { relPath, mimeType, fileSize, metadata }
+          : await (async () => {
+            const audioRelPath = path.join(year, month, userId, path.basename(audio.filePath));
+            const audioMetadata = await metadataManager
+              .extractMetadata(audioRelPath, attachmentType, audio.mimeType, clientMeasuredMetadata(upload.metadata?.duration), audio.size)
+              .catch(() => metadata);
+            return { relPath: audioRelPath, mimeType: audio.mimeType, fileSize: audio.size, metadata: audioMetadata };
+          })();
+        // #11263 — un HEIC/AVIF illisible par le serveur est REFUSÉ (415),
+        // jamais servi tel quel aux lecteurs ; la copie posée est retirée.
+        const renditions = await produceMediaRenditions(
           { uploadBasePath: UPLOAD_PATH, metadataManager, runFfmpeg },
-          { relPath, mimeType, attachmentType, fileSize, metadata, clientThumbHash: upload.metadata?.thumbhash ?? null },
-        );
+          { ...stored, attachmentType, clientThumbHash: upload.metadata?.thumbhash ?? null },
+          { defer: deferred },
+        ).catch(async (error: unknown) => {
+          if (!(error instanceof UnconvertibleImageError)) throw error;
+          await fs.unlink(destPath).catch((err) => logger.debug('[TUS] Unconvertible image cleanup failed', { destPath, err }));
+          logger.warn(`[TUS] Upload REFUSED — ${error.message} (userId=${userId})`);
+          throw { status_code: 415, body: 'Image format not supported by the server\n' };
+        });
+        return { rendered: renditions, loudnessLufs: audio?.loudnessLufs ?? null };
+      };
+      let loudnessLufs: number | null = null;
 
+      // #11329 — la description saisie à l'envoi (métadonnée TUS `alt`).
+      const description = mediaDescriptionFields(upload.metadata?.alt);
       const uploadContext = upload.metadata?.uploadcontext;
       // Les commentaires réutilisent PostMedia (FK `commentId`) — même pipeline
       // d'upload/transcription/traduction que les posts. Le média est créé en
@@ -555,7 +600,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             body: 'Post media upload requires an identifiable registered account\n',
           };
         }
-        rendered = await renderMedia();
+        ({ rendered } = await renderMedia());
         metadata = rendered.metadata;
         const postMedia = await prisma.postMedia.create({
           data: {
@@ -563,6 +608,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             uploaderId,
             originalName: filename,
             ...persistedRenditionFields(rendered),
+            ...processingFields,
+            ...description,
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
@@ -571,6 +618,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = postMedia.id;
+        if ('alt' in description) triggerMediaAltTranslations([{ id: postMedia.id, text: description.alt }]);
+        await scheduleDeferred('postMedia', postMedia.id);
         logger.info(`[TUS] PostMedia created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes, postId=null pending)`);
       } else {
         // Upload destiné à un message : créer MessageAttachment
@@ -617,7 +666,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           }
         }
 
-        rendered = await renderMedia();
+        ({ rendered, loudnessLufs } = await renderMedia());
         metadata = rendered.metadata;
 
         // Lue ici, sur la branche MESSAGE et pour un AUDIO seulement :
@@ -631,6 +680,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           data: {
             originalName: filename,
             ...persistedRenditionFields(rendered),
+            ...processingFields,
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
@@ -638,6 +688,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             sampleRate: metadata.sampleRate || null,
             codec: metadata.codec || null,
             channels: metadata.channels || null,
+            loudnessLufs,
             fps: metadata.fps || null,
             videoCodec: metadata.videoCodec || null,
             pageCount: metadata.pageCount || null,
@@ -657,10 +708,13 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             // ouvre ne garde rien.
             // @see packages/shared/utils/forward-to-publication.ts
             capturedInApp: upload.metadata?.capturedinapp === 'true',
+            ...description,
             ...(clientTranscription ? { metadata: { transcription: clientTranscription } } : {}),
           },
         });
         recordId = attachment.id;
+        await scheduleDeferred('messageAttachment', attachment.id);
+        if ('alt' in description) triggerMessageAttachmentAltTranslation(attachment.id);
         logger.info(`[TUS] MessageAttachment created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes)`);
       }
 
@@ -678,6 +732,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
               fileSize: rendered.storedSize,
               fileUrl: rendered.storedPath,
               thumbnailUrl: rendered.thumbnailPath ?? undefined,
+              // #11264 — `pending` : la vignette et les rendus arrivent par `attachment:ready`.
+              processingState: deferred.length > 0 ? 'pending' : undefined,
               thumbHash: rendered.thumbHash,
               width: metadata.width,
               height: metadata.height,
@@ -686,6 +742,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
               sampleRate: metadata.sampleRate,
               codec: metadata.codec,
               channels: metadata.channels,
+              loudnessLufs: loudnessLufs ?? undefined,
               // `UploadedAttachmentResponse` déclare ces trois champs REQUIS,
               // et ce corps ne les portait pas : le chemin résumable ne
               // servait que les fichiers > 50 Mo, jusqu'à ce que le transport

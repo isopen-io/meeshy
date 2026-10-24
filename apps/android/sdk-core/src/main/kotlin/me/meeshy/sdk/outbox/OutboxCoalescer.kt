@@ -38,6 +38,7 @@ public sealed interface CoalesceDecision {
  *   bookmark (or unbookmark) keeps only the latest (same idempotent-terminal rule);
  * - a repeated friend request to the same receiver keeps only the latest
  *   (only one request can exist — idempotent send, latest greeting wins);
+ * - a repeated answer to the same friend request keeps only the latest (last answer wins);
  * - a repeated profile edit (same user id) keeps only the latest snapshot
  *   (each carries the full PATCH body — the newest edit subsumes the pending one);
  * - a repeated settings update (same user id) keeps only the latest snapshot
@@ -79,6 +80,8 @@ public object OutboxCoalescer {
                 terminalToggle(incoming, sameTarget, OutboxKind.BOOKMARK_POST, OutboxKind.UNBOOKMARK_POST)
             OutboxKind.SEND_FRIEND_REQUEST ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.SEND_FRIEND_REQUEST)
+            OutboxKind.RESPOND_FRIEND_REQUEST ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.RESPOND_FRIEND_REQUEST)
             else -> CoalesceDecision.Enqueue(incoming)
         }
     }

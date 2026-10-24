@@ -349,6 +349,9 @@ struct UniversalComposerBar: View {
     /// Le défilement de la rangée des emojis rapides : posé, et en cours (#10842).
     @State var quickEmojiScroll: CGFloat = 0
     @State var quickEmojiDrag: CGFloat = 0
+    /// L'élargissement que la bande garde après le relâcher, jusqu'au texte
+    /// touché ou à l'émoji choisi (#12440).
+    @State var quickEmojiHeld: CGFloat = 0
     /// La largeur du champ quand la bande est au repos : celle qu'il peut lui céder.
     @State var quickEmojiFieldWidth: CGFloat = 0
 
@@ -366,19 +369,15 @@ struct UniversalComposerBar: View {
     @State var isExpandingToLibrary = false
     @State var currentLanguage: String = "fr"
 
-    // Attachments
     @State var attachments: [ComposerAttachment] = []
 
-    // Minimized / expanded state
     @State var isMinimized: Bool = false
     @State var dragOffsetY: CGFloat = 0
     @State var clipboardContent: ClipboardContent? = nil
 
-    // Ephemeral picker
     @State var showEphemeralPicker = false
     /// Le petit panneau des effets du message, ouvert par la baguette (#7967).
     @State var showEffectsPanel = false
-    // Permanent effects inline picker (for comments)
     @State var showPermanentEffectsPicker = false
 
     // Text analysis (sentiment + language detection from MessageComposer)

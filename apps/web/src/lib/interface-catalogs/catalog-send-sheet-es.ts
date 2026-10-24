@@ -36,7 +36,7 @@ const es = {
   'sendSheet.limit.recipients': 'Máximo {count} destinatarios',
   'sendSheet.error.captionTooLong': 'Este mensaje es demasiado largo para publicarlo (máximo {count} caracteres)',
   'sendSheet.error.tooManyFiles': 'Máximo {count} archivos por publicación',
-  'sendSheet.moreOptions': 'Compartir fuera de Meeshy',
+  'sendSheet.moreOptions': 'Compartir',
   'sendSheet.compose': 'Editar en el estudio',
   'sendSheet.copyLink': 'Copiar enlace',
   'sendSheet.linkCopied': 'Enlace copiado',

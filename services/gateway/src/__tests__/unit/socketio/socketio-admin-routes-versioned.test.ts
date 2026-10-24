@@ -85,7 +85,7 @@ async function monter(): Promise<FastifyInstance> {
     await reply.status(401).send({ success: false, error: 'Unauthorized' });
   });
 
-  const handler = new MeeshySocketIOHandler({} as never, {} as never);
+  const handler = new MeeshySocketIOHandler({} as never, { getZmqClient: () => null } as never);
   await handler.setupSocketIO(app);
   await app.ready();
   return app;

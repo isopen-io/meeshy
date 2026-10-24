@@ -6,6 +6,7 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryColorMatrix
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
@@ -82,6 +83,8 @@ data class StoryComposerUiState(
     val errorMessage: String? = null,
     val canvasWidthPx: Float = 0f,
     val canvasHeightPx: Float = 0f,
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text

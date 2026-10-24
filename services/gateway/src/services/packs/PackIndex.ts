@@ -44,6 +44,8 @@ import { parseAvatarRingPackContract } from '@meeshy/shared/types/avatar-ring-de
 import { parseBannerFramePackContract } from '@meeshy/shared/types/banner-frame-design';
 import { parseGloryFramePackContract } from '@meeshy/shared/types/glory-frame-pack';
 import { gloryFrameAssets, parseGloryFrameContract } from '@meeshy/shared/types/glory-frames';
+import { PackRegistryOverrides, overlayPackIndex, type PackRegistryOverridesPrisma } from './PackRegistryOverrides';
+import { attachPackRegistryMetrics } from '../metrics/packRegistryMetrics';
 
 export type PackIndex = {
   /** Les entrées d'un domaine, dans l'ordre éditorial (`order`). */
@@ -274,9 +276,32 @@ export function loadPackIndex(
 }
 
 let startupIndex: PackIndex | undefined;
+let liveOverrides: PackRegistryOverrides | undefined;
 
-/** L'index du DÉMARRAGE, lu une seule fois et partagé par la boutique des cadres et le magasin. */
-export function startupPackIndex(): PackIndex {
+/** Le registre du DÉPÔT, lu une seule fois au démarrage — sans aucune surcharge d'administration. */
+export function startupBasePackIndex(): PackIndex {
   startupIndex ??= loadPackIndex();
   return startupIndex;
+}
+
+/**
+ * Les surcharges d'administration (#11275), une instance par processus, attachée
+ * à la base par la première route qui la demande (l'administration du registre,
+ * montée au démarrage, qui les charge avant que le serveur écoute). Tant qu'elles
+ * ne sont pas lues, chaque pack du registre est servi masqué (fail-closed).
+ */
+export function liveRegistryOverrides(prisma: PackRegistryOverridesPrisma): PackRegistryOverrides {
+  liveOverrides ??= new PackRegistryOverrides({ prisma });
+  attachPackRegistryMetrics(liveOverrides);
+  return liveOverrides;
+}
+
+/**
+ * L'index SERVI : le registre du dépôt (toujours chargé) et, par-dessus, les
+ * surcharges d'administration courantes (#11275) — masqué, ordre, prix,
+ * fenêtre, ciblage. Partagé par la boutique, le magasin et la décoration.
+ */
+export function startupPackIndex(): PackIndex {
+  const base = startupBasePackIndex();
+  return overlayPackIndex(base, () => (liveOverrides === undefined ? new Map() : liveOverrides.snapshot()));
 }

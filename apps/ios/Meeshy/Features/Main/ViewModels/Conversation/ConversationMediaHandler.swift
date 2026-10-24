@@ -95,6 +95,8 @@ final class ConversationMediaHandler {
             // Video preroll: fire-and-forget so the first video in the
             // current window starts as soon as the user taps play. Doesn't
             // delay this prefetch — runs in its own utility-priority Task.
+            // `preloadAndCachePlayer` ne prépare que depuis le disque, hors
+            // stade thermique critique, et cède aux voisins des réels (#9882).
             if allowVideo,
                let firstVideoAtt = snapshot.flatMap(\.attachments).first(where: { $0.type == .video }),
                !firstVideoAtt.fileUrl.isEmpty,

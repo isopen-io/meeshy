@@ -10,9 +10,9 @@ name: CI
 
 on:
   push:
-    branches: [main, dev, develop]
+    branches: [main, dev]
   pull_request:
-    branches: [main, dev, develop]
+    branches: [main, dev]
   workflow_dispatch:
     inputs:
       package_manager:
@@ -116,19 +116,26 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # CHANGES: ce que la poussée touche (#7711)
-  # Les quatre jobs du traducteur ne tournent que si un fichier qu'ils lisent
-  # a changé ; tout le reste tourne toujours. La règle et ses cas vivent dans
-  # `scripts/ci-affected.mjs` (en cas de doute, tout tourne).
+  # CHANGES: ce que la poussée touche (#7711, #12531)
+  # Quatre zones ne tournent que si un fichier qu'elles lisent a changé : les
+  # quatre jobs du traducteur, la coque Android, les cadres de gloire et les
+  # gardes navigateur du web. Tout le reste tourne toujours. La règle et ses cas
+  # vivent dans `scripts/ci-affected.mjs` (en cas de doute, tout tourne).
   # ===========================================================================
   changes:
-    name: Changes
+    name: Zones touchées
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
       translator: ${{ steps.affected.outputs.translator }}
       shell_android: ${{ steps.affected.outputs.shell_android }}
       glory_frames: ${{ steps.affected.outputs.glory_frames }}
+      web_navigateur: ${{ steps.affected.outputs.web_navigateur }}
+      tests_web: ${{ steps.affected.outputs.tests_web }}
+      tests_gateway: ${{ steps.affected.outputs.tests_gateway }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -139,11 +146,43 @@ jobs:
       - name: Self-test
         run: node scripts/ci-affected.mjs --self-test
 
+      # La base de comparaison d'une POUSSÉE est le dernier run VERT de ce workflow sur
+      # cette branche, pas la poussée précédente : une poussée évincée par la suivante,
+      # ou un run resté rouge, emporterait sinon son diff avec lui et une zone serait
+      # sautée à tort. Même résolveur que `docker.yml` (#6551). Tant que la branche est
+      # rouge, la base recule et davantage de zones tournent : sûr par construction.
+      # `--event push` écarte les runs de PR, qui ont testé un commit de fusion.
+      # Le résolveur ne reçoit JAMAIS `github.event.before` : son repli sur la poussée
+      # précédente, juste pour une image, ferait ici sauter une zone sans preuve. Relevé
+      # en échec, aucun vert connu ou SHA disparu de l'historique : aucune base, tout tourne.
+      - name: Dernier run vert de ce workflow sur cette branche
+        id: dernier_vert
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if SHA=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch "$GITHUB_REF_NAME" \
+            --event push --status success --limit 1 --json headSha --jq '.[0].headSha // empty'); then
+            [ -n "$SHA" ] || echo "::notice title=Zones touchées::aucun run vert connu sur $GITHUB_REF_NAME, tout tourne."
+          else
+            SHA=""
+            echo "::warning title=Zones touchées::relevé du dernier run vert impossible, tout tourne."
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Base de comparaison
+        id: base
+        if: github.event_name == 'push'
+        env:
+          LAST_SUCCESSFUL_SHA: ${{ steps.dernier_vert.outputs.sha }}
+        run: |
+          node scripts/resolve-docker-detect-base.mjs | tee -a "$GITHUB_OUTPUT"
+
       - name: Detect affected domains
         id: affected
         env:
           CI_EVENT: ${{ github.event_name }}
-          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_BASE: ${{ github.event.pull_request.base.sha || steps.base.outputs.base }}
           CI_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/ci-affected.mjs >> "$GITHUB_OUTPUT"
 
@@ -151,57 +190,14 @@ jobs:
   # QUALITY: Lint & Type-check (Fast feedback)
   # ===========================================================================
   quality:
-    name: Quality (${{ github.event.inputs.package_manager || 'bun' }})
+    name: Qualité TS (${{ github.event.inputs.package_manager || 'bun' }})
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       # Build shared package first (required for type-check)
       - name: Build shared package (bun)
@@ -368,19 +364,34 @@ jobs:
       - name: any debt ratchet (gateway + shared + web)
         run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
 
-      # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
-      # sans appelant se compte comme un lecteur : un décideur qui cherche qui
-      # consomme un champ voit la déclaration `case foo(...)` /
-      # `foo: '/chemin'` et GARDE, alors que rien ne l'appelle jamais. Les
-      # deux catalogues (`packages/MeeshySDK/.../Networking/Endpoints/*.swift`,
-      # `packages/shared/api/endpoints.ts`) sont GÉNÉRÉS depuis
-      # `services/gateway/route-manifest.json` — un marqueur posé à la main
-      # sur une entrée y serait écrasé (ou rejeté par le cliquet de
-      # régénération TS) à la prochaine régénération. Ces deux cliquets à deux
-      # sens gardent donc le compte de dette à CÔTÉ des catalogues plutôt que
-      # dedans, sur le modèle du ratchet de types ci-dessus.
-      - name: Swift catalog dead-entries ratchet
-        run: node scripts/check-swift-catalog-dead-entries.mjs --self-test && node scripts/check-swift-catalog-dead-entries.mjs
+      # #10385, #11441 — le runner des opérations serveur : liste blanche, délais,
+      # demandes refusées, et la publication des conteneurs de SON environnement
+      # (étiquette revérifiée, aucun secret, sous le plafond de la passerelle),
+      # confrontée au schéma partagé par bun. `docker` et `systemctl` sont des doubles.
+      - name: Ops runner witness
+        run: node --test infrastructure/scripts/ops-runner/meeshy-ops-runner.test.mjs
+
+  # ===========================================================================
+  # GARDES DU DÉPÔT : des cliquets purs, sans installation ni build
+  # ===========================================================================
+  # Une garde juge là où vivent ses entrées. Celles-ci lisent le DÉPÔT (workflows,
+  # compose, Makefile, catalogues) et rien de ce que `quality` construit : les
+  # sortir de `quality` fait qu'un cliquet rouge ne saute plus aucun « Tests · »
+  # (ils dépendent de `quality`, pas de ce job), alors que « Verdict CI » rougit
+  # quand même. `quality` ne garde que ce qui rend les tests sans objet quand il
+  # échoue : installation, build de shared, lint, types, jetons web, dette `any`.
+  gardes-depot:
+    name: Gardes du dépôt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: TS catalog dead-entries ratchet
         run: node scripts/check-ts-catalog-dead-entries.mjs --self-test && node scripts/check-ts-catalog-dead-entries.mjs
@@ -390,19 +401,6 @@ jobs:
       # littérale (348 lignes → 0), et cette étape l'interdit.
       - name: web API literal prohibition
         run: node scripts/check-web-api-literals.mjs --self-test && node scripts/check-web-api-literals.mjs
-
-      # #3678 — la règle d'accent (CLAUDE.md § « Conversation Accent Color »)
-      # veut qu'un composant lié au contexte d'une conversation utilise
-      # `accentColor`/`colorPalette`, jamais une couleur en dur. Le golden
-      # partagé qui PROUVE le calcul existe déjà (accent.vectors.json, joué
-      # par les 3 clients) ; ce cliquet ferme l'autre moitié du critère de
-      # fin de #3678 en empêchant le CONTOURNEMENT (`Color(hex:)` hors
-      # `Theme/`) de grossir en silence.
-      - name: Accent color hardcoding ratchet
-        run: node scripts/check-accent-color-hardcoding.mjs --self-test && node scripts/check-accent-color-hardcoding.mjs
-
-      - name: Law literals guard
-        run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
 
       # L'invariant porte sur le `bun.lock` de la RACINE et sur tous les
       # manifestes que la racine déclare comme workspaces : sa surface est le
@@ -492,6 +490,19 @@ jobs:
       - name: CI summary coverage guard
         run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
 
+      - name: CI verdict witness
+        run: node scripts/ci/needs-verdict.mjs --self-test
+
+      # #12559 — l'outil UNIQUE qui dit si une PR est verte, pour tous les
+      # fusionneurs (`.claude/workflows`, `apps/android/scripts/parity`) :
+      # chaque check du SHA de tête fini et vert, « Verdict CI » présent, une
+      # annulation jamais verte.
+      - name: Green PR tool witness
+        run: node scripts/ci/pr-verte.mjs --self-test
+
+      - name: Web navigator zone read-set guard
+        run: node scripts/ci/check-web-navigateur-read-set.mjs --self-test && node scripts/ci/check-web-navigateur-read-set.mjs
+
       # Pas de mode « balayage du dépôt » ici : `resolve-docker-detect-base.mjs`
       # est une fonction de décision PURE (docker.yml § job `detect`, #6551),
       # invoquée à l'exécution avec le SHA du dernier run réussi et
@@ -548,19 +559,6 @@ jobs:
       - name: Tracked symlinks guard
         run: node scripts/check-tracked-symlinks.mjs --self-test && node scripts/check-tracked-symlinks.mjs
 
-      # #6545 — le run iOS déclenché sur `promote/main-39224d5fc9` est tombé
-      # avant toute compilation : `xcodebuild -resolvePackageDependencies`
-      # échouait quatre fois avec la MÊME erreur (« already exists in file
-      # system », une entrée du cache d'artefacts SwiftPM DU RUNNER), et la
-      # boucle de reprise — qui n'attendait et rejouait que pour une panne
-      # réseau — ne pouvait pas en sortir. La logique a quitté `ios.yml` pour
-      # `scripts/ci/resolve-spm-packages.sh`, rejouable ici (faux
-      # `xcodebuild`/`sleep` sur PATH) sans macOS : collision purgée sans
-      # dormir, panne réseau toujours retentée avec attente, échec réel
-      # toujours définitif après 4 essais.
-      - name: iOS SPM resolve retry guard
-        run: node scripts/check-ios-spm-resolve-retry.mjs --self-test && node scripts/check-ios-spm-resolve-retry.mjs
-
       # #4544 — le validateur de déploiement ne tient plus de liste : il DÉRIVE
       # ses variables exigées de la garde ci-dessus. Un témoin qui comparerait
       # les deux listes ne prouverait rien, deux copies coïncidant toujours le
@@ -598,20 +596,6 @@ jobs:
       - name: Nightly backup verdict witness
         run: node --test infrastructure/scripts/production-backup/meeshy-nightly-backup.test.mjs
 
-      # #10385, #11441 — le runner des opérations serveur : liste blanche, délais,
-      # demandes refusées, et la publication des conteneurs de SON environnement
-      # (étiquette revérifiée, aucun secret, sous le plafond de la passerelle),
-      # confrontée au schéma partagé par bun. `docker` et `systemctl` sont des doubles.
-      - name: Ops runner witness
-        run: node --test infrastructure/scripts/ops-runner/meeshy-ops-runner.test.mjs
-
-      # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
-      # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
-      # ~15 min et meurt à la première erreur, alors que ce garde les liste
-      # toutes avant même que le job iOS ne démarre.
-      - name: ViewBuilder statement-chaining guard
-        run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
-
   # ===========================================================================
   # CACHE INSTITUTIONNEL: les cinq pages restent ELLES-MÊMES à la deuxième visite
   # ===========================================================================
@@ -630,54 +614,49 @@ jobs:
   # la mesure de première peinture (elle n'installe le service worker qu'à la
   # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
   # visite : c'est exactement ce que ce job fait.
-  institutionnel-v3:
-    name: Peaux web (institutionnel, Lentille, états et virtualisation du fil)
+  web-navigateur:
+    name: Web · gardes navigateur (Playwright) · tranche ${{ matrix.tranche }}
     runs-on: ubuntu-latest
-    needs: quality
+    # #12555 — QUATRE TRANCHES PARALLÈLES. En série, les gardes prenaient
+    # ~37 min sur un job de 38 (médiane de 10 runs verts de dev, 23-24 octobre),
+    # et ce job fixait la durée de tout le run. Chaque garde lève son propre
+    # serveur et son propre Chromium : rien ne les lie, la répartition ne change
+    # aucun verdict. Les étapes restent LITTÉRALES (`gate-ci-parity.test.ts`,
+    # `check-web-navigateur-read-set.mjs` les lisent) ; seule leur condition
+    # porte `matrix.tranche`. L'équilibre vient des durées mesurées par étape
+    # sur dev (#12622 : runs 40081153594, 40082491974 et 40085428201, ~420 s
+    # de gardes par tranche ; le cadre téléphone, ~350 s en relevant trois
+    # contextes à la fois, ne partage la sienne qu'avec des gardes courtes) :
+    # une garde NOUVELLE va dans la tranche la plus légère du dernier relevé.
+    # `fail-fast: false` — même règle que `!cancelled()` plus bas : une tranche
+    # rouge n'en tait pas trois autres.
+    strategy:
+      fail-fast: false
+      matrix:
+        tranche: [1, 2, 3, 4]
+    # #12600 — il ne lit rien de `quality` : l'attendre retardait de ~3,5 min
+    # le job qui fixe la durée de tout le run. Le verdict n'y perd rien, le
+    # job « Verdict CI » attend les deux.
+    needs: [changes]
+    if: needs.changes.outputs.web_navigateur == 'true'
     # #8580 — 53 gates Playwright en série : le job franchissait ses 25 min
     # (24 min 23 s puis annulé à 25 min 15 s sur #8593) dès que les gates
     # d'appel ont gagné leurs témoins. Le plafond suit la charge mesurée.
-    timeout-minutes: 40
+    # 2026-10-22 — 40 min ne suffisent plus : les verts du jour ont fini à
+    # 39 min 21 s, 39 min 22 s, 39 min 54 s et 39 min 59 s, puis le run
+    # 39843843835 a été annulé à 40 min 16 s, pendant le gate du cadre
+    # téléphone (13 min à lui seul en CI : 148 adresses × 3 téléphones,
+    # 270 relevés de Progression, 21 textes de landing — ~0,8 s le relevé,
+    # 9 min 48 s en local). 55 min rendent une marge d'un quart.
+    # #12555 — en tranches, la plus lourde attend ~9 min (préparation comprise) :
+    # 25 min gardent plus du double de marge, et un blocage ne coûte plus une heure.
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       # Le préchauffage des cinq documents fait partie de CE build depuis
       # qu'il est un greffon de `vite.config.ts` : le témoin mesure donc
@@ -709,7 +688,7 @@ jobs:
       # leur arrêt — un gate qui tourne sans `dist` rendrait un rouge de
       # plomberie qui ne mesure rien, soit le défaut inverse.
       - name: Gate cache institutionnel
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-institutional.mjs
@@ -718,7 +697,7 @@ jobs:
       # même navigateur sur le même `dist`, et un second travail paierait une
       # installation de Chromium pour rien.
       - name: Gate flux de la Lentille (mise en page invariable au défilement)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-lens.mjs
@@ -729,7 +708,7 @@ jobs:
       # y compris ceux qu'aucun navigateur de gate ne visite. Sans navigateur,
       # donc joué même si Chromium manque.
       - name: Gate inventaire des avatars (aucun `Avatar` muet)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-avatar-src.mjs
@@ -741,7 +720,7 @@ jobs:
       # rougir un seul verdict. `naturalWidth` après `decode()`, sur les trois
       # RANGS de la loi partagée, plus un contre-témoin sans photo.
       - name: Gate photo de profil peinte (trois rangs, pixels)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-avatar-pixels.mjs
@@ -751,7 +730,7 @@ jobs:
       # (elementFromPoint, deux schémas, 390×844 et 320×568) ; l'en-tête du Flux
       # s'escamote ; les cotes du plateau sont celles d'iOS (88 / 36).
       - name: Gate couloir des disques flottants (Flux et liste)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-floating-clearance.mjs
@@ -762,7 +741,7 @@ jobs:
       # glisser tenu n'ouvre rien et suit le pointeur sans retard, la place
       # survit au rechargement, un réel de carte ramène au même défilement.
       - name: Gate disque du Flux (bascule, appui long, glisser)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-feed-disc.mjs
@@ -773,7 +752,7 @@ jobs:
       # contrôle n'est volé par un disque (elementFromPoint, deux schémas,
       # 390×844 et 320×568).
       - name: Gate cloche des notifications (pastille, catégories, marquage, cible)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-notifications.mjs
@@ -784,7 +763,7 @@ jobs:
       # photo avant de l'envoyer, désactive l'écriture hors ligne ; aucun
       # contrôle ni texte n'est volé par un disque (deux schémas, deux gabarits).
       - name: Gate profil (lecture, édition optimiste, langues, recompression, hors-ligne)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-profile.mjs
@@ -795,7 +774,7 @@ jobs:
       # mène au legacy, la déconnexion efface la session ; aucun contrôle ni
       # texte n'est volé par un disque (deux schémas, deux gabarits).
       - name: Gate réglages (thème, langue d'interface, bascules, legacy, déconnexion)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-settings.mjs
@@ -805,7 +784,7 @@ jobs:
       # états, refus compris, à 360 et 390 px. Un témoin unitaire dit qu'un
       # bouton est rendu ; il ne dit pas à quelle ordonnée il tombe.
       - name: Gate jonction par lien (action primaire dans le premier écran, 360 et 390)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-join-first-screen.mjs
@@ -817,7 +796,7 @@ jobs:
       # au pire pixel ; aucun contrôle ni texte n'est volé par un disque (deux
       # schémas, deux gabarits).
       - name: Gate communautés (liste, recherche, détail, création, hors-ligne)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-communities.mjs
@@ -828,7 +807,7 @@ jobs:
       # le cache, une ligne ouvre son fil ; chaque texte tient AA et aucun n'est
       # volé par un disque (deux schémas, deux gabarits).
       - name: Gate journal d'appels (directions, filtre, fil, hors-ligne)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-calls.mjs
@@ -837,7 +816,7 @@ jobs:
       # par nom et par numéro, la fiche /call/:id se lit sans numéro, un appel
       # vivant se rejoint par lien profond, bannière et pastille « Rejoindre ».
       - name: Gate appels rejoints (pavé, fiche, reprise)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-calls-join.mjs
@@ -848,7 +827,7 @@ jobs:
       # et envoyer dans une autre conversation, se déplace au doigt et au
       # clavier, revient en un geste ; l'image dans l'image s'ouvre.
       - name: Gate appel en cours (bulle, image dans l'image, périphériques)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-calls-during.mjs
@@ -860,7 +839,7 @@ jobs:
       # l'écran du pair s'affiche entier sous sa bannière. Sans getDisplayMedia
       # (coque Android), aucun bouton.
       - name: Gate partage d'écran pendant un appel
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-calls-screen.mjs
@@ -872,7 +851,7 @@ jobs:
       # seconde, puis tout reprend ; indicateur et détail de qualité, alertes du
       # pair, call:quality-report et call:analytics (codec réel).
       - name: Gate qualité d'appel (paliers, survie vidéo, indicateur, alertes)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-calls-quality.mjs
@@ -883,7 +862,7 @@ jobs:
       # effets ; la capsule de zoom passe de 1× à 1,3× sur une caméra qui expose
       # la capacité zoom.
       - name: Gate effets et zoom d'appel (piste envoyée, micro tenu, zoom)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-calls-effects.mjs
@@ -895,7 +874,7 @@ jobs:
       # remises à l'envoi, < 5 % perdues, aucune tâche longue pendant un
       # glissé, p95 du traitement d'une image ≤ 4 ms.
       - name: Gate perf des effets d'appel (worker, flou, zoom)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-calls-effects-perf.mjs
@@ -909,7 +888,7 @@ jobs:
       # coupe un micro (call:mute-participant) et confirme avant de retirer ;
       # le pair coupe mon micro et le dit.
       - name: Gate contrôles d'appel (ajouter, modérer, réagir, enregistrer)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-calls-controls.mjs
@@ -924,7 +903,7 @@ jobs:
       # déplie la transcription gravée, servie par le Prisme du lecteur. Sans
       # reconnaissance vocale : on reçoit, rien ne part.
       - name: Gate sous-titres d'appel (deux sens, journal, transcription du fil)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-calls-captions.mjs
@@ -935,7 +914,7 @@ jobs:
       # geste, aucun point de présence peint ; chaque texte tient AA et aucun
       # n'est volé par un disque (deux schémas, deux gabarits).
       - name: Gate découverte de personnes (relations, demandes, bloqués, compte)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-discover.mjs
@@ -946,7 +925,7 @@ jobs:
       # remplace l'écran par le lien créé ; chaque texte tient AA et aucun
       # n'est volé par un disque (deux schémas, deux gabarits).
       - name: Gate Mes liens (hub, liens de partage, détail, création)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-links.mjs
@@ -958,7 +937,7 @@ jobs:
       # tient AA au pixel, le retour ne laisse aucun lecteur ; hors ligne chaud
       # et froid, lien profond, mouvement réduit (deux schémas, deux gabarits).
       - name: Gate Réels (lecteur plein écran, balayage, lecture unique, retour)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-reels.mjs
@@ -968,7 +947,7 @@ jobs:
       # lecture. Porte ses deux contre-épreuves — l'affiche d'un RÉEL ne monte
       # aucun élément média (#6457), une story IMAGE reste une image.
       - name: Gate médias du fil (une vidéo, un son et une story vidéo SE JOUENT)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-feed-media.mjs
@@ -981,7 +960,7 @@ jobs:
       # traverse la porte de création : ses deux formats, le refus NOMMÉ d'un
       # réel non qualifiant, la bascule qui garde la saisie, la publication.
       - name: Gate colonne du fil (centrage large, porte de création, publication)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-feed-column.mjs
@@ -993,7 +972,7 @@ jobs:
       # valeur EXACTE et que « Réessayer » repart. Surface partagée par
       # `/post/$post` et le panneau du lecteur de stories.
       - name: Gate commentaires (aimer, modifier, supprimer — optimiste et refus)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-post-comments.mjs
@@ -1004,7 +983,7 @@ jobs:
       # état DESSINÉ, ANNONCÉ, lisible et SANS bouton — il n'y a rien à
       # retenter — sans emporter la story autour d'elle.
       - name: Gate médias absents (état dessiné, annoncé, non destructeur)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-medias-absents.mjs
@@ -1014,7 +993,7 @@ jobs:
       # joue à la fois (`prefers-reduced-motion` en tient une hors du jeu), et
       # chaque tuile d'un agencement montre la scène de SA slide.
       - name: Gate scènes du fil (texte, cadrage 1,4, une seule lecture, tuiles)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-feed-scenes.mjs
@@ -1025,7 +1004,7 @@ jobs:
       # Prisme (rang 2), son de fond dont le bouton dit la vérité et a un effet,
       # image seule sans moteur, épingle de timeline autoritaire, v1 intact.
       - name: Gate scènes du lecteur de story (placeholder, plateau, son, image seule)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-story-scene.mjs
@@ -1036,7 +1015,7 @@ jobs:
       # en-tête. Ce gate mesure l'EFFET (readyState, duration), l'absence de
       # jeton dans l'URL, et qu'un refus dégrade sans promesse rejetée.
       - name: Gate son de fond de story (route authentifiée, URL d'objet, refus)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-story-sound.mjs
@@ -1047,7 +1026,7 @@ jobs:
       # 9:16 est centrée dans son plateau aux deux gabarits, cinq cibles
       # ≥ 44 px, le texte tapé survit à un rechargement (brouillon).
       - name: Gate studio de story (moteur peint, carte 9:16, cibles, brouillon)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-story-studio.mjs
@@ -1076,7 +1055,7 @@ jobs:
       # un appel de fonction lui est opaque, et « opaque && faux » ne se lit
       # pas comme faux).
       - name: Gate cadres de gloire (peintre, échantillon de L21a, stabilité)
-        if: ${{ env.PACKAGE_MANAGER == 'bun' && !cancelled() }}
+        if: ${{ env.PACKAGE_MANAGER == 'bun' && !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           bun scripts/check-glory-frames.ts --report
@@ -1090,7 +1069,7 @@ jobs:
       # (`dist-gateway/`) : le `dist/` de fixtures court-circuite la
       # publication, donc il n'y aurait AUCUN document à relire.
       - name: Gate plateau de story (deux textes, gestes, langue, style, légende, document publié)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-story-plateau.mjs
@@ -1101,13 +1080,13 @@ jobs:
       # pastilles sur un même avatar), 💭 sans humeur et l'emoji animé avec,
       # chaque porte ouverte par un VRAI clic — clair, sombre et RTL miroité.
       - name: Gate rail « soi » (deux portes, cibles disjointes, 💭 / emoji, RTL)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-story-self-rail.mjs
 
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-thread-states.mjs
@@ -1122,7 +1101,7 @@ jobs:
       # propre sortie (`dist-capacitor`, `dist-gateway`) : ils ne touchent pas
       # au `dist` que les pas précédents ont mesuré.
       - name: Gate actions de rangée (un contrôle existe s'il a un EFFET)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-list-actions.mjs
@@ -1130,13 +1109,13 @@ jobs:
       # #8694 — une section repliée porte le compte de non-lus qu'elle cache,
       # à jour sans la déplier (le câblage, que les témoins `bun test` ne voient pas).
       - name: Gate section repliée (compte de non-lus)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-list-folded-unread.mjs
 
       - name: Gate mode de lecture (l'EFFET, pas le rendu du contrôle)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-reading-mode.mjs
@@ -1144,7 +1123,7 @@ jobs:
       # #8147 — LE MESSAGE LONG : extrait au quart, dépliage en place, verre
       # Focal flouté, voisins atténués, mouvement réduit — mesurés au navigateur.
       - name: Gate message long (dépliage en place, verre Focal)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-long-message.mjs
@@ -1154,7 +1133,7 @@ jobs:
       # `pointer-events`, positions et `scrollTop` RÉELS, dans les deux
       # schémas — rien de tout cela n'est visible d'un test unitaire.
       - name: Gate chrome du fil (escamotage, pilule de jour, retour en bas)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-thread-chrome.mjs
@@ -1163,7 +1142,7 @@ jobs:
       # des nœuds texte sous la capsule et opacité calculée, deux schémas,
       # deux gabarits, trois modes rendus — une géométrie, jamais un booléen.
       - name: Gate pilule de jour au repos (#6101)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-day-pill-rest.mjs
@@ -1173,7 +1152,7 @@ jobs:
       # dans la langue, UN SEUL catalogue téléchargé, aucune erreur de page,
       # atteignabilité à 320×568 en allemand et en arabe.
       - name: Gate langue d'interface (#6206)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-interface-language.mjs
@@ -1182,13 +1161,13 @@ jobs:
       # check-thread-chrome.mjs : rien de ceci n'est visible d'un test
       # unitaire, seule la mesure de rectangles réels le prouve.
       - name: Gate arêtes de défilement du fil (#6213)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-thread-scroll-edges.mjs
 
       - name: Gate couple de focus des champs (l'anneau et son contre-anneau)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-field-focus.mjs
@@ -1199,7 +1178,7 @@ jobs:
       # connexion à 1440×900 et 834×1194, et garde la colonne de la tablette à
       # 390×844 (plus petit ancêtre commun du contenu perceptible).
       - name: Gate colonne des pages d'accès (centrée, jamais plus large que la connexion)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-access-column.mjs
@@ -1208,7 +1187,7 @@ jobs:
       # moyen de passer le numéro, le refus se dit sous le champ, et la charge
       # envoyée porte le couple numéro + pays (la passerelle reste permissive).
       - name: Gate inscription (numéro requis par l'écran)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-signup.mjs
@@ -1218,13 +1197,13 @@ jobs:
       # champ n'est écrit sous 16 px (zoom de Safari iOS au focus), et la
       # connexion tient entière dans 375×667.
       - name: Gate cadre téléphone (aucun défilement de côté, connexion dans la vue)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-phone-frame.mjs
 
       - name: Gate dist de la coque Capacitor (variante B)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-shell-dist.mjs
@@ -1233,7 +1212,7 @@ jobs:
       # exécuté par AUCUN job : `gate-ci-parity.test.ts` le signalait vert par
       # omission. Pur node, il ne lit que le manifeste versionné de la coque.
       - name: Gate manifeste de la coque Android (permissions requises)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-android-manifest.mjs
@@ -1242,13 +1221,13 @@ jobs:
       # par la CLI, jamais en ESM : `bun test` ne peut pas voir un `import.meta`
       # qui casse ce chargeur-là. Ce gate rejoue le VRAI chargeur (`bunx cap ls`).
       - name: Gate capacitor.config.ts (chargeur CJS réel de la CLI)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-capacitor-config.mjs
 
       - name: Gate build passerelle (VITE_DATA_SOURCE=gateway parle vraiment)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-gateway-build.mjs
@@ -1260,7 +1239,7 @@ jobs:
       # connecté. Il construit sa propre sortie (`dist-app-update-a`, puis la
       # version B qui en dérive) et ne touche pas au `dist` mesuré plus haut.
       - name: Gate mise à jour de l'application (bannière, purge, session gardée)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-app-update.mjs
@@ -1273,7 +1252,7 @@ jobs:
       # TRADUIT, mesuré sous un prisme à DEUX échelons (`fr`,`en`) avec son
       # contre-témoin à un seul ; aucun href hostile, aucun <script>.
       - name: Gate texte enrichi (liens, mentions, quatre emphases, texte traduit)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-rich-text.mjs
@@ -1283,7 +1262,7 @@ jobs:
       # mise en page à chaque image. Cliquet sur les sources : aucun nouveau
       # site, et les sites tolérés ne font que décroître.
       - name: Gate animations de géométrie (transform et opacity seulement)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-animated-properties.mjs
@@ -1294,7 +1273,7 @@ jobs:
       # clavier et navigation vers /admin sur UNE lecture de la matrice ; six
       # barreaux sans le droit, sur 403 et en vol ; aucune lecture sans session.
       - name: Gate barreau Administration du menu flottant (#6458)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-admin-rung.mjs
@@ -1307,7 +1286,7 @@ jobs:
       # et aucune clé de contenu laissée dans `localStorage` après la lecture.
       # Le gate construit son propre `dist-admin-souverain`, comme son voisin.
       - name: Gate lecture souveraine et section Agent (#6862, #6733)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-admin-souverain.mjs
@@ -1316,7 +1295,7 @@ jobs:
       # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait
       # `{ source: apiConfig.source, … }` divergerait en silence sans ce gate.
       - name: Gate adaptateur unique de apiConfig.source (#6151)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-api-source.mjs
@@ -1326,7 +1305,7 @@ jobs:
       # reconstruit normalement. Le placer avant les deux autres leur ferait
       # mesurer un `dist` qui n'est pas celui qu'on livre.
       - name: Gate virtualisation du fil (500 messages)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-thread-virtualization.mjs
@@ -1347,7 +1326,7 @@ jobs:
   # la poussée touche ce que le pilote LIT (`shell_android`,
   # `scripts/ci-affected.mjs`). iOS reste local (runner macOS, #5657).
   shell-android:
-    name: Coque Android (apps/web)
+    name: Android coque · APK de recette
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.shell_android == 'true'
@@ -1454,7 +1433,7 @@ jobs:
   # Chromium ; seul ce job lit `docs/product/cadres-de-gloire/` (domaine
   # `glory_frames`, `scripts/ci-affected.mjs`), il n'installe rien du monorepo.
   glory-frames:
-    name: Cadres de gloire (empiètement)
+    name: Cadres de gloire · empiètement
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.glory_frames == 'true'
@@ -1577,10 +1556,16 @@ jobs:
   # runners lents franchissaient 25 min sans aucun échec. Filet en attendant
   # l'accélération de ts-jest (isolatedModules, mesurée 584 → 268 s en local).
   test:
-    name: Test ${{ matrix.package.name }}
+    name: Tests · ${{ matrix.package.name }}
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
     timeout-minutes: ${{ matrix.package.timeoutMinutes }}
+    # #12558 — web et passerelle ne tournent que si leur ZONE est touchée
+    # (`scripts/ci-affected.mjs`, tests_web / tests_gateway) ; leurs tests qui
+    # lisent HORS zone (Swift, Kotlin, infrastructure…) passent à chaque poussée
+    # par `test-parite`. La condition est répétée sur chaque étape lourde, en
+    # clair : un job de matrice ne peut pas se sauter par entrée, et
+    # `check-ci-build-order` lit les étapes à travers elle.
     strategy:
       fail-fast: false
       matrix:
@@ -1588,21 +1573,48 @@ jobs:
           - name: shared
             path: packages/shared
             filter: '@meeshy/shared'
+            zone: toujours
             timeoutMinutes: 20
             testTimeoutMinutes: 15
-          - name: gateway
+          # #12556 — la passerelle en TROIS tranches Jest (`--shard`) : en un
+          # bloc, 16 à 17,5 min après `quality`, elle fixait la durée du run.
+          # Chaque tranche tourne sans seuil et dépose son `coverage-final.json` ;
+          # `test-gateway-coverage` les fusionne et juge le seuil de
+          # `jest.config.json`, inchangé.
+          - name: gateway · tranche 1/3
             path: services/gateway
             filter: '@meeshy/gateway'
-            timeoutMinutes: 40
-            testTimeoutMinutes: 35
+            zone: tests_gateway
+            shard: 1/3
+            artifact: couverture-gateway-1
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+          - name: gateway · tranche 2/3
+            path: services/gateway
+            filter: '@meeshy/gateway'
+            zone: tests_gateway
+            shard: 2/3
+            artifact: couverture-gateway-2
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+          - name: gateway · tranche 3/3
+            path: services/gateway
+            filter: '@meeshy/gateway'
+            zone: tests_gateway
+            shard: 3/3
+            artifact: couverture-gateway-3
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
+            zone: toujours
             timeoutMinutes: 20
             testTimeoutMinutes: 15
           - name: web
             path: apps/web
             filter: '@meeshy/web'
+            zone: tests_web
             timeoutMinutes: 20
             testTimeoutMinutes: 15
 
@@ -1610,54 +1622,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        if: ${{ (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        uses: ./.github/actions/preparer-js
 
       # Generate Prisma client before building
       - name: Generate Prisma client
+        if: ${{ (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
         env:
           DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
@@ -1665,6 +1636,150 @@ jobs:
           npx prisma generate --generator client
 
       # Build shared package first (required for gateway tests)
+      - name: Build shared package (bun)
+        if: ${{ env.PACKAGE_MANAGER == 'bun' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        run: |
+          cd packages/shared
+          bun run build
+
+      - name: Build shared package (pnpm)
+        if: ${{ env.PACKAGE_MANAGER == 'pnpm' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        run: |
+          cd packages/shared
+          pnpm run build
+
+      # #11258 — le retrait des métadonnées vidéo se prouve par ffmpeg/ffprobe
+      # RÉELS (GPS absent, paquets identiques) : la passerelle les embarque en
+      # production (Dockerfile), sa suite les exige ici. #11841 — la rotation
+      # JPEG sans perte se prouve par jpegtran RÉEL (libjpeg-turbo-progs).
+      # #12290 — l'AVIF HDR d'une photo à carte de gain s'écrit par avifenc
+      # RÉEL (libavif-bin). #11263 et #12268 — un HEIC se convertit, et la carte
+      # de gain d'un vrai HEIC d'iPhone se prouve, par heif-convert RÉEL.
+      - name: Install ffmpeg, jpegtran, avifenc and heif-convert (gateway)
+        if: ${{ matrix.package.path == 'services/gateway' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265
+          ffprobe -version | head -1
+          jpegtran -version 2>&1 | head -1
+          command -v heif-convert
+          avifenc --version | head -1
+
+      - name: Run tests with coverage (bun)
+        if: ${{ env.PACKAGE_MANAGER == 'bun' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
+        run: |
+          # Le web lance sa suite depuis son répertoire (`bun test`, happy-dom).
+          if [ "${{ matrix.package.name }}" = "web" ]; then
+            cd ${{ matrix.package.path }}
+            echo "Running web tests with bun test..."
+            bun run test:coverage
+          elif [ -n "${{ matrix.package.shard }}" ]; then
+            cd ${{ matrix.package.path }}
+            bun run test:coverage --shard=${{ matrix.package.shard }} --coverageThreshold='{}' --coverageReporters=json --coverageReporters=text-summary
+          else
+            bun run test:coverage --filter=${{ matrix.package.filter }}
+          fi
+
+      - name: Run tests with coverage (pnpm)
+        if: ${{ env.PACKAGE_MANAGER == 'pnpm' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
+        run: |
+          if [ -n "${{ matrix.package.shard }}" ]; then
+            cd ${{ matrix.package.path }}
+            pnpm run test:coverage --shard=${{ matrix.package.shard }} --coverageThreshold='{}' --coverageReporters=json --coverageReporters=text-summary
+          else
+            pnpm run test:coverage --filter=${{ matrix.package.filter }}
+          fi
+
+      - name: Upload shard coverage
+        if: ${{ matrix.package.artifact && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.package.artifact }}
+          path: ${{ matrix.package.path }}/coverage/coverage-final.json
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload coverage
+        if: ${{ !matrix.package.artifact && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        uses: codecov/codecov-action@v7
+        continue-on-error: true
+        with:
+          file: ./${{ matrix.package.path }}/coverage/lcov.info
+          flags: ${{ matrix.package.name }}
+          name: ${{ matrix.package.name }}-coverage
+
+  # #12556 — LA COUVERTURE DE LA PASSERELLE, FUSIONNÉE PUIS JUGÉE UNE FOIS.
+  # Chaque tranche ne voit qu'une part des tests : jugée seule, elle tomberait
+  # sous le seuil global à tort. `merge-jest-coverage.mjs` additionne les trois
+  # `coverage-final.json` par emplacement et compare les quatre totaux au
+  # `coverageThreshold.global` de `services/gateway/jest.config.json` ; une
+  # tranche manquante est rouge (`--attendu 3`).
+  test-gateway-coverage:
+    name: Tests · gateway · couverture fusionnée
+    runs-on: ubuntu-latest
+    needs: [changes, test]
+    if: ${{ !cancelled() && needs.test.result != 'skipped' && needs.changes.outputs.tests_gateway == 'true' }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download shard coverage
+        uses: actions/download-artifact@v8
+        with:
+          pattern: couverture-gateway-*
+          path: couverture
+
+      - name: Merge coverage and enforce the threshold
+        run: |
+          node scripts/ci/merge-jest-coverage.mjs --self-test
+          node scripts/ci/merge-jest-coverage.mjs \
+            --config services/gateway/jest.config.json \
+            --attendu 3 \
+            --sortie services/gateway/coverage/coverage-final.json \
+            couverture/*/coverage-final.json
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v7
+        continue-on-error: true
+        with:
+          file: ./services/gateway/coverage/coverage-final.json
+          flags: gateway
+          name: gateway-coverage
+
+  # #12558 — LA VOIE DE PARITÉ, TOUJOURS EXÉCUTÉE. Les tests web et passerelle
+  # qui lisent hors de leur zone (le Swift des appels, le Kotlin de la
+  # signalisation, `apps/ios/Meeshy` entier, les compose d'`infrastructure/`,
+  # `CLAUDE.md`, les sources de l'autre suite…) se rejouent ici à chaque
+  # poussée : sans elle, sauter « Tests · web » ou « Tests · gateway » par zone
+  # laisserait passer une rupture de parité venue d'iOS ou d'Android. Leur liste
+  # se DÉRIVE du texte des tests (`scripts/ci/voie-parite.mjs`) ; elle ne se
+  # tient pas à la main. Sans `needs` : elle ne lit rien d'un autre job.
+  test-parite:
+    name: Tests · voie de parité (web et passerelle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd packages/shared
+          npx prisma generate --generator client
+
       - name: Build shared package (bun)
         if: env.PACKAGE_MANAGER == 'bun'
         run: |
@@ -1677,31 +1792,31 @@ jobs:
           cd packages/shared
           pnpm run build
 
-      - name: Run tests with coverage (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
+      - name: Install ffmpeg, jpegtran, avifenc and heif-convert (gateway)
         run: |
-          # Le web lance sa suite depuis son répertoire (`bun test`, happy-dom).
-          if [ "${{ matrix.package.name }}" = "web" ]; then
-            cd ${{ matrix.package.path }}
-            echo "Running web tests with bun test..."
-            bun run test:coverage
-          else
-            bun run test:coverage --filter=${{ matrix.package.filter }}
-          fi
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265
 
-      - name: Run tests with coverage (pnpm)
+      - name: Parity lane self-test
+        run: node scripts/ci/voie-parite.mjs --self-test
+
+      - name: Parity lane · web
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          cd apps/web
+          bun test $(node ../../scripts/ci/voie-parite.mjs --liste web)
+
+      - name: Parity lane · gateway (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          cd services/gateway
+          bun run test $(node ../../scripts/ci/voie-parite.mjs --liste gateway)
+
+      - name: Parity lane · gateway (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
-        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
-        run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v7
-        continue-on-error: true
-        with:
-          file: ./${{ matrix.package.path }}/coverage/lcov.info
-          flags: ${{ matrix.package.name }}
-          name: ${{ matrix.package.name }}-coverage
+        run: |
+          cd services/gateway
+          pnpm run test $(node ../../scripts/ci/voie-parite.mjs --liste gateway)
 
   # ===========================================================================
   # TEST: Python Tests with Coverage
@@ -1720,7 +1835,7 @@ jobs:
   # jobs dédiés.
   # ===========================================================================
   test-python:
-    name: Test Python (translator)
+    name: Traducteur · tests Python
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -1728,44 +1843,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Node.js and package manager setup for Prisma CLI
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      # Install Node.js dependencies (required for Prisma CLI)
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -1861,7 +1940,7 @@ jobs:
   # Generates audio samples and uploads as artifacts
   # ===========================================================================
   test-audio-pipeline:
-    name: Audio Pipeline Tests
+    name: Traducteur · pipeline audio
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -1869,44 +1948,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Node.js and package manager setup for Prisma CLI
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      # Install Node.js dependencies (required for Prisma CLI)
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -2014,7 +2057,7 @@ jobs:
   # Tests UnifiedTTSService, TranscriptionService, and E2E voice pipeline
   # ===========================================================================
   test-tts-stt:
-    name: TTS/STT Integration
+    name: Traducteur · TTS et STT
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -2022,44 +2065,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Node.js and package manager setup for Prisma CLI
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      # Install Node.js dependencies (required for Prisma CLI)
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -2179,7 +2186,7 @@ jobs:
   # Complete coverage for Voice API endpoints and handlers
   # ===========================================================================
   test-voice-api:
-    name: Voice API Tests
+    name: Traducteur · API vocale
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -2187,19 +2194,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -2236,29 +2232,6 @@ jobs:
           done
           echo "::error::uv python install a échoué après 5 tentatives."
           exit 1
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
@@ -2336,7 +2309,7 @@ jobs:
   # Comprehensive pipeline tests matching Python XTTS test script
   # ===========================================================================
   test-voice-e2e:
-    name: Voice E2E Benchmark
+    name: Traducteur · banc vocal de bout en bout
     runs-on: ubuntu-latest
     needs: [quality, test-voice-api]
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[e2e]')
@@ -2344,42 +2317,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -2407,7 +2346,7 @@ jobs:
   # SECURITY: Vulnerability Scan
   # ===========================================================================
   security:
-    name: Security
+    name: Sécurité · Trivy du dépôt
     runs-on: ubuntu-latest
     # Sans `security-events: write`, l'envoi du SARIF échoue sur les pushes de
     # dev (« Resource not accessible by integration », masqué par
@@ -2442,58 +2381,15 @@ jobs:
   # PRISMA: Validate schema and check migrations
   # ===========================================================================
   prisma:
-    name: Prisma
+    name: Prisma · schéma et client
     runs-on: ubuntu-latest
     needs: quality
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Validate Prisma schema
         env:
@@ -2521,58 +2417,15 @@ jobs:
   # BUILD: Verify builds work (like in Dockerfiles)
   # ===========================================================================
   build:
-    name: Build (${{ github.event.inputs.package_manager || 'bun' }})
+    name: Build · shared, passerelle, agent (${{ github.event.inputs.package_manager || 'bun' }})
     runs-on: ubuntu-latest
     needs: [quality, test, prisma]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       # Generate Prisma client before building
       - name: Generate Prisma client
@@ -2631,30 +2484,43 @@ jobs:
   # SUMMARY
   # ===========================================================================
   summary:
-    name: Summary
+    name: Verdict CI
     runs-on: ubuntu-latest
-    needs: [changes, quality, institutionnel-v3, shell-android, glory-frames, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [changes, quality, gardes-depot, web-navigateur, shell-android, glory-frames, test, test-gateway-coverage, test-parite, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
-      - name: Pipeline Summary
+      - name: Checkout (le script du verdict seul)
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/ci
+          fetch-depth: 1
+
+      - name: Tableau
         run: |
-          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## CI — verdict" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package Manager:** ${{ env.PACKAGE_MANAGER }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Changes (translator: ${{ needs.changes.outputs.translator }}) | ${{ needs.changes.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Peaux web (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Coque Android (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Zones touchées (translator: ${{ needs.changes.outputs.translator }}) | ${{ needs.changes.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Qualité TS | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gardes du dépôt | ${{ needs.gardes-depot.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web · gardes navigateur (web_navigateur: ${{ needs.changes.outputs.web_navigateur }}) | ${{ needs.web-navigateur.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android coque (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cadres de gloire (glory_frames: ${{ needs.changes.outputs.glory_frames }}) | ${{ needs.glory-frames.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| TTS/STT Integration | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Voice API Tests | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Voice E2E Benchmark | ${{ needs.test-voice-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Prisma | ${{ needs.prisma.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests · paquets Node | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests · gateway · couverture fusionnée (tests_gateway: ${{ needs.changes.outputs.tests_gateway }}) | ${{ needs.test-gateway-coverage.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests · voie de parité | ${{ needs.test-parite.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · tests Python | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · pipeline audio | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · TTS et STT | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · API vocale | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · banc vocal de bout en bout | ${{ needs.test-voice-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prisma · schéma et client | ${{ needs.prisma.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sécurité · Trivy du dépôt | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build · shared, passerelle, agent | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+      - name: Verdict
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/ci/needs-verdict.mjs

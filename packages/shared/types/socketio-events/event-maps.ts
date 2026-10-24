@@ -9,6 +9,7 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { E2EEServedEnvelope } from '../e2ee-directory.js';
 import type { AdminMetricsSubscribeAck, HostMetricsSample } from '../admin-ops.js';
 import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
 import type { GameUpdatedEventData } from '../game-sync.js';
@@ -119,7 +120,7 @@ import type { CallPreviewRequestEvent, CallPreviewRequestedEvent } from '../call
 import type { CallLiveFrameSelectEvent, CallLiveFrameSelectedEvent } from '../call-live-frame.js';
 
 import type { AgentAdminEventData } from './agent.js';
-import type { AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
+import type { AttachmentReadyEventData, AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
 import type {
   AudioTranslationFailedEventData,
   AudioTranslationReadyEventData,
@@ -248,6 +249,7 @@ import type { UserUpdatedEventData } from './user.js';
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED]: (data: AttachmentUpdatedEventData) => void;
+  [SERVER_EVENTS.ATTACHMENT_READY]: (data: AttachmentReadyEventData) => void;
   [SERVER_EVENTS.MESSAGE_EDITED]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_DELETED]: (data: MessageDeletedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EXPIRED]: (data: MessageExpiredEventData) => void;
@@ -275,6 +277,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUTHENTICATED]: (data: AuthenticatedEventData) => void;
   [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
+  /** L'enveloppe libsignal de CET appareil (#3706), vers `ROOMS.device`. */
+  [SERVER_EVENTS.E2EE_ENVELOPE]: (data: E2EEServedEnvelope) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;
   [SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED]: (data: ConversationUnreadUpdatedEventData) => void;

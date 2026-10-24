@@ -69,7 +69,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationMembersSheet(
+internal fun ConversationMembersSheet(
     conversationId: String,
     accentColor: Color,
     onDismiss: () -> Unit,
@@ -106,6 +106,7 @@ fun ConversationMembersSheet(
             displayName = member.displayLabel,
             accentColor = accentColor,
             onDismiss = { openProfileFor = null },
+            avatarUrl = member.avatar,
         )
     }
 
@@ -300,7 +301,7 @@ private fun MemberRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        MeeshyAvatar(name = name, size = 40.dp, containerColor = accentColor)
+        MeeshyAvatar(name = name, size = 40.dp, containerColor = accentColor, imageUrl = member.avatar)
 
         Column(modifier = Modifier.weight(1f)) {
             Row(

@@ -100,7 +100,8 @@ final class ComposerBackgroundMenuTests: XCTestCase {
     /// le verrait avant que l'un des deux n'en manque un.
     func test_modifier_passeParLEditeurUnique() throws {
         let code = try source("MeeshyComposerHost+BackgroundMenu.swift")
-        XCTAssertTrue(code.contains("case.edit:openObjectEditor(id)"))
+        XCTAssertTrue(code.contains("case.edit:if!requestSceneMediaRetouch(id){openObjectEditor(id)}"),
+                      "une image ou une vidéo s'ouvre dans la retouche unique (#12590), le reste dans l'éditeur du double-tap")
     }
 
     /// **L'identifiant se lit AVANT d'agir.** SwiftUI referme le dialogue et

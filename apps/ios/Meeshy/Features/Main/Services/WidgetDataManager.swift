@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import WidgetKit
 import UIKit
 import MeeshySDK
@@ -140,6 +141,17 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// juste d'écrire (`conversationToastPresentation`).
     private var lastPublishedSnapshots: [String: ConversationSnapshotPayload] = [:]
 
+    /// Les dernières conversations publiées : verrouiller ou déverrouiller ne
+    /// touche pas la liste, et ce qui est sorti doit pourtant suivre le verrou
+    /// (#11387, `republishForContentLocks`). Vidé par le wipe de logout.
+    private var lastPublishedConversations: [MeeshyConversation] = []
+
+    /// #11387 — le verrou PIN protège le CONTENU : une conversation verrouillée
+    /// ne sort ni son dernier message sur l'écran d'accueil, ni en clair dans
+    /// le cliché que lit l'extension de notification. Seam de test.
+    private let contentLocksProvider: @MainActor () -> Set<String>
+    private var contentLockObservation: AnyCancellable?
+
     private let encoder: JSONEncoder = {
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
@@ -183,7 +195,7 @@ final class WidgetDataManager: NotificationWidgetSink {
         suiteName: String,
         stagingDirectories: [URL]? = nil,
         preferredContentLanguages: @escaping @MainActor () -> [String] = {
-            AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         },
         presenceState: @escaping @MainActor (String) -> PresenceState? = {
             PresenceManager.shared.knownPresenceState(for: $0)
@@ -191,14 +203,38 @@ final class WidgetDataManager: NotificationWidgetSink {
         shareDirectoryOwner: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
         shareDirectoryPeople: @escaping @MainActor (String) async -> [ShareRecipient] = {
             await LiveShareRecipientDirectory().cachedPeople(currentUserId: $0)
-        }
+        },
+        contentLocks: @escaping @MainActor () -> Set<String> = {
+            ConversationLockManager.shared.lockedConversationIds
+        },
+        contentLockChanges: NotificationCenter = .default
     ) {
+        self.contentLocksProvider = contentLocks
         self.preferredContentLanguagesProvider = preferredContentLanguages
         self.presenceStateProvider = presenceState
         self.shareDirectoryOwner = shareDirectoryOwner
         self.shareDirectoryPeople = shareDirectoryPeople
         self.suiteName = suiteName
         self.stagingDirectoriesOverride = stagingDirectories
+        contentLockObservation = contentLockChanges
+            .publisher(for: .conversationContentLocksDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.republishForContentLocks() }
+    }
+
+    private func hidesContent(of conversationId: String, lockedIds: Set<String>) -> Bool {
+        ConversationLockManager.hidesContent(of: conversationId, lockedConversationIds: lockedIds)
+    }
+
+    /// Republie ce qui est déjà sorti avec le verrou du moment (#11387). Rien
+    /// après le wipe de logout, ni sans compte connecté (la déconnexion lève
+    /// aussi tous les verrous) : les conversations du compte sortant ne
+    /// ressortent jamais.
+    func republishForContentLocks() {
+        guard !lastPublishedConversations.isEmpty,
+              let owner = shareDirectoryOwner(), !owner.isEmpty else { return }
+        publishConversations(lastPublishedConversations)
+        reloadTimelines()
     }
 
     /// Les dossiers App Group qui portent du contenu du compte connecté.
@@ -243,6 +279,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
             lastPublishedSnapshots = [:]
         }
+        lastPublishedConversations = []
         Self.forgetHeldShares()
         let stagingDirs = stagingDirectoriesOverride ?? Self.accountStagingDirectories()
         for dir in stagingDirs {
@@ -295,10 +332,12 @@ final class WidgetDataManager: NotificationWidgetSink {
     // MARK: - NotificationWidgetSink
 
     func publishConversations(_ conversations: [MeeshyConversation]) {
+        lastPublishedConversations = conversations
         // Résolu UNE fois par publication : le prisme est une propriété du
         // lecteur, pas de la conversation, et le relire par ligne ferait 50
         // reconstructions de tableau pour un résultat identique.
         let preferredLanguages = preferredContentLanguagesProvider()
+        let lockedIds = contentLocksProvider()
         let widgetConversations = conversations
             .sorted { ($0.userState.isPinned ? 0 : 1, $0.lastMessageAt) < ($1.userState.isPinned ? 0 : 1, $1.lastMessageAt) }
             .reversed()
@@ -313,7 +352,9 @@ final class WidgetDataManager: NotificationWidgetSink {
                     id: conv.id,
                     contactName: conv.displayName,
                     contactAvatar: conv.type == .group ? "person.3.fill" : "person.circle.fill",
-                    lastMessage: formatLastMessage(conv, preferredLanguages: preferredLanguages),
+                    lastMessage: hidesContent(of: conv.id, lockedIds: lockedIds)
+                        ? ConversationLockedPreviewLine.label
+                        : formatLastMessage(conv, preferredLanguages: preferredLanguages),
                     timestamp: conv.lastMessageAt,
                     isUnread: conv.userState.unreadCount > 0,
                     isPinned: conv.userState.isPinned,
@@ -375,6 +416,7 @@ final class WidgetDataManager: NotificationWidgetSink {
         categoryNamesById: [String: String]
     ) {
         guard let defaults = sharedDefaults else { return }
+        let lockedIds = contentLocksProvider()
         let snapshots: [String: ConversationSnapshotPayload] = conversations
             .prefix(snapshotsCap)
             .reduce(into: [:]) { acc, conv in
@@ -387,7 +429,7 @@ final class WidgetDataManager: NotificationWidgetSink {
                     isPinned: conv.userState.isPinned,
                     isMuted: conv.userState.isMuted,
                     isArchived: conv.userState.isArchived,
-                    isLocked: conv.userState.isLocked,
+                    isLocked: conv.userState.isLocked || hidesContent(of: conv.id, lockedIds: lockedIds),
                     favoriteEmoji: conv.userState.reaction,
                     categoryName: categoryName,
                     accentColor: conv.accentColor,

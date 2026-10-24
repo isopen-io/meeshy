@@ -2,23 +2,18 @@ package me.meeshy.app.feed
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,15 +29,16 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.PostShareLink
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,10 +53,26 @@ fun FeedScreen(
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    FeedMediaPrefetchEffect(listState = listState, posts = state.posts)
     var composerDraft by remember { mutableStateOf<FeedComposerDraft?>(null) }
 
-    LaunchedEffect(state.errorMessage) {
-        state.errorMessage?.let { snackbar.showSnackbar(it) }
+    val context = LocalContext.current
+    val retryLabel = stringResource(R.string.feed_retry)
+    // Each notice shows once, in the reader's language. Collected (not keyed) so consuming
+    // it never cancels the toast that is on screen.
+    LaunchedEffect(viewModel) {
+        viewModel.state.map { it.notice }.distinctUntilChanged().filterNotNull().collect { notice ->
+            val unpublished = viewModel.state.value.unpublishedDraft
+            viewModel.consumeNotice()
+            if (unpublished != null) viewModel.consumeUnpublishedDraft()
+            // The author's own post lands at the head: bring it into view (iOS scrolls to it).
+            if (notice == FeedNotice.PUBLISHED) launch { listState.animateScrollToItem(0) }
+            val result = snackbar.showSnackbar(
+                message = context.getString(notice.messageRes()),
+                actionLabel = if (unpublished != null) retryLabel else null,
+            )
+            if (unpublished != null && result == SnackbarResult.ActionPerformed) composerDraft = unpublished
+        }
     }
 
     MeeshyBackground {
@@ -89,7 +101,8 @@ fun FeedScreen(
             // it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
             FeedComposerPlaceholder(onClick = { composerDraft = FeedComposerDraft() })
             val clipboard = LocalClipboardManager.current
-            val shareContext = LocalContext.current
+            val linkCopied = stringResource(R.string.feed_link_copied)
+            val shareContext = context
             var reportPostId by remember { mutableStateOf<String?>(null) }
             var deletePostId by remember { mutableStateOf<String?>(null) }
             reportPostId?.let { targetId ->
@@ -119,13 +132,8 @@ fun FeedScreen(
             ) {
             when {
                 state.showSkeleton -> FeedSkeleton()
-                state.posts.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        stringResource(R.string.feed_empty),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
+                state.posts.isEmpty() && state.loadFailed -> FeedErrorState(onRetry = viewModel::refresh)
+                state.posts.isEmpty() -> FeedEmptyState()
                 else -> LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(MeeshySpacing.lg),
@@ -156,33 +164,24 @@ fun FeedScreen(
                                 viewModel.recordShare(post.id)
                                 val send = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, postShareUrl(post.id))
+                                    putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(post.id))
                                 }
                                 shareContext.startActivity(Intent.createChooser(send, null))
                             },
-                            onCopyLink = { clipboard.setText(AnnotatedString(postShareUrl(post.id))) },
+                            onCopyLink = {
+                                clipboard.setText(AnnotatedString(PostShareLink.webLink(post.id)))
+                                scope.launch { snackbar.showSnackbar(linkCopied) }
+                            },
                             onRepost = { viewModel.repost(post.id) },
                             onQuote = { viewModel.beginQuote(post.id) },
                             onPin = { viewModel.pinPost(post.id) },
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
+                            onComments = { onOpenPost(post.id) },
                         )
                     }
                     if (state.isLoadingMore) {
-                        item(key = "feed_load_more") {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(MeeshySpacing.md),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(24.dp),
-                                    color = MeeshyPalette.Indigo500,
-                                )
-                            }
-                        }
+                        item(key = "feed_load_more") { FeedLoadingMoreCards() }
                     }
                 }
             }

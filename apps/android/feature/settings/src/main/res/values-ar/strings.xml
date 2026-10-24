@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_section_chats">المحادثات</string>
+    <string name="settings_section_privacy">الخصوصية والأمان</string>
+    <string name="settings_display_language">لغة العرض</string>
+    <string name="settings_language_system">افتراضي النظام</string>
+    <string name="settings_regional_language_search">البحث عن اللغات</string>
+    <string name="settings_regional_language_empty">لا توجد لغة تطابق بحثك</string>
+    <string name="settings_notification_vibration">الاهتزاز</string>
+    <string name="settings_notif_show_preview">معاينة الرسالة</string>
+    <string name="settings_notif_badge_enabled">شارة على أيقونة التطبيق</string>
+    <string name="settings_dnd_start">من</string>
+    <string name="settings_dnd_end">إلى</string>
+    <string name="settings_dnd_days">التكرار في</string>
+    <string name="settings_dnd_every_day">كل يوم</string>
+    <string name="settings_dnd_active">ساعات الهدوء مفعّلة الآن</string>
+    <string name="settings_dnd_inactive">متوقفة حاليًا</string>
+    <string name="settings_dnd_day_mon">الاثنين</string>
+    <string name="settings_dnd_day_tue">الثلاثاء</string>
+    <string name="settings_dnd_day_wed">الأربعاء</string>
+    <string name="settings_dnd_day_thu">الخميس</string>
+    <string name="settings_dnd_day_fri">الجمعة</string>
+    <string name="settings_dnd_day_sat">السبت</string>
+    <string name="settings_dnd_time_picker_confirm">تعيين</string>
+    <string name="settings_notification_types_title">أنواع الإشعارات</string>
+    <string name="settings_notification_types_search">البحث عن أنواع الإشعارات</string>
+    <string name="settings_notification_types_empty">لا يوجد نوع إشعار يطابق بحثك</string>
+    <string name="settings_notif_cat_groups">المجموعات وجهات الاتصال</string>
+    <string name="settings_notif_type_conversation">تحديثات المحادثات</string>
+    <string name="settings_notif_type_voicemail">البريد الصوتي</string>
+    <string name="settings_notif_type_friend_content">نشاط الأصدقاء</string>
+    <string name="settings_notif_type_group_invite">دعوات المجموعات</string>
+    <string name="settings_notif_type_system">تنبيهات النظام</string>
+    <string name="settings_two_factor">المصادقة الثنائية</string>
+    <string name="settings_account_contact">البريد الإلكتروني والهاتف</string>
+    <string name="settings_clear_media_cache">مسح ذاكرة الوسائط المؤقتة</string>
+    <string name="settings_storage_used">المساحة المستخدمة</string>
+    <string name="settings_version">الإصدار 1.0.0</string>
+    <!-- Two-factor authentication (§L) -->
+    <string name="twofactor_status_enabled">مفعّلة</string>
+    <string name="twofactor_enable_button">إعداد المصادقة الثنائية</string>
+    <string name="twofactor_regenerate_button">إعادة إنشاء الرموز الاحتياطية</string>
+    <string name="twofactor_setup_title">امسح رمز QR</string>
+    <string name="twofactor_setup_instructions">امسح رمز QR هذا بتطبيق المصادقة لديك، أو أدخل الرمز يدويًا.</string>
+    <string name="twofactor_setup_secret_label">رمز الإدخال اليدوي</string>
+    <string name="twofactor_backup_codes_warning">احفظ هذه الرموز في مكان آمن. يمكن استخدام كل رمز مرة واحدة فقط.</string>
+    <string name="twofactor_backup_codes_done">لقد حفظت رموزي</string>
+    <string name="twofactor_regenerate_title">إعادة إنشاء الرموز الاحتياطية</string>
+    <string name="twofactor_regenerate_confirm">إعادة الإنشاء</string>
+    <string name="twofactor_error_status">تعذّر تحميل حالة المصادقة الثنائية</string>
+    <string name="twofactor_error_setup">تعذّر بدء إعداد المصادقة الثنائية</string>
+    <string name="twofactor_error_disable">تعذّر تعطيل المصادقة الثنائية</string>
+    <string name="twofactor_error_backup_codes">تعذّرت إعادة إنشاء الرموز الاحتياطية</string>
+    <!-- Change password (§L) -->
+    <string name="change_password_hint_match">كلمتا المرور متطابقتان</string>
+    <string name="change_password_hint_different">مختلفة عن كلمة المرور الحالية</string>
+    <string name="change_password_error_current">كلمة المرور الحالية غير صحيحة</string>
+    <!-- Email / phone change (§K) -->
+    <string name="account_contact_title">البريد الإلكتروني والهاتف</string>
+    <string name="account_contact_email_resend">إعادة إرسال البريد</string>
+    <string name="account_contact_email_resend_cooldown">إعادة الإرسال (%1$dث)</string>
+    <string name="account_contact_error_email_change">تعذّر إرسال رسالة التحقق. تحقق من العنوان وحاول مرة أخرى.</string>
+    <string name="account_contact_error_email_resend">تعذّرت إعادة إرسال رسالة التحقق.</string>
+    <string name="account_contact_phone_new_label">هاتف جديد</string>
+    <string name="account_contact_phone_send_code">إرسال الرمز</string>
+    <string name="account_contact_error_phone_change">تعذّر إرسال رمز التحقق. تحقق من الرقم وحاول مرة أخرى.</string>
+    <!-- Privacy & visibility (§L) -->
+    <string name="settings_privacy">الخصوصية والظهور</string>
+    <string name="privacy_title">الخصوصية والظهور</string>
+    <!-- Account deletion (§L) -->
+    <string name="delete_account_warning_title">لا يمكن التراجع عن هذا الإجراء</string>
+    <string name="delete_account_warning_intro">يؤدي حذف حسابك إلى إزالة ما يلي نهائيًا:</string>
+    <string name="delete_account_warning_media">جميع الوسائط التي شاركتها</string>
+    <string name="delete_account_confirm_prompt">اكتب %1$s للتأكيد</string>
+    <string name="delete_account_error_invalid_password">كلمة المرور غير صحيحة. حاول مرة أخرى.</string>
+    <string name="delete_account_error_pending">هناك طلب حذف قيد التنفيذ بالفعل. تحقق من صندوق الوارد.</string>
+    <string name="delete_account_error_no_email">أضف عنوان بريد إلكتروني وتحقق منه قبل أن تتمكن من حذف حسابك.</string>
+    <string name="delete_account_email_title">رسالة تأكيد في الطريق إليك</string>
+    <string name="delete_account_email_body">تحقق من صندوق الوارد لتأكيد حذف حسابك.</string>
+
+    <!-- Data export (GDPR) -->
+    <string name="data_export_info_body">بموجب اللائحة العامة لحماية البيانات، يمكنك تصدير جميع بياناتك الشخصية.</string>
+    <string name="data_export_format_json">JSON</string>
+    <string name="data_export_format_csv">CSV</string>
+    <string name="data_export_content_profile">الملف الشخصي (مضمّن دائمًا)</string>
+    <string name="data_export_ready_title">التصدير جاهز</string>
+
+    <!-- Media cache management -->
+    <string name="media_cache_info_title">الوسائط المخزّنة مؤقتًا</string>
+    <string name="media_cache_info_body">يتيح التخزين المؤقت تحميل الوسائط بسرعة أكبر ويوفّر البيانات. مسحه آمن، إذ يُعاد تنزيل الملفات عند الحاجة.</string>
+    <string name="media_cache_total_label">إجمالي الذاكرة المؤقتة المستخدمة</string>
+    <string name="media_cache_category_thumbnails">الصور المصغّرة</string>
+    <string name="media_cache_clear_all">مسح الذاكرة المؤقتة</string>
+    <string name="media_cache_confirm_title">مسح الذاكرة المؤقتة</string>
+    <string name="media_cache_confirm_message">سيؤدي هذا إلى إزالة جميع الوسائط المخزّنة محليًا. وسيُعاد تنزيلها عند الحاجة.</string>
+    <string name="media_cache_error_scan">تعذّرت قراءة حجم الذاكرة المؤقتة. اسحب للأسفل للتحديث.</string>
+    <string name="media_cache_error_clear">تعذّر مسح الذاكرة المؤقتة. حاول مرة أخرى.</string>
+
+    <!-- Crash diagnostics -->
+    <string name="settings_diagnostics">التشخيص</string>
+    <string name="crash_reports_title">التشخيص</string>
+    <string name="crash_reports_info_body">إذا أُغلق التطبيق بشكل غير متوقع، يُحفظ هنا تقرير يمكنك مشاركته مع الدعم. لا يغادر شيء جهازك إلا عندما تشاركه.</string>
+    <string name="crash_reports_empty">لا توجد تقارير أعطال، فالتطبيق يعمل بسلاسة.</string>
+    <string name="crash_reports_clear_all">مسح التقارير</string>
+    <string name="crash_reports_confirm_title">مسح التقارير</string>
+    <string name="crash_reports_confirm_message">سيؤدي هذا إلى حذف جميع تقارير الأعطال المحفوظة على هذا الجهاز نهائيًا.</string>
+    <string name="crash_reports_error_load">تعذّرت قراءة تقارير الأعطال.</string>
+    <string name="crash_reports_error_clear">تعذّر مسح تقارير الأعطال. حاول مرة أخرى.</string>
+    <string name="crash_kind_anr">ANR</string>
+    <string name="about_version_label">الإصدار %1$s</string>
+    <string name="about_info_application_id">معرّف التطبيق</string>
+    <string name="settings_help_support">المساعدة والدعم</string>
+    <string name="licenses_intro">بُني Meeshy باستخدام مكتبات المصدر المفتوح التالية.</string>
+    <string name="licenses_type_mit">MIT</string>
+    <string name="licenses_type_apache">Apache 2.0</string>
+    <string name="licenses_type_bsd">BSD</string>
+    <string name="support_title">المساعدة والدعم</string>
+    <string name="support_link_email">مراسلة الدعم بالبريد</string>
+
+    <!-- Active sessions -->
+    <string name="sessions_revoke_others">تسجيل الخروج من جميع الأجهزة الأخرى</string>
+</resources>

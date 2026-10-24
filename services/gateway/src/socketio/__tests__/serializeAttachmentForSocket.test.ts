@@ -110,7 +110,8 @@ describe('serializeAttachmentForSocket — la garde d’INVENTAIRE (#7014)', () 
     };
     const charge = serializeAttachmentForSocket(ligneComplete) as unknown as Record<string, unknown>;
 
-    const attendus = Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions');
+    // `message` : la protection du porteur, CHARGÉE pour `servedDescription`, jamais servie.
+    const attendus = Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions' && champ !== 'message');
     expect(attendus.length).toBeGreaterThan(0);
     expect(attendus.filter((champ) => !(champ in charge))).toEqual([]);
   });
@@ -139,7 +140,7 @@ describe('serializeAttachmentForSocket — la garde d’INVENTAIRE (#7014)', () 
     const charge = serializeAttachmentForSocket(ligneAvecSecrets) as unknown as Record<string, unknown>;
 
     const inventaire = new Set([
-      ...Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions'),
+      ...Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions' && champ !== 'message'),
       'reactionSummary',
       'currentUserReactions',
     ]);

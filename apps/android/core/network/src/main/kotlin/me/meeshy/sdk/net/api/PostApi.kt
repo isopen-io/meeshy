@@ -1,9 +1,17 @@
 package me.meeshy.sdk.net.api
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import me.meeshy.sdk.model.DiscoverabilityPrecision
+import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.NearbyDensityCell
+import me.meeshy.sdk.model.PostShareResult
+import me.meeshy.sdk.model.PublicationModerationReceipt
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
@@ -11,6 +19,9 @@ import me.meeshy.sdk.model.StoryEffectsWireSerializer
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.HTTP
+import retrofit2.http.Header
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -43,38 +54,47 @@ data class CreatePostRequest(
      * (`services/gateway/src/routes/posts/types.ts`, `CreatePostSchema.mediaAlt`).
      */
     val mediaAlt: Map<String, String>? = null,
+    /** Audience restreinte (`EXCEPT` / `ONLY`) : les ids concernés. */
+    val visibilityUserIds: List<String>? = null,
+    /** Scène composée (v1 + canvas v3), absente d'un post sans scène. */
+    @Serializable(with = StoryEffectsWireSerializer::class)
+    val storyEffects: StoryEffects? = null,
+    val allowSoundExtraction: Boolean? = null,
+    /** `null` = ne rien déclarer ; jamais `[]` (ne pas effacer). */
+    val mentions: List<PostMentionInput>? = null,
+    /** Légende visible par média, clé = un id de [mediaIds]. */
+    val mediaCaption: Map<String, String>? = null,
+    val discoverabilityPrecision: DiscoverabilityPrecision? = null,
 )
 
-/** Mobile transcription payload — port of MobileTranscriptionPayload (ServiceModels.swift). */
-@Serializable
-data class MobileTranscriptionPayload(
-    val text: String,
-    val language: String,
-    val confidence: Double? = null,
-    val durationMs: Int? = null,
-    val segments: List<MobileTranscriptionSegment> = emptyList(),
-)
+/** Le modèle vit dans :core:model ; ces alias gardent les imports historiques valides. */
+typealias MobileTranscriptionPayload = me.meeshy.sdk.model.MobileTranscriptionPayload
+typealias MobileTranscriptionSegment = me.meeshy.sdk.model.MobileTranscriptionSegment
 
-/** A mobile transcription segment — port of MobileTranscriptionSegment (ServiceModels.swift). */
-@Serializable
-data class MobileTranscriptionSegment(
-    val text: String,
-    val start: Double? = null,
-    val end: Double? = null,
-    val speakerId: String? = null,
-)
-
-/** Create a story — port of CreateStoryRequest (ServiceModels.swift). */
+/**
+ * Create a story — port of CreateStoryRequest (ServiceModels.swift).
+ *
+ * [type] et [visibility] partent TOUJOURS (#4754) : `MeeshyApi.json` n'encode pas les
+ * valeurs par défaut, et la passerelle pose `type = POST` sur un corps qui n'en porte
+ * pas — la story devenait un post public permanent, sans expiration ni anneau.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CreateStoryRequest(
-    val type: String = "STORY",
+    @EncodeDefault val type: String = "STORY",
     val content: String? = null,
     @Serializable(with = StoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
-    val visibility: String = "PUBLIC",
+    @EncodeDefault val visibility: String = "PUBLIC",
     val originalLanguage: String? = null,
     val mediaIds: List<String>? = null,
     val repostOfId: String? = null,
+    val visibilityUserIds: List<String>? = null,
+    val mentions: List<PostMentionInput>? = null,
+    val allowSoundExtraction: Boolean? = null,
+    val mediaAlt: Map<String, String>? = null,
+    val mediaCaption: Map<String, String>? = null,
+    val alsoAsReel: Boolean? = null,
 )
 
 /** Update a post — port of UpdatePostRequest (ServiceModels.swift). */
@@ -83,6 +103,20 @@ data class UpdatePostRequest(
     val content: String? = null,
     val visibility: String? = null,
     val moodEmoji: String? = null,
+    val visibilityUserIds: List<String>? = null,
+    val originalLanguage: String? = null,
+    val type: String? = null,
+    val removeMediaIds: List<String>? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
+    val storyEffects: StoryEffects? = null,
+    val mediaIds: List<String>? = null,
+    /** `null` = clé absente ; [kotlinx.serialization.json.JsonNull] = effacer ; objet = remplacer. */
+    val location: JsonElement? = null,
+    /** `null` = clé absente ; `[]` = tout retirer. Jamais INLINE. */
+    val mentions: List<PostMentionInput>? = null,
+    val allowSoundExtraction: Boolean? = null,
+    val mediaAlt: Map<String, String>? = null,
+    val mediaCaption: Map<String, String>? = null,
 )
 
 /** Create a comment — port of CreateCommentRequest (ServiceModels.swift). */
@@ -91,6 +125,8 @@ data class CreateCommentRequest(
     val content: String,
     val parentId: String? = null,
     val effectFlags: Int? = null,
+    /** La langue dans laquelle le commentaire est écrit ; absente, la passerelle la devine (#12484). */
+    val originalLanguage: String? = null,
 )
 
 /** Repost a post — port of RepostRequest (StoryModels.swift). */
@@ -124,12 +160,51 @@ data class PostLikeRequest(
     val emoji: String,
 )
 
-/** Batch impression-tracking body for a feed slice. */
+/** Le corps d'un retrait par la modération : `{ "reason": … }` (#11151). */
 @Serializable
-data class PostImpressionsRequest(
-    val postIds: List<String>,
-    val source: String = "feed",
+data class ContentRemovalBody(val reason: String)
+
+/** Édition d'un commentaire — seuls les champs posés partent. */
+@Serializable
+data class UpdateCommentRequest(
+    val content: String? = null,
+    val effectFlags: Int? = null,
+    val originalLanguage: String? = null,
 )
+
+/** Partage d'un post ; `generateLink = true` demande un lien suivi `meeshy.me/l/<jeton>`. */
+@Serializable
+data class SharePostRequest(
+    val platform: String? = null,
+    val generateLink: Boolean? = null,
+)
+
+/** Traduction d'un commentaire à la demande vers UNE langue ; `force` rejoue une langue déjà traduite. */
+@Serializable
+data class CommentTranslationRequest(
+    val targetLanguage: String,
+    val force: Boolean? = null,
+)
+
+/** Publie une pièce jointe reçue en conversation (`POST /posts/from-attachment`). */
+@Serializable
+data class PublishAttachmentRequest(
+    val attachmentId: String,
+    val target: String? = null,
+    val content: String? = null,
+    val capturedInApp: Boolean? = null,
+)
+
+/** Un geste de modération de publications (`make-private`) avec son motif. */
+@Serializable
+data class PublicationModerationRequest(
+    val action: String,
+    val postIds: List<String>,
+    val reason: String? = null,
+)
+
+/** En-tête d'idempotence des créations : un rejeu du même geste ne crée rien de plus. */
+const val CLIENT_MUTATION_ID_HEADER = "X-Client-Mutation-Id"
 
 interface PostApi {
     @GET("posts/feed")
@@ -185,10 +260,16 @@ interface PostApi {
     ): ApiResponse<List<ApiPost>>
 
     @POST("posts")
-    suspend fun create(@Body body: CreatePostRequest): ApiResponse<ApiPost>
+    suspend fun create(
+        @Body body: CreatePostRequest,
+        @Header(CLIENT_MUTATION_ID_HEADER) clientMutationId: String? = null,
+    ): ApiResponse<ApiPost>
 
     @POST("posts")
-    suspend fun createStory(@Body body: CreateStoryRequest): ApiResponse<ApiPost>
+    suspend fun createStory(
+        @Body body: CreateStoryRequest,
+        @Header(CLIENT_MUTATION_ID_HEADER) clientMutationId: String? = null,
+    ): ApiResponse<ApiPost>
 
     @PUT("posts/{id}")
     suspend fun update(@Path("id") postId: String, @Body body: UpdatePostRequest): ApiResponse<ApiPost>
@@ -237,6 +318,7 @@ interface PostApi {
     suspend fun repost(
         @Path("id") postId: String,
         @Body body: RepostPostRequest,
+        @Header(CLIENT_MUTATION_ID_HEADER) clientMutationId: String? = null,
     ): ApiResponse<ApiPost>
 
     @POST("posts/{id}/translate")
@@ -272,9 +354,6 @@ interface PostApi {
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
 
-    @POST("posts/impressions/batch")
-    suspend fun recordImpressions(@Body body: PostImpressionsRequest): ApiResponse<Unit>
-
     @GET("posts/{id}/comments")
     suspend fun getComments(
         @Path("id") postId: String,
@@ -286,6 +365,7 @@ interface PostApi {
     suspend fun addComment(
         @Path("id") postId: String,
         @Body body: CreateCommentRequest,
+        @Header(CLIENT_MUTATION_ID_HEADER) clientMutationId: String? = null,
     ): ApiResponse<ApiPostComment>
 
     @GET("posts/{id}/comments/{commentId}/replies")
@@ -313,4 +393,75 @@ interface PostApi {
         @Path("id") postId: String,
         @Path("commentId") commentId: String,
     ): ApiResponse<Unit>
+
+    /** Posts portant un mot-dièse (`GET /posts/hashtag/{tag}`), pagination par curseur. */
+    @GET("posts/hashtag/{tag}")
+    suspend fun getByHashtag(
+        @Path("tag") tag: String,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPost>>
+
+    /** Carte de densité « À proximité » : `cellSizeKm` doit être un pas de [me.meeshy.sdk.model.NearbyDensityCellSize]. */
+    @GET("posts/nearby/density")
+    suspend fun getNearbyDensity(
+        @Query("lat") lat: Double,
+        @Query("lng") lng: Double,
+        @Query("radiusKm") radiusKm: Double,
+        @Query("cellSizeKm") cellSizeKm: Double,
+    ): ApiResponse<List<NearbyDensityCell>>
+
+    /** Retrait d'un post par la modération : le DELETE porte le motif en corps. */
+    @HTTP(method = "DELETE", path = "posts/{id}", hasBody = true)
+    suspend fun deleteWithReason(
+        @Path("id") postId: String,
+        @Body body: ContentRemovalBody,
+    ): ApiResponse<Unit>
+
+    /** Retrait d'un commentaire par la modération : le DELETE porte le motif en corps. */
+    @HTTP(method = "DELETE", path = "posts/{id}/comments/{commentId}", hasBody = true)
+    suspend fun deleteCommentWithReason(
+        @Path("id") postId: String,
+        @Path("commentId") commentId: String,
+        @Body body: ContentRemovalBody,
+    ): ApiResponse<Unit>
+
+    @PATCH("posts/{id}/comments/{commentId}")
+    suspend fun updateComment(
+        @Path("id") postId: String,
+        @Path("commentId") commentId: String,
+        @Body body: UpdateCommentRequest,
+    ): ApiResponse<ApiPostComment>
+
+    @POST("posts/{id}/comments/{commentId}/translate")
+    suspend fun requestCommentTranslation(
+        @Path("id") postId: String,
+        @Path("commentId") commentId: String,
+        @Body body: CommentTranslationRequest,
+    ): ApiResponse<Unit>
+
+    /** Compte un partage et, sur demande, frappe le lien suivi (`generateLink`). */
+    @POST("posts/{id}/share")
+    suspend fun shareWithLink(
+        @Path("id") postId: String,
+        @Body body: SharePostRequest,
+    ): ApiResponse<PostShareResult>
+
+    /** Traduction à la demande de la LÉGENDE d'un média de post. */
+    @POST("posts/media/{mediaId}/caption/translate")
+    suspend fun requestMediaCaptionTranslation(
+        @Path("mediaId") mediaId: String,
+        @Body body: PostTranslationRequest,
+    ): ApiResponse<Unit>
+
+    /** Publie une pièce jointe de conversation ; soumis à la porte e-mail côté intercepteur, pas ici. */
+    @POST("posts/from-attachment")
+    suspend fun publishAttachment(@Body body: PublishAttachmentRequest): ApiResponse<ApiPost>
+
+    /** Rendre privée la publication d'un autre : la même porte que la console d'administration. */
+    @POST("admin/users/{authorId}/publications/moderation")
+    suspend fun moderatePublications(
+        @Path("authorId") authorId: String,
+        @Body body: PublicationModerationRequest,
+    ): ApiResponse<PublicationModerationReceipt>
 }

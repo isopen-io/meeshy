@@ -6,7 +6,7 @@ import MeeshySDK
 /// instead of fighting singleton state pollution.
 ///
 /// The default production implementation `AuthManagerLanguageProvider` reads
-/// `AuthManager.shared.currentUser?.preferredContentLanguages` exactly once
+/// the reader's strict prism (`ReaderPrism.resolve(for:)`) exactly once
 /// per call so updates to the authenticated user are picked up automatically.
 ///
 /// Usage in ViewModels:
@@ -22,12 +22,12 @@ protocol LanguageProviding {
 }
 
 /// Default implementation that defers to the live `AuthManager` singleton.
-/// Reads `currentUser?.preferredContentLanguages` exactly once per call so
+/// Reads the reader's strict prism (`ReaderPrism.resolve(for:)`) once per call so
 /// that updates to the authenticated user are picked up automatically.
 @MainActor
 struct AuthManagerLanguageProvider: LanguageProviding {
     var preferredLanguages: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        ReaderPrism.resolve(for: AuthManager.shared.currentUser)
     }
 }
 

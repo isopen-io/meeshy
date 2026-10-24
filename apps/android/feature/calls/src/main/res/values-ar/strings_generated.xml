@@ -1,0 +1,28 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_recording_accept">قبول</string>
+    <string name="call_recording_active">التسجيل جارٍ</string>
+    <string name="call_recording_ask">%s يريد تسجيل المكالمة</string>
+    <string name="call_recording_askDetail">لا يبدأ التسجيل إلا إذا وافق الجميع، ثم يُضاف إلى المحادثة.</string>
+    <string name="call_recording_askDetail_video">لا تُسجَّل شاشة المكالمة وكل صوتها إلا إذا وافق الجميع، ثم تُضاف إلى المحادثة.</string>
+    <string name="call_recording_ask_video">%s يريد تسجيل المكالمة بالفيديو</string>
+    <string name="call_recording_cancel">إلغاء</string>
+    <string name="call_recording_caption">تسجيل</string>
+    <string name="call_recording_close">إغلاق</string>
+    <string name="call_recording_hint">يطلب موافقة كل مشارك قبل التسجيل</string>
+    <string name="call_recording_kind_audio">الصوت فقط</string>
+    <string name="call_recording_kind_hint">اختر ما سيُسجَّل؛ ثم يجب أن يوافق كل مشارك</string>
+    <string name="call_recording_kind_video">الصوت والفيديو</string>
+    <string name="call_recording_refuse">رفض</string>
+    <string name="call_recording_saveFailed">تعذّرت إضافة التسجيل</string>
+    <string name="call_recording_saved">أُضيف التسجيل إلى المحادثة</string>
+    <string name="call_recording_someone">أحد المشاركين</string>
+    <string name="call_recording_start">تسجيل المكالمة</string>
+    <string name="call_recording_stop">إيقاف التسجيل</string>
+    <string name="call_recording_stopped_joined">انضم شخص إلى المكالمة: توقف التسجيل</string>
+    <string name="call_recording_stopped_other">توقف التسجيل</string>
+    <string name="call_recording_stopped_refused">تم رفض التسجيل</string>
+    <string name="call_recording_stopped_timeout">لم يُجب الجميع: لا تسجيل</string>
+    <string name="call_recording_unavailable">التسجيل غير متاح حاليًا</string>
+    <string name="call_recording_waiting">بانتظار موافقة الجميع…</string>
+</resources>

@@ -4,7 +4,7 @@
 /// auteur (cover locale composite) comme côté récepteur (`StoryCoverThumbnail`).
 ///
 /// Extrait de `StoryViewModel.swift` (#4425) — voir ce fichier pour l'état
-/// stocké (`prefetchedMediaURLs`, `attemptedReceiverCoverStoryIds`, …).
+/// stocké (`trayPreloader`, `attemptedReceiverCoverStoryIds`, …).
 
 import Foundation
 import SwiftUI
@@ -191,72 +191,10 @@ extension StoryViewModel {
         }
     }
 
-    /// Prefetch all media for all story groups in the background.
-    /// Downloads images to disk cache and prerolls video players for the first groups.
-    /// First slide of each group is prefetched at high priority for instant display.
+    /// Précharge les médias du tray (#11868) : la passe vit chez
+    /// `StoryTrayMediaPreloader`, qui s'arrête hors du premier plan.
     func prefetchAllStoryMedia(_ groups: [StoryGroup]) {
-        // Élargi de 5 → 8 groupes : sur un tray dense, précharger plus de bulles
-        // rend les premières ouvertures instantanées sans exploser la mémoire (on
-        // ne preroll l'AVPlayer que pour la première slide de chaque groupe).
-        let groupsToPreload = Array(groups.prefix(8))
-
-        // High priority: première slide non vue de chaque groupe (ce que l'utilisateur tape en premier).
-        Task(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
-            let imageCache = await CacheCoordinator.shared.images
-            await withTaskGroup(of: [String].self) { taskGroup in
-                for group in groupsToPreload {
-                    guard let targetStory = group.stories.first(where: { !$0.isViewed }) ?? group.stories.first else { continue }
-                    // Réclame (et marque) les URLs non encore préchargées sur le MainActor
-                    // AVANT de dispatcher le child task (qui n'est pas isolé MainActor).
-                    let urls = self.claimUnprefetchedURLs(for: targetStory)
-                    guard !urls.isEmpty else { continue }
-                    taskGroup.addTask {
-                        await Self.prefetchStoryMediaURLs(urls, in: targetStory, imageCache: imageCache, prerollPlayer: true)
-                    }
-                }
-                // Une URL sautée par la politique (ex: vidéo en cellulaire) n'est
-                // PAS « déjà préchargée » — la retirer pour qu'un retour au Wi-Fi
-                // en cours de session la rattrape (cf. claimUnprefetchedURLs ci-dessous).
-                for await skipped in taskGroup {
-                    self.prefetchedMediaURLs.subtract(skipped)
-                }
-            }
-        }
-
-        // Utility priority: jusqu'à n+2 slides à venir par groupe (fenêtre élargie
-        // de 3 → 4 pour couvrir confortablement n+1 ET n+2 avant ouverture).
-        // DO NOT preroll AVPlayer here; let `StoryReaderPrefetcher` handle JIT warming to save memory.
-        Task(priority: .utility) { [weak self] in
-            guard let self else { return }
-            let imageCache = await CacheCoordinator.shared.images
-            for group in groupsToPreload {
-                guard !Task.isCancelled else { return }
-                let firstUnviewedIndex = group.stories.firstIndex(where: { !$0.isViewed }) ?? 0
-                let slidesToPrefetch = Array(group.stories.dropFirst(firstUnviewedIndex + 1).prefix(4))
-
-                for story in slidesToPrefetch {
-                    guard !Task.isCancelled else { return }
-                    let urls = self.claimUnprefetchedURLs(for: story)
-                    guard !urls.isEmpty else { continue }
-                    let skipped = await Self.prefetchStoryMediaURLs(urls, in: story, imageCache: imageCache, prerollPlayer: false)
-                    self.prefetchedMediaURLs.subtract(skipped)
-                }
-            }
-        }
-    }
-
-    /// Calcule les URLs média d'une story, retire celles déjà préchargées dans la
-    /// session, marque les nouvelles comme réclamées et les retourne. `@MainActor`
-    /// (mutation de `prefetchedMediaURLs`) — appelé depuis les boucles de prefetch.
-    private func claimUnprefetchedURLs(for story: StoryItem) -> [String] {
-        let all = Self.mediaURLStrings(for: story)
-        let fresh = all.filter { !prefetchedMediaURLs.contains($0) }
-        // Borné : passé ce seuil, la mémoire de session repart de zéro — au pire un média déjà en cache
-        // est re-sondé une fois, au lieu d'un ensemble qui grossit tant que l'app reste ouverte.
-        if prefetchedMediaURLs.count > 2_000 { prefetchedMediaURLs.removeAll() }
-        prefetchedMediaURLs.formUnion(fresh)
-        return fresh
+        trayPreloader.preload(groups)
     }
 
     // MARK: - Purge des stories mortes
@@ -379,6 +317,113 @@ extension StoryViewModel {
             }
         }
     }
+}
+
+/// **Le préchargement du tray des stories (#11868)** — sorti de
+/// `StoryViewModel`, dont il ne lisait que les groupes.
+///
+/// Deux passes : la première slide non vue de huit groupes (haute priorité,
+/// lecteur préparé), puis jusqu'à quatre slides suivantes par groupe (sans
+/// lecteur : `StoryReaderPrefetcher` les chauffe au besoin). Toutes deux
+/// tournent sous `PreloadActivityGate` : l'app qui quitte le premier plan (ou
+/// dont l'écran est couvert) les arrête, son retour les relance depuis le début.
+///
+/// Les URL sont RÉCLAMÉES avant d'être téléchargées — c'est la déduplication
+/// de session : le tray rappelle `preload` à chaque chargement (cache `.fresh`,
+/// `.stale`, rafraîchissement SWR), et sans elle chaque ouverture relançait
+/// des dizaines de sondes disque pour des médias déjà en cache. Une passe
+/// INTERROMPUE rend donc ce qu'elle avait réclamé, sinon le retour le
+/// sauterait pour toute la session ; une URL sautée par la politique
+/// d'auto-téléchargement est rendue aussi (un retour au Wi-Fi la rattrape).
+@MainActor
+final class StoryTrayMediaPreloader {
+    nonisolated deinit {}
+
+    /// Télécharge les URL d'une story ; rend celles que la politique a sautées.
+    typealias Fetch = @Sendable @concurrent ([String], StoryItem, Bool) async -> [String]
+
+    private(set) var claimedURLs: Set<String> = []
+    private let activity: PreloadActivityGate
+    private let fetch: Fetch
+    private var passes: [Task<Void, Never>] = []
+
+    /// `fetch` : `nil` ⇒ les stores disque du produit, sous la politique
+    /// d'auto-téléchargement (`prefetchStoryMediaURLs`).
+    init(activity: PreloadActivityGate = .shared, fetch: Fetch? = nil) {
+        self.activity = activity
+        self.fetch = fetch ?? { urls, story, prerollPlayer in
+            await StoryTrayMediaPreloader.prefetchStoryMediaURLs(urls, in: story, prerollPlayer: prerollPlayer)
+        }
+    }
+
+    /// Relance les deux passes sur `groups` ; celles en cours s'arrêtent et
+    /// rendent leurs réclamations.
+    func preload(_ groups: [StoryGroup]) {
+        cancel()
+        let groupsToPreload = Array(groups.prefix(8))
+        let activity = activity
+        passes = [
+            Task(priority: .userInitiated) { [weak self] in
+                await activity.runWhileActive { await self?.preloadFirstSlides(of: groupsToPreload) }
+            },
+            Task(priority: .utility) { [weak self] in
+                await activity.runWhileActive { await self?.preloadUpcomingSlides(of: groupsToPreload) }
+            },
+        ]
+    }
+
+    func cancel() {
+        passes.forEach { $0.cancel() }
+        passes = []
+    }
+
+    /// La première slide non vue de chaque groupe — celle qu'on tape d'abord.
+    /// Réclamée sur le MainActor AVANT le lancement de la tâche enfant.
+    private func preloadFirstSlides(of groups: [StoryGroup]) async {
+        let fetch = self.fetch
+        await withTaskGroup(of: [String].self) { taskGroup in
+            for group in groups {
+                guard let target = group.stories.first(where: { !$0.isViewed }) ?? group.stories.first else { continue }
+                let urls = claim(for: target)
+                guard !urls.isEmpty else { continue }
+                taskGroup.addTask {
+                    let skipped = await fetch(urls, target, true)
+                    return Task.isCancelled ? urls : skipped
+                }
+            }
+            for await returned in taskGroup {
+                release(returned)
+            }
+        }
+    }
+
+    /// Jusqu'à quatre slides après la première non vue, sans préparer de lecteur.
+    private func preloadUpcomingSlides(of groups: [StoryGroup]) async {
+        for group in groups {
+            let firstUnviewedIndex = group.stories.firstIndex(where: { !$0.isViewed }) ?? 0
+            for story in group.stories.dropFirst(firstUnviewedIndex + 1).prefix(4) {
+                guard !Task.isCancelled else { return }
+                let urls = claim(for: story)
+                guard !urls.isEmpty else { continue }
+                let skipped = await fetch(urls, story, false)
+                release(Task.isCancelled ? urls : skipped)
+            }
+        }
+    }
+
+    /// Les URL média de `story` pas encore réclamées cette session, réclamées.
+    /// Borné : passé 2 000, la mémoire de session repart de zéro — au pire un
+    /// média déjà en cache est re-sondé une fois.
+    private func claim(for story: StoryItem) -> [String] {
+        let fresh = StoryViewModel.mediaURLStrings(for: story).filter { !claimedURLs.contains($0) }
+        if claimedURLs.count > 2_000 { claimedURLs.removeAll() }
+        claimedURLs.formUnion(fresh)
+        return fresh
+    }
+
+    private func release(_ urls: [String]) {
+        claimedURLs.subtract(urls)
+    }
 
     /// Décision PURE : ce type de média de story doit-il être PRÉCHARGÉ, la
     /// politique d'auto-téléchargement étant déjà résolue ? Miroir exact de
@@ -403,9 +448,9 @@ extension StoryViewModel {
     /// Prefetch les URLs (déjà filtrées) d'une story dans les stores disque + mémoire.
     /// Retourne les URLs SAUTÉES par la politique d'auto-téléchargement (ex:
     /// vidéo interdite en cellulaire), pour que l'appelant les retire de
-    /// `prefetchedMediaURLs` — sinon la dédup de session les marque
+    /// `claimedURLs` — sinon la dédup de session les marque
     /// « déjà préchargées » à vie et un retour au Wi-Fi ne les rattrape jamais.
-    private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async -> [String] {
+    private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, prerollPlayer: Bool) async -> [String] {
         // Respecte la politique d'auto-téléchargement de l'utilisateur — miroir
         // de `ConversationMediaHandler.prefetchRecentMedia` et de
         // `BubbleCarouselView.prefetchAdjacentPages`. Sans cette garde, le
@@ -418,6 +463,7 @@ extension StoryViewModel {
         let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
         let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
         let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .audio, condition: condition, prefs: prefs)
+        let imageCache = await CacheCoordinator.shared.images
         var skipped: [String] = []
         for urlString in urls {
             // Normalize through the SAME resolver the SDK reader uses

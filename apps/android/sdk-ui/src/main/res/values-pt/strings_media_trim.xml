@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lot rognage-regles-et-bande-de-scene : libellés propres à Android des poignées de rognage. -->
+    <string name="media_trim_handle_start">Início da parte mantida</string>
+    <string name="media_trim_handle_end">Fim da parte mantida</string>
+</resources>

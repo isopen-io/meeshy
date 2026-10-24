@@ -22,6 +22,7 @@ import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
 import { shellStartHref } from '@/lib/links/shell-start';
 import { installHapticsDriver, shellHapticsDriver } from '@/lib/view/haptics';
 import { coqueCourante } from '@/lib/native-shell';
+import { redirectBelowWebViewFloor } from '@/lib/shell/webview-floor';
 import { Router, href, navigate, preload } from '@/routes/route-table';
 
 /**
@@ -31,6 +32,14 @@ import { Router, href, navigate, preload } from '@/routes/route-table';
  * et la recette simulateur R4 pour la preuve qu'elle est bien montee ici.
  */
 followSystem();
+
+/**
+ * LE PLANCHER DE WEBVIEW (#11325) — dans la coque, une Android System WebView
+ * sous Chrome 111 part vers l'écran de mise à jour. Le natif
+ * (`android.minWebViewVersion`) l'a déjà fait quand il sait dater la WebView ;
+ * ce contrôle couvre celles qu'il ne date pas, par `navigator.userAgent`.
+ */
+if (__SHELL__) redirectBelowWebViewFloor({ userAgent: navigator.userAgent, replace: (url) => location.replace(url) });
 
 /**
  * LA SESSION EST TENUE (#5605, § 7.3) — lecture `localStorage` seule, aucun
@@ -339,12 +348,25 @@ if (__SHELL__) {
  * (`vite.config.ts` § `injectRegister`), et que le legacy
  * (`ServiceWorkerInitializer`, monté dans son layout).
  *
- * `__SHELL__` : la coque Capacitor n'émet AUCUN service worker
- * (`scripts/check-shell-dist.mjs`) — elle embarque ses actifs et reçoit une
+ * `__SHELL__` : la coque Capacitor n'émet AUCUN service worker de bundle
+ * (`scripts/check-shell-dist.mjs`) — seulement celui des médias récents, ci-dessus — elle embarque ses actifs et reçoit une
  * version neuve par son magasin d'applications. `import.meta.env.PROD` : en
  * développement, `vite` ne sert pas de `/sw.js` (les `devOptions` de VitePWA
  * sont désactivées), et l'inscription échouerait à chaque rechargement.
  */
+/**
+ * LA COQUE N'INSCRIT QU'UN WORKER : celui des médias vus récemment (#11326),
+ * qui ne précache rien du bundle et ne resert que l'audio et la vidéo gardés.
+ * Même horloge que le worker du web : après le `load`.
+ */
+if (__SHELL__ && 'serviceWorker' in navigator) {
+  const inscrireMediasRecents = (): void => {
+    void import('@/lib/shell/recent-media-worker').then(({ registerShellRecentMediaWorker }) => registerShellRecentMediaWorker());
+  };
+  if (document.readyState === 'complete') inscrireMediasRecents();
+  else window.addEventListener('load', inscrireMediasRecents, { once: true });
+}
+
 if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
   const inscrire = (): void => {
     void import('@/lib/app-update/service-worker').then(({ appUpdateController }) =>
@@ -486,7 +508,8 @@ if (__SHELL__) {
 /**
  * L'ENTONNOIR DES NOTIFICATIONS (#10507) — ce que le service worker a noté
  * (reçue, affichée, ouverte, écartée) passe dans la file v2 au chargement ;
- * et ce que la coque Android a noté app fermée aussi (#10938).
+ * et ce que la coque Android a noté app fermée aussi (#10938). Puis à chaque
+ * retour de la page (#12585) : la coque la reprend sans la recharger.
  */
 {
   const viderNotifications = (): void => {
@@ -494,10 +517,12 @@ if (__SHELL__) {
       import('@/lib/notifications/notification-telemetry'),
       import('@/lib/view/reading-telemetry'),
       import('@/lib/native-shell'),
-    ]).then(([{ drainNotificationTelemetry, drainShellNotificationTelemetry }, { readingTelemetry }, { coqueCourante }]) => {
+    ]).then(([{ drainNotificationTelemetry, drainOnEachReturn, drainShellNotificationTelemetry }, { readingTelemetry }, { coqueCourante }]) => {
       const record = (event: Parameters<typeof readingTelemetry.recordV2>[0]): void => readingTelemetry.recordV2(event);
-      void drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, record);
-      void drainShellNotificationTelemetry(coqueCourante(), record);
+      drainOnEachReturn(document, () => {
+        void drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, record);
+        void drainShellNotificationTelemetry(coqueCourante(), record);
+      });
     });
   };
   if (document.readyState === 'complete') viderNotifications();

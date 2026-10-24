@@ -22,6 +22,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.ui.component.media.rememberMediaKindStrings
+import me.meeshy.ui.theme.LentilleMetrics
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -41,8 +43,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal fun ConversationRowPreviewLine(
     preview: RowPreview,
     primaryAccent: Color,
+    modifier: Modifier = Modifier,
 ) {
-    val bodySmall = MaterialTheme.typography.bodySmall
+    val bodySmall = MaterialTheme.typography.bodySmall.copy(fontSize = LentilleMetrics.Line2.size)
     val textSecondary = MeeshyTheme.tokens.textSecondary
     val textMuted = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.65f)
     val standardColor = if (preview.isAccent) primaryAccent else textSecondary
@@ -80,7 +83,16 @@ internal fun ConversationRowPreviewLine(
         )
     }
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        preview.draftLabel?.let { label ->
+            Text(
+                text = label,
+                style = bodySmall,
+                color = MeeshyPalette.Error,
+                maxLines = 1,
+                modifier = Modifier.padding(end = MeeshySpacing.xs),
+            )
+        }
         if (icon != null) {
             Icon(
                 imageVector = icon,
@@ -121,6 +133,7 @@ internal fun lastMessagePreviewLabels(): LastMessagePreviewLabels =
         you = stringResource(R.string.conversations_preview_you),
         senderFormat = stringResource(R.string.conversations_preview_sender_format),
         draftPrefix = stringResource(R.string.conversations_preview_draft_prefix),
+        draftLabel = stringResource(R.string.conversations_preview_draft_label),
         expired = stringResource(R.string.conversations_preview_expired),
         hidden = stringResource(R.string.conversations_preview_hidden),
         viewOnce = stringResource(R.string.conversations_preview_view_once),

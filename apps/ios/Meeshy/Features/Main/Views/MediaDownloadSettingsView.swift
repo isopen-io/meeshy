@@ -19,8 +19,14 @@ struct MediaDownloadSettingsView: View {
     /// #9684 — à la prise de vue : l'original (défaut : non) et la version avec effets et cadre.
     @AppStorage(CaptureSavePolicy.savesOriginalKey) private var captureSavesOriginal = CaptureSavePolicy.standard.savesOriginal
     @AppStorage(CaptureSavePolicy.renderedModeKey) private var captureRenderedMode = CaptureSavePolicy.standard.renderedMode
+    /// #9885 — à l'envoi : le lieu des photos (retiré par défaut, #11247) et la compression.
+    @AppStorage(OutgoingImageLocationSetting.key) private var keepsPhotoLocation = OutgoingImageLocationSetting.standard
+    @ObservedObject private var preferences = UserPreferencesManager.shared
 
     private let accentColor = MeeshyColors.brandPrimaryHex
+    private static let fieldIconSide: CGFloat = 28
+    /// Le séparateur s'aligne sur le texte des lignes : leur marge, leur icône, puis l'espacement.
+    private static let separatorInset = MeeshySpacing.mdPlus + fieldIconSide + MeeshySpacing.md
 
     var body: some View {
         ZStack {
@@ -44,6 +50,7 @@ struct MediaDownloadSettingsView: View {
             infoSection
             autoSaveSection
             captureSaveSection
+            outgoingSection
             policyPicker(
                 title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandPrimaryHex,
                 binding: $store.preferences.image
@@ -137,7 +144,7 @@ struct MediaDownloadSettingsView: View {
                               subtitle: String(localized: "settings.media.capture.original.subtitle",
                                                defaultValue: "La photo ou la vidéo brute, sans effet ni cadre, rejoint Photos à chaque prise.",
                                                bundle: .main))
-                Divider().padding(.leading, 54)
+                Divider().padding(.leading, Self.separatorInset)
                 captureToggle(isOn: Binding(get: { captureRenderedMode == .automatic },
                                             set: { captureRenderedMode = $0 ? .automatic : .manual }),
                               icon: "camera.filters",
@@ -145,6 +152,33 @@ struct MediaDownloadSettingsView: View {
                                             defaultValue: "Enregistrer la version avec effets et cadre", bundle: .main),
                               subtitle: String(localized: "settings.media.capture.rendered.subtitle",
                                                defaultValue: "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande.",
+                                               bundle: .main))
+            }
+            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
+        }
+    }
+
+    // MARK: - À l'envoi (#9885)
+
+    private var outgoingSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "settings.media.outgoing.header", defaultValue: "À l'envoi", bundle: .main),
+                          icon: "paperplane.fill", color: MeeshyColors.indigo600Hex)
+            VStack(spacing: 0) {
+                captureToggle(isOn: Binding(get: { preferences.document.compressImagesOnUpload },
+                                            set: { compresse in preferences.updateDocument { $0.compressImagesOnUpload = compresse } }),
+                              icon: "arrow.down.right.and.arrow.up.left",
+                              title: String(localized: "settings.media.outgoing.compress.title",
+                                            defaultValue: "Compression forte des photos et vidéos", bundle: .main),
+                              subtitle: String(localized: "settings.media.outgoing.compress.subtitle",
+                                               defaultValue: "Économise des données en réduisant chaque photo et chaque vidéo (720p). Sinon, elles partent en haute définition (vidéos en 1080p), compressées sans perte visible.",
+                                               bundle: .main))
+                Divider().padding(.leading, Self.separatorInset)
+                captureToggle(isOn: $keepsPhotoLocation, icon: "location",
+                              title: String(localized: "settings.media.outgoing.location.title",
+                                            defaultValue: "Conserver le lieu des photos", bundle: .main),
+                              subtitle: String(localized: "settings.media.outgoing.location.subtitle",
+                                               defaultValue: "Par défaut, la position GPS est retirée de chaque photo avant l'envoi.",
                                                bundle: .main))
             }
             .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
@@ -210,7 +244,7 @@ struct MediaDownloadSettingsView: View {
                     .accessibilityAddTraits(binding.wrappedValue == policy ? .isSelected : [])
 
                     if index != AutoDownloadPolicy.allCases.count - 1 {
-                        Divider().padding(.leading, 54)
+                        Divider().padding(.leading, Self.separatorInset)
                     }
                 }
             }
@@ -259,7 +293,7 @@ struct MediaDownloadSettingsView: View {
         Image(systemName: name)
             .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
             .foregroundColor(Color(hex: color))
-            .frame(width: 28, height: 28)
+            .frame(width: Self.fieldIconSide, height: Self.fieldIconSide)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(Color(hex: color).opacity(0.12))

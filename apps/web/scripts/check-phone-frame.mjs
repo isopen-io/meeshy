@@ -59,9 +59,9 @@
  *
  * et, dans les SEPT langues, à 320, 375 et 390 px (#10124) :
  *
- *   6. sur chaque landing, la porte de l'en-tête (« Se connecter » — « Entrer
- *      sans compte » a quitté la page, #10784) tient sur UNE ligne, sans rien
- *      rogner. (La carte World Wide de `/login`, qu'on mesurait aussi, est
+ *   6. sur chaque landing, la porte de l'en-tête (« Mes conversations »,
+ *      seule depuis #12500 — « Entrer sans compte » a quitté la page, #10784,
+ *      « Se connecter » aussi) tient sur UNE ligne, sans rien rogner. (La carte World Wide de `/login`, qu'on mesurait aussi, est
  *      retirée — #10784.)
  *
  * La démonstration ordinaire est confortable : la mesure de 1. et 2. était verte
@@ -74,6 +74,7 @@
  */
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { runBounded } from './lib/run-bounded.mjs';
 import { waitForValueSettled } from './lib/settle-value.mjs';
 import { v31Routes } from './lib/v31-routes.mjs';
 import {
@@ -160,7 +161,7 @@ const releveTextes = (selecteurs) =>
     return { selecteur, absent: false, lignes, rogne: el.scrollWidth > el.clientWidth + 1, texte: (el.textContent ?? '').trim() };
   });
 
-const PORTES_LANDING = ['.ld-bar > a[href="/login"]'];
+const PORTES_LANDING = ['.ld-bar > a[href="/chats"]'];
 
 /** Le relevé, dans la page — voir le doc-comment de tête. */
 const releve = () => {
@@ -262,112 +263,123 @@ const ouvre = async (viewport) => {
   return context;
 };
 
+/* #12600 — le réseau de la page entre dans la stabilité (`settle-value.mjs`) : sans
+ * la fenêtre fixe de 500 ms de `networkidle`, payée à chacun des ~740 relevés. */
+const reseauDe = (page) => {
+  let partis = 0;
+  let revenus = 0;
+  page.on('request', () => { partis += 1; });
+  page.on('requestfinished', () => { revenus += 1; });
+  page.on('requestfailed', () => { revenus += 1; });
+  return () => (partis === revenus ? String(partis) : undefined);
+};
+
 const mesure = async (context, adresse) => {
   const page = await context.newPage();
+  const network = reseauDe(page);
   await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-  await page.waitForLoadState('networkidle').catch(() => undefined);
-  const m = await waitForValueSettled(page, releve);
+  const m = await waitForValueSettled(page, releve, undefined, { network, pret: (r) => r.perceptible });
   await page.close();
   return m;
 };
 
-try {
-  for (const viewport of TELEPHONES) {
-    const gabarit = `${viewport.width}×${viewport.height}`;
-    const context = await ouvre(viewport);
-    for (const adresse of ADRESSES) {
-      const tag = `${adresse} @ ${gabarit}`;
-      const m = await mesure(context, adresse);
-      if (m === undefined) {
-        constate(false, `${tag} : le relevé ne s'est jamais stabilisé — le témoin ne mesure rien`);
+/* #12622 — chaque contexte est une TÂCHE, et `runBounded` en fait tourner
+ * `PHONE_FRAME_PARALLEL` (3 par défaut) à la fois. */
+const PARALLELE = Number(process.env.PHONE_FRAME_PARALLEL ?? 3);
+
+const telephone = (viewport) => async (constate) => {
+  const gabarit = `${viewport.width}×${viewport.height}`;
+  const context = await ouvre(viewport);
+  for (const adresse of ADRESSES) {
+    const tag = `${adresse} @ ${gabarit}`;
+    const m = await mesure(context, adresse);
+    if (m === undefined) {
+      constate(false, `${tag} : le relevé ne s'est jamais stabilisé — le témoin ne mesure rien`);
+      continue;
+    }
+    bilan.mesures += 1;
+    bilan.champs += m.champs;
+    bilan.bandes += m.bandes;
+    constate(m.perceptible, `${tag} : aucun contenu perceptible — le témoin ne mesure rien (${m.chemin})`);
+    constate(m.documentX <= TOLERANCE, `${tag} : la page défile horizontalement (${m.documentX} px de trop, ${m.chemin})`);
+    for (const c of m.colonnes) {
+      constate(false, `${tag} : ${c.conteneur} défile de côté (${c.debord} px de trop, ${m.chemin}) — coupable : ${c.coupables.join(' · ') || 'introuvable'}`);
+    }
+    for (const e of m.etroits) {
+      constate(false, `${tag} : champ ${e} — plus étroit qu'un doigt, il ne se saisit pas (${m.chemin})`);
+    }
+    for (const p of m.petits) {
+      constate(false, `${tag} : champ ${p} — sous ${CHAMP_MIN_PX} px, Safari iOS zoome au focus et le cadre glisse de côté (${m.chemin})`);
+    }
+  }
+  await context.close();
+};
+
+/* 5. PROGRESSION, AUX VALEURS LONGUES — voir le doc-comment de tête. */
+const progression = (viewport, langue) => async (constate) => {
+  const context = await ouvre(viewport);
+  await context.addInitScript(
+    ([drapeau, clef, valeur]) => {
+      localStorage.setItem(drapeau, '1');
+      localStorage.setItem(clef, valeur);
+    },
+    [GAME_LONG_FLAG, LANGUAGE_KEY, langue],
+  );
+  /* UN onglet par langue, rechargé d'adresse en adresse : 280 relevés ne paient pas 280 ouvertures. */
+  const page = await context.newPage();
+  const network = reseauDe(page);
+  for (const adresse of PROGRESSION_PAGES) {
+    const tag = `${adresse} @ ${viewport.width} px, ${langue}, valeurs longues`;
+    await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
+    const m = await waitForValueSettled(page, sidewaysReleve, undefined, { network, pret: (r) => !r.sansContenu });
+    if (m === undefined || m.sansContenu) {
+      constate(false, `${tag} : la page n'a rien peint de mesurable — le témoin ne mesure rien`);
+      continue;
+    }
+    bilan.progression += 1;
+    constate(m.elements >= 10, `${tag} : ${m.elements} élément(s) seulement — la page n'est pas celle attendue (${m.chemin})`);
+    if (adresse === '/me/progression') {
+      constate((m.niveau ?? '').includes(LONG_LEVEL), `${tag} : la première page ne sert pas les valeurs longues (niveau lu : ${m.niveau}) — la mesure porterait sur les valeurs confortables`);
+    }
+    for (const d of m.defilants) constate(false, `${tag} : ${d} — dans Progression, rien ne défile de côté`);
+    for (const d of m.debords) constate(false, `${tag} : ${d} dépasse la page`);
+    constate(m.rogne <= TOLERANCE, `${tag} : le conteneur rogne ${m.rogne} px de contenu — le verrou cache un débordement (un mot insécable, souvent)`);
+    constate(m.verrou, `${tag} : le conteneur qui défile ne verrouille pas l'axe horizontal (overflow-x-clip)`);
+    constate(m.surdefilement === 'none', `${tag} : le conteneur laisse le surdéfilement horizontal (overscroll-behavior-x : ${m.surdefilement})`);
+  }
+  await context.close();
+};
+
+/* 6. LE TEXTE ENTIER, DANS LES SEPT LANGUES — voir le doc-comment de tête. */
+const texteEntier = (viewport, langue) => async (constate) => {
+  const context = await ouvre(viewport);
+  await context.addInitScript(([clef, valeur]) => localStorage.setItem(clef, valeur), [LANGUAGE_KEY, langue]);
+  const page = await context.newPage();
+  const network = reseauDe(page);
+  for (const [adresse, selecteurs, uneLigne] of [
+    [LANDING_DE(langue), PORTES_LANDING, true],
+  ]) {
+    const tag = `${adresse} @ ${viewport.width} px, ${langue}`;
+    await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
+    const m = await waitForValueSettled(page, releveTextes, selecteurs, { network, pret: (r) => r.every((t) => !t.absent) });
+    if (m === undefined) {
+      constate(false, `${tag} : le relevé du texte ne s'est jamais stabilisé`);
+      continue;
+    }
+    for (const t of m) {
+      if (t.absent) {
+        constate(false, `${tag} : ${t.selecteur} absent — le témoin ne mesure rien`);
         continue;
       }
-      bilan.mesures += 1;
-      bilan.champs += m.champs;
-      bilan.bandes += m.bandes;
-      constate(m.perceptible, `${tag} : aucun contenu perceptible — le témoin ne mesure rien (${m.chemin})`);
-      constate(m.documentX <= TOLERANCE, `${tag} : la page défile horizontalement (${m.documentX} px de trop, ${m.chemin})`);
-      for (const c of m.colonnes) {
-        constate(false, `${tag} : ${c.conteneur} défile de côté (${c.debord} px de trop, ${m.chemin}) — coupable : ${c.coupables.join(' · ') || 'introuvable'}`);
-      }
-      for (const e of m.etroits) {
-        constate(false, `${tag} : champ ${e} — plus étroit qu'un doigt, il ne se saisit pas (${m.chemin})`);
-      }
-      for (const p of m.petits) {
-        constate(false, `${tag} : champ ${p} — sous ${CHAMP_MIN_PX} px, Safari iOS zoome au focus et le cadre glisse de côté (${m.chemin})`);
-      }
-    }
-    await context.close();
-  }
-
-  /* 5. PROGRESSION, AUX VALEURS LONGUES — voir le doc-comment de tête. */
-  for (const { viewport, langues } of PROGRESSION_GABARITS) {
-    for (const langue of langues) {
-      const context = await ouvre(viewport);
-      await context.addInitScript(
-        ([drapeau, clef, valeur]) => {
-          localStorage.setItem(drapeau, '1');
-          localStorage.setItem(clef, valeur);
-        },
-        [GAME_LONG_FLAG, LANGUAGE_KEY, langue],
-      );
-      /* UN onglet par langue, rechargé d'adresse en adresse : 280 relevés ne paient pas 280 ouvertures. */
-      const page = await context.newPage();
-      for (const adresse of PROGRESSION_PAGES) {
-        const tag = `${adresse} @ ${viewport.width} px, ${langue}, valeurs longues`;
-        await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-        await page.waitForLoadState('networkidle').catch(() => undefined);
-        const m = await waitForValueSettled(page, sidewaysReleve);
-        if (m === undefined || m.sansContenu) {
-          constate(false, `${tag} : la page n'a rien peint de mesurable — le témoin ne mesure rien`);
-          continue;
-        }
-        bilan.progression += 1;
-        constate(m.elements >= 10, `${tag} : ${m.elements} élément(s) seulement — la page n'est pas celle attendue (${m.chemin})`);
-        if (adresse === '/me/progression') {
-          constate((m.niveau ?? '').includes(LONG_LEVEL), `${tag} : la première page ne sert pas les valeurs longues (niveau lu : ${m.niveau}) — la mesure porterait sur les valeurs confortables`);
-        }
-        for (const d of m.defilants) constate(false, `${tag} : ${d} — dans Progression, rien ne défile de côté`);
-        for (const d of m.debords) constate(false, `${tag} : ${d} dépasse la page`);
-        constate(m.rogne <= TOLERANCE, `${tag} : le conteneur rogne ${m.rogne} px de contenu — le verrou cache un débordement (un mot insécable, souvent)`);
-        constate(m.verrou, `${tag} : le conteneur qui défile ne verrouille pas l'axe horizontal (overflow-x-clip)`);
-        constate(m.surdefilement === 'none', `${tag} : le conteneur laisse le surdéfilement horizontal (overscroll-behavior-x : ${m.surdefilement})`);
-      }
-      await context.close();
+      bilan.textes += 1;
+      constate(!t.rogne, `${tag} : « ${t.texte} » est rogné (${t.selecteur})`);
+      if (uneLigne) constate(t.lignes === 1, `${tag} : « ${t.texte} » passe sur ${t.lignes} lignes (${t.selecteur})`);
     }
   }
+  await context.close();
+};
 
-  /* 6. LE TEXTE ENTIER, DANS LES SEPT LANGUES — voir le doc-comment de tête. */
-  for (const viewport of TEXTES_ENTIERS.length === 0 ? [] : TELEPHONES) {
-    for (const langue of TEXTES_ENTIERS) {
-      const context = await ouvre(viewport);
-      await context.addInitScript(([clef, valeur]) => localStorage.setItem(clef, valeur), [LANGUAGE_KEY, langue]);
-      const page = await context.newPage();
-      for (const [adresse, selecteurs, uneLigne] of [
-        [LANDING_DE(langue), PORTES_LANDING, true],
-      ]) {
-        const tag = `${adresse} @ ${viewport.width} px, ${langue}`;
-        await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-        await page.waitForLoadState('networkidle').catch(() => undefined);
-        const m = await waitForValueSettled(page, releveTextes, selecteurs);
-        if (m === undefined) {
-          constate(false, `${tag} : le relevé du texte ne s'est jamais stabilisé`);
-          continue;
-        }
-        for (const t of m) {
-          if (t.absent) {
-            constate(false, `${tag} : ${t.selecteur} absent — le témoin ne mesure rien`);
-            continue;
-          }
-          bilan.textes += 1;
-          constate(!t.rogne, `${tag} : « ${t.texte} » est rogné (${t.selecteur})`);
-          if (uneLigne) constate(t.lignes === 1, `${tag} : « ${t.texte} » passe sur ${t.lignes} lignes (${t.selecteur})`);
-        }
-      }
-      await context.close();
-    }
-  }
-
+const connexion = async (constate) => {
   const context = await ouvre(IPHONE_SE);
   for (const adresse of CONNEXION) {
     const tag = `${adresse} @ ${IPHONE_SE.width}×${IPHONE_SE.height}`;
@@ -382,6 +394,18 @@ try {
     }
   }
   await context.close();
+};
+
+/* Les plus longues d'abord : un téléphone tardif ne se joue jamais seul en fin de course. */
+const TACHES = [
+  ...(ADRESSES.length === 0 ? [] : TELEPHONES.map(telephone)),
+  ...PROGRESSION_GABARITS.flatMap(({ viewport, langues }) => langues.map((langue) => progression(viewport, langue))),
+  ...(TEXTES_ENTIERS.length === 0 ? [] : TELEPHONES).flatMap((viewport) => TEXTES_ENTIERS.map((langue) => texteEntier(viewport, langue))),
+  connexion,
+];
+
+try {
+  for (const f of await runBounded(TACHES, PARALLELE)) constate(false, f);
 } finally {
   await browser.close();
   served.close();

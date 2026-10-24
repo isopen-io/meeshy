@@ -1,6 +1,5 @@
 package me.meeshy.sdk.net
 
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.net.api.ActiveCallApi
@@ -97,8 +96,9 @@ class MeeshyApi private constructor(private val retrofit: Retrofit) {
             // pas encore : le rafraichissement ne s'execute que sur un 401, bien apres
             // l'affectation, et `/auth/refresh` est une route sans authentification.
             lateinit var api: MeeshyApi
+            val transition = SessionTransitionFlags()
             val contributors = builtInContributors(
-                config, tokenStore, onSessionExpired, tokenRefresher(tokenStore) { api },
+                config, tokenStore, onSessionExpired, sessionRefresher(tokenStore, transition) { api }, transition,
             ) + extraContributors
             api = from(buildRetrofit(config, HttpClientAssembler.build(contributors)))
             return api
@@ -114,15 +114,13 @@ class MeeshyApi private constructor(private val retrofit: Retrofit) {
                 .addConverterFactory(JsonConverterFactory(json, "application/json".toMediaType()))
                 .build()
 
-        internal fun tokenRefresher(tokenStore: TokenStore, api: () -> MeeshyApi): TokenRefresher =
-            TokenRefresher {
-                val session = tokenStore.sessionToken ?: return@TokenRefresher null
-                runCatching {
-                    runBlocking { api().auth.refresh(RefreshTokenRequest(session)) }
-                }.getOrNull()
-                    ?.takeIf { it.success }
-                    ?.data
-                    ?.token
-            }
+        internal fun sessionRefresher(
+            tokenStore: TokenStore,
+            transition: SessionTransitionFlags,
+            api: () -> MeeshyApi,
+        ): SessionRefresher = SessionRefresher(tokenStore, transition) { session ->
+            api().auth.refresh(RefreshTokenRequest(token = tokenStore.jwt ?: session, sessionToken = session))
+                .takeIf { it.success }?.data?.token
+        }
     }
 }

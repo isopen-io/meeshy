@@ -135,11 +135,12 @@ class CallExtensionPointsWiringTest {
     private fun vm(
         controller: CallFeatureController? = null,
         videoHealth: CallVideoHealth = NoopCallVideoHealth(),
+        peerVisuals: CallPeerVisualSource = CallPeerVisualSource { emptyFlow() },
     ) = CallViewModel(
         signalManager, coordinator, sessionRepository, silentSeconds, silentTones, silentTelecom, silentSamples,
         appStatePresence,
         CallPeerIndicatorsController(signalManager, silentTimer, silentRecording),
-        CallWaitingController(signalManager, silentTimer),
+        CallWaitingController(signalManager, silentTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, silentBeats, silentTimer, silentTimer),
         CallAnalyticsController(signalManager, clock),
         CallExtensionPoints(
@@ -149,6 +150,8 @@ class CallExtensionPointsWiringTest {
             toasts = CallToastBus(clock),
             videoHealth = videoHealth,
         ),
+        io.mockk.mockk(relaxed = true),
+        peerVisuals,
     )
 
     @Test
@@ -277,5 +280,34 @@ class CallExtensionPointsWiringTest {
     @Test
     fun `the default video health is never paused`() {
         assertThat(NoopCallVideoHealth().isVideoAutoPaused.value).isFalse()
+    }
+
+    @Test
+    fun `the call screen receives the peer visual of the call it starts, cache first then profile`() {
+        val visuals = MutableSharedFlow<CallPeerVisual>(extraBufferCapacity = 4)
+        val asked = mutableListOf<CallConfig>()
+        val vm = vm(peerVisuals = { config -> asked += config; visuals })
+
+        assertThat(vm.peerVisual.value).isEqualTo(CallPeerVisual.EMPTY)
+        vm.start(outgoingVideo)
+        visuals.tryEmit(CallPeerVisual(avatarUrl = "https://staging.meeshy.me/u/a.jpg"))
+        assertThat(vm.peerVisual.value.avatarUrl).isEqualTo("https://staging.meeshy.me/u/a.jpg")
+        visuals.tryEmit(CallPeerVisual(avatarUrl = "https://staging.meeshy.me/u/a.jpg", bannerUrl = "https://staging.meeshy.me/u/b.jpg"))
+
+        assertThat(asked).containsExactly(outgoingVideo)
+        assertThat(vm.peerVisual.value.backdropUrl).isEqualTo("https://staging.meeshy.me/u/b.jpg")
+    }
+
+    @Test
+    fun `a new call never shows the previous peer's face`() {
+        val first = MutableStateFlow(CallPeerVisual(avatarUrl = "https://staging.meeshy.me/u/alice.jpg"))
+        val vm = vm(peerVisuals = { config -> if (config == outgoingVideo) first else emptyFlow() })
+        vm.start(outgoingVideo)
+        vm.hangUp()
+        vm.dismiss()
+
+        vm.start(incomingAudio)
+
+        assertThat(vm.peerVisual.value).isEqualTo(CallPeerVisual.EMPTY)
     }
 }

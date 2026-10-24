@@ -11,6 +11,9 @@ import kotlinx.serialization.Serializable
 enum class StarredAttachmentKind {
     IMAGE,
     FILE,
+    VIDEO,
+    AUDIO,
+    LOCATION,
 }
 
 /**
@@ -32,6 +35,7 @@ data class StarredMessage(
     val conversationName: String? = null,
     val conversationAccentColor: String? = null,
     val senderName: String? = null,
+    val senderAvatarUrl: String? = null,
     val contentPreview: String = "",
     val attachmentKind: StarredAttachmentKind? = null,
     val starredAtMillis: Long = 0L,
@@ -83,4 +87,17 @@ data class StarredMessages(val items: List<StarredMessage> = emptyList()) {
     fun removeConversation(conversationId: String): StarredMessages =
         if (items.none { it.conversationId == conversationId }) this
         else StarredMessages(items.filterNot { it.conversationId == conversationId })
+
+    /**
+     * Refresh the frozen preview of [messageId] after the source message was edited.
+     * Inert (returns `this`) when it is not starred or the preview is unchanged.
+     */
+    fun updatePreview(messageId: String, contentPreview: String): StarredMessages {
+        val current = items.firstOrNull { it.messageId == messageId } ?: return this
+        if (current.contentPreview == contentPreview) return this
+        return StarredMessages(items.map { if (it.messageId == messageId) it.copy(contentPreview = contentPreview) else it })
+    }
+
+    /** Drop every star (menu « Tout retirer »). Inert when already empty. */
+    fun clear(): StarredMessages = if (items.isEmpty()) this else StarredMessages()
 }

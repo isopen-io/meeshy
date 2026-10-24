@@ -71,8 +71,9 @@ body {
 }
 
 /* QUI EST LÀ — posé par le script d'amorçage AVANT la première peinture
- * (`data-session` sur `<html>`) : un compte voit « Mes conversations » à la
- * place de « Se connecter » et « Entrer sans compte », sans éclair. */
+ * (`data-session` sur `<html>`) : dans la section World Wide, un compte voit
+ * « Mes conversations » à la place de « Créer un compte », sans éclair.
+ * L'en-tête n'en dépend plus : il mène à `/chats` pour tous (#12500). */
 [data-session-member] {
   display: none;
 }

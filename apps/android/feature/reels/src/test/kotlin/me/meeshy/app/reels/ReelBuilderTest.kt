@@ -106,4 +106,80 @@ class ReelBuilderTest {
         assertThat(ReelBuilder.withSeedFirst(reels, null)).isEqualTo(reels)
         assertThat(ReelBuilder.withSeedFirst(reels, "")).isEqualTo(reels)
     }
+
+    // MARK: - build: Prisme of the caption, author identity
+
+    private fun captioned() = videoPost("r1").copy(
+        content = "Hello everyone",
+        originalLanguage = "en",
+        translations = mapOf(
+            "es" to me.meeshy.sdk.model.ApiPostTranslationEntry(text = "Hola a todos"),
+            "fr" to me.meeshy.sdk.model.ApiPostTranslationEntry(text = "Bonjour à tous"),
+        ),
+        author = me.meeshy.sdk.model.ApiAuthor(id = "u9", username = "amina", displayName = "Amina", avatar = "avatars/u9.jpg"),
+    )
+
+    @Test
+    fun `the caption is served in the reader's language, descending the prism past an absent first rank`() {
+        val reader = me.meeshy.sdk.model.MeeshyUser(id = "me", username = "me", systemLanguage = "de", regionalLanguage = "fr")
+
+        val reel = ReelBuilder.build(listOf(captioned()), mediaBaseUrl = null, preferences = reader).single()
+
+        assertThat(reel.caption).isEqualTo("Bonjour à tous")
+        assertThat(reel.isCaptionTranslated).isTrue()
+    }
+
+    @Test
+    fun `a caption already in the reader's language stays the original`() {
+        val reader = me.meeshy.sdk.model.MeeshyUser(id = "me", username = "me", systemLanguage = "en")
+
+        val reel = ReelBuilder.build(listOf(captioned()), mediaBaseUrl = null, preferences = reader).single()
+
+        assertThat(reel.caption).isEqualTo("Hello everyone")
+        assertThat(reel.isCaptionTranslated).isFalse()
+    }
+
+    @Test
+    fun `the author's id travels with the reel so the header opens the profile`() {
+        val reel = ReelBuilder.build(listOf(captioned()), mediaBaseUrl = "https://gate.test").single()
+
+        assertThat(reel.authorId).isEqualTo("u9")
+        assertThat(reel.authorAvatarUrl).isNotNull()
+    }
+
+    private fun mediaPost(id: String, vararg mimes: String, type: String? = "REEL") = ApiPost(
+        id = id,
+        type = type,
+        media = mimes.mapIndexed { i, m ->
+            ApiPostMedia(id = "m$i-$id", mimeType = m, fileUrl = "https://cdn.test/$id-$i")
+        },
+    )
+
+    @Test
+    fun `build admits video, images, audio and image-with-audio reels with their layout`() {
+        val reels = ReelBuilder.build(
+            listOf(
+                mediaPost("v", "video/mp4"),
+                mediaPost("i", "image/jpeg", "image/png"),
+                mediaPost("a", "audio/mpeg"),
+                mediaPost("ia", "image/jpeg", "audio/mpeg"),
+            ),
+            mediaBaseUrl = null,
+        )
+
+        assertThat(reels.map { it.id }).containsExactly("v", "i", "a", "ia").inOrder()
+        assertThat(reels[0].layout).isInstanceOf(me.meeshy.sdk.model.ReelMediaLayout.Video::class.java)
+        assertThat(reels[1].layout).isInstanceOf(me.meeshy.sdk.model.ReelMediaLayout.Images::class.java)
+        assertThat(reels[1].imageUrls).hasSize(2)
+        assertThat(reels[1].videoUrl).isNull()
+        assertThat(reels[2].audioUrl).isEqualTo("https://cdn.test/a-0")
+        assertThat(reels[3].layout).isInstanceOf(me.meeshy.sdk.model.ReelMediaLayout.ImagesWithAudio::class.java)
+    }
+
+    @Test
+    fun `build drops a non-REEL post whatever its media`() {
+        val reels = ReelBuilder.build(listOf(mediaPost("p", "image/jpeg", type = "POST")), mediaBaseUrl = null)
+
+        assertThat(reels).isEmpty()
+    }
 }

@@ -104,6 +104,11 @@ private fun ObjectV3.asText(at: Pair<Double, Double>): StoryTextObject? {
         borderColor = payload.str("borderColor"),
         borderWidth = payload.dbl("borderWidth"),
         textEffect = payload.str("textEffect"),
+        fontWeight = payload.str("fontWeight"),
+        frameShape = payload.str("frameShape"),
+        framePaddingScale = payload.dbl("framePaddingScale"),
+        frameBorderWidth = payload.dbl("frameBorderWidth"),
+        frameBorderColor = payload.str("frameBorderColor"),
         translations = payload.strMap("translations"),
         sourceLanguage = locale,
         startTime = timing?.start,
@@ -128,7 +133,8 @@ private fun ObjectV3.asMedia(at: Pair<Double, Double>): StoryMediaObject {
         scale = transform.scale,
         rotation = transform.rotation,
         volume = if (muted) 0f else (payload.dbl("volume")?.toFloat() ?: 1f),
-        aspectRatio = payload.dbl("aspectRatio") ?: 1.0,
+        aspectRatio = payload.dbl("aspectRatio"),
+        filter = payload.str("filter"),
         anchor = pivot(),
         intrinsicDuration = payload.dbl("intrinsicDuration"),
         isBackground = payload.bool("isBackground") ?: false,
@@ -156,6 +162,7 @@ private fun ObjectV3.asMedia(at: Pair<Double, Double>): StoryMediaObject {
         fadeOut = payload.dbl("fadeOut"),
         sourceLanguage = locale,
         keyframes = timing?.keyframes,
+        adjustments = ImageAdjustments.fromJson(payload["adjustments"]),
     )
 }
 
@@ -169,12 +176,17 @@ private fun ObjectV3.asMedia(at: Pair<Double, Double>): StoryMediaObject {
 private fun ObjectV3.asSticker(at: Pair<Double, Double>): StorySticker? {
     val emoji = payload.str("emoji")
     val postMediaId = payload.str("postMediaId")
-    if (emoji == null && postMediaId == null) return null
+    val templateId = payload.str("templateId").orEmpty()
+    if (emoji == null && postMediaId == null && templateId.isEmpty()) return null
     return StorySticker(
         id = id,
         emoji = emoji ?: "",
         postMediaId = postMediaId ?: "",
         provider = payload.str("provider"),
+        templateId = templateId,
+        slots = payload.strMap("slots") ?: emptyMap(),
+        animation = payload.str("animation"),
+        sourceLanguage = locale,
         x = at.first,
         y = at.second,
         scale = transform.scale,
@@ -182,6 +194,27 @@ private fun ObjectV3.asSticker(at: Pair<Double, Double>): StorySticker? {
         zIndex = z,
         baseSize = payload.dbl("baseSize") ?: 140.0,
         anchor = pivot(),
+        startTime = timing?.start,
+        duration = payload.dbl("duration"),
+        fadeIn = payload.dbl("fadeIn"),
+        fadeOut = payload.dbl("fadeOut"),
+    )
+}
+
+/** Une pastille de lieu sans `place` lisible n'a rien à montrer : rejetée comme iOS. */
+private fun ObjectV3.asLocation(at: Pair<Double, Double>): StoryLocationObject? {
+    val place = decodeWire<SharedPlace>(payload.obj("place")) ?: return null
+    return StoryLocationObject(
+        id = id,
+        place = place,
+        x = at.first,
+        y = at.second,
+        scale = transform.scale,
+        rotation = transform.rotation,
+        zIndex = z,
+        anchor = pivot(),
+        sourceLanguage = locale,
+        styleId = payload.str("styleId")?.takeIf { it.isNotEmpty() },
         startTime = timing?.start,
         duration = payload.dbl("duration"),
         fadeIn = payload.dbl("fadeIn"),
@@ -262,6 +295,9 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
     val texts = mutableListOf<StoryTextObject>()
     val medias = mutableListOf<StoryMediaObject>()
     val stickers = mutableListOf<StorySticker>()
+    val locations = mutableListOf<StoryLocationObject>()
+    val unpaintableKinds = mutableSetOf<String>()
+    val unpaintableObjects = mutableListOf<ObjectV3>()
     val audios = mutableListOf<StoryAudioPlayerObject>()
     var drawingStrokes: List<StoryDrawingStroke>? = null
 
@@ -275,11 +311,17 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
             item.kind == "media" -> medias += item.asMedia(at)
             item.kind == "text" -> item.asText(at)?.let { texts += it }
             item.kind == "sticker" -> item.asSticker(at)?.let { stickers += it }
+            item.kind == "place" -> item.asLocation(at)?.let { locations += it }
             item.kind == "audio" -> audios += item.asAudio(at)
             // Le dernier objet `drawing` gagne, comme iOS (`drawingStrokes = decode(...)`,
             // une affectation, pas une accumulation) ; l'écrivain n'en émet qu'un.
             item.kind == "drawing" -> drawingStrokes = item.asDrawingStrokes()
-            else -> Unit
+            // Une mention est connue et non peinte : une métadonnée, jamais une rupture.
+            item.kind == "mention" -> unpaintableObjects += item
+            else -> {
+                unpaintableKinds += item.kind
+                unpaintableObjects += item
+            }
         }
     }
 
@@ -295,6 +337,9 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
         filter = filterCarrier?.payload?.str("filter"),
         filterIntensity = filterCarrier?.payload?.dbl("filterIntensity"),
         textObjects = texts,
+        locationObjects = locations,
+        unpaintableKinds = unpaintableKinds.sorted(),
+        unpaintableObjects = unpaintableObjects,
         mediaObjects = medias.ifEmpty { null },
         stickerObjects = stickers.ifEmpty { null },
         audioPlayerObjects = audios.ifEmpty { null },

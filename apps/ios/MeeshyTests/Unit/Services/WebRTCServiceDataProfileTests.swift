@@ -64,6 +64,45 @@ final class WebRTCServiceDataProfileTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(applied?.scaleResolutionDownBy ?? 0, budget.scaleResolutionDownBy)
     }
 
+    /// #11292 — dans un appel de groupe, le pair principal est un encodage parmi
+    /// d'autres : le plafond du maillage le borne aussi.
+    func test_groupVideoCeiling_capsThePrimaryEncoding() {
+        let (sut, client, _) = makeSUT()
+        _ = sut.configure(isVideo: true)
+        let plafond = CallVideoBudget.meshLink(encodes: 5)
+
+        sut.setGroupVideoCeiling(plafond)
+
+        let applied = client.videoEncodings.last
+        XCTAssertLessThanOrEqual(applied?.maxBitrateBps ?? .max, plafond.maxBitrateBps)
+        XCTAssertLessThanOrEqual(applied?.maxFramerate ?? .max, plafond.maxFramerate)
+        XCTAssertGreaterThanOrEqual(applied?.scaleResolutionDownBy ?? 0, plafond.scaleResolutionDownBy)
+    }
+
+    func test_groupVideoCeiling_cleared_givesThePrimaryItsFullLadderBack() {
+        let (sut, client, _) = makeSUT()
+        _ = sut.configure(isVideo: true)
+        sut.setGroupVideoCeiling(CallVideoBudget.meshLink(encodes: 5))
+
+        sut.setGroupVideoCeiling(nil)
+
+        XCTAssertEqual(client.videoEncodings.last?.maxFramerate, CallDataProfile.wifi.budget.video.maxFramerate)
+    }
+
+    /// #11293 — un palier qui n'envoie plus que du 360p rechoisit le format de la
+    /// caméra, UNE fois, par le chemin sérialisé du changement de caméra.
+    func test_dataSaverProfile_reselectsTheCaptureFormatOnce() async {
+        let (sut, client, monitor) = makeSUT()
+        client.liveCameraUniqueID = "cam-front"
+        _ = sut.configure(isVideo: true)
+
+        monitor.emit(lowDataMode)
+        sut.setGroupVideoCeiling(CallVideoBudget.meshLink(encodes: 5))
+        for _ in 0..<200 where client.switchedCameraIDs.isEmpty { await Task.yield() }
+
+        XCTAssertEqual(client.switchedCameraIDs, ["cam-front"], "un seul rechoix tant que la capture reste réduite")
+    }
+
     func test_lowDataModePath_selectsTheDataSaverProfile() {
         let (sut, client, monitor) = makeSUT()
         _ = sut.configure(isVideo: true)
@@ -296,6 +335,8 @@ private nonisolated final class DataProfileRecordingClient: WebRTCClientProvidin
     var startLocalMediaError: Error?
     var enableLocalVideoError: Error?
     var switchCameraError: Error?
+    var liveCameraUniqueID: String?
+    private(set) var switchedCameraIDs: [String] = []
     private(set) var appliedProfiles: [CallDataProfile] = []
     private(set) var audioEncodings: [Int] = []
     private(set) var videoEncodings: [RecordedVideoEncoding] = []
@@ -348,7 +389,7 @@ private nonisolated final class DataProfileRecordingClient: WebRTCClientProvidin
         if let switchCameraError { throw switchCameraError }
     }
     func availableCameras() -> [CameraDeviceOption] { [] }
-    func switchToCamera(uniqueID: String) async throws {}
+    func switchToCamera(uniqueID: String) async throws { switchedCameraIDs.append(uniqueID) }
     func getStats() async -> CallStats? { nil }
     func createDataChannel(label: String) -> Bool { true }
     func sendDataChannelMessage(_ data: Data) {}

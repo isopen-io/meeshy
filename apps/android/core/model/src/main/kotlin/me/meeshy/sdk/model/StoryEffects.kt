@@ -1,7 +1,10 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * Story canvas models — port of StoryModels.swift.
@@ -32,6 +35,7 @@ data class StoryTextPosition(
 )
 
 /** The full effects payload for a story slide — port of StoryEffects (StoryModels.swift). */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class StoryEffects(
     val background: String? = null,
@@ -45,6 +49,7 @@ data class StoryEffects(
     val textSize: Double? = null,
     val textBg: String? = null,
     val textOffsetY: Double? = null,
+    @Serializable(with = StoryStickerListSerializer::class)
     val stickerObjects: List<StorySticker>? = null,
     val textPositionPoint: StoryTextPosition? = null,
     val backgroundAudioId: String? = null,
@@ -57,8 +62,15 @@ data class StoryEffects(
     val opening: StoryTransitionEffect? = null,
     @Serializable(with = StoryTransitionTolerantSerializer::class)
     val closing: StoryTransitionEffect? = null,
+    @Serializable(with = StoryTextObjectListSerializer::class)
     val textObjects: List<StoryTextObject> = emptyList(),
+    /** Pastilles de lieu posées sur la slide — distinctes du lieu de la PUBLICATION. */
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @Serializable(with = StoryLocationObjectListSerializer::class)
+    val locationObjects: List<StoryLocationObject> = emptyList(),
+    @Serializable(with = StoryMediaObjectListSerializer::class)
     val mediaObjects: List<StoryMediaObject>? = null,
+    @Serializable(with = StoryAudioPlayerObjectListSerializer::class)
     val audioPlayerObjects: List<StoryAudioPlayerObject>? = null,
     /**
      * Editable freehand strokes — parity with iOS `StoryEffects.drawingStrokes`. On
@@ -68,6 +80,7 @@ data class StoryEffects(
      * Android renderer and is not modelled — a future writer's base64 `data` is read
      * as nothing to paint, never as a decode failure.
      */
+    @Serializable(with = StoryDrawingStrokeListSerializer::class)
     val drawingStrokes: List<StoryDrawingStroke>? = null,
     val backgroundAudioVariants: List<StoryAudioVariant>? = null,
     val thumbHash: String? = null,
@@ -81,6 +94,7 @@ data class StoryEffects(
      * duration falls back to the content-derived rule with zero regression.
      */
     val timelineDuration: Double? = null,
+    @Serializable(with = StoryClipTransitionListSerializer::class)
     val clipTransitions: List<StoryClipTransition>? = null,
     val musicTrackId: String? = null,
     val musicStartTime: Double? = null,
@@ -98,4 +112,16 @@ data class StoryEffects(
      * défaut, il n'est jamais émis par un contenu composé sur Android.
      */
     val layout: MosaicLayoutMode? = null,
+    /**
+     * Les kinds d'objet v3 que ce build ne sait pas peindre (document plus récent). Mémo de
+     * lecture : jamais écrit sur le fil v1 — voir [carriesUnpaintableContent].
+     */
+    @Transient
+    val unpaintableKinds: List<String> = emptyList(),
+    /**
+     * Les objets v3 eux-mêmes (kind réservé, mention), gardés pour être réémis tels quels :
+     * aucun composer ne les édite, leur retrait ne peut donc jamais être une volonté de l'auteur.
+     */
+    @Transient
+    val unpaintableObjects: List<ObjectV3> = emptyList(),
 )

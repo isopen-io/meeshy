@@ -17,11 +17,13 @@ import org.junit.Test
  */
 class RefreshAuthenticatorTest {
 
-    private class FakeRefresher(private val newToken: String?) : TokenRefresher {
+    private class FakeRefresher(private val newToken: String?) {
         var calls: Int = 0
-        override fun refresh(): String? {
+        val flags = SessionTransitionFlags()
+
+        fun over(store: TokenStore): SessionRefresher = SessionRefresher(store, flags) {
             calls++
-            return newToken
+            newToken
         }
     }
 
@@ -51,7 +53,7 @@ class RefreshAuthenticatorTest {
     fun eligibleEndpoint_first401_refreshesAndReplaysWithNewBearer() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
 
         val retry = authenticator.authenticate(null, response("/api/v1/conversations"))
 
@@ -64,7 +66,7 @@ class RefreshAuthenticatorTest {
     @Test
     fun successfulRefresh_preservesOriginalUrlAndMethod() {
         val tokenStore = store()
-        val authenticator = RefreshAuthenticator(tokenStore, FakeRefresher("new-jwt"))
+        val authenticator = RefreshAuthenticator(tokenStore, FakeRefresher("new-jwt").over(tokenStore))
 
         val retry = authenticator.authenticate(
             null,
@@ -80,7 +82,7 @@ class RefreshAuthenticatorTest {
     fun eligibleEndpoint_refreshReturnsNull_tearsDownAndGivesUp() {
         val tokenStore = store()
         val refresher = FakeRefresher(null)
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
 
         val retry = authenticator.authenticate(null, response("/api/v1/conversations"))
 
@@ -94,7 +96,7 @@ class RefreshAuthenticatorTest {
     fun eligibleEndpoint_refreshReturnsBlank_tearsDownAndGivesUp() {
         val tokenStore = store()
         val refresher = FakeRefresher("   ")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
 
         val retry = authenticator.authenticate(null, response("/api/v1/conversations"))
 
@@ -107,7 +109,7 @@ class RefreshAuthenticatorTest {
     fun eligibleEndpoint_secondAttempt_priorResponsePresent_tearsDownWithoutRefreshing() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
         val prior = response("/api/v1/conversations")
 
         val retry = authenticator.authenticate(null, response("/api/v1/conversations", prior = prior))
@@ -122,7 +124,7 @@ class RefreshAuthenticatorTest {
     fun loginEndpoint_401_invalidCredentials_noRetry_noRefresh_preservesSession() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
 
         val retry = authenticator.authenticate(null, response("/api/v1/auth/login"))
 
@@ -136,7 +138,7 @@ class RefreshAuthenticatorTest {
     fun accountDeletionEndpoint_401_invalidPassword_noRetry_noRefresh_preservesSession() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
 
         val retry = authenticator.authenticate(null, response("/api/v1/me/account/deletion", method = "POST"))
 
@@ -150,7 +152,7 @@ class RefreshAuthenticatorTest {
     fun refreshEndpoint_401_ineligible_tearsDownWithoutRefreshing() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
 
         val retry = authenticator.authenticate(null, response("/api/v1/auth/refresh"))
 
@@ -164,7 +166,7 @@ class RefreshAuthenticatorTest {
     fun registerEndpoint_401_ineligible_tearsDown() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
 
         val retry = authenticator.authenticate(null, response("/api/v1/auth/register"))
 
@@ -177,7 +179,7 @@ class RefreshAuthenticatorTest {
     fun magicLinkEndpoint_401_ineligible_tearsDown() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
 
         val retry = authenticator.authenticate(null, response("/api/v1/auth/magic-link/verify"))
 
@@ -189,7 +191,7 @@ class RefreshAuthenticatorTest {
     fun endpointWithoutApiPrefix_stillNormalizesToPolicyForm() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore))
 
         // No `/api/v1` prefix: the path IS already the policy endpoint form.
         val retry = authenticator.authenticate(null, response("/auth/login"))
@@ -203,7 +205,7 @@ class RefreshAuthenticatorTest {
     fun customApiPrefix_isStrippedBeforePolicyDecision() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")
-        val authenticator = RefreshAuthenticator(tokenStore, refresher, apiPathPrefix = "/api/v2")
+        val authenticator = RefreshAuthenticator(tokenStore, refresher.over(tokenStore), apiPathPrefix = "/api/v2")
 
         // `/api/v2/auth/login` must normalize to `/auth/login` → invalid-credentials, no refresh.
         val retry = authenticator.authenticate(null, response("/api/v2/auth/login"))
@@ -211,5 +213,93 @@ class RefreshAuthenticatorTest {
         assertThat(retry).isNull()
         assertThat(refresher.calls).isEqualTo(0)
         assertThat(tokenStore.jwt).isEqualTo("old-jwt")
+    }
+}
+
+class RefreshAuthenticatorSingleFlightTest {
+
+    private fun unauthorized(jwt: String, path: String = "/api/v1/conversations", pinned: Boolean = false): Response {
+        val request = Request.Builder()
+            .url("https://gate.meeshy.me$path")
+            .header("Authorization", "Bearer $jwt")
+            .tag(SentCredential::class.java, SentCredential(RequestCredential.Bearer(jwt), 0, pinned))
+            .build()
+        return Response.Builder().request(request).protocol(Protocol.HTTP_2).code(401).message("Unauthorized").build()
+    }
+
+    @Test
+    fun `cinq 401 simultanes ne font qu un seul refresh et rejouent tous avec le nouveau jwt`() {
+        val store = InMemoryTokenStore(jwt = "old", sessionToken = "session", userId = "u1")
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val refresher = SessionRefresher(store) {
+            calls.incrementAndGet()
+            kotlinx.coroutines.delay(50)
+            "new"
+        }
+        val authenticator = RefreshAuthenticator(store, refresher)
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(5)
+        val retries = (1..5).map { pool.submit<Request?> { authenticator.authenticate(null, unauthorized("old")) } }
+            .map { it.get() }
+        pool.shutdown()
+
+        assertThat(calls.get()).isEqualTo(1)
+        assertThat(retries.map { it?.header("Authorization") }).containsExactly(
+            "Bearer new", "Bearer new", "Bearer new", "Bearer new", "Bearer new",
+        )
+    }
+
+    @Test
+    fun `un 401 d un autre compte n est ni renouvele ni rejoue`() {
+        val store = InMemoryTokenStore(jwt = "active", sessionToken = "session", userId = "u1")
+        var calls = 0
+        val authenticator = RefreshAuthenticator(store, SessionRefresher(store) { calls++; "new" })
+
+        assertThat(authenticator.authenticate(null, unauthorized("other-account"))).isNull()
+        assertThat(calls).isEqualTo(0)
+        assertThat(store.jwt).isEqualTo("active")
+    }
+
+    @Test
+    fun `une requete epinglee a un jeton fige n est jamais rejouee`() {
+        val store = InMemoryTokenStore(jwt = "old", sessionToken = "session", userId = "u1")
+        var calls = 0
+        val authenticator = RefreshAuthenticator(store, SessionRefresher(store) { calls++; "new" })
+
+        assertThat(authenticator.authenticate(null, unauthorized("old", pinned = true))).isNull()
+        assertThat(calls).isEqualTo(0)
+    }
+
+    @Test
+    fun `pendant une bascule de compte rien n est renouvele`() {
+        val store = InMemoryTokenStore(jwt = "old", sessionToken = "session", userId = "u1")
+        val flags = SessionTransitionFlags().also { it.isSwitchingAccount = true }
+        var calls = 0
+        val authenticator = RefreshAuthenticator(store, SessionRefresher(store, flags) { calls++; "new" })
+
+        assertThat(authenticator.authenticate(null, unauthorized("old"))).isNull()
+        assertThat(calls).isEqualTo(0)
+        assertThat(store.jwt).isEqualTo("old")
+    }
+
+    @Test
+    fun `un jeton retire de la meme session rejoue sous le courant sans nouveau refresh`() {
+        val store = InMemoryTokenStore(jwt = "old", sessionToken = "session", userId = "u1")
+        var calls = 0
+        val authenticator = RefreshAuthenticator(store, SessionRefresher(store) { calls++; "new" })
+
+        authenticator.authenticate(null, unauthorized("old"))
+        val late = authenticator.authenticate(null, unauthorized("old"))
+
+        assertThat(calls).isEqualTo(1)
+        assertThat(late!!.header("Authorization")).isEqualTo("Bearer new")
+    }
+
+    @Test
+    fun `un echec du refresh demonte le compte actif`() {
+        val store = InMemoryTokenStore(jwt = "old", sessionToken = "session", userId = "u1")
+        val authenticator = RefreshAuthenticator(store, SessionRefresher(store) { null })
+
+        assertThat(authenticator.authenticate(null, unauthorized("old"))).isNull()
+        assertThat(store.isAuthenticated).isFalse()
     }
 }

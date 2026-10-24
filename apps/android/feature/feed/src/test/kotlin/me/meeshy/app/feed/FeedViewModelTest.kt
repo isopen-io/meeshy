@@ -22,6 +22,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostMedia
@@ -67,6 +68,7 @@ class FeedViewModelTest {
     }
 
     private val repository: PostRepository = mockk(relaxed = true)
+    private val engagement: me.meeshy.sdk.post.FeedEngagementRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val feedMediaUploader: FeedMediaUploader = mockk(relaxed = true)
@@ -103,7 +105,7 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement)
     }
 
     @Test
@@ -162,7 +164,8 @@ class FeedViewModelTest {
             skipItems(1) // initial empty
             cancelAndIgnoreRemainingEvents()
         }
-        assertThat(vm.state.value.errorMessage).isEqualTo("timeout")
+        assertThat(vm.state.value.loadFailed).isTrue()
+        assertThat(vm.state.value.showSkeleton).isFalse()
     }
 
     @Test
@@ -212,7 +215,7 @@ class FeedViewModelTest {
         val vm = viewModel()
         vm.pinPost("p1")
 
-        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PIN_FAILED)
         coVerify(exactly = 0) { repository.refresh() }
     }
 
@@ -255,7 +258,7 @@ class FeedViewModelTest {
         val vm = viewModel()
         vm.repost("p1")
 
-        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.REPOST_FAILED)
         coVerify(exactly = 0) { repository.refresh() }
     }
 
@@ -450,7 +453,7 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement)
     }
 
     @Test
@@ -1118,7 +1121,8 @@ class FeedViewModelTest {
         vm.publishPost(content = "hi", visibility = "PUBLIC")
 
         val s = vm.state.value
-        assertThat(s.errorMessage).isEqualTo("network down")
+        assertThat(s.notice).isEqualTo(FeedNotice.PUBLISH_FAILED)
+        assertThat(s.unpublishedDraft?.text).isEqualTo("hi")
         assertThat(s.posts.map { it.id }).containsExactly("1")
     }
 
@@ -1132,7 +1136,7 @@ class FeedViewModelTest {
         vm.publishPost(content = "hi", visibility = "PUBLIC")
 
         val s = vm.state.value
-        assertThat(s.errorMessage).isEqualTo("boom")
+        assertThat(s.notice).isEqualTo(FeedNotice.PUBLISH_FAILED)
         assertThat(s.posts.map { it.id }).containsExactly("1")
     }
 
@@ -1398,5 +1402,129 @@ class FeedViewModelTest {
         vm.dismissImageViewer()
 
         assertThat(vm.state.value.imageViewer).isNull()
+    }
+
+    // --- Localized notices and drawn states (iOS FeedView error/empty + FeedbackToast) ---
+
+    @Test
+    fun `a sync error with posts on screen raises the localized load notice, not the error state`() = runTest {
+        every { repository.feedStream(any(), captureLambda()) } answers {
+            val onError = lambda<(Throwable) -> Unit>().captured
+            kotlinx.coroutines.flow.flow {
+                emit(CacheResult.Stale(listOf(post("1")), 1L))
+                onError(RuntimeException("timeout"))
+            }
+        }
+
+        val vm = viewModel()
+
+        assertThat(vm.state.value.loadFailed).isFalse()
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.LOAD_FAILED)
+    }
+
+    @Test
+    fun `a refresh failure on an empty feed shows the error state`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { repository.refreshReporting() } returns RuntimeException("offline")
+
+        val vm = viewModel()
+        vm.refresh()
+
+        assertThat(vm.state.value.loadFailed).isTrue()
+        assertThat(vm.state.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun `retrying clears the error state`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { repository.refreshReporting() } returns RuntimeException("offline")
+        val vm = viewModel()
+        vm.refresh()
+        coEvery { repository.refreshReporting() } returns null
+
+        vm.refresh()
+
+        assertThat(vm.state.value.loadFailed).isFalse()
+        assertThat(vm.state.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun `a successful publish confirms with the published notice`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISHED)
+        assertThat(vm.state.value.unpublishedDraft).isNull()
+    }
+
+    @Test
+    fun `a failed publish keeps the text and visibility so the composer can reopen on it`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        coEvery {
+            repository.create(content = "bonjour", type = "POST", visibility = "FRIENDS")
+        } returns NetworkResult.Failure(ApiError(message = "down"))
+
+        vm.publishPost(content = "bonjour", visibility = "FRIENDS")
+        val draft = vm.state.value.unpublishedDraft
+        vm.consumeUnpublishedDraft()
+
+        assertThat(draft?.text).isEqualTo("bonjour")
+        assertThat(draft?.visibility).isEqualTo(FeedPostVisibility.FRIENDS)
+        assertThat(vm.state.value.unpublishedDraft).isNull()
+    }
+
+    @Test
+    fun `a sent report is confirmed, a failed one is said`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { reportRepository.reportPost("p1", any(), any()) } returns NetworkResult.Success(Unit)
+        coEvery { reportRepository.reportPost("p2", any(), any()) } returns NetworkResult.Failure(ApiError("x"))
+        val vm = viewModel()
+
+        vm.reportPost("p1", ReportReason.SPAM)
+        val afterSent = vm.state.value.notice
+        vm.consumeNotice()
+        vm.reportPost("p2", ReportReason.SPAM)
+
+        assertThat(afterSent).isEqualTo(FeedNotice.REPORTED)
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.REPORT_FAILED)
+    }
+
+    @Test
+    fun `deleting hides the post at once, before the network answers`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<Unit>>()
+        coEvery { repository.delete("1") } coAnswers { gate.await() }
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        vm.deletePost("1")
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("2")
+        gate.complete(NetworkResult.Success(Unit))
+    }
+
+    @Test
+    fun `a failed delete brings the post back and says so`() = runTest {
+        coEvery { repository.delete("1") } returns NetworkResult.Failure(ApiError("down"))
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        vm.deletePost("1")
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("1", "2")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.DELETE_FAILED)
+    }
+
+    @Test
+    fun `consuming a notice clears it so the same one can show again`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { repository.pinPost("p1") } returns NetworkResult.Failure(ApiError("offline"))
+        val vm = viewModel()
+        vm.pinPost("p1")
+
+        vm.consumeNotice()
+
+        assertThat(vm.state.value.notice).isNull()
     }
 }

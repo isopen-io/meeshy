@@ -26,35 +26,41 @@ public class NotificationRevocationTest {
         assertEquals(Arrays.asList("n1", "n2"), NotificationRevocation.tagsToCancel(revocation("n1,n2", null, null)));
     }
 
+    // #12523 — sous le tag d'une conversation s'affiche le DERNIER message : seule une banniere sans marque y part, comme sur le web.
+
     @Test
-    public void aRevokedMessageArrivalAlsoLosesTheBannerOfItsConversation() {
-        assertEquals(
-            Arrays.asList("n1", "n2", "c1", "c2"),
-            NotificationRevocation.tagsToCancel(revocation("n1,n2", "c1,c2", "new_message,message_reply"))
-        );
+    public void aRevokedMessageArrivalOnlyLooksAtTheBannerOfItsConversation() {
+        Map<String, String> data = revocation("n1,n2", "c1,c2", "new_message,message_reply");
+        assertEquals(Arrays.asList("n1", "n2"), NotificationRevocation.tagsToCancel(data));
+        assertEquals(Arrays.asList("c1", "c2"), NotificationRevocation.conversationTags(data));
+    }
+
+    @Test
+    public void theBannerOfANewerMessageOfTheConversationStaysLikeOnTheWeb() {
+        assertFalse(NotificationRevocation.closesConversationBanner("n9"));
+        assertTrue(NotificationRevocation.closesConversationBanner(null));
+        assertTrue(NotificationRevocation.closesConversationBanner(" "));
     }
 
     @Test
     public void aRevokedReactionNeverCancelsTheBannerOfTheMessageItReactedTo() {
-        assertEquals(
-            Arrays.asList("n1"),
-            NotificationRevocation.tagsToCancel(revocation("n1", "c1", "message_reaction"))
-        );
+        Map<String, String> data = revocation("n1", "c1", "message_reaction");
+        assertEquals(Arrays.asList("n1"), NotificationRevocation.tagsToCancel(data));
+        assertTrue(NotificationRevocation.conversationTags(data).isEmpty());
     }
 
     @Test
     public void aLineWithoutConversationOnlyCancelsItsNotification() {
-        assertEquals(
-            Arrays.asList("n1", "n2", "c2"),
-            NotificationRevocation.tagsToCancel(revocation("n1,n2", ",c2", "new_message,new_message"))
-        );
+        Map<String, String> data = revocation("n1,n2", ",c2", "new_message,new_message");
+        assertEquals(Arrays.asList("n1", "n2"), NotificationRevocation.tagsToCancel(data));
+        assertEquals(Arrays.asList("c2"), NotificationRevocation.conversationTags(data));
     }
 
     @Test
     public void aSharedConversationIsCancelledOnce() {
         assertEquals(
-            Arrays.asList("n1", "n2", "c1"),
-            NotificationRevocation.tagsToCancel(revocation("n1,n2", "c1,c1", "new_message,new_message"))
+            Arrays.asList("c1"),
+            NotificationRevocation.conversationTags(revocation("n1,n2", "c1,c1", "new_message,new_message"))
         );
     }
 
@@ -66,6 +72,8 @@ public class NotificationRevocationTest {
         assertTrue(NotificationRevocation.tagsToCancel(message).isEmpty());
         assertTrue(NotificationRevocation.tagsToCancel(revocation(null, null, null)).isEmpty());
         assertTrue(NotificationRevocation.tagsToCancel(revocation(",,", null, null)).isEmpty());
+        assertTrue(NotificationRevocation.conversationTags(message).isEmpty());
+        assertTrue(NotificationRevocation.conversationTags(revocation(",", "c1,", "new_message,")).isEmpty());
     }
 
     // #11032 — comme le web (`banner-revocation.ts`), la banniere MARQUEE d'une notification revoquee part, quel que soit son tag.

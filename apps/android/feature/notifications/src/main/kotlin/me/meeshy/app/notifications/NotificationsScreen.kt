@@ -31,12 +31,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +56,8 @@ import me.meeshy.sdk.model.NotificationBannerFraming
 import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.notificationTypeAccentHex
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.swipe.SwipeAction
+import me.meeshy.ui.component.swipe.SwipeableRow
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -241,13 +240,11 @@ private fun NotificationFilterCategory.labelRes(): Int = when (this) {
 }
 
 /**
- * Port of iOS `NotificationRowView`'s `.swipeActions`: trailing (end-to-start) swipe deletes,
- * leading (start-to-end) swipe marks read — only offered while unread, mirroring iOS's
- * `if !notification.isRead`. Non-destructive at the gesture level (mirrors the established
- * `ConversationListScreen` pattern): the swipe box always snaps back, and the row's actual
+ * Port of iOS `NotificationRowView`'s `.swipeActions` on the shared persistent [SwipeableRow]:
+ * the trailing side deletes, the leading side marks read — only offered while unread, mirroring
+ * iOS's `if !notification.isRead`. The row stays open until closed; the row's actual
  * removal/re-style comes from the repository cache mutation flowing back through [state].
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NotificationItem(
     notification: ApiNotification,
@@ -268,21 +265,20 @@ private fun NotificationItem(
         isDirect = notification.context?.conversationType.equals("direct", ignoreCase = true),
     )
 
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> if (isUnread) onMarkRead()
-                SwipeToDismissBoxValue.EndToStart -> onDelete()
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-            false
-        },
-    )
+    val markReadLabel = stringResource(R.string.notifications_action_mark_read)
+    val deleteLabel = stringResource(R.string.notifications_action_delete)
+    val leadingActions = remember(isUnread, markReadLabel, onMarkRead) {
+        if (isUnread) {
+            listOf(SwipeAction(Icons.Filled.MarkEmailRead, markReadLabel, MeeshyPalette.Indigo500, onMarkRead))
+        } else {
+            emptyList()
+        }
+    }
+    val trailingActions = remember(deleteLabel, onDelete) {
+        listOf(SwipeAction(Icons.Filled.Delete, deleteLabel, MeeshyPalette.Error, onDelete))
+    }
 
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = { NotificationSwipeBackground(direction = dismissState.dismissDirection, isUnread = isUnread) },
-    ) {
+    SwipeableRow(leadingActions = leadingActions, trailingActions = trailingActions) {
         Surface(
             onClick = onTap,
             color = if (isUnread) accent.copy(alpha = 0.12f) else Color.Transparent,
@@ -297,6 +293,7 @@ private fun NotificationItem(
                     name = notification.actor?.displayName ?: notification.actor?.username ?: "?",
                     modifier = Modifier.size(44.dp),
                     containerColor = accent,
+                    imageUrl = notification.actor?.avatar,
                 )
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column(modifier = Modifier.weight(1f)) {
@@ -338,49 +335,6 @@ private fun NotificationItem(
         }
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun NotificationSwipeBackground(direction: SwipeToDismissBoxValue, isUnread: Boolean) {
-    val (alignment, icon, description, background) = when {
-        direction == SwipeToDismissBoxValue.StartToEnd && isUnread -> NotificationSwipeVisual(
-            alignment = Alignment.CenterStart,
-            icon = Icons.Filled.MarkEmailRead,
-            description = stringResource(R.string.notifications_action_mark_read),
-            background = MeeshyPalette.Indigo500.copy(alpha = 0.20f),
-        )
-        direction == SwipeToDismissBoxValue.EndToStart -> NotificationSwipeVisual(
-            alignment = Alignment.CenterEnd,
-            icon = Icons.Filled.Delete,
-            description = stringResource(R.string.notifications_action_delete),
-            background = MeeshyPalette.Error.copy(alpha = 0.20f),
-        )
-        else -> NotificationSwipeVisual(
-            alignment = Alignment.CenterStart,
-            icon = Icons.Filled.MarkEmailRead,
-            description = "",
-            background = Color.Transparent,
-        )
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(background)
-            .padding(horizontal = MeeshySpacing.xl),
-        contentAlignment = alignment,
-    ) {
-        if (background != Color.Transparent) {
-            Icon(imageVector = icon, contentDescription = description, tint = MeeshyTheme.tokens.textSecondary)
-        }
-    }
-}
-
-private data class NotificationSwipeVisual(
-    val alignment: Alignment,
-    val icon: ImageVector,
-    val description: String,
-    val background: Color,
-)
 
 /**
  * The notification row's arrival timestamp as a compact relative label ("5 min", "2 h", "3 j", …)

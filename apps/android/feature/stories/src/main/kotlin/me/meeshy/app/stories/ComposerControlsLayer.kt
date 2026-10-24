@@ -1,8 +1,14 @@
 package me.meeshy.app.stories
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,45 +17,37 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
-import kotlin.math.abs
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.StoryToolMode
 
 /**
- * The bottom-band tools toolbar — parity with iOS's composer FAB column + bottom band
- * (`Contenu` / `Effets`). Two FABs toggle a tools drawer that animates in above them;
- * the drawer shows the active [BandCategory]'s tools — Contenu's add-text / add-media
- * tiles, or Effets' visibility chips. Which category is showing, and whether the drawer
- * is open at all, is decided by the pure, unit-tested [ComposerBandState]; this
- * Composable only renders that state and forwards intents. The drawer is dismissable by
- * a downward swipe and swaps category on a horizontal swipe — natural gestures routed
- * through [onDismiss] / [onSwapCategory].
+ * The open tool's panel under a resizable handle — parity with iOS, it slides over the
+ * bottom of the stage ([ComposerStage]) and never resizes the scene. What is open is decided
+ * by the pure [ComposerBandState]; this Composable only renders it and forwards intents. The
+ * tool row itself is [ComposerToolBand].
  */
 @Composable
-internal fun ComposerControlsLayer(
+internal fun ComposerToolPanel(
     band: ComposerBandState,
     visibility: StoryVisibility,
     selectedFilter: StoryFilter?,
@@ -62,9 +60,7 @@ internal fun ComposerControlsLayer(
     isMediaFull: Boolean,
     mediaCount: Int,
     hasMedia: Boolean,
-    onFabTap: (BandCategory) -> Unit,
     onDismiss: () -> Unit,
-    onSwapCategory: () -> Unit,
     onAddText: () -> Unit,
     onAddSticker: () -> Unit,
     onPickMedia: () -> Unit,
@@ -75,168 +71,139 @@ internal fun ComposerControlsLayer(
     onSlideDurationChange: (Double) -> Unit,
     onSelectBackground: (StoryBackgroundValue?) -> Unit,
 ) {
-    val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        AnimatedVisibility(visible = band.isVisible) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        var total = 0f
-                        detectVerticalDragGestures(
-                            onDragStart = { total = 0f },
-                            onDragEnd = { if (total > swipeThresholdPx) onDismiss() },
-                        ) { change, dy -> change.consume(); total += dy }
+    var panelHeightDp by remember { mutableFloatStateOf(DEFAULT_PANEL_HEIGHT_DP) }
+    val activeTool = band.activeTool
+    AnimatedVisibility(visible = activeTool != null) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column {
+                ComposerBandHandle(
+                    heightDp = panelHeightDp,
+                    onHeightChange = { panelHeightDp = it },
+                    onDismiss = onDismiss,
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(panelHeightDp.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    when (activeTool) {
+                        StoryToolMode.MEDIA -> {
+                            MediaTile(isUploadingMedia, isMediaFull, mediaCount, hasMedia, onPickMedia)
+                            BandTile(
+                                icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
+                                label = stringResource(R.string.stories_composer_add_sticker),
+                                enabled = canAddSticker,
+                                onClick = onAddSticker,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        StoryToolMode.TEXT -> BandTile(
+                            icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
+                            label = stringResource(R.string.stories_composer_add_text),
+                            enabled = canAddText,
+                            onClick = onAddText,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        StoryToolMode.DRAWING -> BandTile(
+                            icon = { Icon(Icons.Filled.Brush, contentDescription = null) },
+                            label = stringResource(R.string.stories_composer_draw),
+                            enabled = true,
+                            onClick = onEnterDrawing,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        StoryToolMode.TEXTURE -> {
+                            BackgroundRow(selected = selectedBackground, onSelect = onSelectBackground)
+                            FilterRow(
+                                selected = selectedFilter,
+                                intensity = filterIntensity,
+                                onSelect = onSelectFilter,
+                                onIntensityChange = onFilterIntensityChange,
+                            )
+                            DurationRow(seconds = slideDurationSeconds, onSecondsChange = onSlideDurationChange)
+                            VisibilityRow(selected = visibility, onSelect = onSelectVisibility)
+                        }
+                        else -> Unit
                     }
-                    .pointerInput(Unit) {
-                        var total = 0f
-                        detectHorizontalDragGestures(
-                            onDragStart = { total = 0f },
-                            onDragEnd = { if (abs(total) > swipeThresholdPx) onSwapCategory() },
-                        ) { change, dx -> change.consume(); total += dx }
-                    },
-            ) {
-                when (band.activeCategory) {
-                    BandCategory.CONTENU -> ContentTilesRow(
-                        canAddText = canAddText,
-                        canAddSticker = canAddSticker,
-                        isUploadingMedia = isUploadingMedia,
-                        isMediaFull = isMediaFull,
-                        mediaCount = mediaCount,
-                        hasMedia = hasMedia,
-                        onAddText = onAddText,
-                        onAddSticker = onAddSticker,
-                        onPickMedia = onPickMedia,
-                        onEnterDrawing = onEnterDrawing,
-                    )
-                    BandCategory.EFFETS -> Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        BackgroundRow(
-                            selected = selectedBackground,
-                            onSelect = onSelectBackground,
-                        )
-                        FilterRow(
-                            selected = selectedFilter,
-                            intensity = filterIntensity,
-                            onSelect = onSelectFilter,
-                            onIntensityChange = onFilterIntensityChange,
-                        )
-                        DurationRow(
-                            seconds = slideDurationSeconds,
-                            onSecondsChange = onSlideDurationChange,
-                        )
-                        VisibilityRow(
-                            selected = visibility,
-                            onSelect = onSelectVisibility,
-                        )
-                    }
-                    null -> Unit
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BandFab(
-                icon = Icons.Filled.Add,
-                label = stringResource(R.string.stories_composer_band_contenu),
-                active = band.activeCategory == BandCategory.CONTENU,
-                onClick = { onFabTap(BandCategory.CONTENU) },
-            )
-            BandFab(
-                icon = Icons.Filled.Tune,
-                label = stringResource(R.string.stories_composer_band_effets),
-                active = band.activeCategory == BandCategory.EFFETS,
-                onClick = { onFabTap(BandCategory.EFFETS) },
+    }
+}
+
+/**
+ * The tool row of the band, under the stage — or, with the chrome voluntarily hidden, only a
+ * ghost handle that gives the row back in one tap.
+ */
+@Composable
+internal fun ComposerToolBand(
+    band: ComposerBandState,
+    badges: Map<StoryToolMode, Int>,
+    onToolTap: (StoryToolMode) -> Unit,
+    onToolSwipeUp: (StoryToolMode) -> Unit,
+    onHideChrome: () -> Unit,
+    onShowChrome: () -> Unit,
+) {
+    if (band.isChromeHidden) {
+        GhostHandle(onShowChrome)
+    } else {
+        ComposerToolRow(
+            tools = ComposerBandTools.served,
+            badges = badges,
+            activeTool = band.activeTool,
+            onTap = onToolTap,
+            onSwipeUp = onToolSwipeUp,
+            onSwipeDown = onHideChrome,
+        )
+    }
+}
+
+private const val DEFAULT_PANEL_HEIGHT_DP = 220f
+
+/** The ghost handle of a voluntarily bare screen: one tap brings the tool row back. */
+@Composable
+private fun GhostHandle(onShow: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+        IconButton(onClick = onShow) {
+            Icon(
+                Icons.Filled.ExpandLess,
+                contentDescription = stringResource(R.string.story_composer_grabber),
             )
         }
     }
 }
 
-/** One bottom-band FAB. Brand-coloured when its category's drawer is open. */
 @Composable
-internal fun BandFab(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    active: Boolean,
-    onClick: () -> Unit,
-) {
-    val container = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
-    val content = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
-    ExtendedFloatingActionButton(
-        onClick = onClick,
-        containerColor = container,
-        contentColor = content,
-        icon = { Icon(icon, contentDescription = null) },
-        text = { Text(label) },
-    )
-}
-
-/** The Contenu drawer's tiles — add-text and pick-media — rendered in [ComposerBand.contentTiles] order. */
-@Composable
-internal fun ContentTilesRow(
-    canAddText: Boolean,
-    canAddSticker: Boolean,
+private fun MediaTile(
     isUploadingMedia: Boolean,
     isMediaFull: Boolean,
     mediaCount: Int,
     hasMedia: Boolean,
-    onAddText: () -> Unit,
-    onAddSticker: () -> Unit,
     onPickMedia: () -> Unit,
-    onEnterDrawing: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        ComposerBand.contentTiles.forEach { tile ->
-            when (tile) {
-                ComposerContentTile.TEXT -> BandTile(
-                    icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
-                    label = stringResource(R.string.stories_composer_add_text),
-                    enabled = canAddText,
-                    onClick = onAddText,
-                    modifier = Modifier.weight(1f),
-                )
-                ComposerContentTile.MEDIA -> BandTile(
-                    icon = {
-                        if (isUploadingMedia) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
-                        }
-                    },
-                    label = if (hasMedia) {
-                        stringResource(R.string.stories_composer_add_media_count, mediaCount, StoryComposerDraft.MAX_MEDIA)
-                    } else {
-                        stringResource(R.string.stories_composer_add_media)
-                    },
-                    enabled = !isUploadingMedia && !isMediaFull,
-                    onClick = onPickMedia,
-                    modifier = Modifier.weight(1f),
-                )
-                ComposerContentTile.STICKER -> BandTile(
-                    icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
-                    label = stringResource(R.string.stories_composer_add_sticker),
-                    enabled = canAddSticker,
-                    onClick = onAddSticker,
-                    modifier = Modifier.weight(1f),
-                )
-                ComposerContentTile.DRAW -> BandTile(
-                    icon = { Icon(Icons.Filled.Brush, contentDescription = null) },
-                    label = stringResource(R.string.stories_composer_draw),
-                    enabled = true,
-                    onClick = onEnterDrawing,
-                    modifier = Modifier.weight(1f),
-                )
+    BandTile(
+        icon = {
+            if (isUploadingMedia) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
             }
-        }
-    }
+        },
+        label = if (hasMedia) {
+            stringResource(R.string.stories_composer_add_media_count, mediaCount, StoryComposerDraft.MAX_MEDIA)
+        } else {
+            stringResource(R.string.stories_composer_add_media)
+        },
+        enabled = !isUploadingMedia && !isMediaFull,
+        onClick = onPickMedia,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /** A single content-drawer tile: an icon over a label, forwarding [onClick]. Glue. */

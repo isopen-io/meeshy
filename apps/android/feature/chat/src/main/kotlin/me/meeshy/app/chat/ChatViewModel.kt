@@ -30,6 +30,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
 import me.meeshy.sdk.mention.MentionSearch
@@ -41,13 +42,16 @@ import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
+import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
 import me.meeshy.sdk.reaction.ReactionRepository
+import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
@@ -95,6 +99,8 @@ class ChatViewModel @Inject constructor(
     private val fileAttachmentDownloader: FileAttachmentDownloader,
     savedStateHandle: SavedStateHandle,
     contributedControllers: Set<@JvmSuppressWildcards ChatController> = emptySet(),
+    recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
+    languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -114,8 +120,21 @@ class ChatViewModel @Inject constructor(
         ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
         ?.takeIf { it.isNotBlank() }
 
-    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId, draft = initialDraft.orEmpty()))
+    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
+
+    private val composerTextHolder = ComposerTextHolder(initialDraft.orEmpty())
+
+    /**
+     * The composer's text, apart from [state]: typing moves only this flow, so the message
+     * list (which reads [state]) is not recomposed per character.
+     */
+    val composerText: StateFlow<ComposerTextState> = composerTextHolder.flow
+    private val _callEntry = MutableStateFlow<HeaderCallEntry?>(null)
+
+    /** The header's call entry ([HeaderCallEntry.resolve], iOS parity): `null` hides every
+     * call button (guest, global, broadcast…), `canStart == false` keeps only « Rejoindre ». */
+    val callEntry: StateFlow<HeaderCallEntry?> = _callEntry.asStateFlow()
 
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
@@ -159,6 +178,10 @@ class ChatViewModel @Inject constructor(
         messageSocketManager = messageSocketManager,
         workManager = workManager,
         clock = clock,
+        pendingTray = { controllers.find<ComposerTrayController>() },
+        composerText = composerTextHolder,
+        recentEmojis = recentEmojiStore,
+        languageIdentifier = languageIdentifier,
     )
 
     private val reactions = ChatReactionController(
@@ -255,6 +278,14 @@ class ChatViewModel @Inject constructor(
                 val viewerRole = conversation.participants
                     .firstOrNull { it.userId == currentUserId }
                     ?.role
+                _callEntry.value = HeaderCallEntry.resolve(
+                    conversationId = conversation.id,
+                    conversationType = conversation.type,
+                    viewerConversationRole = viewerRole,
+                    viewerPlatformRole = sessionRepository.currentUser.value?.role,
+                    viewerIsGuest = sessionRepository.currentUser.value?.isAnonymous == true,
+                    directPeerUserId = conversation.otherParticipantUserId(currentUserId),
+                )
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
@@ -578,6 +609,10 @@ class ChatViewModel @Inject constructor(
     fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
         composer.sendFileAttachment(bytes, fileName, declaredMimeType)
 
+    /** Un fichier choisi, une photo ou un vocal rejoint le plateau : rien ne part avant [send]. */
+    fun onPickFile(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
+        controllers.find<ComposerTrayController>()?.stageBytes(bytes, fileName, declaredMimeType)
+
     /** Present the composer's message-effects picker sheet. */
     fun openEffectsPicker() = composer.openEffectsPicker()
 
@@ -624,6 +659,9 @@ class ChatViewModel @Inject constructor(
 
     /** Select a tab in the open who-reacted sheet; an out-of-range index is inert. */
     fun selectReactionTab(index: Int) = reactions.selectTab(index)
+
+    /** Adds [emoji] from the who-reacted sheet's quick strip (inert when the viewer already has it). */
+    fun addReactionFromDetails(messageId: String, emoji: String) = reactions.addFromDetails(messageId, emoji)
 
     /** Dismiss the who-reacted sheet. */
     fun closeReactionDetails() = reactions.closeDetails()
@@ -757,17 +795,30 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * File the report. A submission in flight or already succeeded short-circuits a re-tap
-     * ([ReportMessageForm.canSubmit]), so a double tap never fires two reports. An inert repository
-     * result (no session) or a network failure both surface [ReportMessageForm.hasError] and clear
-     * the submitting flag, so the user can retry.
+     * "Envoyer le signalement" tapped: raises the mandatory confirmation dialog and sends nothing.
+     * Inert without a reason or while a send is in flight / done, so a double tap never stacks.
      */
     fun submitReport() {
+        _state.update { it.copy(reportForm = it.reportForm?.requestConfirmation()) }
+    }
+
+    fun cancelReportConfirmation() {
+        _state.update { it.copy(reportForm = it.reportForm?.cancelConfirmation()) }
+    }
+
+    /**
+     * File the report — only reachable from the confirmation dialog ([ReportMessageForm.isConfirming]),
+     * so no report ever reaches moderation unconfirmed, and a second confirm is inert. An inert
+     * repository result (no session) or a network failure both surface [ReportMessageForm.hasError]
+     * so the user can retry.
+     */
+    fun confirmReportSubmit() {
         val form = _state.value.reportForm ?: return
-        if (!form.canSubmit) return
+        val reason = form.selectedReason ?: return
+        if (!form.isConfirming) return
         _state.update { it.copy(reportForm = it.reportForm?.submitting()) }
         viewModelScope.launch {
-            val result = reportRepository.reportMessage(form.messageId, form.selectedReason, form.details)
+            val result = reportRepository.reportMessage(form.messageId, reason, form.details)
             _state.update { current ->
                 val open = current.reportForm ?: return@update current
                 current.copy(reportForm = if (result is NetworkResult.Success) open.submitted() else open.failed())
@@ -862,6 +913,7 @@ class ChatViewModel @Inject constructor(
         conversationName = _state.value.conversationTitle,
         conversationAccentColor = _state.value.accentColorHex,
         senderName = senderName,
+        senderAvatarUrl = latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.sender?.resolvedAvatar,
         contentPreview = text,
         attachmentKind = when {
             images.isNotEmpty() -> StarredAttachmentKind.IMAGE

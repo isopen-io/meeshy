@@ -1,0 +1,28 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_recording_accept">Zustimmen</string>
+    <string name="call_recording_active">Aufnahme läuft</string>
+    <string name="call_recording_ask">%s möchte den Anruf aufnehmen</string>
+    <string name="call_recording_askDetail">Die Aufnahme beginnt nur, wenn alle zustimmen, und wird dann zur Unterhaltung hinzugefügt.</string>
+    <string name="call_recording_askDetail_video">Der Anrufbildschirm und sein gesamter Ton werden nur aufgenommen, wenn alle zustimmen, und dann zur Unterhaltung hinzugefügt.</string>
+    <string name="call_recording_ask_video">%s möchte den Anruf als Video aufnehmen</string>
+    <string name="call_recording_cancel">Abbrechen</string>
+    <string name="call_recording_caption">Aufnehmen</string>
+    <string name="call_recording_close">Schließen</string>
+    <string name="call_recording_hint">Fragt jede teilnehmende Person vor der Aufnahme um Zustimmung</string>
+    <string name="call_recording_kind_audio">Nur Audio</string>
+    <string name="call_recording_kind_hint">Wählen Sie, was aufgenommen wird; danach muss jede Person zustimmen</string>
+    <string name="call_recording_kind_video">Audio und Video</string>
+    <string name="call_recording_refuse">Ablehnen</string>
+    <string name="call_recording_saveFailed">Die Aufnahme konnte nicht hinzugefügt werden</string>
+    <string name="call_recording_saved">Die Aufnahme wurde zur Unterhaltung hinzugefügt</string>
+    <string name="call_recording_someone">Ein Teilnehmer</string>
+    <string name="call_recording_start">Anruf aufnehmen</string>
+    <string name="call_recording_stop">Aufnahme beenden</string>
+    <string name="call_recording_stopped_joined">Jemand ist dem Anruf beigetreten: Aufnahme beendet</string>
+    <string name="call_recording_stopped_other">Aufnahme beendet</string>
+    <string name="call_recording_stopped_refused">Aufnahme abgelehnt</string>
+    <string name="call_recording_stopped_timeout">Nicht alle haben geantwortet: keine Aufnahme</string>
+    <string name="call_recording_unavailable">Aufnahme derzeit nicht möglich</string>
+    <string name="call_recording_waiting">Warten auf die Zustimmung aller…</string>
+</resources>

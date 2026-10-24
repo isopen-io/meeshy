@@ -133,6 +133,12 @@ on:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
       - '.github/workflows/ios.yml'
+      - 'scripts/ci/**'
+      - 'scripts/check-swift-catalog-dead-entries.mjs'
+      - 'scripts/check-accent-color-hardcoding.mjs'
+      - 'scripts/check-law-literals.sh'
+      - 'scripts/check-swift-viewbuilder.sh'
+      - 'scripts/check-ios-spm-resolve-retry.mjs'
   pull_request:
     branches:
       - main
@@ -145,6 +151,12 @@ on:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
       - '.github/workflows/ios.yml'
+      - 'scripts/ci/**'
+      - 'scripts/check-swift-catalog-dead-entries.mjs'
+      - 'scripts/check-accent-color-hardcoding.mjs'
+      - 'scripts/check-law-literals.sh'
+      - 'scripts/check-swift-viewbuilder.sh'
+      - 'scripts/check-ios-spm-resolve-retry.mjs'
   workflow_dispatch:
     # Suites ciblées (noms de classes MeeshyTests séparés par des virgules) :
     # la suite complète dépasse la limite du job, et un lot doit pouvoir
@@ -171,7 +183,11 @@ on:
 # compilation, silencieusement — le nouveau run est vert, il n'a juste rien testé.
 concurrency:
   group: ios-tests-${{ github.ref }}
-  cancel-in-progress: true
+  # Même règle que ci.yml (#4395) : sur `dev` et `main`, le run EN COURS va au bout et seul le
+  # run en attente est remplacé. Sinon une rafale de poussées n'obtenait presque jamais de
+  # conclusion (mesuré le 2026-10-23 sur 9 à 61 poussées de `dev` : 1 conclusion pour le SDK,
+  # 11 pour Android, 5 pour iOS), donc aucun verdict de ces chaînes sur le commit promu.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
 
 env:
   # Nombre de tranches parallèles de la suite MeeshyTests (#9692). Choisi sur
@@ -302,9 +318,9 @@ jobs:
   # qui ÉNUMÈRE `apps/ios/scripts/` plutôt que d'en recopier la liste — une
   # garde neuve fait donc rougir le jour où elle est écrite.
   gardes-outillage:
-    name: Gardes de l'outillage iOS
+    name: Gardes iOS (texte, ubuntu)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -356,6 +372,63 @@ jobs:
       - name: Règles maison — cliquets sur la référence
         run: bash apps/ios/scripts/check_house_rules.sh --self-test && bash apps/ios/scripts/check_house_rules.sh
 
+      # Les cinq gardes ci-dessous lisent du SWIFT (et le script de résolution
+      # SPM) et rien d'autre : elles jugent donc ICI, là où vivent leurs entrées,
+      # et non dans `quality` de ci.yml, où un cliquet Swift rouge sautait toute
+      # la suite TS et bloquait la promotion de production. Node est épinglé comme
+      # dans ci.yml (NODE_VERSION).
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.19'
+
+      # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
+      # sans appelant se compte comme un lecteur : un décideur qui cherche qui
+      # consomme un champ voit la déclaration `case foo(...)` /
+      # `foo: '/chemin'` et GARDE, alors que rien ne l'appelle jamais. Les
+      # deux catalogues (`packages/MeeshySDK/.../Networking/Endpoints/*.swift`,
+      # `packages/shared/api/endpoints.ts`) sont GÉNÉRÉS depuis
+      # `services/gateway/route-manifest.json` — un marqueur posé à la main
+      # sur une entrée y serait écrasé (ou rejeté par le cliquet de
+      # régénération TS) à la prochaine régénération. Ces deux cliquets à deux
+      # sens gardent donc le compte de dette à CÔTÉ des catalogues plutôt que
+      # dedans, sur le modèle du ratchet de types ci-dessus.
+      - name: Swift catalog dead-entries ratchet
+        run: node scripts/check-swift-catalog-dead-entries.mjs --self-test && node scripts/check-swift-catalog-dead-entries.mjs
+
+      # #3678 — la règle d'accent (CLAUDE.md § « Conversation Accent Color »)
+      # veut qu'un composant lié au contexte d'une conversation utilise
+      # `accentColor`/`colorPalette`, jamais une couleur en dur. Le golden
+      # partagé qui PROUVE le calcul existe déjà (accent.vectors.json, joué
+      # par les 3 clients) ; ce cliquet ferme l'autre moitié du critère de
+      # fin de #3678 en empêchant le CONTOURNEMENT (`Color(hex:)` hors
+      # `Theme/`) de grossir en silence.
+      - name: Accent color hardcoding ratchet
+        run: node scripts/check-accent-color-hardcoding.mjs --self-test && node scripts/check-accent-color-hardcoding.mjs
+
+      - name: Law literals guard
+        run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
+
+      # #6545 — le run iOS déclenché sur `promote/main-39224d5fc9` est tombé
+      # avant toute compilation : `xcodebuild -resolvePackageDependencies`
+      # échouait quatre fois avec la MÊME erreur (« already exists in file
+      # system », une entrée du cache d'artefacts SwiftPM DU RUNNER), et la
+      # boucle de reprise — qui n'attendait et rejouait que pour une panne
+      # réseau — ne pouvait pas en sortir. La logique a quitté `ios.yml` pour
+      # `scripts/ci/resolve-spm-packages.sh`, rejouable ici (faux
+      # `xcodebuild`/`sleep` sur PATH) sans macOS : collision purgée sans
+      # dormir, panne réseau toujours retentée avec attente, échec réel
+      # toujours définitif après 4 essais.
+      - name: iOS SPM resolve retry guard
+        run: node scripts/check-ios-spm-resolve-retry.mjs --self-test && node scripts/check-ios-spm-resolve-retry.mjs
+
+      # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
+      # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
+      # ~15 min et meurt à la première erreur, alors que ce garde les liste
+      # toutes avant même que le job iOS ne démarre.
+      - name: ViewBuilder statement-chaining guard
+        run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
+
   # File d'attente des suites complètes (#9751). L'org a 5 jobs macOS
   # simultanés, et une suite complète les prend tous (build + 4 tranches) : deux
   # suites lancées ensemble entrelaçaient leurs tranches et finissaient en 60 à
@@ -400,7 +473,7 @@ jobs:
     # + ARCHS=arm64, qui produit un `.xctestrun` exécutable sur n'importe quel
     # simulateur arm64 — et publie `Build/Products` en artefact ; les tranches
     # `ios-test-shard` l'exécutent en parallèle, `ios-tests` rend le verdict
-    # sous le nom historique « Build app + tests unitaires ». Effet de bord
+    # sous le nom « Verdict iOS (tests) » (ancien « Build app + tests unitaires »). Effet de bord
     # voulu : les deux modes bâtissent désormais la MÊME destination, la
     # lignée DerivedData sert donc indifféremment PR et `dev`.
     name: ${{ needs.scope.outputs.run_tests == 'true' && 'Build app (produits de test)' || 'Build app (app + cibles de test)' }}
@@ -988,8 +1061,7 @@ jobs:
           overwrite: true
           if-no-files-found: warn
 
-  # Le VERDICT de la suite, sous le nom de check historique : les veilles qui
-  # cherchent « Build app + tests unitaires » le retrouvent, et il ne verdit
+  # Le VERDICT de la suite (ancien nom : « Build app + tests unitaires ») : il ne verdit
   # que si la compilation ET chaque tranche sont vertes — une tranche annulée
   # (délai, poussée concurrente) n'est jamais un vert. Il rougit aussi sur une
   # tranche qui n'a exécuté AUCUN test : une sélection vide est une faute de
@@ -999,8 +1071,8 @@ jobs:
     if: always() && needs.scope.outputs.run_tests == 'true'
     # Nom STATIQUE : un job sauté (compilation seule) n'évalue pas son nom, et
     # l'expression brute s'affichait telle quelle dans la liste des checks
-    # (run 37830972768). Sauté, « Build app + tests unitaires » dit juste.
-    name: Build app + tests unitaires
+    # (run 37830972768). Sauté (compilation seule), « Verdict iOS (tests) » dit juste.
+    name: Verdict iOS (tests)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

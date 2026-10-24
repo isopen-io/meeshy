@@ -54,6 +54,8 @@ class CallViewModel @Inject constructor(
     private val analytics: CallAnalyticsController,
     /** The seams capabilities plug into; the call screen reads the UI ones from here. */
     val extensions: CallExtensionPoints,
+    private val ongoing: CallOngoingController,
+    private val peerVisuals: CallPeerVisualSource,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -74,6 +76,7 @@ class CallViewModel @Inject constructor(
 
     /** Seconds of connected media, ticked once the call reaches [CallState.Connected]. */
     private var elapsedSeconds: Long = 0L
+    private var mediaEstablished = false
 
     /** The 1-Hz timer job; alive only while media is (or was) flowing this call. */
     private var tickerJob: Job? = null
@@ -104,6 +107,14 @@ class CallViewModel @Inject constructor(
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
+    private val _peerVisual = MutableStateFlow(CallPeerVisual.EMPTY)
+
+    /** La photo, le contour équipé et la bannière du correspondant ([CallPeerVisualSource]), cache d'abord. */
+    val peerVisual: StateFlow<CallPeerVisual> = _peerVisual.asStateFlow()
+
+    /** Résout le visuel de l'appel en cours ; remplacé à chaque [start]. */
+    private var peerVisualJob: Job? = null
+
     /**
      * The inputs of the call in flight — read by the app shell to rebuild the call
      * route when the floating pill re-opens a minimised call (the Activity-scoped
@@ -113,10 +124,13 @@ class CallViewModel @Inject constructor(
     val activeConfig: CallConfig get() = config
 
     init {
+        coordinator.onRemoteBye = { onRemoteBye() }
+        coordinator.onSetupFailed = { message -> dispatch(CallEvent.ConnectionFailed(message)) }
         peers.attach(host)
         waiting.attach(host)
         watchdogs.attach(host)
         analytics.attach(host)
+        ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute, onAnswer = ::accept, onDecline = ::decline)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
         }
@@ -168,7 +182,10 @@ class CallViewModel @Inject constructor(
 
     /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */
     private fun onIceServersRefreshed(iceServers: List<SocketIceServer>) {
-        if (!awaitingIncomingIce) return
+        if (!awaitingIncomingIce) {
+            if (callId.isNotBlank()) coordinator.updateIceServers(iceServers)
+            return
+        }
         awaitingIncomingIce = false
         coordinator.startIncoming(
             viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo,
@@ -177,7 +194,10 @@ class CallViewModel @Inject constructor(
     }
 
     /** WebRTC reports the media path is up → advance the FSM to Connected. */
-    private fun onMediaConnected() = dispatch(CallEvent.MediaConnected)
+    private fun onMediaConnected() {
+        telecomReporter.onMediaConnected()
+        dispatch(CallEvent.MediaConnected)
+    }
 
     /** WebRTC reports a mid-call ICE stall → FSM Reconnecting (« Reconnexion… »). */
     private fun onMediaStalled() = dispatch(CallEvent.ConnectionStalled)
@@ -195,14 +215,26 @@ class CallViewModel @Inject constructor(
         this.media = CallMedia(isCameraOn = config.isVideo, isSpeakerOn = config.isVideo)
         this.callId = config.callId
         this.elapsedSeconds = 0L
+        this.mediaEstablished = false
         this.connectionQuality = null
+        telecomReporter.begin(TelecomCallInfo(config.peerId, config.peerName, config.isVideo, config.isOutgoing))
         waiting.reset()
         analytics.begin()
         stopTicker()
         stopQuality()
         watchdogs.reset()
         peers.clear()
+        resolvePeerVisual(config)
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
+    }
+
+    /** Le visuel d'un appel précédent ne survit jamais : vide d'abord, puis ce que la source résout. */
+    private fun resolvePeerVisual(config: CallConfig) {
+        peerVisualJob?.cancel()
+        _peerVisual.value = CallPeerVisual.EMPTY
+        peerVisualJob = viewModelScope.launch {
+            peerVisuals.visualFor(config).collect { _peerVisual.value = it }
+        }
     }
 
     /**
@@ -256,6 +288,7 @@ class CallViewModel @Inject constructor(
     /** Local user hangs up an active call — end the FSM and the call on the wire. */
     fun hangUp() {
         dispatch(CallEvent.LocalHangUp)
+        coordinator.sendHangupBye()
         emitIfIdentified { signalManager.emitEnd(it) }
         coordinator.end()
     }
@@ -280,6 +313,9 @@ class CallViewModel @Inject constructor(
 
     /** Video tracks + EGL context for [CallScreen]'s renderers (video calls only). */
     val eglBaseContext get() = coordinator.eglBaseContext
+
+    /** Le serveur-id de l'appel en cours (vide avant que l'ACK ne le donne) : la clé par appel des surfaces. */
+    val activeCallId: String get() = callId
     val localVideoTrack get() = coordinator.localVideoTrack
     val remoteVideoTracks get() = coordinator.remoteVideoTracks
 
@@ -325,6 +361,7 @@ class CallViewModel @Inject constructor(
                 peerName = pending.callerName,
                 isVideo = pending.isVideo,
                 isOutgoing = false,
+                conversationId = pending.conversationId,
                 callId = pending.callId,
             ),
         )
@@ -346,6 +383,13 @@ class CallViewModel @Inject constructor(
         waiting.onRemotelyEnded(signal.callId)
     }
 
+    /** In-band `bye` from the peer: instant cut; the `call:ended` fanout that follows finds the call already ended. */
+    private fun onRemoteBye() {
+        if (!callState.isActive) return
+        dispatch(CallEvent.RemoteHangUp)
+        coordinator.end()
+    }
+
     /** Runs [emit] with the current [callId] only once one is known — inert otherwise. */
     private inline fun emitIfIdentified(emit: (String) -> Unit) {
         if (callId.isNotBlank()) emit(callId)
@@ -356,6 +400,7 @@ class CallViewModel @Inject constructor(
     private fun dispatch(event: CallEvent) {
         val previous = callState
         callState = CallStateMachine.reduce(previous, event)
+        if (callState is CallState.Connected) mediaEstablished = true
         driveTone(previous, callState)
         driveTelecom(previous, callState)
         analytics.onTransition(previous, callState)
@@ -383,6 +428,7 @@ class CallViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        ongoing.detach()
         toneController.release()
         telecomReporter.release()
         extensions.controllers.notifyCleared()
@@ -435,7 +481,7 @@ class CallViewModel @Inject constructor(
         _state.value = CallPresenter.present(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
             peer.qualityDegraded, peer.screenCapturing, peer.caption,
-            peer.audioEnabled, peer.videoEnabled, videoAutoPaused,
+            peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
         )
     }
 

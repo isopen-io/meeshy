@@ -35,31 +35,20 @@ extension MeeshyComposerHost {
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.86), value: presentedSceneMenu)
         }
+        .modifier(ComposerSceneMediaRetouchCover(request: $sceneMediaRetouch) { completeSceneMediaRetouch($0, $1) })
     }
 
-    /// **L'identifiant se lit AVANT d'agir, et se remet à `nil` ensuite.**
-    ///
-    /// Le `Binding` du dialogue efface déjà l'état à la fermeture, mais l'ordre
-    /// des deux n'est pas garanti : SwiftUI referme la feuille et exécute
-    /// l'action dans la même passe. Lire l'identifiant en premier rend la
-    /// fonction indifférente à cet ordre — sans quoi une action arriverait
-    /// parfois sur un `nil`, et jamais de façon reproductible.
+    /// **L'identifiant se lit AVANT d'agir, puis se remet à `nil`** : SwiftUI referme la feuille et
+    /// exécute l'action dans la même passe, sans garantir l'ordre.
     func applyBackgroundMenu(_ action: ComposerBackgroundMenuAction) {
         guard let id = backgroundMenuObjectId else { return }
         backgroundMenuObjectId = nil
         switch action {
         case .edit:
-            // Le MÊME éditeur que le double-tap et que le rail des
-            // contrôleurs — la vue `2d` de la planche, unifiée pour les cinq
-            // familles. Un second chemin d'ouverture divergerait au premier
-            // outil ajouté.
-            openObjectEditor(id)
+            // Le MÊME éditeur que le double-tap et le rail, la retouche unique pour une image ou une vidéo.
+            if !requestSceneMediaRetouch(id) { openObjectEditor(id) }
         case .bringForward:
-            // `toggleBackground` et NON `bringForward` : ce dernier déplace un
-            // z-index parmi les objets de premier plan, et un fond se rend
-            // depuis `backgroundLayer` quel que soit son z — l'entrée aurait
-            // été INERTE. Ce que « ramener en avant » veut dire sur un fond,
-            // c'est le faire SORTIR du plan de fond.
+            // `toggleBackground` et NON `bringForward` : un fond se rend depuis `backgroundLayer` quel que soit son z.
             viewModel.toggleBackground(id: id)
         case .delete:
             // **Le retrait du MEUBLE, jamais la primitive du SDK** (#6577).

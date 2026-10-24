@@ -55,6 +55,25 @@ final class CallCaptureControllerFramesTests: XCTestCase {
         try XCTUnwrap(CallFrameCatalogue.frames(forPeople: people).first)
     }
 
+    // MARK: - Un seul visage, l'Écran d'un appareil (#12589)
+
+    func test_render_oneFace_classicScreen_drawsTheDevice() throws {
+        let portrait = CallMontagePortrait(id: "local", name: "Vous", image: makeImage(width: 300, height: 400))
+        let faces = CallCaptureFaces(montage: [portrait], frame: [])
+        let taille = CGSize(width: 108, height: 192)
+        let rendu = try XCTUnwrap(CallCaptureController.render(
+            .classic(.screen), faces: faces, caption: CallMontageCaption(title: "Meeshy", subtitle: "", clock: "09:41"),
+            texts: CallFrameTexts(groupName: nil, isGroup: false, date: "", accentHex: nil), size: taille))
+        let contexte = CGContext(data: nil, width: 108, height: 192, bitsPerComponent: 8, bytesPerRow: 0,
+                                 space: CGColorSpaceCreateDeviceRGB(),
+                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        contexte.draw(rendu, in: CGRect(x: 0, y: 0, width: 108, height: 192))
+        let octets = contexte.data!.assumingMemoryBound(to: UInt8.self)
+        let ligne = (192 - 1 - 96) * contexte.bytesPerRow
+        XCTAssertLessThan(Int(octets[ligne + 1 * 4]), 30, "un appel à un seul visage reçoit le même bord d'appareil")
+        XCTAssertGreaterThan(Int(octets[ligne + 54 * 4 + 2]), 150, "le centre est le visage")
+    }
+
     // MARK: - Choisir un cadre
 
     func test_selectChoice_frame_isTheChoice_andKeepsTheLastClassic() throws {

@@ -1,4 +1,5 @@
 import type { CoqueNative } from '@/lib/native-shell';
+import { COMPOSER_INPUT_SELECTOR } from '@/lib/notifications/composer-focus-intent';
 
 import { WIDGETS_BRIDGE } from './channel';
 
@@ -11,9 +12,11 @@ import { WIDGETS_BRIDGE } from './channel';
  *
  * Le signal est RETENU côté natif jusqu'à ce que cet écouteur s'abonne : un
  * lancement à froid ne le perd pas.
+ *
+ * Le curseur se pose comme sur le web (#12499, `composer-focus-intent.ts`) :
+ * même composeur, et le fil ne défile pas.
  */
 export const COMPOSE_EVENT = 'composeRequested';
-const COMPOSER_FIELD = '[data-composer] textarea';
 const DEADLINE_MS = 6_000;
 const STEP_MS = 120;
 
@@ -29,9 +32,9 @@ export function focusComposerWhenReady(params: {
   const threadPath = `/c/${conversationId}`;
   const attempt = (): void => {
     if (now() > until) return;
-    const field = path() === threadPath ? doc.querySelector<HTMLTextAreaElement>(COMPOSER_FIELD) : null;
+    const field = path() === threadPath ? doc.querySelector<HTMLTextAreaElement>(COMPOSER_INPUT_SELECTOR) : null;
     if (field !== null) {
-      field.focus();
+      field.focus({ preventScroll: true });
       return;
     }
     timers.set(attempt, STEP_MS);

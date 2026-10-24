@@ -17,6 +17,7 @@ import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.apiCallUnit
 import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.outbox.FriendRequestPayload
+import me.meeshy.sdk.outbox.FriendRespondPayload
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -77,6 +78,34 @@ class FriendRepository @Inject constructor(
     }
 
     /**
+     * Queues the answer to a RECEIVED request durably (accept or reject), so the gesture
+     * is accepted offline and delivered FIFO on the friend lane at reconnection. Only
+     * enqueues: the caller applies the optimistic [FriendshipCache] change. The row is keyed
+     * by the request id, so a second answer to the same request supersedes the first.
+     *
+     * @return the queued row's `cmid`, or `null` for a blank request or user id.
+     */
+    suspend fun enqueueRespondFriendRequest(
+        requestId: String,
+        userId: String,
+        accepted: Boolean,
+        cmid: String = OutboxIds.cmid(),
+    ): String? {
+        if (requestId.isBlank() || userId.isBlank()) return null
+        return outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.RESPOND_FRIEND_REQUEST,
+                lane = OutboxLanes.FRIEND,
+                targetId = requestId,
+                payload = MeeshyApi.json.encodeToString(
+                    FriendRespondPayload(FriendRequestAction.responding(accepted).wire, userId),
+                ),
+                cmid = cmid,
+            ),
+        )
+    }
+
+    /**
      * Every accepted relation of the current user, in BOTH directions — the source of
      * the friend list. One listing (`direction=any&status=accepted`), read a hundred rows
      * at a time by cursor, up to [FRIENDS_FETCH_CAP].
@@ -89,6 +118,36 @@ class FriendRepository @Inject constructor(
     suspend fun acceptedFriendRequests(): NetworkResult<List<FriendRequest>> =
         drainByCursor(cap = FRIENDS_FETCH_CAP) { cursor ->
             readPage(FriendRequestDirection.Any, STATUS_ACCEPTED, cursor, FRIENDS_PAGE_SIZE)
+                .map { DrainedPage(it.requests, it.nextCursor, it.hasMore) }
+        }
+
+    /**
+     * The whole friend graph of [currentUserId], shaped for [FriendshipCache.hydrate]: the
+     * accepted relations of [acceptedFriendRequests] split by who sent them, plus every
+     * pending request received and sent. The friend list and the friendship cache read
+     * this ONE graph, so an accepted relation the user received is a friend in both. Any
+     * read that fails fails the graph — a partial graph would erase relations on hydrate.
+     */
+    suspend fun friendshipGraph(currentUserId: String): NetworkResult<FriendshipPages> {
+        val accepted = when (val read = acceptedFriendRequests()) {
+            is NetworkResult.Success -> read.data
+            is NetworkResult.Failure -> return read
+        }
+        val received = when (val read = allPending(FriendRequestDirection.Received)) {
+            is NetworkResult.Success -> read.data
+            is NetworkResult.Failure -> return read
+        }
+        val sent = when (val read = allPending(FriendRequestDirection.Sent)) {
+            is NetworkResult.Success -> read.data
+            is NetworkResult.Failure -> return read
+        }
+        val (acceptedSent, acceptedReceived) = accepted.partition { it.senderId == currentUserId }
+        return NetworkResult.Success(FriendshipPages(sent = acceptedSent + sent, received = acceptedReceived + received))
+    }
+
+    private suspend fun allPending(direction: FriendRequestDirection): NetworkResult<List<FriendRequest>> =
+        drainByCursor(cap = FRIENDS_FETCH_CAP) { cursor ->
+            readPage(direction, STATUS_PENDING, cursor, FRIENDS_PAGE_SIZE)
                 .map { DrainedPage(it.requests, it.nextCursor, it.hasMore) }
         }
 

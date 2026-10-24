@@ -12,6 +12,8 @@ import {
   type ReadingTelemetryErasure,
 } from './social/readingTelemetryErasure';
 import { deleteShareLinksRevokingGuests } from '../socketio/deleteShareLinksRevokingGuests';
+import { eraseCallTelemetryOf } from './calls/callTelemetryPrivacy';
+import { eraseE2EEDataOfUser } from './e2ee/device-retirement';
 import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
@@ -30,6 +32,10 @@ export type AccountPurgeSummary = {
   readonly packs: PackPurgeSummary;
   /** Ce que le compte a vu, lu, ouvert, fait défiler ou capturé (#10499, O6). */
   readonly readingTelemetry: ReadingTelemetryErasure;
+  /** Les lignes d'appel dont la télémétrie et la note ont été effacées (#11277) : la ligne, elle, reste. */
+  readonly callTelemetryErased: number;
+  /** Ses appareils chiffrés, leurs pré-clés publiques et les enveloppes qui lui restaient adressées (#12543). */
+  readonly e2eeErased: { readonly devices: number; readonly preKeys: number; readonly envelopes: number };
 };
 
 export type AccountPurgeOptions = {
@@ -89,7 +95,7 @@ export async function purgeAccountIsolatedData(
   userId: string,
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry] =
+  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
@@ -115,6 +121,8 @@ export async function purgeAccountIsolatedData(
       purgeGameData(prisma, userId),
       purgePackData(prisma, userId, { files: options.packFiles }),
       eraseReadingTelemetryOf(prisma, userId),
+      eraseCallTelemetryOf(prisma, userId),
+      eraseE2EEDataOfUser(prisma, userId),
     ]);
 
   const summary: AccountPurgeSummary = {
@@ -129,6 +137,8 @@ export async function purgeAccountIsolatedData(
     game,
     packs,
     readingTelemetry,
+    callTelemetryErased: callTelemetry,
+    e2eeErased: e2ee,
   };
 
   logger.info(
@@ -140,7 +150,7 @@ export async function purgeAccountIsolatedData(
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
       `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
-      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents}`
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry}`
   );
 
   return summary;

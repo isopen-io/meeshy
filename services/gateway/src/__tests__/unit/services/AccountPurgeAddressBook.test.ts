@@ -92,13 +92,18 @@ function base() {
     postEngagement: table([]),
     postView: table([]),
     contentEvent: table([]),
+    // L'annuaire E2EE (#12543) : aucun appareil chiffré.
+    e2EEDevice: table([]),
+    e2EEOneTimePreKey: table([]),
+    messageEnvelope: table([]),
+    e2EERevokedIdentity: table([]),
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, table([])]),
     ),
     user: { updateMany: async () => ({ count: 1 }) },
     // Les packs (#10151) : des collections vides.
-    ...(({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack }) => ({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack }))(fakePackDb({})),
+    ...(({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset }) => ({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset }))(fakePackDb({})),
   };
   return { prisma, userContact, contactJoinNotice, notification };
 }

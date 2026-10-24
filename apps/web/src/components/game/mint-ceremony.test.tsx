@@ -272,10 +272,15 @@ describe('réduire les animations', () => {
   });
 });
 
-describe('un appareil modeste', () => {
-  test('quatre cœurs ou moins', () => {
-    expect(isModestDevice({ hardwareConcurrency: 4 })).toBe(true);
-    expect(isModestDevice({ hardwareConcurrency: 8 })).toBe(false);
+describe('un appareil modeste (le tier de capacite, W10)', () => {
+  test('un tier bas ou moyen est modeste, haut ne l\'est pas', () => {
+    expect(isModestDevice({ hardwareConcurrency: 3 })).toBe(true);
+    expect(isModestDevice({ hardwareConcurrency: 8, deviceMemory: 2 })).toBe(true);
+    expect(isModestDevice({ hardwareConcurrency: 8, deviceMemory: 4 })).toBe(false);
+    expect(isModestDevice({ hardwareConcurrency: 4 })).toBe(false);
+  });
+
+  test('un navigateur muet n\'est pas modeste', () => {
     expect(isModestDevice({})).toBe(false);
     expect(isModestDevice(undefined)).toBe(false);
   });

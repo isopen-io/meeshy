@@ -24,7 +24,7 @@
 # would block slices on pre-existing debt the routine never agreed to fix.
 # =============================================================================
 
-name: Android
+name: Android natif
 
 on:
   push:
@@ -38,6 +38,12 @@ on:
       - 'apps/ios/MeeshyWidgets/Localizable.xcstrings'
       - 'apps/ios/MeeshyNotificationExtension/Localizable.xcstrings'
       - 'apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings'
+      - 'services/gateway/route-manifest.json'
+      - 'packages/shared/api/**'
+      - 'packages/shared/scripts/generate-android-endpoints.ts'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
+      - 'packages/design-tokens/**'
   pull_request:
     branches: [main, dev]
     paths:
@@ -49,11 +55,21 @@ on:
       - 'apps/ios/MeeshyWidgets/Localizable.xcstrings'
       - 'apps/ios/MeeshyNotificationExtension/Localizable.xcstrings'
       - 'apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings'
+      - 'services/gateway/route-manifest.json'
+      - 'packages/shared/api/**'
+      - 'packages/shared/scripts/generate-android-endpoints.ts'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
+      - 'packages/design-tokens/**'
   workflow_dispatch:
 
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: true
+  # Même règle que ci.yml (#4395) : sur `dev` et `main`, le run EN COURS va au bout et seul le
+  # run en attente est remplacé. Sinon une rafale de poussées n'obtenait presque jamais de
+  # conclusion (mesuré le 2026-10-23 sur 9 à 61 poussées de `dev` : 1 conclusion pour le SDK,
+  # 11 pour Android, 5 pour iOS), donc aucun verdict de ces chaînes sur le commit promu.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
 
 env:
   # Mandatory, not cosmetic: with LANG/LC_ALL unset the JVM boots with
@@ -70,7 +86,7 @@ jobs:
   # n'est plus celui que les catalogues produiraient. Bloquant pour une PR qui touche apps/android,
   # consultatif pour une PR iOS seule (qui ne peut pas connaître le manifeste Android).
   i18n:
-    name: Android strings (generation check)
+    name: Chaînes Android générées à jour
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -109,6 +125,48 @@ jobs:
         continue-on-error: ${{ steps.scope.outputs.android_touched != 'true' }}
         run: python3 apps/android/scripts/i18n/xcstrings_to_android.py --check
         working-directory: .
+
+  # Routes : les constantes Kotlin de core/network/.../net/routes sont GÉNÉRÉES depuis
+  # services/gateway/route-manifest.json (packages/shared/api/build-kotlin-endpoints.ts).
+  # Le contrôle échoue quand un fichier a divergé du manifeste ou qu'un orphelin subsiste.
+  routes:
+    name: Routes Android générées à jour
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Generated Kotlin routes are up to date (generate-android-endpoints.ts --check)
+        working-directory: packages/shared
+        run: npx --yes tsx@4.20.6 scripts/generate-android-endpoints.ts --check
+
+  # Jetons : MeeshyPaletteGenerated.kt (Android) et ios.css (web) sont GÉNÉRÉS depuis
+  # MeeshyColors.swift par le même parseur strict. Une couleur modifiée côté Swift sans
+  # régénération fait échouer ce contrôle.
+  tokens:
+    name: Jetons de design générés à jour
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: ios.css is up to date (generate-from-ios.mjs --check)
+        run: node packages/design-tokens/scripts/generate-from-ios.mjs --check
+
+      - name: MeeshyPaletteGenerated.kt is up to date (generate-android-from-ios.mjs --check)
+        run: node packages/design-tokens/scripts/generate-android-from-ios.mjs --check
 
   android:
     name: Android (assemble + unit tests)

@@ -82,6 +82,7 @@ import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
 
 import { E2EE_PLAINTEXT_REFUSED } from '../../../services/messaging/e2eePlaintextAdmission';
+import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
 
 describe('MessagingService.handleMessage — aucun clair dans une conversation e2ee (#11216)', () => {
   let service: MessagingService;
@@ -208,7 +209,7 @@ describe('MessagingService.handleMessage — aucun clair dans une conversation e
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
   });
 
-  it('écrit le chiffré d’un client qui chiffre, et aucun clair à côté', async () => {
+  it('refuse un chiffré à l’ancienne (sans enveloppes libsignal) avec E2EE_CLIENT_OUTDATED lisible, sans rien écrire (#3706)', async () => {
     conversationIn(E2EE);
 
     const response = await service.handleMessage(
@@ -216,11 +217,25 @@ describe('MessagingService.handleMessage — aucun clair dans une conversation e
       senderParticipantId
     );
 
-    expect(response.success).toBe(true);
-    const written = mockPrisma.message.create.mock.calls[0][0].data;
-    expect(written.isEncrypted).toBe(true);
-    expect(written.encryptedContent).toBe('c2lnbmFs');
-    expect(written.content).toBe('');
+    expect(response.success).toBe(false);
+    expect(response.code).toBe(E2EE_ERROR_CODES.CLIENT_OUTDATED);
+    expect(response.error).toMatch(/mettez à jour Meeshy/);
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('refuse un vocal sans texte — REST et socket convergent ici (#12518)', async () => {
+    conversationIn(E2EE);
+
+    const response = await service.handleMessage(
+      { conversationId, content: '', originalLanguage: 'fr', attachmentIds: ['507f1f77bcf86cd799439099'] } as MessageRequest,
+      senderParticipantId
+    );
+
+    expect(response.success).toBe(false);
+    expect(response.code).toBe(E2EE_PLAINTEXT_REFUSED);
+    expect(response.error).toMatch(/pièce jointe/);
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    expect(mockHandleNewMessage).not.toHaveBeenCalled();
   });
 
   it('laisse une conversation en clair inchangée', async () => {

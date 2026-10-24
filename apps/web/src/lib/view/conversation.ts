@@ -145,6 +145,11 @@ export const avatarOf = (conversation: Conversation, viewerId: string): string |
   participantAvatarOf(peerOf(conversation, viewerId)) ?? participantAvatarOf({ avatar: conversation.avatar });
 
 /**
+ * **LA SEULE FONCTION D'INITIALES** (#12571) — tout avatar, toute pastille, toute
+ * fiche l'importe d'ici. Les jumelles locales (profil, communautés, carte de
+ * contact, admin) ont été supprimées, et `initials-single-source.test.ts`
+ * interdit d'en écrire une nouvelle.
+ *
  * Deux lettres, jamais plus : « Amina Diallo » → « AD », « Équipe » → « ÉQ ».
  * Un seul mot rend ses deux premières lettres plutôt qu'une seule, parce
  * qu'une initiale seule dans un cercle de 44 px lit comme une erreur.

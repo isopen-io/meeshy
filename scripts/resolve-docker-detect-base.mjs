@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Choix de la base de comparaison du job « Detect Changes » (.github/workflows/docker.yml) — #6551
+// Le job « Zones touchées » de ci.yml (poussées) l'appelle aussi, avec le dernier run ci.yml vert de la branche.
 //
 // LE DÉFAUT
 // `docker.yml` diffait jusqu'ici depuis `github.event.before` — la poussée

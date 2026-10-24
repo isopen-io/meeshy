@@ -9,13 +9,25 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.platform.LocalDensity
+import me.meeshy.sdk.model.chrome.CollapsibleHeaderMetrics
+import me.meeshy.ui.component.chrome.CollapsibleHeader
+import me.meeshy.ui.component.chrome.CollapsibleHeaderPageProgress
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,13 +42,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -88,37 +98,25 @@ fun MyShareLinksScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
 
     MeeshyBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                        titleContentColor = MeeshyTheme.tokens.textPrimary,
-                        navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
-                    ),
-                    title = { Text(stringResource(R.string.my_share_links_title)) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.my_share_links_back),
-                            )
-                        }
-                    },
+        val listState = rememberLazyListState()
+        val density = LocalDensity.current.density
+        val offsetDp by remember(listState, density) {
+            derivedStateOf {
+                CollapsibleHeaderPageProgress.lazyOffsetDp(
+                    listState.firstVisibleItemIndex,
+                    listState.firstVisibleItemScrollOffset,
+                    density,
                 )
-            },
-        ) { padding ->
+            }
+        }
+        Box(Modifier.fillMaxSize()) {
             PullToRefreshBox(
                 isRefreshing = state.isRefreshing,
                 onRefresh = viewModel::refresh,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize(),
             ) {
                 when {
-                    state.showColdSpinner -> Box(Modifier.fillMaxSize()) {
+                    state.showColdSpinner -> Box(Modifier.fillMaxSize().headerReserve()) {
                         CircularProgressIndicator(
                             modifier = Modifier.align(Alignment.Center),
                             color = MeeshyPalette.Indigo500,
@@ -131,6 +129,7 @@ fun MyShareLinksScreen(
                         FailedLoad(message = state.errorMessage, onRetry = viewModel::refresh)
 
                     else -> LinksList(
+                        listState = listState,
                         links = state.links,
                         stats = state.stats,
                         showFailureBanner = state.showFailureBanner,
@@ -149,15 +148,32 @@ fun MyShareLinksScreen(
                     )
                 }
             }
+            CollapsibleHeader(
+                title = stringResource(R.string.my_share_links_title),
+                scrollOffsetDp = offsetDp,
+                modifier = Modifier.fillMaxWidth(),
+                onBack = onBack,
+                titleColor = MeeshyTheme.tokens.textPrimary,
+                backArrowColor = MeeshyPalette.Indigo500,
+                backgroundColor = MeeshyTheme.tokens.backgroundPrimary,
+            )
         }
     }
 }
+
+/** Espace reserve sous l'en-tete repliable (barre d'etat + 64 dp) pour les etats sans liste. */
+@Composable
+private fun Modifier.headerReserve(): Modifier =
+    this
+        .windowInsetsPadding(WindowInsets.statusBars)
+        .padding(top = CollapsibleHeaderMetrics.EXPANDED_HEIGHT.dp)
 
 @Composable
 private fun EmptyLinks() {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .headerReserve()
             .verticalScroll(rememberScrollState())
             .padding(MeeshySpacing.xl),
         verticalArrangement = Arrangement.Center,
@@ -183,6 +199,7 @@ private fun FailedLoad(message: String?, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .headerReserve()
             .verticalScroll(rememberScrollState())
             .padding(MeeshySpacing.xl),
         verticalArrangement = Arrangement.Center,
@@ -214,6 +231,7 @@ private fun FailureBanner(onRetry: () -> Unit) {
 
 @Composable
 private fun LinksList(
+    listState: LazyListState,
     links: List<MyShareLink>,
     stats: MyShareLinkStats?,
     showFailureBanner: Boolean,
@@ -229,9 +247,21 @@ private fun LinksList(
     val nowMillis = remember { System.currentTimeMillis() }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(MeeshySpacing.lg),
+        state = listState,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            start = MeeshySpacing.lg,
+            end = MeeshySpacing.lg,
+            bottom = MeeshySpacing.lg,
+        ),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
+        item(key = "collapsible-header-spacer", contentType = "spacer") {
+            Spacer(
+                Modifier
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .height(CollapsibleHeaderMetrics.EXPANDED_HEIGHT.dp),
+            )
+        }
         if (showFailureBanner) {
             item(key = "failure", contentType = "banner") { FailureBanner(onRetry) }
         }
@@ -338,8 +368,9 @@ private fun ShareLinkRow(
                     maxLines = 1,
                 )
                 Text(
-                    text = "$statusText · " + stringResource(
-                        R.string.my_share_links_joined_count,
+                    text = "$statusText · " + pluralStringResource(
+                        R.plurals.my_share_links_joined_count,
+                        link.currentUses,
                         link.currentUses,
                     ),
                     style = MaterialTheme.typography.labelMedium,

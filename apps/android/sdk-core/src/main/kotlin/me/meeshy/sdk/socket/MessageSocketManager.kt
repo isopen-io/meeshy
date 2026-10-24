@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -12,12 +13,15 @@ import me.meeshy.sdk.notification.NotificationDeletedSocketEvent
 import me.meeshy.sdk.notification.NotificationReadBulkSocketEvent
 import me.meeshy.sdk.notification.NotificationReadSocketEvent
 import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.model.profile.ProfileDecorUpdatedEvent
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
+import me.meeshy.sdk.model.MessageTranslationSharedEvent
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.model.UnreadUpdateEvent
 import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.UserUpdatedEvent
 import me.meeshy.sdk.model.MessageDeletedEvent
 import me.meeshy.sdk.model.MessageExpiredEvent
 import me.meeshy.sdk.model.MessagePinnedEvent
@@ -26,7 +30,9 @@ import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.AttachmentUpdatedEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
+import me.meeshy.sdk.model.ParticipantJoinedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
+import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.model.ConversationClosedSocketEvent
@@ -37,7 +43,7 @@ import me.meeshy.sdk.model.LiveLocationUpdatedEvent
 import me.meeshy.sdk.model.LiveLocationStoppedEvent
 import me.meeshy.sdk.sync.SyncSeqTracker
 import org.json.JSONObject
-import timber.log.Timber
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -53,41 +59,56 @@ class MessageSocketManager @Inject constructor(
     private val socketManager: SocketManager,
     private val json: Json,
     private val syncSeqTracker: SyncSeqTracker,
+    private val router: SocketEventRouter,
 ) {
-    private val _messageReceived = buf<ApiMessage>()
-    private val _messageEdited = buf<ApiMessage>()
-    private val _messageDeleted = buf<MessageDeletedEvent>()
-    private val _messageExpired = buf<MessageExpiredEvent>()
-    private val _messagePinned = buf<MessagePinnedEvent>()
-    private val _messageUnpinned = buf<MessageUnpinnedEvent>()
-    private val _typingStarted = buf<TypingEvent>()
-    private val _typingStopped = buf<TypingEvent>()
-    private val _reactionAdded = buf<ReactionUpdateEvent>()
-    private val _reactionRemoved = buf<ReactionUpdateEvent>()
-    private val _unreadUpdated = buf<UnreadUpdateEvent>()
-    private val _translationReceived = buf<TranslationEvent>()
-    private val _transcriptionReady = buf<TranscriptionReadyEvent>()
-    private val _audioTranslationReady = buf<AudioTranslationEvent>()
-    private val _attachmentUpdated = buf<AttachmentUpdatedEvent>()
-    private val _conversationUpdated = buf<ConversationUpdatedSocketEvent>()
-    private val _conversationDeleted = buf<ConversationDeletedSocketEvent>()
-    private val _conversationRestored = buf<ConversationRestoredSocketEvent>()
-    private val _conversationClosed = buf<ConversationClosedSocketEvent>()
-    private val _userStatus = buf<UserStatusEvent>()
-    private val _presenceSnapshot = buf<PresenceSnapshotEvent>()
-    private val _participantLeft = buf<ParticipantLeftEvent>()
-    private val _participantBanned = buf<ParticipantBannedEvent>()
-    private val _participantRoleUpdated = buf<ParticipantRoleUpdatedEvent>()
-    private val _readStatusUpdated = buf<ReadStatusUpdatedEvent>()
-    private val _liveLocationStarted = buf<LiveLocationStartedEvent>()
-    private val _liveLocationUpdated = buf<LiveLocationUpdatedEvent>()
-    private val _liveLocationStopped = buf<LiveLocationStoppedEvent>()
-    private val _notificationReceived = buf<ApiNotification>()
-    private val _notificationRead = buf<NotificationReadSocketEvent>()
-    private val _notificationReadBulk = buf<NotificationReadBulkSocketEvent>()
-    private val _notificationDeleted = buf<NotificationDeletedSocketEvent>()
-    private val _notificationDeletedBulk = buf<NotificationDeletedBulkSocketEvent>()
-    private val _notificationCounts = buf<NotificationCountsSocketEvent>()
+    internal constructor(
+        socketManager: SocketManager,
+        json: Json,
+        syncSeqTracker: SyncSeqTracker,
+    ) : this(
+        socketManager, json, syncSeqTracker,
+        SocketEventRouter(SocketEventRegistrar { event, callback -> socketManager.on(event, callback) }, Dispatchers.Default),
+    )
+
+    private val _messageReceived = SocketInboundRoute.subject<ApiMessage>()
+    private val _messageEdited = SocketInboundRoute.subject<ApiMessage>()
+    private val _messageDeleted = SocketInboundRoute.subject<MessageDeletedEvent>()
+    private val _messageExpired = SocketInboundRoute.subject<MessageExpiredEvent>()
+    private val _messagePinned = SocketInboundRoute.subject<MessagePinnedEvent>()
+    private val _messageUnpinned = SocketInboundRoute.subject<MessageUnpinnedEvent>()
+    private val _typingStarted = SocketInboundRoute.subject<TypingEvent>()
+    private val _typingStopped = SocketInboundRoute.subject<TypingEvent>()
+    private val _reactionAdded = SocketInboundRoute.subject<ReactionUpdateEvent>()
+    private val _reactionRemoved = SocketInboundRoute.subject<ReactionUpdateEvent>()
+    private val _unreadUpdated = SocketInboundRoute.subject<UnreadUpdateEvent>()
+    private val _translationReceived = SocketInboundRoute.subject<TranslationEvent>()
+    private val _translationShared = SocketInboundRoute.subject<MessageTranslationSharedEvent>()
+    private val _transcriptionReady = SocketInboundRoute.subject<TranscriptionReadyEvent>()
+    private val _audioTranslationReady = SocketInboundRoute.subject<AudioTranslationEvent>()
+    private val _attachmentUpdated = SocketInboundRoute.subject<AttachmentUpdatedEvent>()
+    private val _conversationUpdated = SocketInboundRoute.subject<ConversationUpdatedSocketEvent>()
+    private val _conversationDeleted = SocketInboundRoute.subject<ConversationDeletedSocketEvent>()
+    private val _conversationRestored = SocketInboundRoute.subject<ConversationRestoredSocketEvent>()
+    private val _conversationClosed = SocketInboundRoute.subject<ConversationClosedSocketEvent>()
+    private val _userStatus = SocketInboundRoute.subject<UserStatusEvent>()
+    private val _userUpdated = SocketInboundRoute.subject<UserUpdatedEvent>()
+    private val _presenceSnapshot = SocketInboundRoute.subject<PresenceSnapshotEvent>()
+    private val _participantLeft = SocketInboundRoute.subject<ParticipantLeftEvent>()
+    private val _participantBanned = SocketInboundRoute.subject<ParticipantBannedEvent>()
+    private val _participantJoined = SocketInboundRoute.subject<ParticipantJoinedEvent>()
+    private val _participantUnbanned = SocketInboundRoute.subject<ParticipantUnbannedEvent>()
+    private val _participantRoleUpdated = SocketInboundRoute.subject<ParticipantRoleUpdatedEvent>()
+    private val _readStatusUpdated = SocketInboundRoute.subject<ReadStatusUpdatedEvent>()
+    private val _liveLocationStarted = SocketInboundRoute.subject<LiveLocationStartedEvent>()
+    private val _liveLocationUpdated = SocketInboundRoute.subject<LiveLocationUpdatedEvent>()
+    private val _liveLocationStopped = SocketInboundRoute.subject<LiveLocationStoppedEvent>()
+    private val _notificationReceived = SocketInboundRoute.subject<ApiNotification>()
+    private val _notificationRead = SocketInboundRoute.subject<NotificationReadSocketEvent>()
+    private val _notificationReadBulk = SocketInboundRoute.subject<NotificationReadBulkSocketEvent>()
+    private val _notificationDeleted = SocketInboundRoute.subject<NotificationDeletedSocketEvent>()
+    private val _notificationDeletedBulk = SocketInboundRoute.subject<NotificationDeletedBulkSocketEvent>()
+    private val _notificationCounts = SocketInboundRoute.subject<NotificationCountsSocketEvent>()
+    private val _profileDecorUpdated = SocketInboundRoute.subject<ProfileDecorUpdatedEvent>()
 
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.asSharedFlow()
     val messageEdited: SharedFlow<ApiMessage> = _messageEdited.asSharedFlow()
@@ -115,6 +136,8 @@ class MessageSocketManager @Inject constructor(
      * contrat le déclarait, personne ne le produisait (cycle 77).
      */
     val translationReceived: SharedFlow<TranslationEvent> = _translationReceived.asSharedFlow()
+    /** `message:translation-shared` : la traduction (enveloppe scellée) qu'un autre membre vient de partager. */
+    val translationShared: SharedFlow<MessageTranslationSharedEvent> = _translationShared.asSharedFlow()
     val transcriptionReady: SharedFlow<TranscriptionReadyEvent> = _transcriptionReady.asSharedFlow()
     val audioTranslationReady: SharedFlow<AudioTranslationEvent> = _audioTranslationReady.asSharedFlow()
     val attachmentUpdated: SharedFlow<AttachmentUpdatedEvent> = _attachmentUpdated.asSharedFlow()
@@ -123,9 +146,16 @@ class MessageSocketManager @Inject constructor(
     val conversationRestored: SharedFlow<ConversationRestoredSocketEvent> = _conversationRestored.asSharedFlow()
     val conversationClosed: SharedFlow<ConversationClosedSocketEvent> = _conversationClosed.asSharedFlow()
     val userStatus: SharedFlow<UserStatusEvent> = _userStatus.asSharedFlow()
+    /**
+     * `user:updated` — un contact a changé son nom ou sa photo ; chaque copie qui le garde est repeinte par
+     * `UserUpdatedEvent.repainted(...)` (loi unique, miroir de `UserProfileRepaint`). Sans replay, comme `user:status`.
+     */
+    val userUpdated: SharedFlow<UserUpdatedEvent> = _userUpdated.asSharedFlow()
     val presenceSnapshot: SharedFlow<PresenceSnapshotEvent> = _presenceSnapshot.asSharedFlow()
     val participantLeft: SharedFlow<ParticipantLeftEvent> = _participantLeft.asSharedFlow()
     val participantBanned: SharedFlow<ParticipantBannedEvent> = _participantBanned.asSharedFlow()
+    val participantJoined: SharedFlow<ParticipantJoinedEvent> = _participantJoined.asSharedFlow()
+    val participantUnbanned: SharedFlow<ParticipantUnbannedEvent> = _participantUnbanned.asSharedFlow()
     val participantRoleUpdated: SharedFlow<ParticipantRoleUpdatedEvent> = _participantRoleUpdated.asSharedFlow()
     val readStatusUpdated: SharedFlow<ReadStatusUpdatedEvent> = _readStatusUpdated.asSharedFlow()
     val liveLocationStarted: SharedFlow<LiveLocationStartedEvent> = _liveLocationStarted.asSharedFlow()
@@ -159,83 +189,85 @@ class MessageSocketManager @Inject constructor(
     val notificationDeletedBulk: SharedFlow<NotificationDeletedBulkSocketEvent> = _notificationDeletedBulk.asSharedFlow()
     val notificationCounts: SharedFlow<NotificationCountsSocketEvent> = _notificationCounts.asSharedFlow()
 
+    /** `profile:decor-updated` : le décor d'un compte a changé ; le filtrage par compte est celui du consommateur. */
+    val profileDecorUpdated: SharedFlow<ProfileDecorUpdatedEvent> = _profileDecorUpdated.asSharedFlow()
+
+    /**
+     * Déclare les routes de la famille messagerie. Gelé (socket-routage-evenements-ordre-arrivee) :
+     * une nouvelle famille d'événements ajoute sa propre classe et enregistre ses routes par
+     * [SocketEventRouter.install], elle n'ajoute rien ici.
+     */
     fun attach() {
-        listen("message:new", _messageReceived)
-        listen("message:edited", _messageEdited)
-        listen("message:deleted", _messageDeleted)
-        listen("message:expired", _messageExpired)
-        listen("message:pinned", _messagePinned)
-        listen("message:unpinned", _messageUnpinned)
-        listen("typing:start", _typingStarted)
-        listen("typing:stop", _typingStopped)
-        listen("reaction:added", _reactionAdded)
-        listen("reaction:removed", _reactionRemoved)
-        listen("conversation:unread-updated", _unreadUpdated)
-        listen("message:translation", _translationReceived)
-        listen("audio:transcription-ready", _transcriptionReady)
-        listen("audio:translation-ready", _audioTranslationReady)
-        listen("message:attachment-updated", _attachmentUpdated)
-        listen("conversation:updated", _conversationUpdated)
-        listen("conversation:deleted", _conversationDeleted)
-        listen("conversation:restored", _conversationRestored)
-        listen("conversation:closed", _conversationClosed)
-        listen("user:status", _userStatus)
-        listen("presence:snapshot", _presenceSnapshot)
-        listen("conversation:participant-left", _participantLeft)
-        listen("conversation:participant-banned", _participantBanned)
-        listen("participant:role-updated", _participantRoleUpdated)
-        listen("read-status:updated", _readStatusUpdated)
-        listen("location:live-started", _liveLocationStarted)
-        listen("location:live-updated", _liveLocationUpdated)
-        listen("location:live-stopped", _liveLocationStopped)
+        router.install(routes())
+    }
+
+    private fun routes(): List<SocketInboundRoute> = buildList {
+        route(SocketEventNames.MESSAGE_NEW, _messageReceived)
+        route(SocketEventNames.MESSAGE_EDITED, _messageEdited)
+        route(SocketEventNames.MESSAGE_DELETED, _messageDeleted)
+        route(SocketEventNames.MESSAGE_EXPIRED, _messageExpired)
+        route(SocketEventNames.MESSAGE_PINNED, _messagePinned)
+        route(SocketEventNames.MESSAGE_UNPINNED, _messageUnpinned)
+        route(SocketEventNames.TYPING_START, _typingStarted)
+        route(SocketEventNames.TYPING_STOP, _typingStopped)
+        route(SocketEventNames.REACTION_ADDED, _reactionAdded)
+        route(SocketEventNames.REACTION_REMOVED, _reactionRemoved)
+        route(SocketEventNames.CONVERSATION_UNREAD_UPDATED, _unreadUpdated)
+        route(SocketEventNames.MESSAGE_TRANSLATION, _translationReceived)
+        route(SocketEventNames.MESSAGE_TRANSLATION_SHARED, _translationShared)
+        route(SocketEventNames.AUDIO_TRANSCRIPTION_READY, _transcriptionReady)
+        route(SocketEventNames.AUDIO_TRANSLATION_READY, _audioTranslationReady)
+        route(SocketEventNames.MESSAGE_ATTACHMENT_UPDATED, _attachmentUpdated)
+        route(SocketEventNames.CONVERSATION_UPDATED, _conversationUpdated)
+        route(SocketEventNames.CONVERSATION_DELETED, _conversationDeleted)
+        route(SocketEventNames.CONVERSATION_RESTORED, _conversationRestored)
+        route(SocketEventNames.CONVERSATION_CLOSED, _conversationClosed)
+        route(SocketEventNames.USER_STATUS, _userStatus)
+        route(SocketEventNames.USER_UPDATED, _userUpdated)
+        route(SocketEventNames.PRESENCE_SNAPSHOT, _presenceSnapshot)
+        route(SocketEventNames.CONVERSATION_PARTICIPANT_LEFT, _participantLeft)
+        route(SocketEventNames.CONVERSATION_PARTICIPANT_BANNED, _participantBanned)
+        route(SocketEventNames.CONVERSATION_PARTICIPANT_JOINED, _participantJoined)
+        route(SocketEventNames.CONVERSATION_PARTICIPANT_UNBANNED, _participantUnbanned)
+        route(SocketEventNames.PARTICIPANT_ROLE_UPDATED, _participantRoleUpdated)
+        route(SocketEventNames.READ_STATUS_UPDATED, _readStatusUpdated)
+        route(SocketEventNames.LOCATION_LIVE_STARTED, _liveLocationStarted)
+        route(SocketEventNames.LOCATION_LIVE_UPDATED, _liveLocationUpdated)
+        route(SocketEventNames.LOCATION_LIVE_STOPPED, _liveLocationStopped)
         // SyncEngine — observer le `_seq` AVANT de livrer l'event, comme le web
         // (`notification-socketio.singleton.ts`) : un trou prouve que des
         // notifications ont été manquées. Le curseur suit le flux SERVEUR, donc il
         // avance même si le décodage échoue ensuite (un décodage raté est notre
         // bug, pas un trou d'émission) et même si aucun écran n'écoute.
-        listen("notification:new", _notificationReceived) { raw ->
+        route(SocketEventNames.NOTIFICATION_NEW, _notificationReceived) { raw ->
             syncSeqTracker.observe((raw.opt(SEQ_KEY) as? Number)?.toLong())
         }
         // Plain emissions (no `_seq`) — the gateway deliberately does not stamp them, so unlike
-        // "notification:new" above there is no cursor to observe here.
-        listen("notification:read", _notificationRead)
-        listen("notification:read-bulk", _notificationReadBulk)
-        listen("notification:deleted", _notificationDeleted)
-        listen("notification:deleted-bulk", _notificationDeletedBulk)
-        listen("notification:counts", _notificationCounts)
+        // SocketEventNames.NOTIFICATION_NEW above there is no cursor to observe here.
+        route(SocketEventNames.NOTIFICATION_READ, _notificationRead)
+        route(SocketEventNames.NOTIFICATION_READ_BULK, _notificationReadBulk)
+        route(SocketEventNames.NOTIFICATION_DELETED, _notificationDeleted)
+        route(SocketEventNames.NOTIFICATION_DELETED_BULK, _notificationDeletedBulk)
+        route(SocketEventNames.NOTIFICATION_COUNTS, _notificationCounts)
+        route(SocketEventNames.PROFILE_DECOR_UPDATED, _profileDecorUpdated)
     }
 
     /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */
     fun emitTypingStart(conversationId: String) {
-        socketManager.emit("typing:start", JSONObject().put("conversationId", conversationId))
+        socketManager.emit(SocketEventNames.TYPING_START, JSONObject().put("conversationId", conversationId))
     }
 
     fun emitTypingStop(conversationId: String) {
-        socketManager.emit("typing:stop", JSONObject().put("conversationId", conversationId))
+        socketManager.emit(SocketEventNames.TYPING_STOP, JSONObject().put("conversationId", conversationId))
     }
 
-    /**
-     * [onRaw] sees the untouched payload before it is decoded — the seam for transport-level
-     * fields the durable model deliberately does not carry (`_seq`). It runs inside the same
-     * `runCatching`, so a throw there is logged and drops the event exactly like a decode
-     * failure rather than escaping into the Socket.IO callback thread.
-     */
-    private inline fun <reified T> listen(
+    private inline fun <reified T> MutableList<SocketInboundRoute>.route(
         event: String,
-        flow: MutableSharedFlow<T>,
-        crossinline onRaw: (JSONObject) -> Unit = {},
+        subject: MutableSharedFlow<T>,
+        noinline arrival: ((JSONObject) -> Unit)? = null,
     ) {
-        socketManager.on(event) { args ->
-            runCatching {
-                val raw = (args.firstOrNull() as? JSONObject) ?: return@on
-                onRaw(raw)
-                flow.tryEmit(json.decodeFromString<T>(raw.toString()))
-            }.onFailure { Timber.e(it, "Socket decode error [$event]: ${T::class.simpleName}") }
-        }
+        add(SocketInboundRoute.decoding(event, json, subject, arrival))
     }
-
-    private fun <T> buf(): MutableSharedFlow<T> =
-        MutableSharedFlow(replay = 0, extraBufferCapacity = 64)
 
     private companion object {
         /** Transport-level per-user cursor stamped by the gateway's `emitWithSeq`. */

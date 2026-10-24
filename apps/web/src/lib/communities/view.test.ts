@@ -3,7 +3,7 @@ import type { InfiniteData } from '@tanstack/react-query';
 
 import type { CommunityPage, CommunitySummary } from '@/lib/api/communities';
 
-import { cachedSearchPlaceholder, communityAccent, compactCount, conversationTitleOf, findCachedCommunity, initialsOf } from './view';
+import { cachedSearchPlaceholder, communityAccent, compactCount, conversationTitleOf, findCachedCommunity } from './view';
 
 /**
  * LES RÈGLES PURES DES ÉCRANS DE COMMUNAUTÉ (#6364) — ce que les cartes, le
@@ -36,17 +36,6 @@ describe('communityAccent — miroir `DynamicColorGenerator.colorForName`', () =
   test('le même nom rend la même couleur, deux noms peuvent diverger', () => {
     expect(communityAccent('Club de lecture')).toBe(communityAccent('Club de lecture'));
     expect(communityAccent('Club de lecture')).toMatch(/^#[0-9A-Fa-f]{6}$/);
-  });
-});
-
-describe('initialsOf', () => {
-  test('deux initiales pour deux mots, une pour un mot', () => {
-    expect(initialsOf('Club de lecture')).toBe('CD');
-    expect(initialsOf('polyglottes')).toBe('P');
-  });
-
-  test('des lettres seulement : la ponctuation d’un nom ne devient jamais une initiale (#8131)', () => {
-    expect(initialsOf('(Club) « lecture »')).toBe('CL');
   });
 });
 

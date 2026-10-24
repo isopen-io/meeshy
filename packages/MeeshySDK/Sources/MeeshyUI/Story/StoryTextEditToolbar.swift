@@ -30,6 +30,9 @@ public struct StoryTextEditToolbar: View {
     /// le texte édité (spec 2026-08-01).
     var onTopBarBottomYChange: ((CGFloat) -> Void)? = nil
 
+    /// Les outils et les fonds offerts — le composer les garde tous.
+    var profile: StoryTextEditProfile = .composer
+
     /// **Les DEUX rappels de géométrie, pas un.** Un `init` public écrit de
     /// mémoire n'en portait qu'un, et l'atelier — qui passe les deux — cessait
     /// de compiler. C'est la leçon 336 à l'échelle d'un initialiseur : ce qui
@@ -38,7 +41,9 @@ public struct StoryTextEditToolbar: View {
     /// dit.
     public init(viewModel: StoryComposerViewModel,
                 onControlsTopYChange: ((CGFloat) -> Void)? = nil,
-                onTopBarBottomYChange: ((CGFloat) -> Void)? = nil) {
+                onTopBarBottomYChange: ((CGFloat) -> Void)? = nil,
+                profile: StoryTextEditProfile = .composer) {
+        self.profile = profile
         self.viewModel = viewModel
         self.onControlsTopYChange = onControlsTopYChange
         self.onTopBarBottomYChange = onTopBarBottomYChange
@@ -112,7 +117,7 @@ public struct StoryTextEditToolbar: View {
         AdaptiveGlassContainer(spacing: 10) {
             VStack(spacing: MeeshySpacing.smPlus) {
                 if let tool = expandedTool {
-                    TextEditToolOptions(tool: tool, textObject: binding)
+                    TextEditToolOptions(tool: tool, textObject: binding, profile: profile)
                         .padding(.horizontal, MeeshySpacing.md)
                         .padding(.vertical, MeeshySpacing.smPlus)
                         .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
@@ -123,7 +128,8 @@ public struct StoryTextEditToolbar: View {
                     expandedTool: expandedTool,
                     onOpenPanel: { tool in
                         viewModel.setExpandedTool(expandedTool == tool ? nil : tool)
-                    }
+                    },
+                    profile: profile
                 )
             }
             .padding(.horizontal, TextEditToolbarMetrics.horizontalMargin)

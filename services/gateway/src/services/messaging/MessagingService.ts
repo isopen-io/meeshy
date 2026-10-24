@@ -51,6 +51,8 @@ import { announceConversationLanguageChange } from '../message-translation/conve
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
 import { isE2eePlaintextRefusal } from './e2eePlaintextAdmission';
+import { isE2eeRelayRefusal } from '../e2ee/e2ee-relay-errors';
+import { persistableEncryption } from './e2eeRelayPayload';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -483,11 +485,7 @@ export class MessagingService {
           conversationId,
           senderId: participant!.id,
           mentionedUserIds: request.mentionedUserIds,
-          encryptedContent: request.encryptedPayload?.ciphertext,
-          encryptionMetadata: request.encryptedPayload ? {
-            mode: 'e2ee',
-            ...request.encryptedPayload
-          } as unknown as import('@meeshy/shared/prisma/client').Prisma.InputJsonValue : undefined,
+          ...persistableEncryption(request.encryptedPayload),
           clientMessageId: request.clientMessageId
         }),
         { ...corr, conversationId }
@@ -549,6 +547,11 @@ export class MessagingService {
       if (isE2eePlaintextRefusal(error)) {
         logger.info('e2ee plaintext refused', { ...corr });
         return this.createErrorResponse(error.message, error.code);
+      }
+      // #3706 — un envoi libsignal refusé (Sesame, appareil, ancien client) : son code et son écart voyagent.
+      if (isE2eeRelayRefusal(error)) {
+        logger.info('e2ee relay refused', { ...corr, code: error.code });
+        return { ...this.createErrorResponse(error.message, error.code), ...(error.mismatch ? { e2eeMismatch: error.mismatch } : {}) };
       }
       logger.warn('perf:messaging.handleMessage', {
         ...corr, step: 'messaging.handleMessage', phase: 'end',
@@ -620,7 +623,8 @@ export class MessagingService {
         content: message.content,
         messageType: message.messageType,
         replyToId: message.replyToId,
-        storyReplyToId: message.storyReplyToId ?? null
+        storyReplyToId: message.storyReplyToId ?? null,
+        encryptionMode: message.encryptionMode ?? null
       },
       originalLanguage,
       onError: (effect, err) =>

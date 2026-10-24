@@ -1,5 +1,6 @@
 /**
- * LES SEPT ADRESSES INSTITUTIONNELLES, déclarées UNE fois.
+ * LES HUIT ADRESSES INSTITUTIONNELLES, déclarées UNE fois (la huitième,
+ * `child-safety`, est la page de normes que Google Play exige — #9923).
  *
  * Trois consommateurs les lisent, et c'est la raison d'être de ce fichier :
  *
@@ -22,7 +23,7 @@
  * visible. `src/institutional/help-faq.test.tsx` confronte désormais les deux
  * (#7287).
  */
-export const INSTITUTIONAL_ROUTES = ['about', 'contact', 'faq', 'help', 'partners', 'privacy', 'terms'];
+export const INSTITUTIONAL_ROUTES = ['about', 'child-safety', 'contact', 'faq', 'help', 'partners', 'privacy', 'terms'];
 
 /**
  * Les DEUX formes de chaque adresse, parce que les deux sont servies : sans

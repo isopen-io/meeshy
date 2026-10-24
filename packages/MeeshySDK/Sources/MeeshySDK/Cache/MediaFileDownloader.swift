@@ -52,6 +52,37 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
     private struct TransferLedger {
         var sessions: [MediaTransferProfile: URLSession] = [:]
         var transfers: [ObjectIdentifier: Transfer] = [:]
+        var streams: [ObjectIdentifier: ReadableTransfer] = [:]
+    }
+
+    /// Un transfert LISIBLE en cours de route (#9881) : ses octets vont dans
+    /// un `ProgressiveMediaDownload` au fil de leur arrivée.
+    private final class ReadableTransfer {
+        let continuation: CheckedContinuation<URLResponse, Error>
+        let sink: ProgressiveMediaDownload
+        let progress: ProgressHandler?
+        /// Où commence ce transfert dans le fichier : `0`, ou la fin d'une
+        /// tête qu'il reprend (#11288).
+        let offset: Int64
+        /// Octets au-delà desquels une réponse ENTIÈRE (serveur qui ignore
+        /// `Range`) est coupée : une tête ne télécharge jamais tout le fichier.
+        let limit: Int64?
+        var cadence: TransferProgressCadence
+        var acceptance: ProgressiveResumeLaw.Acceptance?
+        var rejected: URLResponse?
+        var written: Int64 = 0
+        /// La tête a atteint `limit` : la tâche est annulée, et les paquets
+        /// déjà en route ne s'écrivent plus.
+        var cut = false
+
+        init(continuation: CheckedContinuation<URLResponse, Error>, sink: ProgressiveMediaDownload, progress: ProgressHandler?, offset: Int64, limit: Int64?, cadence: TransferProgressCadence) {
+            self.continuation = continuation
+            self.sink = sink
+            self.progress = progress
+            self.offset = offset
+            self.limit = limit
+            self.cadence = cadence
+        }
     }
 
     private final class Transfer {
@@ -146,6 +177,46 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
         }
     }
 
+    /// Télécharge `request` EN FLUX dans `sink`, lisible pendant le transfert
+    /// (#9881). Rend la réponse à la fin ; une réponse HTTP d'erreur arrête le
+    /// transfert à son premier octet et se rend telle quelle, sans rien écrire.
+    /// L'annulation de la `Task` appelante annule le transfert et lève
+    /// `CancellationError` ; une panne réseau lève l'`URLError` d'origine.
+    ///
+    /// `resumingAt` : le transfert REPREND une tête déjà écrite dans `sink`
+    /// (#11288) ; une réponse qui ne commence pas à cet octet lève
+    /// `ProgressiveResumeLaw.RangeNotHonoredError` sans rien écrire.
+    /// `limit` : une réponse entière est coupée après ce nombre d'octets.
+    public func stream(
+        _ request: URLRequest,
+        profile: MediaTransferProfile = .standard,
+        into sink: ProgressiveMediaDownload,
+        resumingAt offset: Int64 = 0,
+        limit: Int64? = nil,
+        progress: ProgressHandler? = nil
+    ) async throws -> URLResponse {
+        try Task.checkCancellation()
+        let relay = CancellationRelay()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URLResponse, Error>) in
+                let task = session(for: profile).dataTask(with: request)
+                let stream = ReadableTransfer(
+                    continuation: continuation,
+                    sink: sink,
+                    progress: progress,
+                    offset: offset,
+                    limit: limit,
+                    cadence: TransferProgressCadence(minimumInterval: cadenceInterval)
+                )
+                ledger.mutateUnchecked { $0.streams[ObjectIdentifier(task)] = stream }
+                relay.attach(task)
+                task.resume()
+            }
+        } onCancel: {
+            relay.cancel()
+        }
+    }
+
     /// Une session par profil : une `URLSession` ne change pas de configuration
     /// après sa création. Au plus quatre (deux priorités × deux réglages).
     func session(for profile: MediaTransferProfile) -> URLSession {
@@ -224,6 +295,10 @@ extension MediaFileDownloader: URLSessionDownloadDelegate {
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let stream = ledger.mutateUnchecked({ $0.streams.removeValue(forKey: ObjectIdentifier(task)) }) {
+            finishStream(stream, task: task, error: error)
+            return
+        }
         guard let transfer = ledger.mutateUnchecked({ $0.transfers.removeValue(forKey: ObjectIdentifier(task)) }) else { return }
         let staged = ledger.mutateUnchecked { _ in transfer.staged }
         if let error {
@@ -241,5 +316,100 @@ extension MediaFileDownloader: URLSessionDownloadDelegate {
         case nil:
             transfer.continuation.resume(throwing: URLError(.cannotCreateFile))
         }
+    }
+}
+
+extension MediaFileDownloader: URLSessionDataDelegate {
+    /// Les octets d'un flux vont dans son fichier, sur la file du délégué. La
+    /// réponse est lue au premier paquet : une erreur HTTP (404…) arrête le
+    /// transfert sans qu'un seul de ses octets passe pour du média.
+    public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard let stream = ledger.mutateUnchecked({ $0.streams[ObjectIdentifier(dataTask)] }) else { return }
+        if ledger.mutateUnchecked({ _ in stream.rejected != nil || stream.cut }) { return }
+        guard accept(stream, response: dataTask.response) else {
+            dataTask.cancel()
+            return
+        }
+        do {
+            try stream.sink.append(data)
+        } catch {
+            logger.error("progressive media write failed: \(error.localizedDescription, privacy: .public)")
+            dataTask.cancel()
+            return
+        }
+        let now = ProcessInfo.processInfo.systemUptime
+        let report = ledger.mutateUnchecked { _ -> (ProgressHandler, Int64, Int64)? in
+            stream.written += Int64(data.count)
+            let expected = dataTask.countOfBytesExpectedToReceive
+            let whole = stream.offset + stream.written
+            let wholeExpected = expected > 0 ? stream.offset + expected : expected
+            guard let progress = stream.progress,
+                  stream.cadence.admits(writtenBytes: whole, expectedBytes: wholeExpected, now: now) else { return nil }
+            return (progress, whole, wholeExpected)
+        }
+        if let report { report.0(report.1, report.2) }
+        if cutsAtLimit(stream) { dataTask.cancel() }
+    }
+
+    /// La première réponse d'un flux décide de tout le reste : refusée, elle
+    /// n'écrit rien ; acceptée, elle annonce la taille du fichier entier.
+    private func accept(_ stream: ReadableTransfer, response: URLResponse?) -> Bool {
+        if ledger.mutateUnchecked({ _ in stream.acceptance != nil }) { return true }
+        guard let response else { return true }
+        guard let acceptance = ProgressiveResumeLaw.acceptance(of: response, resumingAt: stream.offset) else {
+            ledger.mutateUnchecked { _ in stream.rejected = response }
+            return false
+        }
+        ledger.mutateUnchecked { _ in stream.acceptance = acceptance }
+        stream.sink.respond(expectedBytes: acceptance.totalBytes, mimeType: response.mimeType, resumable: acceptance.resumable)
+        return true
+    }
+
+    /// Une réponse ENTIÈRE qui atteint `limit` est coupée, et rien de ce qui
+    /// arrive après ne s'écrit : les paquets en route après l'annulation
+    /// remplissaient la tête jusqu'au fichier entier, sans réponse pour
+    /// l'adopter, et l'élection levait `notCached`. Un fichier déjà arrivé en
+    /// entier n'est pas coupé : sa réponse le rend adoptable.
+    private func cutsAtLimit(_ stream: ReadableTransfer) -> Bool {
+        ledger.mutateUnchecked { _ -> Bool in
+            guard let limit = stream.limit, let acceptance = stream.acceptance, !acceptance.resumable else { return false }
+            let arrived = stream.offset + stream.written
+            let whole = acceptance.totalBytes.map { arrived >= $0 } ?? false
+            guard arrived >= limit, !whole else { return false }
+            stream.cut = true
+            return true
+        }
+    }
+
+    private func finishStream(_ stream: ReadableTransfer, task: URLSessionTask, error: Error?) {
+        if error == nil, let response = task.response, !accept(stream, response: response) {
+            stream.continuation.resume(with: Self.rejection(of: response))
+            return
+        }
+        if let rejected = ledger.mutateUnchecked({ _ in stream.rejected }) {
+            stream.continuation.resume(with: Self.rejection(of: rejected))
+            return
+        }
+        if let error {
+            stream.continuation.resume(throwing: Self.normalized(error))
+            return
+        }
+        guard let response = task.response else {
+            stream.continuation.resume(throwing: URLError(.badServerResponse))
+            return
+        }
+        stream.continuation.resume(returning: response)
+    }
+
+    /// Une erreur HTTP se rend telle quelle (l'appelant lit son statut) ; une
+    /// réponse RÉUSSIE refusée est une reprise que le serveur n'a pas honorée.
+    private static func rejection(of response: URLResponse) -> Result<URLResponse, Error> {
+        guard isSuccess(response) else { return .success(response) }
+        return .failure(ProgressiveResumeLaw.RangeNotHonoredError())
+    }
+
+    private static func isSuccess(_ response: URLResponse) -> Bool {
+        guard let http = response as? HTTPURLResponse else { return true }
+        return (200...299).contains(http.statusCode)
     }
 }

@@ -62,4 +62,17 @@ object FrameLuminance {
         if (count == 0) return null
         return sum.toFloat() / count.toFloat()
     }
+
+    /**
+     * Luminance relative WCAG 2.x (0 = noir … 1 = blanc) d'un pixel sRGB `0..255` : chaque canal
+     * est linéarisé puis pondéré (0,2126 / 0,7152 / 0,0722). Brique commune de la mesure du
+     * chrome posé sur un média (miroir de `CanvasChromeScheme.averageRelativeLuminance`, iOS).
+     */
+    fun relativeLuminance(red: Int, green: Int, blue: Int): Double =
+        0.2126 * linearize(red) + 0.7152 * linearize(green) + 0.0722 * linearize(blue)
+
+    private fun linearize(channel: Int): Double {
+        val c = channel.coerceIn(0, 255) / 255.0
+        return if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
+    }
 }

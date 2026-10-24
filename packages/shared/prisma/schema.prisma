@@ -1265,6 +1265,18 @@ model MessageAttachment {
   title   String?
   /// Accessibility alt text (for images/media)
   alt     String?
+  /// Langue SOURCE de `alt` (ISO 639-1, détectée à la saisie, #11329) — même
+  /// rôle que `PostMedia.altLanguage`. `null` tant que `alt` est vide. Sans
+  /// saisie, la description par défaut est la transcription, RÉSOLUE par
+  /// `resolveMediaDescription` (`packages/shared/utils/media-description.ts`),
+  /// jamais recopiée ici.
+  altLanguage String?
+  /// Traductions de `alt` (#12333), MÊME forme que `PostMedia.altTranslations`
+  /// (`{ [lang]: { text, translationModel, confidenceScore, createdAt } }`).
+  /// Seul écrivain : `MessageAttachmentAltTranslationService`, garde fail-closed
+  /// (vue unique, floutée, chiffrée ⇒ jamais traduite). DISTINCTE de
+  /// `translations` (pistes audio) et de `captionTranslations`.
+  altTranslations Json?
   /// Caption/legend displayed with the attachment
   caption String?
 
@@ -1337,6 +1349,9 @@ model MessageAttachment {
   thumbnailUrl  String?
   thumbHash     String?   // ThumbHash base64 (~33 chars) — placeholder image instantane
   imageVariants Json?     // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
+  avifVariants  Json?     // Variantes AVIF responsive (#11262), MÊME forme, format 'avif' — à CÔTÉ des WebP, jamais dedans (anciens clients)
+  renditions    Json?     // Rendus vidéo ADDITIONNELS (#11261) : [{ codec: 'h264', url, width, height, size }] — l'original reste servi à iOS
+  processingState String? // #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias ; absent = prêt (ligne héritée ou traitée pendant la requête)
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)
@@ -1344,6 +1359,7 @@ model MessageAttachment {
   sampleRate Int? // Fréquence d'échantillonnage en Hz (ex: 44100, 48000)
   codec      String? // Codec audio (ex: "opus", "aac", "vorbis", "mp3")
   channels   Int? // Nombre de canaux audio (1: mono, 2: stereo)
+  loudnessLufs Float? // Sonie intégrée EBU R128 du fichier STOCKÉ (LUFS), mesurée à l'ingestion (#11259) — null si non mesurée
 
   // Métadonnées spécifiques vidéo
   fps        Float? // Frames per second pour vidéos
@@ -1495,6 +1511,7 @@ model MessageAttachment {
   // index, ce comptage balaie la collection entière à chaque suppression.
   @@index([filePath])
   @@index([thumbnailPath])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 // =====================================================
@@ -3244,6 +3261,116 @@ model SignalPreKeyBundle {
 }
 
 /// =====================================================
+/// ANNUAIRE E2EE PAR APPAREIL — libsignal (#3706)
+/// Spec docs/superpowers/specs/2026-10-23-e2ee-libsignal-ios-macos.md § 3.3, § 4.3.
+/// Le serveur ne détient QUE des clés publiques et des enveloppes opaques.
+/// Aucun de ces modèles ne déclare de clé non publique (témoin e2ee-directory-schema.test.ts).
+/// =====================================================
+
+/// Un appareil enrôlé (iPhone, Mac) : son identité publique, sa pré-clé signée
+/// EC et sa pré-clé Kyber de dernier recours, toutes deux signées XEdDSA par
+/// l'identité. `deviceId` = une place 1…E2EE_MAX_ACTIVE_DEVICES ; un appareil retiré
+/// rend la sienne, jamais à la même registrationId (#12543).
+model E2EEDevice {
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String @db.ObjectId
+  deviceId       Int
+  registrationId Int
+
+  /// Clé d'identité Curve25519 publique sérialisée par libsignal (33 octets), base64.
+  identityKey String
+
+  signedPreKeyId        Int
+  signedPreKey          String
+  signedPreKeySignature String
+
+  kyberLastResortId        Int
+  kyberLastResort          String
+  kyberLastResortSignature String
+
+  /// La session UserSession (claim `sid`) qui a enrôlé l'appareil : seule elle
+  /// écrit ses clés, lit ses enveloppes et envoie en son nom.
+  sessionId String @db.ObjectId
+
+  /// Lien vers PushToken pour le routage du push par appareil (lot NSE, #12537).
+  pushTokenId String? @db.ObjectId
+
+  platform String
+  label    String?
+
+  createdAt             DateTime  @default(now())
+  lastSeenAt            DateTime  @default(now())
+  signedPreKeyRotatedAt DateTime  @default(now())
+  retiredAt             DateTime?
+
+  @@unique([userId, deviceId])
+  @@index([sessionId])
+  @@index([userId, retiredAt])
+}
+
+/// Une identité d'appareil RETIRÉE par le propriétaire du compte (DELETE
+/// /e2ee/devices/:id) : elle ne se réenrôle plus jamais sur ce compte, même avec
+/// une preuve de liaison fraîche. Distincte de E2EEDevice, dont la ligne se
+/// reprend par une autre installation : la révocation survit à la reprise.
+model E2EERevokedIdentity {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  /// Clé d'identité publique révoquée, base64.
+  identityKey String
+  revokedAt   DateTime @default(now())
+
+  @@unique([userId, identityKey])
+}
+
+/// Une pré-clé à usage unique (EC ou Kyber), un document par clé. Réservée UNE
+/// fois, atomiquement (findAndModify sur usedAt: null).
+model E2EEOneTimePreKey {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String  @db.ObjectId
+  deviceId  Int
+  /// La génération de l'appareil qui l'a publiée : une place reprise par une
+  /// autre installation ne sert ni n'efface jamais les pré-clés de la précédente.
+  registrationId Int
+  /// "ec" | "kyber"
+  kind      String
+  keyId     Int
+  publicKey String
+  /// Signature XEdDSA par l'identité (Kyber seulement).
+  signature String?
+
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+  /// User.id du demandeur qui a reçu la clé.
+  usedBy    String?   @db.ObjectId
+
+  @@unique([userId, deviceId, registrationId, kind, keyId])
+  @@index([userId, deviceId, registrationId, kind, usedAt])
+}
+
+/// Une enveloppe libsignal opaque adressée à UN appareil destinataire. Effacée à
+/// l'accusé de réception de cet appareil, au plus tard à 30 jours.
+model MessageEnvelope {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId         String   @db.ObjectId
+  conversationId    String   @db.ObjectId
+  recipientUserId   String   @db.ObjectId
+  recipientDeviceId Int
+  /// La génération destinataire : seul l'appareil de cette registrationId la lit.
+  recipientRegistrationId Int
+  senderUserId      String   @db.ObjectId
+  senderDeviceId    Int
+  /// 2 = SignalMessage, 3 = PreKeySignalMessage
+  type              Int
+  /// Le chiffré libsignal, base64.
+  body              String
+  createdAt         DateTime @default(now())
+
+  @@unique([messageId, recipientUserId, recipientDeviceId])
+  @@index([recipientUserId, recipientDeviceId, createdAt])
+  @@index([createdAt])
+}
+
+/// =====================================================
 /// CONVERSATION PUBLIC KEY - E2EE KEY EXCHANGE
 /// =====================================================
 
@@ -4157,6 +4284,15 @@ model PostMedia {
   /// chemin résumable et le multipart partagent (#11260). OPTIONNEL : une ligne héritée n'en
   /// porte pas, et une image déjà petite non plus. Images non chiffrées uniquement.
   imageVariants Json?
+  /// #11262 — les mêmes largeurs en AVIF, à CÔTÉ des WebP (jamais dans `imageVariants`,
+  /// que les anciens clients lisent sans filtrer le format). OPTIONNEL.
+  avifVariants Json?
+  /// #11261 — rendus vidéo ADDITIONNELS (H.264 de compatibilité d'une vidéo HEVC) :
+  /// [{ codec, url, width, height, size }]. OPTIONNEL ; l'original n'est jamais remplacé.
+  renditions Json?
+  /// #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias.
+  /// OPTIONNEL : absent = prêt (ligne héritée, ou traitée pendant la requête).
+  processingState String?
 
   // Metadata audio/vidéo
   duration     Int?     // ms
@@ -4268,6 +4404,7 @@ model PostMedia {
   /// Sert le rattrapage et la garde de revendication (filtre sur uploadeur
   /// parmi les médias en attente).
   @@index([uploaderId, postId])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)
@@ -5905,6 +6042,8 @@ model GameSeasonDefinition {
   stepPoints Int      @default(100)
   /// Textes en sept langues `{fr,en,es,de,it,pt-BR,ar → {title,tagline,description}}`, ou absent.
   copy       Json?
+  /// Le pack que la saison récompense (#11274), par sa clé `packChoiceKey` ; absent = aucun.
+  rewardPackKey String?
   revision   Int      @unique
   updatedBy  String?  @db.ObjectId
   createdAt  DateTime @default(now())
@@ -6115,6 +6254,83 @@ model CommunityAppearancePack {
   @@index([domain, status, createdAt])
   @@index([submitterId])
   @@index([contractSrc])
+}
+
+/// Une lens proposée par un partenaire (#11271, MeeshyLens v1) : le document
+/// re-sérialisé par `parseLens`, ses fichiers ré-encodés, et la fenêtre et les
+/// communautés FIXÉES par la modération. Gratuite (prix 0) ; l'identité
+/// partenaire, le crédit et le comptage d'usage attendent #11251 (S26).
+model LensPack {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  slug           String    @unique
+  name           String
+  author         String
+  submitterId    String    @db.ObjectId
+  /// pending · approved · rejected · withdrawn (retirée par la modération après publication)
+  status         String    @default("pending")
+  reviewNote     String?
+  reviewerId     String?   @db.ObjectId
+  reviewedAt     DateTime?
+  installCount   Int       @default(0)
+  /// light · standard · rich — le coût MESURÉ par la passerelle, jamais celui déclaré.
+  cost           String
+  /// capture · live
+  surfaces       String[]
+  /// La fenêtre fixée par la modération (proposée par le document, retenue ou corrigée à la revue).
+  startsAt       DateTime
+  endsAt         DateTime
+  /// Les communautés visées, fixées à la revue ; vide = tout le monde.
+  communities    String[]  @db.ObjectId
+  /// Le document re-sérialisé, tel que servi (adressé par `documentSha256`).
+  documentJson   String
+  documentSha256 String
+  /// `<sha16>.json` — l'adresse sous laquelle le magasin des packs sert le document.
+  documentSrc    String
+  documentBytes  Int
+  /// Les adresses `<sha16>.<ext>` des fichiers du document (`LensPackAsset.src`).
+  assetSrcs      String[]
+  createdAt      DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([submitterId, status])
+  @@index([documentSrc])
+}
+
+/// Un fichier d'une lens (#11271) : ré-encodé à la proposition, adressé par son
+/// empreinte, servi par `/pack-assets` seulement quand sa lens est publiée.
+model LensPackAsset {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  packId    String   @db.ObjectId
+  /// `<sha16>.webp|png` — les 16 premiers hexadécimaux du SHA-256 des octets.
+  src       String
+  sha256    String
+  mimeType  String
+  bytes     Bytes
+  sizeBytes Int
+  createdAt DateTime @default(now())
+
+  @@unique([packId, src])
+  @@index([src])
+}
+
+/// La SURCHARGE d'un pack du registre versionné (#11275), écrite par
+/// l'administration sans déploiement : masqué, ordre, prix, fenêtre, ciblage
+/// (`PackRegistryOverride`, JSON validé). Ne crée jamais un pack : les packs du
+/// dépôt restent lus au démarrage, la surcharge s'y applique. Chaque écriture
+/// est journalisée (`AdminAuditLog`) AVANT d'agir.
+model PackRegistryEntry {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  domain     String
+  slug       String
+  /// `PackRegistryOverride` — seules les clés présentes surchargent ; `null` retire.
+  override   Json
+  /// Compare-and-set : une écriture porte la révision qu'elle a lue.
+  revision   Int      @default(1)
+  updatedBy  String   @db.ObjectId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([domain, slug])
 }
 
 /// LA POSSESSION d'un pack payant (#10632). Quatre voies (#11272, `PACK_OWNERSHIP_SOURCES`) :

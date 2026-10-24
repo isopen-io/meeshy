@@ -8,6 +8,7 @@ import me.meeshy.app.conversations.ShareLinkDetailViewModel
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.stories.StoryViewerViewModel
+import me.meeshy.sdk.model.PostShareLink
 import me.meeshy.sdk.model.ProfileShareLink
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 
@@ -72,6 +73,18 @@ object Routes {
     const val SAVED_POSTS = "feed/saved"
     const val NEARBY_DISCOVERY = "feed/nearby"
     const val POST_DETAIL = "feed/post/{${PostDetailViewModel.POST_ID_ARG}}"
+
+    /**
+     * The receiving half of [PostShareLink]: the canonical `/feeds/post/{id}` link every
+     * client shares, and the legacy `/post/{id}` the gateway's tracked links still mint —
+     * on both hosts. Before these, a shared post link opened the browser, never the app.
+     */
+    val POST_SHARE_DEEP_LINKS: List<String> =
+        listOf(PostShareLink.WEB_HOST, PostShareLink.WWW_HOST).flatMap { host ->
+            listOf(PostShareLink.CANONICAL_SEGMENT, PostShareLink.LEGACY_SEGMENT).map { segment ->
+                "https://$host/$segment/{${PostDetailViewModel.POST_ID_ARG}}"
+            }
+        }
     const val CALLS = "calls"
     const val CONTACTS = "contacts"
     const val CONTACTS_DISCOVER = "contacts/discover"
@@ -80,6 +93,7 @@ object Routes {
     const val CHANGE_PASSWORD = "settings/change-password"
     const val TWO_FACTOR = "settings/two-factor"
     const val ACCOUNT_CONTACT = "settings/account-contact"
+    const val SECURITY = "settings/security"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"
