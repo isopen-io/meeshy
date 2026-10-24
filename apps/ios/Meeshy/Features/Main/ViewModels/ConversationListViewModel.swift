@@ -666,8 +666,8 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Preview Messages
 
-    func loadPreviewMessages(for conversationId: String, refresh: Bool = false, intent: ConversationListPreviewLoader.LoadIntent? = nil) async {
-        await previewLoader.load(for: conversationId, intent: intent ?? (refresh ? .open : .ensure), regime: EndToEndRegime(conversation: conversations.first { $0.id == conversationId }), currentUserId: { [weak self] in self?.currentUserId ?? "" })
+    func loadPreviewMessages(for conversationId: String, refresh: Bool = false, intent: ConversationListPreviewLoader.LoadIntent? = nil, directness: PreviewDirectness? = nil) async {
+        await previewLoader.load(for: conversationId, intent: intent ?? (refresh ? .open : .ensure), regime: EndToEndRegime(conversation: conversations.first { $0.id == conversationId }), directness: directness, currentUserId: { [weak self] in self?.currentUserId ?? "" })
     }
 
     // MARK: - Mark as Read (local update from ConversationView)

@@ -230,15 +230,9 @@ extension ConversationViewModel {
     // MARK: - Decryption
 
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
-        guard isDirect else { return }
-
-        let payloads: [DecryptionPayload] = msgs.compactMap { msg in
-            guard msg.isEncrypted, !msg.senderId.isEmpty,
-                  !msg.content.isEmpty,
-                  let data = Data(base64Encoded: msg.content)
-            else { return nil }
-            return DecryptionPayload(messageId: msg.id, senderId: msg.senderId, ciphertext: data)
-        }
+        // Clé sous le PAIR local, jamais sous l'expéditeur affirmé (#11232, #12757) ; pair inconnu ⇒ rien.
+        guard isDirect, let peer = DirectSessionPeer(peerUserId: participantUserId ?? currentConversation?.participantUserId, readerUserId: currentUserId) else { return }
+        let payloads = msgs.compactMap { DecryptionPayload(decrypting: $0, under: peer) }
         guard !payloads.isEmpty else { return }
 
         let results = await decryptionActor.decrypt(payloads)
