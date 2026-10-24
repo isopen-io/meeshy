@@ -378,10 +378,50 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     func test_bothOSPaths_openWithTheCompactHeader() throws {
         let builder = try nativeBuilderBlock()
         XCTAssertTrue(builder.contains("ControlGroup {"), "Le menu natif ouvre sur un ControlGroup compact.")
-        XCTAssertTrue(builder.contains("nativeMenuItems(catalog.header,"), "Le ControlGroup porte la tête du catalogue.")
+        XCTAssertTrue(builder.contains("case .header:"), "Le ControlGroup porte la section de tête du catalogue.")
 
         let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
-        XCTAssertTrue(menu.contains("ForEach(catalog.header, id: \\.self)"), "Le menu custom dessine la même tête.")
+        XCTAssertTrue(menu.contains("case .header: headerTiles(group.entries)"), "Le menu custom dessine la même tête.")
+    }
+
+    /// Les DEUX chemins parcourent la MÊME séquence de groupes
+    /// (`catalog.groups`) : un builder qui oublierait un groupe (le départ, par
+    /// exemple) ne peut plus le faire en silence, il n'en énumère aucun.
+    func test_bothOSPaths_walkTheSameGroupSequence() throws {
+        let builder = try nativeBuilderBlock()
+        XCTAssertTrue(builder.contains("ForEach(catalog.groups)"), "Le menu natif parcourt les groupes du catalogue.")
+        XCTAssertFalse(builder.contains("nativeMenuItems(catalog."), "Le menu natif n'énumère plus ses groupes un par un.")
+
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains("ForEach(catalog.groups)"), "Le menu custom parcourt la MÊME séquence.")
+        XCTAssertFalse(menu.contains("entryRows(catalog."), "Le menu custom n'énumère plus ses groupes un par un.")
+    }
+
+    /// « Plus d'options » porte le même symbole sur les deux chemins : celui du catalogue.
+    func test_moreOptions_hasOneSymbol_onBothPaths() throws {
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains("ConversationMenuCatalog.moreSymbol"), "Le menu custom lit le symbole du catalogue.")
+        XCTAssertFalse(menu.contains("icon: \"ellipsis\""), "Aucun symbole « Plus d'options » écrit à la main.")
+        XCTAssertTrue(try nativeBuilderBlock().contains("ConversationMenuCatalog.moreSymbol"))
+    }
+
+    /// Le bouton d'appel de l'en-tête de l'aperçu suit la loi, comme l'entrée
+    /// « Appeler » : ni soi-même, ni une conversation terminée, ni un invité.
+    func test_previewCallButton_followsTheCatalog() throws {
+        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        guard let start = overlays.range(of: "func previewCallAction(for") else {
+            return XCTFail("previewCallAction(for:) doit exister.")
+        }
+        let body = String(overlays[start.lowerBound...].prefix(400))
+        XCTAssertTrue(body.contains("rowMenuCatalog(for: conversation).reach.contains(.call)"), "L'appel de l'aperçu lit le MÊME verdict que l'entrée du menu.")
+        XCTAssertFalse(body.contains("conversation.type == .direct"), "Plus de règle d'appel réécrite au type.")
+    }
+
+    /// La feuille des réglages s'ouvre au rang EFFECTIF qui a fait offrir l'entrée.
+    func test_settingsSheet_opensAtTheEffectiveRank() throws {
+        let presentations = try source("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift")
+        XCTAssertTrue(presentations.contains("ConversationRowMenuCapabilities.settingsRole(of: conversation, currentUser: AuthManager.shared.currentUser)"))
+        XCTAssertFalse(presentations.contains("MemberRole(rawValue: conversation.currentUserRole"), "Plus de rang SERVI pour une entrée gardée par le rang effectif.")
     }
 
     /// Aucune règle de rôle écrite en chaînes ne reste dans les règles de la liste.

@@ -197,6 +197,30 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertEqual(caps.removal, .delete)
     }
 
+    // MARK: - Le rang des réglages (#11230)
+
+    /// L'entrée « Paramètres du groupe » s'ouvre sur le rang EFFECTIF de la
+    /// loi : l'écran ne doit pas retenir ce que l'entrée a promis.
+    func test_settingsRole_platformAdminMember_isCreator() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "member"), currentUser: makeUser(role: "ADMIN"))
+        XCTAssertEqual(role, .creator, "ADMIN de plateforme membre ⇒ rang effectif créateur, comme la passerelle.")
+    }
+
+    func test_settingsRole_servedAdmin_staysAdmin_caseFolded() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "ADMIN"), currentUser: makeUser())
+        XCTAssertEqual(role, .admin)
+    }
+
+    func test_settingsRole_plainMember_staysMember() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "member"), currentUser: makeUser(role: "MODERATOR"))
+        XCTAssertEqual(role, .member, "MODERATOR de plateforme n'est qu'un membre dans la conversation.")
+    }
+
+    func test_settingsRole_unreadableRole_fallsToMember() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "owner"), currentUser: makeUser())
+        XCTAssertEqual(role, .member)
+    }
+
     // MARK: - Administration
 
     func test_adminConsoleURL_pointsAtTheConversationSheetOfTheWebConsole() {

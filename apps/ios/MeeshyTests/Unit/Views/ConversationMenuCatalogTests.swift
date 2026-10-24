@@ -104,6 +104,7 @@ final class ConversationMenuCatalogTests: XCTestCase {
 
     func test_make_closedDirect_offersNoCall() {
         let menu = catalog(makeInput(makeConversation(type: .direct, participantUserId: "peer", isActive: false)))
+        XCTAssertFalse(menu.reach.contains(.call), "Une conversation terminée ne s'appelle plus.")
         XCTAssertFalse(menu.reach.contains(.videoCall), "Une conversation terminée ne s'appelle plus.")
     }
 
@@ -123,6 +124,32 @@ final class ConversationMenuCatalogTests: XCTestCase {
     func test_make_groupMember_hasNoGroupSettings() {
         let menu = catalog(makeInput(makeConversation(currentUserRole: "member")))
         XCTAssertFalse(menu.entries.contains(.groupSettings), "Un simple membre ne règle pas le groupe.")
+    }
+
+    /// Global se règle-t-il ? Non : l'écran des réglages édite titre,
+    /// description, avatar, bannière et offre « Quitter » — tout ce que la loi
+    /// ferme sur Global et que la passerelle refuse (403). Un ADMIN ou un
+    /// BIGBOSS de plateforme y a le rang effectif créateur, et `manageMembers`
+    /// couvre Global : l'entrée ne se lit donc pas sur `manageMembers`.
+    func test_make_globalForPlatformAdmin_hasNoGroupSettings() {
+        for role in ["ADMIN", "BIGBOSS"] {
+            let menu = catalog(makeInput(
+                makeConversation(type: .global, currentUserRole: "member"),
+                user: makeUser(role: role)
+            ))
+            XCTAssertFalse(menu.entries.contains(.groupSettings), "\(role) : Global ne s'ouvre pas sur des réglages qu'il refuse.")
+            XCTAssertFalse(menu.entries.contains(.leave), "\(role) : Global ne se quitte pas.")
+        }
+    }
+
+    func test_make_closedGroup_hasNoGroupSettings() {
+        let menu = catalog(makeInput(makeConversation(currentUserRole: "admin", isActive: false)))
+        XCTAssertFalse(menu.entries.contains(.groupSettings), "Une conversation terminée ne se règle plus.")
+    }
+
+    func test_make_platformAdminMemberOfGroup_offersGroupSettings() {
+        let menu = catalog(makeInput(makeConversation(currentUserRole: "member"), user: makeUser(role: "ADMIN")))
+        XCTAssertTrue(menu.organize.contains(.groupSettings))
     }
 
     func test_make_direct_hasNoGroupSettings() {
@@ -195,6 +222,30 @@ final class ConversationMenuCatalogTests: XCTestCase {
         XCTAssertEqual(menu.entries.count, Set(menu.entries).count)
     }
 
+    // MARK: - Les groupes : UNE séquence pour les deux chemins
+
+    func test_groups_flattenToTheEntries_inSectionOrder() {
+        let menu = catalog(makeInput(makeDirect(), isPeerBlocked: false, windowsAvailable: true, offersReadingModes: true))
+        XCTAssertEqual(menu.groups.flatMap(\.entries), menu.entries)
+        XCTAssertEqual(menu.groups.map(\.section), [.header, .reach, .organize, .more, .departure])
+    }
+
+    func test_groups_skipEmptySections() {
+        let anonymous = makeUser(role: nil, isAnonymous: true)
+        let menu = catalog(makeInput(makeConversation(type: .public, currentUserRole: "member"), user: anonymous))
+        XCTAssertTrue(menu.departure.isEmpty, "Un invité ne quitte ni ne masque : aucune entrée de départ.")
+        XCTAssertFalse(menu.groups.contains { $0.entries.isEmpty }, "Un groupe vide ne se dessine pas.")
+        XCTAssertFalse(menu.groups.map(\.section).contains(.departure))
+    }
+
+    func test_sections_openWithADivider_exceptTheHeadAndWhatFollowsIt() {
+        XCTAssertFalse(ConversationMenuSection.header.opensWithDivider)
+        XCTAssertFalse(ConversationMenuSection.reach.opensWithDivider)
+        XCTAssertTrue(ConversationMenuSection.organize.opensWithDivider)
+        XCTAssertTrue(ConversationMenuSection.more.opensWithDivider)
+        XCTAssertTrue(ConversationMenuSection.departure.opensWithDivider)
+    }
+
     // MARK: - La table des libellés et des symboles
 
     func test_everyEntry_hasALabelAndASystemSymbol() {
@@ -203,6 +254,7 @@ final class ConversationMenuCatalogTests: XCTestCase {
             XCTAssertNotNil(UIImage(systemName: entry.symbol), "\(entry) : « \(entry.symbol) » n'est pas un symbole SF")
         }
         XCTAssertNotNil(UIImage(systemName: ConversationMenuEntry.favorite.displayedSymbol(hasFavorite: true)))
+        XCTAssertNotNil(UIImage(systemName: ConversationMenuCatalog.moreSymbol))
     }
 
     func test_toggles_sayTwoDifferentWords() {
@@ -311,5 +363,66 @@ final class ConversationMenuCatalogDispatchTests: XCTestCase {
         )
         let exposed = menu.accessibilityEntries.compactMap { ConversationMenuEntry(rawValue: $0.id) }
         XCTAssertEqual(exposed, menuCatalog.entries.filter { !$0.opensSubmenu })
+    }
+
+    private func readingModeCatalog() -> ConversationMenuCatalog {
+        let conversation = MeeshyConversation(id: "c1", identifier: "c1", type: .group, title: "Équipe", currentUserRole: "member")
+        let user = MeeshyUser(id: "me", username: "me", role: "USER", isAnonymous: false)
+        return ConversationMenuCatalog.make(ConversationMenuCatalog.Input(
+            capabilities: ConversationRowMenuCapabilities.make(conversation: conversation, currentUser: user),
+            isPinned: false, isMuted: false, hasUnread: false, isLocked: false,
+            isArchived: false, canToggleArchive: true, isPeerBlocked: nil,
+            windowsAvailable: false, offersReadingModes: true
+        ))
+    }
+
+    private func readingModeMenu(
+        mountsSubmenu: Bool,
+        onDismiss: @escaping () -> Void = {}
+    ) -> ConversationContextMenuView {
+        let conversation = MeeshyConversation(id: "c1", identifier: "c1", type: .group, title: "Équipe", currentUserRole: "member")
+        return ConversationContextMenuView(
+            accentHex: "6366F1",
+            catalog: readingModeCatalog(),
+            currentReaction: nil,
+            categories: [],
+            currentSectionId: nil,
+            actions: makeActions(Recorder()),
+            readingModeMenu: mountsSubmenu ? LentilleReadingModeSubmenu(conversation: conversation) : nil,
+            onDismiss: onDismiss
+        )
+    }
+
+    /// VoiceOver joint le mode de lecture comme toute autre entrée : chaque
+    /// mode sélectionnable devient une action nommée, rangée à la place de
+    /// l'entrée « Mode de lecture » dans l'ordre du catalogue.
+    func test_customMenu_exposesTheReadingModes_asNamedActions() {
+        let exposed = readingModeMenu(mountsSubmenu: true).accessibilityEntries.map(\.id)
+        let modes = exposed.filter { $0.hasPrefix("readingMode.") }
+        XCTAssertFalse(modes.isEmpty, "Les modes de lecture doivent être joignables par VoiceOver.")
+        XCTAssertTrue(modes.contains("readingMode.auto"))
+        let firstMode = exposed.firstIndex { $0.hasPrefix("readingMode.") }
+        let details = exposed.firstIndex(of: ConversationMenuEntry.details.rawValue)
+        XCTAssertNotNil(details)
+        if let firstMode, let details {
+            XCTAssertTrue(firstMode < details, "Les modes se lisent avant « Détails ».")
+        }
+    }
+
+    func test_customMenu_withoutSubmenu_exposesNoReadingMode_andDrawsNoEmptyRow() {
+        let menu = readingModeMenu(mountsSubmenu: false)
+        XCTAssertFalse(menu.accessibilityEntries.contains { $0.id.hasPrefix("readingMode") })
+        XCTAssertTrue(readingModeCatalog().organize.contains(.readingMode), "Le catalogue offre l'entrée…")
+        XCTAssertFalse(menu.drawnEntries(readingModeCatalog().organize).contains(.readingMode), "…mais sans sous-menu monté, aucune rangée vide n'est dessinée.")
+        XCTAssertTrue(readingModeMenu(mountsSubmenu: true).drawnEntries(readingModeCatalog().organize).contains(.readingMode))
+    }
+
+    /// Choisir un mode par VoiceOver ferme le menu, comme toute autre entrée.
+    func test_customMenu_readingModeAction_dismissesTheMenu() {
+        var dismissed = 0
+        let menu = readingModeMenu(mountsSubmenu: true, onDismiss: { dismissed += 1 })
+        let auto = menu.accessibilityEntries.first { $0.id == "readingMode.auto" }
+        auto?.perform()
+        XCTAssertEqual(dismissed, 1)
     }
 }
