@@ -13,6 +13,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         willDisplay cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
+        arrivalMotion.play(on: cell, item: dataSource.itemIdentifier(for: indexPath))
         applyFocalPerspectiveOnCellDisplay()
         applyLongMessageExpansionPresentation(animated: false)
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }

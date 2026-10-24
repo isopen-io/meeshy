@@ -384,9 +384,9 @@ extension MessageListViewController {
                 editMenuActions: self.messageEditMenuActions(message: message, callbacks: callbacks, offer: offer)
             ) {
                 if let focalRow {
-                    focalRow.equatable()
+                    focalRow.equatable().modifier(UnencryptedMessageMarking(isUnencrypted: parts.inputs.isUnencrypted, isDark: self.isDark))
                 } else {
-                    messageBubble.longMessageFocus(longMessageExpansion)
+                    messageBubble.longMessageFocus(longMessageExpansion).modifier(UnencryptedMessageMarking(isUnencrypted: parts.inputs.isUnencrypted, isDark: self.isDark))
                 }
             }
             .environmentObject(host)

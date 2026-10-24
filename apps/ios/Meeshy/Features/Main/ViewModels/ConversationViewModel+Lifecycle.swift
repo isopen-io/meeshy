@@ -35,6 +35,9 @@ struct ConversationDependencies {
     let persistence: MessagePersistenceActor
     var collaborators: ConversationCollaborators? = nil
     var transcriptionRetry: (any TranscriptionRetryScheduling)? = nil
+    /// Ce que l'ère chiffrée de la conversation laisse servir (#11380) — une
+    /// instance par conversation ouverte, comme ce conteneur.
+    var encryptedEra = ConversationEncryptedEra()
 
     @MainActor
     static var live: ConversationDependencies {

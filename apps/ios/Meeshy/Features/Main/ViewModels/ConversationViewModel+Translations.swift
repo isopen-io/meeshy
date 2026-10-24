@@ -229,7 +229,7 @@ extension ConversationViewModel {
     // MARK: - Résolution du Prisme (traduction préférée)
 
     func preferredTranslation(for messageId: String) -> MessageTranslation? {
-        if let override = activeTranslationOverrides[messageId] {
+        if let override = activeTranslationOverrides[messageId], startupDependencies.encryptedEra.serves(override, for: messageId, in: self) {
             return override
         }
         if cachedRevisionForTranslation != preferredLanguageRevision {
@@ -246,7 +246,7 @@ extension ConversationViewModel {
         case .none:
             break
         }
-        guard let translations = messageTranslations[messageId], !translations.isEmpty else {
+        guard case let translations = startupDependencies.encryptedEra.servedTranslations(for: messageId, in: self), !translations.isEmpty else {
             translationResolutionCache.updateValue(nil, forKey: messageId)
             return nil
         }
@@ -297,7 +297,7 @@ extension ConversationViewModel {
         let manual = activeTranslationOverrides[messageId].flatMap { $0?.targetLanguage }
         return ConsumedLanguageResolver.resolve(
             originalLanguage: messages[index].originalLanguage,
-            availableTranslations: (messageTranslations[messageId] ?? []).map(\.targetLanguage),
+            availableTranslations: startupDependencies.encryptedEra.servedTranslations(for: messageId, in: self).map(\.targetLanguage),
             preferredLanguages: preferredLanguages,
             manualSelection: manual
         )
