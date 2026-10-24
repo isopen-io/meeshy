@@ -136,6 +136,7 @@ public struct E2EEServedEnvelope: Codable, Equatable, Sendable {
 /// reçoit pour CET appareil — la room de sa génération. Un canal à part plutôt
 /// qu'un éditeur de plus sur le gestionnaire de socket : seul `MeeshyE2EE`, côté
 /// app, l'écoute.
+/// unchecked: `received` est un `PassthroughSubject` (sérialise ses propres envois) ; aucune autre propriété mutable.
 public final class E2EEEnvelopeChannel: @unchecked Sendable {
     public static let shared = E2EEEnvelopeChannel()
     public let received = PassthroughSubject<E2EEServedEnvelope, Never>()
