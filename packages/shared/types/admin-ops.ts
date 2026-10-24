@@ -109,6 +109,103 @@ export const SERVER_OPERATION_COOLDOWN_MS: Readonly<Record<(typeof SERVER_OPERAT
   'image-prune': 3_600_000,
 };
 
+/**
+ * LA FENÊTRE D'UNE OPÉRATION (#11452, tranché par le porteur le 2026-10-24) : le
+ * nettoyage ne part qu'aux heures creuses de l'hôte partagé, de 02:00 inclus à 06:00
+ * exclu, heure de Paris ; la sauvegarde n'a pas de fenêtre. L'heure locale se lit par
+ * `Intl.DateTimeFormat` dans le fuseau NOMMÉ, jamais par un décalage fixe : la fenêtre
+ * reste juste aux deux changements d'heure (dernier dimanche de mars, dernier dimanche
+ * d'octobre). Le runner de l'hôte tient la même fenêtre (`WINDOWS`,
+ * `infrastructure/scripts/ops-runner/meeshy-ops-runner.py`) et fait foi.
+ */
+export type ServerOperationWindow = {
+  readonly timeZone: 'Europe/Paris';
+  readonly startHour: number;
+  readonly endHour: number;
+};
+
+export const SERVER_OPERATION_WINDOWS: Readonly<Record<(typeof SERVER_OPERATIONS)[number], ServerOperationWindow | null>> = {
+  backup: null,
+  'image-prune': { timeZone: 'Europe/Paris', startHour: 2, endHour: 6 },
+};
+
+type LocalClock = { readonly year: number; readonly month: number; readonly day: number; readonly hour: number; readonly minute: number };
+
+const clockFormats = new Map<string, Intl.DateTimeFormat>();
+
+const localClockOf = (timeZone: string, at: number): LocalClock => {
+  const format =
+    clockFormats.get(timeZone) ??
+    new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
+  clockFormats.set(timeZone, format);
+  const part = (type: Intl.DateTimeFormatPartTypes): number => Number(format.formatToParts(at).find((p) => p.type === type)?.value);
+  return { year: part('year'), month: part('month'), day: part('day'), hour: part('hour'), minute: part('minute') };
+};
+
+/** Le décalage du fuseau à l'instant `at`, en millisecondes (Paris : +1 h l'hiver, +2 h l'été). */
+const offsetAt = (timeZone: string, at: number): number => {
+  const clock = localClockOf(timeZone, at);
+  return Date.UTC(clock.year, clock.month - 1, clock.day, clock.hour, clock.minute) - Math.floor(at / 60_000) * 60_000;
+};
+
+/**
+ * Le premier instant du jour local `day` où l'horloge du fuseau marque `hour` ou plus.
+ * Deux candidats, un par décalage du jour : un jour de changement d'heure en a deux. En
+ * octobre, 02:00 se vit deux fois et la fenêtre s'ouvre à la première ; en mars, 02:00
+ * n'existe pas et elle s'ouvre à 03:00 d'été, le même instant que 02:00 d'hiver.
+ */
+const firstInstantAtHour = (timeZone: string, day: { readonly year: number; readonly month: number; readonly day: number }, hour: number): number => {
+  const wall = Date.UTC(day.year, day.month - 1, day.day, hour);
+  const offsets = [offsetAt(timeZone, wall - 12 * 3_600_000), offsetAt(timeZone, wall + 12 * 3_600_000)];
+  const reached = offsets
+    .map((offset) => wall - offset)
+    .filter((candidate) => {
+      const clock = localClockOf(timeZone, candidate);
+      return clock.year === day.year && clock.month === day.month && clock.day === day.day && clock.hour >= hour;
+    });
+  return Math.min(...reached);
+};
+
+export type ServerOperationWindowState = {
+  /** L'instant tombe dans la fenêtre. */
+  readonly open: boolean;
+  /** La prochaine ouverture APRÈS l'instant, en ISO UTC (fenêtre ouverte : celle du lendemain). */
+  readonly nextOpeningAt: string;
+};
+
+/** Pure : la fenêtre est-elle ouverte à `at`, et quand s'ouvre-t-elle ensuite ? */
+export function serverOperationWindowAt(window: ServerOperationWindow, at: Date): ServerOperationWindowState {
+  const clock = localClockOf(window.timeZone, at.getTime());
+  const open = clock.hour >= window.startHour && clock.hour < window.endHour;
+  const shift = clock.hour < window.startHour ? 0 : 1;
+  const next = new Date(Date.UTC(clock.year, clock.month - 1, clock.day + shift));
+  const day = { year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() };
+  return { open, nextOpeningAt: new Date(firstInstantAtHour(window.timeZone, day, window.startHour)).toISOString() };
+}
+
+/**
+ * Le premier instant, à partir de `now`, où l'opération est permise : le délai depuis le
+ * dernier passage accepté écoulé ET la fenêtre ouverte. `null` : permise maintenant. Une
+ * ouverture qui tombe PENDANT le délai ne compte pas : on part de la fin du délai, et si la
+ * fenêtre est fermée à cet instant, c'est l'ouverture suivante qui répond.
+ */
+export function serverOperationAvailableAt({
+  operation,
+  lastAcceptedAt,
+  now,
+}: {
+  readonly operation: (typeof SERVER_OPERATIONS)[number];
+  readonly lastAcceptedAt: string | null | undefined;
+  readonly now: Date;
+}): string | null {
+  const cooldownEnd = lastAcceptedAt ? Date.parse(lastAcceptedAt) + SERVER_OPERATION_COOLDOWN_MS[operation] : Number.NEGATIVE_INFINITY;
+  const from = Math.max(now.getTime(), cooldownEnd);
+  const window = SERVER_OPERATION_WINDOWS[operation];
+  const state = window ? serverOperationWindowAt(window, new Date(from)) : null;
+  const allowed = state === null || state.open ? from : Date.parse(state.nextOpeningAt);
+  return allowed > now.getTime() ? new Date(allowed).toISOString() : null;
+}
+
 export const serverOperationRequestBodySchema = z
   .object({
     confirm: serverOperationSchema,
@@ -141,11 +238,21 @@ export const serverOperationRunSchema = z.object({
 const runsByOperation = z.record(serverOperationSchema, serverOperationRunSchema.nullable());
 const instantByOperation = z.record(serverOperationSchema, isoInstant.nullable());
 
+/** La fenêtre exposée (#11452) : l'écran la dit en mots sans la recopier ; `open` à l'instant servi. */
+export const serverOperationWindowViewSchema = z.object({
+  timeZone: z.literal('Europe/Paris'),
+  startHour: z.number().int().min(0).max(23),
+  endHour: z.number().int().min(1).max(24),
+  open: z.boolean(),
+});
+
 export const serverOperationStatusSchema = z.object({
   environment: opsEnvironmentSchema,
   relayInstalled: z.boolean(),
   runs: runsByOperation,
+  /** La fin du délai ET de la fenêtre, le plus tardif (#11452). */
   availableAt: instantByOperation,
+  windows: z.record(serverOperationSchema, serverOperationWindowViewSchema.nullable()),
 });
 
 export const OPS_REQUEST_FILE_MAX_BYTES = 1024;
@@ -180,6 +287,7 @@ export const SERVER_OPERATION_ERROR_CODES = [
   'FORBIDDEN',
   'UNKNOWN_OPERATION',
   'OPERATION_COOLDOWN',
+  'OPERATION_OUTSIDE_WINDOW',
   'OPERATION_IN_PROGRESS',
   'OPS_RELAY_UNAVAILABLE',
   'AUDIT_UNAVAILABLE',
@@ -197,6 +305,7 @@ export type ServerOperation = z.infer<typeof serverOperationSchema>;
 export type ServerOperationRunStatus = z.infer<typeof serverOperationRunStatusSchema>;
 export type ServerOperationRun = z.infer<typeof serverOperationRunSchema>;
 export type ServerOperationStatus = z.infer<typeof serverOperationStatusSchema>;
+export type ServerOperationWindowView = z.infer<typeof serverOperationWindowViewSchema>;
 export type ServerOperationRequestBody = z.infer<typeof serverOperationRequestBodySchema>;
 export type ServerOperationAccepted = z.infer<typeof serverOperationAcceptedSchema>;
 export type OpsRequestFile = z.infer<typeof opsRequestFileSchema>;
