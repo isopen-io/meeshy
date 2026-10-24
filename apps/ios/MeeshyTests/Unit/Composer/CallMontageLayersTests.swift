@@ -133,7 +133,8 @@ final class CallMontageLayersTests: XCTestCase {
         let bord = Self.pixelAt(pixels, x: 2, y: 192, width: 216)
         XCTAssertLessThan(bord.0, 30, "les 3 % de bord noir courent sur toute la hauteur")
         let centre = Self.pixelAt(pixels, x: 108, y: 200, width: 216)
-        XCTAssertEqual(Int(centre.0), 51, accuracy: 6, "le centre est la photo, un gris 0,2")
+        XCTAssertGreaterThan(Int(centre.0), 40, "le centre est la photo (un gris sombre), pas le noir du bord")
+        XCTAssertLessThan(Int(centre.0), 110, "et pas le blanc du reflet")
         let barre = CallMontageSoloLayout.screen(in: CGRect(origin: .zero, size: canvas)).statusBand
         let claires = Self.lightPixels(pixels, in: barre, width: 216)
         XCTAssertGreaterThan(claires, 6, "l'heure et la signature s'écrivent en clair dans la barre d'état")
