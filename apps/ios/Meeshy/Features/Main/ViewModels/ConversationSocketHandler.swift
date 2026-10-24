@@ -23,6 +23,12 @@ final class ConversationSocketHandler {
     // uniquely referenced at that point, so there's no real race.
     nonisolated(unsafe) weak var delegate: ConversationSocketDelegate?
 
+    /// Le lecteur a quitté, a été retiré ou banni PENDANT que le fil est
+    /// ouvert (#11415) — posé par `subscribeMembershipEnd`, lu par l'autorité
+    /// du menu (`ConversationMenuAuthority.make(conversation:viewModel:)`) au
+    /// moment où un menu s'ouvre. La vue reste montée.
+    private(set) var membershipEnded = false
+
     /// Optional persistence actor — when set, message-related socket events
     /// write through the actor in addition to updating the delegate/ViewModel.
     var persistence: MessagePersistenceActor?
@@ -314,6 +320,7 @@ final class ConversationSocketHandler {
         subscribeReactions(on: lane)
         subscribePresence(on: lane)
         subscribeConversationState()
+        subscribeMembershipEnd()
         // Réactions par-pièce-jointe, statut de consommation, enrichissements
         // (transcription / traduction audio) — extraits par responsabilité
         // dans `ConversationSocketHandler+MediaEvents.swift` (I4, #7360).
@@ -506,6 +513,31 @@ final class ConversationSocketHandler {
             .sink { [weak self] _ in
                 self?.delegate?.isConversationClosed = true
             }
+            .store(in: &cancellables)
+    }
+
+    /// **La fin d'appartenance du LECTEUR, fil ouvert** (#11415). La passerelle
+    /// adresse `conversation:participant-left` / `participant-banned` à la room
+    /// personnelle du partant ; la liste en retire la ligne, mais le fil ouvert
+    /// gardait sa conversation capturée et offrait encore « Supprimer pour
+    /// moi », réagir, signaler — tous refusés en 403. `names(_:)` : le même
+    /// test d'identité que la liste. Un bannissement qui nomme le lecteur le
+    /// laisse hors de la conversation, que l'événement dise ou non qu'il a
+    /// retiré une appartenance (`ParticipantBannedEvent.membershipEnded`).
+    private func subscribeMembershipEnd() {
+        let convId = conversationId
+        let me = currentUserId
+
+        messageSocket.participantSelfLeft
+            .filter { $0.conversationId == convId && $0.names(me) }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.membershipEnded = true }
+            .store(in: &cancellables)
+
+        messageSocket.participantBanned
+            .filter { $0.conversationId == convId && $0.names(me) }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.membershipEnded = true }
             .store(in: &cancellables)
     }
 

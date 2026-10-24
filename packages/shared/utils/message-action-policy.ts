@@ -90,6 +90,7 @@ export type ServerFeatureAbsence = 'e2ee-server-feature-absent';
 export type MessageActionVerdicts = {
   readonly edit: EditVerdict | null;
   readonly deleteForEveryone: boolean;
+  /** `DELETE /messages/:id/delete-for-me` : un inscrit, participant ACTIF (#11415) — l'appartenance inconnue se dit fermée. */
   readonly deleteForMe: boolean;
   /** Retrait par un tiers modérateur : un motif est exigé, l'auteur en est prévenu. */
   readonly remove: { readonly reasonRequired: true } | null;
