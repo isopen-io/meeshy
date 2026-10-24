@@ -12,18 +12,18 @@
       "base": {
         "layout": {
           "arrangement": "grid",
-          "margin": 0.06,
+          "margin": 0.07,
           "gap": 0.03,
-          "top": 0.14,
-          "bottom": 0.12
+          "top": 0.17,
+          "bottom": 0.1
         },
         "slot": {
-          "shape": "round",
-          "radius": 0.12,
+          "shape": "circle",
           "stroke": {
-            "color": "#FFFFFF66",
-            "width": 0.006
+            "color": "#FFFFFF",
+            "width": 0.012
           },
+          "glow": "#FF7AB6AA",
           "shadow": true,
           "tilt": "none",
           "tone": "color"
@@ -31,50 +31,77 @@
         "background": {
           "kind": "accent"
         },
+        "pattern": {
+          "kind": "stars",
+          "color": "#FFFFFF",
+          "opacity": 0.18
+        },
         "ornaments": [
           {
             "kind": "lightleak",
-            "color": "#E0E7FF40",
-            "density": "low",
-            "layer": "back"
+            "color": "#FF5FA2",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "bokeh",
-            "color": "#FFFFFF2E",
+            "color": "#FFD3E8",
             "density": "mid",
-            "layer": "back"
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#FFFFFF",
+            "density": "low",
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
           "mark": "both",
           "place": "bottom",
           "color": "#FFFFFF",
-          "size": "l",
+          "size": "m",
           "font": "bubble"
         },
         "names": {
-          "show": "name",
-          "style": "caption",
+          "show": "handle",
+          "style": "badge",
           "font": "bubble",
-          "color": "#FFFFFF"
+          "color": "#FFFFFF",
+          "fill": "#2A0E5CCC"
         },
         "title": {
           "source": "group",
           "font": "bubble",
           "color": "#FFFFFF",
           "place": "top",
-          "size": "m",
-          "effect": "shadow"
+          "size": "l",
+          "effect": "glow"
         }
       },
       "variants": {
         "duo": {
           "layout": {
             "arrangement": "split",
-            "margin": 0.06,
-            "gap": 0.03,
-            "top": 0.12,
-            "bottom": 0.12
+            "margin": 0.07,
+            "gap": 0.035,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.12,
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.012
+            },
+            "glow": "#FF7AB6AA",
+            "shadow": true,
+            "tilt": "none",
+            "tone": "color"
           },
           "title": {
             "source": "names",
@@ -82,81 +109,65 @@
             "color": "#FFFFFF",
             "place": "top",
             "size": "l",
-            "effect": "shadow"
-          }
-        },
-        "comite": {
-          "layout": {
-            "arrangement": "arch",
-            "margin": 0.06,
-            "gap": 0.03,
-            "top": 0.16,
-            "bottom": 0.12
+            "effect": "glow"
           },
-          "slot": {
-            "shape": "circle",
-            "stroke": {
-              "color": "#FFFFFFB3",
-              "width": 0.008
-            },
-            "glow": "#C7D2FEAA",
-            "tilt": "none",
-            "tone": "color"
-          },
-          "names": {
-            "show": "name",
-            "style": "badge",
+          "subtitle": {
+            "source": "date",
             "font": "bubble",
-            "color": "#FFFFFF",
-            "fill": "#1E1B4BCC"
+            "color": "#FFD3E8",
+            "place": "top",
+            "size": "s"
           }
         },
+        "comite": {},
         "groupe": {
           "layout": {
             "arrangement": "honeycomb",
             "margin": 0.05,
             "gap": 0.02,
-            "top": 0.14,
-            "bottom": 0.12
-          },
-          "slot": {
-            "shape": "hex",
-            "stroke": {
-              "color": "#FFFFFF80",
-              "width": 0.005
-            },
-            "shadow": true,
-            "tilt": "none",
-            "tone": "color"
-          },
-          "names": {
-            "show": "name",
-            "style": "badge",
-            "font": "bubble",
-            "color": "#FFFFFF",
-            "fill": "#1E1B4BCC"
-          }
-        },
-        "tablee": {
-          "layout": {
-            "arrangement": "honeycomb",
-            "margin": 0.04,
-            "gap": 0.015,
-            "top": 0.12,
+            "top": 0.15,
             "bottom": 0.1
           },
           "slot": {
             "shape": "hex",
             "stroke": {
-              "color": "#FFFFFF80",
-              "width": 0.004
+              "color": "#FFFFFF",
+              "width": 0.01
             },
+            "glow": "#FF7AB6AA",
             "tilt": "none",
             "tone": "color"
           },
           "names": {
-            "show": "none",
+            "show": "handle",
             "style": "badge",
+            "font": "bubble",
+            "color": "#FFFFFF",
+            "fill": "#2A0E5CCC"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.13,
+            "bottom": 0.09
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.18,
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.008
+            },
+            "glow": "#FF7AB688",
+            "tilt": "none",
+            "tone": "color"
+          },
+          "names": {
+            "show": "handle",
+            "style": "list",
             "font": "bubble",
             "color": "#FFFFFF"
           }
@@ -173,156 +184,171 @@
       ],
       "base": {
         "layout": {
-          "arrangement": "grid",
-          "margin": 0.06,
-          "gap": 0.02,
-          "top": 0.12,
+          "arrangement": "cascade",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.17,
           "bottom": 0.1
         },
         "slot": {
-          "shape": "rect",
+          "shape": "round",
+          "radius": 0.08,
           "stroke": {
-            "color": "#FFFFFFCC",
-            "width": 0.004
+            "color": "#FFFFFF",
+            "width": 0.014
           },
+          "double": true,
           "shadow": true,
-          "tilt": "none",
+          "tilt": "gentle",
           "tone": "color"
         },
         "background": {
           "kind": "linear",
           "colors": [
-            "#312E81",
-            "#4338CA",
-            "#6366F1",
-            "#0E7490"
+            "#BDEBFF",
+            "#E2D4FF",
+            "#FFD1EA",
+            "#FFF1BF"
           ],
           "angle": 135
         },
         "pattern": {
-          "kind": "stripes",
+          "kind": "sunburst",
           "color": "#FFFFFF",
-          "opacity": 0.07
+          "opacity": 0.22
         },
         "ornaments": [
           {
             "kind": "rays",
-            "color": "#FFFFFF1F",
-            "density": "low",
-            "layer": "back"
+            "color": "#FFFFFF",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "sparkles",
-            "color": "#E0E7FF",
+            "color": "#8B5CF6",
+            "density": "mid",
+            "layer": "front",
+            "motion": "loop"
+          },
+          {
+            "kind": "stars",
+            "color": "#38BDF8",
             "density": "low",
-            "layer": "front"
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
-          "mark": "logo",
-          "place": "top-right",
-          "color": "#FFFFFF",
-          "size": "l"
+          "mark": "both",
+          "place": "bottom",
+          "color": "#4C1D95",
+          "size": "m",
+          "font": "futuristic"
         },
         "names": {
           "show": "handle",
           "style": "plate",
-          "font": "bold",
+          "font": "futuristic",
           "color": "#FFFFFF",
-          "fill": "#1E1B4BB3"
+          "fill": "#4C1D95D9"
         },
         "title": {
           "source": "group",
-          "font": "bold",
-          "color": "#FFFFFF",
+          "font": "futuristic",
+          "color": "#4C1D95",
           "place": "top",
-          "size": "m",
-          "effect": "glow",
-          "case": "as-is"
-        },
-        "subtitle": {
-          "source": "date",
-          "font": "bold",
-          "color": "#E0E7FF",
-          "place": "top",
-          "size": "s"
+          "size": "l",
+          "effect": "outline",
+          "case": "upper"
         }
       },
       "variants": {
         "duo": {
           "layout": {
             "arrangement": "diagonal",
-            "margin": 0.06,
-            "gap": 0.02,
-            "top": 0.14,
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
             "bottom": 0.1
           },
           "slot": {
-            "shape": "rect",
+            "shape": "round",
+            "radius": 0.1,
             "stroke": {
               "color": "#FFFFFF",
-              "width": 0.006
+              "width": 0.016
             },
-            "glow": "#22D3EE88",
+            "double": true,
             "shadow": true,
-            "tilt": "none",
+            "tilt": "gentle",
             "tone": "color"
           },
           "title": {
             "source": "names",
-            "font": "bold",
-            "color": "#FFFFFF",
+            "font": "futuristic",
+            "color": "#4C1D95",
             "place": "top",
             "size": "l",
-            "effect": "glow"
+            "effect": "outline",
+            "case": "upper"
           }
         },
-        "comite": {
-          "layout": {
-            "arrangement": "hero",
-            "margin": 0.06,
-            "gap": 0.025,
-            "top": 0.14,
-            "bottom": 0.1
-          }
-        },
+        "comite": {},
         "groupe": {
           "layout": {
             "arrangement": "mosaic",
-            "margin": 0.05,
-            "gap": 0.015,
-            "top": 0.12,
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.15,
             "bottom": 0.1
           },
-          "names": {
-            "show": "handle",
-            "style": "badge",
-            "font": "bold",
-            "color": "#FFFFFF",
-            "fill": "#312E81CC"
+          "slot": {
+            "shape": "round",
+            "radius": 0.08,
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.012
+            },
+            "double": true,
+            "shadow": true,
+            "tilt": "none",
+            "tone": "color"
           }
         },
         "tablee": {
           "layout": {
             "arrangement": "grid",
-            "margin": 0.04,
-            "gap": 0.012,
-            "top": 0.1,
-            "bottom": 0.08
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.13,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.1,
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.01
+            },
+            "shadow": true,
+            "tilt": "none",
+            "tone": "color"
           },
           "names": {
             "show": "handle",
-            "style": "badge",
-            "font": "bold",
-            "color": "#FFFFFF",
-            "fill": "#312E81CC"
+            "style": "list",
+            "font": "futuristic",
+            "color": "#4C1D95"
           },
           "subtitle": {
-            "source": "none",
-            "font": "bold",
-            "color": "#FFFFFF",
-            "place": "top",
-            "size": "s"
+            "source": "date",
+            "font": "futuristic",
+            "color": "#7C3AED",
+            "place": "bottom",
+            "size": "s",
+            "case": "upper"
           }
         }
       }
@@ -337,77 +363,88 @@
       ],
       "base": {
         "layout": {
-          "arrangement": "grid",
-          "margin": 0.05,
-          "gap": 0.025,
-          "top": 0.12,
+          "arrangement": "orbit",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.16,
           "bottom": 0.1
         },
         "slot": {
-          "shape": "round",
-          "radius": 0.22,
-          "card": {
+          "shape": "circle",
+          "stroke": {
             "color": "#FFFFFF",
-            "pad": 0.03,
-            "foot": 0.03
+            "width": 0.022
           },
           "shadow": true,
-          "tilt": "none",
+          "tilt": "gentle",
           "tone": "color"
         },
         "background": {
-          "kind": "solid",
-          "color": "#1E1B4B"
+          "kind": "radial",
+          "colors": [
+            "#FFB3DE",
+            "#FF6FB5",
+            "#B5179E"
+          ]
         },
         "pattern": {
           "kind": "dots",
-          "color": "#6366F1",
-          "opacity": 0.22
+          "color": "#FFFFFF",
+          "opacity": 0.2
         },
         "ornaments": [
           {
             "kind": "bubbles",
-            "color": "#818CF8",
-            "density": "mid",
-            "layer": "back"
+            "color": "#FFFFFF",
+            "density": "high",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "hearts",
+            "color": "#FFE3F1",
+            "density": "low",
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
-          "mark": "wordmark",
-          "place": "top-left",
+          "mark": "both",
+          "place": "bottom",
           "color": "#FFFFFF",
           "size": "m",
           "font": "bubble"
         },
         "names": {
-          "show": "handle",
-          "style": "badge",
+          "show": "name",
+          "style": "bubble",
           "font": "bubble",
-          "color": "#FFFFFF",
-          "fill": "#6366F1"
+          "color": "#B5179E",
+          "fill": "#FFFFFF"
         },
         "title": {
           "source": "group",
           "font": "bubble",
           "color": "#FFFFFF",
           "place": "top",
-          "size": "m"
+          "size": "l",
+          "effect": "shadow"
         }
       },
       "variants": {
         "duo": {
           "layout": {
-            "arrangement": "cascade",
-            "margin": 0.06,
-            "gap": 0.02,
-            "top": 0.14,
+            "arrangement": "row",
+            "margin": 0.07,
+            "gap": 0.04,
+            "top": 0.16,
             "bottom": 0.1
           },
           "names": {
-            "show": "both",
+            "show": "name",
             "style": "bubble",
             "font": "bubble",
-            "color": "#1E1B4B",
+            "color": "#B5179E",
             "fill": "#FFFFFF"
           },
           "title": {
@@ -415,53 +452,34 @@
             "font": "bubble",
             "color": "#FFFFFF",
             "place": "top",
-            "size": "l"
+            "size": "l",
+            "effect": "shadow"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "bubble",
+            "color": "#FFE3F1",
+            "place": "top",
+            "size": "s"
           }
         },
-        "comite": {
+        "comite": {},
+        "groupe": {
           "layout": {
             "arrangement": "scatter",
             "margin": 0.06,
             "gap": 0.03,
-            "top": 0.14,
+            "top": 0.15,
             "bottom": 0.1
           },
           "slot": {
-            "shape": "round",
-            "radius": 0.22,
-            "card": {
+            "shape": "circle",
+            "stroke": {
               "color": "#FFFFFF",
-              "pad": 0.03,
-              "foot": 0.03
+              "width": 0.016
             },
             "shadow": true,
             "tilt": "gentle",
-            "tone": "color"
-          },
-          "names": {
-            "show": "handle",
-            "style": "bubble",
-            "font": "bubble",
-            "color": "#1E1B4B",
-            "fill": "#FFFFFF"
-          }
-        },
-        "groupe": {
-          "layout": {
-            "arrangement": "grid",
-            "margin": 0.05,
-            "gap": 0.02,
-            "top": 0.12,
-            "bottom": 0.1
-          },
-          "slot": {
-            "shape": "round",
-            "radius": 0.2,
-            "stroke": {
-              "color": "#818CF8",
-              "width": 0.006
-            },
-            "tilt": "none",
             "tone": "color"
           }
         }

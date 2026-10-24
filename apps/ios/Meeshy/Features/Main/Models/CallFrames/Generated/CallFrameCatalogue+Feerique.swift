@@ -86,18 +86,19 @@ nonisolated extension CallFrameCatalogue {
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
-                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#FFD98A", shadow: false, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
-                background: .radial(colors: ["#1D3530", "#0C1A18", "#050B0A"]),
+                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#F7E27A66", shadow: false, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
+                background: .radial(colors: ["#1F4A3A", "#0D241D", "#04100C"]),
                 pattern: nil,
                 border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .fireflies, color: "#FFE9A8", density: .high, layer: .back),
-                    CallFrameOrnament(kind: .bokeh, color: "#F6D58A33", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .leaves, color: "#2F5A47", density: .mid, layer: .back)
+                    CallFrameOrnament(kind: .fireflies, color: "#FFE680", density: .high, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#7CFFB2", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .leaves, color: "#2F6B4F", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .fireflies, color: "#FFF4B8", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .logo, place: .topRight, color: "#FFE9A8", size: .s, font: nil),
-                names: CallFrameNames(show: .handle, style: .tag, font: .handwriting, color: "#FFE9A8", fill: "#0A1412CC"),
-                title: CallFrameTitle(source: .names, font: .curve, color: "#FFE9A8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#FFF4B8", size: .m, font: StoryTextStyle.handwriting),
+                names: CallFrameNames(show: .name, style: .badge, font: .brush, color: "#FFF4B8", fill: "#0D241DCC"),
+                title: CallFrameTitle(source: .names, font: .handwriting, color: "#FFF4B8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
             ),
             surfaces: [.capture, .live]
@@ -110,18 +111,19 @@ nonisolated extension CallFrameCatalogue {
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .scatter, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
-                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#FFD98A", shadow: false, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
-                background: .radial(colors: ["#1D3530", "#0C1A18", "#050B0A"]),
+                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#F7E27A66", shadow: false, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
+                background: .radial(colors: ["#1F4A3A", "#0D241D", "#04100C"]),
                 pattern: nil,
                 border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .fireflies, color: "#FFE9A8", density: .high, layer: .back),
-                    CallFrameOrnament(kind: .bokeh, color: "#F6D58A33", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .leaves, color: "#2F5A47", density: .mid, layer: .back)
+                    CallFrameOrnament(kind: .fireflies, color: "#FFE680", density: .high, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#7CFFB2", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .leaves, color: "#2F6B4F", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .fireflies, color: "#FFF4B8", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .logo, place: .topRight, color: "#FFE9A8", size: .s, font: nil),
-                names: CallFrameNames(show: .handle, style: .badge, font: .curve, color: "#FFE9A8", fill: "#0A1412CC"),
-                title: CallFrameTitle(source: .group, font: .curve, color: "#FFE9A8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#FFF4B8", size: .m, font: StoryTextStyle.handwriting),
+                names: CallFrameNames(show: .name, style: .badge, font: .brush, color: "#FFF4B8", fill: "#0D241DCC"),
+                title: CallFrameTitle(source: .group, font: .handwriting, color: "#FFF4B8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
             ),
             surfaces: [.capture, .live]
@@ -133,19 +135,19 @@ nonisolated extension CallFrameCatalogue {
             name: "Lucioles",
             bucket: .groupe,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .hero, margin: 0.06, gap: 0.025, top: 0.15, bottom: 0.1),
-                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#FFD98A", shadow: false, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
-                background: .radial(colors: ["#1D3530", "#0C1A18", "#050B0A"]),
+                layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.02, top: 0.15, bottom: 0.1),
+                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#F7E27A66", shadow: false, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
+                background: .radial(colors: ["#1F4A3A", "#0D241D", "#04100C"]),
                 pattern: nil,
                 border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .fireflies, color: "#FFE9A8", density: .high, layer: .back),
-                    CallFrameOrnament(kind: .bokeh, color: "#F6D58A33", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .sparkles, color: "#FFE9A8", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .fireflies, color: "#FFE680", density: .high, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#7CFFB2", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .leaves, color: "#2F6B4F", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .logo, place: .topRight, color: "#FFE9A8", size: .s, font: nil),
-                names: CallFrameNames(show: .handle, style: .badge, font: .curve, color: "#FFE9A8", fill: "#0A1412CC"),
-                title: CallFrameTitle(source: .group, font: .curve, color: "#FFE9A8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#FFF4B8", size: .m, font: StoryTextStyle.handwriting),
+                names: CallFrameNames(show: .name, style: .badge, font: .brush, color: "#FFF4B8", fill: "#0D241DCC"),
+                title: CallFrameTitle(source: .group, font: .handwriting, color: "#FFF4B8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
             ),
             surfaces: [.capture, .live]
@@ -157,19 +159,20 @@ nonisolated extension CallFrameCatalogue {
             name: "Lucioles",
             bucket: .tablee,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.018, top: 0.14, bottom: 0.09),
-                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: nil, double: false, glow: "#FFD98AAA", shadow: false, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
-                background: .radial(colors: ["#1D3530", "#0C1A18", "#050B0A"]),
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.13, bottom: 0.1),
+                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#F7E27A55", shadow: false, card: nil, tilt: .none, tone: .warm, duotone: nil),
+                background: .radial(colors: ["#1F4A3A", "#0D241D", "#04100C"]),
                 pattern: nil,
                 border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .fireflies, color: "#FFE9A8", density: .high, layer: .back),
-                    CallFrameOrnament(kind: .bokeh, color: "#F6D58A33", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .leaves, color: "#2F5A47", density: .mid, layer: .back)
+                    CallFrameOrnament(kind: .fireflies, color: "#FFE680", density: .high, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#7CFFB2", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .leaves, color: "#2F6B4F", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .fireflies, color: "#FFF4B8", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .logo, place: .topRight, color: "#FFE9A8", size: .s, font: nil),
-                names: CallFrameNames(show: .none, style: .badge, font: .curve, color: "#FFE9A8", fill: nil),
-                title: CallFrameTitle(source: .group, font: .curve, color: "#FFE9A8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#FFF4B8", size: .m, font: StoryTextStyle.handwriting),
+                names: CallFrameNames(show: .name, style: .list, font: .brush, color: "#FFF4B8", fill: nil),
+                title: CallFrameTitle(source: .group, font: .handwriting, color: "#FFF4B8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
             ),
             surfaces: [.capture, .live]
@@ -181,21 +184,21 @@ nonisolated extension CallFrameCatalogue {
             name: "Clair de lune",
             bucket: .duo,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .column, margin: 0.08, gap: 0.04, top: 0.2, bottom: 0.14),
-                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F9C6D3", width: 0.006), double: false, glow: "#C7B8F0", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
-                background: .linear(colors: ["#1E2A5A", "#4B4A8F", "#6E5BA8"], angle: 0.0),
-                pattern: CallFramePattern(kind: .stars, color: "#FFFFFF", opacity: 0.25),
+                layout: CallFrameLayout(arrangement: .row, margin: 0.08, gap: 0.05, top: 0.17, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F3E8FF", width: 0.008), double: false, glow: "#C4B5FDAA", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
+                background: .linear(colors: ["#0B0A26", "#2A2466", "#6A55B5", "#E2B6E8"], angle: 0.0),
+                pattern: CallFramePattern(kind: .stars, color: "#FFF6D6", opacity: 0.25),
                 border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .moon, color: "#FFF6D8", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .clouds, color: "#FFFFFF2E", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .sparkles, color: "#FFF6D8", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .snow, color: "#FFFFFFB3", density: .low, layer: .back)
+                    CallFrameOrnament(kind: .moon, color: "#FFF6D6", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .clouds, color: "#F3E8FF", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .sparkles, color: "#FFE9FB", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .both, place: .bottomLeft, color: "#FFF6D8", size: .s, font: StoryTextStyle.curve),
-                names: CallFrameNames(show: .name, style: .caption, font: .curve, color: "#FFFFFF", fill: nil),
-                title: CallFrameTitle(source: .names, font: .calligraphy, color: "#FFF6D8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .curve, color: "#F9C6D3", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#F3E8FF", size: .m, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#FFF6D6", fill: nil),
+                title: CallFrameTitle(source: .names, font: .elegant, color: "#FFF6D6", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
+                subtitle: CallFrameTitle(source: .date, font: .calligraphy, color: "#F3E8FF", place: .top, size: .m, effect: nil, letterCase: nil)
             ),
             surfaces: [.capture, .live]
         ),
@@ -206,21 +209,21 @@ nonisolated extension CallFrameCatalogue {
             name: "Clair de lune",
             bucket: .comite,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .orbit, margin: 0.07, gap: 0.03, top: 0.18, bottom: 0.12),
-                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F9C6D3", width: 0.006), double: false, glow: "#C7B8F0", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
-                background: .linear(colors: ["#1E2A5A", "#4B4A8F", "#6E5BA8"], angle: 0.0),
-                pattern: CallFramePattern(kind: .stars, color: "#FFFFFF", opacity: 0.25),
+                layout: CallFrameLayout(arrangement: .orbit, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.1),
+                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F3E8FF", width: 0.008), double: false, glow: "#C4B5FDAA", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
+                background: .linear(colors: ["#0B0A26", "#2A2466", "#6A55B5", "#E2B6E8"], angle: 0.0),
+                pattern: CallFramePattern(kind: .stars, color: "#FFF6D6", opacity: 0.25),
                 border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .moon, color: "#FFF6D8", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .clouds, color: "#FFFFFF2E", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .sparkles, color: "#FFF6D8", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .snow, color: "#FFFFFFB3", density: .low, layer: .back)
+                    CallFrameOrnament(kind: .moon, color: "#FFF6D6", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .clouds, color: "#F3E8FF", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .sparkles, color: "#FFE9FB", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .both, place: .bottomLeft, color: "#FFF6D8", size: .s, font: StoryTextStyle.curve),
-                names: CallFrameNames(show: .name, style: .caption, font: .curve, color: "#FFFFFF", fill: nil),
-                title: CallFrameTitle(source: .group, font: .calligraphy, color: "#FFF6D8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .curve, color: "#F9C6D3", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#F3E8FF", size: .m, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#FFF6D6", fill: nil),
+                title: CallFrameTitle(source: .group, font: .elegant, color: "#FFF6D6", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
+                subtitle: nil
             ),
             surfaces: [.capture, .live]
         ),
@@ -231,21 +234,21 @@ nonisolated extension CallFrameCatalogue {
             name: "Clair de lune",
             bucket: .groupe,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .scatter, margin: 0.06, gap: 0.025, top: 0.17, bottom: 0.12),
-                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F9C6D3", width: 0.006), double: false, glow: "#C7B8F0", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
-                background: .linear(colors: ["#1E2A5A", "#4B4A8F", "#6E5BA8"], angle: 0.0),
-                pattern: CallFramePattern(kind: .stars, color: "#FFFFFF", opacity: 0.25),
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
+                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F3E8FF", width: 0.008), double: false, glow: "#C4B5FDAA", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
+                background: .linear(colors: ["#0B0A26", "#2A2466", "#6A55B5", "#E2B6E8"], angle: 0.0),
+                pattern: CallFramePattern(kind: .stars, color: "#FFF6D6", opacity: 0.25),
                 border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .moon, color: "#FFF6D8", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .clouds, color: "#FFFFFF2E", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .sparkles, color: "#FFF6D8", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .snow, color: "#FFFFFFB3", density: .low, layer: .back)
+                    CallFrameOrnament(kind: .moon, color: "#FFF6D6", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .clouds, color: "#F3E8FF", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .sparkles, color: "#FFE9FB", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .both, place: .bottomLeft, color: "#FFF6D8", size: .s, font: StoryTextStyle.curve),
-                names: CallFrameNames(show: .name, style: .badge, font: .curve, color: "#FFFFFF", fill: "#1E2A5ACC"),
-                title: CallFrameTitle(source: .group, font: .calligraphy, color: "#FFF6D8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .curve, color: "#F9C6D3", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#F3E8FF", size: .m, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .badge, font: .elegant, color: "#FFF6D6", fill: "#2A2466CC"),
+                title: CallFrameTitle(source: .group, font: .elegant, color: "#FFF6D6", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
+                subtitle: nil
             ),
             surfaces: [.capture, .live]
         ),
@@ -256,21 +259,21 @@ nonisolated extension CallFrameCatalogue {
             name: "Clair de lune",
             bucket: .tablee,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.018, top: 0.16, bottom: 0.1),
-                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F9C6D3", width: 0.004), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
-                background: .linear(colors: ["#1E2A5A", "#4B4A8F", "#6E5BA8"], angle: 0.0),
-                pattern: CallFramePattern(kind: .stars, color: "#FFFFFF", opacity: 0.25),
+                layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#F3E8FF", width: 0.006), double: false, glow: "#C4B5FD88", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
+                background: .linear(colors: ["#0B0A26", "#2A2466", "#6A55B5", "#E2B6E8"], angle: 0.0),
+                pattern: CallFramePattern(kind: .stars, color: "#FFF6D6", opacity: 0.25),
                 border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .moon, color: "#FFF6D8", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .clouds, color: "#FFFFFF2E", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .sparkles, color: "#FFF6D8", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .snow, color: "#FFFFFFB3", density: .low, layer: .back)
+                    CallFrameOrnament(kind: .moon, color: "#FFF6D6", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .clouds, color: "#F3E8FF", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .sparkles, color: "#FFE9FB", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .both, place: .bottomLeft, color: "#FFF6D8", size: .s, font: StoryTextStyle.curve),
-                names: CallFrameNames(show: .none, style: .badge, font: .curve, color: "#FFFFFF", fill: nil),
-                title: CallFrameTitle(source: .group, font: .calligraphy, color: "#FFF6D8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .curve, color: "#F9C6D3", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#F3E8FF", size: .m, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .list, font: .elegant, color: "#FFF6D6", fill: nil),
+                title: CallFrameTitle(source: .group, font: .elegant, color: "#FFF6D6", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
+                subtitle: nil
             ),
             surfaces: [.capture, .live]
         ),
@@ -282,19 +285,20 @@ nonisolated extension CallFrameCatalogue {
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.08, gap: 0.04, top: 0.16, bottom: 0.12),
-                slot: CallFrameSlotStyle(shape: .heart, radius: nil, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.008), double: false, glow: "#FFB3C7", shadow: false, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
-                background: .linear(colors: ["#F9C6D3", "#FCE3EA", "#BFE6D2"], angle: 0.0),
-                pattern: CallFramePattern(kind: .hearts, color: "#FFFFFF", opacity: 0.35),
+                slot: CallFrameSlotStyle(shape: .heart, radius: nil, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.014), double: false, glow: "#FF5C8DAA", shadow: false, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
+                background: .linear(colors: ["#FFB8D2", "#FFE4EE", "#FFC9DD"], angle: 0.0),
+                pattern: CallFramePattern(kind: .hearts, color: "#FFFFFF", opacity: 0.4),
                 border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .petals, color: "#F28FAD", density: .high, layer: .back),
-                    CallFrameOrnament(kind: .sparkles, color: "#D4AF6A", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .hearts, color: "#F28BA8", density: .low, layer: .back)
+                    CallFrameOrnament(kind: .hearts, color: "#FF3D7F", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .petals, color: "#FF8FB1", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .hearts, color: "#E0115F", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .logo, place: .bottom, color: "#8C3B5C", size: .m, font: nil),
-                names: CallFrameNames(show: .both, style: .ribbon, font: .curve, color: "#FFFFFF", fill: "#C24D78"),
-                title: CallFrameTitle(source: .names, font: .calligraphy, color: "#8C3B5C", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .handwriting, color: "#A0587A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#C9184A", size: .m, font: StoryTextStyle.handwriting),
+                names: CallFrameNames(show: .both, style: .ribbon, font: .bubble, color: "#FFFFFF", fill: "#FF3D7F"),
+                title: CallFrameTitle(source: .names, font: .handwriting, color: "#C9184A", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
+                subtitle: nil
             ),
             surfaces: [.capture, .live]
         )
