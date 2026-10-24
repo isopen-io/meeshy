@@ -5,8 +5,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { PendingAttachment } from '@/lib/send/attachments';
 
+import { createMediaCoordinator, type MediaCoordinator } from './media-coordinator';
 import type { RecorderEngine, RecorderEngineResult, RecorderState } from './use-recorder';
-import { MIN_SENDABLE_DURATION_MS, useRecorder } from './use-recorder';
+import { MIN_SENDABLE_DURATION_MS, RECORDER_MEDIA_ID, useRecorder } from './use-recorder';
 
 /**
  * TÉMOIN (#5668) — patron `use-live-announcer.test.tsx` (happy-dom +
@@ -97,13 +98,15 @@ function capturingInterval(): { readonly schedule: (cb: () => void, ms: number) 
   };
 }
 
-function Harness({ onReady, engine, now, interval }: {
+function Harness({ onReady, engine, now, interval, coordinator, onInterrupted }: {
   readonly onReady: (recorder: Recorder) => void;
   readonly engine: RecorderEngine;
   readonly now: () => number;
   readonly interval: (cb: () => void, ms: number) => () => void;
+  readonly coordinator: MediaCoordinator;
+  readonly onInterrupted?: () => void;
 }) {
-  const recorder = useRecorder({ engine, now, interval });
+  const recorder = useRecorder({ engine, now, interval, coordinator, ...(onInterrupted === undefined ? {} : { onInterrupted }) });
   onReady(recorder);
   return (
     <div
@@ -119,14 +122,27 @@ function mount(params: {
   readonly engine: RecorderEngine;
   readonly now?: () => number;
   readonly interval?: (cb: () => void, ms: number) => () => void;
+  readonly coordinator?: MediaCoordinator;
+  readonly onInterrupted?: () => void;
 }): HTMLDivElement {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   const now = params.now ?? (() => 0);
   const interval = params.interval ?? (() => () => {});
+  // Un coordinateur PAR TÉMOIN : l'instance de l'application ne fuit jamais d'un test à l'autre.
+  const coordinator = params.coordinator ?? createMediaCoordinator();
   act(() => {
-    root.render(<Harness onReady={params.onReady} engine={params.engine} now={now} interval={interval} />);
+    root.render(
+      <Harness
+        onReady={params.onReady}
+        engine={params.engine}
+        now={now}
+        interval={interval}
+        coordinator={coordinator}
+        {...(params.onInterrupted === undefined ? {} : { onInterrupted: params.onInterrupted })}
+      />,
+    );
   });
   return container;
 }
@@ -395,5 +411,112 @@ describe('useRecorder — double tap pendant `requesting` (défaut 6, revue #566
       recorder.start(); // déjà `recording` — doit être un no-op.
     });
     expect(calls).toBe(1);
+  });
+});
+
+/**
+ * UN VOCAL NE S'ENREGISTRE JAMAIS PENDANT QU'UN AUTRE JOUE (#12471) — sur
+ * l'émulateur, la lecture d'un vocal et un enregistrement tournaient en même
+ * temps : le micro captait le haut-parleur. L'enregistreur prend donc
+ * l'exclusivité du coordinateur de média DÈS l'appui, comme une lecture.
+ */
+describe('useRecorder — exclusivité avec la lecture (#12471)', () => {
+  test('start() met en pause le média qui jouait, dès l’appui (avant même le flux)', () => {
+    let recorder!: Recorder;
+    const coordinator = createMediaCoordinator();
+    let paused = 0;
+    coordinator.claim('vocal-en-lecture', () => {
+      paused += 1;
+    });
+    const never: RecorderEngine = { ...fakeEngine({ ok: true, stream: fakeStream() }), requestStream: () => new Promise(() => {}) };
+    mount({ onReady: (r) => (recorder = r), engine: never, coordinator });
+
+    act(() => recorder.start());
+
+    expect(paused).toBe(1);
+    expect(coordinator.active()).toBe(RECORDER_MEDIA_ID);
+  });
+
+  test('une lecture lancée pendant l’enregistrement l’interrompt (onInterrupted), jamais les deux à la fois', async () => {
+    let recorder!: Recorder;
+    const coordinator = createMediaCoordinator();
+    let interrupted = 0;
+    mount({
+      onReady: (r) => (recorder = r),
+      engine: fakeEngine({ ok: true, stream: fakeStream() }),
+      coordinator,
+      onInterrupted: () => {
+        interrupted += 1;
+      },
+    });
+    await act(async () => {
+      recorder.start();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    act(() => coordinator.claim('vocal-touché', () => {}));
+
+    expect(interrupted).toBe(1);
+  });
+
+  test('annuler rend l’exclusivité : le coordinateur n’a plus d’actif', async () => {
+    let recorder!: Recorder;
+    const coordinator = createMediaCoordinator();
+    mount({ onReady: (r) => (recorder = r), engine: fakeEngine({ ok: true, stream: fakeStream() }), coordinator });
+    await act(async () => {
+      recorder.start();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    act(() => recorder.cancel());
+
+    expect(coordinator.active()).toBe(null);
+  });
+});
+
+/**
+ * ANNULER PENDANT LA DEMANDE DE PERMISSION (#12471) — la barre s'affiche dès
+ * l'appui, donc la croix existe AVANT que le micro soit accordé. Un flux
+ * arrivé après l'annulation est relâché sur-le-champ, et l'enregistreur reste
+ * au repos : jamais un enregistrement qui démarre tout seul derrière une boîte
+ * de permission acceptée plus tard.
+ */
+describe('useRecorder — annulé pendant `requesting` (#12471)', () => {
+  test('le flux arrivé après cancel() est relâché et l’état reste idle', async () => {
+    let recorder!: Recorder;
+    let grant!: (result: RecorderEngineResult) => void;
+    let released = 0;
+    let started = 0;
+    const base = fakeEngine({ ok: true, stream: fakeStream() });
+    const engine: RecorderEngine = {
+      ...base,
+      requestStream: () =>
+        new Promise((resolve) => {
+          grant = resolve;
+        }),
+      start: () => {
+        started += 1;
+      },
+      release: () => {
+        released += 1;
+      },
+    };
+    const el = mount({ onReady: (r) => (recorder = r), engine });
+
+    act(() => recorder.start());
+    expect(stateOf(el).status).toBe('requesting');
+    act(() => recorder.cancel());
+
+    await act(async () => {
+      grant({ ok: true, stream: fakeStream() });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(stateOf(el).status).toBe('idle');
+    expect(started).toBe(0);
+    expect(released).toBe(1);
   });
 });

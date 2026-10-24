@@ -3,7 +3,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { pendingAttachmentOf, type PendingAttachment } from '@/lib/send/attachments';
 import { speechRecorderOptionsOf } from '@/lib/media/recording-codec';
 
+import { mediaCoordinator, type MediaCoordinator } from './media-coordinator';
 import { shellMicrophoneHold, type MicrophoneHold } from './shell-microphone';
+
+/**
+ * LA CLÉ DE L'ENREGISTREUR AUPRÈS DU COORDINATEUR DE MÉDIA (#12471) — un
+ * enregistrement prend l'exclusivité comme une lecture : il met en pause le
+ * vocal qui jouait, et une lecture lancée pendant qu'il capte l'interrompt.
+ * Jamais les deux à la fois, le micro capterait le haut-parleur.
+ */
+export const RECORDER_MEDIA_ID = 'composer-recorder';
 
 /**
  * LE MICRO, DERRIÈRE UNE INTERFACE BOUCHONNABLE (#5668) — miroir
@@ -172,6 +181,11 @@ export function useRecorder(params?: {
   /** La coque tient le micro tant qu'on capte (#9238) — injectable, le
    * défaut ne fait rien hors de la coque Android. */
   readonly microphone?: MicrophoneHold;
+  /** Injectable — le défaut est l'instance de l'application (#12471). */
+  readonly coordinator?: MediaCoordinator;
+  /** Une lecture a pris l'exclusivité pendant l'enregistrement (#12471) : au
+   * composeur de le clore sans rien perdre (le vocal passe au tiroir). */
+  readonly onInterrupted?: () => void;
 }): {
   readonly state: RecorderState;
   readonly start: () => void;
@@ -221,6 +235,12 @@ export function useRecorder(params?: {
     heldRef.current = false;
     microphone.release();
   }, [microphone]);
+  const coordinatorRef = useRef<MediaCoordinator | null>(null);
+  if (coordinatorRef.current === null) coordinatorRef.current = params?.coordinator ?? mediaCoordinator;
+  const coordinator = coordinatorRef.current;
+  // Lu au moment de l'interruption : le composeur peut redéfinir son rappel à chaque rendu.
+  const onInterruptedRef = useRef(params?.onInterrupted);
+  onInterruptedRef.current = params?.onInterrupted;
 
   const [state, setState] = useState<RecorderState>(RECORDER_IDLE_STATE);
   const streamRef = useRef<MediaStream | null>(null);
@@ -250,17 +270,33 @@ export function useRecorder(params?: {
       stopMetering();
       if (streamRef.current !== null) engine.release(streamRef.current);
       releaseMicrophone();
+      coordinator.release(RECORDER_MEDIA_ID);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nettoyage de démontage seul, volontairement sans dépendance.
   }, []);
 
+  /**
+   * LA CAPTATION EN COURS (#12471) — chaque `start()` prend un numéro ; un
+   * flux qui revient pour un numéro périmé (annulé pendant la demande de
+   * permission) est relâché sans rien démarrer.
+   */
+  const attemptRef = useRef(0);
+
   const start = useCallback(() => {
     if (activeRef.current) return; // Défaut 6 : re-entrance gardée, jamais une seconde captation.
     activeRef.current = true;
+    const attempt = ++attemptRef.current;
     setState({ status: 'requesting', durationMs: 0, levels: [] });
+    // Dès l'appui, AVANT la permission : le vocal qui jouait se tait.
+    coordinator.claim(RECORDER_MEDIA_ID, () => onInterruptedRef.current?.());
     void (async () => {
       const result = await engine.requestStream();
+      if (attempt !== attemptRef.current || !activeRef.current) {
+        if (result.ok) engine.release(result.stream);
+        return;
+      }
       if (!result.ok) {
+        coordinator.release(RECORDER_MEDIA_ID);
         activeRef.current = false;
         setState({ status: result.reason, durationMs: 0, levels: [] });
         return;
@@ -294,8 +330,10 @@ export function useRecorder(params?: {
       streamRef.current = null;
     }
     releaseMicrophone();
+    coordinator.release(RECORDER_MEDIA_ID);
     activeRef.current = false;
-  }, [engine, stopMetering, releaseMicrophone]);
+    attemptRef.current += 1;
+  }, [engine, stopMetering, releaseMicrophone, coordinator]);
 
   const cancel = useCallback(() => {
     // Défaut 6 : `teardown()` couvre aussi `requesting` — un double tap qui

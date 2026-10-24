@@ -227,7 +227,10 @@ export const Composer = memo(function Composer({
    * `null` quand il n'y en a pas. Le refus du MICRO, lui, vit dans l'état du
    * hook : les deux se rendent au MÊME endroit (`ComposerNotice`). */
   const [fileRefusal, setFileRefusal] = useState<string | null>(null);
-  const recorder = useRecorder();
+  /** Une lecture lancée pendant l'enregistrement le clôt (#12471) — câblé plus
+   * bas, une fois `stopRecordingToTray` défini. */
+  const recordingInterruptedRef = useRef<() => void>(() => {});
+  const recorder = useRecorder({ onInterrupted: () => recordingInterruptedRef.current() });
   /** LA POSITION (#7280) — le hook possède l'état de la DEMANDE (refus,
    * recherche, panne) ET le lieu obtenu, exactement comme `useRecorder`
    * possède l'état du micro et le vocal qu'il rend. */
@@ -268,7 +271,9 @@ export const Composer = memo(function Composer({
      pourtant quelque chose (loi 4, vue depuis l'autre bout). */
   const sendTarget = text.trim().length > 0 || pending.length > 0 || locator.place !== null;
   const hasReply = replyTo !== undefined;
-  const isRecording = recorder.state.status === 'recording';
+  /** La barre paraît DÈS L'APPUI (#12471), pendant la demande de permission :
+   * la croix existe avant que la boîte du système ne s'affiche. */
+  const isRecording = recorder.state.status === 'recording' || recorder.state.status === 'requesting';
 
   /**
    * LA LANGUE D'ÉCRITURE (#5828) — décide ce qui PART, jamais le rang 1 du
@@ -668,6 +673,12 @@ export const Composer = memo(function Composer({
       if (attachment !== null) setPending((prev) => addPendingAttachment(prev, attachment));
     });
   };
+  /* INTERROMPU PAR UNE LECTURE (#12471) : ce qui est capté passe au tiroir,
+     rien ne part ; avant la permission, il n'y a rien à garder. */
+  recordingInterruptedRef.current = () => {
+    if (recorder.state.status === 'recording') stopRecordingToTray();
+    else recorder.cancel();
+  };
 
   /** ENVOYER (barre d'enregistrement) — termine l'enregistrement puis envoie
    * TOUT ce que le composeur porte (texte + tiroir + ce vocal), un seul
@@ -921,16 +932,13 @@ export const Composer = memo(function Composer({
               <button
                 type="button"
                 onClick={() => recorder.start()}
-                aria-busy={recorder.state.status === 'requesting'}
                 className="grid size-9 shrink-0 place-items-center self-end"
                 style={{ marginBottom: 4, marginLeft: 4, color: 'var(--composer-icon)' }}
                 aria-label={translate(uiLanguage, 'composer.attach.voice.action')}
               >
-                <Glyph
-                  name="microphone"
-                  size={18}
-                  {...(recorder.state.status === 'requesting' ? { className: 'animate-pulse' } : {})}
-                />
+                {/* Pendant la demande de permission, c'est la barre d'enregistrement
+                    qui se montre (#12471) : ce bouton n'est plus rendu. */}
+                <Glyph name="microphone" size={18} />
               </button>
             ) : null}
             <textarea
