@@ -1,10 +1,6 @@
 package me.meeshy.ui.component.retouch
 
 import androidx.annotation.StringRes
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoFixHigh
-import androidx.compose.material.icons.rounded.FilterFrames
-import androidx.compose.material.icons.rounded.FilterVintage
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -16,6 +12,7 @@ import me.meeshy.sdk.model.composer.look.ComposerLookFamily
 import me.meeshy.sdk.model.composer.look.ComposerLookStripItem
 import me.meeshy.sdk.model.composer.look.ComposerPhotoFrame
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 
 /** Les mots de la retouche (#9351) — les clés d'iOS (`ComposerCaptureCopy`, `CallEffectsCopy`, `CallCaptureCopy`). */
 internal object ComposerRetouchCopy {
@@ -28,9 +25,9 @@ internal object ComposerRetouchCopy {
     }
 
     fun familyIcon(family: ComposerLookFamily): ImageVector = when (family) {
-        ComposerLookFamily.FILTERS -> Icons.Rounded.FilterVintage
-        ComposerLookFamily.EFFECTS -> Icons.Rounded.AutoFixHigh
-        ComposerLookFamily.FRAMES -> Icons.Rounded.FilterFrames
+        ComposerLookFamily.FILTERS -> MeeshyIcons.PhotoFilter
+        ComposerLookFamily.EFFECTS -> MeeshyIcons.MagicWand
+        ComposerLookFamily.FRAMES -> MeeshyIcons.Wallpaper
     }
 
     @StringRes

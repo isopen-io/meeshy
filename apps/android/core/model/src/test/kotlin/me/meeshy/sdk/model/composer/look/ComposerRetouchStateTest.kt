@@ -105,10 +105,12 @@ class ComposerRetouchStateTest {
 
     @Test
     fun `des equerres tirees a la main font un recadrage libre, sauf si elles realisent un preset`() {
-        val free = photo().cropping(NormalizedCrop(0.1f, 0.1f, 0.5f, 0.7f), 1000, 1000)
+        val free = photo().cropping(NormalizedCrop(0.1f, 0.1f, 0.5f, 0.7f), 2000, 1000)
         assertThat(free.cropPreset).isNull()
-        val square = photo().cropping(NormalizedCrop(0f, 0f, 0.5f, 0.5f), 1000, 1000)
+        val square = photo().cropping(NormalizedCrop(0f, 0f, 0.25f, 0.5f), 2000, 1000)
         assertThat(square.cropPreset).isEqualTo(ComposerCropPreset.SQUARE)
+        val whole = photo().cropping(NormalizedCrop(0f, 0f, 0.5f, 0.5f), 1000, 1000)
+        assertThat(whole.cropPreset).isEqualTo(ComposerCropPreset.ORIGINAL)
     }
 
     @Test
