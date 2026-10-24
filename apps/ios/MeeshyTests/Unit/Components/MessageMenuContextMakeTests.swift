@@ -243,47 +243,46 @@ final class MessageMenuContextMakeTests: XCTestCase {
     }
 
     /// La passerelle exige un participant actif (`DELETE /messages/:id/delete-for-me`) ;
-    /// un lecteur dont elle a révoqué l'accès relit son cache sans se voir offrir
+    /// un lecteur qui a perdu son appartenance relit son cache sans se voir offrir
     /// un geste condamné au 403.
-    func test_make_aViewerWhoseAccessWasRevoked_isNotOfferedDeleteForMe() {
+    func test_make_aViewerWhoLostMembership_isNotOfferedDeleteForMe() {
         let user = MeeshyUser(id: viewerId, username: "lea")
-        let member = ConversationMenuAuthority.make(conversation: group(), currentUser: user, guest: nil, accessRevoked: false)
+        let member = ConversationMenuAuthority.make(conversation: group(), currentUser: user, guest: nil, membershipLost: false)
         XCTAssertTrue(member.viewer.isActiveMember)
         XCTAssertTrue(make(message(mine: false), member).canDeleteForMe, "témoin : un participant actif masque chez lui")
 
-        let departed = ConversationMenuAuthority.make(conversation: group(), currentUser: user, guest: nil, accessRevoked: true)
+        let departed = ConversationMenuAuthority.make(conversation: group(), currentUser: user, guest: nil, membershipLost: true)
         XCTAssertFalse(departed.viewer.isActiveMember)
         XCTAssertFalse(make(message(mine: false), departed).canDeleteForMe)
         XCTAssertFalse(make(message(mine: true), departed).canDeleteForMe, "son propre message non plus")
         XCTAssertFalse(make(message(mine: true, deletedAt: now), departed).canDeleteForMe, "ni un message déjà supprimé")
     }
 
-    func test_isActiveMember_needsAKnownConversationAndNoRevocation() {
-        XCTAssertTrue(ConversationMenuAuthority.isActiveMember(conversation: group(), accessRevoked: false))
-        XCTAssertFalse(ConversationMenuAuthority.isActiveMember(conversation: group(), accessRevoked: true))
-        XCTAssertFalse(ConversationMenuAuthority.isActiveMember(conversation: nil, accessRevoked: false))
+    func test_isActiveMember_needsAKnownConversationAndNoLostMembership() {
+        XCTAssertTrue(ConversationMenuAuthority.isActiveMember(conversation: group(), membershipLost: false))
+        XCTAssertFalse(ConversationMenuAuthority.isActiveMember(conversation: group(), membershipLost: true))
+        XCTAssertFalse(ConversationMenuAuthority.isActiveMember(conversation: nil, membershipLost: false))
     }
 
     /// Sans conversation connue, l'appartenance est INCONNUE : fermée.
     func test_make_withoutAConversation_isNotOfferedDeleteForMe() {
         let unknown = ConversationMenuAuthority.make(
-            conversation: nil, currentUser: MeeshyUser(id: viewerId, username: "lea"), guest: nil, accessRevoked: false)
+            conversation: nil, currentUser: MeeshyUser(id: viewerId, username: "lea"), guest: nil, membershipLost: false)
         XCTAssertFalse(unknown.viewer.isActiveMember)
         XCTAssertFalse(make(message(mine: false), unknown).canDeleteForMe)
     }
 
-    func test_conversationView_menuAuthority_readsTheRevokedAccess() throws {
+    /// Le comportement (événement de départ → menu fermé, vue montée) est témoigné
+    /// par `ConversationViewModelSocketSeamTests` ; ici, seulement le CÂBLAGE :
+    /// la vue remet l'autorité que compose son modèle, pas une seconde lecture.
+    func test_conversationView_menuAuthority_isComposedByTheViewModel() throws {
         let view = AppSourceGuard.stripComments(try String(
             contentsOf: appRoot().appendingPathComponent("Meeshy/Features/Main/Views/ConversationView.swift"),
             encoding: .utf8
         ))
-        XCTAssertTrue(view.contains("guest: anonymousSession, accessRevoked: viewModel.accessRevoked"),
-                      "l'autorité du menu lit la révocation servie, jamais `conversation != nil` seul")
-        let factory = AppSourceGuard.stripComments(try String(
-            contentsOf: appRoot().appendingPathComponent("Meeshy/Features/Main/Components/MessageMenuContext+Make.swift"),
-            encoding: .utf8
-        ))
-        XCTAssertFalse(factory.contains("isActiveMember: conversation != nil"))
+        XCTAssertNotNil(view.range(of: #"ConversationMenuAuthority\s*\.\s*make\s*\(\s*conversation:\s*\w+\s*,\s*viewModel:"#, options: .regularExpression),
+                        "l'autorité du menu lit l'appartenance que le modèle tient, jamais `conversation != nil` seul")
+        XCTAssertNil(view.range(of: #"currentUser:\s*AuthManager"#, options: .regularExpression), "une seule composition du lecteur")
     }
 
     // MARK: - Les actions du type

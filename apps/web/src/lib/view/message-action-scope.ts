@@ -52,7 +52,6 @@ type ScopeParticipant = {
   readonly role?: string | undefined;
   readonly permissions?: { readonly canSendMessages?: boolean } | undefined;
   readonly isActive?: boolean | undefined;
-  readonly leftAt?: Date | string | null | undefined;
 };
 
 /**
@@ -60,13 +59,15 @@ type ScopeParticipant = {
  * détail qu'à un participant actif (`verdictAccesConversation`) et exige la
  * même chose de « Supprimer pour moi », de la réaction et du signalement. Le
  * client dit fermé ce qu'il ne sait pas (aucune conversation lue), et rien ne
- * survit à ce que le serveur a dit : `isMember: false`, ou la ligne du lecteur
- * servie inactive ou quittée (`Participant.isActive`, `leftAt`).
+ * survit à ce que le serveur a dit : `isMember: false` — servi, ou posé par la
+ * fin d'appartenance reçue fil ouvert (`realtime-membership-ended.ts`) — ou la
+ * ligne du lecteur servie inactive. `isActive` seul, comme la passerelle
+ * (`user-deletions.ts`) : rejoindre efface `leftAt`, qui ne décide rien.
  */
 const viewerIsActiveMember = (
   conversation: { readonly isMember?: boolean | undefined } | undefined,
   participant: ScopeParticipant | undefined,
-): boolean => conversation !== undefined && conversation.isMember !== false && participant?.isActive !== false && participant?.leftAt == null;
+): boolean => conversation !== undefined && conversation.isMember !== false && participant?.isActive !== false;
 
 /** Le lecteur de l'écran, composé UNE fois : compte, rôles et permission d'envoi viennent de ce que le serveur a servi. */
 export function menuViewerOf(input: {

@@ -314,7 +314,7 @@ describe('menuViewerOf — le lecteur explicite, composé une fois pour l’écr
     expect(viewer).toMatchObject({ hasAccount: false, isAnonymous: true, platformRole: null, canSendMessages: false, participantId: 'p-guest' });
   });
 
-  test('#11415 — une ligne de participation servie INACTIVE ou quittée ne fait plus un membre : pas de « Supprimer pour moi »', () => {
+  test('#11415 — une ligne de participation servie INACTIVE ne fait plus un membre : pas de « Supprimer pour moi »', () => {
     const viewerWith = (line: { readonly isActive?: boolean; readonly leftAt?: Date | string | null }) =>
       menuViewerOf({
         viewer: { id: 'u-viewer', isAnonymous: false },
@@ -324,8 +324,10 @@ describe('menuViewerOf — le lecteur explicite, composé une fois pour l’écr
       });
     expect(viewerWith({ isActive: true }).isActiveMember).toBe(true);
     expect(viewerWith({ isActive: false }).isActiveMember).toBe(false);
-    expect(viewerWith({ isActive: true, leftAt: '2026-10-20T11:00:00.000Z' }).isActiveMember).toBe(false);
-    expect(viewerWith({ isActive: true, leftAt: null }).isActiveMember).toBe(true);
+    expect(viewerWith({ isActive: false, leftAt: '2026-10-20T11:00:00.000Z' }).isActiveMember).toBe(false);
+    // La passerelle ne lit que `isActive: true` (`user-deletions.ts`) : un `leftAt` resté
+    // sur une ligne active (rejoindre l'efface) ne retire pas ce qu'elle admet.
+    expect(viewerWith({ isActive: true, leftAt: '2026-10-20T11:00:00.000Z' }).isActiveMember).toBe(true);
 
     const group = menuConversationOf({ type: 'group', encryptionMode: null, isActive: true });
     const departed: ActionScope = { viewer: viewerWith({ isActive: false }), conversation: group };
