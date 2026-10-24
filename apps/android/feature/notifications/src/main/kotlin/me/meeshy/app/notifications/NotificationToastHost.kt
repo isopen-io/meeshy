@@ -13,6 +13,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.NotificationBannerAvatar
+import me.meeshy.sdk.model.isDirectConversationType
 import me.meeshy.ui.component.MeeshyNotificationToast
 
 /**
@@ -32,6 +34,17 @@ internal fun notificationToastSubtitle(notification: ApiNotification): String =
     notification.context?.conversationTitle?.takeIf { it.isNotBlank() }
         ?: notification.content?.takeIf { it.isNotBlank() }
         ?: ""
+
+/**
+ * The toast's face — the SAME law as the banner ([NotificationBannerAvatar], iOS `toastAvatarURL`):
+ * the actor's photo, else the group's under the group's initials, never a direct's conversation photo.
+ */
+internal fun notificationToastAvatar(notification: ApiNotification): NotificationBannerAvatar =
+    NotificationBannerAvatar.of(
+        notification = notification,
+        actorName = notificationToastSenderName(notification),
+        isDirect = isDirectConversationType(notification.context?.conversationType),
+    )
 
 /**
  * Mounts the in-app real-time toast: observes [NotificationToastViewModel.currentToast] and
@@ -55,12 +68,13 @@ fun NotificationToastHost(
         exit = slideOutVertically { -it } + fadeOut(),
     ) {
         shown?.let { notification ->
+            val avatar = notificationToastAvatar(notification)
             MeeshyNotificationToast(
                 senderName = notificationToastSenderName(notification),
                 title = notificationToastSubtitle(notification),
                 modifier = modifier,
-                avatarName = notificationToastSenderName(notification),
-                avatarUrl = notification.actor?.avatar ?: notification.context?.conversationAvatar,
+                avatarName = avatar.name,
+                avatarUrl = avatar.url,
                 onTap = {
                     onOpen(notification)
                     viewModel.dismiss()

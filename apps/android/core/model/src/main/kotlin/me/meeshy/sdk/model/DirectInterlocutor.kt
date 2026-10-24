@@ -17,9 +17,15 @@ const val DIRECT_GENERIC_NAME: String = "Conversation"
 
 private val DIRECT_WIRE_TYPES: Set<String> = setOf(DIRECT_CONVERSATION_TYPE, "dm")
 
+/**
+ * Vrai pour les deux types de fil qui désignent une conversation à deux (`direct`, `dm`), quelle
+ * que soit la casse — le type d'une conversation comme celui que porte le contexte d'une notification.
+ */
+fun isDirectConversationType(type: String?): Boolean = type?.lowercase() in DIRECT_WIRE_TYPES
+
 /** Vrai pour les deux types de fil qui désignent une conversation à deux (`direct`, `dm`). */
 val ApiConversation.isDirect: Boolean
-    get() = type.lowercase() in DIRECT_WIRE_TYPES
+    get() = isDirectConversationType(type)
 
 /**
  * L'AUTRE participant d'un direct, élu contre le lecteur — le résultat de l'unique élection
