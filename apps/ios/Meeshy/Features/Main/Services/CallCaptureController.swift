@@ -147,6 +147,8 @@ final class CallCaptureController: ObservableObject {
     /// #8743 — le nom du groupe, la date, l'accent : ce qu'un cadre écrit hors des visages.
     private(set) var frameTexts: CallFrameTexts
     let frameThumbnails: any CallFrameThumbnailCacheProviding
+    /// #12683 — ce que le carrousel range : les ambiances ouvertes d'office, ou tout le catalogue.
+    @Published private(set) var requestedFrameScope: CallFrameScope = .spotlight
     /// Le dernier choix fait dans chaque ambiance, pour y revenir d'un toucher de puce.
     private var rememberedChoices: [CallMontageMoodChip: CallMontageChoice] = [:]
 
@@ -271,7 +273,22 @@ final class CallCaptureController: ObservableObject {
     /// #8742 — toucher une puce : le carrousel change dans la même image, et son choix se
     /// rend tout de suite — le dernier fait dans cette ambiance, sinon son premier élément.
     func show(_ chip: CallMontageMoodChip, people: Int) {
-        select(choice: CallMontageFrameRule.entering(chip, people: people, remembered: rememberedChoices[chip]))
+        select(choice: CallMontageFrameRule.entering(chip, people: people, remembered: rememberedChoices[chip], scope: frameScope(people: people)))
+    }
+
+    /// #12683 — la portée montrée : celle demandée, élargie à tout le catalogue si le choix en cours n'y figure pas.
+    func frameScope(people: Int) -> CallFrameScope {
+        CallMontageFrameRule.scope(of: choice, people: people, requested: requestedFrameScope)
+    }
+
+    /// #12683 — « Plus d'ambiances » ouvre tout le catalogue ; « Moins » revient aux ambiances
+    /// ouvertes d'office, et le choix y retombe sur la première vedette s'il n'y figure pas.
+    func setFrameScope(_ scope: CallFrameScope, people: Int) {
+        if requestedFrameScope != scope { requestedFrameScope = scope }
+        guard scope == .spotlight, CallMontageFrameRule.scope(of: choice, people: people, requested: scope) != scope else { return }
+        let chip = CallMontageFrameRule.chip(of: choice)
+        let mood: CallMontageMoodChip = CallMontageFrameRule.chips(forPeople: people, scope: scope).contains(chip) ? chip : .classics
+        select(choice: CallMontageFrameRule.entering(mood, people: people, remembered: nil, scope: scope))
     }
 
     /// `n` a changé pendant le mode : le cadre passe à la variante du même motif, sinon au

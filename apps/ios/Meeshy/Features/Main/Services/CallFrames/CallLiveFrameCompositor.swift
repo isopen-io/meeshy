@@ -76,12 +76,15 @@ nonisolated final class CallLiveFrameScene: @unchecked Sendable {
     let backdrop: CIImage
     let overlay: CIImage
     let slots: [CallLiveFrameSlot]
+    /// #12683 — les ornements animés, que Core Animation joue au-dessus ; `nil` : tout est dans les couches.
+    let motion: CallFrameMotionScene?
 
-    init(inputs: CallLiveFrameLayerInputs, backdrop: CIImage, overlay: CIImage, slots: [CallLiveFrameSlot]) {
+    init(inputs: CallLiveFrameLayerInputs, backdrop: CIImage, overlay: CIImage, slots: [CallLiveFrameSlot], motion: CallFrameMotionScene? = nil) {
         self.inputs = inputs
         self.backdrop = backdrop
         self.overlay = overlay
         self.slots = slots
+        self.motion = motion
     }
 
     var size: CGSize { inputs.size }
@@ -117,15 +120,18 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
     /// du peintre (`CallFrameRenderer.layers(for:caching:)`).
     func paint(design: CallFrameDesign, inputs: CallLiveFrameLayerInputs, cachingLayers: Bool) -> CallLiveFrameScene? {
         guard inputs.size.width >= 1, inputs.size.height >= 1 else { return nil }
+        let motion = inputs.animates ? CallFrameMotionRenderer.renderMotion(
+            CallFrameStage(frame: design, people: inputs.people, texts: inputs.texts, size: CallFrameMotionRenderer.spriteSize(for: inputs.size), reserve: inputs.reserve)
+        ) : nil
         let stage = CallFrameStage(frame: design, people: inputs.people, texts: inputs.texts, size: inputs.size,
-                                   reserve: inputs.reserve)
+                                   reserve: inputs.reserve, excludesMotion: motion != nil)
         guard let layers = CallFrameRenderer.layers(for: stage, caching: cachingLayers),
               let backdrop = Self.baked(layers.backdrop),
               let overlay = Self.baked(layers.overlay) else { return nil }
         let slots = zip(stage.boxes, inputs.people).compactMap { box, person in
             Self.slot(box: box, person: person, stage: stage)
         }
-        return CallLiveFrameScene(inputs: inputs, backdrop: backdrop, overlay: overlay, slots: slots)
+        return CallLiveFrameScene(inputs: inputs, backdrop: backdrop, overlay: overlay, slots: slots, motion: motion)
     }
 
     static func slot(box: CallFrameSlotBox, person: CallFramePerson, stage: CallFrameStage) -> CallLiveFrameSlot? {

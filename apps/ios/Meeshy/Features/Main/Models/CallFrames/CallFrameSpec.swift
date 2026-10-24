@@ -457,10 +457,14 @@ nonisolated struct CallFrameDesign: Equatable, Sendable, Identifiable {
     /// Où le cadre se propose : la capture seule, sauf s'il déclare aussi le direct.
     let surfaces: [CallFrameSurface]
     let cost: CallFrameCost?
+    /// #12685 — les déclinaisons du motif (au glissement vertical) ; `styleId` : celle que ce cadre porte.
+    let styles: [CallFrameStyle]
+    let styleId: String?
 
     init(
         id: String, motif: String, mood: CallFrameMood, name: String, bucket: CallFrameBucket, look: CallFrameLook,
-        credits: CallFrameCredits? = nil, surfaces: [CallFrameSurface] = [.capture], cost: CallFrameCost? = nil
+        credits: CallFrameCredits? = nil, surfaces: [CallFrameSurface] = [.capture], cost: CallFrameCost? = nil,
+        styles: [CallFrameStyle] = [], styleId: String? = nil
     ) {
         self.id = id
         self.motif = motif
@@ -472,6 +476,8 @@ nonisolated struct CallFrameDesign: Equatable, Sendable, Identifiable {
         self.credits = credits
         self.surfaces = surfaces
         self.cost = cost
+        self.styles = styles
+        self.styleId = styleId
     }
 
     func isOffered(on surface: CallFrameSurface) -> Bool { surfaces.contains(surface) }
