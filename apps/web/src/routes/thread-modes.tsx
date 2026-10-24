@@ -184,6 +184,8 @@ export function ThreadModes({
   permanentOf,
   retry,
   retryableOf,
+  discard,
+  discardableOf,
   displayLanguageOf,
   myReactionsOf,
   contentWithheld,
@@ -265,6 +267,9 @@ export function ThreadModes({
   readonly retry?: (messageId: string) => void;
   /** Le web sait-il renvoyer CE message d'ici (#11372, `useMessageMenu.retryableOf`) ? Absent : aucun bouton. */
   readonly retryableOf?: (messageId: string) => boolean;
+  /** « Abandonner » un envoi en échec (#12632, `useSend.discard`), sur le verdict du menu (`discardableOf`) ; absents, la bande n'offre rien. */
+  readonly discard?: (messageId: string) => void;
+  readonly discardableOf?: (messageId: string) => boolean;
   readonly displayLanguageOf?: (messageId: string) => string | undefined;
   readonly myReactionsOf?: (messageId: string) => readonly string[] | undefined;
   /**
@@ -571,6 +576,7 @@ export function ThreadModes({
                        loi que le menu (#11372) : `retryableOf` dit si le web
                        sait renvoyer d'ici — jamais en bout en bout. */
                     ...(rowPermanent || retry === undefined || retryableOf?.(p.message.id) !== true ? {} : { onRetry: () => retry(p.message.id) }),
+                    ...(rowDelivery !== 'failed' || discard === undefined || discardableOf?.(p.message.id) !== true ? {} : { onDiscard: () => discard(p.message.id) }),
                     ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
                     ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
                   };
