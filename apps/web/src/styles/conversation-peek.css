@@ -36,6 +36,7 @@
 
 .conversation-peek-card {
   position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   min-height: 120px;
@@ -52,6 +53,53 @@
   gap: 10px;
   padding: 12px 12px 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* LE FOND DE LA CONVERSATION (#12633) — la couche du fil
+   (`ConversationBackdrop`), posée sous le contenu de la carte. `isolation`
+   garde son `z-index: -1` DANS la carte : devant sa surface, derrière ses
+   rangées. Ces règles ne dépendent pas de `thread-scene.css`, que seul le
+   chunk du fil charge : la liste peut tenir une conversation sans jamais en
+   avoir ouvert une. */
+.conversation-peek-card > .thread-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Tant que le fond choisi n'est pas prêt (photo en route, modèle chargé à la
+   demande), la couche rend Signature : la carte garde alors SA surface, comme
+   iOS (#11231), plutôt que de montrer un dégradé que le fil ne montrera pas. */
+.conversation-peek-card > .thread-backdrop:not([data-appearance]) {
+  display: none;
+}
+
+.conversation-peek-card > .thread-backdrop .thread-backdrop-photo,
+.conversation-peek-card > .thread-backdrop .thread-backdrop-veil {
+  position: absolute;
+  inset: 0;
+}
+
+.conversation-peek-card > .thread-backdrop .thread-backdrop-photo {
+  inset: -32px;
+  background-size: cover;
+  background-position: center;
+}
+
+/* Sur un fond peint, l'en-tête garde la SURFACE de la carte : le titre et la
+   ligne de membres tiennent le contraste qu'ils ont sur la carte unie, sur
+   toute photo et sans voile, en clair comme en sombre. Mesuré : la ligne
+   secondaire (`--color-ios-ink-3`) tombe sous AA (4,5:1) dès que 4 % d'une
+   photo noire ou blanche transparaît — aucune translucidité n'est donc sûre. */
+.conversation-peek-card[data-peek-backdrop] .conversation-peek-header {
+  background-color: var(--color-ios-card);
+}
+
+[dir='rtl'] .conversation-peek-card > .thread-backdrop[data-flip-rtl] {
+  transform: scaleX(-1);
 }
 
 /* Les derniers messages tiennent par le BAS, comme le fil : un message

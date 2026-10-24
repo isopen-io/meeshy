@@ -35,6 +35,34 @@ extension OutgoingMessage {
         )
     }
 
+    /// Le corps REST d'un envoi libsignal (#3707, spec § 4.3). Le texte, la
+    /// langue détectée et le lieu ne voyagent QUE dans les enveloppes : ni
+    /// `content`, ni `originalLanguage`, ni pièce, ni sticker n'y figurent. Les
+    /// métadonnées que le serveur applique sans lire le contenu (réponse à,
+    /// éphémère, vue unique, flou, effets) restent sur le fil.
+    public func libsignalWireRequest(
+        context: SendAttemptContext,
+        wireEffectFlags: UInt32?,
+        senderDeviceId: UInt32,
+        envelopes: [E2EEOutgoingEnvelope],
+        unapprovedOwnDevices: [UInt32]
+    ) -> SendMessageRequest {
+        var request = SendMessageRequest.libsignal(
+            clientMessageId: context.clientMessageId.rawValue,
+            replyToId: relation.replyToId,
+            storyReplyToId: relation.storyReplyToId,
+            senderDeviceId: senderDeviceId,
+            envelopes: envelopes,
+            unapprovedOwnDevices: unapprovedOwnDevices
+        )
+        request.ephemeralDuration = context.intent.ephemeralDurationSeconds
+        request.isViewOnce = context.intent.isViewOnce ? true : nil
+        request.maxViewOnceCount = context.intent.maxViewOnceCount
+        request.isBlurred = context.intent.wireIsBlurred
+        request.effectFlags = wireEffectFlags
+        return request
+    }
+
     /// L'item de la file hors ligne : langue d'origine BRUTE (nil possible),
     /// relation complète.
     public func offlineQueueItem(clientMessageId: MessageID, intent: MessageProtectionIntent) -> OfflineQueueItem {

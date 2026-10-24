@@ -21398,6 +21398,100 @@
         }
       }
     },
+    "conversation.send.e2ee.deviceLimitReached": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بلغ حسابك الحد الأقصى من الأجهزة المشفّرة: أزل جهازًا للكتابة من هذا الجهاز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Konto hat die maximale Anzahl verschlüsselter Geräte erreicht: Entferne eines, um von diesem Gerät zu schreiben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your account has reached the maximum number of encrypted devices: remove one to write from this device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta alcanzó el número máximo de dispositivos cifrados: elimina uno para escribir desde este."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre compte a atteint le nombre maximal d’appareils chiffrés : retirez-en un pour écrire depuis celui-ci."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo account ha raggiunto il numero massimo di dispositivi crittografati: rimuovine uno per scrivere da questo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua conta atingiu o número máximo de dispositivos criptografados: remova um para escrever deste."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.recipientWithoutEncryptedDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يجب على جهة الاتصال تحديث Meeshy لتلقي الرسائل المشفّرة: لم تُرسل الرسالة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Kontakt muss Meeshy aktualisieren, um verschlüsselte Nachrichten zu empfangen: Die Nachricht wurde nicht gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your contact needs to update Meeshy to receive encrypted messages: the message wasn’t sent."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu contacto debe actualizar Meeshy para recibir mensajes cifrados: el mensaje no se envió."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre correspondant doit mettre à jour Meeshy pour recevoir des messages chiffrés : le message n’est pas parti."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo contatto deve aggiornare Meeshy per ricevere messaggi crittografati: il messaggio non è stato inviato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu contato precisa atualizar o Meeshy para receber mensagens criptografadas: a mensagem não foi enviada."
+          }
+        }
+      }
+    },
     "conversation.send.slow_mode": {
       "extractionState": "manual",
       "localizations": {
@@ -21441,6 +21535,382 @@
           "stringUnit": {
             "state": "translated",
             "value": "Uma mensagem a cada 30 s para contas novas — tente de novo em %lld s"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة هذا الجهاز؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gerät entfernen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove this device?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar este dispositivo?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer cet appareil ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovere questo dispositivo?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover este dispositivo?"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.device": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الجهاز رقم %d"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gerät Nr. %d"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device no. %d"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivo n.º %d"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appareil n° %d"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivo n. %d"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivo nº %d"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.enrolled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يقوم هذا الجهاز بالتشفير مجددًا. يمكنك إعادة إرسال رسالتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gerät verschlüsselt wieder. Du kannst deine Nachricht erneut senden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device encrypts again. You can resend your message."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo vuelve a cifrar. Puedes reenviar tu mensaje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cet appareil chiffre de nouveau. Vous pouvez renvoyer votre message."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo dispositivo cripta di nuovo. Puoi inviare di nuovo il tuo messaggio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo voltou a criptografar. Você pode reenviar sua mensagem."
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.explanation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يستخدم حسابك بالفعل الحد الأقصى من الأجهزة للتشفير التام بين الطرفين. أزل جهازًا للكتابة من هذا الجهاز. الجهاز المُزال لن يقرأ الرسائل المشفّرة الجديدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Konto nutzt bereits die maximale Anzahl an Geräten für die Ende-zu-Ende-Verschlüsselung. Entferne eines, um von diesem Gerät zu schreiben. Ein entferntes Gerät liest keine neuen verschlüsselten Nachrichten mehr."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your account already uses the maximum number of devices for end-to-end encryption. Remove one to write from this device. A removed device no longer reads new encrypted messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta ya usa el número máximo de dispositivos para el cifrado de extremo a extremo. Elimina uno para escribir desde este. Un dispositivo eliminado ya no lee los nuevos mensajes cifrados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre compte utilise déjà le nombre maximal d’appareils pour le chiffrement de bout en bout. Retirez-en un pour écrire depuis celui-ci. Un appareil retiré ne lit plus les nouveaux messages chiffrés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo account usa già il numero massimo di dispositivi per la crittografia end-to-end. Rimuovine uno per scrivere da questo. Un dispositivo rimosso non legge più i nuovi messaggi crittografati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua conta já usa o número máximo de dispositivos para a criptografia de ponta a ponta. Remova um para escrever deste. Um dispositivo removido não lê mais as novas mensagens criptografadas."
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل أجهزتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Geräte konnten nicht geladen werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t load your devices."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron cargar tus dispositivos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de lire vos appareils."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare i tuoi dispositivi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível carregar seus dispositivos."
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.retire": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة المحاولة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erneut versuchen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réessayer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riprova"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tentar novamente"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عدد كبير جدًا من الأجهزة المشفّرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu viele verschlüsselte Geräte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many encrypted devices"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiados dispositivos cifrados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop d’appareils chiffrés"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Troppi dispositivi crittografati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivos criptografados demais"
           }
         }
       }

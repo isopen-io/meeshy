@@ -7,8 +7,8 @@
  * écriture. Ce témoin garde, dans les composes de référence :
  *  - staging : `/ops-requests` monté, `/ops-state` monté en `:ro`, les variables
  *    d'environnement écrites sans guillemets ;
- *  - production : AUCUN montage ni variable d'opérations (feu vert du porteur
- *    requis, #9223) ;
+ *  - production : la même chose, sous ses propres chemins (feu vert du porteur
+ *    le 2026-10-24, #11509) — jamais ceux du staging ;
  *  - partout : pas de `docker.sock` dans la passerelle.
  *
  * @jest-environment node
@@ -51,8 +51,26 @@ describe('le relais des opérations serveur (#10385, #10386)', () => {
     expect(staging).not.toMatch(/OPS_[A-Z_]+="/);
   });
 
-  it('production : aucun montage ni variable d’opérations', () => {
-    expect(production).not.toMatch(/ops-requests|ops-state|OPS_REQUESTS_DIR|OPS_STATE_DIR/);
+  it('production : la passerelle dépose ses demandes et lit l’état en lecture seule, sous SES chemins (#11509)', () => {
+    expect(production).toContain('- /opt/meeshy/production/ops/requests:/ops-requests\n');
+    expect(production).toContain('- /opt/meeshy/production/ops/state:/ops-state:ro');
+    expect(production).not.toMatch(/:\/ops-requests:ro/);
+    // Jamais le dossier de l'autre environnement : une demande de la production
+    // exécutée par le runner du staging (ou l'inverse) viserait le mauvais projet.
+    expect(production).not.toContain('/opt/meeshy/staging/');
+    expect(staging).not.toContain('/opt/meeshy/production/');
+  });
+
+  it('production : les variables sont écrites sans guillemets', () => {
+    for (const line of [
+      '- OPS_ENVIRONMENT=production',
+      '- OPS_SHARED_HOST=true',
+      '- OPS_REQUESTS_DIR=/ops-requests',
+      '- OPS_STATE_DIR=/ops-state',
+    ]) {
+      expect(production).toContain(line);
+    }
+    expect(production).not.toMatch(/OPS_[A-Z_]+="/);
   });
 
   it.each([
