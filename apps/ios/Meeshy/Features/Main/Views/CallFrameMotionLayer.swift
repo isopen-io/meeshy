@@ -1,3 +1,4 @@
+import AVFoundation
 import QuartzCore
 import UIKit
 
@@ -103,22 +104,61 @@ nonisolated enum CallFrameMotionAnimations {
 /// toile peinte, et masquée hors des visages et des textes. Sans toucher, sans dessin par image.
 nonisolated final class CallFrameMotionLayer: CALayer {
     let sceneSize: CGSize
+    /// Les boucles vidéo d'une scène tournent tant que la couche vit.
+    private var loopers: [AVPlayerLooper] = []
 
     init(scene: CallFrameMotionScene) {
         sceneSize = scene.size
         super.init()
         bounds = CGRect(origin: .zero, size: scene.size)
         anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        let masked = CALayer()
+        masked.frame = bounds
         let maskLayer = CALayer()
         maskLayer.frame = bounds
         maskLayer.contents = scene.mask
-        mask = maskLayer
-        scene.sprites.forEach { addSublayer(Self.spriteLayer($0, size: scene.size, unit: scene.unit)) }
+        masked.mask = maskLayer
+        addSublayer(masked)
+        scene.ambient.filter { $0.depth == .back }.forEach { masked.addSublayer(ambientLayer($0, scene: scene)) }
+        scene.sprites.forEach { masked.addSublayer(Self.spriteLayer($0, size: scene.size, unit: scene.unit)) }
+        scene.ambient.filter { $0.depth == .front }.forEach { masked.addSublayer(ambientLayer($0, scene: scene)) }
+        scene.ambient.filter { $0.depth == .effects }.forEach { addSublayer(ambientLayer($0, scene: scene)) }
     }
 
     override init(layer: Any) {
         sceneSize = (layer as? CallFrameMotionLayer)?.sceneSize ?? .zero
         super.init(layer: layer)
+    }
+
+    /// Une lumière (halo radial qui respire) ou une boucle vidéo (muette, transparente si le
+    /// fichier porte un canal alpha — HEVC alpha), à la taille de la toile. `effects` passe sur
+    /// les visages, `back` et `front` restent dans le masque.
+    private func ambientLayer(_ layer: CallFrameSceneLayer, scene: CallFrameMotionScene) -> CALayer {
+        let frame = CGRect(origin: .zero, size: scene.size)
+        switch layer.kind {
+        case .videoLoop:
+            guard let src = layer.src, let url = CallFrameBundleImages.url(for: src) else { return CALayer() }
+            let player = AVQueuePlayer()
+            player.isMuted = true
+            player.preventsDisplaySleepDuringVideoPlayback = false
+            loopers.append(AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url)))
+            let video = AVPlayerLayer(player: player)
+            video.frame = frame
+            video.videoGravity = .resizeAspectFill
+            video.opacity = Float(layer.amount ?? 1)
+            player.play()
+            return video
+        default:
+            let light = CAGradientLayer()
+            light.type = .radial
+            light.frame = frame
+            let ink = CallFrameColor.cg(layer.color ?? "#FFFFFF", alpha: layer.amount ?? 0.6)
+            light.colors = [ink, ink.copy(alpha: 0) ?? ink]
+            light.startPoint = CGPoint(x: 0.5, y: 0.5)
+            light.endPoint = CGPoint(x: 1, y: 1)
+            light.add(CallFrameMotionAnimations.loop(.breathe(period: 5), phase: 0, size: scene.size, unit: scene.unit)[0], forKey: CallFrameMotionAnimations.key)
+            return light
+        }
     }
 
     @available(*, unavailable)

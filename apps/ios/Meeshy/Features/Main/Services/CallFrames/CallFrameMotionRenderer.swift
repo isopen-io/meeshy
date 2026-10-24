@@ -14,12 +14,15 @@ nonisolated final class CallFrameMotionScene {
     let unit: CGFloat
     let mask: CGImage
     let sprites: [CallFrameMotionSprite]
+    /// Les lumières et boucles vidéo de la scène, que Core Animation et AVFoundation jouent telles quelles.
+    let ambient: [CallFrameSceneLayer]
 
-    init(size: CGSize, unit: CGFloat, mask: CGImage, sprites: [CallFrameMotionSprite]) {
+    init(size: CGSize, unit: CGFloat, mask: CGImage, sprites: [CallFrameMotionSprite], ambient: [CallFrameSceneLayer] = []) {
         self.size = size
         self.unit = unit
         self.mask = mask
         self.sprites = sprites
+        self.ambient = ambient
     }
 }
 
@@ -38,13 +41,14 @@ nonisolated enum CallFrameMotionRenderer {
     }
 
     static func renderMotion(_ stage: CallFrameStage) -> CallFrameMotionScene? {
-        let tracks = CallFrameMotionPlan.tracks(for: stage.look)
-        guard !tracks.isEmpty else { return nil }
+        let tracks = CallFrameMotionPlan.tracks(for: stage.look) + CallFrameMotionPlan.sceneTracks(for: stage.look)
+        let ambient = CallFrameMotionPlan.ambientLayers(for: stage.look)
+        guard !tracks.isEmpty || !ambient.isEmpty else { return nil }
         let fonts = CallFrameFontBook()
         let layout = Painter.textLayout(stage, fonts: fonts)
         let sprites = tracks.compactMap { track in motionSprite(track, stage: stage, layout: layout, fonts: fonts) }
         guard sprites.count == tracks.count, let mask = motionMask(stage, layout: layout) else { return nil }
-        return CallFrameMotionScene(size: stage.size, unit: stage.unit, mask: mask, sprites: sprites)
+        return CallFrameMotionScene(size: stage.size, unit: stage.unit, mask: mask, sprites: sprites, ambient: ambient)
     }
 
     static func motionSprite(_ track: CallFrameMotionTrack, stage: CallFrameStage, layout: CallFrameTextLayout, fonts: CallFrameFontBook) -> CallFrameMotionSprite? {

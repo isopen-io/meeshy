@@ -63,15 +63,16 @@ nonisolated enum CallLiveFrameRule {
         return CallFrameMood.allCases.filter { served.contains($0.rawValue) }
     }
 
-    /// Un cadre bouge s'il porte un ornement animé ou une couche de scène.
+    /// Un cadre bouge s'il porte un ornement animé ou une couche de scène qui bouge (une illustration
+    /// `image` est fixe, #12683).
     static func animates(_ design: CallFrameDesign) -> Bool {
-        design.look.ornaments.contains { $0.motion != .still } || !design.look.scene.isEmpty
+        design.look.ornaments.contains { $0.motion != .still } || design.look.scene.contains { $0.kind != .image }
     }
 
     /// #12683 — un cadre dont seuls les ornements bougent a un état FIXE complet : ses ornements
-    /// peints à leur place. Une couche de scène, elle, n'a pas encore d'image fixe de repli.
+    /// peints à leur place, ses illustrations aussi. Une couche de scène animée n'a pas encore d'image fixe de repli.
     static func hasStillState(_ design: CallFrameDesign) -> Bool {
-        design.look.scene.isEmpty
+        design.look.scene.allSatisfy { $0.kind == .image }
     }
 
     /// Les ornements s'animent-ils à l'écran ? Jamais sous « Réduire les animations », ni quand
@@ -88,7 +89,7 @@ nonisolated enum CallLiveFrameRule {
 
     /// L'interrupteur se montre sur un cadre du catalogue servi en direct, en duo vidéo.
     static func mayHold(frameId: String, isOffered: Bool, in catalogue: [CallFrameDesign] = CallFrameCatalogue.all) -> Bool {
-        guard isOffered, let design = catalogue.first(where: { $0.id == frameId }) else { return false }
+        guard isOffered, let design = CallFrameCatalogue.frame(id: frameId, in: catalogue) else { return false }
         return isEligible(design)
     }
 
@@ -116,7 +117,7 @@ nonisolated enum CallLiveFrameRule {
         in catalogue: [CallFrameDesign] = CallFrameCatalogue.all
     ) -> CallLiveFrameDisplay {
         guard participants == people, let frameId,
-              let design = catalogue.first(where: { $0.id == frameId }), isEligible(design) else { return .none }
+              let design = CallFrameCatalogue.frame(id: frameId, in: catalogue), isEligible(design) else { return .none }
         if isDeviceConstrained { return .suspended(design, .deviceConstrained) }
         if reduceMotion && animates(design) && !hasStillState(design) { return .suspended(design, .reduceMotion) }
         return .frame(design)

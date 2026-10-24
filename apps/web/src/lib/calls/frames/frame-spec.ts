@@ -109,7 +109,12 @@ export const FRAME_SURFACES = ['capture', 'live'] as const;
 export type FrameSurface = (typeof FRAME_SURFACES)[number];
 export const FRAME_COSTS = ['light', 'standard', 'rich'] as const;
 
-/** Les couches d'une scène (spec 02 § 1.1), qui pointent vers les fichiers du pack. */
+/**
+ * Les couches d'une scène (spec 02 § 1.1), qui pointent vers les fichiers du pack. Une couche `image`
+ * remplit la toile en la couvrant ; avec `slice` (#12683), elle se pose en neuf morceaux : coins
+ * intacts sur `slice` du plus petit côté, bords étirés, centre étiré — une bordure épouse ainsi
+ * tout écran sans déformer ses coins.
+ */
 export const SCENE_LAYER_KINDS = ['image', 'lottie', 'sprite', 'video-loop', 'particles', 'light'] as const;
 export const SCENE_DEPTHS = ['back', 'front', 'effects'] as const;
 /** Plafonds de rendu d'une scène (spec 02 § 3.3). */
@@ -238,11 +243,13 @@ const SceneLayer = z
     color: z.optional(Hex),
     amount: z.optional(Fraction),
     max: z.optional(z.number().check(z.int(), z.minimum(1), z.maximum(MAX_SCENE_PARTICLES))),
+    slice: z.optional(Fraction),
   })
   .check(
     z.refine((layer) => !ASSET_KINDS.has(layer.kind) || layer.src !== undefined),
     z.refine((layer) => layer.kind !== 'particles' || layer.preset !== undefined),
     z.refine((layer) => layer.kind !== 'light' || layer.color !== undefined),
+    z.refine((layer) => layer.slice === undefined || (layer.kind === 'image' && layer.slice > 0 && layer.slice < 0.5)),
   );
 
 type SceneLayerValue = z.infer<typeof SceneLayer>;
@@ -302,6 +309,25 @@ export const FrameLookSchema = z.object({
   fallbacks: z.optional(Fallbacks),
 });
 
+/**
+ * Une DÉCLINAISON d'un motif (#12685) : un autre habillage du même cadre — par exemple « Relief »,
+ * matière et moulure illustrées —, choisi d'un glissement vertical dans sa vignette. Son `look`
+ * surcharge, clé par clé, le cadre de chaque tranche ; son identifiant s'ajoute à celui du cadre
+ * (`ambiance.motif.tranche.style`).
+ */
+export const MAX_FRAME_STYLES = 6;
+
+const FrameStyleSchema = z.object({
+  id: Slug,
+  name: z.string().check(z.minLength(1), z.maxLength(40)),
+  look: z.partial(FrameLookSchema),
+});
+
+const Styles = z.array(FrameStyleSchema).check(
+  z.maxLength(MAX_FRAME_STYLES),
+  z.refine((styles) => new Set(styles.map((style) => style.id)).size === styles.length),
+);
+
 export const FrameMotifSchema = z.object({
   id: z.string().check(z.regex(/^[a-z-]+\.[a-z0-9-]+$/)),
   mood: z.enum(FRAME_MOODS),
@@ -311,6 +337,7 @@ export const FrameMotifSchema = z.object({
   cost: z.optional(z.enum(FRAME_COSTS)),
   base: FrameLookSchema,
   variants: z.partialRecord(z.enum(FRAME_BUCKETS), z.partial(FrameLookSchema)),
+  styles: z.optional(Styles),
 });
 
 export const FrameMoodFileSchema = z.object({ mood: z.enum(FRAME_MOODS), motifs: z.array(FrameMotifSchema) });

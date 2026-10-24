@@ -75,3 +75,15 @@ final class CallFrameMotionRenderingTests: XCTestCase {
         XCTAssertEqual(animations.first?.repeatCount, 0)
     }
 }
+
+/// LES ILLUSTRATIONS D'UN CADRE (#12683) — la bordure en neuf morceaux garde ses coins intacts.
+final class CallFrameSceneImagePainterTests: XCTestCase {
+    func test_nineSlice_cornersKeepTheSliceOfTheShortSide_edgesStretch() {
+        let pieces = CallFrameSceneImagePainter.nineSlicePieces(source: CGSize(width: 1080, height: 1920), target: CGRect(x: 0, y: 0, width: 400, height: 900), slice: 0.2)
+        XCTAssertEqual(pieces.count, 9)
+        XCTAssertEqual(pieces[0].source, CGRect(x: 0, y: 0, width: 216, height: 216))
+        XCTAssertEqual(pieces[0].target, CGRect(x: 0, y: 0, width: 80, height: 80))
+        XCTAssertEqual(pieces[8].target, CGRect(x: 320, y: 820, width: 80, height: 80))
+        XCTAssertEqual(pieces[4].target, CGRect(x: 80, y: 80, width: 240, height: 740))
+    }
+}

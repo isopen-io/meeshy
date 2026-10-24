@@ -58,6 +58,18 @@ nonisolated enum CallMontageFrameRule {
         CallFrameCatalogue.frame(id: id, in: frames)
     }
 
+    /// #12685 — le cadre de base d'un choix décliné ; un classique ou un cadre de base reste lui-même.
+    static func base(of choice: CallMontageChoice) -> CallMontageChoice {
+        guard case .frame(let id) = choice else { return choice }
+        return .frame(CallFrameStyleRule.baseId(of: id))
+    }
+
+    /// #12685 — les identifiants qu'un glissement vertical parcourt : le cadre, puis ses déclinaisons.
+    static func declinations(of choice: CallMontageChoice, in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> [String] {
+        guard case .frame(let id) = choice else { return [] }
+        return CallFrameStyleRule.declinations(of: CallFrameStyleRule.baseId(of: id), in: frames).map(\.id)
+    }
+
     /// `n` a changé (arrivée, départ) : le même motif dans la nouvelle tranche ; sinon le
     /// premier cadre de la même ambiance ; sinon le premier classique. Un classique ne bouge pas.
     static func reconcile(_ choice: CallMontageChoice, people: Int, in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> CallMontageChoice {
@@ -70,7 +82,7 @@ nonisolated enum CallMontageFrameRule {
     static func entering(_ chip: CallMontageMoodChip, people: Int, remembered: CallMontageChoice?, scope: CallFrameScope = .all,
                          in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> CallMontageChoice {
         let offered = items(for: chip, people: people, scope: scope, in: frames)
-        if let remembered, offered.contains(remembered) { return remembered }
+        if let remembered, offered.contains(base(of: remembered)) { return remembered }
         return offered.first ?? fallback
     }
 }

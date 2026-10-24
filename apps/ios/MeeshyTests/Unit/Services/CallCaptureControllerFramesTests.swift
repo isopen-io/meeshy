@@ -152,7 +152,9 @@ final class CallCaptureControllerFramesTests: XCTestCase {
 
         let ids = sut.frameWindow(for: sut.choice).map(\.id)
 
-        XCTAssertEqual(ids, CallCaptureController.thumbnailWindow(around: selected.id, in: frames.map(\.id), radius: CallCaptureController.thumbnailRadius))
+        let window = CallCaptureController.thumbnailWindow(around: selected.id, in: frames.map(\.id), radius: CallCaptureController.thumbnailRadius)
+        let declinations = CallMontageFrameRule.declinations(of: .frame(selected.id)).dropFirst()
+        XCTAssertEqual(ids, window + declinations)
     }
 
     func test_frameWindow_classicChoice_isEmpty() {

@@ -127,6 +127,33 @@ nonisolated enum CallFrameMotionPlan {
         return Array(tracks.prefix(maxTracks))
     }
 
+    /// #12683 — les particules d'une scène (celles d'une marque, par exemple) : un ornement semé de
+    /// la forme `preset`, à la couleur et à la quantité déclarées, animé comme lui. Leur rang les place
+    /// après les ornements, pour que leur tirage ne recopie jamais celui d'un ornement.
+    static let sceneRankOffset = 100
+
+    static func sceneTracks(for look: CallFrameLook) -> [CallFrameMotionTrack] {
+        look.scene.enumerated().compactMap { index, layer -> CallFrameMotionTrack? in
+            guard layer.kind == .particles, let preset = layer.preset, let style = style(for: preset) else { return nil }
+            let ornament = CallFrameOrnament(kind: preset, color: layer.color ?? "#FFFFFF", density: density(forParticles: layer.maxParticles),
+                                             layer: layer.depth == .back ? .back : .front, motion: .loop)
+            return CallFrameMotionTrack(rank: sceneRankOffset + index, ornament: ornament, style: style, repeats: true)
+        }
+    }
+
+    static func density(forParticles max: Int?) -> CallFrameDensity {
+        switch max ?? 60 {
+        case ...40: return .low
+        case ...90: return .mid
+        default: return .high
+        }
+    }
+
+    /// Les couches de scène que Core Animation joue telles quelles : lumières et boucles vidéo.
+    static func ambientLayers(for look: CallFrameLook) -> [CallFrameSceneLayer] {
+        look.scene.filter { $0.kind == .light || $0.kind == .videoLoop }
+    }
+
     /// Les rangs retirés des couches fixes parce qu'ils se peignent animés.
     static func animatedRanks(for look: CallFrameLook) -> Set<Int> {
         Set(tracks(for: look).map(\.rank))

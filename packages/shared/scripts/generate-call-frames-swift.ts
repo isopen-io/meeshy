@@ -16,7 +16,7 @@
  * périmé ne traîne : le Swift ne peut pas dériver du JSON en silence.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -187,6 +187,10 @@ const element = (value: unknown, path: string): string => {
 const particleCount = (value: unknown, path: string): string =>
   typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 150 ? String(value) : fail(path, 'entier de 1 à 150 attendu');
 
+/** Les coins d'une image en neuf morceaux : réservés aux couches `image`, de 0 à 0,5 exclus. */
+const sliceFraction = (value: unknown, kind: unknown, path: string): string =>
+  kind === 'image' && typeof value === 'number' && value > 0 && value < 0.5 ? numberLiteral(value, path) : fail(path, `découpe d'une image attendue, de 0 à 0,5 exclus ${JSON.stringify(value)}`);
+
 const sceneLayer = (value: unknown, path: string): string => {
   const it = record(value, path);
   const fields = [
@@ -198,6 +202,7 @@ const sceneLayer = (value: unknown, path: string): string => {
     `color: ${optional(it.color, (color) => hex(color, `${path}.color`))}`,
     `amount: ${optional(it.amount, (amount) => fraction(amount, `${path}.amount`))}`,
     `maxParticles: ${optional(it.max, (max) => particleCount(max, `${path}.max`))}`,
+    ...present(it.slice, (slice) => `slice: ${sliceFraction(slice, it.kind, `${path}.slice`)}`),
   ];
   return `CallFrameSceneLayer(${fields.join(', ')})`;
 };
@@ -367,7 +372,41 @@ const title = (value: unknown, path: string): string => {
 const LOOK_KEYS = ['layout', 'slot', 'background', 'pattern', 'border', 'ornaments', 'brand', 'names', 'title', 'subtitle', 'elements', 'scene', 'behaviors', 'fallbacks'] as const;
 
 /** Les clés du MOTIF (doc 06 § 3) : elles valent pour toutes ses tranches, aucune variante ne les surcharge. */
-const MOTIF_KEYS = ['credits', 'surfaces', 'cost'] as const;
+const MOTIF_KEYS = ['credits', 'surfaces', 'cost', 'styles'] as const;
+
+/** Une déclinaison ne surcharge que les clés qu'elle déclare, dans l'ordre de `CallFrameLookOverride`. */
+const lookOverride = (value: unknown, path: string): string => {
+  const it = record(value, path);
+  Object.keys(it).filter((key) => !(LOOK_KEYS as readonly string[]).includes(key)).forEach((key) => fail(path, `clé inconnue « ${key} »`));
+  const fields = [
+    ...present(it.layout, (declared) => `layout: ${layout(declared, `${path}.layout`)}`),
+    ...present(it.slot, (declared) => `slot: ${slot(declared, `${path}.slot`)}`),
+    ...present(it.background, (declared) => `background: ${background(declared, `${path}.background`)}`),
+    ...present(it.pattern, (declared) => `pattern: ${pattern(declared, `${path}.pattern`)}`),
+    ...present(it.border, (declared) => `border: ${border(declared, `${path}.border`)}`),
+    ...present(it.ornaments, (declared) => `ornaments: ${listLiteral(declared, `${path}.ornaments`, ornament)}`),
+    ...present(it.brand, (declared) => `brand: ${brand(declared, `${path}.brand`)}`),
+    ...present(it.names, (declared) => `names: ${names(declared, `${path}.names`)}`),
+    ...present(it.title, (declared) => `title: ${title(declared, `${path}.title`)}`),
+    ...present(it.subtitle, (declared) => `subtitle: ${title(declared, `${path}.subtitle`)}`),
+    ...present(it.elements, (declared) => `elements: ${listLiteral(declared, `${path}.elements`, element, 6)}`),
+    ...present(it.scene, (declared) => `scene: ${listLiteral(declared, `${path}.scene`, sceneLayer, 12)}`),
+    ...present(it.behaviors, (declared) => `behaviors: ${listLiteral(declared, `${path}.behaviors`, behavior)}`),
+    ...present(it.fallbacks, (declared) => `fallbacks: ${fallbacks(declared, `${path}.fallbacks`)}`),
+  ];
+  return `CallFrameLookOverride(${fields.join(', ')})`;
+};
+
+const styles = (value: unknown, path: string): string => {
+  const list = items(value, path, 6);
+  const ids = list.map((item, index) => slug(record(item, `${path}[${index}]`).id, `${path}[${index}].id`));
+  if (new Set(ids).size !== ids.length) return fail(path, 'déclinaisons en double');
+  return `[${list.map((item, index) => {
+    const it = record(item, `${path}[${index}]`);
+    const name = typeof it.name === 'string' && it.name.length > 0 && it.name.length <= 40 ? quote(it.name) : fail(`${path}[${index}].name`, 'nom attendu (40 caractères au plus)');
+    return `CallFrameStyle(id: ${ids[index]}, name: ${name}, look: ${lookOverride(it.look, `${path}[${index}].look`)})`;
+  }).join(', ')}]`;
+};
 
 const look = (value: Json, path: string): string => {
   const required = ['layout', 'slot', 'background', 'ornaments', 'names', 'title'];
@@ -454,6 +493,7 @@ const frameLiteral = (frame: ExpandedFrame): string => {
     ...present(frame.motifKeys.credits, (declared) => `credits: ${credits(declared, `${frame.id}.credits`)}`),
     ...present(frame.motifKeys.surfaces, (declared) => `surfaces: ${surfaces(declared, `${frame.id}.surfaces`)}`),
     ...present(frame.motifKeys.cost, (declared) => `cost: ${qualified(declared, FRAME_COSTS, 'CallFrameCost', `${frame.id}.cost`)}`),
+    ...present(frame.motifKeys.styles, (declared) => `styles: ${styles(declared, `${frame.id}.styles`)}`),
   ];
   return ['        CallFrameDesign(', fields.map((field) => `            ${field}`).join(',\n'), '        )'].join('\n');
 };
@@ -582,6 +622,36 @@ export function readMoodFiles(directory: string = SOURCE_DIR): readonly unknown[
   return FRAME_MOODS.map((mood): unknown => JSON.parse(readFileSync(join(directory, `${mood}.json`), 'utf8')));
 }
 
+/*
+ * **LES ILLUSTRATIONS DES CADRES** (#12683) — les couches `image` d'une scène pointent vers
+ * `assets/call-frames/<fichier>.webp` sous le dossier des JSON. iOS les embarque à plat dans son
+ * bundle : le générateur en tient une copie à l'octet près dans `IOS_ASSETS_RELATIVE_DIR`, et un
+ * fichier référencé mais absent fait échouer la génération.
+ */
+
+export const ASSET_SOURCE_RELATIVE_DIR = 'assets/call-frames';
+export const IOS_ASSETS_RELATIVE_DIR = 'apps/ios/Meeshy/Resources/CallFrames';
+const ASSET_FILE = /^[A-Za-z0-9_-]+\.webp$/;
+
+/** Les fichiers d'illustration que les cadres référencent, triés, chacun une fois. */
+export function referencedAssets(files: readonly unknown[]): readonly string[] {
+  const sources = expandFiles(files).flatMap((frame) => {
+    const scene = frame.look.scene;
+    if (!Array.isArray(scene)) return [];
+    return scene.flatMap((layer: unknown) => {
+      if (!isRecord(layer) || layer.kind !== 'image' || typeof layer.src !== 'string') return [];
+      const prefix = `${ASSET_SOURCE_RELATIVE_DIR}/`;
+      const name = layer.src.startsWith(prefix) ? layer.src.slice(prefix.length) : '';
+      return ASSET_FILE.test(name) ? [name] : fail(`${frame.id}.scene`, `illustration hors de ${prefix} ${JSON.stringify(layer.src)}`);
+    });
+  });
+  return [...new Set(sources)].sort();
+}
+
+export function assetFilesIn(directory: string): readonly string[] {
+  return existsSync(directory) ? readdirSync(directory).filter((name) => ASSET_FILE.test(name)).sort() : [];
+}
+
 export function readSpotlight(directory: string = SOURCE_DIR): unknown {
   return JSON.parse(readFileSync(join(directory, 'spotlight.json'), 'utf8'));
 }
@@ -602,6 +672,13 @@ if (isMain) {
   generated.forEach((file) => writeFileSync(join(OUTPUT_DIR, file.name), file.content));
   const spotlight = renderSpotlightSwift(readSpotlight(), expandFiles(readMoodFiles()));
   writeFileSync(join(OUTPUT_DIR, spotlight.name), spotlight.content);
+  const assets = referencedAssets(readMoodFiles());
+  const sourceAssets = join(SOURCE_DIR, ASSET_SOURCE_RELATIVE_DIR);
+  const iosAssets = resolve(REPO_ROOT, IOS_ASSETS_RELATIVE_DIR);
+  assets.filter((name) => !existsSync(join(sourceAssets, name))).forEach((name) => fail(name, 'illustration référencée mais absente'));
+  mkdirSync(iosAssets, { recursive: true });
+  assetFilesIn(iosAssets).filter((name) => !assets.includes(name)).forEach((name) => rmSync(join(iosAssets, name)));
+  assets.forEach((name) => copyFileSync(join(sourceAssets, name), join(iosAssets, name)));
   const count = generated.reduce((sum, file) => sum + (file.content.match(/^ {8}CallFrameDesign\($/gm) ?? []).length, 0);
   process.stdout.write(`${OUTPUT_RELATIVE_DIR} — ${generated.length} fichiers, ${count} cadres\n`);
 }

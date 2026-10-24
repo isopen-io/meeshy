@@ -77,3 +77,30 @@ final class CallFrameMotionPlanTests: XCTestCase {
         }
     }
 }
+
+/// LES COUCHES ANIMÉES D'UNE SCÈNE (#12683) — les particules, lumières et boucles vidéo qu'une marque déclare.
+final class CallFrameSceneMotionPlanTests: XCTestCase {
+    private func look(scene: [CallFrameSceneLayer]) throws -> CallFrameLook {
+        let base = try XCTUnwrap(CallFrameCatalogue.all.first).look
+        return CallFrameLook(layout: base.layout, slot: base.slot, background: base.background, pattern: base.pattern, border: base.border,
+                             ornaments: [], names: base.names, title: base.title, subtitle: base.subtitle, scene: scene)
+    }
+
+    private func layer(_ id: String, _ kind: CallFrameSceneLayerKind, depth: CallFrameSceneDepth = .back, preset: CallFrameOrnamentKind? = nil, max: Int? = nil) -> CallFrameSceneLayer {
+        CallFrameSceneLayer(id: id, kind: kind, depth: depth, src: kind == .videoLoop ? "assets/call-frames/test_loop.mov" : nil,
+                            preset: preset, color: "#FFD166", amount: 0.5, maxParticles: max)
+    }
+
+    func test_sceneParticles_becomeATrackOfTheirPreset_afterTheOrnaments() throws {
+        let tracks = CallFrameMotionPlan.sceneTracks(for: try look(scene: [layer("halo", .light), layer("braises", .particles, depth: .front, preset: .sparkles, max: 120)]))
+        XCTAssertEqual(tracks.map(\.rank), [CallFrameMotionPlan.sceneRankOffset + 1])
+        XCTAssertEqual(tracks.first?.ornament.kind, .sparkles)
+        XCTAssertEqual(tracks.first?.ornament.density, .high)
+        XCTAssertEqual(tracks.first?.ornament.layer, .front)
+    }
+
+    func test_ambientLayers_areTheLightsAndVideoLoops() throws {
+        let scene = [layer("matiere", .image), layer("halo", .light), layer("boucle", .videoLoop), layer("braises", .particles, preset: .snow)]
+        XCTAssertEqual(CallFrameMotionPlan.ambientLayers(for: try look(scene: scene)).map(\.id), ["halo", "boucle"])
+    }
+}

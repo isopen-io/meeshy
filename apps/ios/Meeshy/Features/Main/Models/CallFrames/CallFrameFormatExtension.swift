@@ -155,6 +155,8 @@ nonisolated struct CallFrameSceneLayer: Equatable, Sendable {
     let color: String?
     let amount: Double?
     let maxParticles: Int?
+    /// #12683 — une image en neuf morceaux : ses coins gardent `slice` du plus petit côté, intacts.
+    var slice: Double? = nil
 }
 
 nonisolated enum CallFrameBehaviorTrigger: String, CaseIterable, Equatable, Sendable {

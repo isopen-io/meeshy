@@ -143,6 +143,7 @@ nonisolated enum CallFrameRenderer {
         let layout = textLayout(stage, fonts: fonts)
         paintBackground(context, stage: stage)
         paintPattern(context, stage: stage)
+        CallFrameSceneImagePainter.paint(context, stage: stage, depth: .back)
         paintOrnaments(context, stage: stage, layer: .back, text: layout, fonts: fonts)
         stage.boxes.forEach { paintUnderlay(context, box: $0, stage: stage) }
         return context.makeImage()
@@ -155,6 +156,7 @@ nonisolated enum CallFrameRenderer {
         let layout = textLayout(stage, fonts: fonts)
         stage.boxes.forEach { paintSlotStroke(context, box: $0, stage: stage) }
         paintBorder(context, stage: stage)
+        CallFrameSceneImagePainter.paint(context, stage: stage, depth: .front)
         paintOrnaments(context, stage: stage, layer: .front, text: layout, fonts: fonts)
         paintTexts(context, stage: stage, plan: layout.plan, fonts: fonts)
         return context.makeImage()

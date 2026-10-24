@@ -55,9 +55,9 @@ nonisolated enum CallFrameSpotlightRule {
     static func scope(showing frameId: String?, people: Int, requested: CallFrameScope,
                       in catalogue: [CallFrameDesign] = CallFrameCatalogue.all,
                       spotlight: [CallFrameSpotlight] = CallFrameCatalogue.spotlight) -> CallFrameScope {
-        guard requested == .spotlight, let frameId, let design = catalogue.first(where: { $0.id == frameId }) else { return requested }
+        guard requested == .spotlight, let frameId, let design = CallFrameCatalogue.frame(id: frameId, in: catalogue) else { return requested }
         let visible = moods(forPeople: people, scope: .spotlight, in: catalogue, spotlight: spotlight).contains(design.mood)
-            && frames(forPeople: people, mood: design.mood, scope: .spotlight, in: catalogue, spotlight: spotlight).contains { $0.id == frameId }
+            && frames(forPeople: people, mood: design.mood, scope: .spotlight, in: catalogue, spotlight: spotlight).contains { $0.id == CallFrameStyleRule.baseId(of: frameId) }
         return visible ? .spotlight : .all
     }
 

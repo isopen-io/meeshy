@@ -1,9 +1,15 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ASSET_SOURCE_RELATIVE_DIR,
   FRAME_MOODS,
+  IOS_ASSETS_RELATIVE_DIR,
+  REPO_ROOT,
+  SOURCE_DIR,
+  assetFilesIn,
+  referencedAssets,
   OUTPUT_DIR,
   SPOTLIGHT_FILE,
   SPOTLIGHT_MAX_FEATURED,
@@ -86,5 +92,28 @@ describe('les ambiances ouvertes par défaut et leurs cadres vedettes (#12683)',
     expect(() => spotlightOf(spotlight({ mood: 'jovial', featured: [] }), catalogue)).toThrow(/moods\[0\]\.featured/);
     const tooMany = Array.from({ length: SPOTLIGHT_MAX_FEATURED + 1 }, () => 'jovial.fete');
     expect(() => spotlightOf(spotlight({ mood: 'jovial', featured: tooMany }), catalogue)).toThrow(/moods\[0\]\.featured/);
+  });
+});
+
+describe('les illustrations des cadres (#12683)', () => {
+  const sourceAssets = join(SOURCE_DIR, ASSET_SOURCE_RELATIVE_DIR);
+  const iosAssets = join(REPO_ROOT, IOS_ASSETS_RELATIVE_DIR);
+
+  it('chaque illustration référencée existe dans le dossier partagé', () => {
+    referencedAssets(readMoodFiles()).forEach((name) => expect(existsSync(join(sourceAssets, name)), name).toBe(true));
+  });
+
+  it('iOS embarque exactement les illustrations référencées, à l’octet près', () => {
+    const referenced = referencedAssets(readMoodFiles());
+    expect(assetFilesIn(iosAssets)).toEqual(referenced);
+    referenced.forEach((name) => expect(readFileSync(join(iosAssets, name)).equals(readFileSync(join(sourceAssets, name))), name).toBe(true));
+  });
+
+  it('une illustration hors du dossier des cadres fait échouer la lecture', () => {
+    const outside = {
+      mood: 'jovial',
+      motifs: [{ id: 'jovial.essai', mood: 'jovial', name: 'Essai', base: { ...look, scene: [{ id: 'fond', kind: 'image', depth: 'back', src: 'assets/ailleurs/fond.webp' }] }, variants: { duo: {} } }],
+    };
+    expect(() => referencedAssets([outside])).toThrow(/jovial\.essai\.duo\.scene/);
   });
 });

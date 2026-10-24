@@ -97,8 +97,9 @@ extension CallCaptureController {
         guard case .frame(let id) = choice, case .mood(let mood) = CallMontageFrameRule.chip(of: choice) else { return [] }
         let people = subjects.count
         let frames = CallFrameSpotlightRule.frames(forPeople: people, mood: mood, scope: frameScope(people: people))
-        let ids = Self.thumbnailWindow(around: id, in: frames.map(\.id), radius: Self.thumbnailRadius)
-        return frames.filter { ids.contains($0.id) }
+        let ids = Self.thumbnailWindow(around: CallFrameStyleRule.baseId(of: id), in: frames.map(\.id), radius: Self.thumbnailRadius)
+        let declinations = CallFrameStyleRule.declinations(of: CallFrameStyleRule.baseId(of: id), in: CallFrameCatalogue.all).dropFirst()
+        return frames.filter { ids.contains($0.id) } + declinations
     }
 
     // MARK: - Peindre, hors du thread principal

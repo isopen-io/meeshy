@@ -15,6 +15,14 @@ enum CallFrameCopy {
             : String(localized: "call.frames.more", defaultValue: "Plus d'ambiances", bundle: .main)
     }
 
+    static var nextDeclination: String {
+        String(localized: "call.frames.style.next", defaultValue: "Déclinaison suivante", bundle: .main)
+    }
+
+    static var previousDeclination: String {
+        String(localized: "call.frames.style.previous", defaultValue: "Déclinaison précédente", bundle: .main)
+    }
+
     static func scopeToggleHint(showsAll: Bool) -> String {
         showsAll
             ? String(localized: "call.frames.less.hint", defaultValue: "Revient aux ambiances mises en avant", bundle: .main)
@@ -49,7 +57,10 @@ enum CallFrameCopy {
     static func choiceName(_ choice: CallMontageChoice) -> String {
         switch choice {
         case .classic(let style): return CallCaptureCopy.styleName(style)
-        case .frame(let id): return CallMontageFrameRule.design(id: id)?.name ?? ""
+        case .frame(let id):
+            guard let design = CallMontageFrameRule.design(id: id) else { return "" }
+            let style = design.styles.first { $0.id == design.styleId }
+            return style.map { "\(design.name) · \($0.name)" } ?? design.name
         }
     }
 

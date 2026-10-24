@@ -192,6 +192,14 @@ final class CallLiveFrameRuleTests: XCTestCase {
         XCTAssertEqual(display(design, reduceMotion: true), .frame(design))
     }
 
+    func test_animates_illustrationOnly_isStillAndKeepsItsStillState() {
+        let image = CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/test_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil)
+        let design = makeDesign(scene: [image])
+        XCTAssertFalse(CallLiveFrameRule.animates(design))
+        XCTAssertTrue(CallLiveFrameRule.hasStillState(design))
+        XCTAssertEqual(display(design, reduceMotion: true), .frame(design))
+    }
+
     func test_animates_sceneLayer_countsAsMotion() {
         let layer = CallFrameSceneLayer(id: "glow", kind: .light, depth: .back, src: nil, preset: nil, color: "#FFFFFF", amount: 0.5, maxParticles: nil)
         XCTAssertTrue(CallLiveFrameRule.animates(makeDesign(scene: [layer])))
