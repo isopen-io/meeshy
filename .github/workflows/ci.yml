@@ -194,51 +194,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       # Build shared package first (required for type-check)
       - name: Build shared package (bun)
@@ -534,6 +491,13 @@ jobs:
       - name: CI verdict witness
         run: node scripts/ci/needs-verdict.mjs --self-test
 
+      # #12559 — l'outil UNIQUE qui dit si une PR est verte, pour tous les
+      # fusionneurs (`.claude/workflows`, `apps/android/scripts/parity`) :
+      # chaque check du SHA de tête fini et vert, « Verdict CI » présent, une
+      # annulation jamais verte.
+      - name: Green PR tool witness
+        run: node scripts/ci/pr-verte.mjs --self-test
+
       - name: Web navigator zone read-set guard
         run: node scripts/ci/check-web-navigateur-read-set.mjs --self-test && node scripts/ci/check-web-navigateur-read-set.mjs
 
@@ -689,42 +653,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       # Le préchauffage des cinq documents fait partie de CE build depuis
       # qu'il est un greffon de `vite.config.ts` : le témoin mesure donc
@@ -1637,11 +1567,32 @@ jobs:
             filter: '@meeshy/shared'
             timeoutMinutes: 20
             testTimeoutMinutes: 15
-          - name: gateway
+          # #12556 — la passerelle en TROIS tranches Jest (`--shard`) : en un
+          # bloc, 16 à 17,5 min après `quality`, elle fixait la durée du run.
+          # Chaque tranche tourne sans seuil et dépose son `coverage-final.json` ;
+          # `test-gateway-coverage` les fusionne et juge le seuil de
+          # `jest.config.json`, inchangé.
+          - name: gateway · tranche 1/3
             path: services/gateway
             filter: '@meeshy/gateway'
-            timeoutMinutes: 40
-            testTimeoutMinutes: 35
+            shard: 1/3
+            artifact: couverture-gateway-1
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+          - name: gateway · tranche 2/3
+            path: services/gateway
+            filter: '@meeshy/gateway'
+            shard: 2/3
+            artifact: couverture-gateway-2
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+          - name: gateway · tranche 3/3
+            path: services/gateway
+            filter: '@meeshy/gateway'
+            shard: 3/3
+            artifact: couverture-gateway-3
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
@@ -1657,51 +1608,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       # Generate Prisma client before building
       - name: Generate Prisma client
@@ -1732,7 +1640,7 @@ jobs:
       # RÉEL (libavif-bin). #11263 et #12268 — un HEIC se convertit, et la carte
       # de gain d'un vrai HEIC d'iPhone se prouve, par heif-convert RÉEL.
       - name: Install ffmpeg, jpegtran, avifenc and heif-convert (gateway)
-        if: matrix.package.name == 'gateway'
+        if: matrix.package.path == 'services/gateway'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265
@@ -1750,6 +1658,9 @@ jobs:
             cd ${{ matrix.package.path }}
             echo "Running web tests with bun test..."
             bun run test:coverage
+          elif [ -n "${{ matrix.package.shard }}" ]; then
+            cd ${{ matrix.package.path }}
+            bun run test:coverage --shard=${{ matrix.package.shard }} --coverageThreshold='{}' --coverageReporters=json --coverageReporters=text-summary
           else
             bun run test:coverage --filter=${{ matrix.package.filter }}
           fi
@@ -1757,15 +1668,75 @@ jobs:
       - name: Run tests with coverage (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
         timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
-        run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
+        run: |
+          if [ -n "${{ matrix.package.shard }}" ]; then
+            cd ${{ matrix.package.path }}
+            pnpm run test:coverage --shard=${{ matrix.package.shard }} --coverageThreshold='{}' --coverageReporters=json --coverageReporters=text-summary
+          else
+            pnpm run test:coverage --filter=${{ matrix.package.filter }}
+          fi
+
+      - name: Upload shard coverage
+        if: ${{ matrix.package.artifact }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.package.artifact }}
+          path: ${{ matrix.package.path }}/coverage/coverage-final.json
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Upload coverage
+        if: ${{ !matrix.package.artifact }}
         uses: codecov/codecov-action@v7
         continue-on-error: true
         with:
           file: ./${{ matrix.package.path }}/coverage/lcov.info
           flags: ${{ matrix.package.name }}
           name: ${{ matrix.package.name }}-coverage
+
+  # #12556 — LA COUVERTURE DE LA PASSERELLE, FUSIONNÉE PUIS JUGÉE UNE FOIS.
+  # Chaque tranche ne voit qu'une part des tests : jugée seule, elle tomberait
+  # sous le seuil global à tort. `merge-jest-coverage.mjs` additionne les trois
+  # `coverage-final.json` par emplacement et compare les quatre totaux au
+  # `coverageThreshold.global` de `services/gateway/jest.config.json` ; une
+  # tranche manquante est rouge (`--attendu 3`).
+  test-gateway-coverage:
+    name: Tests · gateway · couverture fusionnée
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ !cancelled() && needs.test.result != 'skipped' }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download shard coverage
+        uses: actions/download-artifact@v8
+        with:
+          pattern: couverture-gateway-*
+          path: couverture
+
+      - name: Merge coverage and enforce the threshold
+        run: |
+          node scripts/ci/merge-jest-coverage.mjs --self-test
+          node scripts/ci/merge-jest-coverage.mjs \
+            --config services/gateway/jest.config.json \
+            --attendu 3 \
+            --sortie services/gateway/coverage/coverage-final.json \
+            couverture/*/coverage-final.json
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v7
+        continue-on-error: true
+        with:
+          file: ./services/gateway/coverage/coverage-final.json
+          flags: gateway
+          name: gateway-coverage
 
   # ===========================================================================
   # TEST: Python Tests with Coverage
@@ -1792,44 +1763,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Node.js and package manager setup for Prisma CLI
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      # Install Node.js dependencies (required for Prisma CLI)
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -1933,44 +1868,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Node.js and package manager setup for Prisma CLI
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      # Install Node.js dependencies (required for Prisma CLI)
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -2086,44 +1985,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Node.js and package manager setup for Prisma CLI
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      # Install Node.js dependencies (required for Prisma CLI)
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -2251,19 +2114,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -2300,29 +2152,6 @@ jobs:
           done
           echo "::error::uv python install a échoué après 5 tentatives."
           exit 1
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
@@ -2408,42 +2237,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -2513,51 +2308,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Validate Prisma schema
         env:
@@ -2592,51 +2344,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       # Generate Prisma client before building
       - name: Generate Prisma client
@@ -2697,7 +2406,7 @@ jobs:
   summary:
     name: Verdict CI
     runs-on: ubuntu-latest
-    needs: [changes, quality, gardes-depot, web-navigateur, shell-android, glory-frames, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [changes, quality, gardes-depot, web-navigateur, shell-android, glory-frames, test, test-gateway-coverage, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Checkout (le script du verdict seul)
@@ -2721,6 +2430,7 @@ jobs:
           echo "| Android coque (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cadres de gloire (glory_frames: ${{ needs.changes.outputs.glory_frames }}) | ${{ needs.glory-frames.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests · paquets Node | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests · gateway · couverture fusionnée | ${{ needs.test-gateway-coverage.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Traducteur · tests Python | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Traducteur · pipeline audio | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Traducteur · TTS et STT | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
