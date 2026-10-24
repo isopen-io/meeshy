@@ -24,6 +24,8 @@
  *     - mode=server → getOrCreateConversationKey called
  *     - senderParticipant found → message created
  *     - senderParticipant null → no message
+ *     - the notice is broadcast (message:new + conversation:updated), detached
+ *       from the response, which survives a failing or hanging emission (#11416)
  *     - throws → 500
  *
  * @jest-environment node
@@ -514,11 +516,17 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
     it("une diffusion qui échoue ne fait pas échouer l'activation", async () => {
       const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockRejectedValue(new Error('socket down'));
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => unhandled.push(reason);
+      process.on('unhandledRejection', onUnhandled);
       const app = await buildApp(ADMIN_GROUP, broadcastMessage);
       const res = await enable(app);
-      expect(res.statusCode).toBe(200);
       await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      process.off('unhandledRejection', onUnhandled);
+      expect(res.statusCode).toBe(200);
       expect(broadcastMessage).toHaveBeenCalledTimes(1);
+      expect(unhandled).toEqual([]);
       await app.close();
     });
 
