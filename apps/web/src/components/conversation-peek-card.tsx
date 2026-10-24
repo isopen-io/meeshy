@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { QueryClient } from '@tanstack/react-query';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 import { conversationPreviewString } from '@meeshy/shared/utils/conversation-preview-strings';
 import { conversationIsEndToEnd } from '@meeshy/shared/utils/message-action-policy';
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
-import { accentOf, withAccent } from '@/lib/accent';
+import { accentOf, personalBubbleVars, withAccent } from '@/lib/accent';
 import { apiDeps } from '@/lib/api/deps';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { messagesInfiniteOptions, messagesQueryKey } from '@/lib/api/messages';
@@ -17,6 +17,7 @@ import { place, type PlacedMessage } from '@/lib/grouping';
 import { translate } from '@/lib/i18n-catalog';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { appearanceOf } from '@/lib/appearance/read';
 import { resolveThreadMode, toStickyPreference, type FlatRowMode } from '@/lib/reading-mode/decision';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { readingModeStore, type ReadingModeStore } from '@/lib/reading-mode/store';
@@ -28,6 +29,7 @@ import { usePresence } from '@/lib/view/use-presence';
 
 import { Avatar } from './avatar';
 import { Bubble } from './bubble';
+import { ConversationBackdrop } from './conversation-backdrop';
 import { FocalRow } from './focal-row';
 import { Glyph } from './glyph';
 
@@ -49,6 +51,15 @@ import '@/styles/conversation-peek.css';
  * Les rangées sont celles du fil (`FocalRow`, `Bubble`) : le Prisme, la
  * protection et la mise en forme sont les leurs. Elles sont INERTES ici — la
  * carte entière est un geste, ouvrir la conversation.
+ *
+ * LA PEAU DU FIL (#12633) : la carte pose ce que le fil pose sur sa racine
+ * (`routes/thread.tsx`) — l'accent, la couleur PERSONNELLE des bulles envoyées
+ * (`personalBubbleVars`) et, quand le lecteur en a choisi un, le FOND de la
+ * conversation (`ConversationBackdrop`, non vivant comme dans la feuille
+ * d'apparence). Signature garde la surface de la carte, comme iOS (#11231) :
+ * ce que le fond choisi n'a pas encore prêt (photo en route) la laisse voir.
+ * Le fond se lit du cache du client de la carte — aucune requête de plus quand
+ * le fil l'a déjà chargé.
  */
 
 /** Ce que l'aperçu dessine : ce que le fil dessinerait, le Résumé retombant sur Focal. */
@@ -186,6 +197,8 @@ export function ConversationPeekCard({
     setOverflowing(body.scrollHeight > body.clientHeight);
   }, [placed, maxHeight, mode]);
   const label = rowMenuText(interfaceLanguage, 'rowMenu.peek');
+  const background = appearanceOf(conversation).background.kind;
+  const painted = background !== 'signature';
   const e2ee = conversationIsEndToEnd({ type: conversation.type, encryptionMode: conversation.encryptionMode ?? null });
   const memberCount = conversation.memberCount ?? 0;
 
@@ -196,9 +209,15 @@ export function ConversationPeekCard({
       {...(idBase === undefined ? {} : { id: `${idBase}-card` })}
       data-peek-card
       data-peek-mode={mode}
+      {...(painted ? { 'data-peek-backdrop': background } : {})}
       className="conversation-peek-card"
-      style={withAccent(accent, { maxHeight })}
+      style={withAccent(accent, { maxHeight, ...personalBubbleVars(conversation) })}
     >
+      {painted ? (
+        <QueryClientProvider client={client}>
+          <ConversationBackdrop conversation={conversation} accent={accent} live={false} deps={deps} />
+        </QueryClientProvider>
+      ) : null}
       <div data-peek-header className="conversation-peek-header">
         <Avatar
           initials={initialsOf(title)}
