@@ -1,6 +1,5 @@
 package me.meeshy.app.profile
 
-import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -26,8 +25,12 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
+/**
+ * My page's stats dashboard, fed only by the session. The third-party stats
+ * behaviour moved with the third-party page to [PublicProfileViewModelTest].
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
-class ProfileViewModelStatsTest {
+class OwnProfileViewModelStatsTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -58,26 +61,41 @@ class ProfileViewModelStatsTest {
         Dispatchers.resetMain()
     }
 
-    private fun otherProfileViewModel(
-        session: SessionRepository = mockk(relaxed = true),
+    private fun ownProfileViewModel(
+        flow: MutableStateFlow<MeeshyUser?>,
         userRepo: UserRepository,
         statsCache: ProfileStatsCacheRepository = coldStatsCache(),
-        viewedId: String = "u1",
-    ) = ProfileViewModel(
-        sessionRepository = session,
-        userRepository = userRepo,
-        statsCache = statsCache,
-        workManager = mockk(relaxed = true),
-        savedStateHandle = SavedStateHandle(mapOf(ProfileViewModel.USER_ID_ARG to viewedId)),
-    )
+    ): OwnProfileViewModel {
+        val session = mockk<SessionRepository>()
+        every { session.currentUser } returns flow
+        return OwnProfileViewModel(
+            sessionRepository = session,
+            userRepository = userRepo,
+            statsCache = statsCache,
+            workManager = mockk(relaxed = true),
+        )
+    }
+
+    @Test
+    fun myPage_readsTheSession_andNeverFetchesAProfile() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        val me = MeeshyUser(id = "me1", username = "atabeth", displayName = "Moi")
+
+        val vm = ownProfileViewModel(MutableStateFlow(me), userRepo)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.user?.id).isEqualTo("me1")
+        assertThat(vm.state.value.displayName).isEqualTo("Moi")
+        coVerify(exactly = 0) { userRepo.getProfile(any()) }
+        coVerify(exactly = 1) { userRepo.getUserStatsTimeline(any()) }
+    }
 
     @Test
     fun stats_areProjectedIntoState_afterASuccessfulFetch() = runTest(dispatcher) {
-        val userRepo = mockk<UserRepository>()
-        coEvery { userRepo.getProfile("u1") } returns NetworkResult.Success(user())
+        val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStats("u1") } returns NetworkResult.Success(sampleStats)
 
-        val vm = otherProfileViewModel(userRepo = userRepo)
+        val vm = ownProfileViewModel(MutableStateFlow(user()), userRepo)
         advanceUntilIdle()
 
         val stats = vm.state.value.stats
@@ -88,12 +106,11 @@ class ProfileViewModelStatsTest {
     }
 
     @Test
-    fun stats_stayNull_whenTheStatsFetchFails_withoutClobberingTheProfile() = runTest(dispatcher) {
-        val userRepo = mockk<UserRepository>()
-        coEvery { userRepo.getProfile("u1") } returns NetworkResult.Success(user())
+    fun stats_stayNull_whenTheStatsFetchFails_withoutClobberingThePage() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStats("u1") } returns NetworkResult.Failure(ApiError("boom"))
 
-        val vm = otherProfileViewModel(userRepo = userRepo)
+        val vm = ownProfileViewModel(MutableStateFlow(user()), userRepo)
         advanceUntilIdle()
 
         assertThat(vm.state.value.stats).isNull()
@@ -103,11 +120,10 @@ class ProfileViewModelStatsTest {
 
     @Test
     fun stats_areNotClobbered_whenTheStatsFetchThrows() = runTest(dispatcher) {
-        val userRepo = mockk<UserRepository>()
-        coEvery { userRepo.getProfile("u1") } returns NetworkResult.Success(user())
+        val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStats("u1") } throws RuntimeException("network down")
 
-        val vm = otherProfileViewModel(userRepo = userRepo)
+        val vm = ownProfileViewModel(MutableStateFlow(user()), userRepo)
         advanceUntilIdle()
 
         assertThat(vm.state.value.stats).isNull()
@@ -116,20 +132,11 @@ class ProfileViewModelStatsTest {
 
     @Test
     fun ownProfile_loadsStatsExactlyOnce_acrossRepeatedSessionEmissions() = runTest(dispatcher) {
-        val session = mockk<SessionRepository>()
         val flow = MutableStateFlow<MeeshyUser?>(null)
-        every { session.currentUser } returns flow
-
-        val userRepo = mockk<UserRepository>()
+        val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStats("u1") } returns NetworkResult.Success(sampleStats)
 
-        val vm = ProfileViewModel(
-            sessionRepository = session,
-            userRepository = userRepo,
-            statsCache = coldStatsCache(),
-            workManager = mockk(relaxed = true),
-            savedStateHandle = SavedStateHandle(),
-        )
+        val vm = ownProfileViewModel(flow, userRepo)
 
         flow.value = user()
         advanceUntilIdle()
@@ -143,17 +150,9 @@ class ProfileViewModelStatsTest {
 
     @Test
     fun ownProfile_neverLoadsStats_whileTheSessionUserIsAbsent() = runTest(dispatcher) {
-        val session = mockk<SessionRepository>()
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         val userRepo = mockk<UserRepository>(relaxed = true)
 
-        val vm = ProfileViewModel(
-            sessionRepository = session,
-            userRepository = userRepo,
-            statsCache = coldStatsCache(),
-            workManager = mockk(relaxed = true),
-            savedStateHandle = SavedStateHandle(),
-        )
+        val vm = ownProfileViewModel(MutableStateFlow(null), userRepo)
         advanceUntilIdle()
 
         assertThat(vm.state.value.stats).isNull()

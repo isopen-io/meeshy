@@ -1,6 +1,5 @@
 package me.meeshy.app.profile
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.work.WorkManager
 import androidx.work.WorkRequest
 import com.google.common.truth.Truth.assertThat
@@ -34,7 +33,7 @@ import org.junit.Test
  * from — and never clobbered by — the session identity.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class ProfileViewModelEditTest {
+class OwnProfileViewModelEditTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -70,15 +69,14 @@ class ProfileViewModelEditTest {
         flow: MutableStateFlow<MeeshyUser?>,
         userRepo: UserRepository,
         workManager: WorkManager = mockk(relaxed = true),
-    ): ProfileViewModel {
+    ): OwnProfileViewModel {
         val session = mockk<SessionRepository>()
         every { session.currentUser } returns flow
-        return ProfileViewModel(
+        return OwnProfileViewModel(
             sessionRepository = session,
             userRepository = userRepo,
             statsCache = coldStatsCache(),
             workManager = workManager,
-            savedStateHandle = SavedStateHandle(),
         )
     }
 
@@ -99,7 +97,7 @@ class ProfileViewModelEditTest {
         val vm = ownProfileVm(flow, userRepo)
         advanceUntilIdle()
 
-        vm.startEditing()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
 
         val s = vm.state.value
         assertThat(s.isEditing).isTrue()
@@ -119,7 +117,7 @@ class ProfileViewModelEditTest {
         val vm = ownProfileVm(flow, userRepo)
         advanceUntilIdle()
 
-        vm.startEditing()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
 
         val s = vm.state.value
         assertThat(s.firstName).isEmpty()
@@ -131,10 +129,10 @@ class ProfileViewModelEditTest {
         val userRepo = mockk<UserRepository>(relaxed = true)
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
         advanceUntilIdle()
-        vm.startEditing()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
 
-        vm.onFirstNameChange("Alicia")
-        vm.onLastNameChange("Keys")
+        vm.onEvent(OwnProfileUiEvent.FirstNameChanged("Alicia"))
+        vm.onEvent(OwnProfileUiEvent.LastNameChanged("Keys"))
 
         val s = vm.state.value
         assertThat(s.firstName).isEqualTo("Alicia")
@@ -146,11 +144,11 @@ class ProfileViewModelEditTest {
         val userRepo = mockk<UserRepository>(relaxed = true)
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
         advanceUntilIdle()
-        vm.startEditing()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
 
-        vm.onSystemLanguageChange("de")
-        vm.onRegionalLanguageChange("it")
-        vm.onCustomDestinationLanguageChange("pt")
+        vm.onEvent(OwnProfileUiEvent.SystemLanguageChanged("de"))
+        vm.onEvent(OwnProfileUiEvent.RegionalLanguageChanged("it"))
+        vm.onEvent(OwnProfileUiEvent.CustomDestinationLanguageChanged("pt"))
 
         val s = vm.state.value
         assertThat(s.systemLanguage).isEqualTo("de")
@@ -164,9 +162,9 @@ class ProfileViewModelEditTest {
         coEvery { userRepo.enqueueProfileEdit(any()) } returns "cmid_1"
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
         advanceUntilIdle()
-        vm.startEditing()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
 
-        vm.saveProfile()
+        vm.onEvent(OwnProfileUiEvent.Save)
 
         // Optimistic: the editor closes before the coroutine (and network) run.
         assertThat(vm.state.value.isEditing).isFalse()
@@ -181,13 +179,13 @@ class ProfileViewModelEditTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo, workManager)
         advanceUntilIdle()
-        vm.startEditing()
-        vm.onFirstNameChange("  Alicia  ")
-        vm.onLastNameChange("  Keys  ")
-        vm.onDisplayNameChange("  Alicia  ")
-        vm.onSystemLanguageChange("de")
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.FirstNameChanged("  Alicia  "))
+        vm.onEvent(OwnProfileUiEvent.LastNameChanged("  Keys  "))
+        vm.onEvent(OwnProfileUiEvent.DisplayNameChanged("  Alicia  "))
+        vm.onEvent(OwnProfileUiEvent.SystemLanguageChanged("de"))
 
-        vm.saveProfile()
+        vm.onEvent(OwnProfileUiEvent.Save)
         advanceUntilIdle()
 
         // The request is built from the buffers via the trimming builder.
@@ -207,9 +205,9 @@ class ProfileViewModelEditTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo, workManager)
         advanceUntilIdle()
-        vm.startEditing()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
 
-        vm.saveProfile()
+        vm.onEvent(OwnProfileUiEvent.Save)
         advanceUntilIdle()
 
         verify(exactly = 0) { workManager.enqueue(any<WorkRequest>()) }
@@ -221,9 +219,9 @@ class ProfileViewModelEditTest {
         coEvery { userRepo.enqueueProfileEdit(any()) } throws RuntimeException("db write failed")
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
         advanceUntilIdle()
-        vm.startEditing()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
 
-        vm.saveProfile()
+        vm.onEvent(OwnProfileUiEvent.Save)
         advanceUntilIdle()
 
         assertThat(vm.state.value.isEditing).isTrue()
@@ -235,12 +233,12 @@ class ProfileViewModelEditTest {
         val userRepo = mockk<UserRepository>(relaxed = true)
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
         advanceUntilIdle()
-        vm.startEditing()
-        vm.onFirstNameChange("Abandoned")
-        vm.onDisplayNameChange("Typed but abandoned")
-        vm.onSystemLanguageChange("de")
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.FirstNameChanged("Abandoned"))
+        vm.onEvent(OwnProfileUiEvent.DisplayNameChanged("Typed but abandoned"))
+        vm.onEvent(OwnProfileUiEvent.SystemLanguageChanged("de"))
 
-        vm.cancelEditing()
+        vm.onEvent(OwnProfileUiEvent.CancelEditing)
 
         val s = vm.state.value
         assertThat(s.isEditing).isFalse()
@@ -255,8 +253,8 @@ class ProfileViewModelEditTest {
         val flow = MutableStateFlow<MeeshyUser?>(user())
         val vm = ownProfileVm(flow, userRepo)
         advanceUntilIdle()
-        vm.startEditing()
-        vm.onDisplayNameChange("Alicia in progress")
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.DisplayNameChanged("Alicia in progress"))
 
         // A background refresh republishes a different identity mid-edit.
         flow.value = user(displayName = "Server Renamed")
