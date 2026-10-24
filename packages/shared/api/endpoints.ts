@@ -44,6 +44,7 @@ import * as communitiesGroup from './endpoints/communities.js';
 import * as contactsGroup from './endpoints/contacts.js';
 import * as conversationsGroup from './endpoints/conversations.js';
 import * as directoryGroup from './endpoints/directory.js';
+import * as e2EeGroup from './endpoints/e2-ee.js';
 import * as friendRequestsGroup from './endpoints/friend-requests.js';
 import * as guestSessionsGroup from './endpoints/guest-sessions.js';
 import * as hashtagsGroup from './endpoints/hashtags.js';
@@ -104,6 +105,7 @@ export const API_ENDPOINTS = {
   contacts: contactsGroup,
   conversations: conversationsGroup,
   directory: directoryGroup,
+  e2Ee: e2EeGroup,
   friendRequests: friendRequestsGroup,
   guestSessions: guestSessionsGroup,
   hashtags: hashtagsGroup,
@@ -447,6 +449,14 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/directory/people',
   '/api/v1/directory/people/:handle',
   '/api/v1/directory/presence',
+  '/api/v1/e2ee/devices',
+  '/api/v1/e2ee/devices/:deviceId',
+  '/api/v1/e2ee/devices/:deviceId/keys',
+  '/api/v1/e2ee/devices/self/prekey-count',
+  '/api/v1/e2ee/envelopes',
+  '/api/v1/e2ee/envelopes/ack',
+  '/api/v1/e2ee/keys/:userId',
+  '/api/v1/e2ee/keys/:userId/devices',
   '/api/v1/friend-requests',
   '/api/v1/friend-requests/:id',
   '/api/v1/friend-requests/received',
@@ -1062,6 +1072,14 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/directory/people': ['GET'],
   '/api/v1/directory/people/:handle': ['GET'],
   '/api/v1/directory/presence': ['GET'],
+  '/api/v1/e2ee/devices': ['POST'],
+  '/api/v1/e2ee/devices/:deviceId': ['DELETE'],
+  '/api/v1/e2ee/devices/:deviceId/keys': ['PUT'],
+  '/api/v1/e2ee/devices/self/prekey-count': ['GET'],
+  '/api/v1/e2ee/envelopes': ['GET'],
+  '/api/v1/e2ee/envelopes/ack': ['POST'],
+  '/api/v1/e2ee/keys/:userId': ['GET'],
+  '/api/v1/e2ee/keys/:userId/devices': ['GET'],
   '/api/v1/friend-requests': ['POST'],
   '/api/v1/friend-requests/:id': ['PATCH', 'DELETE'],
   '/api/v1/friend-requests/received': ['GET'],

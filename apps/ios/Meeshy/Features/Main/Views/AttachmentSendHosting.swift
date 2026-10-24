@@ -9,6 +9,8 @@ protocol AttachmentSendHosting: AnyObject {
     func send(_ outgoing: OutgoingMessage) async -> Result<SentMessageReceipt, SendFailure>
     func recordSendFailure(tempId: String, error: any Error) async
     func markOptimisticMediaFailed(tempId: String, reason: String) async
+    /// Non nul dans une conversation chiffrée de bout en bout : aucune pièce ne s'y téléverse (#11379).
+    var endToEndPieceRefusal: EndToEndSendRefusal? { get }
 }
 
 enum LocalTranscriptionPlacement {
