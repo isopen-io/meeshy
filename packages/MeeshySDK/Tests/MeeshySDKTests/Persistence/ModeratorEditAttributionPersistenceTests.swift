@@ -4,10 +4,13 @@ import GRDB
 
 /// **#11375 — « modifié par un modérateur » survit à GRDB.** Décision porteur
 /// du 2026-10-24 : un modérateur de plateforme qui modifie le message d'un
-/// autre le fait à visage découvert. La passerelle sert `editedById` ; le fil
-/// ne lit que GRDB, donc la mention doit traverser la table `messages` — par
-/// la revalidation REST (upsert) ET par `message:edited` (`markEdited`).
-/// L'auteur qui réécrit son message l'efface.
+/// autre le fait à visage découvert. La passerelle sert `editedById` (l'identité
+/// à ADMIN / BIGBOSS, la marque `"moderator"` aux autres) ; le fil ne lit que
+/// GRDB, donc la mention doit traverser la table `messages` — par la
+/// revalidation REST (upsert) ET par `message:edited` (`markEdited`), y compris
+/// conversation FERMÉE (`RealtimeMessageMutation.edited`). L'auteur qui réécrit
+/// son message l'efface (`null` servi) ; une charge qui ne porte pas la clé
+/// (projection qui ne la sélectionne pas, passerelle antérieure) n'efface rien.
 final class ModeratorEditAttributionPersistenceTests: XCTestCase {
 
     private var dbQueue: DatabaseQueue!
@@ -30,12 +33,25 @@ final class ModeratorEditAttributionPersistenceTests: XCTestCase {
         dbQueue = nil
     }
 
-    private static func payload(isEdited: Bool, editedById: String?) -> String {
-        let editor = editedById.map { "\"editedById\":\"\($0)\",\"editedByRole\":\"MODERATOR\"," } ?? ""
+    private enum Editor {
+        case absent
+        case author
+        case served(String)
+
+        var json: String {
+            switch self {
+            case .absent: return ""
+            case .author: return "\"editedById\":null,\"editedByRole\":null,"
+            case let .served(id): return "\"editedById\":\"\(id)\",\"editedByRole\":null,"
+            }
+        }
+    }
+
+    private static func payload(isEdited: Bool, editor: Editor) -> String {
         return """
         {"id":"\(messageId)","conversationId":"\(conversationId)","senderId":"\(senderId)",
          "content":"Bonjour","messageType":"text","messageSource":"user",
-         "isEdited":\(isEdited),\(editor)
+         "isEdited":\(isEdited),\(editor.json)
          "isEncrypted":false,
          "createdAt":"2026-10-24T09:00:00.000Z","updatedAt":"2026-10-24T09:05:00.000Z"}
         """
@@ -52,13 +68,13 @@ final class ModeratorEditAttributionPersistenceTests: XCTestCase {
     }
 
     func test_decode_moderatorEdit_carriesTheEditor() throws {
-        let api = try decode(Self.payload(isEdited: true, editedById: Self.moderator))
+        let api = try decode(Self.payload(isEdited: true, editor: .served(Self.moderator)))
         XCTAssertEqual(api.editedById, Self.moderator)
         XCTAssertTrue(api.toMessage(currentUserId: Self.reader).editedByModerator)
     }
 
     func test_upsert_moderatorEdit_survivesPersistence() async throws {
-        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editedById: Self.moderator))])
+        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editor: .served(Self.moderator)))])
 
         let message = try persistedMessage()
         XCTAssertEqual(message.editedById, Self.moderator)
@@ -66,28 +82,72 @@ final class ModeratorEditAttributionPersistenceTests: XCTestCase {
     }
 
     func test_upsert_authorRewrite_clearsTheMention() async throws {
-        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editedById: Self.moderator))])
-        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editedById: nil))])
+        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editor: .served(Self.moderator)))])
+        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editor: .author))])
 
         XCTAssertFalse(try persistedMessage().editedByModerator)
     }
 
     func test_markEdited_servedEditor_isRecorded_thenClearedByTheAuthor() async throws {
-        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: false, editedById: nil))])
+        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: false, editor: .absent))])
 
-        try await actor.markEdited(localId: Self.messageId, newContent: "corrigé", editedAt: Date(), editedById: Self.moderator)
+        try await actor.markEdited(localId: Self.messageId, newContent: "corrigé", editedAt: Date(),
+                                 authorship: .served(editedById: Self.moderator))
         XCTAssertTrue(try persistedMessage().editedByModerator)
 
-        try await actor.markEdited(localId: Self.messageId, newContent: "réécrit", editedAt: Date().addingTimeInterval(1), editedById: nil)
+        try await actor.markEdited(localId: Self.messageId, newContent: "réécrit", editedAt: Date().addingTimeInterval(1),
+                                 authorship: .served(editedById: nil))
         XCTAssertFalse(try persistedMessage().editedByModerator)
     }
 
     func test_markEdited_withoutServedEditor_keepsTheColumn() async throws {
-        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editedById: Self.moderator))])
+        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editor: .served(Self.moderator)))])
 
         try await actor.markEdited(localId: Self.messageId, newContent: "corrigé", editedAt: Date())
 
         XCTAssertTrue(try persistedMessage().editedByModerator, "un chemin qui ne porte pas l'auteur ne l'efface pas")
+    }
+
+    func test_decode_absentKey_isUntouched_nullIsServed() throws {
+        XCTAssertEqual(try decode(Self.payload(isEdited: true, editor: .absent)).editAuthorship, .untouched)
+        XCTAssertEqual(try decode(Self.payload(isEdited: true, editor: .author)).editAuthorship, .served(editedById: nil))
+    }
+
+    func test_upsert_projectionWithoutTheKey_keepsTheMention() async throws {
+        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editor: .served(Self.moderator)))])
+        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editor: .absent))])
+
+        XCTAssertTrue(try persistedMessage().editedByModerator,
+                      "une charge qui ne dit pas l'auteur (recherche, épinglés, passerelle antérieure) n'efface pas la mention")
+    }
+
+    func test_upsert_maskedMark_saysModifiedByAModerator() async throws {
+        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: true, editor: .served("moderator")))])
+
+        XCTAssertTrue(try persistedMessage().editedByModerator, "la marque sans identité dit la mention")
+    }
+
+    func test_realtimeMutation_closedConversation_carriesTheServedEditor() throws {
+        let api = try decode(Self.payload(isEdited: true, editor: .served("moderator")))
+
+        guard case let .edited(_, _, _, _, authorship) = ConversationSyncEngine.mutation(for: api, content: "corrigé") else {
+            return XCTFail("une modification reste une modification")
+        }
+        XCTAssertEqual(authorship, .served(editedById: "moderator"))
+    }
+
+    func test_markEdited_closedConversationPath_writesTheColumn() async throws {
+        try await actor.upsertFromAPIMessages([try decode(Self.payload(isEdited: false, editor: .absent))])
+        let api = try decode(Self.payload(isEdited: true, editor: .served("moderator")))
+        guard case let .edited(messageId, content, editedAt, marksEdited, authorship) =
+                ConversationSyncEngine.mutation(for: api, content: "corrigé") else {
+            return XCTFail("une modification reste une modification")
+        }
+
+        try await actor.markEdited(localId: messageId, newContent: content, editedAt: editedAt,
+                                   marksEdited: marksEdited, authorship: authorship)
+
+        XCTAssertTrue(try persistedMessage().editedByModerator)
     }
 
     func test_editedByModerator_requiresAnEditedMessage() {

@@ -31,18 +31,11 @@ extension MessagePersistenceActor {
 
     /// #11375 — la même modification, avec l'auteur que la passerelle a SERVI
     /// (`message:edited.editedById`) : un modérateur de plateforme est gravé,
-    /// `nil` (l'auteur a réécrit) efface la mention « modifié par un modérateur ».
+    /// `.served(editedById: nil)` (l'auteur a réécrit) efface la mention,
+    /// `.untouched` (la charge ne le dit pas) laisse la colonne.
     public func markEdited(
         localId: String, newContent: String, editedAt: Date, marksEdited: Bool = true,
-        arrivalsNotice: ArrivalsNoticeMetadata? = nil, editedById: String?
-    ) throws {
-        try markEdited(localId: localId, newContent: newContent, editedAt: editedAt, marksEdited: marksEdited,
-                       arrivalsNotice: arrivalsNotice, authorship: .served(editedById: editedById))
-    }
-
-    private func markEdited(
-        localId: String, newContent: String, editedAt: Date, marksEdited: Bool,
-        arrivalsNotice: ArrivalsNoticeMetadata?, authorship: EditAuthorship
+        arrivalsNotice: ArrivalsNoticeMetadata? = nil, authorship: EditAuthorship
     ) throws {
         let noticeJson = arrivalsNotice.flatMap {
             JSONEncoder().encodeOrLog($0, field: "joinNoticeJson", id: localId)

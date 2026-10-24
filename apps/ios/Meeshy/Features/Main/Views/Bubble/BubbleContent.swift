@@ -398,7 +398,9 @@ nonisolated struct BubbleContent: Equatable {
     var isForwarded: Bool { forwardAttribution != nil }
     let editedAt: Date?
     /// #11375 — la dernière modification est celle d'un modérateur de plateforme.
-    let editedByModerator: Bool
+    /// `var … = false` et non `let` : l'init memberwise sert encore les témoins
+    /// qui ne la nomment pas.
+    var editedByModerator: Bool = false
     let isEditSaving: Bool
     let hasEditHistory: Bool
     let reactions: [MeeshyReactionSummary]

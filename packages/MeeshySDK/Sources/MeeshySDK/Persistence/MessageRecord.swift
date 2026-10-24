@@ -54,8 +54,10 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     // Edit / Delete
     public var isEdited: Bool
     public var editedAt: Date?
-    /// #11375 — `User.id` du modérateur de plateforme qui a fait la dernière
-    /// modification ; `nil` quand c'est l'auteur (ou ligne antérieure).
+    /// #11375 — l'éditeur tiers de la dernière version tel que la passerelle
+    /// l'a servi à ce lecteur : le `User.id` du modérateur (ADMIN, BIGBOSS,
+    /// lui-même) ou la marque sans identité `"moderator"` ; `nil` quand c'est
+    /// l'auteur (ou ligne antérieure).
     public var editedById: String?
     public var deletedAt: Date?
 
@@ -196,7 +198,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         trackedLinksJson: String? = nil,
         senderIsAnonymous: Bool? = nil,
         senderHasAccount: Bool? = nil,
-        senderRingJson: String? = nil, editedById: String? = nil
+        senderRingJson: String? = nil
     ) {
         self.viewOnceOpenedAt = viewOnceOpenedAt
         self.localId = localId
@@ -265,7 +267,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.trackedLinksJson = trackedLinksJson
         self.senderIsAnonymous = senderIsAnonymous
         self.senderHasAccount = senderHasAccount
-        self.senderRingJson = senderRingJson; self.editedById = editedById
+        self.senderRingJson = senderRingJson
     }
 
     // MARK: - Timestamp pre-compute helper

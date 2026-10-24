@@ -6,21 +6,6 @@ struct PendingTombstone: Sendable {
     let expired: Bool
 }
 
-/// #11375 — ce qu'une modification dit de son AUTEUR : rien (chemin qui ne
-/// le porte pas, la colonne garde la sienne), ou celui que la passerelle a
-/// servi (`nil` = l'auteur du message lui-même, la mention s'efface).
-enum EditAuthorship: Sendable, Equatable {
-    case untouched
-    case served(editedById: String?)
-
-    var servesEditor: Bool { self != .untouched }
-
-    var servedEditorId: String? {
-        guard case let .served(editedById) = self else { return nil }
-        return editedById
-    }
-}
-
 struct PendingEdit: Sendable {
     let newContent: String
     let editedAt: Date

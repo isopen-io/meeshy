@@ -108,12 +108,16 @@ public struct APIMessage: Sendable {
     /// feature — the renderer then falls back to the raw URLs. Defaulted so the
     /// memberwise initializer stays source-compatible with existing call sites.
     public var trackingLinks: [TrackedLink]? = nil
-    /// #11375 — `User.id` du modérateur de plateforme qui a fait la dernière
-    /// modification ; `nil` quand c'est l'auteur, ou sur une charge d'une
-    /// passerelle antérieure. Sa présence dit « modifié par un modérateur ».
-    /// Même patron `var`/`= nil` que `trackingLinks` : l'init memberwise reste
+    /// #11375 — l'auteur de la dernière modification tel que la passerelle l'a
+    /// SERVI, ou `.untouched` quand la charge ne porte pas la clé `editedById`.
+    /// Même patron `var`/défaut que `trackingLinks` : l'init memberwise reste
     /// source-compatible.
-    public var editedById: String? = nil
+    public var editAuthorship: EditAuthorship = .untouched
+
+    /// #11375 — l'éditeur tiers servi (`User.id`, ou la marque sans identité) ;
+    /// `nil` quand c'est l'auteur ou que la charge ne le dit pas. Sa présence
+    /// dit « modifié par un modérateur ».
+    public var editedById: String? { editAuthorship.servedEditorId }
 
     /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when no
     /// tracking data is present. Consumed by `MessageTextRenderer` (tappable
@@ -154,6 +158,23 @@ extension APIMessage: Decodable {
         let sticker: MessageSticker?
     }
 
+    /// #11375 — « absent » (la charge ne dit rien de l'auteur) et « null »
+    /// (l'auteur a réécrit, la mention s'efface) ne se confondent pas.
+    private static func servedEditAuthorship(in c: KeyedDecodingContainer<CodingKeys>) -> EditAuthorship {
+        guard c.contains(.editedById) else { return .untouched }
+        return .served(editedById: (try? c.decodeIfPresent(String.self, forKey: .editedById)) ?? nil)
+    }
+
+    /// Sticker : la racine d'abord (les deux producteurs le hissent), sinon
+    /// l'enveloppe `metadata`. Les deux lectures sont tolérantes — une forme
+    /// inattendue laisse le champ nil sans faire tomber le message — et un
+    /// sticker non rendable vaut absence (règle de `MessageSticker`).
+    private static func servedSticker(in c: KeyedDecodingContainer<CodingKeys>) -> MessageSticker? {
+        let rootSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
+        let metadataSticker: MessageSticker? = (try? c.decodeIfPresent(MessageStickerEnvelope.self, forKey: .metadata))?.sticker
+        return rootSticker?.ifWireWorthy ?? metadataSticker?.ifWireWorthy
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         // Resilient id: try "id" first, fall back to "_id" (raw MongoDB)
@@ -171,7 +192,7 @@ extension APIMessage: Decodable {
         messageSource = try c.decodeIfPresent(String.self, forKey: .messageSource)
         isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
         editedAt = try c.decodeIfPresent(Date.self, forKey: .editedAt)
-        editedById = (try? c.decodeIfPresent(String.self, forKey: .editedById)) ?? nil
+        editAuthorship = Self.servedEditAuthorship(in: c)
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
         storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
@@ -189,12 +210,7 @@ extension APIMessage: Decodable {
         ephemeralDuration = try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration)
         consumedByMe = try c.decodeIfPresent(Bool.self, forKey: .consumedByMe)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
-        // Sticker : la racine d'abord (les deux producteurs le hissent), sinon `metadata`.
-        // Lectures tolérantes (une forme inattendue laisse nil sans faire tomber le
-        // message) ; un sticker non rendable vaut absence (règle de `MessageSticker`).
-        let rootSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
-        let metadataSticker: MessageSticker? = (try? c.decodeIfPresent(MessageStickerEnvelope.self, forKey: .metadata))?.sticker
-        sticker = rootSticker?.ifWireWorthy ?? metadataSticker?.ifWireWorthy
+        sticker = Self.servedSticker(in: c)
         isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
         encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
