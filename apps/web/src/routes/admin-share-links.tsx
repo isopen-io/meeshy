@@ -105,7 +105,7 @@ export function AdminShareLinksPanel({ language, deps = apiDeps, now = defaultNo
         language={language}
         title={translateAdmin(language, 'admin.nav.shareLinks')}
         subtitle={translateAdmin(language, 'admin.shareLink.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.exchanges') }, { label: translateAdmin(language, 'admin.nav.shareLinks') }]}
+        place={{ section: 'shareLinks' }}
       />
       <AdminOfflineNotice language={language} />
       <AdminEntityList
