@@ -8,8 +8,8 @@ import MeeshyUI
 // Le cadre se CHOISIT dans la capture ; il n'a pas d'entrée à lui dans la pilule.
 
 extension CallView {
-    /// Ce que l'écran montre : duo seulement, coupé quand l'appareil se protège, et — pour un
-    /// cadre animé — quand « Réduire les animations » est activé.
+    /// Ce que l'écran montre : duo seulement, coupé quand l'appareil se protège. Sous « Réduire les
+    /// animations », un cadre dont seuls les ornements bougent se montre immobile (#12683).
     var liveFrameDisplay: CallLiveFrameDisplay {
         guard !isGroupStage else { return .none }
         return CallLiveFrameRule.display(
