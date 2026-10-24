@@ -262,11 +262,22 @@ const ouvre = async (viewport) => {
   return context;
 };
 
+/* #12600 — le réseau de la page entre dans la stabilité (`settle-value.mjs`) : sans
+ * la fenêtre fixe de 500 ms de `networkidle`, payée à chacun des ~740 relevés. */
+const reseauDe = (page) => {
+  let partis = 0;
+  let revenus = 0;
+  page.on('request', () => { partis += 1; });
+  page.on('requestfinished', () => { revenus += 1; });
+  page.on('requestfailed', () => { revenus += 1; });
+  return () => (partis === revenus ? String(partis) : undefined);
+};
+
 const mesure = async (context, adresse) => {
   const page = await context.newPage();
+  const network = reseauDe(page);
   await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-  await page.waitForLoadState('networkidle').catch(() => undefined);
-  const m = await waitForValueSettled(page, releve);
+  const m = await waitForValueSettled(page, releve, undefined, { network });
   await page.close();
   return m;
 };
@@ -313,11 +324,11 @@ try {
       );
       /* UN onglet par langue, rechargé d'adresse en adresse : 280 relevés ne paient pas 280 ouvertures. */
       const page = await context.newPage();
+      const network = reseauDe(page);
       for (const adresse of PROGRESSION_PAGES) {
         const tag = `${adresse} @ ${viewport.width} px, ${langue}, valeurs longues`;
         await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-        await page.waitForLoadState('networkidle').catch(() => undefined);
-        const m = await waitForValueSettled(page, sidewaysReleve);
+        const m = await waitForValueSettled(page, sidewaysReleve, undefined, { network });
         if (m === undefined || m.sansContenu) {
           constate(false, `${tag} : la page n'a rien peint de mesurable — le témoin ne mesure rien`);
           continue;
@@ -343,13 +354,13 @@ try {
       const context = await ouvre(viewport);
       await context.addInitScript(([clef, valeur]) => localStorage.setItem(clef, valeur), [LANGUAGE_KEY, langue]);
       const page = await context.newPage();
+      const network = reseauDe(page);
       for (const [adresse, selecteurs, uneLigne] of [
         [LANDING_DE(langue), PORTES_LANDING, true],
       ]) {
         const tag = `${adresse} @ ${viewport.width} px, ${langue}`;
         await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-        await page.waitForLoadState('networkidle').catch(() => undefined);
-        const m = await waitForValueSettled(page, releveTextes, selecteurs);
+        const m = await waitForValueSettled(page, releveTextes, selecteurs, { network });
         if (m === undefined) {
           constate(false, `${tag} : le relevé du texte ne s'est jamais stabilisé`);
           continue;

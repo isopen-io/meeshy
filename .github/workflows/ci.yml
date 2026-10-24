@@ -649,9 +649,28 @@ jobs:
   # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
   # visite : c'est exactement ce que ce job fait.
   web-navigateur:
-    name: Web · gardes navigateur (Playwright)
+    name: Web · gardes navigateur (Playwright) · tranche ${{ matrix.tranche }}
     runs-on: ubuntu-latest
-    needs: [quality, changes]
+    # #12555 — QUATRE TRANCHES PARALLÈLES. En série, les gardes prenaient
+    # ~37 min sur un job de 38 (médiane de 10 runs verts de dev, 23-24 octobre),
+    # et ce job fixait la durée de tout le run. Chaque garde lève son propre
+    # serveur et son propre Chromium : rien ne les lie, la répartition ne change
+    # aucun verdict. Les étapes restent LITTÉRALES (`gate-ci-parity.test.ts`,
+    # `check-web-navigateur-read-set.mjs` les lisent) ; seule leur condition
+    # porte `matrix.tranche`. L'équilibre vient des durées médianes par étape
+    # (~455 s par tranche ; le cadre téléphone, ~340 s, ne partage la sienne
+    # qu'avec des gardes courtes) :
+    # une garde NOUVELLE va dans la tranche la plus légère du dernier relevé.
+    # `fail-fast: false` — même règle que `!cancelled()` plus bas : une tranche
+    # rouge n'en tait pas trois autres.
+    strategy:
+      fail-fast: false
+      matrix:
+        tranche: [1, 2, 3, 4]
+    # #12600 — il ne lit rien de `quality` : l'attendre retardait de ~3,5 min
+    # le job qui fixe la durée de tout le run. Le verdict n'y perd rien, le
+    # job « Verdict CI » attend les deux.
+    needs: [changes]
     if: needs.changes.outputs.web_navigateur == 'true'
     # #8580 — 53 gates Playwright en série : le job franchissait ses 25 min
     # (24 min 23 s puis annulé à 25 min 15 s sur #8593) dès que les gates
@@ -662,7 +681,9 @@ jobs:
     # téléphone (13 min à lui seul en CI : 148 adresses × 3 téléphones,
     # 270 relevés de Progression, 21 textes de landing — ~0,8 s le relevé,
     # 9 min 48 s en local). 55 min rendent une marge d'un quart.
-    timeout-minutes: 55
+    # #12555 — en tranches, la plus lourde attend ~9 min (préparation comprise) :
+    # 25 min gardent plus du double de marge, et un blocage ne coûte plus une heure.
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -734,7 +755,7 @@ jobs:
       # leur arrêt — un gate qui tourne sans `dist` rendrait un rouge de
       # plomberie qui ne mesure rien, soit le défaut inverse.
       - name: Gate cache institutionnel
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-institutional.mjs
@@ -743,7 +764,7 @@ jobs:
       # même navigateur sur le même `dist`, et un second travail paierait une
       # installation de Chromium pour rien.
       - name: Gate flux de la Lentille (mise en page invariable au défilement)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-lens.mjs
@@ -754,7 +775,7 @@ jobs:
       # y compris ceux qu'aucun navigateur de gate ne visite. Sans navigateur,
       # donc joué même si Chromium manque.
       - name: Gate inventaire des avatars (aucun `Avatar` muet)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-avatar-src.mjs
@@ -766,7 +787,7 @@ jobs:
       # rougir un seul verdict. `naturalWidth` après `decode()`, sur les trois
       # RANGS de la loi partagée, plus un contre-témoin sans photo.
       - name: Gate photo de profil peinte (trois rangs, pixels)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-avatar-pixels.mjs
@@ -776,7 +797,7 @@ jobs:
       # (elementFromPoint, deux schémas, 390×844 et 320×568) ; l'en-tête du Flux
       # s'escamote ; les cotes du plateau sont celles d'iOS (88 / 36).
       - name: Gate couloir des disques flottants (Flux et liste)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-floating-clearance.mjs
@@ -787,7 +808,7 @@ jobs:
       # glisser tenu n'ouvre rien et suit le pointeur sans retard, la place
       # survit au rechargement, un réel de carte ramène au même défilement.
       - name: Gate disque du Flux (bascule, appui long, glisser)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-feed-disc.mjs
@@ -798,7 +819,7 @@ jobs:
       # contrôle n'est volé par un disque (elementFromPoint, deux schémas,
       # 390×844 et 320×568).
       - name: Gate cloche des notifications (pastille, catégories, marquage, cible)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-notifications.mjs
@@ -809,7 +830,7 @@ jobs:
       # photo avant de l'envoyer, désactive l'écriture hors ligne ; aucun
       # contrôle ni texte n'est volé par un disque (deux schémas, deux gabarits).
       - name: Gate profil (lecture, édition optimiste, langues, recompression, hors-ligne)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-profile.mjs
@@ -820,7 +841,7 @@ jobs:
       # mène au legacy, la déconnexion efface la session ; aucun contrôle ni
       # texte n'est volé par un disque (deux schémas, deux gabarits).
       - name: Gate réglages (thème, langue d'interface, bascules, legacy, déconnexion)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-settings.mjs
@@ -830,7 +851,7 @@ jobs:
       # états, refus compris, à 360 et 390 px. Un témoin unitaire dit qu'un
       # bouton est rendu ; il ne dit pas à quelle ordonnée il tombe.
       - name: Gate jonction par lien (action primaire dans le premier écran, 360 et 390)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-join-first-screen.mjs
@@ -842,7 +863,7 @@ jobs:
       # au pire pixel ; aucun contrôle ni texte n'est volé par un disque (deux
       # schémas, deux gabarits).
       - name: Gate communautés (liste, recherche, détail, création, hors-ligne)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-communities.mjs
@@ -853,7 +874,7 @@ jobs:
       # le cache, une ligne ouvre son fil ; chaque texte tient AA et aucun n'est
       # volé par un disque (deux schémas, deux gabarits).
       - name: Gate journal d'appels (directions, filtre, fil, hors-ligne)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-calls.mjs
@@ -862,7 +883,7 @@ jobs:
       # par nom et par numéro, la fiche /call/:id se lit sans numéro, un appel
       # vivant se rejoint par lien profond, bannière et pastille « Rejoindre ».
       - name: Gate appels rejoints (pavé, fiche, reprise)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-calls-join.mjs
@@ -873,7 +894,7 @@ jobs:
       # et envoyer dans une autre conversation, se déplace au doigt et au
       # clavier, revient en un geste ; l'image dans l'image s'ouvre.
       - name: Gate appel en cours (bulle, image dans l'image, périphériques)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-calls-during.mjs
@@ -885,7 +906,7 @@ jobs:
       # l'écran du pair s'affiche entier sous sa bannière. Sans getDisplayMedia
       # (coque Android), aucun bouton.
       - name: Gate partage d'écran pendant un appel
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-calls-screen.mjs
@@ -897,7 +918,7 @@ jobs:
       # seconde, puis tout reprend ; indicateur et détail de qualité, alertes du
       # pair, call:quality-report et call:analytics (codec réel).
       - name: Gate qualité d'appel (paliers, survie vidéo, indicateur, alertes)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-calls-quality.mjs
@@ -908,7 +929,7 @@ jobs:
       # effets ; la capsule de zoom passe de 1× à 1,3× sur une caméra qui expose
       # la capacité zoom.
       - name: Gate effets et zoom d'appel (piste envoyée, micro tenu, zoom)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-calls-effects.mjs
@@ -920,7 +941,7 @@ jobs:
       # remises à l'envoi, < 5 % perdues, aucune tâche longue pendant un
       # glissé, p95 du traitement d'une image ≤ 4 ms.
       - name: Gate perf des effets d'appel (worker, flou, zoom)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-calls-effects-perf.mjs
@@ -934,7 +955,7 @@ jobs:
       # coupe un micro (call:mute-participant) et confirme avant de retirer ;
       # le pair coupe mon micro et le dit.
       - name: Gate contrôles d'appel (ajouter, modérer, réagir, enregistrer)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-calls-controls.mjs
@@ -949,7 +970,7 @@ jobs:
       # déplie la transcription gravée, servie par le Prisme du lecteur. Sans
       # reconnaissance vocale : on reçoit, rien ne part.
       - name: Gate sous-titres d'appel (deux sens, journal, transcription du fil)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-calls-captions.mjs
@@ -960,7 +981,7 @@ jobs:
       # geste, aucun point de présence peint ; chaque texte tient AA et aucun
       # n'est volé par un disque (deux schémas, deux gabarits).
       - name: Gate découverte de personnes (relations, demandes, bloqués, compte)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-discover.mjs
@@ -971,7 +992,7 @@ jobs:
       # remplace l'écran par le lien créé ; chaque texte tient AA et aucun
       # n'est volé par un disque (deux schémas, deux gabarits).
       - name: Gate Mes liens (hub, liens de partage, détail, création)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-links.mjs
@@ -983,7 +1004,7 @@ jobs:
       # tient AA au pixel, le retour ne laisse aucun lecteur ; hors ligne chaud
       # et froid, lien profond, mouvement réduit (deux schémas, deux gabarits).
       - name: Gate Réels (lecteur plein écran, balayage, lecture unique, retour)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-reels.mjs
@@ -993,7 +1014,7 @@ jobs:
       # lecture. Porte ses deux contre-épreuves — l'affiche d'un RÉEL ne monte
       # aucun élément média (#6457), une story IMAGE reste une image.
       - name: Gate médias du fil (une vidéo, un son et une story vidéo SE JOUENT)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-feed-media.mjs
@@ -1006,7 +1027,7 @@ jobs:
       # traverse la porte de création : ses deux formats, le refus NOMMÉ d'un
       # réel non qualifiant, la bascule qui garde la saisie, la publication.
       - name: Gate colonne du fil (centrage large, porte de création, publication)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-feed-column.mjs
@@ -1018,7 +1039,7 @@ jobs:
       # valeur EXACTE et que « Réessayer » repart. Surface partagée par
       # `/post/$post` et le panneau du lecteur de stories.
       - name: Gate commentaires (aimer, modifier, supprimer — optimiste et refus)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-post-comments.mjs
@@ -1029,7 +1050,7 @@ jobs:
       # état DESSINÉ, ANNONCÉ, lisible et SANS bouton — il n'y a rien à
       # retenter — sans emporter la story autour d'elle.
       - name: Gate médias absents (état dessiné, annoncé, non destructeur)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-medias-absents.mjs
@@ -1039,7 +1060,7 @@ jobs:
       # joue à la fois (`prefers-reduced-motion` en tient une hors du jeu), et
       # chaque tuile d'un agencement montre la scène de SA slide.
       - name: Gate scènes du fil (texte, cadrage 1,4, une seule lecture, tuiles)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-feed-scenes.mjs
@@ -1050,7 +1071,7 @@ jobs:
       # Prisme (rang 2), son de fond dont le bouton dit la vérité et a un effet,
       # image seule sans moteur, épingle de timeline autoritaire, v1 intact.
       - name: Gate scènes du lecteur de story (placeholder, plateau, son, image seule)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-story-scene.mjs
@@ -1061,7 +1082,7 @@ jobs:
       # en-tête. Ce gate mesure l'EFFET (readyState, duration), l'absence de
       # jeton dans l'URL, et qu'un refus dégrade sans promesse rejetée.
       - name: Gate son de fond de story (route authentifiée, URL d'objet, refus)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-story-sound.mjs
@@ -1072,7 +1093,7 @@ jobs:
       # 9:16 est centrée dans son plateau aux deux gabarits, cinq cibles
       # ≥ 44 px, le texte tapé survit à un rechargement (brouillon).
       - name: Gate studio de story (moteur peint, carte 9:16, cibles, brouillon)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-story-studio.mjs
@@ -1101,7 +1122,7 @@ jobs:
       # un appel de fonction lui est opaque, et « opaque && faux » ne se lit
       # pas comme faux).
       - name: Gate cadres de gloire (peintre, échantillon de L21a, stabilité)
-        if: ${{ env.PACKAGE_MANAGER == 'bun' && !cancelled() }}
+        if: ${{ env.PACKAGE_MANAGER == 'bun' && !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           bun scripts/check-glory-frames.ts --report
@@ -1115,7 +1136,7 @@ jobs:
       # (`dist-gateway/`) : le `dist/` de fixtures court-circuite la
       # publication, donc il n'y aurait AUCUN document à relire.
       - name: Gate plateau de story (deux textes, gestes, langue, style, légende, document publié)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-story-plateau.mjs
@@ -1126,13 +1147,13 @@ jobs:
       # pastilles sur un même avatar), 💭 sans humeur et l'emoji animé avec,
       # chaque porte ouverte par un VRAI clic — clair, sombre et RTL miroité.
       - name: Gate rail « soi » (deux portes, cibles disjointes, 💭 / emoji, RTL)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-story-self-rail.mjs
 
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-thread-states.mjs
@@ -1147,7 +1168,7 @@ jobs:
       # propre sortie (`dist-capacitor`, `dist-gateway`) : ils ne touchent pas
       # au `dist` que les pas précédents ont mesuré.
       - name: Gate actions de rangée (un contrôle existe s'il a un EFFET)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-list-actions.mjs
@@ -1155,13 +1176,13 @@ jobs:
       # #8694 — une section repliée porte le compte de non-lus qu'elle cache,
       # à jour sans la déplier (le câblage, que les témoins `bun test` ne voient pas).
       - name: Gate section repliée (compte de non-lus)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-list-folded-unread.mjs
 
       - name: Gate mode de lecture (l'EFFET, pas le rendu du contrôle)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-reading-mode.mjs
@@ -1169,7 +1190,7 @@ jobs:
       # #8147 — LE MESSAGE LONG : extrait au quart, dépliage en place, verre
       # Focal flouté, voisins atténués, mouvement réduit — mesurés au navigateur.
       - name: Gate message long (dépliage en place, verre Focal)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-long-message.mjs
@@ -1179,7 +1200,7 @@ jobs:
       # `pointer-events`, positions et `scrollTop` RÉELS, dans les deux
       # schémas — rien de tout cela n'est visible d'un test unitaire.
       - name: Gate chrome du fil (escamotage, pilule de jour, retour en bas)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-thread-chrome.mjs
@@ -1188,7 +1209,7 @@ jobs:
       # des nœuds texte sous la capsule et opacité calculée, deux schémas,
       # deux gabarits, trois modes rendus — une géométrie, jamais un booléen.
       - name: Gate pilule de jour au repos (#6101)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-day-pill-rest.mjs
@@ -1198,7 +1219,7 @@ jobs:
       # dans la langue, UN SEUL catalogue téléchargé, aucune erreur de page,
       # atteignabilité à 320×568 en allemand et en arabe.
       - name: Gate langue d'interface (#6206)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-interface-language.mjs
@@ -1207,13 +1228,13 @@ jobs:
       # check-thread-chrome.mjs : rien de ceci n'est visible d'un test
       # unitaire, seule la mesure de rectangles réels le prouve.
       - name: Gate arêtes de défilement du fil (#6213)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-thread-scroll-edges.mjs
 
       - name: Gate couple de focus des champs (l'anneau et son contre-anneau)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-field-focus.mjs
@@ -1224,7 +1245,7 @@ jobs:
       # connexion à 1440×900 et 834×1194, et garde la colonne de la tablette à
       # 390×844 (plus petit ancêtre commun du contenu perceptible).
       - name: Gate colonne des pages d'accès (centrée, jamais plus large que la connexion)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-access-column.mjs
@@ -1233,7 +1254,7 @@ jobs:
       # moyen de passer le numéro, le refus se dit sous le champ, et la charge
       # envoyée porte le couple numéro + pays (la passerelle reste permissive).
       - name: Gate inscription (numéro requis par l'écran)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-signup.mjs
@@ -1243,13 +1264,13 @@ jobs:
       # champ n'est écrit sous 16 px (zoom de Safari iOS au focus), et la
       # connexion tient entière dans 375×667.
       - name: Gate cadre téléphone (aucun défilement de côté, connexion dans la vue)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-phone-frame.mjs
 
       - name: Gate dist de la coque Capacitor (variante B)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-shell-dist.mjs
@@ -1258,7 +1279,7 @@ jobs:
       # exécuté par AUCUN job : `gate-ci-parity.test.ts` le signalait vert par
       # omission. Pur node, il ne lit que le manifeste versionné de la coque.
       - name: Gate manifeste de la coque Android (permissions requises)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-android-manifest.mjs
@@ -1267,13 +1288,13 @@ jobs:
       # par la CLI, jamais en ESM : `bun test` ne peut pas voir un `import.meta`
       # qui casse ce chargeur-là. Ce gate rejoue le VRAI chargeur (`bunx cap ls`).
       - name: Gate capacitor.config.ts (chargeur CJS réel de la CLI)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-capacitor-config.mjs
 
       - name: Gate build passerelle (VITE_DATA_SOURCE=gateway parle vraiment)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-gateway-build.mjs
@@ -1285,7 +1306,7 @@ jobs:
       # connecté. Il construit sa propre sortie (`dist-app-update-a`, puis la
       # version B qui en dérive) et ne touche pas au `dist` mesuré plus haut.
       - name: Gate mise à jour de l'application (bannière, purge, session gardée)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-app-update.mjs
@@ -1298,7 +1319,7 @@ jobs:
       # TRADUIT, mesuré sous un prisme à DEUX échelons (`fr`,`en`) avec son
       # contre-témoin à un seul ; aucun href hostile, aucun <script>.
       - name: Gate texte enrichi (liens, mentions, quatre emphases, texte traduit)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-rich-text.mjs
@@ -1308,7 +1329,7 @@ jobs:
       # mise en page à chaque image. Cliquet sur les sources : aucun nouveau
       # site, et les sites tolérés ne font que décroître.
       - name: Gate animations de géométrie (transform et opacity seulement)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-animated-properties.mjs
@@ -1319,7 +1340,7 @@ jobs:
       # clavier et navigation vers /admin sur UNE lecture de la matrice ; six
       # barreaux sans le droit, sur 403 et en vol ; aucune lecture sans session.
       - name: Gate barreau Administration du menu flottant (#6458)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-admin-rung.mjs
@@ -1332,7 +1353,7 @@ jobs:
       # et aucune clé de contenu laissée dans `localStorage` après la lecture.
       # Le gate construit son propre `dist-admin-souverain`, comme son voisin.
       - name: Gate lecture souveraine et section Agent (#6862, #6733)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |
           cd apps/web
           node scripts/check-admin-souverain.mjs
@@ -1341,7 +1362,7 @@ jobs:
       # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait
       # `{ source: apiConfig.source, … }` divergerait en silence sans ce gate.
       - name: Gate adaptateur unique de apiConfig.source (#6151)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
         run: |
           cd apps/web
           node scripts/check-api-source.mjs
@@ -1351,7 +1372,7 @@ jobs:
       # reconstruit normalement. Le placer avant les deux autres leur ferait
       # mesurer un `dist` qui n'est pas celui qu'on livre.
       - name: Gate virtualisation du fil (500 messages)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
         run: |
           cd apps/web
           node scripts/check-thread-virtualization.mjs
