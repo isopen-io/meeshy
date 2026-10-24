@@ -154,6 +154,12 @@ public final class StoryRendererCache: @unchecked Sendable {
     /// La description de chaque texte, relue seulement quand ses keyframes changent.
     private var keyframePlans: [String: (fingerprint: Int, plan: StoryKeyframeAnimationPlan?)] = [:]
 
+    /// Le calque de dessin de la slide et ce qui l'a produit (#9865).
+    private var drawing: CachedDrawing?
+
+    /// Nombre de rastérisations du dessin depuis le dernier `invalidate()`.
+    public private(set) var drawingBuildCount: Int = 0
+
     /// Only entry point usable from nonisolated context — every other member
     /// is MainActor by MeeshyUI's default isolation.
     public nonisolated init(keyframesPlayedByCoreAnimation: Bool = false) {
@@ -247,6 +253,29 @@ public final class StoryRendererCache: @unchecked Sendable {
         return layer
     }
 
+    /// Le calque de dessin de la slide : le MÊME tant que traits, données
+    /// legacy, échelle et taille sont inchangés (sur un modèle figé, l'égalité
+    /// des tableaux se tranche sur leur tampon partagé). `build` ne tourne
+    /// qu'au changement ; un `nil` (rien à peindre) se retient aussi.
+    public func drawingLayer(strokes: [StoryDrawingStroke]?, data: Data?,
+                             scale: CGFloat, renderSize: CGSize,
+                             build: () -> CALayer?) -> CALayer? {
+        if let drawing, drawing.strokes == strokes, drawing.data == data,
+           drawing.scale == scale, drawing.renderSize == renderSize {
+            return drawing.layer
+        }
+        let layer = build()
+        drawingBuildCount += 1
+        drawing = CachedDrawing(strokes: strokes, data: data, scale: scale, renderSize: renderSize, layer: layer)
+        return layer
+    }
+
+    /// Rend le calque de dessin et son bitmap : un dessin qui ne s'affiche pas
+    /// (masqué pendant que l'auteur dessine) ne reste pas retenu ici.
+    func releaseDrawing() {
+        drawing = nil
+    }
+
     /// Retire toutes les entrées dont `id` n'apparaît pas dans `keepIds`.
     /// Pour un `StoryMediaLayer` retenu (vidéo), pause l'AVPlayer et coupe
     /// la `currentItem` avant le retrait pour libérer proprement les
@@ -277,6 +306,8 @@ public final class StoryRendererCache: @unchecked Sendable {
         }
         layerCache.removeAll()
         keyframePlans.removeAll()
+        drawing = nil
+        drawingBuildCount = 0
         lastSlideId = nil
         lastLanguages = []
         lastMode = nil
@@ -413,6 +444,14 @@ public final class StoryRendererCache: @unchecked Sendable {
 fileprivate struct CachedLayer {
     let signature: StoryRendererCache.ItemSignature
     let layer: CALayer
+}
+
+fileprivate struct CachedDrawing {
+    let strokes: [StoryDrawingStroke]?
+    let data: Data?
+    let scale: CGFloat
+    let renderSize: CGSize
+    let layer: CALayer?
 }
 
 // MARK: - Hashable / Equatable (nonisolated)

@@ -511,9 +511,7 @@ final class DependencyContainer {
     /// L'état « par compte » tenu en mémoire hors des bases, rendu vierge à la
     /// déconnexion : la présence vue, les contours de story, les amis du `@`,
     /// les relations des fiches contact, la citation du brouillon de
-    /// commentaire, les rappels de série, les protections armées — et la
-    /// preuve « déchiffré sur cet appareil », que le compte suivant
-    /// n'hérite jamais.
+    /// commentaire, les rappels de série, les protections armées.
     private static func resetInMemoryAccountState() {
         PresenceManager.shared.resetForLogout()
         StoryViewerParticipationStore.shared.resetForLogout()
@@ -522,7 +520,6 @@ final class DependencyContainer {
         StreakReminderScheduler.shared.annulerTout()
         ConversationProtectionPreferenceStore.shared.purgeAll()
         ArrivalCelebrationController.shared.resetForLogout()
-        DecryptedMessageLedger.shared.removeAll()
     }
 
     // MARK: - Recovery (P1.5 — no more fatalError on DB init)

@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 
 /// L'exclusion entre l'app et l'extension de notification autour de tout ce qui
 /// fait avancer un ratchet (spec § 4.4) : deux processus qui déchiffrent depuis
@@ -21,7 +22,7 @@ public enum E2EEProcessLockError: Error, Equatable {
 /// fils qui partageraient un descripteur.
 public final class E2EEProcessLock: E2EEProcessLockProviding {
     private let path: String
-    private let local = NSLock()
+    private let local = OSAllocatedUnfairLock()
 
     public init(path: String) {
         self.path = path
@@ -35,15 +36,15 @@ public final class E2EEProcessLock: E2EEProcessLockProviding {
     }
 
     public func withLock<T>(_ body: () throws -> T) throws -> T {
-        local.lock()
-        defer { local.unlock() }
-        let descriptor = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
-        guard descriptor >= 0 else { throw E2EEProcessLockError.cannotOpen(errno: errno) }
-        defer { close(descriptor) }
-        while flock(descriptor, LOCK_EX) != 0 {
-            guard errno == EINTR else { throw E2EEProcessLockError.cannotLock(errno: errno) }
+        try local.withLockUnchecked { () throws -> T in
+            let descriptor = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
+            guard descriptor >= 0 else { throw E2EEProcessLockError.cannotOpen(errno: errno) }
+            defer { close(descriptor) }
+            while flock(descriptor, LOCK_EX) != 0 {
+                guard errno == EINTR else { throw E2EEProcessLockError.cannotLock(errno: errno) }
+            }
+            defer { flock(descriptor, LOCK_UN) }
+            return try body()
         }
-        defer { flock(descriptor, LOCK_UN) }
-        return try body()
     }
 }
