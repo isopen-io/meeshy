@@ -350,8 +350,8 @@ struct ProtectedFormChip: View {
 /// **L'aperçu d'appui long LIT les vocaux et les vidéos, dans les TROIS modes**
 /// (#11339, décision porteur du 2026-10-24, option B).
 ///
-/// L'aperçu reste une image de la cellule : seule la ZONE DE LECTURE d'une
-/// pièce lisible se touche (le lecteur du vocal, la vidéo) ; partout ailleurs,
+/// L'aperçu reste une image de la cellule : seul le BOUTON de lecture / pause
+/// d'une pièce lisible se touche (celui du vocal, celui de la vidéo) ; partout ailleurs,
 /// le toucher ferme et le glissement réduit l'aperçu, comme avant. La face suit
 /// le mode de lecture (#11208), la zone ne le suit pas : Bulles, Script et
 /// Focal lisent ensemble, jamais un seul.
@@ -380,6 +380,21 @@ struct MessageOverlayPreviewTouch: Equatable {
 
     static func isPlayable(_ attachment: MessageAttachment) -> Bool {
         (attachment.type == .audio || attachment.type == .video) && !attachment.fileUrl.isEmpty
+    }
+
+    /// **Un vocal se lance depuis l'aperçu** quand la loi le laisse lire : un
+    /// vocal du message, sous aucune forme protégée, avec un fichier.
+    static func mayPlayVoice(attachmentId: String, in message: Message, now: Date = Date()) -> Bool {
+        playableAttachmentIds(for: message, now: now).contains(attachmentId)
+            && message.attachments.contains { $0.id == attachmentId && $0.type == .audio }
+    }
+
+    /// **La fermeture arrête ce que l'aperçu a lancé, et seulement cela** : la
+    /// piste lancée depuis l'aperçu, si c'est encore elle qui joue. Une lecture
+    /// partie du fil avant l'appui long, ou une autre piste lancée depuis, continue.
+    static func stopsOnClose(previewPlayedAttachmentId: String?, activeAttachmentId: String?) -> Bool {
+        guard let played = previewPlayedAttachmentId else { return false }
+        return played == activeAttachmentId
     }
 
     /// **Les trous du masque** : les zones de lecture des pièces lisibles,

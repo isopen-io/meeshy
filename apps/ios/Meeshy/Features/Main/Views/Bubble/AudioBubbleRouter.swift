@@ -193,9 +193,6 @@ struct AudioBubbleRouter: View {
             isActive = newIsActive
             externalEngine = newIsActive ? coordinator.engineForBubble : nil
         }
-        // #11339 — la zone de lecture du vocal, que l'aperçu d'appui long
-        // laisse toucher (`MessageOverlayPreviewTouch`).
-        .modifier(MessagePreviewPlaybackZoneMarker(attachmentId: attachmentId))
     }
 }
 

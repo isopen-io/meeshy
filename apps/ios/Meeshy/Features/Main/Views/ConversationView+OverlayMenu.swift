@@ -85,6 +85,11 @@ struct ConversationOverlayMenu: View {
             onExportImage: { quick in actions.export(msg, quick) },
             onExpandFullPicker: {
                 overlayState.fullReactionPickerMessage = msg
+            },
+            // #11339 — un vocal lu depuis l'aperçu : la même entrée de file
+            // que le fil, sans auto-avance derrière lui.
+            onPlayAudio: { attachmentId in
+                viewModel.playAudio(attachmentId: attachmentId, continuesQueue: false)
             }
         )
     }

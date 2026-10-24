@@ -119,34 +119,6 @@ struct MessageOverlayCellPreview: View {
     }
 }
 
-// MARK: - La zone de lecture se déclare (#11339)
-
-/// La zone de lecture d'une pièce, déclarée par le lecteur qui la rend
-/// (`AudioBubbleRouter`, `VideoAvailabilityResolver`) : l'aperçu d'appui long
-/// n'y perce son masque que pour les pièces que la loi laisse lire
-/// (`MessageOverlayPreviewTouch`). Dans le fil, personne ne la lit.
-struct MessagePreviewPlaybackZone {
-    let attachmentId: String
-    let bounds: Anchor<CGRect>
-}
-
-struct MessagePreviewPlaybackZoneKey: PreferenceKey {
-    static let defaultValue: [MessagePreviewPlaybackZone] = []
-    static func reduce(value: inout [MessagePreviewPlaybackZone], nextValue: () -> [MessagePreviewPlaybackZone]) {
-        value += nextValue()
-    }
-}
-
-struct MessagePreviewPlaybackZoneMarker: ViewModifier {
-    let attachmentId: String
-
-    func body(content: Content) -> some View {
-        content.anchorPreference(key: MessagePreviewPlaybackZoneKey.self, value: .bounds) { bounds in
-            [MessagePreviewPlaybackZone(attachmentId: attachmentId, bounds: bounds)]
-        }
-    }
-}
-
 // MARK: - Le masque de l'aperçu : tout sauf la lecture (#11339)
 
 /// **Le masque posé sur l'aperçu** : il prend chaque toucher HORS des zones de

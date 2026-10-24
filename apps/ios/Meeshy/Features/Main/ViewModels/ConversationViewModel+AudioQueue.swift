@@ -11,20 +11,19 @@ import MeeshySDK
 extension ConversationViewModel {
 
     /// Kicks off conversation-wide audio playback starting at `attachmentId`.
-    ///
-    /// Resolves the message/attachment in the current `messages` snapshot,
-    /// asks `AudioQueueBuilder` for the unlistened, non-self tail of audios
-    /// strictly after this one, then routes the whole queue through the app
-    /// coordinator (which gates on CallKit + auth and exposes the mini-player
-    /// state to the rest of the app).
-    func playAudio(attachmentId: String) {
+    /// Resolves the message/attachment in the current `messages` snapshot, asks
+    /// `AudioQueueBuilder` for the unlistened, non-self tail strictly after it, then
+    /// routes the queue through the app coordinator (CallKit + auth gate, mini-player).
+    /// `continuesQueue: false` joue CE vocal seul (#11339, l'aperçu d'appui long) :
+    /// la même entrée de file que le fil, sans auto-avance derrière.
+    func playAudio(attachmentId: String, continuesQueue: Bool = true) {
         guard let (message, attachment) = findAudioAttachment(id: attachmentId),
               attachment.type == .audio,
               authManager.currentUser?.id != nil else { return }
 
         audioCoordinator.play(
             current: queuedAudio(for: attachment, message: message),
-            tail: audioQueueTail(after: attachment.id),
+            tail: continuesQueue ? audioQueueTail(after: attachment.id) : [],
             conversationName: currentConversationName,
             conversationArtworkURL: currentConversationArtworkURL
         )

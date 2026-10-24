@@ -88,6 +88,10 @@ struct MessageOverlayMenu: View {
     var onExportImage: ((Bool) -> Void)? = nil
     /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
     var onExpandFullPicker: (() -> Void)? = nil
+    /// **Lire un vocal depuis l'aperçu** (#11339) — l'hôte le rend au
+    /// ViewModel (`ConversationViewModel.playAudio(attachmentId:continuesQueue:)`).
+    /// Sans rappel, le bouton de lecture de l'aperçu ne lance rien.
+    var onPlayAudio: ((String) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openURL) private var openURL
@@ -470,7 +474,7 @@ struct MessageOverlayMenu: View {
             .environment(\.bubbleSkin, previewSkin)
             .environment(\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)
             .frame(width: previewSize.width, alignment: message.isMe ? .trailing : .leading)
-            .overlayPreferenceValue(MessagePreviewPlaybackZoneKey.self) { zones in
+            .overlayPreferenceValue(MediaPlayControlAnchorKey.self) { zones in
                 previewTouchMask(zones: zones, playable: touch.playableAttachmentIds)
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
@@ -480,11 +484,13 @@ struct MessageOverlayMenu: View {
         .allowsHitTesting(fit.scrollsInternally || touch.offersPlayback)
     }
 
-    /// **Le masque de l'aperçu** (#11339) : percé aux zones de lecture que la
-    /// loi laisse lire, il ferme le menu sur un toucher ailleurs — comme le
-    /// voile que l'aperçu laissait traverser.
+    /// **Le masque de l'aperçu** (#11339) : percé aux seuls BOUTONS de lecture
+    /// (lecture / pause, `MediaPlayControlAnchorKey`, émis par les lecteurs du
+    /// SDK) des pièces que la loi laisse lire. Partout ailleurs — citation, pied
+    /// et drapeaux de langue, forme d'onde, surface de la vidéo —, un toucher
+    /// ferme le menu comme le voile, et un glissement réduit l'aperçu.
     @ViewBuilder
-    private func previewTouchMask(zones: [MessagePreviewPlaybackZone], playable: Set<String>) -> some View {
+    private func previewTouchMask(zones: [MediaPlayControlAnchor], playable: Set<String>) -> some View {
         if !playable.isEmpty {
             GeometryReader { proxy in
                 MessageOverlayPreviewTouchMask(
@@ -499,25 +505,26 @@ struct MessageOverlayMenu: View {
 
     // MARK: - Lire un vocal depuis l'aperçu (#11339)
 
-    /// Le bouton du lecteur de la cellule appelle ici, comme dans le fil : la
-    /// piste que le fil SERT part sur le coordinateur partagé — un seul moteur,
-    /// un seul son, le mini-lecteur et la carte « À l'écoute » compris. La
-    /// cellule de l'aperçu suit le coordinateur (`AudioBubbleRouter`) et montre
-    /// la lecture en cours.
+    /// Le bouton du lecteur de la cellule appelle ici, comme dans le fil, et
+    /// l'hôte le rend au ViewModel (`onPlayAudio`) : la MÊME entrée de file que
+    /// le fil (`ConversationViewModel.queuedAudio`, piste servie, langue de la
+    /// transcription), le nom et l'image de la conversation — sans file à la
+    /// suite. L'overlay ne garde que la porte de la loi.
     private func playFromPreview(_ attachmentId: String) {
-        guard let queued = Self.previewQueuedAudio(
-            attachmentId: attachmentId, message: message, served: threadLanguage.servedAudioTracks) else { return }
+        guard let onPlayAudio,
+              MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: attachmentId, in: message) else { return }
         previewPlayedAttachmentId = attachmentId
-        ConversationAudioCoordinator.shared.play(
-            current: queued, tail: [], conversationName: queued.senderName, conversationArtworkURL: nil)
+        onPlayAudio(attachmentId)
     }
 
     /// La fermeture arrête ce que l'aperçu a lancé, et seulement cela : le
     /// coordinateur ne retient alors plus rien de l'aperçu.
     private func stopPreviewPlayback() {
-        guard let attachmentId = previewPlayedAttachmentId,
-              ConversationAudioCoordinator.shared.isActive(attachmentId: attachmentId) else { return }
-        ConversationAudioCoordinator.shared.close()
+        let coordinator = ConversationAudioCoordinator.shared
+        guard MessageOverlayPreviewTouch.stopsOnClose(
+            previewPlayedAttachmentId: previewPlayedAttachmentId,
+            activeAttachmentId: coordinator.activeContext?.attachmentId) else { return }
+        coordinator.close()
     }
 
     // MARK: - La face de l'aperçu (#11208)
@@ -747,31 +754,6 @@ extension MessageOverlayMenu {
     /// quand l'hôte n'en a élu aucune.
     static func previewAudioTrack(for attachment: MessageAttachment, served: [String: ServedAudioTrack]) -> ServedAudioTrack {
         served[attachment.id] ?? .original(of: attachment)
-    }
-
-    /// **L'entrée de file d'un vocal lu depuis l'aperçu** (#11339) — la piste
-    /// que le fil sert (URL et langue partent ensemble), jamais celle d'une
-    /// pièce que la loi de l'aperçu ne laisse pas lire.
-    static func previewQueuedAudio(
-        attachmentId: String, message: Message, served: [String: ServedAudioTrack], now: Date = Date()
-    ) -> QueuedAudio? {
-        guard MessageOverlayPreviewTouch.playableAttachmentIds(for: message, now: now).contains(attachmentId),
-              let attachment = message.attachments.first(where: { $0.id == attachmentId && $0.type == .audio })
-        else { return nil }
-        let track = previewAudioTrack(for: attachment, served: served)
-        return QueuedAudio(
-            attachmentId: attachment.id,
-            messageId: message.id,
-            conversationId: message.conversationId,
-            fileUrl: track.url,
-            durationMs: track.durationMs ?? attachment.duration ?? 0,
-            senderName: message.senderName ?? "",
-            senderAvatarURL: message.senderAvatarURL,
-            receivedAt: message.createdAt,
-            trackLanguage: track.language ?? message.originalLanguage,
-            isTranslatedTrack: track.language != nil,
-            isProtected: ConversationViewModel.isProtectedVoice(message)
-        )
     }
 
     /// **Ce que le fil sert pour CE message** (#9259) : la sélection du

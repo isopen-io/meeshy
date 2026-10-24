@@ -243,33 +243,43 @@ final class MessageOverlayPreviewTouchTests: XCTestCase {
         XCTAssertTrue(holes.isEmpty)
     }
 
-    // MARK: - Le vocal lu depuis l'aperçu est la piste que le fil sert
+    // MARK: - Un vocal se lance depuis l'aperçu quand la loi le laisse lire
 
-    func test_previewQueuedAudio_playsTheServedTrack() {
-        let french = ServedAudioTrack(language: "fr", url: "https://cdn/voix-fr.m4a", durationMs: 38_000, transcript: nil)
-
-        let queued = MessageOverlayMenu.previewQueuedAudio(attachmentId: "a1", message: message([voice()]), served: ["a1": french])
-
-        XCTAssertEqual(queued?.fileUrl, "https://cdn/voix-fr.m4a")
-        XCTAssertEqual(queued?.trackLanguage, "fr")
-        XCTAssertEqual(queued?.isTranslatedTrack, true)
-        XCTAssertEqual(queued?.messageId, "m1")
-        XCTAssertEqual(queued?.conversationId, "c1")
+    func test_mayPlayVoice_clearVoice_isTrue() {
+        XCTAssertTrue(MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: "a1", in: message([voice()])))
     }
 
-    func test_previewQueuedAudio_nothingServed_playsTheOriginal() {
-        let queued = MessageOverlayMenu.previewQueuedAudio(attachmentId: "a1", message: message([voice()]), served: [:])
-
-        XCTAssertEqual(queued?.fileUrl, "https://cdn/orig-ko.m4a")
-        XCTAssertEqual(queued?.trackLanguage, "ko")
-        XCTAssertEqual(queued?.isTranslatedTrack, false)
+    func test_mayPlayVoice_viewOnceMessage_isFalse() {
+        XCTAssertFalse(MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: "a1", in: message([voice()], viewOnce: true)))
     }
 
-    func test_previewQueuedAudio_viewOnce_playsNothing() {
-        XCTAssertNil(MessageOverlayMenu.previewQueuedAudio(attachmentId: "a1", message: message([voice()], viewOnce: true), served: [:]))
+    func test_mayPlayVoice_blurredPiece_isFalse() {
+        XCTAssertFalse(MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: "a1", in: message([voice(isBlurred: true)])))
     }
 
-    func test_previewQueuedAudio_video_isNotAVoice() {
-        XCTAssertNil(MessageOverlayMenu.previewQueuedAudio(attachmentId: "v1", message: message([video()]), served: [:]))
+    func test_mayPlayVoice_video_isNotAVoice() {
+        XCTAssertFalse(MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: "v1", in: message([video()])))
+    }
+
+    func test_mayPlayVoice_unknownPiece_isFalse() {
+        XCTAssertFalse(MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: "zz", in: message([voice()])))
+    }
+
+    // MARK: - La fermeture n'arrête que ce que l'aperçu a lancé
+
+    func test_stopsOnClose_trackLaunchedByThePreview_stillPlaying_stops() {
+        XCTAssertTrue(MessageOverlayPreviewTouch.stopsOnClose(previewPlayedAttachmentId: "a1", activeAttachmentId: "a1"))
+    }
+
+    func test_stopsOnClose_nothingLaunchedByThePreview_keepsTheThreadPlayback() {
+        XCTAssertFalse(MessageOverlayPreviewTouch.stopsOnClose(previewPlayedAttachmentId: nil, activeAttachmentId: "a1"))
+    }
+
+    func test_stopsOnClose_anotherTrackNowPlaying_keepsIt() {
+        XCTAssertFalse(MessageOverlayPreviewTouch.stopsOnClose(previewPlayedAttachmentId: "a1", activeAttachmentId: "a2"))
+    }
+
+    func test_stopsOnClose_coordinatorIdle_doesNothing() {
+        XCTAssertFalse(MessageOverlayPreviewTouch.stopsOnClose(previewPlayedAttachmentId: "a1", activeAttachmentId: nil))
     }
 }

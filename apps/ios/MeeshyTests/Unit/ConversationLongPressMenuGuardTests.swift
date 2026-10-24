@@ -382,23 +382,28 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
 
     // MARK: - #11339 — l'aperçu lit vocaux et vidéos, dans les trois modes
 
-    /// Les lecteurs du fil DÉCLARENT leur zone de lecture ; l'aperçu y perce son
-    /// masque, rend le vocal au coordinateur et l'arrête à la fermeture. Les
-    /// deux faces (bulle, rangée plate) reçoivent le même rappel de lecture.
-    func test_preview_playbackZones_areDeclaredByThePlayers_andReadByTheMask() throws {
+    /// Le masque de l'aperçu ne se perce qu'aux BOUTONS de lecture que les
+    /// lecteurs du SDK déclarent (`MediaPlayControlAnchorKey`), jamais au
+    /// lecteur entier : citation, pied et drapeaux, forme d'onde et surface de
+    /// la vidéo restent sous le masque. Le vocal part par le ViewModel de l'hôte.
+    func test_preview_playbackHoles_areThePlayButtonsOnly_andPlayThroughTheViewModel() throws {
         let router = try source("Features/Main/Views/Bubble/AudioBubbleRouter.swift")
-        XCTAssertTrue(router.contains(".modifier(MessagePreviewPlaybackZoneMarker(attachmentId: attachmentId))"),
-                      "Le lecteur du vocal déclare sa zone de lecture.")
+        XCTAssertFalse(router.contains("PlaybackZone"), "Le lecteur entier n'est pas une zone de lecture.")
         let video = try source("Features/Main/Views/VideoAvailabilityResolver.swift")
-        XCTAssertTrue(video.contains(".modifier(MessagePreviewPlaybackZoneMarker(attachmentId: attachment.id))"),
-                      "Le lecteur de la vidéo déclare sa zone de lecture.")
+        XCTAssertFalse(video.contains("PlaybackZone"), "La surface de la vidéo n'est pas une zone de lecture.")
 
         let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
-        XCTAssertTrue(menu.contains(".overlayPreferenceValue(MessagePreviewPlaybackZoneKey.self)"), "Le masque lit les zones.")
-        XCTAssertTrue(menu.contains("interactive: touch.offersPlayback"), "Le contenu ne se touche que s'il porte une zone.")
+        XCTAssertTrue(menu.contains(".overlayPreferenceValue(MediaPlayControlAnchorKey.self)"), "Le masque lit les boutons de lecture.")
+        XCTAssertTrue(menu.contains("interactive: touch.offersPlayback"), "Le contenu ne se touche que s'il porte un bouton lisible.")
         XCTAssertTrue(menu.contains("bubble.onPlayAudio = { playFromPreview($0) }"), "La bulle de l'aperçu lit le vocal.")
         XCTAssertTrue(menu.contains("onPlayAudio: { playFromPreview($0) }"), "La rangée plate de l'aperçu lit le vocal.")
         XCTAssertTrue(menu.contains(".onDisappear { stopPreviewPlayback() }"), "La fermeture arrête la lecture lancée.")
+        XCTAssertFalse(menu.contains("ConversationAudioCoordinator.shared.play("),
+                       "L'overlay ne recompose aucune entrée de file : le ViewModel la construit, comme dans le fil.")
+
+        let host = try source("Features/Main/Views/ConversationView+OverlayMenu.swift")
+        XCTAssertTrue(host.contains("viewModel.playAudio(attachmentId: attachmentId, continuesQueue: false)"),
+                      "L'hôte rend le vocal de l'aperçu au ViewModel, sans file à la suite.")
 
         let cell = try source("Features/Main/Components/MessageOverlayCellPreview.swift")
         XCTAssertTrue(cell.contains("FocalRow(input: input, actions: rowActions)"))
