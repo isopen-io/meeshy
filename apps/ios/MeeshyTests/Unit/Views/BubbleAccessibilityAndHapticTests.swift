@@ -32,8 +32,8 @@ final class BubbleAccessibilityAndHapticTests: XCTestCase {
     }
 }
 
-/// **Le glissé latéral et les actions VoiceOver d'une rangée n'offrent que ce
-/// que le menu offre au même message** (#12626).
+/// **Le glissé latéral, les actions VoiceOver et le double toucher d'une
+/// rangée n'offrent que ce que le menu offre au même message** (#12626).
 ///
 /// Le menu d'appui long lit `MessageActionPolicy` par `MessageMenuContext.make`.
 /// Les deux autres portes de la rangée ne la lisaient pas : on répondait au
@@ -43,7 +43,7 @@ final class BubbleAccessibilityAndHapticTests: XCTestCase {
 /// un effet : sans verdict, le côté du glissé ne s'arme pas et l'action nommée
 /// n'est pas exposée.
 @MainActor
-final class BubbleSwipeOfferLawTests: XCTestCase {
+final class MessageRowOfferLawTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private let viewerId = "6a0ad86a6e21a483b4443d01"
@@ -78,25 +78,26 @@ final class BubbleSwipeOfferLawTests: XCTestCase {
         id: String = "6a0ad86a6e21a483b4443d11",
         messageSource: Message.MessageSource = .user,
         effects: MessageEffects = .none,
-        deliveryStatus: Message.DeliveryStatus = .sent
+        deliveryStatus: Message.DeliveryStatus = .sent,
+        mine: Bool = false
     ) -> Message {
         Message(
             id: id,
             conversationId: "6a0ad86a6e21a483b4443d99",
-            senderId: "6a0ad86a6e21a483b4443da2",
+            senderId: mine ? "6a0ad86a6e21a483b4443da1" : "6a0ad86a6e21a483b4443da2",
             content: "Bonjour",
             messageSource: messageSource,
             effects: effects,
             createdAt: now.addingTimeInterval(-3600),
             updatedAt: now.addingTimeInterval(-3600),
-            senderUserId: otherId,
+            senderUserId: mine ? viewerId : otherId,
             deliveryStatus: deliveryStatus,
-            isMe: false
+            isMe: mine
         )
     }
 
-    private func offer(_ message: Message, _ authority: ConversationMenuAuthority) -> BubbleSwipeOffer {
-        BubbleSwipeOffer.of(message, authority: authority, now: now)
+    private func lawOffer(_ message: Message, _ authority: ConversationMenuAuthority) -> MessageRowOffer {
+        MessageRowOffer.of(message, authority: authority, now: now)
     }
 
     private func menuOffers(_ message: Message, _ authority: ConversationMenuAuthority) -> [MoreItem] {
@@ -111,7 +112,7 @@ final class BubbleSwipeOfferLawTests: XCTestCase {
     // MARK: - Le nominal : les deux portes
 
     func test_offer_aPlainTextMessage_offersReplyAndForward() {
-        let offer = offer(message(), authority())
+        let offer = lawOffer(message(), authority())
         XCTAssertTrue(offer.canReply)
         XCTAssertTrue(offer.canForward)
         XCTAssertEqual(offer.accessibilityActions, [.reply, .forward])
@@ -120,38 +121,38 @@ final class BubbleSwipeOfferLawTests: XCTestCase {
     // MARK: - Répondre : ce que la loi refuse ne s'offre pas
 
     func test_offer_aViewOnceMessage_offersNoReply() {
-        let offer = offer(message(effects: MessageEffects(flags: .viewOnce)), authority())
+        let offer = lawOffer(message(effects: MessageEffects(flags: .viewOnce)), authority())
         XCTAssertFalse(offer.canReply, "une vue unique ne se cite pas")
         XCTAssertFalse(offer.accessibilityActions.contains(.reply))
     }
 
     func test_offer_anUnsentClientMessage_offersNoReply() {
-        let offer = offer(message(id: ClientMessageId.generate(), deliveryStatus: .sending), authority())
+        let offer = lawOffer(message(id: ClientMessageId.generate(), deliveryStatus: .sending), authority())
         XCTAssertFalse(offer.canReply, "un envoi `cid_` n'existe pas encore pour le serveur : sa citation pointerait dans le vide")
         XCTAssertFalse(offer.accessibilityActions.contains(.reply))
     }
 
     func test_offer_aSystemNotice_offersNoReply() {
-        let offer = offer(message(messageSource: .system), authority())
+        let offer = lawOffer(message(messageSource: .system), authority())
         XCTAssertFalse(offer.canReply, "un avis système ne se cite pas")
         XCTAssertFalse(offer.canForward, "un avis système ne se transfère pas")
         XCTAssertEqual(offer.accessibilityActions, [])
     }
 
     func test_offer_anAnnouncementChannelWithoutTheWritingRank_offersNoReply() {
-        let offer = offer(message(), authority(isAnnouncementChannel: true))
+        let offer = lawOffer(message(), authority(isAnnouncementChannel: true))
         XCTAssertFalse(offer.canReply, "un membre sans rang d'écriture ne répond pas dans un canal d'annonce")
         XCTAssertFalse(offer.accessibilityActions.contains(.reply))
     }
 
     func test_offer_anAnnouncementChannelAdmin_replies() {
-        XCTAssertTrue(offer(message(), authority(conversationRole: "admin", isAnnouncementChannel: true)).canReply)
+        XCTAssertTrue(lawOffer(message(), authority(conversationRole: "admin", isAnnouncementChannel: true)).canReply)
     }
 
     // MARK: - Transférer : le verdict de la loi, pas la seule loi de sortie
 
     func test_offer_anEndToEndEncryptedMessage_offersNoForward() {
-        let offer = offer(message(), authority(encryptionMode: "e2ee"))
+        let offer = lawOffer(message(), authority(encryptionMode: "e2ee"))
         XCTAssertFalse(offer.canForward, "un message E2EE ne se transfère pas : le serveur n'en a pas le clair")
         XCTAssertTrue(offer.canReply, "répondre reste offert en E2EE")
         XCTAssertEqual(offer.accessibilityActions, [.reply])
@@ -170,35 +171,51 @@ final class BubbleSwipeOfferLawTests: XCTestCase {
         ]
         for (msg, auth) in cases {
             let menu = menuOffers(msg, auth)
-            let offer = offer(msg, auth)
+            let offer = lawOffer(msg, auth)
             XCTAssertEqual(offer.canReply, menu.contains(.reply), "glissé et menu divergent sur « Répondre » (\(msg.id))")
             XCTAssertEqual(offer.canForward, menu.contains(.forward), "glissé et menu divergent sur « Transférer » (\(msg.id))")
         }
     }
 
+    // MARK: - Éditer au double toucher : la même lecture, une seule fois
+
+    func test_offer_ownTextWithinTheWindow_edits() {
+        XCTAssertTrue(lawOffer(message(mine: true), authority()).canEdit)
+    }
+
+    func test_offer_someoneElsesMessage_doesNotEdit() {
+        XCTAssertFalse(lawOffer(message(), authority(conversationRole: "admin")).canEdit,
+                       "un rang de conversation n'ouvre pas l'édition du message d'autrui")
+    }
+
+    func test_closed_offersNothing() {
+        let closed = MessageRowOffer.closed
+        XCTAssertFalse(closed.canEdit || closed.canReply || closed.canForward)
+    }
+
     // MARK: - Le geste : un côté sans verdict ne s'arme pas
 
     func test_committed_aRefusedSide_neverFires() {
-        let replyOnly = BubbleSwipeOffer(canReply: true, canForward: false)
+        let replyOnly = MessageRowOffer(canReply: true, canForward: false)
         let distance = BubbleSwipeResistance.commitDistance
         XCTAssertEqual(replyOnly.committed(directedOffset: distance), .reply)
         XCTAssertNil(replyOnly.committed(directedOffset: -distance), "le transfert refusé ne se valide pas au glissé")
 
-        let forwardOnly = BubbleSwipeOffer(canReply: false, canForward: true)
+        let forwardOnly = MessageRowOffer(canReply: false, canForward: true)
         XCTAssertNil(forwardOnly.committed(directedOffset: distance), "la réponse refusée ne se valide pas au glissé")
         XCTAssertEqual(forwardOnly.committed(directedOffset: -distance), .forward)
     }
 
     func test_arms_aRefusedSide_keepsTheBubbleInPlace() {
-        let replyOnly = BubbleSwipeOffer(canReply: true, canForward: false)
+        let replyOnly = MessageRowOffer(canReply: true, canForward: false)
         XCTAssertTrue(replyOnly.arms(directedOffset: 30))
         XCTAssertFalse(replyOnly.arms(directedOffset: -30), "la bulle ne suit pas le doigt vers un côté refusé")
-        XCTAssertFalse(BubbleSwipeOffer.closed.armsAnySide, "sans verdict, aucun glissé ne s'engage")
-        XCTAssertEqual(BubbleSwipeOffer.closed.accessibilityActions, [])
+        XCTAssertFalse(MessageRowOffer.closed.armsAnySide, "sans verdict, aucun glissé ne s'engage")
+        XCTAssertEqual(MessageRowOffer.closed.accessibilityActions, [])
     }
 
     func test_accessibilityActions_areNamed() {
-        let names = BubbleSwipeOffer(canReply: true, canForward: true).accessibilityActions.map(\.accessibilityName)
+        let names = MessageRowOffer(canReply: true, canForward: true).accessibilityActions.map(\.accessibilityName)
         XCTAssertEqual(names.count, 2)
         XCTAssertTrue(names.allSatisfy { !$0.isEmpty })
         XCTAssertEqual(Set(names).count, 2)
@@ -209,12 +226,17 @@ final class BubbleSwipeOfferLawTests: XCTestCase {
     func test_triggerReplyAndSwipeForward_readTheLaw() throws {
         let row = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView+MessageRow.swift")
         XCTAssertEqual(
-            row.components(separatedBy: "guard mayReply(to: msg) else { return }").count - 1, 2,
+            row.components(separatedBy: "guard MessageRowOffer.of(msg, authority: menuAuthority).canReply else { return }").count - 1, 2,
             "les deux `triggerReply` (message entier, pièce citée) refusent ce que la loi refuse"
         )
         let layer = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift")
-        XCTAssertTrue(layer.contains("BubbleSwipeOffer.of(msg, authority: authority).canForward"),
+        XCTAssertTrue(layer.contains("MessageRowOffer.of(msg, authority: authority).canForward"),
                       "le transfert au glissé relit le verdict de la loi, pas la seule loi de sortie")
         XCTAssertFalse(layer.contains("msg.isForwardable else { return }"))
+        let rows = try AppSourceGuard.unit("Meeshy/Features/Main/Views/MessageListViewController+Rows.swift")
+        XCTAssertTrue(rows.contains("onSwipeReply: offer.canReply ?"), "sans verdict, le glissé vers « Répondre » ne s'arme pas")
+        XCTAssertTrue(rows.contains("onSwipeForward: offer.canForward ?"), "sans verdict, le glissé vers « Transférer » ne s'arme pas")
+        XCTAssertTrue(rows.contains("repondre: offer.canReply ? callbacks.swipeReply : nil"), "le double toucher suit le même verdict")
+        XCTAssertTrue(rows.contains("transferer: offer.canForward ? callbacks.swipeForward : nil"))
     }
 }

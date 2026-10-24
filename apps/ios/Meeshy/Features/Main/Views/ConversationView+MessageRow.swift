@@ -44,6 +44,7 @@ extension ConversationView {
     }
 
     func triggerReply(for msg: Message) {
+        guard MessageRowOffer.of(msg, authority: menuAuthority).canReply else { return } // #12626 — la loi du menu, sur tous les chemins
         // La citation naît de la fabrique UNIQUE du ViewModel — la même que la
         // bulle optimiste (#4945). Ce geste composait la sienne à la main,
         // pauvre de trois champs : sans miniature ThumbHash, sans durée, en
@@ -62,6 +63,7 @@ extension ConversationView {
     /// comme la réponse du plein écran. Une pièce protégée ne se cite pas :
     /// le menu ne l'offre pas, et ce site ne la nomme pas non plus.
     func triggerReply(for msg: Message, citing piece: MessageAttachment) {
+        guard MessageRowOffer.of(msg, authority: menuAuthority).canReply else { return }
         triggerReply(for: msg)
         guard !MessagePieceTarget.isProtected(piece, in: msg) else { return }
         composerState.pendingReplyReference = viewModel.optimisticReplyReference(quoting: msg, citing: piece)
@@ -348,9 +350,7 @@ extension ConversationView {
     private func quickReactionActionsRow(messageId: String) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             messageActionButton(icon: MessageActionVerb.reply.filledSymbol, label: MessageActionVerb.reply.label, color: MeeshyColors.indigo300Hex) {
-                if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                    triggerReply(for: msg)
-                }
+                if let index = viewModel.messageIndex(for: messageId) { triggerReply(for: viewModel.messages[index]) }
                 closeReactionBar()
             }
             // La loi de sortie décide (#9573) : un contenu qui disparaît, ou

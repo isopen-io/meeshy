@@ -247,8 +247,8 @@ final class MessageListViewController: UIViewController {
     /// « Plus… » ouvre `MessageMoreSheet` — la feuille COMPLÈTE — et non
     /// l'overlay d'appui long. Les deux sont des menus distincts.
     var onOpenMoreSheet: ((String) -> Void)?
-    /// Remis par `ConversationView`, jamais recalculé ici.
-    var canEditMessage: ((String) -> Bool)?
+    /// Éditer, répondre, transférer hors du menu (#12626) — remis par `ConversationView`, jamais recalculé ici.
+    var rowOffer: ((MeeshyMessage) -> MessageRowOffer)?
     /// Add reaction. Carries the message id and the tapped bubble cell's
     /// on-screen frame (window coords; `nil` when the cell is not realized)
     /// so the quick-reaction bar can anchor to the bubble.
