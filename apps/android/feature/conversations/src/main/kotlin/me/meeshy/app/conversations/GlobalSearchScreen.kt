@@ -309,8 +309,7 @@ private fun SearchResults(
             GlobalSearchTab.MESSAGES -> items(state.results.messages, key = { it.message.id }) { hit ->
                 MessageHitRow(
                     hit = hit,
-                    avatarUrl = state.results.conversations.firstOrNull { it.id == hit.message.conversationId }
-                        ?.displayedAvatar(state.currentUserId),
+                    avatarUrl = hit.conversation?.displayedAvatar(state.currentUserId),
                     query = state.resultsQuery,
                     onClick = { onOpenConversation(hit.message.conversationId) },
                 )
