@@ -73,6 +73,17 @@ public struct SendMessageRequest: Encodable, Sendable {
     /// passerelle recopie tout le lot (ancien comportement). Chaque id doit être
     /// une pièce du message source, sinon refus `forwarded-attachment-not-in-source`.
     public var forwardedAttachmentIds: [String]?
+    /// **L'envoi libsignal (#3707, spec § 4.3)** — `encryptionProtocol`
+    /// (`libsignal-v1`), `encryptedContent` (le marqueur non vide), les
+    /// `envelopes` (une par appareil destinataire), `encryptionMetadata`
+    /// (l'appareil émetteur) et les appareils de l'émetteur qu'il n'a pas
+    /// approuvés. Le texte ne voyage QUE dans les enveloppes : `content` reste
+    /// absent. Un envoi en clair n'a aucune de ces clés.
+    public var encryptionProtocol: String?
+    public var encryptedContent: String?
+    public var encryptionMetadata: E2EEWireMetadata?
+    public var envelopes: [E2EEOutgoingEnvelope]?
+    public var unapprovedOwnDevices: [UInt32]?
 
     public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil, sticker: MessageSticker? = nil, attachmentReplyTo: QuotedAttachmentSend? = nil, forwardedAttachmentIds: [String]? = nil) {
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
@@ -88,5 +99,29 @@ public struct SendMessageRequest: Encodable, Sendable {
         self.sticker = sticker
         self.attachmentReplyTo = attachmentReplyTo
         self.forwardedAttachmentIds = forwardedAttachmentIds
+    }
+}
+
+public extension SendMessageRequest {
+    /// Le corps d'un envoi libsignal (#3707, spec § 4.3) : aucun `content`,
+    /// aucune langue — le texte ne voyage que dans les enveloppes.
+    static func libsignal(
+        clientMessageId: String,
+        replyToId: String? = nil,
+        storyReplyToId: String? = nil,
+        senderDeviceId: UInt32,
+        envelopes: [E2EEOutgoingEnvelope],
+        unapprovedOwnDevices: [UInt32]
+    ) -> SendMessageRequest {
+        var request = SendMessageRequest(
+            content: nil, replyToId: replyToId, storyReplyToId: storyReplyToId,
+            isEncrypted: true, encryptionMode: E2EEWire.mode, clientMessageId: clientMessageId
+        )
+        request.encryptionProtocol = E2EEWire.libsignalProtocol
+        request.encryptedContent = E2EEWire.encryptedContentMarker
+        request.encryptionMetadata = E2EEWireMetadata(senderDeviceId: senderDeviceId)
+        request.envelopes = envelopes
+        request.unapprovedOwnDevices = unapprovedOwnDevices.isEmpty ? nil : unapprovedOwnDevices
+        return request
     }
 }

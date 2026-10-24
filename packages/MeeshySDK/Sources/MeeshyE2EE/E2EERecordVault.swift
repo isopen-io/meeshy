@@ -15,6 +15,14 @@ public enum E2EERecordKind: String, CaseIterable, Sendable {
     case kyberBaseKeySeen
     case senderKey
     case keyIdCounter
+    /// Le CLAIR d'un message déchiffré sur cet appareil, par identifiant de
+    /// message (spec § 4.4) : c'est lui qui rend l'historique lisible une fois
+    /// l'enveloppe effacée du serveur. Scellé comme toute ligne.
+    case plaintext
+    /// Mes autres appareils approuvés localement (spec § 3.5), par numéro.
+    case approvedOwnDevice
+    /// L'enrôlement de cette installation auprès de l'annuaire (compte, numéro).
+    case localEnrollment
 }
 
 /// Une transaction sur les enregistrements : c'est elle que libsignal reçoit
@@ -25,6 +33,9 @@ public protocol E2EERecordTransaction: StoreContext {
     func save(_ data: Data, as kind: E2EERecordKind, _ key: String) throws
     func remove(_ kind: E2EERecordKind, _ key: String) throws
     func keys(of kind: E2EERecordKind) throws -> [String]
+    /// Efface TOUT : un changement de compte ou une identité révoquée ne laisse
+    /// ni session, ni pré-clé, ni clair d'un autre régime.
+    func removeAll() throws
 }
 
 public protocol E2EERecordVaultProviding: Sendable {
@@ -140,5 +151,9 @@ private struct GRDBRecordTransaction: E2EERecordTransaction {
 
     func keys(of kind: E2EERecordKind) throws -> [String] {
         try String.fetchAll(db, sql: "SELECT key FROM record WHERE kind = ? ORDER BY key", arguments: [kind.rawValue])
+    }
+
+    func removeAll() throws {
+        try db.execute(sql: "DELETE FROM record")
     }
 }
