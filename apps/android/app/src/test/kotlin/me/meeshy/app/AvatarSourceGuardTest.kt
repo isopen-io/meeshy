@@ -6,9 +6,12 @@ import org.junit.Test
 
 // #12569 : la loi « UN cercle d'avatar = UN visage » se garde sur la SOURCE.
 //  (1) tout `MeeshyAvatar(` passe `imageUrl` (la photo servie atteint le cercle), sauf les
-//      exemptions NOMMÉES ci-dessous, chacune avec sa raison ;
+//      exemptions NOMMÉES ci-dessous, chacune avec sa raison — et jamais un `imageUrl = null` écrit
+//      en dur, qui satisferait la lettre de la règle sans jamais montrer de photo ;
 //  (2) aucun `AsyncImage(` n'est posé en couche à côté d'un `MeeshyAvatar(` : c'est ainsi que photo
-//      et initiales se retrouvaient visibles ensemble (Fit, liseré, PNG transparent).
+//      et initiales se retrouvaient visibles ensemble (Fit, liseré, PNG transparent) ;
+//  (3) aucun cercle d'initiales n'est dessiné à la main (`nom.take(1).uppercase()`) : un tel cercle
+//      échappe aux deux règles précédentes et ne montre jamais la photo (la pastille d'appel l'a prouvé).
 // Miroir d'`apps/web/scripts/check-avatar-src.mjs`.
 class AvatarSourceGuardTest {
 
@@ -47,10 +50,23 @@ class AvatarSourceGuardTest {
             val text = file.readText()
             Regex("""(?<![\w.])MeeshyAvatar\(""").findAll(text).forEach { m ->
                 val call = callText(text, m.range.last)
-                if ("imageUrl" !in call) offenders += "${file.name}:${text.substring(0, m.range.first).count { it == '\n' } + 1}"
+                val passesNoPhoto = "imageUrl" !in call || Regex("""imageUrl\s*=\s*null\b""").containsMatchIn(call)
+                if (passesNoPhoto) offenders += "${file.name}:${text.substring(0, m.range.first).count { it == '\n' } + 1}"
             }
         }
-        assertWithMessage("MeeshyAvatar sans imageUrl (ajouter la photo servie, ou une exemption nommée)")
+        assertWithMessage("MeeshyAvatar sans imageUrl servi (ajouter la photo servie, ou une exemption nommée)")
+            .that(offenders).isEmpty()
+    }
+
+    @Test
+    fun `aucun cercle d'initiales n'est dessine a la main hors de l'atome`() {
+        val handDrawn = Regex("""\w*[Nn]ame\w*\??\.take\(1\)\.uppercase\(\)""")
+        val offenders = mainSources().flatMap { file ->
+            file.readLines().mapIndexedNotNull { index, line ->
+                "${file.name}:${index + 1}".takeIf { handDrawn.containsMatchIn(line) }
+            }
+        }
+        assertWithMessage("initiales dessinées à la main (passer par MeeshyAvatar, qui montre la photo servie)")
             .that(offenders).isEmpty()
     }
 
