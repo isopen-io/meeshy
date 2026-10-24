@@ -7,7 +7,7 @@ import Foundation
 ///
 /// Un canal à part de `MessageSocketManager` (déjà au-delà de son budget de
 /// cohésion) : la route socket y publie, les abonnés n'en lisent que ceci.
-// unchecked: un seul `let` immuable ; PassthroughSubject sérialise ses envois mais n'est pas Sendable dans Combine.
+/// unchecked: `changed` est un `PassthroughSubject` (sérialise ses propres envois) ; aucune autre propriété mutable.
 public final class ConversationEncryptionChannel: @unchecked Sendable {
     public static let shared = ConversationEncryptionChannel()
 

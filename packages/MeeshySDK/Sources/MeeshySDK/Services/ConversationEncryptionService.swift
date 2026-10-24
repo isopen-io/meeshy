@@ -10,7 +10,8 @@ public protocol ConversationEncryptionServiceProviding: Sendable {
     func disable(conversationId: String) async throws -> ConversationEncryptionStatus
 }
 
-public final class ConversationEncryptionService: ConversationEncryptionServiceProviding, Sendable {
+/// unchecked: `api` est assigné une seule fois à l'init et jamais réassigné ; aucun état mutable partagé.
+public final class ConversationEncryptionService: ConversationEncryptionServiceProviding, @unchecked Sendable {
     public static let shared = ConversationEncryptionService()
     private let api: APIClientProviding
 

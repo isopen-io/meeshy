@@ -9,7 +9,8 @@ import os
 /// seul site qui les touche ; le reste de l'app parle à
 /// `EndToEndMessagingProviding`.
 nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning, @unchecked Sendable {
-    private let opened = OSAllocatedUnfairLock<(vault: E2EEGRDBRecordVault, lock: E2EEProcessLock)?>(uncheckedState: nil)
+    private let lock = OSAllocatedUnfairLock()
+    private var opened: (vault: E2EEGRDBRecordVault, lock: E2EEProcessLock)?
     private let secrets = E2EEKeychainSecretStore()
     private let directory: any E2EEDirectoryClientProviding
 
@@ -19,11 +20,11 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
 
     /// La base et son verrou, ouverts une fois par processus.
     private func storage() throws -> (vault: E2EEGRDBRecordVault, lock: E2EEProcessLock) {
-        try opened.withLockUnchecked { slot in
-            if let slot { return slot }
+        try lock.withLock { _ in
+            if let opened { return opened }
             let processLock = try E2EEProcessLock.shared()
             let vault = try E2EEGRDBRecordVault.shared(secrets: secrets, lock: processLock)
-            slot = (vault, processLock)
+            opened = (vault, processLock)
             return (vault, processLock)
         }
     }

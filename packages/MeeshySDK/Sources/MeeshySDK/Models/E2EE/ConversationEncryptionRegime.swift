@@ -2,7 +2,7 @@ import Foundation
 
 /// Le régime de chiffrement d'une conversation, tel que
 /// `GET /conversations/:id/encryption-status` et ses deux bascules le servent
-/// (#12522, spec e2ee-libsignal-ios-macos § 5). `epoch` et `canToggleEncryption` sont nuls
+/// (#12522, spec E2EE libsignal iOS/macOS § 5). `epoch` et `canToggleEncryption` sont nuls
 /// quand la passerelle est antérieure à la commutation : le client retombe
 /// alors sur la politique de rôle (`ConversationEncryptionActivationPolicy`).
 public struct ConversationEncryptionStatus: Decodable, Equatable, Sendable {
