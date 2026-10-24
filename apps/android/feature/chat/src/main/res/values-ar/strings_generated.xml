@@ -12,6 +12,13 @@
     <string name="chat_delete_confirm_cancel">إلغاء</string>
     <string name="chat_delete_confirm_hint">الحذف للجميع متاح لمدة ساعتين بعد الإرسال.</string>
     <string name="chat_delete_confirm_title">حذف هذه الرسالة؟</string>
+    <string name="chat_exit_blocked_after_read">تختفي بعد القراءة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها.</string>
+    <string name="chat_exit_blocked_attachment_not_in_source">لم يعد هذا العنصر جزءًا من الرسالة.</string>
+    <string name="chat_exit_blocked_encrypted_source">يُنسخ هذا المحتوى المشفّر من هذا الجهاز.</string>
+    <string name="chat_exit_blocked_source_unavailable">الرسالة الأصلية لم تعد متاحة.</string>
+    <string name="chat_exit_blocked_title">هذه الرسالة لا تغادر Meeshy</string>
+    <string name="chat_exit_blocked_understood">حسنًا</string>
+    <string name="chat_exit_blocked_view_once">إنها للعرض مرة واحدة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها. تبقى في المحادثة حتى تُشاهَد.</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_send">إرسال</string>
     <string name="common_unknown">غير معروف</string>

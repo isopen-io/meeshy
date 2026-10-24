@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.MessageExit
+import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.PinAction
 
 /**
@@ -69,6 +71,8 @@ data class MessageActionContext(
     val hasText: Boolean = false,
     /** Which of the detail/selection entries the host can actually serve; inert (empty) by default. */
     val hostedEntries: Set<MessageAction> = emptySet(),
+    /** What the message lets out of Meeshy — an exit it refuses is absent from the menu, never greyed out. */
+    val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
 ) {
     /**
      * A message is "actionable" — eligible for reply / forward / star / edit / delete —
@@ -89,22 +93,22 @@ object MessageActionMenu {
     fun actions(ctx: MessageActionContext): List<MessageAction> = buildList {
         if (ctx.isActionable) {
             add(MessageAction.Reply)
-            add(MessageAction.Forward)
+            if (ctx.exitOffer.offers(MessageExit.FORWARD)) add(MessageAction.Forward)
         }
         if (ctx.isTranslated) {
             add(if (ctx.isShowingOriginal) MessageAction.ShowTranslation else MessageAction.ShowOriginal)
             add(MessageAction.ExploreLanguages)
         }
-        if (!ctx.isDeleted) {
+        if (!ctx.isDeleted && ctx.exitOffer.offers(MessageExit.COPY)) {
             add(MessageAction.Copy)
         }
-        if (ctx.hasOpenableFile) {
+        if (ctx.hasOpenableFile && ctx.exitOffer.offers(MessageExit.SHARE)) {
             add(MessageAction.OpenFile)
             add(MessageAction.ShareFile)
         }
         if (!ctx.isDeleted) {
             if (MessageAction.Select in ctx.hostedEntries) add(MessageAction.Select)
-            if (MessageAction.ExportCard in ctx.hostedEntries && ctx.hasText) add(MessageAction.ExportCard)
+            if (MessageAction.ExportCard in ctx.hostedEntries && ctx.hasText && ctx.exitOffer.offers(MessageExit.IMAGINE)) add(MessageAction.ExportCard)
         }
         when (ctx.pinAction) {
             PinAction.Pin -> add(MessageAction.Pin)

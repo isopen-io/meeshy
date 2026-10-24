@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.blocked.title",
+          "androidName": "chat_exit_blocked_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.blocked.view-once",
+          "androidName": "chat_exit_blocked_view_once",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.blocked.after-read",
+          "androidName": "chat_exit_blocked_after_read",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.blocked.understood",
+          "androidName": "chat_exit_blocked_understood",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.refused.source-unavailable",
+          "androidName": "chat_exit_blocked_source_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.refused.encrypted-source",
+          "androidName": "chat_exit_blocked_encrypted_source",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.refused.attachment-not-in-source",
+          "androidName": "chat_exit_blocked_attachment_not_in_source",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
