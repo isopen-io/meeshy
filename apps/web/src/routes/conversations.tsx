@@ -19,6 +19,8 @@ import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
 import { useListReorderFlip, useScene } from '@/lib/lens/scene';
+import { ExitPresence } from '@/lib/view/exit-presence';
+import { useListDepartures } from '@/lib/view/list-departures';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { publicWebOrigin } from '@/lib/links/public-origin';
@@ -518,6 +520,11 @@ export default function ConversationsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, selection, search, viewer.id, overrides, categories, timeZone, minute]);
   useListReorderFlip(frame, visible);
+  /* UNE CONVERSATION QUI QUITTE LA LISTE S'Y REPLIE (#11574) — sous la même
+     portée de filtre et de recherche seulement : changer de filtre remplace la
+     liste, il n'en retire personne. */
+  const { rowMayExit, sectionMayExit } = useListDepartures({ visible, sections });
+  const exitScope = `${selection.join(',')}|${search}`;
 
   /**
    * LE PLIAGE DES SECTIONS (#8694, toute section depuis #10103) — Épingles et
@@ -758,6 +765,7 @@ export default function ConversationsScreen() {
           #5694 ; voir le doc-comment de `LensSticker`).
         */}
         {world === undefined ? null : lensRowOf(world)}
+        <ExitPresence scope={exitScope} mayExit={sectionMayExit}>
         {sections.map((section, i) => {
           const fold = folds[i];
           return (
@@ -767,10 +775,15 @@ export default function ConversationsScreen() {
             {...(section.category === undefined ? {} : { category: section.category })}
             {...(fold === undefined ? {} : { fold })}
           >
-            {fold?.folded === true ? null : section.conversations.map((c) => lensRowOf(c))}
+            {fold?.folded === true ? null : (
+              <ExitPresence scope={exitScope} mayExit={rowMayExit}>
+                {section.conversations.map((c) => lensRowOf(c))}
+              </ExitPresence>
+            )}
           </LensSection>
           );
         })}
+        </ExitPresence>
         {/*
           LE PIED DE PAGINATION (#6195) — APRÈS les sections, AVANT les états
           vides (miroir iOS `ConversationListView.swift:1851` →

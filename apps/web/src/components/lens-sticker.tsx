@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 
 import lentilleTokens from '@meeshy/shared/design/lentille-tokens.json';
 
@@ -6,6 +6,7 @@ import { lensSectionAccessibleName } from '@/lib/lens/folded-unread';
 import type { LensSectionId } from '@/lib/lens/sections';
 import { lensSectionLabel } from '@/lib/lens/sections';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useExitMotion } from '@/lib/view/exit-presence';
 import '@/styles/lens-section.css';
 
 import { Glyph } from './glyph';
@@ -173,8 +174,11 @@ export function LensSection({
   readonly fold?: LensSectionFold;
   readonly children: ReactNode;
 }) {
+  /* UNE SECTION VIDÉE PAR SA DERNIÈRE SORTIE SE REPLIE AVEC ELLE (#11574). */
+  const block = useRef<HTMLLIElement | null>(null);
+  useExitMotion(block);
   return (
-    <li data-section={id} className="shrink-0" style={{ marginTop: lentilleTokens.list.row.marginVertical }}>
+    <li ref={block} data-section={id} className="shrink-0" style={{ marginTop: lentilleTokens.list.row.marginVertical }}>
       <LensSticker id={id} {...(category === undefined ? {} : { category })} {...(fold === undefined ? {} : { fold })} />
       <SectionRows id={id} fold={fold}>
         {children}
