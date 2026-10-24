@@ -82,6 +82,15 @@ const CONV_ID = '507f1f77bcf86cd799439013';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439014';
 const AUTH = { authorization: 'Bearer valid-token' };
 
+const NOTICE = {
+  id: '507f1f77bcf86cd799439015',
+  conversationId: CONV_ID,
+  senderId: PARTICIPANT_ID,
+  messageType: 'system',
+  metadata: { kind: 'encryption-enabled', mode: 'e2ee' },
+  createdAt: new Date('2026-10-24T10:00:00.000Z'),
+};
+
 // ─── Prisma factory ───────────────────────────────────────────────────────────
 
 type ConvShape = {
@@ -127,16 +136,22 @@ function makePrisma(opts: {
       findFirst: jest.fn().mockResolvedValue(senderParticipant),
     },
     message: {
-      create: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockResolvedValue(NOTICE),
     },
   };
 }
 
 // ─── App builder ─────────────────────────────────────────────────────────────
 
-async function buildApp(prismaOpts: Parameters<typeof makePrisma>[0] = {}): Promise<FastifyInstance> {
+async function buildApp(
+  prismaOpts: Parameters<typeof makePrisma>[0] = {},
+  broadcastMessage?: jest.Mock<(message: unknown, conversationId: string) => Promise<void>>,
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate('prisma', makePrisma(prismaOpts) as unknown);
+  if (broadcastMessage) {
+    app.decorate('socketIOHandler', { getManager: () => ({ broadcastMessage }) } as unknown);
+  }
   await app.register(encryptionRoutes);
   await app.ready();
   return app;
@@ -447,5 +462,92 @@ describe('POST /conversations/:conversationId/encryption', () => {
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(res.statusCode).toBe(500);
     await app.close();
+  });
+  describe("diffusion de l'avis aux membres (#11416)", () => {
+    const ADMIN_GROUP = {
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
+      senderParticipant: { id: PARTICIPANT_ID },
+    };
+    const enable = (app: FastifyInstance) =>
+      app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
+
+    it("diffuse l'avis par le chemin ordinaire des messages (message:new + conversation:updated)", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined);
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const res = await enable(app);
+      expect(res.statusCode).toBe(200);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(broadcastMessage).toHaveBeenCalledTimes(1);
+      expect(broadcastMessage).toHaveBeenCalledWith(NOTICE, CONV_ID);
+      await app.close();
+    });
+
+    it("fait de l'avis le dernier message du fil : l'horloge avance sur son createdAt", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined);
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const update = (app as unknown as { prisma: { conversation: { update: jest.Mock } } }).prisma.conversation.update;
+      await enable(app);
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: CONV_ID },
+        data: { lastMessageAt: NOTICE.createdAt },
+      }));
+      await app.close();
+    });
+
+    it("pose l'avis comme message système, sa clé localisable et son texte de repli anglais (rétrocompatible)", async () => {
+      const app = await buildApp(ADMIN_GROUP, jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined));
+      const create = (app as unknown as { prisma: { message: { create: jest.Mock } } }).prisma.message.create;
+      await enable(app);
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          conversationId: CONV_ID,
+          senderId: PARTICIPANT_ID,
+          messageType: 'system',
+          messageSource: 'system',
+          originalLanguage: 'en',
+          content: expect.stringContaining('End-to-end encryption enabled'),
+          metadata: { kind: 'encryption-enabled', mode: 'e2ee' },
+        }),
+      }));
+      await app.close();
+    });
+
+    it("une diffusion qui échoue ne fait pas échouer l'activation", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockRejectedValue(new Error('socket down'));
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const res = await enable(app);
+      expect(res.statusCode).toBe(200);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(broadcastMessage).toHaveBeenCalledTimes(1);
+      await app.close();
+    });
+
+    it("une diffusion qui lève de façon synchrone ne fait pas échouer l'activation", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockImplementation(() => {
+        throw new Error('encoder crash');
+      });
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const res = await enable(app);
+      expect(res.statusCode).toBe(200);
+      await app.close();
+    });
+
+    it("la réponse n'attend pas la diffusion : une émission qui ne finit jamais ne la retient pas", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockReturnValue(new Promise<void>(() => undefined));
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const res = await enable(app);
+      expect(res.statusCode).toBe(200);
+      expect(broadcastMessage).toHaveBeenCalledTimes(1);
+      await app.close();
+    });
+
+    it("n'écrit ni ne diffuse aucun avis quand l'acteur n'a pas de ligne Participant active", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined);
+      const app = await buildApp({ ...ADMIN_GROUP, senderParticipant: null }, broadcastMessage);
+      const res = await enable(app);
+      expect(res.statusCode).toBe(200);
+      expect(broadcastMessage).not.toHaveBeenCalled();
+      await app.close();
+    });
   });
 });
