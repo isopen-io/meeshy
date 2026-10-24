@@ -1,6 +1,6 @@
 /**
- * Aucun conteneur du staging ne partage un réseau avec la base, Redis, le translator
- * ou l'agent de la production (#11451, #9232 : « ni base, ni Redis, ni réseau »).
+ * Aucun conteneur du staging ne partage un réseau avec la production, hors du seul
+ * réseau d'entrée `meeshy-staging-edge` (#11451, #9232 : « ni base, ni Redis, ni réseau »).
  *
  * Staging et production tournent sur le même hôte, et le Traefik de la production
  * route les deux. Jusqu'ici, la passerelle, la webapp, static-files, coturn et le
@@ -14,9 +14,15 @@
  * - `meeshy-data` (`internal: true`) : base, Redis, translator, passerelle, agent et
  *   les deux UIs d'administration — ni Traefik, ni rien du staging.
  *
- * Il lit les FICHIERS du dépôt (même patron que
- * `staging-admin-surfaces-ssh-tunnel-only.test.ts`). Le compose déployé peut en
- * différer (#9662) : la vérification sur l'hôte se consigne dans l'issue.
+ * Le témoin lit les FICHIERS du dépôt sans parseur YAML (la passerelle n'en dépend
+ * pas), et il est donc FERMÉ PAR DÉFAUT : toute écriture des réseaux qu'il ne
+ * comprend pas (liste en flux, commentaire derrière `networks:`, ancre, `extends`,
+ * `external: True`, nom interpolé…) le fait échouer au lieu d'être ignorée. Les
+ * contournements relevés par l'audit adversarial de la PR sont rejoués plus bas :
+ * chacun doit le faire tomber.
+ *
+ * Le compose déployé peut différer du dépôt (#9662) : la vérification sur l'hôte
+ * se consigne dans l'issue.
  *
  * @jest-environment node
  */
@@ -26,165 +32,322 @@ import path from 'path';
 
 const COMPOSE_DIR = path.resolve(__dirname, '..', '..', '..', '..', '..', '..', 'infrastructure', 'docker', 'compose');
 
-// Projets compose de l'hôte : le nom réel d'un réseau non nommé est `<projet>_<clé>`.
-const PROD = { file: 'docker-compose.prod.yml', project: 'meeshy' } as const;
-const STAGING = { file: 'docker-compose.staging.yml', project: 'staging' } as const;
-
+// Projets compose de l'hôte : le nom réel d'un réseau sans `name:` est `<projet>_<clé>`.
+// La production le fixe par `name: meeshy` ; le staging tient le sien de son dossier
+// (/opt/meeshy/staging, mesuré : `staging_default`).
+const STAGING_PROJECT = 'staging';
+const STAGING_EDGE = 'meeshy-staging-edge';
 const PROD_DATA_SERVICES = ['database', 'redis', 'translator', 'agent'] as const;
 
-type Service = { name: string; body: string };
-type Network = { key: string; realName: string; internal: boolean; external: boolean };
+class FormeInconnue extends Error {}
+
+type Attachment = { networks: string[]; networkMode: string | null };
+type NetworkDecl = { realName: string; internal: boolean; external: boolean };
+type Compose = { project: string; services: Map<string, Attachment>; networks: Map<string, NetworkDecl> };
+
+const TOP_LEVEL_KEYS = new Set(['name', 'services', 'networks', 'volumes', 'secrets', 'configs']);
+
+function stripComment(text: string): string {
+  return text.replace(/\s+#.*$/, '').trim();
+}
+
+/** Un scalaire simple, guillemets ôtés. Interpolation, ancre ou alias : forme inconnue. */
+function scalar(raw: string, where: string): string {
+  const value = stripComment(raw);
+  const unquoted = /^"(.*)"$/.exec(value)?.[1] ?? /^'(.*)'$/.exec(value)?.[1] ?? value;
+  if (!unquoted || /[$&*{}[\]]/.test(unquoted)) throw new FormeInconnue(`${where} : « ${raw.trim()} »`);
+  return unquoted;
+}
+
+function bool(raw: string, where: string): boolean {
+  const value = stripComment(raw);
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new FormeInconnue(`${where} : booléen « ${raw.trim()} » (seuls true et false sont lus)`);
+}
+
+const isBlankOrComment = (l: string): boolean => /^\s*(#.*)?$/.test(l);
+const indent = (l: string): number => /^ */.exec(l)![0].length;
+
+/** Les lignes qui suivent `start` et sont plus indentées que `level` (lignes vides et commentaires compris). */
+function childLines(lines: string[], start: number, level: number): string[] {
+  const out: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    if (!isBlankOrComment(lines[i]) && indent(lines[i]) <= level) break;
+    out.push(lines[i]);
+  }
+  return out;
+}
+
+function parseServiceNetworks(name: string, body: string[]): Attachment {
+  let networks: string[] | null = null;
+  let networkMode: string | null = null;
+  for (let i = 0; i < body.length; i++) {
+    const line = body[i];
+    if (isBlankOrComment(line) || indent(line) !== 4) continue;
+    const key = /^ {4}("?[^:"]+"?)\s*:/.exec(line)?.[1] ?? '';
+    if (key === '<<' || key === 'extends') throw new FormeInconnue(`${name} : « ${key} » (les réseaux viendraient d'ailleurs)`);
+    if (!/network/.test(key)) continue;
+    if (key === 'network_mode') {
+      networkMode = scalar(line.replace(/^ {4}network_mode:/, ''), `${name}.network_mode`);
+      continue;
+    }
+    if (key !== 'networks' || !/^ {4}networks:\s*$/.test(line)) {
+      throw new FormeInconnue(`${name} : « ${line.trim()} » (seul « networks: » seul sur sa ligne est lu)`);
+    }
+    networks = [];
+    for (const child of childLines(body, i, 4)) {
+      if (isBlankOrComment(child) || indent(child) > 6) continue; // réglages du rattachement (aliases, gw_priority…)
+      const listed = /^ {6}- (.+)$/.exec(child);
+      const keyed = /^ {6}([^\s:#][^:]*):\s*(\{\s*\}|null)?\s*(#.*)?$/.exec(child);
+      if (listed) networks.push(scalar(listed[1], `${name}.networks`));
+      else if (keyed) networks.push(scalar(keyed[1], `${name}.networks`));
+      else throw new FormeInconnue(`${name}.networks : « ${child.trim()} »`);
+    }
+  }
+  return { networks: networks ?? [], networkMode };
+}
+
+function parseCompose(source: string, fallbackProject: string): Compose {
+  const lines = source.split('\n');
+  let project = fallbackProject;
+  const services = new Map<string, Attachment>();
+  const networks = new Map<string, NetworkDecl>();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (isBlankOrComment(line) || indent(line) !== 0) continue;
+    const key = /^([^:\s]+)\s*:/.exec(line)?.[1];
+    if (!key) throw new FormeInconnue(`clé racine illisible : « ${line} »`);
+    if (key.startsWith('x-')) continue;
+    if (!TOP_LEVEL_KEYS.has(key)) throw new FormeInconnue(`clé racine « ${key} » non lue par le témoin`);
+    if (key === 'name') {
+      project = scalar(line.replace(/^name:/, ''), 'name');
+      continue;
+    }
+    if (key !== 'services' && key !== 'networks') continue;
+    if (!new RegExp(`^${key}:\\s*$`).test(line)) throw new FormeInconnue(`« ${line} »`);
+    const section = childLines(lines, i, 0);
+    for (let j = 0; j < section.length; j++) {
+      const entry = section[j];
+      if (isBlankOrComment(entry) || indent(entry) !== 2) {
+        if (!isBlankOrComment(entry) && indent(entry) < 2) throw new FormeInconnue(`« ${entry} »`);
+        continue;
+      }
+      const header = /^ {2}(.+?):\s*(#.*)?$/.exec(entry);
+      if (!header) throw new FormeInconnue(`${key} : « ${entry.trim()} »`);
+      const name = scalar(header[1], key);
+      const body = childLines(section, j, 2);
+      if (key === 'services') {
+        services.set(name, parseServiceNetworks(name, body));
+        continue;
+      }
+      const field = (f: string): string | undefined => body.find((l) => new RegExp(`^ {4}${f}:`).test(l))?.replace(new RegExp(`^ {4}${f}:`), '');
+      // Une clé entre guillemets échapperait à la lecture de name/external/internal.
+      const quoted = body.find((l) => /^ {4}["']/.test(l));
+      if (quoted) throw new FormeInconnue(`networks.${name} : « ${quoted.trim()} »`);
+      const realName = field('name');
+      const external = field('external');
+      const internal = field('internal');
+      networks.set(name, {
+        realName: realName === undefined ? `${project}_${name}` : scalar(realName, `networks.${name}.name`),
+        external: external === undefined ? false : bool(external, `networks.${name}.external`),
+        internal: internal === undefined ? false : bool(internal, `networks.${name}.internal`),
+      });
+    }
+  }
+  return { project, services, networks };
+}
+
+/** Noms RÉELS des réseaux d'un service ; sans `networks` ni `network_mode`, le réseau `default` du projet. */
+function realNetworksOf(service: Attachment, compose: Compose, where: string): string[] {
+  if (service.networkMode) return [];
+  const keys = service.networks.length ? service.networks : ['default'];
+  return keys.map((key) => {
+    const declared = compose.networks.get(key);
+    if (declared) return declared.realName;
+    if (key === 'default') return `${compose.project}_default`;
+    throw new FormeInconnue(`${where} : réseau « ${key} » non déclaré à la racine`);
+  });
+}
+
+/**
+ * Les violations de l'isolement : un service du staging sur un réseau (nom réel) de
+ * la production autre que meeshy-staging-edge, ou partageant une pile réseau qui
+ * n'est pas la sienne.
+ */
+function isolationViolations(prod: Compose, stagingFiles: Compose[]): string[] {
+  const prodNetworks = new Set([...prod.networks.values()].map((n) => n.realName));
+  for (const service of prod.services.values()) {
+    for (const n of realNetworksOf(service, prod, 'production')) prodNetworks.add(n);
+  }
+  prodNetworks.delete(STAGING_EDGE);
+
+  const merged: Compose = { project: STAGING_PROJECT, services: new Map(), networks: new Map() };
+  for (const file of stagingFiles) {
+    file.networks.forEach((v, k) => merged.networks.set(k, v));
+    file.services.forEach((v, k) => merged.services.set(k, v));
+  }
+  const out: string[] = [];
+  for (const [name, service] of merged.services) {
+    const mode = service.networkMode;
+    if (mode !== null) {
+      const sibling = /^service:(.+)$/.exec(mode)?.[1];
+      const allowed = mode === 'none' || mode === 'bridge' || (sibling !== undefined && merged.services.has(sibling));
+      if (!allowed) out.push(`${name} → network_mode ${mode}`);
+    }
+    for (const real of realNetworksOf(service, merged, name)) {
+      if (prodNetworks.has(real)) out.push(`${name} → ${real}`);
+    }
+  }
+  return out;
+}
 
 function read(file: string): string {
   return fs.readFileSync(path.join(COMPOSE_DIR, file), 'utf8');
 }
 
-function services(source: string): Service[] {
-  const lines = source.split('\n');
-  const start = lines.indexOf('services:');
-  const out: Service[] = [];
-  for (let i = start + 1; i < lines.length && !/^\S/.test(lines[i]); i++) {
-    const m = /^ {2}([a-z0-9-]+):\s*$/.exec(lines[i]);
-    if (!m) continue;
-    let j = i + 1;
-    while (j < lines.length && !/^ {2}\S/.test(lines[j]) && !/^\S/.test(lines[j])) j++;
-    out.push({ name: m[1], body: lines.slice(i + 1, j).join('\n') });
-  }
-  return out;
+function membersOf(compose: Compose, key: string): string[] {
+  return [...compose.services].filter(([, s]) => s.networks.includes(key)).map(([n]) => n).sort();
 }
 
-/** Forme liste (`- meeshy-data`) et forme dictionnaire (`meeshy-staging-edge: {}`). */
-function networksOf(body: string): string[] {
-  const m = /^ {4}networks:\n((?: {6}.*\n?|\s*#.*\n?)+)/m.exec(body);
-  if (!m) return [];
-  return m[1]
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith('#'))
-    .map((l) => l.replace(/\s+#.*$/, '').replace(/^- /, '').replace(/:.*$/, ''));
-}
+describe("le staging ne partage aucun réseau avec la production, hors meeshy-staging-edge (#11451)", () => {
+  const prodSource = read('docker-compose.prod.yml');
+  const stagingSource = read('docker-compose.staging.yml');
+  const prod = parseCompose(prodSource, 'meeshy');
+  const staging = parseCompose(stagingSource, STAGING_PROJECT);
+  const mediaS3 = parseCompose(read('docker-compose.staging.media-s3.yml'), STAGING_PROJECT);
 
-function rootNetworks(source: string, project: string): Network[] {
-  const section = source.slice(source.lastIndexOf('\nnetworks:') + 1).split('\n').slice(1);
-  const out: Network[] = [];
-  for (let i = 0; i < section.length && !/^\S/.test(section[i]); i++) {
-    const m = /^ {2}([a-z0-9-]+):\s*$/.exec(section[i]);
-    if (!m) continue;
-    let j = i + 1;
-    while (j < section.length && !/^ {2}\S/.test(section[j]) && !/^\S/.test(section[j])) j++;
-    const body = section.slice(i + 1, j).join('\n');
-    const name = /^ {4}name:\s*(\S+)/m.exec(body)?.[1];
-    out.push({
-      key: m[1],
-      realName: name ?? `${project}_${m[1]}`,
-      internal: /^ {4}internal:\s*true\b/m.test(body),
-      external: /^ {4}external:\s*true\b/m.test(body),
-    });
-  }
-  return out;
-}
-
-function realNetworksOf(service: Service, networks: Network[]): string[] {
-  return networksOf(service.body).map((key) => {
-    const declared = networks.find((n) => n.key === key);
-    if (!declared) throw new Error(`réseau "${key}" de ${service.name} non déclaré à la racine`);
-    return declared.realName;
-  });
-}
-
-function membersOf(all: Service[], key: string): string[] {
-  return all.filter((s) => networksOf(s.body).includes(key)).map((s) => s.name).sort();
-}
-
-describe("le staging ne partage aucun réseau avec les données de la production (#11451)", () => {
-  const prodSource = read(PROD.file);
-  const stagingSource = read(STAGING.file);
-  const prod = services(prodSource);
-  const staging = services(stagingSource);
-  const prodNetworks = rootNetworks(prodSource, PROD.project);
-  const stagingNetworks = rootNetworks(stagingSource, STAGING.project);
-
-  it('lit bien les services et les réseaux des deux fichiers', () => {
-    expect(prod.map((s) => s.name)).toEqual(expect.arrayContaining([...PROD_DATA_SERVICES, 'traefik', 'gateway']));
-    expect(staging.map((s) => s.name)).toEqual(expect.arrayContaining(['gateway-staging', 'translator-staging']));
-    expect(prodNetworks.map((n) => n.key)).toEqual(expect.arrayContaining(['meeshy-network', 'meeshy-data']));
+  it('lit bien les services et les réseaux des fichiers', () => {
+    expect(prod.project).toBe('meeshy');
+    expect([...prod.services.keys()]).toEqual(expect.arrayContaining([...PROD_DATA_SERVICES, 'traefik', 'gateway']));
+    expect([...staging.services.keys()]).toEqual(expect.arrayContaining(['gateway-staging', 'translator-staging']));
+    expect([...mediaS3.services.keys()]).toEqual(expect.arrayContaining(['media-s3-staging']));
+    expect([...prod.networks.keys()]).toEqual(expect.arrayContaining(['meeshy-network', 'meeshy-data', STAGING_EDGE]));
   });
 
-  it('aucun service du staging ne partage un réseau (nom réel) avec la base, Redis, le translator ou l’agent de la production', () => {
-    const prodDataNetworks = new Set(
-      prod.filter((s) => (PROD_DATA_SERVICES as readonly string[]).includes(s.name)).flatMap((s) => realNetworksOf(s, prodNetworks))
-    );
-    const partages = staging.flatMap((s) =>
-      realNetworksOf(s, stagingNetworks)
-        .filter((n) => prodDataNetworks.has(n))
-        .map((n) => `${s.name} → ${n}`)
-    );
-    expect(partages).toEqual([]);
-  });
-
-  it('le staging ne rejoint plus meeshy_meeshy-network, sous aucune clé', () => {
-    expect(stagingNetworks.map((n) => n.realName)).not.toContain('meeshy_meeshy-network');
+  it('aucun service du staging (surcouche S3 comprise) ne rejoint un réseau de la production autre que meeshy-staging-edge', () => {
+    expect(isolationViolations(prod, [staging, mediaS3])).toEqual([]);
   });
 
   it('le seul réseau externe du staging est meeshy-staging-edge, et seuls les services routés du staging y sont', () => {
-    expect(stagingNetworks.filter((n) => n.external).map((n) => n.realName)).toEqual(['meeshy-staging-edge']);
-    const routes = staging.filter((s) => /traefik\.enable=true/.test(s.body)).map((s) => s.name).sort();
-    expect(membersOf(staging, 'meeshy-staging-edge')).toEqual(routes);
+    expect([...staging.networks.values()].filter((n) => n.external).map((n) => n.realName)).toEqual([STAGING_EDGE]);
+    const routes = [...staging.services.keys()].filter((name) => /traefik\.enable=true/.test(serviceText(stagingSource, name))).sort();
+    expect(membersOf(staging, STAGING_EDGE)).toEqual(routes);
     for (const s of ['database-staging', 'redis-staging', 'translator-staging', 'agent-staging']) {
-      expect(membersOf(staging, 'meeshy-staging-edge')).not.toContain(s);
+      expect(membersOf(staging, STAGING_EDGE)).not.toContain(s);
     }
   });
 
   it('les services routés du staging sont joints par Traefik sur meeshy-staging-edge', () => {
-    const fautifs = staging
-      .filter((s) => /traefik\.enable=true/.test(s.body))
-      .filter((s) => !s.body.includes('"traefik.docker.network=meeshy-staging-edge"'))
-      .map((s) => s.name);
+    const fautifs = [...staging.services.keys()]
+      .map((name) => ({ name, text: serviceText(stagingSource, name) }))
+      .filter(({ text }) => /traefik\.enable=true/.test(text) && !text.includes(`"traefik.docker.network=${STAGING_EDGE}"`))
+      .map(({ name }) => name);
     expect(fautifs).toEqual([]);
   });
 
   describe('en production', () => {
     it('meeshy-staging-edge est le même réseau des deux côtés, et seul Traefik y est', () => {
-      const edge = prodNetworks.find((n) => n.key === 'meeshy-staging-edge');
-      expect(edge).toEqual({ key: 'meeshy-staging-edge', realName: 'meeshy-staging-edge', internal: false, external: true });
-      expect(membersOf(prod, 'meeshy-staging-edge')).toEqual(['traefik']);
+      expect(prod.networks.get(STAGING_EDGE)).toEqual({ realName: STAGING_EDGE, internal: false, external: true });
+      expect(membersOf(prod, STAGING_EDGE)).toEqual(['traefik']);
     });
 
     it('Traefik ne joint que des réseaux d’entrée', () => {
-      expect(networksOf(prod.find((s) => s.name === 'traefik')!.body).sort()).toEqual(['meeshy-network', 'meeshy-staging-edge']);
+      expect([...prod.services.get('traefik')!.networks].sort()).toEqual(['meeshy-network', STAGING_EDGE]);
     });
 
-    it.each(PROD_DATA_SERVICES)('%s ne rejoint ni meeshy-network ni meeshy-staging-edge', (name) => {
-      const nets = networksOf(prod.find((s) => s.name === name)!.body);
+    it.each(PROD_DATA_SERVICES)('%s est sur meeshy-data, ni sur meeshy-network ni sur meeshy-staging-edge', (name) => {
+      const nets = prod.services.get(name)!.networks;
       expect(nets).toContain('meeshy-data');
       expect(nets).not.toContain('meeshy-network');
-      expect(nets).not.toContain('meeshy-staging-edge');
+      expect(nets).not.toContain(STAGING_EDGE);
     });
 
     it('meeshy-data est interne', () => {
-      expect(prodNetworks.find((n) => n.key === 'meeshy-data')?.internal).toBe(true);
+      expect(prod.networks.get('meeshy-data')?.internal).toBe(true);
     });
 
     it('ne place sur meeshy-data que les services de données, la passerelle, l’agent et les UIs d’administration', () => {
-      expect(membersOf(prod, 'meeshy-data')).toEqual(
-        ['agent', 'database', 'gateway', 'nosqlclient', 'p3x-redis-ui', 'redis', 'translator'].sort()
-      );
+      expect(membersOf(prod, 'meeshy-data')).toEqual(['agent', 'database', 'gateway', 'nosqlclient', 'p3x-redis-ui', 'redis', 'translator']);
     });
 
     it('la base et Redis ne sont QUE sur meeshy-data : aucune sortie, aucune entrée', () => {
       for (const name of ['database', 'redis']) {
-        expect({ name, nets: networksOf(prod.find((s) => s.name === name)!.body) }).toEqual({ name, nets: ['meeshy-data'] });
+        expect({ name, nets: prod.services.get(name)!.networks }).toEqual({ name, nets: ['meeshy-data'] });
       }
     });
 
     it('un service qui publie un port rejoint au moins un réseau non interne (Docker ne publie rien d’un réseau interne)', () => {
-      const internes = new Set(prodNetworks.filter((n) => n.internal).map((n) => n.key));
-      const fautifs = prod
-        .filter((s) => /^ {4}ports:/m.test(s.body))
-        .filter((s) => !/^ {4}network_mode:/m.test(s.body))
-        .filter((s) => networksOf(s.body).every((n) => internes.has(n)))
-        .map((s) => s.name);
+      const internes = new Set([...prod.networks].filter(([, n]) => n.internal).map(([k]) => k));
+      const fautifs = [...prod.services]
+        .filter(([name, s]) => /^ {4}ports:/m.test(serviceText(prodSource, name)) && s.networkMode === null)
+        .filter(([, s]) => s.networks.every((n) => internes.has(n)))
+        .map(([name]) => name);
       expect(fautifs).toEqual([]);
     });
+  });
+});
+
+function serviceText(source: string, name: string): string {
+  const lines = source.split('\n');
+  const start = lines.findIndex((l) => l === `  ${name}:`);
+  if (start === -1) throw new Error(`service "${name}" introuvable`);
+  return childLines(lines, start, 2).join('\n');
+}
+
+/**
+ * Les contournements relevés par l'audit adversarial de la PR #12705 : chacun met
+ * un service du staging sur les données de la production. Le témoin doit tomber —
+ * par une violation, ou par une forme qu'il refuse de lire.
+ */
+describe('le témoin tombe sur chaque contournement connu (audit de #12705)', () => {
+  const prod = parseCompose(read('docker-compose.prod.yml'), 'meeshy');
+
+  const staging = (services: string, networks = ''): string =>
+    [
+      'services:',
+      '  gateway-staging:',
+      '    image: isopen/meeshy-gateway:staging',
+      services,
+      'networks:',
+      '  meeshy-staging-network:',
+      '    driver: bridge',
+      '    name: meeshy-staging-network',
+      networks,
+    ].join('\n');
+
+  const verdict = (text: string): string => {
+    try {
+      const v = isolationViolations(prod, [parseCompose(text, STAGING_PROJECT)]);
+      return v.length ? `violation: ${v.join(', ')}` : 'accepté';
+    } catch (e) {
+      if (e instanceof FormeInconnue) return `forme refusée: ${e.message}`;
+      throw e;
+    }
+  };
+
+  it('témoin positif : un staging propre est accepté', () => {
+    expect(verdict(staging('    networks:\n      - meeshy-staging-network'))).toBe('accepté');
+  });
+
+  it.each([
+    ['jonction franche', staging('    networks:\n      - prod-data', '  prod-data:\n    name: meeshy_meeshy-data')],
+    ['M1 nom entre guillemets', staging('    networks:\n      - prod-data', '  prod-data:\n    name: "meeshy_meeshy-data"')],
+    ['M2 commentaire derrière networks:', staging('    networks: # staging\n      - prod-data', '  prod-data:\n    name: meeshy_meeshy-data')],
+    ['M3 liste en flux', staging('    networks: [meeshy-staging-network, prod-data]', '  prod-data:\n    name: meeshy_meeshy-data')],
+    ['M4 ligne vide dans la liste', staging('    networks:\n      - meeshy-staging-network\n\n      - prod-data', '  prod-data:\n    name: meeshy_meeshy-data')],
+    ['M5 network_mode container:', staging('    network_mode: "container:meeshy-database"')],
+    ['M5 bis network_mode host', staging('    network_mode: host')],
+    ['M6 réseau des UIs d’administration', staging('    networks:\n      - prod-admin', '  prod-admin:\n    name: meeshy_meeshy-admin-ui')],
+    ['M6 bis réseau implicite de la production', staging('    networks:\n      - prod-default', '  prod-default:\n    name: meeshy_default')],
+    ['M7 service au nom souligné', staging('    networks:\n      - meeshy-staging-network\n  debug_shell:\n    image: alpine\n    networks:\n      - prod-data', '  prod-data:\n    name: meeshy_meeshy-data')],
+    ['M9 external: True', staging('    networks:\n      - prod-data', '  prod-data:\n    external: True\n    name: "meeshy_meeshy-data"')],
+    ['forme dictionnaire', staging('    networks:\n      prod-data:\n        aliases:\n          - x', '  prod-data:\n    name: meeshy_meeshy-data')],
+    ['nom interpolé', staging('    networks:\n      - prod-data', '  prod-data:\n    name: ${PROD_NET:-meeshy_meeshy-data}')],
+    ['ancre de fusion', staging('    <<: *prod-attachment')],
+    ['extends', staging('    extends:\n      file: docker-compose.prod.yml\n      service: gateway')],
+    ['include racine', 'include:\n  - docker-compose.prod.yml\n' + staging('    networks:\n      - meeshy-staging-network')],
+  ])('%s', (_cas, text) => {
+    expect(verdict(text)).not.toBe('accepté');
   });
 });

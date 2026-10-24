@@ -66,13 +66,17 @@ services:
     # #11451 — Traefik ne partage QUE des réseaux d'entrée : meeshy-network (les services
     # exposés de la production) et meeshy-staging-edge (ceux du staging). Les données de
     # la production (base, Redis, translator, agent) vivent sur meeshy-data, qu'il ne joint pas.
+    # gw_priority -1 (comme sur l'hôte) : la route par défaut de Traefik ne passe jamais
+    # par le réseau du staging.
     networks:
-      - meeshy-network
-      - meeshy-staging-edge
+      meeshy-network: {}
+      meeshy-staging-edge:
+        gw_priority: -1
     labels:
       - "traefik.enable=true"
-      # #10323 — deux réseaux depuis #11451 : le nom réel du réseau d'entrée de la production.
-      # Le tableau de bord sert api@internal, mais la règle vaut pour tout service routé.
+      # #10323 — Traefik a deux réseaux depuis #11451 : ce label ne vaut que pour SES routeurs
+      # (le tableau de bord, api@internal). Les autres services routés multi-réseaux portent
+      # le leur ; --providers.docker.network ci-dessus n'est pas le nom réel (#10323).
       - "traefik.docker.network=meeshy_meeshy-network"
       # Dashboard Traefik sur traefik.${DOMAIN}
       - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN:-localhost}`)"

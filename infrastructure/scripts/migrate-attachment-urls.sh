@@ -24,16 +24,22 @@ echo ""
 echo "💾 Création d'un backup de sécurité..."
 BACKUP_NAME="attachments-pre-migration-${TIMESTAMP}"
 
-# Le réseau de la base de CET environnement (#11451) : la base de production n'est
-# que sur meeshy_meeshy-data, celle du staging que sur meeshy-staging-network.
 if [ "$ENVIRONMENT" = "staging" ]; then
   DB_HOST="database-staging"
+  DB_CONTAINER="meeshy-database-staging"
   DB_NAME="meeshy"
-  DB_NETWORK="meeshy-staging-network"
 else
   DB_HOST="meeshy-database"
+  DB_CONTAINER="meeshy-database"
   DB_NAME="meeshy"
-  DB_NETWORK="meeshy_meeshy-data"
+fi
+
+# Le réseau de la base de CET environnement, lu sur l'hôte (#11451) : meeshy_meeshy-data
+# après la séparation des réseaux de la production, meeshy_meeshy-network avant.
+DB_NETWORK=$(ssh $REMOTE_HOST "docker inspect -f '{{range \$k, \$v := .NetworkSettings.Networks}}{{\$k}} {{end}}' $DB_CONTAINER" | tr ' ' '\n' | grep -E '^(meeshy_meeshy-data|meeshy-staging-network|meeshy_meeshy-network)$' | head -1)
+if [ -z "$DB_NETWORK" ]; then
+  echo "❌ Réseau de $DB_CONTAINER introuvable sur $REMOTE_HOST" >&2
+  exit 1
 fi
 
 ssh $REMOTE_HOST "docker run --rm \
