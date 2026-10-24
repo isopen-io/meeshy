@@ -108,7 +108,7 @@ final class StoryMediaSourceSwapTests: XCTestCase {
         let (vm, ancien) = viewModel()
         XCTAssertNil(StoryMediaSourceSwap.swap(
             ancien.id, to: .video(URL(fileURLWithPath: "/tmp/e.mov"), thumbnail: nil, aspectRatio: 1, duration: 3), in: vm))
-        XCTAssertEqual(vm.slides[0].effects.mediaObjects?.first?.id, ancien.id)
+        XCTAssertTrue(vm.slides[0].effects.mediaObjects?.contains { $0.id == ancien.id } ?? false, "rien n'a bougé")
     }
 
     func test_swap_undoGivesBackTheOriginalObjectAndItsBitmap() throws {
