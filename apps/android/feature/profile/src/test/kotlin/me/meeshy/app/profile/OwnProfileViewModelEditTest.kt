@@ -19,7 +19,10 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UpdateProfileRequest
+import me.meeshy.sdk.cache.SystemCacheClock
+import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.user.ProfileStatsCacheRepository
 import me.meeshy.sdk.user.UserRepository
 import org.junit.After
@@ -77,6 +80,8 @@ class OwnProfileViewModelEditTest {
             userRepository = userRepo,
             statsCache = coldStatsCache(),
             workManager = workManager,
+            friendshipCache = FriendshipCache(),
+            statusBarCache = StatusBarCache(SystemCacheClock),
         )
     }
 

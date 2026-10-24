@@ -248,6 +248,40 @@ time.sleep(30)`, file], { stdio: ['ignore', 'pipe', 'inherit'] });
   });
 });
 
+describe('les chemins par défaut de la production (#11509)', () => {
+  it('le gabarit de la production sauvegarde là où la NOCTURNE sauvegarde, sous le MÊME verrou', () => {
+    // La nocturne (meeshy-nightly-backup.service) ne pose aucune variable : elle prend les
+    // valeurs par défaut du script. Le gabarit lancé par le relais doit les reprendre à
+    // l'identique — sinon les deux tournent ensemble, ou sur deux séries de sauvegardes.
+    const unit = readFileSync(path.join(here, 'meeshy-production-backup@.service'), 'utf8');
+    const script = readFileSync(path.join(here, '../production-backup/meeshy-nightly-backup.sh'), 'utf8');
+    const fromUnit = (name) => new RegExp(`^Environment="?${name}=([^"\\n]*)"?$`, 'm').exec(unit)?.[1];
+    const fromScript = (name) => new RegExp(`^${name}="\\$\\{${name}:-([^}]*)\\}"$`, 'm').exec(script)?.[1];
+    for (const name of ['COMPOSE_DIR', 'BACKUP_ROOT', 'DB_CONTAINER', 'VOLUMES', 'STATUS_DIR', 'LOCK_FILE']) {
+      assert.ok(fromScript(name), `valeur par défaut de ${name} introuvable dans le script`);
+      assert.equal(fromUnit(name), fromScript(name), name);
+    }
+    assert.equal(fromUnit('BACKUP_ORIGIN'), '%i');
+    // Le verdict que le runner de la production lit est celui que ce gabarit écrit.
+    const python = spawnSync('python3', ['-I', '-c', 'import importlib.util,sys; s=importlib.util.spec_from_file_location("r", sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); print(m.BACKUP_STATUS_FILES["production"])', RUNNER], { encoding: 'utf8' });
+    assert.equal(python.stdout.trim(), `${fromUnit('STATUS_DIR')}/etat.json`);
+  });
+
+  it('la production lit le verdict de SA sauvegarde là où la sauvegarde l’écrit, et lance SON unité à la demande', () => {
+    const python = spawnSync(
+      'python3',
+      ['-I', '-c', 'import importlib.util,json,os,sys; [os.environ.pop(k, None) for k in list(os.environ) if k.startswith("OPS_")]; s=importlib.util.spec_from_file_location("r", sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); print(json.dumps({e: [m.Paths(e).backup_status, m.Paths(e).backup_unit, m.Paths(e).base, m.Paths(e).compose_dir] for e in ("production", "staging")}))', RUNNER],
+      { encoding: 'utf8', env: { PATH: process.env.PATH } },
+    );
+    assert.equal(python.status, 0, python.stderr);
+    assert.deepEqual(JSON.parse(python.stdout), {
+      // Le dossier que la passerelle de production monte déjà (BACKUP_STATUS_HOST_DIR).
+      production: ['/opt/meeshy/backups/nightly-status/etat.json', 'meeshy-production-backup@on-demand.service', '/opt/meeshy/production/ops', '/opt/meeshy/production'],
+      staging: ['/opt/meeshy/staging/backup-status/etat.json', 'meeshy-staging-backup@on-demand.service', '/opt/meeshy/staging/ops', '/opt/meeshy/staging'],
+    });
+  });
+});
+
 describe('la purge n’est permise qu’aux heures creuses : de 02:00 à 06:00, heure de Paris (#11452)', () => {
   it('la fenêtre et le délai d’attente du runner sont ceux de la passerelle (packages/shared, confrontés)', () => {
     // Sans ce témoin, changer la fenêtre d'un seul côté laisse tous les tests verts, et

@@ -40,6 +40,8 @@ esac
 printf 'Avail\\n %sG\\n' "\${FAKE_DF_AVAIL:-500}"
 `,
   flock: `#!/usr/bin/env bash
+[[ -n "\${FAKE_FLOCK_LOG:-}" ]] && echo "$*" >> "$FAKE_FLOCK_LOG"
+[[ -n "\${FAKE_FLOCK_FAIL:-}" ]] && exit 1
 exit 0
 `,
   rsync: `#!/usr/bin/env bash
@@ -200,6 +202,33 @@ describe('le verdict d’un échec', () => {
 // #11450 : une sauvegarde lancée depuis l'administration passe par le même script, avec
 // BACKUP_ORIGIN=on-demand. Elle ne fait jamais sortir de la rotation la dernière
 // sauvegarde nocturne vérifiée : les deux origines tournent à part.
+describe('le verrou commun de la nocturne et des demandes (#11509)', () => {
+  const flockCalls = () => readFileSync(path.join(env.HOME, 'flock.log'), 'utf8').trim().split('\n');
+
+  it('la nocturne ATTEND le verrou ; une demande le refuse aussitôt', () => {
+    const log = path.join(env.HOME, 'flock.log');
+    assert.equal(run({ FAKE_FLOCK_LOG: log, FAKE_STAMP: '20261020T0000Z' }).status, 0);
+    assert.equal(run({ FAKE_FLOCK_LOG: log, BACKUP_ORIGIN: 'on-demand', FAKE_STAMP: '20261020T0600Z' }).status, 0);
+    assert.deepEqual(flockCalls(), ['-w 10800 9', '-n 9']);
+  });
+
+  it('une nocturne qui n’obtient pas le verrou publie un échec, et ne touche à aucune sauvegarde', () => {
+    seedCompleteBackup('20261019T0000Z');
+    const result = run({ FAKE_FLOCK_FAIL: '1', NIGHTLY_LOCK_WAIT_SECONDS: '1' });
+    assert.equal(result.status, 1);
+    const verdict = JSON.parse(readFileSync(statusFile(), 'utf8'));
+    assert.equal(verdict.status, 'failed');
+    assert.match(verdict.reason, /verrou/);
+    assert.deepEqual(backups(), ['20261019T0000Z']);
+  });
+
+  it('une demande qui n’obtient pas le verrou ne publie rien : celle qui le tient publiera', () => {
+    const result = run({ FAKE_FLOCK_FAIL: '1', BACKUP_ORIGIN: 'on-demand' });
+    assert.equal(result.status, 1);
+    assert.equal(existsSync(statusFile()), false);
+  });
+});
+
 describe('la rotation des sauvegardes à la demande (#11450)', () => {
   it('trois sauvegardes à la demande en 18 h laissent la nocturne de la veille en place', () => {
     seedCompleteBackup('20261019T0000Z');
