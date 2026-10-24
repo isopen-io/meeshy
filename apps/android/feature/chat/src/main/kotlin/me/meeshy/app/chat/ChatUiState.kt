@@ -216,6 +216,8 @@ data class ForwardUiState(
     val targets: List<ForwardTarget> = emptyList(),
     val sendingConversationId: String? = null,
     val sentConversationIds: Set<String> = emptySet(),
+    /** Why this message cannot leave Meeshy; non-null shows the refusal card instead of recipients. */
+    val refusal: me.meeshy.sdk.model.ForwardRefusalReason? = null,
 )
 
 internal fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessage {

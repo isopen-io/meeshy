@@ -10,6 +10,11 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ContentExitLaw
+import me.meeshy.sdk.model.ForwardRefusalReason
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.contentExitSubject
+import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 
@@ -53,17 +58,33 @@ internal class ChatForwardController(
      * conversation list is already loaded (the collector fills it in live).
      */
     fun open(messageId: String) {
+        val refusal = refusalFor(messageId)
         state.update {
             it.copy(
                 actionMessageId = null,
                 forward = ForwardUiState(
                     sourceMessageId = messageId,
                     sendingConversationId = sendingForwards[messageId],
+                    refusal = refusal,
                 ),
             )
         }
         recomputeTargets()
     }
+
+    /**
+     * The gateway refused the forward (`FORWARD_REFUSAL_CODES`): the same "does not leave
+     * Meeshy" card as a local refusal, never a recipient list. An unknown code changes nothing.
+     */
+    fun onGatewayRefusal(code: String?) {
+        val reason = ForwardRefusalReason.fromCode(code) ?: return
+        state.update { s -> s.forward?.let { s.copy(forward = it.copy(refusal = reason, sendingConversationId = null)) } ?: s }
+    }
+
+    /** What the exit law refuses for the message [messageId], or `null` when it may be forwarded. */
+    private fun refusalFor(messageId: String): ForwardRefusalReason? =
+        messages.value.firstOrNull { it.message.id == messageId }
+            ?.let { ForwardRefusalReason.local(it.message.exitOffer()) }
 
     fun onQueryChange(query: String) {
         state.update { s -> s.forward?.let { s.copy(forward = it.copy(query = query)) } ?: s }
@@ -84,12 +105,21 @@ internal class ChatForwardController(
     fun forwardTo(targetConversationId: String) {
         val forward = state.value.forward ?: return
         val sourceMessageId = forward.sourceMessageId
+        if (forward.refusal != null) return
+        refusalFor(sourceMessageId)?.let { reason ->
+            state.update { s -> s.forward?.let { s.copy(forward = it.copy(refusal = reason, targets = emptyList())) } ?: s }
+            return
+        }
         if (sendingForwards.containsKey(sourceMessageId)) return
         if (targetConversationId in forward.sentConversationIds) return
         val user = sessionRepository.currentUser.value ?: return
         val source = messages.value
             .firstOrNull { it.message.id == sourceMessageId && it.sendState == LocalSendState.SYNCED }
             ?.message ?: return
+        // The copy's protection, as the gateway will impose it: a timed flame keeps its
+        // flame with a duration bounded by the source, a blurred source (message or piece)
+        // hands its blur down. `null` = the law refuses: nothing is sent.
+        val copy = ContentExitLaw.forwardedCopyProtection(source.contentExitSubject, null) ?: return
         sendingForwards[sourceMessageId] = targetConversationId
         state.update { s ->
             if (s.forward?.sourceMessageId == sourceMessageId) {
@@ -107,6 +137,7 @@ internal class ChatForwardController(
                     sender = user,
                     forwardedFromId = source.id,
                     forwardedFromConversationId = conversationId,
+                    effects = MessageEffects(flags = copy.effectFlags, ephemeralDuration = copy.ephemeralDuration),
                 )
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 sendingForwards.remove(sourceMessageId)
@@ -141,6 +172,7 @@ internal class ChatForwardController(
     private fun recomputeTargets() {
         state.update { s ->
             val forward = s.forward ?: return@update s
+            if (forward.refusal != null) return@update s.copy(forward = forward.copy(targets = emptyList()))
             s.copy(
                 forward = forward.copy(
                     targets = ForwardTargets.of(
