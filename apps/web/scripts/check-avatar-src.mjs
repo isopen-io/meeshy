@@ -34,9 +34,10 @@ const SRC = new URL('../src/', import.meta.url).pathname;
  */
 /**
  * LE REGISTRE AVAIT ÉTÉ VIDÉ PAR #6985, puis rempli de deux surfaces dont la
- * passerelle ne servait pas la photo. La liste complète des arrivées d'un lien
- * (#7813, #9357) a été soldée par #12571 : la passerelle sert `avatar` sur
- * `GET links/:linkId/arrivals` (additif), l'entrée a quitté ce registre.
+ * passerelle ne servait pas la photo. Les deux sont soldées par #12571 : la
+ * passerelle sert `avatar` sur `GET links/:linkId/arrivals` (#7813, #9357) et
+ * sur la fiche World Wide (#10102), toutes deux en ajout rétrocompatible ; leurs
+ * entrées ont quitté ce registre.
  *
  * Une surface ne peut revenir ici que si la donnée n'existe PAS, jamais parce
  * qu'on ne l'a pas branchée, et avec l'endroit EXACT où la chaîne s'arrête.
@@ -47,12 +48,6 @@ const EXEMPTIONS = [
     combien: 1,
     pourquoi:
       "ContactFace sans compte Meeshy associé : seule la vCard du carnet de l'auteur existe, et sa PHOTO n'est pas lue (vcard.ts ne garde ni PHOTO ni LOGO) — la chaîne s'arrête à l'analyse de la carte (#12571)",
-  },
-  {
-    fichier: 'components/world-participant-card-sheet.tsx',
-    combien: 1,
-    pourquoi:
-      "worldParticipantCardSchema (packages/shared/types/world-participant-card.ts), liste blanche de la fiche de modération, ne porte aucun champ photo — la chaîne s'arrête à la projection de GET world.participantsByParticipantId (#10102)",
   },
 ];
 
