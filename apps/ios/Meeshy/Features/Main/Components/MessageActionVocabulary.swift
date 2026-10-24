@@ -14,7 +14,7 @@ import Foundation
 /// (le message entier ou l'une de ses pièces).
 enum MessageActionVerb: CaseIterable {
     case reply, retry, forward, edit, select, compose, imager, exportQuick, create
-    case translate, copy, saveMedia, more, callDetail, wholeMessage
+    case translate, copy, saveMedia, more, callDetail, wholeMessage, goToMessage
     case delete, deleteMedia, share
     case addSticker, favoriteSticker, unfavoriteSticker
     case openLink, copyLink, openInMaps, copyAddress
@@ -38,6 +38,7 @@ enum MessageActionVerb: CaseIterable {
         case .more: return String(localized: "action.more", defaultValue: "Plus…", bundle: .main)
         case .callDetail: return String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main)
         case .wholeMessage: return String(localized: "message.piece.wholeMessage", defaultValue: "Tout le message", bundle: .main)
+        case .goToMessage: return String(localized: "action.go_to_message", defaultValue: "Aller au message", bundle: .main)
         case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
         case .deleteMedia: return String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main)
         case .share: return String(localized: "action.share", defaultValue: "Partager", bundle: .main)
@@ -84,7 +85,8 @@ enum MessageActionVerb: CaseIterable {
         case .saveMedia: return "arrow.down.to.line"
         case .more: return "ellipsis"
         case .callDetail: return "info.circle"
-        case .wholeMessage: return "text.bubble"
+        // « Aller au message » : la bulle où l'on se rend, le glyphe du web (`chatText`).
+        case .wholeMessage, .goToMessage: return "text.bubble"
         case .delete, .deleteMedia: return "trash"
         case .share: return "square.and.arrow.up"
         case .addSticker: return "plus.rectangle.on.rectangle"

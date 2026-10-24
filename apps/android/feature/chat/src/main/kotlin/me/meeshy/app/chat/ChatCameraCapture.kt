@@ -39,12 +39,22 @@ object ChatCameraCaptureFile {
     private const val PHOTO_EXTENSION = ".jpg"
     private const val VIDEO_PREFIX = "chat_video_"
     private const val VIDEO_EXTENSION = ".mp4"
+    private const val RETOUCHED_PREFIX = "chat_retouch_"
 
     /** e.g. `next(1700000000000L) == "chat_capture_1700000000000.jpg"`. */
     fun next(nowMillis: Long): String = "$PHOTO_PREFIX$nowMillis$PHOTO_EXTENSION"
 
     /** e.g. `nextVideo(1700000000000L) == "chat_video_1700000000000.mp4"`. */
     fun nextVideo(nowMillis: Long): String = "$VIDEO_PREFIX$nowMillis$VIDEO_EXTENSION"
+
+    /** The rendered photo a retouch hands back (#12614), e.g. `"chat_retouch_1700000000000.jpg"`. */
+    fun nextRetouched(nowMillis: Long): String = "$RETOUCHED_PREFIX$nowMillis$PHOTO_EXTENSION"
+
+    /** The copy of a captured video a retouch reads (#12650), e.g. `"chat_video_source_1700000000000.mp4"`. */
+    fun nextVideoSource(nowMillis: Long): String = "${VIDEO_PREFIX}source_$nowMillis$VIDEO_EXTENSION"
+
+    /** The rendered video a retouch hands back (#12650), e.g. `"chat_retouch_1700000000000.mp4"`. */
+    fun nextRetouchedVideo(nowMillis: Long): String = "$RETOUCHED_PREFIX$nowMillis$VIDEO_EXTENSION"
 }
 
 /** The two capture launchers the composer's Camera tile chooser offers. */

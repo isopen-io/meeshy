@@ -101,6 +101,19 @@ describe('GET /conversations — ce qui survit à la sérialisation', () => {
     expect(row.slowModeSeconds).toBe(0);
     expect(row.autoTranslateEnabled).toBe(true);
   });
+
+  it("sert le régime de chiffrement ET son activation (#11380)", () => {
+    // iOS date par `encryptionEnabledAt` l'historique en clair d'une
+    // conversation chiffrée après coup : sans lui, chaque message passé d'un
+    // pair se signalait « non chiffré » et perdait sa traduction.
+    const row = serializeList({
+      ...listRowFromHandler,
+      encryptionMode: 'e2ee',
+      encryptionEnabledAt: '2026-10-01T08:00:00.000Z',
+    });
+    expect(row.encryptionMode).toBe('e2ee');
+    expect(row.encryptionEnabledAt).toBe('2026-10-01T08:00:00.000Z');
+  });
 });
 
 describe('GET /conversations/:id — ce qui survit à la sérialisation', () => {
