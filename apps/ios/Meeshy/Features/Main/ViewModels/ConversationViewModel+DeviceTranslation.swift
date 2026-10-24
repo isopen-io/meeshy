@@ -37,10 +37,11 @@ extension ConversationViewModel: DeviceTranslationConversationSource {
     }
 
     func deviceTranslatedLanguages(of messageId: String) -> [String] {
-        (messageTranslations[messageId] ?? []).map(\.targetLanguage)
+        startupDependencies.encryptedEra.servedTranslations(for: messageId, in: self).map(\.targetLanguage)
     }
 
     func applyDeviceTranslation(_ translation: MessageTranslation, persisting: Bool) {
+        startupDependencies.encryptedEra.record(translation)
         guard persisting else {
             mergeDeviceTranslationInMemory(translation)
             return

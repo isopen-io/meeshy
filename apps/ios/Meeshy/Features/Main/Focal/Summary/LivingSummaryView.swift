@@ -23,6 +23,9 @@ struct LivingSummaryView: View {
     var onReplyToPerson: (FaceRampEntry) -> Void
     var onOpenEpisode: (ConversationEpisode) -> Void
     var onResumeThread: () -> Void
+    /// #11225 — le menu d'appui long des visages et des épisodes, construit par
+    /// le site de montage (qui seul connaît la loi d'actions et le fil).
+    var entryMenu: SummaryEntryMenu? = nil
 
     var body: some View {
         ZStack {
@@ -37,10 +40,10 @@ struct LivingSummaryView: View {
                         stateHeader
                         SummaryProtectionsView(entries: protections, isDark: isDark)
                         if !viewModel.faceRamp.isEmpty {
-                            FaceRampView(entries: viewModel.faceRamp, isDark: isDark, onTap: onReplyToPerson)
+                            FaceRampView(entries: viewModel.faceRamp, isDark: isDark, onTap: onReplyToPerson, menu: entryMenu)
                         }
                         if !viewModel.digest.episodes.isEmpty {
-                            EpisodeListView(episodes: viewModel.digest.episodes, isDark: isDark, onTap: onOpenEpisode)
+                            EpisodeListView(episodes: viewModel.digest.episodes, isDark: isDark, onTap: onOpenEpisode, menu: entryMenu)
                         }
                         if let summary = viewModel.agentSummary {
                             agentPanel(summary)

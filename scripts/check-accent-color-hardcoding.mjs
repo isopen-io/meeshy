@@ -414,7 +414,10 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // est la DONNÉE choisie, l'accent de conversation la trahirait. Valeur MESURÉE en CI le 2026-10-21 (PR #11405).
 // 481 -> 483 (2026-10-21, fusion des lots appui long dans dev) : les lots #11401 et #11421 ajoutent deux `Color(hex: variable)`
 // de plus que dev ; valeur MESURÉE en local après fusion de dev, à reconfirmer par la CI.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 483;
+// 483 -> 479 (2026-10-24, le contour de l'avatar sur l'interlude et la carte de fin d'un export de story) : le dessin
+// fixe d'un contour quitte le `Canvas` de `AvatarRingView.swift` (-5) pour `AvatarRingRenderer.swift` (+1), Core Graphics,
+// partagé par la vue et l'export — ses autres couleurs passent par `FramePaint.cgColor`. Valeur MESURÉE le 2026-10-24 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 479;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

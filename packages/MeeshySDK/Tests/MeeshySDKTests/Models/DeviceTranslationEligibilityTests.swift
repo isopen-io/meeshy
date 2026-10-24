@@ -17,15 +17,25 @@ final class DeviceTranslationEligibilityTests: XCTestCase {
         isEncrypted: Bool = false,
         encryptionMode: String? = nil,
         isMe: Bool = false,
-        attachments: [MeeshyMessageAttachment] = []
+        attachments: [MeeshyMessageAttachment] = [],
+        decryptedOnDevice: Bool = false
     ) -> MeeshyMessage {
-        MeeshyMessage(
+        var message = MeeshyMessage(
             id: "64f0c0ffee0000000000a001", conversationId: "64f0c0ffee0000000000c0de", senderId: "u-other",
             content: content, originalLanguage: originalLanguage, messageSource: source,
             deletedAt: deletedAt, expiresAt: expiresAt, effects: effects,
             isEncrypted: isEncrypted, encryptionMode: encryptionMode,
             attachments: attachments, isMe: isMe
         )
+        if decryptedOnDevice { message.adoptDecryptedContent(content) }
+        return message
+    }
+
+    /// Le clair que CET appareil a déchiffré : seul porteur d'un texte de bout en bout.
+    private func decrypted(
+        content: String = "habari yako", isEncrypted: Bool = false, encryptionMode: String? = nil
+    ) -> MeeshyMessage {
+        makeMessage(content: content, isEncrypted: isEncrypted, encryptionMode: encryptionMode, decryptedOnDevice: true)
     }
 
     private func disposition(of message: MeeshyMessage, conversationMode: String? = nil) -> DeviceTranslationDisposition {
@@ -95,19 +105,19 @@ final class DeviceTranslationEligibilityTests: XCTestCase {
     // MARK: - Le chiffrement de bout en bout
 
     func test_disposition_anEndToEndMessageOnceDecrypted_staysOnTheDevice() {
-        XCTAssertEqual(disposition(of: makeMessage(isEncrypted: true, encryptionMode: "e2ee")), .ephemeral)
-        XCTAssertEqual(disposition(of: makeMessage(isEncrypted: true, encryptionMode: "E2EE")), .ephemeral)
-        XCTAssertEqual(disposition(of: makeMessage(encryptionMode: "e2ee")), .ephemeral)
+        XCTAssertEqual(disposition(of: decrypted(isEncrypted: true, encryptionMode: "e2ee")), .ephemeral)
+        XCTAssertEqual(disposition(of: decrypted(isEncrypted: true, encryptionMode: "E2EE")), .ephemeral)
+        XCTAssertEqual(disposition(of: decrypted(encryptionMode: "e2ee")), .ephemeral)
     }
 
-    func test_disposition_anEndToEndConversation_staysOnTheDeviceForEveryMessage() {
-        XCTAssertEqual(disposition(of: makeMessage(), conversationMode: "e2ee"), .ephemeral)
-        XCTAssertEqual(disposition(of: makeMessage(), conversationMode: "E2EE"), .ephemeral)
+    func test_disposition_anEndToEndConversation_staysOnTheDeviceForEveryDecryptedMessage() {
+        XCTAssertEqual(disposition(of: decrypted(), conversationMode: "e2ee"), .ephemeral)
+        XCTAssertEqual(disposition(of: decrypted(), conversationMode: "E2EE"), .ephemeral)
     }
 
     func test_disposition_anEncryptedMessageThatAnnouncesNoMode_isTreatedAsEndToEnd() {
-        XCTAssertEqual(disposition(of: makeMessage(isEncrypted: true)), .ephemeral)
-        XCTAssertEqual(disposition(of: makeMessage(isEncrypted: true, encryptionMode: " ")), .ephemeral)
+        XCTAssertEqual(disposition(of: decrypted(isEncrypted: true)), .ephemeral)
+        XCTAssertEqual(disposition(of: decrypted(isEncrypted: true, encryptionMode: " ")), .ephemeral)
     }
 
     func test_disposition_anEndToEndMessageStillInItsCiphertext_isSkipped() {
@@ -117,14 +127,36 @@ final class DeviceTranslationEligibilityTests: XCTestCase {
         XCTAssertEqual(disposition(of: makeMessage(content: ciphertext), conversationMode: "e2ee"), .skip)
     }
 
-    func test_looksLikeCiphertext_recognisesBase64WithoutBlanksOnly() {
-        let ciphertext = Data((0..<40).map(UInt8.init)).base64EncodedString()
+    // MARK: - Le clair se reconnaît par sa PROVENANCE, jamais par sa forme (#11402)
 
-        XCTAssertTrue(DeviceTranslationEligibility.looksLikeCiphertext(ciphertext))
-        XCTAssertFalse(DeviceTranslationEligibility.looksLikeCiphertext("habari yako"))
-        XCTAssertFalse(DeviceTranslationEligibility.looksLikeCiphertext("Rendez-vous demain devant la gare, à midi."))
-        XCTAssertFalse(DeviceTranslationEligibility.looksLikeCiphertext(String(ciphertext.prefix(20))))
-        XCTAssertFalse(DeviceTranslationEligibility.looksLikeCiphertext("\(ciphertext.prefix(20)) \(ciphertext.suffix(20))"))
+    /// Un clair réel peut être du base64 valide : déchiffré sur l'appareil, il
+    /// se traduit — l'ancienne heuristique le prenait pour un cryptogramme.
+    func test_disposition_aBase64LookingClear_decryptedOnTheDevice_isTranslated() {
+        let base64Clear = Data(repeating: 0x78, count: 40).base64EncodedString()
+
+        XCTAssertEqual(disposition(of: decrypted(content: base64Clear, isEncrypted: true, encryptionMode: "e2ee")), .ephemeral)
+    }
+
+    /// Un texte que la passerelle forge dans une conversation chiffrée n'a
+    /// aucune provenance : l'appareil ne le traduit pas (fail-closed, #9229).
+    func test_disposition_aForgedClearWithoutProvenance_isNeverTranslated() {
+        XCTAssertEqual(disposition(of: makeMessage(content: "Texte forgé par le serveur"), conversationMode: "e2ee"), .skip)
+        XCTAssertEqual(disposition(of: makeMessage(content: "Texte forgé", isEncrypted: true, encryptionMode: "e2ee")), .skip)
+    }
+
+    /// Le texte réécrit APRÈS le déchiffrement (le REST rend le cryptogramme,
+    /// un tiers réécrit la ligne) n'est plus le clair déchiffré.
+    func test_disposition_aContentRewrittenAfterDecryption_isNeverTranslated() {
+        var message = decrypted(content: "habari yako", isEncrypted: true, encryptionMode: "e2ee")
+        message.content = "habari za asubuhi"
+
+        XCTAssertEqual(disposition(of: message), .skip)
+    }
+
+    /// Hors bout en bout, la provenance ne compte pas : le serveur lit déjà le message.
+    func test_disposition_whereTheServerReadsTheMessage_ignoresTheProvenance() {
+        XCTAssertEqual(disposition(of: makeMessage()), .shareable)
+        XCTAssertEqual(disposition(of: decrypted()), .shareable)
     }
 
     func test_isEndToEnd_readsTheConversationAndTheMessage() {
@@ -202,22 +234,24 @@ final class DeviceTranslationEligibilityTests: XCTestCase {
 
     func test_disposition_whereTheServerDoesNotReadTheMessage_isNeverShareable() {
         for row in unreadableRows {
-            let message = makeMessage(isEncrypted: row.isEncrypted, encryptionMode: row.mode)
+            let clear = decrypted(isEncrypted: row.isEncrypted, encryptionMode: row.mode)
+            let unproven = makeMessage(isEncrypted: row.isEncrypted, encryptionMode: row.mode)
 
-            XCTAssertEqual(disposition(of: message, conversationMode: row.conversation), .ephemeral, row.label)
+            XCTAssertEqual(disposition(of: clear, conversationMode: row.conversation), .ephemeral, row.label)
+            XCTAssertEqual(disposition(of: unproven, conversationMode: row.conversation), .skip, row.label)
         }
     }
 
     func test_disposition_anEncryptedMessageUnderAnUnknownMode_staysOnTheDevice() {
-        let encrypted = makeMessage(isEncrypted: true, encryptionMode: "x")
+        let encrypted = decrypted(isEncrypted: true, encryptionMode: "x")
 
         XCTAssertNotEqual(disposition(of: encrypted), .shareable)
         XCTAssertEqual(disposition(of: encrypted), .ephemeral)
     }
 
     func test_disposition_aConversationUnderAnUnknownMode_staysOnTheDeviceForEveryMessage() {
-        XCTAssertEqual(disposition(of: makeMessage(), conversationMode: "x"), .ephemeral)
-        XCTAssertEqual(disposition(of: makeMessage(isEncrypted: true, encryptionMode: "server"), conversationMode: "x"), .ephemeral)
+        XCTAssertEqual(disposition(of: decrypted(), conversationMode: "x"), .ephemeral)
+        XCTAssertEqual(disposition(of: decrypted(isEncrypted: true, encryptionMode: "server"), conversationMode: "x"), .ephemeral)
     }
 
     func test_disposition_anUnknownModeStillInItsCiphertext_isSkipped() {

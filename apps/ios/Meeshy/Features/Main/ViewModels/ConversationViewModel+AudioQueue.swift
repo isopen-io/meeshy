@@ -110,8 +110,7 @@ extension ConversationViewModel {
     /// (par-attachement d'abord, repli par-message filtré), jamais une
     /// troisième résolution.
     private func translatedAudioTracks(for attachment: MessageAttachment, messageId: String) -> [MessageTranslatedAudio] {
-        messageTranslatedAudiosByAttachment[attachment.id]
-            ?? (messageTranslatedAudios[messageId] ?? []).filter { $0.attachmentId == attachment.id }
+        startupDependencies.encryptedEra.servedTranslatedAudios(of: attachment, messageId: messageId, in: self)
     }
 
     /// URL de la piste audio EFFECTIVE d'un attachement — la même loi que le

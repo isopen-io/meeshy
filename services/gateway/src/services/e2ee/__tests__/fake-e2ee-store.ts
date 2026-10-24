@@ -6,6 +6,14 @@
  * (`tick`) : une réservation écrite en « lire puis écrire » y perd la course,
  * exactement comme contre MongoDB. `findAndModify`, lui, s'exécute d'un bloc —
  * c'est la seule opération atomique, comme sur le serveur.
+ *
+ * Il imite AUSSI le connecteur MongoDB de Prisma là où il diffère de MongoDB
+ * brut (leçon 318, #12547) : un `create` n'écrit AUCUN champ facultatif omis
+ * (seuls les `@default` du schéma), et un filtre Prisma `{ champ: null }` ne
+ * trouve que les documents où le champ est PRÉSENT et nul — jamais ceux où il
+ * est absent. `findAndModify`, commande brute, garde la sémantique de MongoDB :
+ * `null` y trouve aussi l'absent. Les lignes semées par `insert()` portent,
+ * elles, les nuls explicites qu'écrit le code de production.
  */
 import { randomBytes } from 'crypto';
 
@@ -21,15 +29,22 @@ const isOperatorObject = (value: unknown): value is Record<string, unknown> =>
 
 const comparable = (value: unknown): unknown => (value instanceof Date ? value.getTime() : value);
 
-const matchesCondition = (actual: unknown, condition: unknown): boolean => {
-  if (condition === null) return actual === null || actual === undefined;
+/** `prisma` : le connecteur (null = présent et nul) ; `raw` : MongoDB brut (null = nul ou absent). */
+type Semantics = 'prisma' | 'raw';
+
+const isNullUnder = (semantics: Semantics, actual: unknown): boolean =>
+  actual === null || (semantics === 'raw' && actual === undefined);
+
+const matchesCondition = (actual: unknown, condition: unknown, semantics: Semantics): boolean => {
+  if (condition === null) return isNullUnder(semantics, actual);
   if (!isOperatorObject(condition)) return comparable(actual) === comparable(condition);
   return Object.entries(condition).every(([operator, operand]) => {
     switch (operator) {
       case 'in':
         return (operand as unknown[]).some((candidate) => comparable(candidate) === comparable(actual));
       case 'not':
-        return !matchesCondition(actual, operand);
+        if (operand === null) return actual !== null && actual !== undefined;
+        return !matchesCondition(actual, operand, semantics);
       case 'lt':
         return actual !== null && actual !== undefined && (comparable(actual) as number) < (comparable(operand) as number);
       case 'gt':
@@ -40,11 +55,11 @@ const matchesCondition = (actual: unknown, condition: unknown): boolean => {
   });
 };
 
-const matches = (row: Row, where: Where = {}): boolean =>
+const matches = (row: Row, where: Where = {}, semantics: Semantics = 'prisma'): boolean =>
   Object.entries(where).every(([field, condition]) => {
-    if (field === 'OR') return (condition as Where[]).some((branch) => matches(row, branch));
-    if (field === 'AND') return (condition as Where[]).every((branch) => matches(row, branch));
-    return matchesCondition(row[field], condition);
+    if (field === 'OR') return (condition as Where[]).some((branch) => matches(row, branch, semantics));
+    if (field === 'AND') return (condition as Where[]).every((branch) => matches(row, branch, semantics));
+    return matchesCondition(row[field], condition, semantics);
   });
 
 const ordered = (rows: Row[], orderBy?: Record<string, 'asc' | 'desc'>): Row[] => {
@@ -67,7 +82,11 @@ type UniqueKey = readonly string[];
 class FakeCollection {
   readonly rows: Row[] = [];
 
-  constructor(private readonly uniques: readonly UniqueKey[], private readonly defaults: () => Record<string, unknown>) {}
+  constructor(
+    private readonly uniques: readonly UniqueKey[],
+    private readonly defaults: () => Record<string, unknown>,
+    private readonly schemaDefaults: () => Record<string, unknown> = () => ({}),
+  ) {}
 
   private assertUnique(candidate: Row): void {
     this.uniques.forEach((key) => {
@@ -76,8 +95,18 @@ class FakeCollection {
     });
   }
 
+  /** Une ligne SEMÉE par un test : elle porte les nuls explicites qu'écrit le code de production. */
   insert(data: Record<string, unknown>): Row {
-    const row: Row = { ...this.defaults(), ...data, id: (data.id as string | undefined) ?? newId() };
+    return this.store({ ...this.defaults(), ...data });
+  }
+
+  /** Une ligne écrite par `create` : seuls les `@default` du schéma s'ajoutent, comme avec le connecteur. */
+  private created(data: Record<string, unknown>): Row {
+    return this.store({ ...this.schemaDefaults(), ...data });
+  }
+
+  private store(data: Record<string, unknown>): Row {
+    const row: Row = { ...data, id: (data.id as string | undefined) ?? newId() };
     this.assertUnique(row);
     this.rows.push(row);
     return row;
@@ -106,11 +135,11 @@ class FakeCollection {
       },
       create: async (args: { data: Record<string, unknown> }) => {
         await tick();
-        return this.insert(args.data);
+        return this.created(args.data);
       },
       createMany: async (args: { data: Record<string, unknown>[] }) => {
         await tick();
-        args.data.forEach((data) => this.insert(data));
+        args.data.forEach((data) => this.created(data));
         return { count: args.data.length };
       },
       update: async (args: { where: Where; data: Record<string, unknown> }) => {
@@ -126,7 +155,7 @@ class FakeCollection {
         const [unique] = Object.values(args.where) as Where[];
         const row = this.rows.find((candidate) => matches(candidate, unique));
         if (row) return Object.assign(row, args.update);
-        return this.insert(args.create);
+        return this.created(args.create);
       },
       updateMany: async (args: { where: Where; data: Record<string, unknown> }) => {
         await tick();
@@ -163,17 +192,18 @@ type FindAndModify = {
 
 export function createFakeE2EEStore() {
   const collections = {
-    E2EEDevice: new FakeCollection([['userId', 'deviceId']], () => ({
-      retiredAt: null,
-      pushTokenId: null,
-      label: null,
-      createdAt: new Date(),
-      lastSeenAt: new Date(),
-      signedPreKeyRotatedAt: new Date(),
-    })),
-    E2EEOneTimePreKey: new FakeCollection([['userId', 'deviceId', 'registrationId', 'kind', 'keyId']], () => ({ usedAt: null, usedBy: null, signature: null, createdAt: new Date() })),
-    MessageEnvelope: new FakeCollection([['messageId', 'recipientUserId', 'recipientDeviceId']], () => ({ createdAt: new Date() })),
-    E2EERevokedIdentity: new FakeCollection([['userId', 'identityKey']], () => ({ revokedAt: new Date() })),
+    E2EEDevice: new FakeCollection(
+      [['userId', 'deviceId']],
+      () => ({ retiredAt: null, pushTokenId: null, label: null, createdAt: new Date(), lastSeenAt: new Date(), signedPreKeyRotatedAt: new Date() }),
+      () => ({ createdAt: new Date(), lastSeenAt: new Date(), signedPreKeyRotatedAt: new Date() }),
+    ),
+    E2EEOneTimePreKey: new FakeCollection(
+      [['userId', 'deviceId', 'registrationId', 'kind', 'keyId']],
+      () => ({ usedAt: null, usedBy: null, signature: null, createdAt: new Date() }),
+      () => ({ createdAt: new Date() }),
+    ),
+    MessageEnvelope: new FakeCollection([['messageId', 'recipientUserId', 'recipientDeviceId']], () => ({ createdAt: new Date() }), () => ({ createdAt: new Date() })),
+    E2EERevokedIdentity: new FakeCollection([['userId', 'identityKey']], () => ({ revokedAt: new Date() }), () => ({ revokedAt: new Date() })),
     Participant: new FakeCollection([], () => ({ isActive: true, type: 'user' })),
     UserSession: new FakeCollection([], () => ({ isValid: true, invalidatedAt: null, expiresAt: new Date(Date.now() + 86_400_000) })),
   };
@@ -183,7 +213,7 @@ export function createFakeE2EEStore() {
     if (!collection) throw new Error(`collection non imitée : ${command.findAndModify}`);
     const query = decodeExtendedJson(command.query) as Where;
     const sortEntries = Object.entries(command.sort ?? {});
-    const candidates = collection.rows.filter((row) => matches(row, query));
+    const candidates = collection.rows.filter((row) => matches(row, query, 'raw'));
     const sorted = sortEntries.length
       ? ordered(candidates, { [sortEntries[0][0]]: sortEntries[0][1] === -1 ? 'desc' : 'asc' })
       : candidates;

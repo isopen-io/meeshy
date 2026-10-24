@@ -271,7 +271,11 @@ struct ConversationEncryptionDetailSheet: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            status = try await E2EAPI.shared.fetchEncryptionStatus(conversationId: conversationId)
+            let fetched = try await E2EAPI.shared.fetchEncryptionStatus(conversationId: conversationId)
+            status = fetched
+            if fetched.isEncrypted {
+                EndToEndRegimeLedger.shared.learn(mode: fetched.mode?.rawValue, for: conversationId)
+            }
         } catch {
             Self.logger.error("loadStatus failed: \(error.localizedDescription)")
             errorMessage = String(localized: "conversation.encryption.detail.readStatusError",
@@ -296,6 +300,8 @@ struct ConversationEncryptionDetailSheet: View {
                 enabledBy: result.enabledBy,
                 canTranslate: result.mode != .e2ee
             )
+            // #11379 — le fil OUVERT derrière cette fiche scelle dès l'envoi suivant.
+            EndToEndRegimeLedger.shared.learn(mode: result.mode.rawValue, for: conversationId)
             HapticFeedback.success()
         } catch {
             errorMessage = error.localizedDescription
