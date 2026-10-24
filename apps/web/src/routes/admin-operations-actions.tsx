@@ -29,8 +29,11 @@ import { BackupsSection } from './admin-monitoring-backups';
  * RANG D'ADMINISTRATION (ADMIN et BIGBOSS, demande porteur 2026-10-21 ; la passerelle
  * garde la même règle, et journalise chaque tentative). Le motif est proposé à l'ADMIN
  * (`useAdminMotive`), facultatif. La confirmation exige de TAPER le nom de l'opération (`backup`,
- * `image-prune`) — la passerelle compare le même mot. Les refus se disent en mots :
- * trop tôt (409), déjà en cours (409), relais absent ou journal indisponible (503). Le statut se relit toutes les
+ * `image-prune`) — la passerelle compare le même mot. Le nettoyage n'est permis qu'aux
+ * heures creuses (#11452) : la carte dit la fenêtre que la passerelle sert, et hors fenêtre
+ * la prochaine ouverture, bouton fermé comme sous le délai. Les refus se disent en mots :
+ * trop tôt (409), hors des heures creuses (409), déjà en cours (409), relais absent ou
+ * journal indisponible (503). Le statut se relit toutes les
  * 5 s tant qu'une opération est en file ou en cours, 30 s sinon — la règle est le modèle de vue
  * pur `lib/admin/ops-run-view.ts` (#10467), témoigné hors du DOM.
  */
@@ -38,6 +41,7 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
 function refusalOf(failure: ApiFailure, language: AdminLanguage): string {
   if (failure.code === 'OPERATION_COOLDOWN') return translateAdmin(language, 'admin.ops.refused.cooldown');
+  if (failure.code === 'OPERATION_OUTSIDE_WINDOW') return translateAdmin(language, 'admin.ops.refused.outsideWindow');
   if (failure.code === 'OPERATION_IN_PROGRESS') return translateAdmin(language, 'admin.ops.refused.inProgress');
   if (failure.code === 'AUDIT_UNAVAILABLE') return translateAdmin(language, 'admin.ops.refused.audit');
   if (failure.code === 'OPS_RELAY_UNAVAILABLE' || failure.status === 503) return translateAdmin(language, 'admin.ops.refused.relay');
@@ -144,6 +148,7 @@ function OperationCard({
   const { run } = card;
   const available = adminMomentOf(status.availableAt[operation], now, language);
   const finished = adminMomentOf(card.lastAt, now, language);
+  const hours = status.windows[operation];
   return (
     <article data-admin-ops-operation={operation} data-admin-ops-run={run?.status ?? 'none'} className="grid content-start gap-3 rounded-card p-4 md:p-5" style={{ backgroundColor: SURFACE, border: `1px solid ${EDGE}` }}>
       <h3 className="text-body font-semibold" style={{ color: INK }}>
@@ -160,7 +165,17 @@ function OperationCard({
               .filter((part) => part !== null)
               .join(' · ')}
       </p>
-      {card.waitMs > 0 && available !== null ? (
+      {hours === null ? null : (
+        <p className="text-caption" style={{ color: INK2 }} data-admin-ops-window>
+          {translateAdmin(language, 'admin.ops.window.hours', { start: String(hours.startHour), end: String(hours.endHour) })}
+        </p>
+      )}
+      {card.waitMs > 0 && available !== null && card.outsideWindow ? (
+        <p className="text-caption" style={{ color: INK2 }} data-admin-ops-window-closed>
+          {translateAdmin(language, 'admin.ops.window.closed', { when: available.relative })}
+        </p>
+      ) : null}
+      {card.waitMs > 0 && available !== null && !card.outsideWindow ? (
         <p className="text-caption" style={{ color: INK2 }} data-admin-ops-cooldown>
           {translateAdmin(language, 'admin.ops.action.availableIn', { when: available.relative })}
         </p>
