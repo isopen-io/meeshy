@@ -1,10 +1,10 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import {
   actorRoleLevel,
   actorHasMinimumRole,
   actsWithCreatorRights,
   effectiveConversationRole,
-} from '../../../utils/conversation-authority';
+} from './conversation-authority';
 
 /**
  * **L'autorité d'un acteur DANS une conversation** (issue #3941).
