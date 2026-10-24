@@ -24,16 +24,20 @@ echo ""
 echo "💾 Création d'un backup de sécurité..."
 BACKUP_NAME="attachments-pre-migration-${TIMESTAMP}"
 
+# Le réseau de la base de CET environnement (#11451) : la base de production n'est
+# que sur meeshy_meeshy-data, celle du staging que sur meeshy-staging-network.
 if [ "$ENVIRONMENT" = "staging" ]; then
   DB_HOST="database-staging"
   DB_NAME="meeshy"
+  DB_NETWORK="meeshy-staging-network"
 else
   DB_HOST="meeshy-database"
   DB_NAME="meeshy"
+  DB_NETWORK="meeshy_meeshy-data"
 fi
 
 ssh $REMOTE_HOST "docker run --rm \
-  --network=meeshy_meeshy-network \
+  --network=$DB_NETWORK \
   -v $BACKUP_DIR:/backup \
   mongo:8.0 \
   mongodump \
@@ -152,7 +156,7 @@ echo "📁 Backup disponible: $BACKUP_DIR/$BACKUP_NAME"
 echo ""
 echo "Pour restaurer en cas de problème:"
 echo "  ssh $REMOTE_HOST \"docker run --rm \\"
-echo "    --network=meeshy_meeshy-network \\"
+echo "    --network=$DB_NETWORK \\"
 echo "    -v $BACKUP_DIR:/backup \\"
 echo "    mongo:8.0 \\"
 echo "    mongorestore \\"
