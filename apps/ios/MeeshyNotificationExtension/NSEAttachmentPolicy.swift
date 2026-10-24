@@ -73,13 +73,22 @@ nonisolated enum NSEAttachmentPolicy {
         return fileSize > 0 && fileSize <= maxAttachmentBytes
     }
 
-    /// Image ou audio — les deux familles qu'iOS rend nativement sur l'écran
-    /// verrouillé. Le paramètre peut porter ses paramètres de type
+    /// Les images que la NSE OUVRE (#11328). Une liste blanche, pas la famille
+    /// `image/*` : le serveur fabrique des rendus AVIF (#11262), et un AVIF
+    /// attaché sans être décodé ne produit aucune image sur l'écran verrouillé.
+    /// `heic` reste : c'est le format d'origine d'un iPhone, et le témoin de
+    /// plafond (`image/heic` à la limite) le tient accepté.
+    static let renderableImageTypes: Set<String> = [
+        "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic",
+    ]
+
+    /// Image décodable ou audio — les deux familles qu'iOS rend nativement sur
+    /// l'écran verrouillé. Le paramètre peut porter ses paramètres de type
     /// (`audio/mp4; codecs=mp4a.40.2`) et une casse quelconque : ce qui arrive
     /// ici vient d'une charge réseau, pas d'une constante du dépôt.
     static func isRenderableFamily(_ mimeType: String) -> Bool {
         let base = baseType(mimeType)
-        return base.hasPrefix("image/") || base.hasPrefix("audio/")
+        return renderableImageTypes.contains(base) || base.hasPrefix("audio/")
     }
 
     /// Un média AUDIO — ce que la notification déployée sait faire écouter
