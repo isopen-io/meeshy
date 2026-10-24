@@ -59,7 +59,7 @@ extension ConversationView {
         guard let request = MessageCardDiscussion.request(
             messages: viewModel.messages,
             endingAt: message.id,
-            servedText: { viewModel.preferredTranslation(for: $0.id)?.translatedContent },
+            servedText: { UnencryptedMessageGate.preferredTranslation(of: $0, in: viewModel)?.translatedContent },
             viewer: MessageCardSubject.Viewer(id: user?.id ?? "", displayName: user?.displayName, username: user?.username),
             handle: user?.username,
             conversationTitle: conversation?.title,
