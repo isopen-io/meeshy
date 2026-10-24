@@ -84,7 +84,8 @@ class CallPeerVisualResolverTest {
         every { catalog.ring("lumieres", "aurore") } returns ring
 
         resolver().visualFor(outgoingAudio).test {
-            assertThat(awaitItem()).isEqualTo(CallPeerVisual(avatarUrl = "https://staging.meeshy.me/u/bob-thumb.jpg"))
+            assertThat(awaitItem())
+                .isEqualTo(CallPeerVisual(avatarUrl = "https://staging.meeshy.me/u/bob-thumb.jpg", selfName = "moi"))
             val full = awaitItem()
             assertThat(full.avatarUrl).isEqualTo("https://staging.meeshy.me/u/bob.jpg")
             assertThat(full.bannerUrl).isEqualTo("https://staging.meeshy.me/u/bob-banner.jpg")
@@ -139,7 +140,10 @@ class CallPeerVisualResolverTest {
         )
 
         resolver().visualFor(outgoingAudio).test {
-            assertThat(awaitItem()).isEqualTo(CallPeerVisual.EMPTY)
+            val shown = awaitItem()
+            assertThat(shown.avatarUrl).isNull()
+            assertThat(shown.bannerUrl).isNull()
+            assertThat(shown.ring).isNull()
             awaitComplete()
         }
     }
