@@ -2,6 +2,9 @@ package me.meeshy.app.navigation
 
 import com.google.common.truth.Truth.assertThat
 import java.io.File
+import me.meeshy.app.navigation.graph.ProfileEntryAction
+import me.meeshy.app.navigation.graph.ProfileRouteEntry
+import me.meeshy.sdk.model.profile.ProfileSheetUser
 import org.junit.Test
 
 /**
@@ -64,9 +67,46 @@ class ProfileRoutesTest {
     @Test
     fun `my page is registered and the third party destination resolves self`() {
         val social = File("src/main/kotlin/me/meeshy/app/navigation/graph/SocialNavGraph.kt").readText()
+        val profile = File("src/main/kotlin/me/meeshy/app/navigation/graph/ProfileNavGraph.kt").readText()
         assertThat(social).contains("composable(ProfileRoutes.OWN)")
         assertThat(social).contains("OwnProfileScreen(")
-        assertThat(social).contains("PublicProfileScreen(")
-        assertThat(social).contains("resolvesToSelf(")
+        assertThat(social).doesNotContain("Routes.PROFILE_USER")
+        assertThat(profile).contains("resolvesToSelf(")
+    }
+
+    @Test
+    fun `the third party route and its deep links open the sheet then leave the stack`() {
+        val profile = File("src/main/kotlin/me/meeshy/app/navigation/graph/ProfileNavGraph.kt").readText()
+        assertThat(profile).contains("route = Routes.PROFILE_USER")
+        assertThat(profile).contains("uriPattern = Routes.PROFILE_DEEP_LINK")
+        assertThat(profile).contains("uriPattern = Routes.PROFILE_SHARE_APP_DEEP_LINK")
+        assertThat(profile).contains("uriPattern = Routes.PROFILE_SHARE_WEB_DEEP_LINK")
+        assertThat(profile).contains("LocalProfileSheetOpener.current")
+        assertThat(profile).contains("opener.open(")
+        assertThat(profile).contains("popBackStack(destinationId, inclusive = true)")
+        assertThat(profile).doesNotContain("PublicProfileScreen")
+    }
+
+    @Test
+    fun `a third party id or pseudo resolves to the sheet opener`() {
+        assertThat(ProfileRouteEntry.resolve("64b7f0a1c2d3e4f5a6b7c8d9", isSelf = false))
+            .isEqualTo(ProfileEntryAction.Sheet(ProfileSheetUser(userId = "64b7f0a1c2d3e4f5a6b7c8d9", username = "64b7f0a1c2d3e4f5a6b7c8d9")))
+        assertThat(ProfileRouteEntry.resolve(" bob ", isSelf = false))
+            .isEqualTo(ProfileEntryAction.Sheet(ProfileSheetUser(username = "bob")))
+    }
+
+    @Test
+    fun `a self target keeps my page and an empty target opens nothing`() {
+        assertThat(ProfileRouteEntry.resolve("atabeth", isSelf = true)).isEqualTo(ProfileEntryAction.OwnPage)
+        assertThat(ProfileRouteEntry.resolve("  ", isSelf = false)).isEqualTo(ProfileEntryAction.Ignore)
+    }
+
+    @Test
+    fun `deep link targets build the route the sheet destination receives`() {
+        val handle = Regex("""\{userId\}""")
+        assertThat(Routes.PROFILE_DEEP_LINK.replace(handle, "u1")).isEqualTo("meeshy://profile/u1")
+        assertThat(Routes.PROFILE_SHARE_APP_DEEP_LINK.replace(handle, "bob")).isEqualTo("meeshy://u/bob")
+        assertThat(Routes.PROFILE_SHARE_WEB_DEEP_LINK.replace(handle, "bob")).isEqualTo("https://meeshy.me/u/bob")
+        assertThat(ProfileRouteEntry.resolve("bob", isSelf = false)).isInstanceOf(ProfileEntryAction.Sheet::class.java)
     }
 }
