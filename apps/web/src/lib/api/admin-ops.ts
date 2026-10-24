@@ -7,6 +7,7 @@ import type {
   ServerOperation,
   ServerOperationRun,
   ServerOperationStatus,
+  ServerOperationWindowView,
 } from '@meeshy/shared/types/admin-ops';
 
 import { asRecord, type AdminDeps } from './admin';
@@ -17,8 +18,10 @@ import type { ApiResult } from './http';
  * **LES OPÉRATIONS DU SERVEUR, VUES PAR L'ADMINISTRATION** (#10396) — `GET admin.opsHostMetrics`
  * (l'hôte échantillonné toutes les 5 s, une heure ; `?since=` ne rend que les points
  * postérieurs), `GET admin.opsStatus` (le dernier passage de chaque opération, sa prochaine
- * disponibilité, le relais, la dernière sauvegarde) et `POST admin.opsByOperation` (BIGBOSS,
- * confirmation qui nomme l'opération).
+ * disponibilité, sa fenêtre horaire, le relais, la dernière sauvegarde) et `POST
+ * admin.opsByOperation` (rang d'administration, confirmation qui nomme l'opération).
+ * La fenêtre (#11452) se lit telle que la passerelle la sert : une passerelle qui ne la
+ * connaît pas encore rend `null`, et l'écran n'en dit rien.
  *
  * Décodeurs écrits à la main (aucun Zod dans le chunk d'administration) : une charge
  * illisible ne fabrique AUCUN chiffre — l'échantillon est écarté, l'instantané rend `null`.
@@ -125,6 +128,16 @@ function decodeRun(raw: unknown, operation: ServerOperation): ServerOperationRun
   };
 }
 
+/** La fenêtre horaire servie (#11452), ou `null` : sans fenêtre, ou illisible. */
+function decodeWindow(raw: unknown): ServerOperationWindowView | null {
+  const served = asRecord(raw);
+  const hour = (value: unknown, max: number): number | null => (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= max ? value : null);
+  const startHour = hour(served?.startHour, 23);
+  const endHour = hour(served?.endHour, 24);
+  if (served?.timeZone !== 'Europe/Paris' || startHour === null || endHour === null || typeof served.open !== 'boolean') return null;
+  return { timeZone: 'Europe/Paris', startHour, endHour, open: served.open };
+}
+
 export type AdminOpsStatus = ServerOperationStatus & { readonly backup: AdminBackups | null };
 
 export function decodeOpsStatus(raw: unknown): AdminOpsStatus | null {
@@ -132,12 +145,14 @@ export function decodeOpsStatus(raw: unknown): AdminOpsStatus | null {
   if (status === null) return null;
   const runs = asRecord(status.runs);
   const availableAt = asRecord(status.availableAt);
+  const windows = asRecord(status.windows);
   const entries = <T,>(of: (op: ServerOperation) => T) => Object.fromEntries(SERVER_OPERATIONS_SHOWN.map((op) => [op, of(op)])) as Record<ServerOperation, T>;
   return {
     environment: ENVIRONMENTS.find((env) => env === status.environment) ?? 'local',
     relayInstalled: status.relayInstalled === true,
     runs: entries((op) => decodeRun(runs?.[op], op)),
     availableAt: entries((op) => text(availableAt?.[op])),
+    windows: entries((op) => decodeWindow(windows?.[op])),
     backup: decodeBackups(status.backup),
   };
 }
