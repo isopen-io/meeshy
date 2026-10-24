@@ -57,6 +57,53 @@ final class TusUploadManager_ImageRefusalTests: XCTestCase {
         XCTAssertEqual(TusImageRefusalStub.methods, ["POST", "PATCH"])
     }
 
+    /// Une passerelle d'AVANT S8 refuse le HEIC par sa signature (400), pas par
+    /// un 415 : c'est le même refus, sinon le message échoue à chaque rejeu.
+    func test_patch400UnknownImageSignature_onAPreS8Gateway_isTheSameTypedRefusal() async throws {
+        let (manager, file) = try Self.makeManagerAndFile()
+        defer { try? FileManager.default.removeItem(at: file) }
+        TusImageRefusalStub.exchanges = [
+            .init(status: 201, headers: ["Location": "https://stub.meeshy.test/api/v1/uploads/b"], body: Data()),
+            .init(status: 400, headers: [:],
+                  body: Data("Declared type \"image/heic\" does not match any known image signature\n".utf8)),
+        ]
+
+        do {
+            _ = try await manager.performTusUpload(fileURL: file, mimeType: "image/heic", credential: .bearer("token"))
+            XCTFail("un 400 de signature d'image inconnue est un refus de format")
+        } catch {
+            XCTAssertTrue(error is UnsupportedImageFormatRefusal, "reçu \(error)")
+        }
+        XCTAssertEqual(TusImageRefusalStub.methods, ["POST", "PATCH"])
+    }
+
+    func test_patch400ForAnotherReason_isNotAnImageFormatRefusal() async throws {
+        let (manager, file) = try Self.makeManagerAndFile()
+        defer { try? FileManager.default.removeItem(at: file) }
+        TusImageRefusalStub.exchanges = [
+            .init(status: 201, headers: ["Location": "https://stub.meeshy.test/api/v1/uploads/c"], body: Data()),
+            .init(status: 400, headers: [:], body: Data("Invalid upload metadata\n".utf8)),
+        ]
+
+        do {
+            _ = try await manager.performTusUpload(fileURL: file, mimeType: "image/heic", credential: .bearer("token"))
+            XCTFail("un 400 reste un échec")
+        } catch {
+            XCTAssertFalse(error is UnsupportedImageFormatRefusal, "reçu \(error)")
+        }
+    }
+
+    private static func makeManagerAndFile() throws -> (TusUploadManager, URL) {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("tus-400-\(UUID().uuidString).heic")
+        try Data(repeating: 7, count: 64).write(to: file)
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [TusImageRefusalStub.self]
+        let manager = TusUploadManager(baseURL: URL(string: "https://stub.meeshy.test")!,
+                                       urlSession: URLSession(configuration: config),
+                                       checkpointStore: try makeCheckpointStore())
+        return (manager, file)
+    }
+
     private static func makeCheckpointStore() throws -> TusUploadCheckpointStore {
         let queue = try DatabaseQueue()
         var migrator = DatabaseMigrator()

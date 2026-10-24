@@ -16,7 +16,8 @@ public enum HEICDelivery: String, Sendable, Equatable {
 public enum HEICServerVerdict: String, Sendable, Equatable {
     /// Il l'a converti : la réponse annonce autre chose que du HEIC.
     case converts
-    /// Il l'a refusé (415) ou rangé tel quel comme un fichier, sans le convertir.
+    /// Il l'a refusé (415, ou 400 de signature inconnue avant S8) ou gardé
+    /// tel quel, sans le convertir.
     case refuses
 }
 
@@ -25,8 +26,9 @@ public enum HEICServerVerdict: String, Sendable, Equatable {
 /// La passerelle ne sert aucune capacité « je convertis le HEIC » : la réponse
 /// d'un envoi en est une. `tus-handler.ts` rend le `mimeType` SERVI de la
 /// pièce (`rendered.storedMimeType`) — `image/jpeg` pour un HEIC converti,
-/// `image/heic` pour un ancien serveur qui l'a rangé comme un fichier — et
-/// répond 415 à un HEIC qu'il ne sait pas décoder.
+/// `image/heic` pour un serveur qui le garderait sans le convertir — et
+/// répond 415 à un HEIC qu'il ne sait pas décoder. Une passerelle d'avant S8
+/// le refuse par sa signature (400) : `UnsupportedImageFormatRefusal` aussi.
 public enum HEICDeliveryLaw {
     /// La qualité du JPEG de compatibilité, plus haute que la qualité
     /// perceptuelle (0,85) : c'est la SEULE génération que le destinataire verra.
@@ -84,11 +86,11 @@ public enum HEICDeliveryMemo {
 
 /// **Envoyer un HEIC, et repartir en JPEG q 0,92 si le serveur n'en veut pas.**
 ///
-/// Le HEIC part tel quel. Si le serveur le refuse (415) ou le rend encore
+/// Le HEIC part tel quel. Si le serveur le refuse (415 ou 400 de signature) ou le rend encore
 /// `image/heic`, UNE variante JPEG est préparée depuis le fichier et envoyée à
 /// sa place ; le refus est retenu (`HEICDeliveryMemo`) pour que les photos
-/// suivantes partent directement en JPEG. Un HEIC resté sur un ancien serveur
-/// n'est pas effaçable par le client : il y reste orphelin.
+/// suivantes partent directement en JPEG. Un HEIC gardé non converti par le
+/// serveur n'est pas effaçable par le client : il y reste orphelin.
 public enum HEICUploadFallback {
     public static func upload<Uploaded: Sendable>(
         fileURL: URL, mimeType: String, keepsLocation: Bool,
@@ -111,7 +113,7 @@ public enum HEICUploadFallback {
         }
         HEICDeliveryMemo.record(verdict, in: defaults, now: now)
         guard verdict == .refuses,
-              let variant = JPEGVariant(of: fileURL, keepsLocation: keepsLocation, preparer: preparer) else {
+              let variant = await JPEGVariant.make(of: fileURL, keepsLocation: keepsLocation, preparer: preparer) else {
             return try first.get()
         }
         defer { variant.remove() }
@@ -120,11 +122,18 @@ public enum HEICUploadFallback {
 }
 
 /// Le JPEG de compatibilité d'un fichier HEIC, écrit dans un dossier à lui.
-private struct JPEGVariant {
+private struct JPEGVariant: Sendable {
     let url: URL
     private let directory: URL
 
-    init?(of source: URL, keepsLocation: Bool, preparer: any OutgoingImagePreparing) {
+    /// Lecture du fichier et encodage hors de tout acteur : l'appelant peut
+    /// être l'acteur d'envoi, qui sert les autres pièces pendant ce temps.
+    @concurrent
+    static func make(of source: URL, keepsLocation: Bool, preparer: any OutgoingImagePreparing) async -> JPEGVariant? {
+        JPEGVariant(of: source, keepsLocation: keepsLocation, preparer: preparer)
+    }
+
+    private init?(of source: URL, keepsLocation: Bool, preparer: any OutgoingImagePreparing) {
         guard let data = try? Data(contentsOf: source),
               let prepared = preparer.prepare(data, policy: .jpegCompatibility(keepsLocation: keepsLocation)),
               prepared.format == .jpeg else { return nil }
