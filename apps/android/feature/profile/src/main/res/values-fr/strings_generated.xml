@@ -20,6 +20,8 @@
     <string name="profile_close_hint">Ferme le profil</string>
     <string name="profile_connection_context_received">%s souhaite entrer en contact avec vous. Acceptez pour échanger des messages.</string>
     <string name="profile_connection_context_sent">Vous avez envoyé une demande de connexion à %s. En attente de sa réponse.</string>
+    <string name="profile_conversations_interactionsDisabled">Interactions désactivées</string>
+    <string name="profile_conversations_noShared">Aucune conversation en commun</string>
     <string name="profile_detail_country">Pays</string>
     <string name="profile_detail_system_language">Langue principale</string>
     <string name="profile_display_name_label">Nom d\'affichage</string>
