@@ -175,41 +175,13 @@ struct IncomingCallView: View {
     }
 
     private var avatarView: some View {
-        let name = callManager.remoteUsername ?? "?"
-        let initial = String(name.prefix(1)).uppercased()
-
-        return ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 110, height: 110)
-
-            Text(initial)
-                // doctrine 82i — initiale bornée par le cercle d'avatar fixe 110×110 ;
-                // décorative (déjà aplatie par le `.accessibilityHidden(true)` du ring parent)
-                .font(.system(size: 44, weight: .bold, design: .rounded))
-                .foregroundStyle(Color.white)
-
-            if let avatar = peerProfile?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: 110, height: 110),
-                    thumbHash: peerProfile?.avatarThumbHash,
-                    showsStatusOverlays: false,
-                    autoLoad: true
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: 110, height: 110)
-                .clipShape(Circle())
-            }
-        }
+        CachedAvatarImage(
+            urlString: peerProfile?.avatar,
+            thumbHash: peerProfile?.avatarThumbHash,
+            name: callManager.remoteUsername ?? "?",
+            size: 110,
+            accentColor: MeeshyColors.brandPrimaryHex
+        )
         .avatarRingWithin(ProfileDecorResolver.ring(peerProfile?.profileDecor?.avatarRing), footprint: 110)
         .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)
     }

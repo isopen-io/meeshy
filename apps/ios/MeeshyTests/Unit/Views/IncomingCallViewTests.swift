@@ -25,9 +25,9 @@ final class IncomingCallViewTests: XCTestCase {
             "IncomingCallView doit recevoir le profil résolu du correspondant."
         )
         XCTAssertTrue(
-            source.contains("CachedAsyncImage(") && source.contains("peerProfile?.avatar"),
-            "Le disque de l'appel entrant doit montrer la photo du correspondant, " +
-            "l'initiale ne restant que le repli pendant le chargement."
+            source.contains("CachedAvatarImage(") && source.contains("urlString: peerProfile?.avatar"),
+            "Le disque de l'appel entrant montre la photo du correspondant, sinon ses " +
+            "initiales — jamais les initiales SOUS la photo (#12568)."
         )
         XCTAssertTrue(
             source.contains(".avatarRingWithin(") && source.contains("ProfileDecorResolver.ring(peerProfile?.profileDecor?.avatarRing)"),
