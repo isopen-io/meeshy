@@ -81,11 +81,11 @@ final class ComposerRetouchTextBoard: ObservableObject {
     /// Ce qui se VOIT d'un texte, champ par champ : l'identité du modèle (z, ancre) ou l'ordre d'un
     /// dictionnaire n'entrent pas dans l'empreinte, sans quoi la flèche reviendrait sans geste.
     private static func signature(_ t: StoryTextObject) -> String {
-        [t.text, "\(t.x)", "\(t.y)", "\(t.scale)", "\(t.rotation)", "\(t.fontSize)", t.fontFamily,
-         t.textStyle ?? "", t.textColor ?? "", t.textAlign ?? "", t.textBg ?? "", t.textEffect ?? "",
-         String(describing: t.backgroundStyle), t.frameShape ?? "", "\(t.framePaddingScale ?? 0)",
-         "\(t.frameBorderWidth ?? 0)", t.frameBorderColor ?? "", t.borderColor ?? "", "\(t.borderWidth ?? 0)",
-         t.fontWeight ?? ""].joined(separator: ",")
+        var champs: [String] = [t.text, String(t.x), String(t.y), String(t.scale), String(t.rotation), String(t.fontSize)]
+        champs += [t.fontFamily, t.textStyle ?? "", t.textColor ?? "", t.textAlign ?? "", t.textBg ?? "", t.textEffect ?? ""]
+        champs += [String(describing: t.backgroundStyle), t.frameShape ?? "", t.frameBorderColor ?? "", t.borderColor ?? ""]
+        champs += [t.fontWeight ?? "", String(t.framePaddingScale ?? 0), String(t.frameBorderWidth ?? 0), String(t.borderWidth ?? 0)]
+        return champs.joined(separator: ",")
     }
 
     /// L'outil Texte est montré : un texte neuf s'ouvre en saisie quand la planche est vide.
