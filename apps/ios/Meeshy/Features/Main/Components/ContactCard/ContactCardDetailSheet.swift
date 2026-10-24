@@ -96,14 +96,9 @@ struct ContactCardDetailSheet: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
-            ZStack {
-                Circle().fill(LinearGradient(colors: [accent, accent.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Text(Self.initials(model.card?.displayName ?? ""))
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(.white)
-            }
-            .frame(width: 52, height: 52)
-            .accessibilityHidden(true)
+            headerFace
+                .frame(width: 52, height: 52)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(model.card?.displayName ?? "")
@@ -238,9 +233,15 @@ struct ContactCardDetailSheet: View {
         }
     }
 
-    static func initials(_ name: String) -> String {
-        let letters = MeeshyAvatar.initials(for: name)
-        return letters.isEmpty ? "?" : letters
+    /// Le visage de la fiche est celui de la bulle : la photo du compte Meeshy
+    /// associé, sinon les initiales du nom de la carte.
+    @ViewBuilder
+    private var headerFace: some View {
+        if let account = model.primaryAccount {
+            MeeshyAvatar(name: account.displayName, context: .custom(52), accentColor: accentHex, avatarURL: account.avatarUrl, isDark: colorScheme == .dark)
+        } else {
+            MeeshyAvatar(name: model.card?.displayName ?? "", context: .custom(52), accentColor: accentHex, avatarURL: nil, isDark: colorScheme == .dark)
+        }
     }
 }
 

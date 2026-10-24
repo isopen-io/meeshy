@@ -36,6 +36,7 @@ struct ShareLinkIdentityChoice: Identifiable {
 struct ShareLinkIdentitySheet: View {
     let choice: ShareLinkIdentityChoice
     let accountDisplayName: String
+    let accountAvatarURL: String?
     let onContinueWithAccount: () -> Void
     let onJoinAnonymously: () -> Void
 
@@ -46,7 +47,9 @@ struct ShareLinkIdentitySheet: View {
             info: choice.info,
             isSignedIn: true,
             resumesGuestSession: choice.resumesGuestSession,
-            accountInitials: MeeshyAvatar.initials(for: accountDisplayName),
+            accountFace: accountDisplayName.isEmpty
+                ? nil
+                : InviteAccountFace(name: accountDisplayName, avatarURL: accountAvatarURL),
             onChoice: { handle($0) },
             onClose: { dismiss() }
         )

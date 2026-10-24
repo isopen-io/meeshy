@@ -286,12 +286,14 @@ public struct CachedAvatarImage: View {
     public let name: String
     public let size: CGFloat
     public let accentColor: String
+    public let secondaryColor: String?
 
     @State private var image: UIImage?
     @State private var thumbHashImage: UIImage?
 
-    public init(urlString: String?, thumbHash: String? = nil, name: String, size: CGFloat, accentColor: String) {
+    public init(urlString: String?, thumbHash: String? = nil, name: String, size: CGFloat, accentColor: String, secondaryColor: String? = nil) {
         self.urlString = urlString; self.thumbHash = thumbHash; self.name = name; self.size = size; self.accentColor = accentColor
+        self.secondaryColor = secondaryColor
 
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
@@ -321,18 +323,27 @@ public struct CachedAvatarImage: View {
             guard let newUrl, !newUrl.isEmpty else { image = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
             image = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
+            thumbHashImage = image == nil ? Self.thumbHashImage(for: thumbHash) : nil
         }
     }
 
+    private static func thumbHashImage(for thumbHash: String?) -> UIImage? {
+        guard let thumbHash, !thumbHash.isEmpty else { return nil }
+        return UIImage.fromThumbHash(thumbHash)
+    }
+
+    /// Les initiales d'attente ET d'échec sont celles d'un avatar sans photo :
+    /// une seule dérivation, `MeeshyAvatar.initials(for:)`.
+    nonisolated public static func fallbackInitials(for name: String) -> String {
+        MeeshyAvatar.initials(for: name)
+    }
+
     private var initialsFallback: some View {
-        let initials = name.components(separatedBy: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-        let color = Color(hex: accentColor)
-        return ZStack {
-            LinearGradient(colors: [color, color.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Text(initials.isEmpty ? "?" : initials)
-                .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color.white)
-        }
+        AvatarInitialsFace(
+            initials: Self.fallbackInitials(for: name),
+            accent: accentColor, secondary: secondaryColor,
+            size: size, fontSize: size * 0.38
+        )
     }
 
     private func loadAvatar(for currentUrlString: String?) async {
