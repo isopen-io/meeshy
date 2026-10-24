@@ -66,9 +66,23 @@ final class E2EEMessageExchangeTests: XCTestCase {
         let sealed = try await send(aliceIPhone.content("copie"), from: aliceIPhone, to: bob, on: server)
 
         XCTAssertEqual(sealed.unapprovedOwnDevices, [])
+        try aliceMac.approve(aliceIPhone)
         let copy = try XCTUnwrap(server.pending(userId: alice, deviceId: aliceMac.device.deviceId).first)
         guard case .opened(let message) = aliceMac.opener.open(copy) else { return XCTFail("copie illisible") }
         XCTAssertEqual(message.content.text, "copie")
+    }
+
+    func test_aMessageFromMyOwnUnapprovedDevice_isNotOpened() async throws {
+        let server = FakeE2EEServer()
+        let aliceIPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let aliceMac = try await E2EETestPeer.enroll(alice, on: server)
+        _ = try await E2EETestPeer.enroll(bob, on: server)
+        try aliceIPhone.approve(aliceMac)
+        _ = try await send(aliceIPhone.content("me faire dire"), from: aliceIPhone, to: bob, on: server)
+        let copy = try XCTUnwrap(server.pending(userId: alice, deviceId: aliceMac.device.deviceId).first)
+
+        XCTAssertEqual(aliceMac.opener.open(copy), .undecryptable(messageId: "m1", conversationId: conversation),
+                       "un appareil de mon compte que je n'ai pas approuvé ne me fait rien dire")
     }
 
     func test_anApprovalPinnedToAnotherIdentity_isNotHonoured() async throws {
@@ -194,6 +208,31 @@ final class E2EEMessageExchangeTests: XCTestCase {
 
         XCTAssertTrue(outcomes.allSatisfy { if case .opened = $0 { true } else { false } }, "\(outcomes)")
         guard case .readable? = try bobIPhone.plaintexts.entry(for: "m1") else { return XCTFail("le clair reste") }
+    }
+
+    func test_aStorageRefusal_defersTheEnvelope_neverAcknowledgesIt_andItOpensLater() async throws {
+        let server = FakeE2EEServer()
+        let aliceIPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let bobIPhone = try await E2EETestPeer.enroll(bob, on: server)
+        _ = try await send(aliceIPhone.content("plus tard"), from: aliceIPhone, to: bob, on: server)
+        let lockless = E2EESessionCipher(
+            local: bobIPhone.device.address, store: MeeshySignalProtocolStore(identity: bobIPhone.enrolled.identity),
+            vault: bobIPhone.vault, lock: E2EEProcessLock(path: "/nonexistent-\(UUID().uuidString)/e2ee.lock")
+        )
+        let suspended = E2EEEnvelopeOpener(
+            local: bobIPhone.device, cipher: lockless, plaintexts: bobIPhone.plaintexts,
+            directory: bobIPhone.directory, approvals: bobIPhone.approvals
+        )
+
+        let outcomes = try await suspended.catchUp()
+
+        XCTAssertEqual(outcomes.count, 1)
+        guard case .deferred = outcomes.first else { return XCTFail("un refus de stockage n'est pas un verdict : \(outcomes)") }
+        XCTAssertNil(try bobIPhone.plaintexts.entry(for: "m1"))
+        XCTAssertEqual(server.pending(userId: bob, deviceId: bobIPhone.device.deviceId).count, 1, "l'enveloppe reste sur le serveur")
+        let later = try await bobIPhone.opener.catchUp()
+        guard case .opened(let message) = later.first else { return XCTFail("elle s'ouvre au rattrapage suivant") }
+        XCTAssertEqual(message.content.text, "plus tard")
     }
 
     func test_anEnvelopeOfAnotherGeneration_isSetAside() async throws {

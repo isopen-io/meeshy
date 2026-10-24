@@ -44,7 +44,7 @@ struct E2EETestPeer {
             userId: userId, enrolled: enrolled, vault: vault, directory: directory, approvals: approvals,
             plaintexts: plaintexts, cipher: cipher,
             sealer: E2EEMessageSealer(local: enrolled.device, cipher: cipher, directory: directory, approvals: approvals),
-            opener: E2EEEnvelopeOpener(local: enrolled.device, cipher: cipher, plaintexts: plaintexts, directory: directory)
+            opener: E2EEEnvelopeOpener(local: enrolled.device, cipher: cipher, plaintexts: plaintexts, directory: directory, approvals: approvals)
         )
     }
 

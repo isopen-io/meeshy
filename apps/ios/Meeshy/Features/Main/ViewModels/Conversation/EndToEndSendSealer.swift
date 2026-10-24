@@ -137,6 +137,7 @@ struct EndToEndSendSealer {
         switch error {
         case E2EESealError.recipientHasNoDevice: return .refused(.recipientWithoutEncryptedDevice)
         case E2EEEnrollmentError.deviceLimitReached: return .refused(.deviceLimitReached)
+        case is URLError: return .transportFailed(error)
         case let meeshy as MeeshyError:
             switch meeshy.e2eeCode {
             case E2EEErrorCode.deviceNotBound: return .refused(.sessionUnavailable)

@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import GRDB
+import MeeshySDK
 import LibSignalClient
 
 /// Ce que range un store libsignal : chaque enregistrement sérialisé par
@@ -102,6 +103,9 @@ public final class E2EEGRDBRecordVault: E2EERecordVaultProviding {
         }
         var configuration = Configuration()
         configuration.busyMode = .timeout(10)
+        // #3707 — le pool s'ouvre désormais à chaque session : sans armement, il
+        // prend des verrous SQLite pendant la suspension (0xDEAD10CC).
+        DatabaseSuspension.arm(&configuration)
         let pool = try DatabasePool(path: container.appendingPathComponent("e2ee.sqlite").path, configuration: configuration)
         let sealingKey = try lock.withLock { try E2EESealingKey.loadOrCreate(in: secrets) }
         return try E2EEGRDBRecordVault(writer: pool, sealingKey: sealingKey)

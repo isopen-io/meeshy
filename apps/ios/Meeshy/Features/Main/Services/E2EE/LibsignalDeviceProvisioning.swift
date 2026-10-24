@@ -45,13 +45,13 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
         let enrolled = try await registrar().ensureEnrolled(userId: userId)
         let store = MeeshySignalProtocolStore(identity: enrolled.identity)
         let cipher = E2EESessionCipher(local: enrolled.device.address, store: store, vault: vault, lock: processLock)
+        let approvals = E2EEOwnDeviceApprovals(vault: vault)
         return EndToEndReadyDevice(
             device: enrolled.device,
-            sealer: E2EEMessageSealer(
-                local: enrolled.device, cipher: cipher, directory: directory, approvals: E2EEOwnDeviceApprovals(vault: vault)
-            ),
+            sealer: E2EEMessageSealer(local: enrolled.device, cipher: cipher, directory: directory, approvals: approvals),
             opener: E2EEEnvelopeOpener(
-                local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault), directory: directory
+                local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault),
+                directory: directory, approvals: approvals
             )
         )
     }

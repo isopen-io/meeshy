@@ -67,7 +67,10 @@ final class E2EEStagingRecetteTests: XCTestCase {
             local: enrolled.device.address, store: MeeshySignalProtocolStore(identity: enrolled.identity), vault: vault, lock: lock
         )
         let sealer = E2EEMessageSealer(local: enrolled.device, cipher: cipher, directory: directory, approvals: E2EEOwnDeviceApprovals(vault: vault))
-        let opener = E2EEEnvelopeOpener(local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault), directory: directory)
+        let opener = E2EEEnvelopeOpener(
+            local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault), directory: directory,
+            approvals: E2EEOwnDeviceApprovals(vault: vault)
+        )
         let clientMessageId = ClientMessageId.generate()
         let content = E2EEContent(
             text: recette.sentinel, language: "fr", replyTo: nil,
