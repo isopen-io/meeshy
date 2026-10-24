@@ -18,7 +18,7 @@ public enum E2EEPreKeyPolicy {
     public static let rotationInterval: TimeInterval = 7 * 24 * 60 * 60
 }
 
-public final class E2EEDeviceKeyFactory: E2EEDeviceKeyFactoryProviding, @unchecked Sendable {
+public final class E2EEDeviceKeyFactory: E2EEDeviceKeyFactoryProviding {
     private let identity: E2EELocalIdentity
     private let store: MeeshySignalProtocolStore
     private let vault: any E2EERecordVaultProviding
