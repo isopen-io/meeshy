@@ -28,7 +28,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .names, font: .futuristic, color: "#C6FF00", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#FFFFFF", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hud.comite",
@@ -52,7 +53,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#C6FF00", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hud.groupe",
@@ -76,7 +78,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#C6FF00", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hud.tablee",
@@ -100,7 +103,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#C6FF00", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hologramme.duo",
@@ -124,7 +128,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .names, font: .futuristic, color: "#00F0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .neon, color: "#FF7AF5", place: .top, size: .s, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper)
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#36E3FF", width: 0.006), double: false, glow: "#FF4FD8AA", shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1B0A3F", light: "#9BF3FF")), background: .radial(colors: ["#1A0A3A", "#05020F"]), ornaments: [CallFrameOrnament(kind: .glitch, color: "#36E3FF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#5AF0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hologramme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hologramme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hologramme.comite",
@@ -148,7 +153,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#00F0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#36E3FF", width: 0.006), double: false, glow: "#FF4FD8AA", shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1B0A3F", light: "#9BF3FF")), background: .radial(colors: ["#1A0A3A", "#05020F"]), ornaments: [CallFrameOrnament(kind: .glitch, color: "#36E3FF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#5AF0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hologramme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hologramme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hologramme.groupe",
@@ -172,7 +178,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#00F0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#36E3FF", width: 0.006), double: false, glow: "#FF4FD8AA", shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1B0A3F", light: "#9BF3FF")), background: .radial(colors: ["#1A0A3A", "#05020F"]), ornaments: [CallFrameOrnament(kind: .glitch, color: "#36E3FF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#5AF0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hologramme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hologramme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "futuriste.orbite.duo",
@@ -196,7 +203,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .names, font: .brush, color: "#FFD08A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#FFB8D9", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F2C86A", width: 0.008), double: false, glow: "#F2C86A88", shadow: true, card: nil, tilt: .none, tone: .warm, duotone: nil), background: .radial(colors: ["#1B1140", "#03020A"]), ornaments: [CallFrameOrnament(kind: .orbits, color: "#F2C86A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#FFFFFF", fill: "#1B1140CC"), title: CallFrameTitle(source: .group, font: .brush, color: "#FFE3A1", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_orbite_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_orbite_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.orbite.comite",
@@ -220,7 +228,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .brush, color: "#FFD08A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F2C86A", width: 0.008), double: false, glow: "#F2C86A88", shadow: true, card: nil, tilt: .none, tone: .warm, duotone: nil), background: .radial(colors: ["#1B1140", "#03020A"]), ornaments: [CallFrameOrnament(kind: .orbits, color: "#F2C86A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#FFFFFF", fill: "#1B1140CC"), title: CallFrameTitle(source: .group, font: .brush, color: "#FFE3A1", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_orbite_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_orbite_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.orbite.groupe",
@@ -244,7 +253,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .brush, color: "#FFD08A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F2C86A", width: 0.008), double: false, glow: "#F2C86A88", shadow: true, card: nil, tilt: .none, tone: .warm, duotone: nil), background: .radial(colors: ["#1B1140", "#03020A"]), ornaments: [CallFrameOrnament(kind: .orbits, color: "#F2C86A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#FFFFFF", fill: "#1B1140CC"), title: CallFrameTitle(source: .group, font: .brush, color: "#FFE3A1", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_orbite_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_orbite_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.essaim.groupe",

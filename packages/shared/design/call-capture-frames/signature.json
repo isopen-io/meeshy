@@ -172,7 +172,60 @@
             "color": "#FFFFFF"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "pattern": {
+              "kind": "stars",
+              "color": "#FFFFFF",
+              "opacity": 0.1
+            },
+            "ornaments": [
+              {
+                "kind": "bokeh",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "bubble",
+              "color": "#FFFFFF",
+              "place": "top",
+              "size": "l",
+              "effect": "glow"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/signature_aurore_back.webp",
+                "amount": 0.55
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/signature_aurore_front.webp",
+                "slice": 0.16
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "signature.prisme",
@@ -351,7 +404,76 @@
             "case": "upper"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "linear",
+              "colors": [
+                "#E6F6FF",
+                "#F3E9FF",
+                "#FFE6F3"
+              ],
+              "angle": 135
+            },
+            "slot": {
+              "shape": "round",
+              "radius": 0.08,
+              "stroke": {
+                "color": "#FFFFFF",
+                "width": 0.012
+              },
+              "double": true,
+              "shadow": true,
+              "tilt": "gentle",
+              "tone": "color"
+            },
+            "ornaments": [
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "stars",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "futuristic",
+              "color": "#3B1A7A",
+              "place": "top",
+              "size": "l",
+              "effect": "outline",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/signature_prisme_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/signature_prisme_front.webp",
+                "slice": 0.16
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "signature.bulle",
@@ -483,7 +605,80 @@
             "tone": "color"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#6E4BFF",
+                "#3B2A8C",
+                "#1A1240"
+              ]
+            },
+            "slot": {
+              "shape": "circle",
+              "stroke": {
+                "color": "#FFFFFF",
+                "width": 0.02
+              },
+              "glow": "#B59CFFAA",
+              "shadow": true,
+              "tilt": "gentle",
+              "tone": "color"
+            },
+            "ornaments": [
+              {
+                "kind": "bubbles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "hearts",
+                "color": "#FFB3E6",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "bubble",
+              "color": "#FFFFFF",
+              "place": "top",
+              "size": "l",
+              "effect": "glow"
+            },
+            "names": {
+              "show": "name",
+              "style": "bubble",
+              "font": "bubble",
+              "color": "#4C2BB5",
+              "fill": "#FFFFFF"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/signature_bulle_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/signature_bulle_front.webp",
+                "slice": 0.16
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "signature.echo",

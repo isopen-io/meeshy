@@ -354,6 +354,7 @@ export type FrameElement = NonNullable<FrameLook['elements']>[number];
 export type FrameOrnament = FrameLook['ornaments'][number];
 export type FrameCredits = NonNullable<FrameMotif['credits']>;
 export type FrameCost = NonNullable<FrameMotif['cost']>;
+export type FrameStyle = NonNullable<FrameMotif['styles']>[number];
 
 /** Un cadre : un motif servi à une tranche. `id` = `<ambiance>.<motif>.<tranche>`, stable. */
 export type CaptureFrame = FrameLook & {
@@ -366,6 +367,8 @@ export type CaptureFrame = FrameLook & {
   readonly credits?: FrameCredits;
   readonly surfaces?: readonly FrameSurface[];
   readonly cost?: FrameCost;
+  /** Les déclinaisons de son motif (#12685), que `styledFrame` applique ; le catalogue déplié ne les déplie pas. */
+  readonly styles?: readonly FrameStyle[];
 };
 
 /** Où le cadre se propose : la capture seule, sauf s'il déclare aussi le direct. */

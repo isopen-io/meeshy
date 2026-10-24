@@ -220,7 +220,74 @@
             "effect": "shadow"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#FF4F9A",
+                "#B5176B",
+                "#5E0C3A"
+              ]
+            },
+            "slot": {
+              "shape": "round",
+              "radius": 0.16,
+              "stroke": {
+                "color": "#FFE08A",
+                "width": 0.026
+              },
+              "glow": "#FFD24A88",
+              "shadow": true,
+              "tilt": "wild",
+              "tone": "color"
+            },
+            "ornaments": [
+              {
+                "kind": "confetti",
+                "color": "#FFE08A",
+                "density": "mid",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "bubble",
+              "color": "#FFF1B8",
+              "place": "top",
+              "size": "l",
+              "effect": "shadow"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/jovial_fete_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/jovial_fete_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "jovial.fanfare",
@@ -568,7 +635,69 @@
             "fill": "#3A0CA3"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "linear",
+              "colors": [
+                "#BFE4FF",
+                "#FFD6E8"
+              ],
+              "angle": 0
+            },
+            "ornaments": [
+              {
+                "kind": "balloons",
+                "color": "#FF5C8A",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "clouds",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "brush",
+              "color": "#2E1E8A",
+              "place": "top",
+              "size": "l",
+              "effect": "outline"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/jovial_ballons_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/jovial_ballons_front.webp",
+                "slice": 0.16
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "jovial.grimaces",
@@ -661,7 +790,76 @@
       },
       "variants": {
         "duo": {}
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#FFD93B"
+            },
+            "slot": {
+              "shape": "rect",
+              "shadow": true,
+              "card": {
+                "color": "#FFFFFF",
+                "pad": 0.05,
+                "foot": 0.17
+              },
+              "tilt": "wild",
+              "tone": "color"
+            },
+            "ornaments": [
+              {
+                "kind": "lightning",
+                "color": "#FF4FA3",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "stars",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "names",
+              "font": "poster",
+              "color": "#FFFFFF",
+              "place": "top",
+              "size": "l",
+              "effect": "outline",
+              "case": "upper"
+            },
+            "names": {
+              "show": "handle",
+              "style": "caption",
+              "font": "tag",
+              "color": "#111111"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/jovial_grimaces_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/jovial_grimaces_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

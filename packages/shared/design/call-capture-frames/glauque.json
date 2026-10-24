@@ -118,7 +118,68 @@
             "fill": "#0A0A10B3"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#0B0D11"
+            },
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#E7DECB",
+                "width": 0.004
+              },
+              "tilt": "none",
+              "tone": "faded"
+            },
+            "ornaments": [
+              {
+                "kind": "glitch",
+                "color": "#AFC3D3",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "rec",
+                "color": "#FF3B30",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "date",
+              "font": "typewriter",
+              "color": "#FFB000",
+              "place": "bottom",
+              "size": "l",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/glauque_vhs_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/glauque_vhs_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "glauque.videosurveillance",
@@ -288,7 +349,72 @@
             }
           ]
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#061009"
+            },
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#7CFF6B",
+                "width": 0.003
+              },
+              "tilt": "none",
+              "tone": "duotone",
+              "duotone": [
+                "#021A05",
+                "#9DFF8A"
+              ]
+            },
+            "ornaments": [
+              {
+                "kind": "crosshair",
+                "color": "#7CFF6B",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "rec",
+                "color": "#FF2A1A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "date",
+              "font": "typewriter",
+              "color": "#9DFF8A",
+              "place": "top",
+              "size": "m",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/glauque_videosurveillance_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/glauque_videosurveillance_front.webp",
+                "slice": 0.17
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "glauque.sous-sol",
@@ -674,7 +800,82 @@
             "color": "#16181B"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "linear",
+              "colors": [
+                "#9EA2A6",
+                "#53585E"
+              ],
+              "angle": 0
+            },
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#2E3338",
+                "width": 0.01
+              },
+              "double": true,
+              "shadow": true,
+              "tilt": "none",
+              "tone": "noir"
+            },
+            "ornaments": [
+              {
+                "kind": "scanlines",
+                "color": "#16181B1A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "vignette",
+                "color": "#0B0C0E",
+                "density": "mid",
+                "layer": "back"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "poster",
+              "color": "#F4F4F2",
+              "place": "top",
+              "size": "l",
+              "effect": "shadow",
+              "case": "upper"
+            },
+            "subtitle": {
+              "source": "date",
+              "font": "typewriter",
+              "color": "#F4F4F2",
+              "place": "top",
+              "size": "s",
+              "effect": "shadow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/glauque_prison_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/glauque_prison_front.webp",
+                "slice": 0.17
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

@@ -157,7 +157,79 @@
             "color": "#111111"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#EFE6D6"
+            },
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#141216",
+                "width": 0.006
+              },
+              "shadow": true,
+              "card": {
+                "color": "#FFFFFF",
+                "pad": 0.05,
+                "foot": 0.05
+              },
+              "tilt": "none",
+              "tone": "mono"
+            },
+            "ornaments": [
+              {
+                "kind": "petals",
+                "color": "#8E939B",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "candles",
+                "color": "#D9C8A8",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "elegant",
+              "color": "#141216",
+              "place": "top",
+              "size": "l",
+              "case": "upper"
+            },
+            "names": {
+              "show": "name",
+              "style": "caption",
+              "font": "italic",
+              "color": "#141216"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/morbide_faire-part_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/morbide_faire-part_front.webp",
+                "slice": 0.16
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "morbide.memento",
@@ -364,7 +436,61 @@
             "color": "#F2E3C6"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#4A2520",
+                "#140B09"
+              ]
+            },
+            "ornaments": [
+              {
+                "kind": "vignette",
+                "color": "#000000",
+                "density": "mid",
+                "layer": "back"
+              },
+              {
+                "kind": "candles",
+                "color": "#FFD08A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "fantasy",
+              "color": "#E3BE5A",
+              "place": "top",
+              "size": "l",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/morbide_memento_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/morbide_memento_front.webp",
+                "slice": 0.2
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "morbide.crypte",
@@ -559,7 +685,70 @@
             "color": "#E9D5FF"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "linear",
+              "colors": [
+                "#3A3A38",
+                "#0E0D0C"
+              ],
+              "angle": 0
+            },
+            "ornaments": [
+              {
+                "kind": "runes",
+                "color": "#8A6A3A",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "candles",
+                "color": "#FFB45A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "bats",
+                "color": "#0A0A0A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "fantasy",
+              "color": "#D9CDBE",
+              "place": "top",
+              "size": "l",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/morbide_crypte_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/morbide_crypte_front.webp",
+                "slice": 0.2
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "morbide.veillee",
@@ -829,7 +1018,97 @@
             "fill": "#B8C0C7E6"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "linear",
+              "colors": [
+                "#8C8B86",
+                "#3F3E3B"
+              ],
+              "angle": 0
+            },
+            "slot": {
+              "shape": "arch",
+              "stroke": {
+                "color": "#C9CCC8",
+                "width": 0.02
+              },
+              "double": true,
+              "shadow": true,
+              "tilt": "none",
+              "tone": "mono"
+            },
+            "ornaments": [
+              {
+                "kind": "bats",
+                "color": "#111111",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "fireflies",
+                "color": "#9FB3C8",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "candles",
+                "color": "#FFD08A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "fantasy",
+              "color": "#F2F2EE",
+              "place": "top",
+              "size": "m",
+              "effect": "shadow",
+              "case": "upper"
+            },
+            "subtitle": {
+              "source": "date",
+              "font": "elegant",
+              "color": "#E6E6E2",
+              "place": "top",
+              "size": "s",
+              "effect": "shadow",
+              "case": "upper"
+            },
+            "names": {
+              "show": "name",
+              "style": "plate",
+              "font": "elegant",
+              "color": "#1F2326",
+              "fill": "#C9CCC8E6"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/morbide_tombe_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/morbide_tombe_front.webp",
+                "slice": 0.2
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

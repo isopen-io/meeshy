@@ -168,7 +168,69 @@
             "color": "#C6FF00"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#17191C"
+            },
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#7CFF4A",
+                "width": 0.004
+              },
+              "double": true,
+              "tilt": "none",
+              "tone": "cool"
+            },
+            "ornaments": [
+              {
+                "kind": "crosshair",
+                "color": "#7CFF4A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "rec",
+                "color": "#7CFF4A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "futuristic",
+              "color": "#7CFF4A",
+              "place": "top",
+              "size": "l",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/futuriste_hud_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/futuriste_hud_front.webp",
+                "slice": 0.17
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "futuriste.hologramme",
@@ -339,7 +401,76 @@
             "fill": "#14002BCC"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#1A0A3A",
+                "#05020F"
+              ]
+            },
+            "slot": {
+              "shape": "hex",
+              "stroke": {
+                "color": "#36E3FF",
+                "width": 0.006
+              },
+              "glow": "#FF4FD8AA",
+              "tilt": "none",
+              "tone": "duotone",
+              "duotone": [
+                "#1B0A3F",
+                "#9BF3FF"
+              ]
+            },
+            "ornaments": [
+              {
+                "kind": "glitch",
+                "color": "#36E3FF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "futuristic",
+              "color": "#5AF0FF",
+              "place": "top",
+              "size": "l",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/futuriste_hologramme_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/futuriste_hologramme_front.webp",
+                "slice": 0.16
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "futuriste.orbite",
@@ -472,7 +603,79 @@
             "bottom": 0.1
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#1B1140",
+                "#03020A"
+              ]
+            },
+            "slot": {
+              "shape": "circle",
+              "stroke": {
+                "color": "#F2C86A",
+                "width": 0.008
+              },
+              "glow": "#F2C86A88",
+              "shadow": true,
+              "tilt": "none",
+              "tone": "warm"
+            },
+            "ornaments": [
+              {
+                "kind": "orbits",
+                "color": "#F2C86A",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "brush",
+              "color": "#FFE3A1",
+              "place": "top",
+              "size": "l",
+              "effect": "glow"
+            },
+            "names": {
+              "show": "handle",
+              "style": "badge",
+              "font": "futuristic",
+              "color": "#FFFFFF",
+              "fill": "#1B1140CC"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/futuriste_orbite_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/futuriste_orbite_front.webp",
+                "slice": 0.17
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "futuriste.essaim",

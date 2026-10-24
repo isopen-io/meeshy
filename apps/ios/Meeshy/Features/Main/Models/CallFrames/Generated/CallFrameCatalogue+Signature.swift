@@ -28,7 +28,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .names, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .bubble, color: "#FFD3E8", place: .top, size: .s, effect: nil, letterCase: nil)
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(pattern: CallFramePattern(kind: .stars, color: "#FFFFFF", opacity: 0.1), ornaments: [CallFrameOrnament(kind: .bokeh, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_aurore_back.webp", preset: nil, color: nil, amount: 0.55, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_aurore_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.aurore.comite",
@@ -52,7 +53,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(pattern: CallFramePattern(kind: .stars, color: "#FFFFFF", opacity: 0.1), ornaments: [CallFrameOrnament(kind: .bokeh, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_aurore_back.webp", preset: nil, color: nil, amount: 0.55, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_aurore_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.aurore.groupe",
@@ -76,7 +78,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(pattern: CallFramePattern(kind: .stars, color: "#FFFFFF", opacity: 0.1), ornaments: [CallFrameOrnament(kind: .bokeh, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_aurore_back.webp", preset: nil, color: nil, amount: 0.55, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_aurore_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.aurore.tablee",
@@ -100,7 +103,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(pattern: CallFramePattern(kind: .stars, color: "#FFFFFF", opacity: 0.1), ornaments: [CallFrameOrnament(kind: .bokeh, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_aurore_back.webp", preset: nil, color: nil, amount: 0.55, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_aurore_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.prisme.duo",
@@ -124,7 +128,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .names, font: .futuristic, color: "#4C1D95", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.08, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.012), double: true, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .color, duotone: nil), background: .linear(colors: ["#E6F6FF", "#F3E9FF", "#FFE6F3"], angle: 135.0), ornaments: [CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#3B1A7A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_prisme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_prisme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.prisme.comite",
@@ -148,7 +153,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#4C1D95", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.08, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.012), double: true, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .color, duotone: nil), background: .linear(colors: ["#E6F6FF", "#F3E9FF", "#FFE6F3"], angle: 135.0), ornaments: [CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#3B1A7A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_prisme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_prisme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.prisme.groupe",
@@ -172,7 +178,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#4C1D95", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.08, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.012), double: true, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .color, duotone: nil), background: .linear(colors: ["#E6F6FF", "#F3E9FF", "#FFE6F3"], angle: 135.0), ornaments: [CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#3B1A7A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_prisme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_prisme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.prisme.tablee",
@@ -196,7 +203,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#4C1D95", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#7C3AED", place: .bottom, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.08, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.012), double: true, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .color, duotone: nil), background: .linear(colors: ["#E6F6FF", "#F3E9FF", "#FFE6F3"], angle: 135.0), ornaments: [CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#3B1A7A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_prisme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_prisme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.bulle.duo",
@@ -219,7 +227,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .names, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .bubble, color: "#FFE3F1", place: .top, size: .s, effect: nil, letterCase: nil)
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.02), double: false, glow: "#B59CFFAA", shadow: true, card: nil, tilt: .gentle, tone: .color, duotone: nil), background: .radial(colors: ["#6E4BFF", "#3B2A8C", "#1A1240"]), ornaments: [CallFrameOrnament(kind: .bubbles, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .hearts, color: "#FFB3E6", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .bubble, font: .bubble, color: "#4C2BB5", fill: "#FFFFFF"), title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_bulle_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_bulle_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.bulle.comite",
@@ -242,7 +251,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.02), double: false, glow: "#B59CFFAA", shadow: true, card: nil, tilt: .gentle, tone: .color, duotone: nil), background: .radial(colors: ["#6E4BFF", "#3B2A8C", "#1A1240"]), ornaments: [CallFrameOrnament(kind: .bubbles, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .hearts, color: "#FFB3E6", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .bubble, font: .bubble, color: "#4C2BB5", fill: "#FFFFFF"), title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_bulle_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_bulle_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.bulle.groupe",
@@ -265,7 +275,8 @@ nonisolated extension CallFrameCatalogue {
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.02), double: false, glow: "#B59CFFAA", shadow: true, card: nil, tilt: .gentle, tone: .color, duotone: nil), background: .radial(colors: ["#6E4BFF", "#3B2A8C", "#1A1240"]), ornaments: [CallFrameOrnament(kind: .bubbles, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .hearts, color: "#FFB3E6", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .bubble, font: .bubble, color: "#4C2BB5", fill: "#FFFFFF"), title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/signature_bulle_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/signature_bulle_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "signature.echo.duo",

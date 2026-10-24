@@ -635,9 +635,12 @@ const ASSET_FILE = /^[A-Za-z0-9_-]+\.webp$/;
 
 /** Les fichiers d'illustration que les cadres référencent, triés, chacun une fois. */
 export function referencedAssets(files: readonly unknown[]): readonly string[] {
+  const styleScenes = (frame: { readonly motifKeys: Json }): readonly unknown[] =>
+    Array.isArray(frame.motifKeys.styles)
+      ? frame.motifKeys.styles.flatMap((style: unknown) => (isRecord(style) && isRecord(style.look) && Array.isArray(style.look.scene) ? style.look.scene : []))
+      : [];
   const sources = expandFiles(files).flatMap((frame) => {
-    const scene = frame.look.scene;
-    if (!Array.isArray(scene)) return [];
+    const scene = [...(Array.isArray(frame.look.scene) ? frame.look.scene : []), ...styleScenes(frame)];
     return scene.flatMap((layer: unknown) => {
       if (!isRecord(layer) || layer.kind !== 'image' || typeof layer.src !== 'string') return [];
       const prefix = `${ASSET_SOURCE_RELATIVE_DIR}/`;

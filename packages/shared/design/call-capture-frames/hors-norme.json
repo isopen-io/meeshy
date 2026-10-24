@@ -273,7 +273,69 @@
             "fill": "#FFE600"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#111111",
+                "width": 0.014
+              },
+              "shadow": true,
+              "tilt": "gentle",
+              "tone": "duotone",
+              "duotone": [
+                "#2B1BD1",
+                "#FF8AD8"
+              ]
+            },
+            "ornaments": [
+              {
+                "kind": "lightning",
+                "color": "#111111",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "stars",
+                "color": "#2A8CFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "poster",
+              "color": "#FFFFFF",
+              "place": "top",
+              "size": "l",
+              "effect": "outline",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/hors-norme_pop-art_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/hors-norme_pop-art_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "hors-norme.collage",
@@ -473,7 +535,62 @@
             "color": "#111111"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#C8A26E"
+            },
+            "slot": {
+              "shape": "torn",
+              "shadow": true,
+              "tilt": "wild",
+              "tone": "noir"
+            },
+            "ornaments": [
+              {
+                "kind": "tape",
+                "color": "#BFF54A",
+                "density": "low",
+                "layer": "front"
+              },
+              {
+                "kind": "stars",
+                "color": "#111111",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "tag",
+              "color": "#111111",
+              "place": "top",
+              "size": "l"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/hors-norme_collage_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/hors-norme_collage_front.webp",
+                "slice": 0.2
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "hors-norme.vitrail",
@@ -846,7 +963,68 @@
             "color": "#FFD166"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#A3141E",
+                "#5A0A10"
+              ]
+            },
+            "ornaments": [
+              {
+                "kind": "crown",
+                "color": "#FFE08A",
+                "density": "low",
+                "layer": "front"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFF4D0",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "bokeh",
+                "color": "#FFC65A",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "poster",
+              "color": "#FFE08A",
+              "place": "top",
+              "size": "l",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/hors-norme_tete-d-affiche_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/hors-norme_tete-d-affiche_front.webp",
+                "slice": 0.2
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

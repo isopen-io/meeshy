@@ -109,6 +109,24 @@ describe('les illustrations des cadres (#12683)', () => {
     referenced.forEach((name) => expect(readFileSync(join(iosAssets, name)).equals(readFileSync(join(sourceAssets, name))), name).toBe(true));
   });
 
+  it('les illustrations d’une déclinaison sont référencées comme celles du cadre de base', () => {
+    const relief = {
+      mood: 'jovial',
+      motifs: [{
+        id: 'jovial.essai', mood: 'jovial', name: 'Essai', base: look, variants: { duo: {} },
+        styles: [{ id: 'relief', name: 'Relief', look: { scene: [
+          { id: 'matiere', kind: 'image', depth: 'back', src: 'assets/call-frames/jovial_essai_back.webp' },
+          { id: 'moulure', kind: 'image', depth: 'front', src: 'assets/call-frames/jovial_essai_front.webp', slice: 0.2 },
+        ] } }],
+      }],
+    };
+    expect(referencedAssets([relief])).toEqual(['jovial_essai_back.webp', 'jovial_essai_front.webp']);
+  });
+
+  it('les cadres vedettes embarquent leurs illustrations « Relief »', () => {
+    expect(referencedAssets(readMoodFiles()).length).toBeGreaterThan(0);
+  });
+
   it('une illustration hors du dossier des cadres fait échouer la lecture', () => {
     const outside = {
       mood: 'jovial',

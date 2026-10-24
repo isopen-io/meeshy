@@ -345,7 +345,68 @@
             "color": "#FFF4B8"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#143B2A",
+                "#050F0A"
+              ]
+            },
+            "slot": {
+              "shape": "blob",
+              "glow": "#C9FF6A66",
+              "shadow": true,
+              "tilt": "gentle",
+              "tone": "warm"
+            },
+            "ornaments": [
+              {
+                "kind": "fireflies",
+                "color": "#C9FF6A",
+                "density": "mid",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "fireflies",
+                "color": "#F4FFB0",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "handwriting",
+              "color": "#F4FFB0",
+              "place": "top",
+              "size": "l",
+              "effect": "glow"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/feerique_lucioles_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/feerique_lucioles_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "feerique.clair-de-lune",
@@ -509,7 +570,63 @@
             "color": "#FFF6D6"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "linear",
+              "colors": [
+                "#0B1030",
+                "#2A2150"
+              ],
+              "angle": 0
+            },
+            "ornaments": [
+              {
+                "kind": "stars",
+                "color": "#FFF6D6",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "elegant",
+              "color": "#F3F0FF",
+              "place": "top",
+              "size": "m",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/feerique_clair-de-lune_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/feerique_clair-de-lune_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "feerique.coeur-de-rose",
@@ -606,7 +723,83 @@
       },
       "variants": {
         "duo": {}
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#E0527E"
+            },
+            "slot": {
+              "shape": "heart",
+              "stroke": {
+                "color": "#FFE3D6",
+                "width": 0.014
+              },
+              "glow": "#FFB3C6AA",
+              "shadow": true,
+              "tilt": "gentle",
+              "tone": "warm"
+            },
+            "ornaments": [
+              {
+                "kind": "petals",
+                "color": "#FFD0DC",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "hearts",
+                "color": "#FFE3D6",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "names",
+              "font": "handwriting",
+              "color": "#FFF1EC",
+              "place": "top",
+              "size": "l",
+              "effect": "shadow"
+            },
+            "names": {
+              "show": "both",
+              "style": "ribbon",
+              "font": "bubble",
+              "color": "#7A1F3F",
+              "fill": "#FFE3D6"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/feerique_coeur-de-rose_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/feerique_coeur-de-rose_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }
