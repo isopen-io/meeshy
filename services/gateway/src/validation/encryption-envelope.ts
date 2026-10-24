@@ -168,6 +168,9 @@ const relayOf = (envelope: LibsignalSendFields, sessionId: string | null): E2EER
  * Un envoi libsignal (#3706) y ajoute `relay` — ses enveloppes, l'appareil
  * émetteur et la session de l'appelant — que `MessagingService` RETIRE avant
  * de persister la charge : les enveloppes vont dans `MessageEnvelope`.
+ * Le relais ne naît QUE de la passerelle : une clé `relay` glissée dans les
+ * métadonnées libres du client est jetée, sans quoi elle choisirait la session
+ * émettrice et porterait des enveloppes que le schéma n'a jamais lues.
  */
 export function toEncryptedPayload(
   envelope: {
@@ -179,10 +182,11 @@ export function toEncryptedPayload(
   if (!envelope.encryptedContent) return undefined;
 
   const relay = relayOf(envelope, caller.sessionId ?? null);
+  const { relay: _clientRelay, ...metadata } = envelope.encryptionMetadata ?? {};
   return {
     ciphertext: envelope.encryptedContent,
     mode: envelope.encryptionMode ?? 'e2ee',
-    ...envelope.encryptionMetadata,
+    ...metadata,
     ...(relay ? { relay } : {}),
   } as unknown as MessageRequest['encryptedPayload'];
 }

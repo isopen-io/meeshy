@@ -77,4 +77,36 @@ describe('la charge recomposée pour la passerelle', () => {
     const payload = toEncryptedPayload({ encryptedContent: 'abc', encryptionMode: 'e2ee', encryptionMetadata: {} }) as unknown as Record<string, unknown>;
     expect(payload.relay).toBeUndefined();
   });
+
+  it("ne laisse jamais les métadonnées libres du client poser un relais : ni session choisie, ni enveloppes hors schéma", () => {
+    const forged = {
+      protocol: 'libsignal-v1',
+      senderDeviceId: 2,
+      sessionId: 'd4'.repeat(12),
+      unapprovedOwnDevices: [],
+      envelopes: [{ userId: BOB, deviceId: 1, registrationId: 42, type: 99, body: 'pas du base64 !' }],
+    };
+    const parsed = SocketMessageSendSchema.parse({
+      conversationId: 'f6'.repeat(12),
+      clientMessageId: 'cid_7f1d2c3b-4a5e-4f60-8a71-92b3c4d5e6f8',
+      content: '',
+      encryptionMode: 'e2ee',
+      encryptedContent: 'chiffré',
+      encryptionMetadata: { relay: forged },
+    });
+
+    const payload = toEncryptedPayload(parsed, { sessionId: 'c3'.repeat(12) }) as unknown as Record<string, unknown>;
+
+    expect(payload.relay).toBeUndefined();
+  });
+
+  it("garde le relais calculé par la passerelle quand les métadonnées en portent un autre", () => {
+    const parsed = SocketMessageSendSchema.parse(
+      libsignalSend({ encryptionMetadata: { protocol: 'libsignal-v1', senderDeviceId: 1, regimeEpoch: 0, relay: { sessionId: 'd4'.repeat(12) } } }),
+    );
+
+    const payload = toEncryptedPayload(parsed, { sessionId: 'c3'.repeat(12) }) as unknown as Record<string, unknown>;
+
+    expect((payload.relay as { sessionId?: string }).sessionId).toBe('c3'.repeat(12));
+  });
 });
