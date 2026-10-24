@@ -269,7 +269,11 @@ export async function performDeleteForMe(params: DeleteParams & { readonly rowEx
 
   const deleted = Math.min(servedCount(result.data) ?? messages.length, messages.length);
   /* La route de masse ne NOMME pas ce qu'elle a refusé : le fil est relu
-     plutôt que de deviner quelles rangées rendre. */
-  if (deleted < messages.length) void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
+     plutôt que de deviner quelles rangées rendre. Les rangées relues
+     reviennent DÉPLIÉES, jamais sous la sortie qui les a repliées (#12634). */
+  if (deleted < messages.length) {
+    rowExit.unfold(ids);
+    void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
+  }
   return { deleted, failed: messages.length - deleted, offline: false };
 }

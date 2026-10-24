@@ -1,6 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { useStore } from 'zustand/react';
 
+import { ARRIVAL_MOTION_CURVE, ARRIVAL_MOTION_MS } from './arrival-motion';
 import { prefersReducedMotion } from './reduced-motion';
 
 /**
@@ -38,11 +39,18 @@ import { prefersReducedMotion } from './reduced-motion';
 /** La durée du repli et du dépliage — celle que la feuille joue. */
 export const ROW_EXIT_MS = 200;
 
-/** La courbe du repli : la même que l'arrivée (`ARRIVAL_MOTION_CURVE`), sans rebond. */
-export const ROW_EXIT_CURVE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+/** La courbe du repli : celle de l'arrivée, sans rebond — la même constante, jamais une copie. */
+export const ROW_EXIT_CURVE = ARRIVAL_MOTION_CURVE;
 
-/** Le retour est tenu au-delà de l'animation : la rangée paraît à la notification du cache, une tâche plus tard. */
-const RETURN_HOLD_MS = ROW_EXIT_MS + 100;
+/**
+ * Le retour est tenu au-delà de l'animation : la rangée paraît à la
+ * notification du cache, une tâche plus tard. Et au-delà de l'ARRIVÉE
+ * (#11223) : une rangée fraîche rendue en queue est une clé neuve pour
+ * `animatedArrival`, qui la tient `ARRIVAL_MOTION_MS` — le retour, prioritaire
+ * dans `rowMotionProps`, doit la couvrir jusqu'au bout, sinon l'entrée repart
+ * de sa première image une fois le dépliage fini.
+ */
+const RETURN_HOLD_MS = Math.max(ROW_EXIT_MS, ARRIVAL_MOTION_MS) + 100;
 
 export type RowExitState = { readonly leaving: ReadonlySet<string>; readonly returning: ReadonlySet<string> };
 

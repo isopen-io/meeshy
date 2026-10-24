@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { ROW_EXIT_MS, createRowExitStore, rowExitOf, type RowExitSchedule } from './row-exit-motion';
+import { ARRIVAL_MOTION_CURVE, ARRIVAL_MOTION_MS } from './arrival-motion';
+import { ROW_EXIT_CURVE, ROW_EXIT_MS, createRowExitStore, rowExitOf, type RowExitSchedule } from './row-exit-motion';
 
 /**
  * #12634 — UN MESSAGE MASQUÉ « POUR MOI » SORT DU FIL EN SE REPLIANT. La
@@ -76,6 +77,10 @@ describe('la sortie — la rangée reste montée le temps du repli', () => {
   });
 });
 
+test('la courbe du repli EST celle de l’arrivée — une seule source', () => {
+  expect(ROW_EXIT_CURVE).toBe(ARRIVAL_MOTION_CURVE);
+});
+
 describe('le retour — la rangée se déplie à sa place', () => {
   test('rendue, elle quitte la sortie et revient, le temps du dépliage', async () => {
     const store = createRowExitStore();
@@ -96,6 +101,13 @@ describe('le retour — la rangée se déplie à sa place', () => {
     const clock = manualClock();
     rowExitOf({ store, reduceMotion: () => false, schedule: clock.schedule }).unfold(ids('m-1'));
     expect(clock.flush().every((ms) => ms >= ROW_EXIT_MS)).toBe(true);
+  });
+
+  test('le retour couvre toute l’arrivée (#11223) : une rangée fraîche rendue en queue ne rejoue jamais son entrée', () => {
+    const store = createRowExitStore();
+    const clock = manualClock();
+    rowExitOf({ store, reduceMotion: () => false, schedule: clock.schedule }).unfold(ids('m-1'));
+    expect(clock.flush().every((ms) => ms > ARRIVAL_MOTION_MS)).toBe(true);
   });
 
   test('« Réduire les animations » ⇒ la rangée revient sans dépliage', () => {

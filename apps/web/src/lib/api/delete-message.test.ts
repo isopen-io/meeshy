@@ -327,6 +327,31 @@ describe('performDeleteForMe — la rangée sort en se repliant, et revient de m
     expect(held.calls.unfolded).toEqual([['m-1', 'm-3']]);
   });
 
+  test('un refus PARTIEL de la route de masse : les rangées se déplient AVANT la relecture du fil', async () => {
+    const queryClient = threadWith();
+    const held = heldExit();
+    const invalidatedWhenUnfolded: boolean[] = [];
+    const exit = {
+      ...held.exit,
+      unfold: (rows: ReadonlySet<string>) => {
+        invalidatedWhenUnfolded.push(queryClient.getQueryState(messagesQueryKey('c-a'))?.isInvalidated ?? false);
+        held.exit.unfold(rows);
+      },
+    };
+    const performed = performDeleteForMe({
+      queryClient,
+      conversationId: 'c-a',
+      messages: [M1, M2, M3],
+      transport: transportBy(() => ({ ok: true, data: { deletedCount: 1, requestedCount: 3 } }), []),
+      rowExit: exit,
+    });
+    held.open();
+    expect(await performed).toEqual({ deleted: 1, failed: 2, offline: false });
+    expect(held.calls.unfolded).toEqual([['m-1', 'm-2', 'm-3']]);
+    expect(invalidatedWhenUnfolded).toEqual([false]);
+    expect(queryClient.getQueryState(messagesQueryKey('c-a'))?.isInvalidated).toBe(true);
+  });
+
   test('aucune sortie à jouer (« Réduire les animations ») : la rangée quitte le fil tout de suite', async () => {
     const queryClient = threadWith();
     let during: readonly (readonly string[])[] = [];
