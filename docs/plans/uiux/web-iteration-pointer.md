@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-to2xb3` |
+| Branche de travail de la session courante | `claude/practical-fermat-o9iiqc` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -38,7 +38,15 @@ normal.
 
 | itération | date | branche de travail | PR | état |
 |---|---|---|---|---|
-| **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | [#11384](https://github.com/isopen-io/meeshy/pull/11384) → `dev` | ⏳ CI |
+| **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | [#11384](https://github.com/isopen-io/meeshy/pull/11384) → `dev` | ✅ mergé |
+| **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | à ouvrir → `dev` | ⏳ |
+
+**75w** — cohérence du thème clair/sombre : la vignette « Signature » du sélecteur
+d'apparence (`appearance-picker-sections.tsx`) DÉRIVE désormais des cotes canoniques
+du fond (`backdropStyleVars()` + `withAccent`, dégradé partagé
+`styles/appearance-picker.css`) au lieu d'un dégradé jumeau codé en dur qui restait
+sombre en thème clair. 3 littéraux de couleur retirés, jumelle divergente supprimée.
+Analyse : `docs/analyses/uiux/2026-10-24-iteration-75w.md`.
 
 **74w** — i18n du flux de connexion par lien magique (`magic-link-{validation,
 panel,flow}.tsx`) : 11 clés `magicLink.*` ×7 langues + câblage `translate` +
@@ -52,6 +60,6 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **75w**
-Revue fraîche `apps/web` — voir les pistes 75w+ en pied de
-`docs/analyses/uiux/2026-10-21-iteration-74w.md`.
+## Prochaine itération : **76w**
+Revue fraîche `apps/web` — voir les pistes 76w+ en pied de
+`docs/analyses/uiux/2026-10-24-iteration-75w.md`.
