@@ -15,7 +15,7 @@ import { accentOf } from '@/lib/accent';
 import { titleOf } from '@/lib/view/conversation';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
-import { LensSection } from '@/components/lens-sticker';
+import { LensVirtualSections } from '@/components/lens-virtual-sections';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
 import { useListReorderFlip, useScene } from '@/lib/lens/scene';
@@ -537,7 +537,7 @@ export default function ConversationsScreen() {
   const folds = sections.map((section) =>
     foldOf(section, section.conversations.map((c) => effectiveUnreadOf(c, overrides))),
   );
-  /** Les rangées RÉELLEMENT montées — World Wide et les sections dépliées. */
+  /** Les rangées que la liste PORTE — World Wide et les sections dépliées, montées ou tenues par une cale (#11228). */
   const shownRows = (world === undefined ? 0 : 1) + sections.reduce((sum, section, i) => (folds[i]?.folded === true ? sum : sum + section.conversations.length), 0);
 
   /**
@@ -757,20 +757,10 @@ export default function ConversationsScreen() {
           en-tête par le suivant au lieu de les empiler tous en haut (revue
           #5694 ; voir le doc-comment de `LensSticker`).
         */}
-        {world === undefined ? null : lensRowOf(world)}
-        {sections.map((section, i) => {
-          const fold = folds[i];
-          return (
-          <LensSection
-            key={section.id}
-            id={section.id}
-            {...(section.category === undefined ? {} : { category: section.category })}
-            {...(fold === undefined ? {} : { fold })}
-          >
-            {fold?.folded === true ? null : section.conversations.map((c) => lensRowOf(c))}
-          </LensSection>
-          );
-        })}
+        {/* LA FENÊTRE (#11228) — seules les rangées visibles sont montées ; des
+            cales gardent la hauteur des autres, donc le collant, la sentinelle
+            et la position de défilement restaurée au retour. */}
+        <LensVirtualSections frame={frame} world={world} sections={sections} folds={folds} rowOf={lensRowOf} />
         {/*
           LE PIED DE PAGINATION (#6195) — APRÈS les sections, AVANT les états
           vides (miroir iOS `ConversationListView.swift:1851` →

@@ -88,6 +88,7 @@ import { checkLensRowMetaRest } from './lib/check-lens-row-meta.mjs';
 import { checkRowMenuMore } from './lib/check-row-menu-more.mjs';
 import { reportFailures } from './lib/ci-annotation.mjs';
 import { awaitCondition } from './lib/await-fact.mjs';
+import { revealRow, sweepRows } from './lib/reveal-row.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -316,6 +317,8 @@ check((await page.$('[role="menu"]')) === null, 'Échap referme réellement le m
  *  bouton au repos (`pointer-events: none` tant qu'il est invisible), et c'est
  *  voulu : un bouton transparent ne doit pas voler le clic de sa rangée. */
 const openMenu = async (row) => {
+  /* La liste est virtualisée (#11228) : la rangée doit être à l'écran pour être dans le document. */
+  await revealRow(page, row);
   await page.evaluate((r) => document.querySelector(`[data-row="${r}"] button[aria-label="Actions de conversation"]`)?.focus(), row);
   await page.keyboard.press('Enter');
   await page.waitForSelector('[role="menu"]');
@@ -500,13 +503,16 @@ await tapChip('pinned');
 
 /* LES TYPES S'ADDITIONNENT : « Personnel + Ouvertes » rend les directs ET les
    publiques, jamais leur intersection vide. */
+/* Relevées par un PARCOURS de la liste : elle est virtualisée (#11228), une
+   union plus longue que l'écran n'en monte qu'une part. */
+const sweptIds = async () => (await sweepRows(page)).map((row) => row.id);
 await tapChip('personal');
-const personal = await rowIds(page);
+const personal = await sweptIds();
 await tapChip('personal');
 await tapChip('open');
-const open = await rowIds(page);
+const open = await sweptIds();
 await tapChip('personal');
-const both = await rowIds(page);
+const both = await sweptIds();
 check(
   personal.length > 0 && open.length > 0 && both.length === personal.length + open.length && (await pressed('personal')) && (await pressed('open')),
   `« Personnel + Ouvertes » rend l’union (${personal.length} + ${open.length} ⇒ ${both.length})`,
@@ -516,9 +522,9 @@ check(
    pour que le croisement ait quelque chose à retenir. */
 const marked = both[0];
 await act(marked, 'Non lu');
-const unreadExpected = await page.$$eval('[data-row]', (els) => els.filter((el) => el.querySelector('[data-unread]') !== null).map((el) => el.dataset.row));
+const unreadExpected = (await sweepRows(page)).filter((row) => row.unread).map((row) => row.id);
 await tapChip('unread');
-const unreadAmong = await rowIds(page);
+const unreadAmong = await sweptIds();
 check(
   unreadExpected.includes(marked) && unreadAmong.length < both.length && JSON.stringify([...unreadAmong].sort()) === JSON.stringify([...unreadExpected].sort()),
   `« Non lus » croise les types posés (${JSON.stringify(unreadAmong)} attendu ${JSON.stringify(unreadExpected)})`,

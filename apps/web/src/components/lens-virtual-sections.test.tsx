@@ -194,7 +194,7 @@ describe('LensVirtualSections — la liste ne monte que les rangées visibles', 
     });
     expect(document.activeElement).toBe(primaryOf('c-005'));
     act(() => primaryOf('c-005').blur());
-    rowRoving.release('c-005');
+    act(() => rowRoving.release('c-005'));
   });
 
   test('Fin mène à la dernière conversation, même hors fenêtre', async () => {
@@ -205,7 +205,7 @@ describe('LensVirtualSections — la liste ne monte que les rangées visibles', 
     });
     expect(document.activeElement).toBe(primaryOf('c-499'));
     act(() => primaryOf('c-499').blur());
-    rowRoving.release('c-499');
+    act(() => rowRoving.release('c-499'));
   });
 
   test('l’appui long ouvre l’aperçu sur une rangée virtualisée', async () => {

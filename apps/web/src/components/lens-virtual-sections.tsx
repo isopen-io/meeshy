@@ -1,0 +1,104 @@
+import { useSyncExternalStore, type ReactElement, type RefObject } from 'react';
+
+import type { Conversation } from '@/lib/api/types';
+import { SCENE_OVERSCAN_PX } from '@/lib/lens/scene';
+import type { LensSection as LensSectionData } from '@/lib/lens/sections';
+import { keptRowIds, rowSlices, type RowRange } from '@/lib/view/row-window';
+import { rowRoving } from '@/lib/view/row-roving';
+import { ROW_ANCHOR_ATTRIBUTE, useRowWindows } from '@/lib/view/use-row-windows';
+
+import { ROW_HEIGHT } from './lens-row';
+import { LensSection, type LensSectionFold } from './lens-sticker';
+
+/**
+ * LES SECTIONS DE LA LENTILLE, VIRTUALISÉES (#11228) — chaque section garde
+ * son bloc, son en-tête collant et son pliage (`LensSection`) ; seules ses
+ * RANGÉES passent par une fenêtre (`lib/view/row-window.ts`). Le bloc n'est
+ * pas touché parce que c'est lui qui BORNE le collant : un en-tête chasse le
+ * suivant parce que sa section a sa vraie hauteur — les cales la lui gardent.
+ *
+ * World Wide, posée au-dessus des sections (#10004), reste montée : une seule
+ * rangée, toujours en tête.
+ *
+ * Ce qui ne régresse pas, et pourquoi :
+ *  - la perspective et le glissement d'une remontée (`useScene`,
+ *    `useListReorderFlip`) suivaient déjà les rangées par `[data-row]` et un
+ *    `MutationObserver` : une rangée montée par la fenêtre y entre d'elle-même ;
+ *  - le parcours au clavier (#11227) lit les rangées MONTÉES : la fenêtre
+ *    retient l'arrêt, ses voisines et les deux bouts (`keptRowIds`) ;
+ *  - l'aperçu d'un appui long (#11211) vit dans la rangée : son focus passe
+ *    par elle, elle tient donc l'arrêt, donc elle reste montée.
+ */
+
+/** La réserve de chaque côté, au-delà de la marge de la perspective — six rangées. */
+export const WINDOW_RESERVE_ROWS = 6;
+
+type Props = {
+  readonly frame: RefObject<HTMLElement | null>;
+  readonly world?: Conversation | undefined;
+  readonly sections: readonly LensSectionData[];
+  readonly folds: readonly (LensSectionFold | undefined)[];
+  readonly rowOf: (conversation: Conversation) => ReactElement;
+};
+
+const gapKey = (at: number): string => `gap:${at}`;
+
+function windowedRows(input: {
+  readonly items: readonly Conversation[];
+  readonly range: RowRange;
+  readonly kept: ReadonlySet<string>;
+  readonly anchor: string;
+  readonly rowOf: (conversation: Conversation) => ReactElement;
+}): readonly ReactElement[] {
+  const { items, range, kept, anchor, rowOf } = input;
+  const keep = items.flatMap((conversation, index) => (kept.has(conversation.id) ? [index] : []));
+  return rowSlices({ count: items.length, range, keep }).flatMap((slice) =>
+    slice.kind === 'rows'
+      ? items.slice(slice.from, slice.to).map(rowOf)
+      : [
+          <li
+            key={gapKey(slice.at)}
+            {...(slice.at === 0 ? { [ROW_ANCHOR_ATTRIBUTE]: anchor } : {})}
+            data-row-gap=""
+            aria-hidden="true"
+            style={{ height: slice.rows * ROW_HEIGHT, flexShrink: 0 }}
+          />,
+        ],
+  );
+}
+
+export function LensVirtualSections({ frame, world, sections, folds, rowOf }: Props) {
+  const open = sections.filter((_, i) => folds[i]?.folded !== true);
+  const blocks = open.map((section) => ({ id: section.id, count: section.conversations.length }));
+  const active = useSyncExternalStore(rowRoving.subscribe, rowRoving.snapshot, () => null);
+  const order = [...(world === undefined ? [] : [world.id]), ...open.flatMap((section) => section.conversations.map((c) => c.id))];
+  const kept = keptRowIds({ order, active });
+  const rangeOf = useRowWindows({ frame, blocks, rowHeight: ROW_HEIGHT, marginPx: SCENE_OVERSCAN_PX, extraRows: WINDOW_RESERVE_ROWS });
+
+  return (
+    <>
+      {world === undefined ? null : rowOf(world)}
+      {sections.map((section, i) => {
+        const fold = folds[i];
+        return (
+          <LensSection
+            key={section.id}
+            id={section.id}
+            {...(section.category === undefined ? {} : { category: section.category })}
+            {...(fold === undefined ? {} : { fold })}
+          >
+            {fold?.folded === true
+              ? null
+              : windowedRows({
+                  items: section.conversations,
+                  range: rangeOf({ id: section.id, count: section.conversations.length }),
+                  kept,
+                  anchor: section.id,
+                  rowOf,
+                })}
+          </LensSection>
+        );
+      })}
+    </>
+  );
+}
