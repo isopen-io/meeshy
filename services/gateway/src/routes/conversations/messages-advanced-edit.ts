@@ -30,12 +30,14 @@ import {
   isEditRefused,
   describeEditRefusalForSocket,
   editRefusalCode,
+  isContentEditRefusal,
   editAttributionOf,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../../services/messaging/messageEditAdmission';
 import { editAttributionReaderOf } from '../../services/messaging/editAttributionReader';
 import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
+import { attachmentProtectionSelect } from '../../services/attachments/attachmentIncludes';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import {
   admitEditedContent,
@@ -195,7 +197,8 @@ export function registerEditMessagePutRoute(
             // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
             // colonnes sur une lecture déjà là : aucun aller-retour de plus.
             conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
-            attachments: { select: { id: true } }
+            // #12792 — la protection PROPRE de chaque pièce, lue par `admitMessageEdit`.
+            attachments: { select: { id: true, mimeType: true, ...attachmentProtectionSelect } }
           }
         })
       );
@@ -220,6 +223,11 @@ export function registerEditMessagePutRoute(
           createdAt: existingMessage.createdAt,
           messageType: existingMessage.messageType,
           metadata: existingMessage.metadata,
+          isViewOnce: existingMessage.isViewOnce,
+          effectFlags: existingMessage.effectFlags,
+          isEncrypted: existingMessage.isEncrypted,
+          encryptionMode: existingMessage.encryptionMode,
+          attachments: existingMessage.attachments,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err),
       });
@@ -231,8 +239,11 @@ export function registerEditMessagePutRoute(
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (admission.reason === 'end-to-end-encrypted') {
+        if (editRefusalCode(admission.reason)) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
+        }
+        if (isContentEditRefusal(admission.reason)) {
+          return sendForbidden(reply, describeEditRefusalForSocket(admission.reason));
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
@@ -642,7 +653,8 @@ export function registerEditMessagePatchRoute(
               },
               // Sans elles, la garde de vacuité ne peut pas trancher : c'est la
               // pièce jointe qui autorise un texte vide (retrait de légende).
-              attachments: { select: { id: true } }
+              // #12792 — et leur protection PROPRE, lue par `admitMessageEdit`.
+              attachments: { select: { id: true, mimeType: true, ...attachmentProtectionSelect } }
             }
           })
       );
@@ -674,6 +686,11 @@ export function registerEditMessagePatchRoute(
           createdAt: message.createdAt,
           messageType: message.messageType,
           metadata: message.metadata,
+          isViewOnce: message.isViewOnce,
+          effectFlags: message.effectFlags,
+          isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode,
+          attachments: message.attachments,
         },
         onError: (err) => logger.error('Patch edit - admission lookup failed', err),
       });
@@ -682,8 +699,11 @@ export function registerEditMessagePatchRoute(
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (admission.reason === 'end-to-end-encrypted') {
+        if (editRefusalCode(admission.reason)) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
+        }
+        if (isContentEditRefusal(admission.reason)) {
+          return sendForbidden(reply, describeEditRefusalForSocket(admission.reason));
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });

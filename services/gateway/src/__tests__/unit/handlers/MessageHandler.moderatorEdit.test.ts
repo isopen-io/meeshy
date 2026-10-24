@@ -134,7 +134,7 @@ const MESSAGE_ID = 'aabbccddee1122334455aabb';
 const AUTHOR = { id: 'user-1', participantId: 'participant-1' };
 const MODERATOR = { id: 'user-mod', participantId: 'participant-mod' };
 
-function setup(editor: { readonly id: string; readonly participantId: string }, globalRole: string) {
+function setup(editor: { readonly id: string; readonly participantId: string }, globalRole: string, previously: Record<string, unknown> = {}) {
   const user = { id: editor.id, userId: editor.id, participantId: editor.participantId, socketId: 'socket-1', isAnonymous: false, language: 'fr', resolvedLanguages: ['fr'], displayName: 'X' };
   mockGetConnectedUser.mockReturnValue({ user });
   mockValidateSocketEvent.mockReturnValue({ success: true, data: { messageId: MESSAGE_ID, content: 'après' } });
@@ -154,6 +154,7 @@ function setup(editor: { readonly id: string; readonly participantId: string }, 
         conversation: { isActive: true, closedAt: null, type: 'group', encryptionMode: null },
         sender: { id: AUTHOR.participantId, userId: AUTHOR.id, displayName: 'Alice', avatar: null, role: 'member' },
         attachments: [],
+        ...previously,
       })),
       updateMany: jest.fn(async () => ({ count: 1 })),
       findUnique: jest.fn(async () => null),
@@ -225,4 +226,28 @@ describe('socket `message:edit` — #11375, la modification par un modérateur e
     expect(prisma.message.updateMany).not.toHaveBeenCalled();
     expect(edited()).toBeUndefined();
   });
+});
+
+describe('socket `message:edit` — #12792, le contenu que la loi déclare non modifiable ne se réécrit pas', () => {
+  const REFUSED = [
+    ['à vue unique', MODERATOR, 'MODERATOR', { isViewOnce: true }, undefined],
+    ['dont la pièce jointe est à vue unique', MODERATOR, 'MODERATOR', { attachments: [{ id: 'att-1', mimeType: 'image/jpeg', isViewOnce: true, isBlurred: false, effectFlags: 0 }] }, undefined],
+    ['système', MODERATOR, 'ADMIN', { messageType: 'system', messageSource: 'system' }, undefined],
+    ['résumé d’appel, par son propre auteur', AUTHOR, 'USER', { messageType: 'system', messageSource: 'system', metadata: { kind: 'call' } }, undefined],
+    ['à vue unique, par son propre auteur', AUTHOR, 'USER', { isViewOnce: true }, undefined],
+    ['chiffré', MODERATOR, 'BIGBOSS', { isEncrypted: true }, 'E2EE_PLAINTEXT_REFUSED'],
+  ] as const;
+
+  for (const [label, editor, role, previously, code] of REFUSED) {
+    it(`le message ${label} est refusé et rien n’est écrit ni diffusé`, async () => {
+      const { handler, prisma, socket, edited } = setup(editor, role, previously);
+      const callback = jest.fn();
+
+      await handler.handleMessageEdit(socket, { messageId: MESSAGE_ID, content: 'après' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, ...(code ? { code } : {}) }));
+      expect(prisma.message.updateMany).not.toHaveBeenCalled();
+      expect(edited()).toBeUndefined();
+    });
+  }
 });

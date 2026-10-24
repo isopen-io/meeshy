@@ -2,7 +2,7 @@
  * CE QU'UN LECTEUR PEUT FAIRE D'UN MESSAGE (#11205) — loi PURE des clients,
  * `now` injecté. Elle reprend `admitMessageEdit`, `admitMessageDelete` et
  * `admitConversationWriteFor`, qui font foi : elle n'offre jamais ce qu'ils
- * refusent, et peut offrir MOINS (E2EE, vue unique, message système) — tenu
+ * refusent, et peut offrir MOINS — tenu
  * par `action-policy-parity.test.ts` (passerelle) sur `fixtures/action-policy/`.
  * Rôle de plateforme comparé EXACTEMENT, comme la passerelle (AUDIT, ANALYST,
  * inconnu et minuscules ne modèrent pas) ; rang de conversation exact, inconnu
@@ -210,10 +210,22 @@ function contextOf(input: MessageActionInput): Context {
   };
 }
 
+/** Ce que le CONTENU d'un message refuse à toute édition, quel que soit l'éditeur (auteur, modérateur, rang). */
+export type EditContentRefusal = 'view-once' | 'encrypted-message' | 'not-editable-kind';
+
+/**
+ * Le message, PAR SON CONTENU, se modifie-t-il ? `null` : oui. Un site UNIQUE pour deux lecteurs —
+ * `editVerdict` ne l'offre pas, `admitMessageEdit` (passerelle) le refuse sur ses quatre transports (#12792).
+ */
+export function editContentRefusal(content: MessageContentShape): EditContentRefusal | null {
+  if (content.flags.viewOnce) return 'view-once';
+  if (content.flags.encrypted) return 'encrypted-message';
+  return EDITABLE_KINDS.has(content.kind) ? null : 'not-editable-kind';
+}
+
 /** `admitMessageEdit` — auteur 24 h, rôle global au-delà ou sur autrui — plus les refus propres au client. */
 function editVerdict(ctx: Context): EditVerdict | null {
-  const { flags } = ctx.content;
-  const offered = ctx.live && ctx.registered && ctx.hasText && EDITABLE_KINDS.has(ctx.content.kind) && !ctx.e2ee && !flags.viewOnce;
+  const offered = ctx.live && ctx.registered && ctx.hasText && editContentRefusal(ctx.content) === null && !ctx.e2ee;
   if (!offered || conversationIsClosed(ctx.conversation)) return null;
   if (ctx.conversation.type === GLOBAL_CONVERSATION_TYPE && ctx.viewer.isDeclaredMinor) return null;
   if (!ctx.isAuthor) return ctx.viewer.isActiveMember && platformModerates(ctx.viewer) ? { asModerator: true, windowEndsAt: null } : null;

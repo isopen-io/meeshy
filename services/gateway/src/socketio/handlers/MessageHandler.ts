@@ -763,6 +763,8 @@ export class MessageHandler {
               // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
               // `location`.
               metadata: true,
+              // #12792 — lus par `admitMessageEdit` (vue unique, chiffré) ; les pièces par `attachmentSocketSelect`.
+              isViewOnce: true, effectFlags: true, isEncrypted: true, encryptionMode: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
               // #7014 — `attachmentSocketSelect`, jamais `attachmentMediaSelect`
               // nu : ce que cette requête charge repart par
@@ -780,14 +782,10 @@ export class MessageHandler {
         return;
       }
 
-      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
-      // (`services/messaging/messageEditAdmission`). Cette garde vivait ici
-      // dépliée, et les trois entrées REST en portaient chacune une variante
-      // différente. Le privilège de contournement est un rôle GLOBAL
-      // (`User.role`), JAMAIS le `Participant.role` minuscule qu'expose
-      // `message.sender.role` — confondre les deux avait déjà produit un bypass
-      // mort. L'unité garde ses lectures paresseuses : l'auteur dans sa fenêtre
-      // n'en déclenche aucune.
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand » (`messageEditAdmission`), jadis déplié ici
+      // et varié sur les trois entrées REST. Le privilège est un rôle GLOBAL (`User.role`), JAMAIS le
+      // `Participant.role` minuscule de `message.sender.role` — leur confusion avait produit un bypass mort.
+      // Lectures paresseuses : l'auteur dans sa fenêtre n'en déclenche aucune.
       const admission = await admitMessageEdit({
         prisma: this.prisma,
         editorUserId: userId,
@@ -796,6 +794,8 @@ export class MessageHandler {
           conversationId: message.conversationId,
           conversation: message.conversation,
           createdAt: message.createdAt, messageType: message.messageType, metadata: message.metadata,
+          isViewOnce: message.isViewOnce, effectFlags: message.effectFlags, isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode, attachments: message.attachments,
         },
         onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
       });

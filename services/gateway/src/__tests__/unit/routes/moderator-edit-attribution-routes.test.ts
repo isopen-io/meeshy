@@ -156,9 +156,9 @@ function buildPrisma(editor: Editor, previously: Record<string, unknown>) {
   return {
     message: {
       findFirst: jest.fn<any>(async () => ({
+        attachments: [],
         ...row,
         sender,
-        attachments: [],
         conversation: { id: CONV_ID, isActive: true, closedAt: null, type: 'group', encryptionMode: null },
       })),
       updateMany: jest.fn<any>(async ({ data }: any) => {
@@ -325,4 +325,88 @@ describe('#12792 — la citation d’un message modifié par un modérateur ne p
     expect(wire).not.toContain('thirdPartyEditorRole');
     expect(wire).not.toContain('BIGBOSS');
   });
+});
+
+/**
+ * Constat de l'audit adversarial de #12792 : la loi d'actions partagée
+ * (`editContentRefusal`, `message-action-policy.ts`) n'offre « Modifier » ni sur
+ * un message à vue unique, ni sur un avis système ou d'appel, ni sur un message
+ * chiffré — et la passerelle, qui fait foi, ne lisait aucune de ces colonnes.
+ * Depuis que #11375 ouvre la porte du modérateur sur le message d'autrui, l'API
+ * directe lui laissait réécrire exactement ce que l'interface lui cache.
+ */
+describe('#12792 — le contenu que la loi déclare non modifiable ne se réécrit sur aucun transport', () => {
+  beforeEach(() => mockBroadcastMessageMutation.mockClear());
+
+  const FORBIDDEN_CASES = [
+    ['à vue unique', { isViewOnce: true }],
+    ['dont la pièce jointe est à vue unique', { attachments: [{ id: 'att-1', mimeType: 'image/jpeg', isViewOnce: true, isBlurred: false, effectFlags: 0 }] }],
+    ['système', { messageType: 'system', messageSource: 'system' }],
+    ['résumé d’appel', { messageType: 'system', messageSource: 'system', metadata: { kind: 'call' } }],
+    ['de lieu', { metadata: { location: { latitude: 48.85, longitude: 2.35 } } }],
+  ] as const;
+
+  const ENCRYPTED_CASES = [
+    ['chiffré (isEncrypted) dans une conversation non e2ee', { isEncrypted: true }],
+    ['chiffré de bout en bout (encryptionMode du message)', { encryptionMode: 'e2ee' }],
+  ] as const;
+
+  for (const transport of TRANSPORTS) {
+    describe(transport.name, () => {
+      for (const [label, previously] of FORBIDDEN_CASES) {
+        it(`un MODERATOR de plateforme ne réécrit pas le message ${label} d’autrui (403)`, async () => {
+          const { app, prisma } = await buildApp(PLATFORM_MODERATOR, previously as Record<string, unknown>);
+          const res = await transport.inject(app);
+          await app.close();
+
+          expect(res.statusCode).toBe(403);
+          expect(prisma.message.update).not.toHaveBeenCalled();
+          expect(prisma.message.updateMany).not.toHaveBeenCalled();
+        });
+      }
+
+      for (const [label, previously] of ENCRYPTED_CASES) {
+        it(`un MODERATOR de plateforme ne réécrit pas en clair le message ${label} (400, E2EE_PLAINTEXT_REFUSED)`, async () => {
+          const { app, prisma } = await buildApp(PLATFORM_MODERATOR, previously as Record<string, unknown>);
+          const res = await transport.inject(app);
+          await app.close();
+
+          expect(res.statusCode).toBe(400);
+          expect(res.json()).toMatchObject({ code: 'E2EE_PLAINTEXT_REFUSED' });
+          expect(prisma.message.update).not.toHaveBeenCalled();
+          expect(prisma.message.updateMany).not.toHaveBeenCalled();
+        });
+      }
+
+      it('l’AUTEUR non plus ne réécrit pas son propre message à vue unique dans sa fenêtre de 24 h', async () => {
+        const { app, prisma } = await buildApp(AUTHOR, { isViewOnce: true });
+        const res = await transport.inject(app);
+        await app.close();
+
+        expect(res.statusCode).toBe(403);
+        expect(prisma.message.update).not.toHaveBeenCalled();
+        expect(prisma.message.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('l’AUTEUR non plus ne réécrit pas le résumé d’appel qu’il porte', async () => {
+        const { app, prisma } = await buildApp(AUTHOR, { messageType: 'system', messageSource: 'system', metadata: { kind: 'call' } });
+        const res = await transport.inject(app);
+        await app.close();
+
+        expect(res.statusCode).toBe(403);
+        expect(prisma.message.update).not.toHaveBeenCalled();
+        expect(prisma.message.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('un message à pièce jointe ordinaire (ni vue unique, ni chiffré) reste modifiable par le modérateur', async () => {
+        const { app } = await buildApp(PLATFORM_MODERATOR, {
+          attachments: [{ id: 'att-1', mimeType: 'image/jpeg', isViewOnce: false, isBlurred: true, effectFlags: 0 }],
+        });
+        const res = await transport.inject(app);
+        await app.close();
+
+        expect(res.statusCode).toBe(200);
+      });
+    });
+  }
 });
