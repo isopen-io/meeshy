@@ -56,6 +56,12 @@ export type StoryRailSelfEntry = {
    * ne laisse passer.
    */
   readonly avatar: string | undefined;
+  /**
+   * **MON NOM** (#12571) — d'où viennent MES initiales quand je n'ai pas de
+   * photo (`StoryTrayView.swift:299-306` : `userName`). `undefined` ⇒ la tuile
+   * rend « ? », jamais les lettres de son libellé « ma story ».
+   */
+  readonly displayName: string | undefined;
 };
 
 /**
@@ -88,6 +94,8 @@ export function selfRailEntry(options: {
    * quand je n'ai RIEN publié — auquel cas il n'y a aucun groupe à interroger.
    */
   readonly avatar?: string | undefined;
+  /** Mon nom, tel que la session le sert (`Viewer.displayName`, #12571). */
+  readonly displayName?: string | undefined;
   readonly groups: readonly StoryTrayGroup[];
   readonly moods: readonly StatusMoodPost[];
   /** L'INSTANT auquel juger l'expiration (#6149) — injecté, jamais lu ici
@@ -108,6 +116,7 @@ export function selfRailEntry(options: {
        `resolveParticipantAvatar`) : les deux rangs sont donnés dans l'ordre,
        et une chaîne BLANCHE ne masque pas le rang suivant. */
     avatar: participantAvatarOf({ avatar: options.avatar }) ?? participantAvatarOf(mien?.author),
+    displayName: [options.displayName, mien?.author?.displayName, mien?.author?.username].map((name) => name?.trim()).find((name) => name !== undefined && name !== ''),
   };
 }
 

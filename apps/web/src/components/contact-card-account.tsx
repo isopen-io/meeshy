@@ -69,7 +69,6 @@ export function ContactAccountRow({
   readonly onAction: (action: ContactAction, account: PublicContactAccount) => void;
 }) {
   const view = contactRelationView(account.relation);
-  const accent = authorAccentColor(account.userId, account.displayName);
   const full = variant === 'full';
 
   return (
