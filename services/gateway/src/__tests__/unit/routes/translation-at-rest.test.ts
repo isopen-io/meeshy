@@ -87,7 +87,7 @@ function prismaWith(store: Store, row: Record<string, unknown>) {
 
 async function blockingApp(prisma: PrismaClient) {
   const translationService = {
-    handleNewMessage: jest.fn(async () => ({ messageId: MSG_ID })),
+    handleNewMessage: jest.fn(async (..._args: unknown[]) => ({ messageId: MSG_ID })),
     getTranslation: jest.fn(async () => ({
       translatedText: 'The door code is 4471', sourceLanguage: 'fr', targetLanguage: 'en', confidenceScore: 1, processingTime: 0, modelType: 'basic',
     })),
@@ -105,7 +105,7 @@ async function blockingApp(prisma: PrismaClient) {
 }
 
 async function nonBlockingApp(prisma: PrismaClient) {
-  const translationService = { handleNewMessage: jest.fn(async () => ({ messageId: MSG_ID })) };
+  const translationService = { handleNewMessage: jest.fn(async (..._args: unknown[]) => ({ messageId: MSG_ID })) };
   const app: FastifyInstance = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
   app.decorate('translationService', translationService);

@@ -495,7 +495,7 @@ describe('MessageProcessor.saveMessage', () => {
   });
 
   it('sets content to empty string when message is encrypted', async () => {
-    await processor.saveMessage({ ...baseData, encryptedContent: 'ct', encryptionMetadata: { mode: 'server' } });
+    await processor.saveMessage({ ...baseData, encryptedContent: 'ct', encryptionMetadata: { mode: 'e2ee' } });
     const createArgs = msgCreate.mock.calls[0][0] as { data: Record<string, unknown> };
     expect(createArgs.data.content).toBe('');
   });

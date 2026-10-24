@@ -116,7 +116,14 @@ describe('parité des actions sur un message — admitMessageEdit / admitMessage
       message: {
         authorUserId: message.authorUserId,
         conversationId: CONVERSATION_ID,
-        conversation: { isActive: conversation.isActive, closedAt: conversation.closedAt == null ? null : new Date(conversation.closedAt), type: conversation.type },
+        // Le régime de la conversation voyage aussi : sans lui, la passerelle ne refusait jamais
+        // l'édition d'un message server/hybrid ici, et la divergence de la loi restait verte (#11381).
+        conversation: {
+          isActive: conversation.isActive,
+          closedAt: conversation.closedAt == null ? null : new Date(conversation.closedAt),
+          type: conversation.type,
+          encryptionMode: conversation.encryptionMode ?? null,
+        },
         createdAt: message.createdAt == null ? null : new Date(message.createdAt),
         messageType: message.messageType,
         metadata: message.metadata,

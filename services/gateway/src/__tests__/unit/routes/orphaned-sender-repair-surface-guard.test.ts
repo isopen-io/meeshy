@@ -153,7 +153,8 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // dans `deliverTextTranslation.ts` (déclaré juste en dessous) — sa lecture
   // (`conversationId`, `senderId` scalaire, `createdAt`) a changé de fichier,
   // pas de nature.
-  'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 6, why: DOES_NOT_SELECT_SENDER },
+  // #11381 — la lecture de `translation:request` est partie dans `messaging/atRestTranslationSource.ts`.
+  'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
   'deliverTextTranslation.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -223,6 +224,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // éphémère devait y ajouter. La lecture a changé de fichier, pas de nature.
   'MessageReadStatusService.ts': { kind: 'exempt', reads: 10, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #11381 — le texte à retraduire (colonnes au repos seules, jamais `sender`).
+  'messaging/atRestTranslationSource.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7451 — la fenêtre du gel : `select: { id: true }`, rien d'autre.
   'messaging/freezeMessageStatus.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7740 — anti-répétition de Global : `select: { content: true }`, aucun expéditeur.

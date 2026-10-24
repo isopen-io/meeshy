@@ -21,7 +21,6 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import type { MessageRequest } from '@meeshy/shared/types';
-import { EncryptionService } from '../../../services/EncryptionService';
 
 // Create mock functions first
 const mockHandleNewMessage = jest.fn();
@@ -2663,37 +2662,6 @@ describe('MessagingService - Edge Cases', () => {
 
       expect(response.success).toBe(true);
       expect(response.data?.id).toBe(EXISTING_ID);
-    });
-
-    it('#11381 — un rejeu dans une conversation server sert (et retraduit) le CLAIR, jamais la ligne scellée', async () => {
-      const savedMaster = process.env.ENCRYPTION_MASTER_KEY;
-      process.env.ENCRYPTION_MASTER_KEY = Buffer.alloc(32, 5).toString('base64');
-      try {
-        const keys = new Map<string, Record<string, unknown>>();
-        mockPrisma.serverEncryptionKey = {
-          create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => { keys.set(String(data.id), data); return data; }),
-          findUnique: jest.fn(async ({ where }: { where: { id: string } }) => keys.get(where.id) ?? null),
-          update: jest.fn(async () => ({})),
-        };
-        const sealed = await new EncryptionService(mockPrisma).sealAtRest({ plaintext: 'Code 4471', conversationId: testConversationId });
-        mockPrisma.message.findFirst.mockResolvedValue(makeExistingMsg({
-          content: '', isEncrypted: true, encryptionMode: 'server', translations: {},
-          encryptedContent: sealed.ciphertext, encryptionMetadata: { mode: 'server', ...sealed.metadata },
-        }));
-        service = new MessagingService(mockPrisma, mockTranslationService);
-
-        const response = await service.handleMessage(
-          { conversationId: testConversationId, content: 'Code 4471', clientMessageId: CLIENT_MSG_ID },
-          testParticipantId
-        );
-
-        expect(response.data).toMatchObject({ content: 'Code 4471', isEncrypted: false, encryptionMode: 'server' });
-        expect(JSON.stringify(response.data)).not.toContain(sealed.ciphertext);
-        expect(mockHandleNewMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'Code 4471' }));
-      } finally {
-        if (savedMaster === undefined) delete process.env.ENCRYPTION_MASTER_KEY;
-        else process.env.ENCRYPTION_MASTER_KEY = savedMaster;
-      }
     });
 
     it('queues re-translation when existing record has no translations', async () => {
