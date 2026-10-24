@@ -119,6 +119,13 @@ const PART_ID = '507f1f77bcf86cd799439033';
 const MSG_ID = '507f1f77bcf86cd799439044';
 const CONV_ID = '507f1f77bcf86cd799439022';
 
+const QUOTED = {
+  id: '507f1f77bcf86cd799439099', conversationId: CONV_ID, senderId: PART_ID, content: 'message cité, corrigé',
+  originalLanguage: 'fr', messageType: 'text', createdAt: new Date(), deletedAt: null, isEdited: true,
+  thirdPartyEditorId: '507f1f77bcf86cd7994391ff', thirdPartyEditorRole: 'BIGBOSS',
+  sender: { id: PART_ID, userId: AUTHOR_ID, displayName: 'alice', avatar: null, type: 'user', user: null },
+};
+
 type Editor = { readonly userId: string; readonly globalRole: string };
 
 const AUTHOR: Editor = { userId: AUTHOR_ID, globalRole: 'USER' };
@@ -160,9 +167,9 @@ function buildPrisma(editor: Editor, previously: Record<string, unknown>) {
       }),
       update: jest.fn<any>(async ({ data }: any) => {
         apply(data);
-        return { ...row, sender };
+        return { ...row, sender, replyTo: QUOTED };
       }),
-      findUniqueOrThrow: jest.fn<any>(async () => ({ ...row, sender })),
+      findUniqueOrThrow: jest.fn<any>(async () => ({ ...row, sender, replyTo: QUOTED })),
     },
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue({ id: 'part-editor', conversationId: CONV_ID, user: { role: editor.globalRole } }),
@@ -301,4 +308,21 @@ describe('#11375 — la modification par un modérateur est enregistrée, servie
       });
     });
   }
+});
+
+describe('#12792 — la citation d’un message modifié par un modérateur ne porte ni son id ni son rang', () => {
+  beforeEach(() => mockBroadcastMessageMutation.mockClear());
+
+  it('PUT /conversations/:id/messages/:messageId : l’auteur qui édite SA réponse diffuse la citation sans l’éditeur tiers', async () => {
+    const { app } = await buildApp(AUTHOR);
+    const res = await TRANSPORTS[1].inject(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain(QUOTED.thirdPartyEditorId);
+    const wire = JSON.stringify((editedPayload() as { replyTo?: unknown }).replyTo);
+    expect(wire).not.toContain(QUOTED.thirdPartyEditorId);
+    expect(wire).not.toContain('thirdPartyEditorRole');
+    expect(wire).not.toContain('BIGBOSS');
+  });
 });
