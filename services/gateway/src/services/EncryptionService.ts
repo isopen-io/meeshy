@@ -264,26 +264,35 @@ export class EncryptionService implements AtRestKeyring {
   }
 
   /**
-   * La clé sous laquelle ÉCRIRE dans cette conversation. Une clé désignée qui
-   * ne s'ouvre plus — absente, ou enveloppée sous une ancienne clé maîtresse
-   * (la clé éphémère de développement d'avant #11381) — verrouillerait la
-   * conversation à vie, son chiffrement étant immuable : elle est REMPLACÉE
-   * par une clé neuve, rattachée à la conversation. Les messages d'avant
-   * restent scellés ; ceux d'après passent. Une panne (base injoignable) ne
-   * remplace rien : l'envoi est refusé.
+   * La clé sous laquelle ÉCRIRE dans cette conversation.
+   *
+   * #12822 — FAIL-CLOSED. Une clé qui EXISTE mais que la clé maîtresse présente
+   * ne désenveloppe pas (`unwrap-failed`) ne se remplace JAMAIS : la cause la
+   * plus probable est une `ENCRYPTION_MASTER_KEY` erronée au déploiement, et
+   * remplacer réécrirait chaque conversation sous une clé que la bonne clé
+   * maîtresse n'ouvrira plus, en scellant au passage tout leur historique.
+   * L'envoi est refusé (`SERVER_AT_REST_UNAVAILABLE`, 503) et journalisé en
+   * ERROR, sans aucun secret. Seule une clé ABSENTE de la base (`missing`) est
+   * remplacée par une clé neuve rattachée à la conversation : rien ne pourrait
+   * plus l'ouvrir. Une panne (base injoignable) ne remplace rien non plus.
    */
   private async writableConversationKey(conversationId: string, preferredKeyId: string | null): Promise<{ keyId: string; key: Buffer }> {
     const keyId = preferredKeyId || await this.getOrCreateConversationKey(conversationId);
     const loaded = await this.keyVault.loadKey(keyId);
     if (loaded.status === 'ok') return { keyId, key: loaded.key };
     if (loaded.status === 'unavailable') throw new ServerAtRestUnavailableError('key-unavailable');
+    if (loaded.status === 'unwrap-failed') {
+      logger.error('clé de conversation illisible sous la clé maîtresse présente : envoi refusé, rien n’est remplacé', undefined, {
+        conversationId, keyId, code: 'SERVER_AT_REST_UNAVAILABLE', reason: 'key-unwrap-failed',
+      });
+      throw new ServerAtRestUnavailableError('key-unwrap-failed');
+    }
     const fresh = await this.keyVault.generateKey(conversationId, 'conversation');
     await this.keyVault.setConversationKey(conversationId, fresh.keyId);
-    logger.warn('clé de conversation illisible remplacée : les messages d’avant restent scellés', {
+    logger.warn('clé de conversation absente remplacée : les messages d’avant restent scellés', {
       conversationId, previousKeyId: keyId, nextKeyId: fresh.keyId, reason: loaded.status,
     });
     if (!preferredKeyId) return fresh;
-    await this.keyVault.adoptOrphanKey(conversationId, preferredKeyId);
     const designated = await this.keyVault.redesignate(conversationId, preferredKeyId, fresh.keyId);
     if (designated === fresh.keyId) return fresh;
     const winner = await this.keyVault.getKeyFor(designated, conversationId);

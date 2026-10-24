@@ -67,11 +67,20 @@ serveur », jamais « de bout en bout » (réservé à `e2ee`).
   déclaré `server`/`hybrid`, ou apporté dans une conversation
   `server`/`hybrid`, est refusé à l'admission (400
   `SERVER_AT_REST_CIPHERTEXT_REFUSED`). Aucun client ne l'émet (mesuré).
-- **Une clé de conversation qui ne s'ouvre plus est remplacée**, jamais un
-  verrou à vie : clé désignée absente ou enveloppée sous une ancienne clé
-  maîtresse ⇒ clé neuve rattachée, désignée en compare-et-échange
-  (`redesignate`), l'ancienne rattachée à sa conversation. Les messages
+- **Une clé de conversation ABSENTE de la base est remplacée** : clé neuve
+  rattachée, désignée en compare-et-échange (`redesignate`). Les messages
   d'avant restent scellés. Une panne de base ne remplace rien (503).
+- **Une clé qui EXISTE mais ne se désenveloppe pas n'est JAMAIS remplacée**
+  (second audit, #12822). La cause la plus probable est une
+  `ENCRYPTION_MASTER_KEY` erronée au déploiement (bonne longueur, mauvaise
+  valeur) : remplacer réécrivait chaque conversation sous une clé que la bonne
+  clé maîtresse n'ouvrirait plus, et scellait tout leur historique en silence.
+  L'envoi est refusé (503 `SERVER_AT_REST_UNAVAILABLE`, raison
+  `key-unwrap-failed`), journalisé en ERROR sans secret. Conséquence assumée :
+  une conversation dont la clé a été enveloppée sous une clé maîtresse
+  PERDUE (clé éphémère d'un environnement d'avant #11381) refuse tout envoi
+  jusqu'à un geste d'exploitation explicite — un verrou visible vaut mieux
+  qu'une rotation silencieuse.
 - **Toutes les lectures ouvrent** : le rejeu d'un `clientMessageId` (dédup
   précoce de `MessagingService`), les citations de `message:new` et des deux
   dédups, et la retraduction à la demande (`POST /translate-blocking`,

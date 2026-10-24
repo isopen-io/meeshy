@@ -250,16 +250,6 @@ export class ServerKeyVault {
     return designated ?? nextKeyId;
   }
 
-  /** Rattache à sa conversation une clé d'activation qui ne l'était pas : ses messages restent les siens. */
-  async adoptOrphanKey(conversationId: string, keyId: string): Promise<void> {
-    await this.prisma.serverEncryptionKey.updateMany({
-      where: { id: keyId, conversationId: null },
-      data: { conversationId },
-    }).catch((error: unknown) => logger.warn('Failed to adopt orphan conversation key', { keyId, conversationId, error }));
-    const cached = this.keyCache.get(keyId);
-    if (cached && cached.owner === null) cached.owner = conversationId;
-  }
-
   private rememberDesignation(conversationId: string, keyId: string): void {
     if (this.designationCache.size >= MAX_DESIGNATION_CACHE) {
       const oldest = this.designationCache.keys().next().value;

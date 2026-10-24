@@ -10,13 +10,13 @@
 import { describe, it, expect, jest, beforeEach, afterAll } from '@jest/globals';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 
-const logged: unknown[] = [];
-const record = (...args: unknown[]) => { logged.push(args); };
+const logged: unknown[][] = [];
+const record = (level: string) => (...args: unknown[]) => { logged.push([level, ...args]); };
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
-    child: jest.fn(() => ({ info: record, warn: record, error: record, debug: record, trace: record })),
-    warn: record,
+    child: jest.fn(() => ({ info: record('info'), warn: record('warn'), error: record('error'), debug: record('debug'), trace: record('trace') })),
+    warn: record('warn'),
   },
   performanceLogger: {
     withTiming: jest.fn().mockImplementation((_name: unknown, fn: () => unknown) => fn()),
@@ -239,5 +239,44 @@ describe('la citation d’une réponse sort en clair dès l’envoi', () => {
     expect((served as unknown as { replyTo: Record<string, unknown> }).replyTo).toMatchObject({
       content: 'Rendez-vous 18h', isEncrypted: false, encryptedContent: null, encryptionMetadata: null,
     });
+  });
+});
+
+describe('une clé maîtresse ERRONÉE (bonne longueur) au déploiement', () => {
+  const WRONG_MASTER = Buffer.alloc(32, 99).toString('base64');
+
+  it.each(['server', 'hybrid'] as const)('en %s, l’envoi est REFUSÉ (503) : aucune clé créée, désignation intacte, ERROR sans secret', async (mode) => {
+    const h = harness({ encryptionMode: mode, encryptionEnabledAt: new Date(), serverEncryptionKeyId: null });
+    const designated = await new EncryptionService(h.prisma).getOrCreateConversationKey(CONV_ID);
+    const live = harness({ encryptionMode: mode, encryptionEnabledAt: new Date(), serverEncryptionKeyId: designated });
+    for (const [id, row] of h.keys) live.keys.set(id, row);
+    const keysBefore = live.keys.size;
+
+    process.env.ENCRYPTION_MASTER_KEY = WRONG_MASTER;
+    await expect(send(new MessageProcessor(live.prisma))).rejects.toMatchObject({ code: SERVER_AT_REST_UNAVAILABLE });
+
+    const designationAfter = (await live.prisma.conversation.findUnique({ where: { id: CONV_ID } } as never) as unknown as Regime).serverEncryptionKeyId;
+    expect({ written: live.created.length, keysCreated: live.keys.size - keysBefore, designationKept: designationAfter === designated })
+      .toEqual({ written: 0, keysCreated: 0, designationKept: true });
+    const errors = logged.filter(([level]) => level === 'error');
+    expect(errors.length).toBeGreaterThan(0);
+    const journal = JSON.stringify(logged);
+    expect(journal).not.toContain(WRONG_MASTER);
+    expect(journal).not.toContain(MASTER);
+    expect(journal).not.toContain(String(live.keys.get(designated)?.encryptedKey));
+    expect(journal).not.toContain('4471');
+  });
+
+  it('sans désignation, une clé de conversation du coffre illisible ne se remplace pas non plus', async () => {
+    const h = harness({ encryptionMode: 'server', encryptionEnabledAt: new Date(), serverEncryptionKeyId: null });
+    process.env.ENCRYPTION_MASTER_KEY = WRONG_MASTER;
+    const former = await new EncryptionService(h.prisma).getOrCreateConversationKey(CONV_ID);
+    process.env.ENCRYPTION_MASTER_KEY = MASTER;
+    const service = new EncryptionService(h.prisma);
+    await service.initialize();
+    const keysBefore = h.keys.size;
+
+    await expect(service.sealAtRest({ plaintext: SECRET, conversationId: CONV_ID })).rejects.toMatchObject({ code: SERVER_AT_REST_UNAVAILABLE });
+    expect({ keysCreated: h.keys.size - keysBefore, formerKept: h.keys.has(former) }).toEqual({ keysCreated: 0, formerKept: true });
   });
 });

@@ -55,7 +55,7 @@ export type MasterKeyState =
 export class ServerAtRestUnavailableError extends Error {
   readonly code = SERVER_AT_REST_UNAVAILABLE;
 
-  constructor(readonly reason: MasterKeyAbsence | 'unknown-mode' | 'key-unavailable') {
+  constructor(readonly reason: MasterKeyAbsence | 'unknown-mode' | 'key-unavailable' | 'key-unwrap-failed') {
     super(SERVER_AT_REST_UNAVAILABLE_MESSAGE);
     this.name = 'ServerAtRestUnavailableError';
   }

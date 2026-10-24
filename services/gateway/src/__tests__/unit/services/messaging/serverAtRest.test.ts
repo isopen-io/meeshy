@@ -298,19 +298,19 @@ describe('une clé ne parle que pour SA conversation (oracle de déchiffrement)'
   });
 });
 
-describe('une clé de conversation qui ne s’ouvre plus est REMPLACÉE, jamais un verrou à vie', () => {
-  it('clé désignée enveloppée sous une autre clé maîtresse : l’envoi passe sous une nouvelle clé, désignée à sa place', async () => {
+describe('une clé qui ne s’ouvre PAS n’est jamais remplacée ; une clé ABSENTE l’est', () => {
+  it('clé désignée enveloppée sous une autre clé maîtresse : l’envoi est REFUSÉ, rien n’est créé ni redésigné', async () => {
     const former = withMasterKey(MASTER_B);
-    const lost = await former.getOrCreateConversationKey();
-    store.designated.keyId = lost;
+    const kept = await former.getOrCreateConversationKey();
+    store.designated.keyId = kept;
     const service = withMasterKey(MASTER_A);
+    const keysBefore = store.rows.size;
 
-    const sealed = await service.sealAtRest({ plaintext: SECRET, conversationId: CONVERSATION, preferredKeyId: lost });
+    await expect(service.sealAtRest({ plaintext: SECRET, conversationId: CONVERSATION, preferredKeyId: kept }))
+      .rejects.toMatchObject({ code: SERVER_AT_REST_UNAVAILABLE, reason: 'key-unwrap-failed' });
 
-    expect(sealed.metadata.keyId).not.toBe(lost);
-    expect(store.designations.get(CONVERSATION)).toBe(sealed.metadata.keyId);
-    expect(store.rows.get(sealed.metadata.keyId)?.conversationId).toBe(CONVERSATION);
-    expect(await service.openAtRest({ ...sealed.metadata, ciphertext: sealed.ciphertext }, CONVERSATION)).toBe(SECRET);
+    expect({ designated: store.designations.get(CONVERSATION), keysCreated: store.rows.size - keysBefore, owner: store.rows.get(kept)?.conversationId ?? null })
+      .toEqual({ designated: kept, keysCreated: 0, owner: null });
   });
 
   it('clé désignée absente de la base : même remplacement', async () => {
