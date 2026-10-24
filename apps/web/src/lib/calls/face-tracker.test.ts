@@ -125,3 +125,26 @@ describe('la réduction du navigateur (#9100)', () => {
     expect(closed).toBe(true);
   });
 });
+
+describe('les 478 points du dernier visage (W15, #11321)', () => {
+  const points = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+
+  test('le suiveur expose les points du dernier visage lu, aucun sans eux', async () => {
+    const tracker = createFaceTracker({ detect: async () => [{ boundingBox: { x: 10, y: 10, width: 50, height: 60 }, landmarks: points }] });
+    expect(tracker.landmarks()).toBeNull();
+    tracker.next(source, frame, 0);
+    await flush();
+    expect(tracker.landmarks()).toHaveLength(478);
+  });
+
+  test('un détecteur sans points n’en fait pas apparaître, et un visage perdu les retire', async () => {
+    const tracker = createFaceTracker({ detect: async () => [{ boundingBox: { x: 10, y: 10, width: 50, height: 60 } }] });
+    tracker.next(source, frame, 0);
+    await flush();
+    expect(tracker.landmarks()).toBeNull();
+    const lost = createFaceTracker({ detect: async () => [] });
+    lost.next(source, frame, 0);
+    await flush();
+    expect(lost.landmarks()).toBeNull();
+  });
+});
