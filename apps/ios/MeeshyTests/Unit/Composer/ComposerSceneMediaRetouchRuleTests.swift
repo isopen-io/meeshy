@@ -73,7 +73,8 @@ final class ComposerSceneMediaDeliveryTests: XCTestCase {
             contexte.fill(CGRect(x: 0, y: 0, width: 20, height: 10))
         }
         let id = UUID().uuidString
-        let livre = try XCTUnwrap(await ComposerSceneMediaRetouch.delivery(of: .image(image), objectId: id))
+        let rendu = await ComposerSceneMediaRetouch.delivery(of: .image(image), objectId: id)
+        let livre = try XCTUnwrap(rendu)
         XCTAssertEqual(livre.media.url.deletingPathExtension().lastPathComponent, id)
         XCTAssertEqual(livre.media.mimeType, "image/jpeg")
         XCTAssertTrue(FileManager.default.fileExists(atPath: livre.media.url.path))
@@ -85,7 +86,8 @@ final class ComposerSceneMediaDeliveryTests: XCTestCase {
         let brut = FileManager.default.temporaryDirectory.appendingPathComponent("retouche-\(UUID().uuidString).mov")
         try Data(repeating: 0x2A, count: 64).write(to: brut)
         let id = UUID().uuidString
-        let livre = try XCTUnwrap(await ComposerSceneMediaRetouch.delivery(of: .video(brut), objectId: id))
+        let rendu = await ComposerSceneMediaRetouch.delivery(of: .video(brut), objectId: id)
+        let livre = try XCTUnwrap(rendu)
         XCTAssertFalse(FileManager.default.fileExists(atPath: brut.path), "le rendu de l'exporteur est déplacé, pas copié")
         XCTAssertEqual(livre.media.url.lastPathComponent, "\(id).mov")
         XCTAssertTrue(FileManager.default.fileExists(atPath: livre.media.url.path))
