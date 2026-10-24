@@ -65,7 +65,7 @@ struct ConversationPreviewLine: View {
         receipts: EphemeralReceiptRecording = EphemeralReceiptLedger.shared
     ) -> ConversationPreview {
         let input = ConversationPreviewInput(
-            conversation: conversation,
+            conversation: servedSource(of: conversation),
             viewerId: viewerId,
             language: strings.language.rawValue,
             preferredLanguages: preferredLanguages,
@@ -73,6 +73,22 @@ struct ConversationPreviewLine: View {
             receivedAt: receivedAt(of: conversation, now: now, receipts: receipts)
         )
         return ConversationPreviewComposer.compose(input, strings: strings)
+    }
+
+    /// Le dernier message est-il arrivé EN CLAIR dans une conversation chiffrée
+    /// (`EndToEndPlaintextLaw`, #11380) ? La ligne le marque, comme le fil.
+    nonisolated static func isUnencrypted(_ conversation: Conversation) -> Bool {
+        EndToEndPlaintextLaw.lastMessageStanding(of: conversation).isUnencrypted
+    }
+
+    /// La conversation telle que le composeur la lit : un dernier message
+    /// arrivé en clair dans une conversation chiffrée n'y emporte aucune
+    /// traduction du serveur — la ligne sert son texte, marqué.
+    nonisolated static func servedSource(of conversation: Conversation) -> Conversation {
+        guard isUnencrypted(conversation) else { return conversation }
+        var source = conversation
+        source.lastMessageTranslations = nil
+        return source
     }
 
     /// La réception locale du dernier message quand c'est un éphémère REÇU —
@@ -107,7 +123,9 @@ struct ConversationPreviewLine: View {
             strings: strings
         )
         guard preview.kind != .empty else { return nil }
-        return spokenText(preview, strings: strings)
+        let spoken = spokenText(preview, strings: strings)
+        guard isUnencrypted(conversation) else { return spoken }
+        return "\(UnencryptedMessageCopy.notice), \(spoken)"
     }
 
     /// Sans la notation (#7871) : VoiceOver dit « un mot », jamais
@@ -179,6 +197,9 @@ struct ConversationPreviewLine: View {
         let glyph = Self.symbol(for: preview.icon).map { symbol -> Text in
             Text(Image(systemName: symbol)).foregroundColor(iconColor(preview)) + Text(" ")
         } ?? Text("")
+        let unencrypted = Self.isUnencrypted(conversation)
+            ? Text(Image(systemName: UnencryptedMessageCopy.symbol)) + Text(" ")
+            : Text("")
         let direction = preview.direction.map { direction -> Text in
             Text(Image(systemName: direction == .outgoing ? "arrow.up.right" : "arrow.down.left"))
                 .foregroundColor(toneColor(preview.tone)) + Text(" ")
@@ -186,7 +207,7 @@ struct ConversationPreviewLine: View {
         let content = segmentsText(preview.segments, at: now)
             .foregroundColor(toneColor(preview.tone))
         let styledBody = Self.isItalic(preview) ? content.italic() : content
-        return (author + glyph + direction + styledBody).font(font)
+        return (author + unencrypted + glyph + direction + styledBody).font(font)
     }
 
     /// Le corps de la ligne. Dans la dernière minute d'un éphémère, son

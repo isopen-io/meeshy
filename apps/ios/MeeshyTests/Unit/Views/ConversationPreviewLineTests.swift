@@ -36,6 +36,43 @@ final class ConversationPreviewLineTests: XCTestCase {
         XCTAssertEqual(entries.count, 1, "une ligne déjà expirée recompose une fois, puis plus jamais")
     }
 
+    // MARK: - Un dernier message en clair dans une conversation chiffrée (#11380)
+
+    private func conversation(mode: String?) -> Conversation {
+        var conversation = Conversation(
+            id: "c1", identifier: "c1", encryptionMode: mode,
+            lastMessagePreview: "Envoie-moi le code",
+            lastMessageId: "m1",
+            lastMessageSenderName: "Bob",
+            lastMessageSenderUserId: "u-bob"
+        )
+        conversation.lastMessageNature = LastMessageNature(messageType: "text")
+        conversation.lastMessageTranslations = ["fr": "Tout va bien"]
+        conversation.lastMessageOriginalLanguage = "en"
+        return conversation
+    }
+
+    private func line(_ conversation: Conversation) -> String {
+        ConversationPreviewLine.preview(
+            for: conversation, viewerId: "me", preferredLanguages: ["fr"], now: start, strings: strings()
+        ).segments.map(\.text).joined(separator: " ")
+    }
+
+    func test_preview_plaintextInEndToEnd_isFlaggedAndServesNoServerTranslation() {
+        let encrypted = conversation(mode: "e2ee")
+
+        XCTAssertTrue(ConversationPreviewLine.isUnencrypted(encrypted))
+        XCTAssertTrue(line(encrypted).contains("Envoie-moi le code"))
+        XCTAssertFalse(line(encrypted).contains("Tout va bien"), "une traduction du serveur peut dire autre chose")
+    }
+
+    func test_preview_conversationWithoutEndToEnd_keepsThePrism() {
+        let plain = conversation(mode: nil)
+
+        XCTAssertFalse(ConversationPreviewLine.isUnencrypted(plain))
+        XCTAssertTrue(line(plain).contains("Tout va bien"))
+    }
+
     // MARK: - L'iconographie
 
     func test_everyComposerIcon_hasItsSymbol() {

@@ -47,9 +47,9 @@ struct ConversationOverlayMenu: View {
             onEdit: { actions.beginEdit(msg) },
             onReply: { actions.reply(msg) },
             onRetry: { Task { await viewModel.retryMessage(messageId: msg.id) } },
-            textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+            textTranslations: UnencryptedMessageGate.translations(of: msg, in: viewModel),
             transcription: viewModel.messageTranscriptions[msg.id],
-            translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+            translatedAudios: UnencryptedMessageGate.translatedAudios(of: msg, in: viewModel),
             threadLanguage: threadLanguage,
             onReact: { emoji in
                 viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
@@ -66,7 +66,7 @@ struct ConversationOverlayMenu: View {
             },
             onSelect: { actions.beginSelection(msg.id) },
             isDirect: isDirect,
-            preferredTranslation: viewModel.preferredTranslation(for: msg.id),
+            preferredTranslation: UnencryptedMessageGate.preferredTranslation(of: msg, in: viewModel),
             mentionDisplayNames: viewModel.mentionDisplayNames,
             currentUserId: AuthManager.shared.currentUser?.id ?? "",
             userRegionalLanguage: AuthManager.shared.currentUser?.regionalLanguage,
