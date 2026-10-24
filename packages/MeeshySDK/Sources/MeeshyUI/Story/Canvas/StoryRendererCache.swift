@@ -270,6 +270,12 @@ public final class StoryRendererCache: @unchecked Sendable {
         return layer
     }
 
+    /// Rend le calque de dessin et son bitmap : un dessin qui ne s'affiche pas
+    /// (masqué pendant que l'auteur dessine) ne reste pas retenu ici.
+    func releaseDrawing() {
+        drawing = nil
+    }
+
     /// Retire toutes les entrées dont `id` n'apparaît pas dans `keepIds`.
     /// Pour un `StoryMediaLayer` retenu (vidéo), pause l'AVPlayer et coupe
     /// la `currentItem` avant le retrait pour libérer proprement les

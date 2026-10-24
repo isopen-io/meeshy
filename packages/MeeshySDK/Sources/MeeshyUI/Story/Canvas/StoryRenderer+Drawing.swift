@@ -8,19 +8,26 @@ import MeeshySDK
 
 extension StoryRenderer {
     /// Le dessin persisté de la slide, en UN calque au-dessus des objets
-    /// (zPosition 9999), ou `nil` quand la slide n'en a pas.
+    /// (zPosition 9999), ou `nil` quand la slide n'en a pas ou qu'il est
+    /// `suppressed`.
     ///
     /// Les traits sont dans l'espace design (1080×1920) et l'image s'étire au
     /// `renderSize`. Rastériser coûte une image pleine taille × l'échelle de
     /// l'écran : avec un `cache`, le MÊME calque est resservi tant que les
     /// traits, les données legacy, l'échelle et la taille ne changent pas — une
     /// fois par lecture au lieu d'une fois par image (#9865), et une fois par
-    /// export au lieu d'une fois par image encodée.
+    /// export au lieu d'une fois par image encodée. Masqué (le composer pendant
+    /// que l'auteur dessine), il rend son bitmap au lieu de le garder retenu.
     @MainActor
     static func drawingOverlay(for effects: StoryEffects,
                                geometry: CanvasGeometry,
                                contentsScale: CGFloat,
-                               cache: StoryRendererCache?) -> CALayer? {
+                               cache: StoryRendererCache?,
+                               suppressed: Bool) -> CALayer? {
+        guard !suppressed else {
+            cache?.releaseDrawing()
+            return nil
+        }
         let build = { () -> CALayer? in
             guard let image = bakedDrawingImage(for: effects, scale: contentsScale) else { return nil }
             let layer = CALayer()

@@ -96,10 +96,10 @@ public enum StoryRenderer {
     ///   - languages: Preferred languages for Prisme Linguistique text resolution (`.play` only).
     ///     In `.edit` mode, the raw source text is always displayed regardless of this parameter.
     ///     Defaults to `[]` for backward compat with existing call sites.
-    ///   - cache: Optional per-export layer-tree cache (`StoryAVCompositor` opt-in).
-    ///     When non-nil, item layers whose render signature matches the previous
-    ///     frame are reused as-is instead of rebuilt. Defaults to `nil` for the
-    ///     live composer/viewer canvas which rebuilds every layer each call.
+    ///   - cache: Optional layer-tree cache (`StoryAVCompositor` and the live
+    ///     canvas). When non-nil, item layers whose render signature matches the
+    ///     previous frame — and the drawing layer — are reused as-is instead of
+    ///     rebuilt. `nil` (snapshots, glass capture) rebuilds every layer.
     ///   - contentsScale: Pixel density applied to the root layer and to the
     ///     persisted-drawing rasterization. Live composer/viewer leaves this at
     ///     the ambient trait scale (`StoryCanvasDisplayScale.ambient`); the live
@@ -108,7 +108,11 @@ public enum StoryRenderer {
     ///     the rendered pixel buffer matches the design-space resolution
     ///     (1080×1920) and does not get upsampled to 3× on devices with a 3×
     ///     screen scale.
-    /// - Returns: A root `CALayer` whose sublayers represent the slide's items.
+    ///   - reusing: The container to reconcile the item layers into (the live
+    ///     canvas's `itemsContainer`, #9865): layers that did not change stay
+    ///     attached. `nil` renders into a fresh root.
+    /// - Returns: `reusing` when given, otherwise a fresh root `CALayer`; its
+    ///   sublayers represent the slide's items.
     /// Optional closure that the caller (live composer or AVFoundation compositor)
     /// supplies to feed glass-background text layers a Metal texture snapshot of
     /// the canvas region beneath them. Receives the layer's frame in render
@@ -306,9 +310,8 @@ public enum StoryRenderer {
         // Le dessin persisté, au-dessus des objets. `suppressDrawingOverlay` est
         // levé par le composer quand le `DrawingOverlayView` est actif : sinon
         // deux dessins désalignés à l'écran (bug utilisateur 2026-05-27).
-        if !suppressDrawingOverlay,
-           let drawing = drawingOverlay(for: slide.effects, geometry: geometry,
-                                        contentsScale: contentsScale, cache: cache) {
+        if let drawing = drawingOverlay(for: slide.effects, geometry: geometry, contentsScale: contentsScale,
+                                        cache: cache, suppressed: suppressDrawingOverlay) {
             tree.append(drawing)
         }
 
