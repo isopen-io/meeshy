@@ -9,7 +9,8 @@ import { z } from 'zod';
  */
 export const SERVER_ONLY_MESSAGE_TYPE = 'system';
 
-export const isClientMessageType = (value: string): boolean => value.trim().toLowerCase() !== SERVER_ONLY_MESSAGE_TYPE;
+export const isClientMessageType = (value: unknown): boolean =>
+  typeof value !== 'string' || value.trim().toLowerCase() !== SERVER_ONLY_MESSAGE_TYPE;
 
 export const clientMessageTypeSchema = z
   .string()

@@ -42,6 +42,7 @@ import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attac
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import { E2EE_PLAINTEXT_REFUSED } from '../../services/messaging/e2eePlaintextAdmission';
 import { SERVER_AT_REST_CIPHERTEXT_REFUSED, SERVER_AT_REST_UNAVAILABLE } from '../../services/messaging/serverAtRest';
+import { isClientMessageType } from '../../validation/client-message-type';
 import { relayRefusalStatus } from '../../services/e2ee/e2ee-relay-errors';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
@@ -75,7 +76,7 @@ export const SendMessageBodySchema = z.object({
     .optional(),
   originalLanguage: CommonSchemas.language.optional(),
   // #12822 — `system` n'est écrit que par la passerelle.
-  messageType: CommonSchemas.messageType.exclude(['system']).optional(),
+  messageType: CommonSchemas.messageType.refine(isClientMessageType, { message: 'messageType "system" is reserved to the gateway' }).optional(),
   replyToId: z.string().optional(),
   // #6164 — la PIÈCE NOMMÉE que cette réponse vise. Champ DÉDIÉ, jamais un
   // `metadata` brut (même doctrine que `location` / `sticker`) : le serveur
