@@ -1047,6 +1047,7 @@ const en = {
   'message.menu.more': 'More…',
   'message.menu.react': 'React',
   'message.menu.addReaction': 'Add a reaction',
+  'message.menu.preview': 'Message preview',
   'message.selection.toolbar': 'Message selection',
   'message.selection.count': '{count} selected',
   'message.detail.title': 'Message details',
