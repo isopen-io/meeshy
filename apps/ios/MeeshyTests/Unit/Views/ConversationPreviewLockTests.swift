@@ -252,7 +252,7 @@ final class ConversationPreviewLockTests: XCTestCase {
         XCTAssertEqual(mirror.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey), ["b"])
 
         sut.resetForLogout()
-        XCTAssertNil(mirror.object(forKey: NSEAttachmentPolicy.lockedConversationIdsKey))
+        XCTAssertEqual(mirror.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey), [])
     }
 
     /// Les bannières déjà délivrées montraient le contenu : verrouiller les

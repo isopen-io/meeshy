@@ -291,7 +291,7 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         ))
     }
 
-    func test_mirrorLockedConversationIds_writesTheFullSet_andAnEmptySetRemovesTheKey() throws {
+    func test_mirrorLockedConversationIds_writesTheFullSet_andAnEmptySetSaysNoLock() throws {
         let suite = "nse-lock-mirror-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -300,7 +300,10 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertEqual(defaults.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey), ["a", "b"])
 
         NSEAttachmentPolicy.mirrorLockedConversationIds([], into: defaults)
-        XCTAssertNil(defaults.object(forKey: NSEAttachmentPolicy.lockedConversationIdsKey))
+        XCTAssertEqual(
+            defaults.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey), [],
+            "un jeu vide est un SAVOIR (aucun verrou), pas une absence (#12655)"
+        )
     }
 
     // MARK: - #11387 — l'ordre de préparation d'une bannière
@@ -347,6 +350,96 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         let source = try nseSource()
         XCTAssertTrue(source.contains("NSEPreparationStep.plan(isLockedConversation:"))
         XCTAssertTrue(source.contains("NSEAttachmentPolicy.lockedConversationIdsKey"))
-        XCTAssertTrue(source.contains("NSEAttachmentPolicy.isContentLocked("))
+        XCTAssertTrue(source.contains("NSEAttachmentPolicy.conversationLock("))
+    }
+
+    // MARK: - #12655 — une conversation sous PIN n'accepte aucune action depuis l'écran verrouillé
+
+    private let conversationCategories = [
+        "MEESHY_MESSAGE", "MEESHY_MENTION", "MEESHY_AUDIO", "MEESHY_EPHEMERAL",
+        "MEESHY_LOCATION", "MEESHY_CONTACT", "MEESHY_INVITE",
+    ]
+
+    func test_conversationLock_distinguishesOpenLockedAndUnknown() {
+        XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
+            conversationId: "c1", mirroredLockedIds: ["c1"], snapshotDeclaresLock: false
+        ), .locked)
+        XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
+            conversationId: "c1", mirroredLockedIds: [], snapshotDeclaresLock: false
+        ), .open)
+        XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
+            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: false
+        ), .unknown, "un miroir illisible ne dit pas « ouverte »")
+        XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
+            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: true
+        ), .locked)
+        XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
+            conversationId: nil, mirroredLockedIds: nil, snapshotDeclaresLock: false
+        ), .noConversation)
+    }
+
+    /// Un verrou INCONNU ne scelle pas le contenu (aucune preuve de verrou),
+    /// mais retire les actions rapides (fail-closed).
+    func test_anUnknownLock_sealsNothing_butOffersNoQuickAction() {
+        XCTAssertFalse(NSEConversationLock.unknown.sealsContent)
+        XCTAssertFalse(NSEConversationLock.unknown.offersQuickActions)
+        XCTAssertFalse(NSEConversationLock.locked.offersQuickActions)
+        XCTAssertTrue(NSEConversationLock.open.offersQuickActions)
+        XCTAssertTrue(NSEConversationLock.noConversation.offersQuickActions)
+    }
+
+    /// Le témoin de la décision : la charge SCELLÉE d'une conversation sous
+    /// PIN prend la catégorie sans action, quelle que soit celle choisie avant.
+    func test_aSealedPayload_getsTheCategoryWithoutAnyAction() {
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(
+            ["type": "new_message", "conversationId": "c1", "messageId": "m1"], isLocked: true
+        )
+
+        for chosen in conversationCategories {
+            XCTAssertEqual(
+                NSEAttachmentPolicy.category(chosen, under: .locked, userInfo: sealed),
+                NSEAttachmentPolicy.lockedConversationCategory, chosen
+            )
+        }
+    }
+
+    func test_aSealedPayload_losesItsActions_evenWhenTheMirrorSaysOpen() {
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(["conversationId": "c1"], isLocked: true)
+
+        XCTAssertEqual(
+            NSEAttachmentPolicy.category("MEESHY_MESSAGE", under: .open, userInfo: sealed),
+            NSEAttachmentPolicy.lockedConversationCategory
+        )
+    }
+
+    func test_anUnknownLock_fallsBackToTheCategoryWithoutAnyAction() {
+        let payload: [AnyHashable: Any] = ["type": "mention", "conversationId": "c1"]
+
+        XCTAssertEqual(
+            NSEAttachmentPolicy.category("MEESHY_MENTION", under: .unknown, userInfo: payload),
+            NSEAttachmentPolicy.lockedConversationCategory
+        )
+    }
+
+    func test_anOpenConversation_keepsItsCategory() {
+        let payload: [AnyHashable: Any] = ["type": "new_message", "conversationId": "c1"]
+
+        for chosen in conversationCategories {
+            XCTAssertEqual(NSEAttachmentPolicy.category(chosen, under: .open, userInfo: payload), chosen)
+        }
+        XCTAssertEqual(
+            NSEAttachmentPolicy.category("MEESHY_SOCIAL", under: .noConversation, userInfo: [:]), "MEESHY_SOCIAL"
+        )
+    }
+
+    func test_callsAndUncategorizedBanners_areLeftAsTheyAre() {
+        for chosen in ["MEESHY_CALL_INCOMING", "MEESHY_CALL_MISSED", "MEESHY_CALL", ""] {
+            XCTAssertEqual(NSEAttachmentPolicy.category(chosen, under: .locked, userInfo: [:]), chosen)
+        }
+    }
+
+    /// L'extension applique la loi à la catégorie qu'elle vient de choisir.
+    func test_extension_gatesTheCategoryItChose() throws {
+        XCTAssertTrue(try nseSource().contains("NSEAttachmentPolicy.category("))
     }
 }

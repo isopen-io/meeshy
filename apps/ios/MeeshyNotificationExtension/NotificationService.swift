@@ -58,21 +58,25 @@ class NotificationService: UNNotificationServiceExtension {
     // MARK: - Pipeline
 
     private func prepareBestAttempt(_ content: UNMutableNotificationContent) {
-        let isLockedConversation = Self.isLockedConversation(content.userInfo)
+        let lock = Self.conversationLock(content.userInfo)
         // #11387 — l'ORDRE est une loi pure (`NSEPreparationStep.plan`) : une
         // conversation verrouillée est scellée avant toute décision, ne dépose
         // rien de son message, et son corps est remplacé en dernier.
-        for step in NSEPreparationStep.plan(isLockedConversation: isLockedConversation) {
-            perform(step, on: content)
+        for step in NSEPreparationStep.plan(isLockedConversation: lock.sealsContent) {
+            perform(step, on: content, lock: lock)
         }
     }
 
-    private func perform(_ step: NSEPreparationStep, on content: UNMutableNotificationContent) {
+    private func perform(_ step: NSEPreparationStep, on content: UNMutableNotificationContent, lock: NSEConversationLock) {
         switch step {
         case .sealLockedConversation:
             content.userInfo = NSEAttachmentPolicy.sealingLockedConversation(content.userInfo, isLocked: true)
         case .applyCategory:
             applyCategory(to: content)
+            // #12655 — verrouillée, scellée ou inconnue : aucune action rapide.
+            content.categoryIdentifier = NSEAttachmentPolicy.category(
+                content.categoryIdentifier, under: lock, userInfo: content.userInfo
+            )
         case .applyBadge:
             applyBadge(to: content)
         case .applyThreading:
@@ -117,14 +121,15 @@ class NotificationService: UNNotificationServiceExtension {
 
     /// La conversation est-elle verrouillée par PIN sur cet appareil ? Le
     /// miroir COMPLET que l'app dépose dans l'App Group fait foi (#11387) — le
-    /// cliché `conversation_snapshots` ne couvre que la liste chargée.
-    private static func isLockedConversation(_ userInfo: [AnyHashable: Any]) -> Bool {
+    /// cliché `conversation_snapshots` ne couvre que la liste chargée. Un
+    /// miroir illisible rend `unknown` (#12655).
+    private static func conversationLock(_ userInfo: [AnyHashable: Any]) -> NSEConversationLock {
         let conversationId = userInfo["conversationId"] as? String
         let mirrored = UserDefaults(suiteName: "group.me.meeshy.apps")?
             .stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey)
         let snapshotDeclaresLock = conversationId
             .flatMap { NSEDataSync.conversationDetails(forId: $0)?.isLocked } ?? false
-        return NSEAttachmentPolicy.isContentLocked(
+        return NSEAttachmentPolicy.conversationLock(
             conversationId: conversationId,
             mirroredLockedIds: mirrored,
             snapshotDeclaresLock: snapshotDeclaresLock

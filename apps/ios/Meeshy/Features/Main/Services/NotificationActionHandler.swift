@@ -94,6 +94,8 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
     private let dialCallBack: @MainActor (CallBackRequest) -> Void
     private let localMarkRead: @MainActor (String) -> Void
+    /// #12655 — la conversation est-elle verrouillée par PIN sur cet appareil ?
+    private let isConversationLocked: @MainActor (String) -> Bool
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
     /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
@@ -197,7 +199,8 @@ final class NotificationActionHandler: NotificationActionHandling {
         openDeepLink: @escaping @MainActor (URL) -> Void = { _ = DeepLinkRouter.shared.handle(url: $0) },
         presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
             NotificationContactPresenter.present($0)
-        }
+        },
+        isConversationLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.isLocked($0) }
     ) {
         self.messageService = messageService
         self.conversationService = conversationService
@@ -224,6 +227,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.openExternalURL = openExternalURL
         self.openDeepLink = openDeepLink
         self.presentNewContact = presentNewContact
+        self.isConversationLocked = isConversationLocked
     }
 
     // MARK: - Révocation (features 4/5)
@@ -317,6 +321,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         applyAuthToken(authTokenProvider())
 
         let payload = NotificationPayload(userInfo: userInfo)
+        guard !refusesLockedConversationWrite(actionIdentifier, payload: payload, userInfo: userInfo) else { return }
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
@@ -377,6 +382,33 @@ final class NotificationActionHandler: NotificationActionHandling {
             openNotification(userInfo)
             await consumeTapped(payload)
         }
+    }
+
+    // MARK: - Conversation verrouillée par PIN (#12655)
+
+    /// Les gestes qui ÉCRIVENT dans une conversation depuis l'écran verrouillé.
+    nonisolated static let conversationWriteActions: Set<String> = [
+        MeeshyNotificationAction.reply.rawValue,
+        MeeshyNotificationAction.markRead.rawValue,
+    ]
+
+    /// Défense en profondeur derrière la catégorie sans action de l'extension :
+    /// une bannière livrée avant le verrou, ou catégorisée par la passerelle
+    /// quand l'extension n'a pas tourné, porte encore « Répondre » et « Marquer
+    /// comme lu ». Sur une conversation verrouillée (ou une charge scellée),
+    /// rien ne part ni n'est marqué lu : l'app s'ouvre sur la conversation, que
+    /// la porte du routeur garde par le PIN.
+    private func refusesLockedConversationWrite(
+        _ actionIdentifier: String,
+        payload: NotificationPayload,
+        userInfo: [AnyHashable: Any]
+    ) -> Bool {
+        guard Self.conversationWriteActions.contains(actionIdentifier) else { return false }
+        let locked = payload.conversationId.map { isConversationLocked($0) } ?? false
+        guard locked || NSEAttachmentPolicy.isSealedForLockedConversation(userInfo) else { return false }
+        logger.info("notification write action refused: conversation locked by PIN")
+        openNotification(userInfo)
+        return true
     }
 
     // MARK: - Détail d'un message (#8858)

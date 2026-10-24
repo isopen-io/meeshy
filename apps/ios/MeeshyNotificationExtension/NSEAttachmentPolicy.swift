@@ -150,27 +150,70 @@ nonisolated enum NSEAttachmentPolicy {
     /// de verrous à chaque changement et au lancement.
     static let lockedConversationIdsKey = "locked_conversation_ids"
 
-    /// Écrit le miroir. Un jeu vide RETIRE la clé : la déconnexion (qui lève
-    /// tous les verrous) ne laisse rien derrière elle.
+    /// Écrit le miroir, jeu VIDE compris (#12655) : une liste vide dit « aucun
+    /// verrou », une clé absente dit « l'extension ne sait pas » (miroir jamais
+    /// écrit, groupe d'apps illisible avant le premier déverrouillage). La
+    /// déconnexion, qui lève tous les verrous, ne laisse qu'une liste vide.
     static func mirrorLockedConversationIds(_ ids: Set<String>, into defaults: UserDefaults?) {
-        guard let defaults else { return }
-        guard !ids.isEmpty else {
-            defaults.removeObject(forKey: lockedConversationIdsKey)
-            return
-        }
-        defaults.set(ids.sorted(), forKey: lockedConversationIdsKey)
+        defaults?.set(ids.sorted(), forKey: lockedConversationIdsKey)
     }
 
-    /// **La conversation de cette charge est-elle verrouillée par PIN sur cet
-    /// appareil ?** Le miroir fait foi ; le drapeau du cliché ne sert que de
-    /// renfort (il ne peut qu'AJOUTER un verrou, jamais en retirer un).
+    /// **Ce que l'extension sait du verrou PIN de la conversation d'une charge.**
+    /// Le miroir fait foi ; le drapeau du cliché ne sert que de renfort (il ne
+    /// peut qu'AJOUTER un verrou, jamais en retirer un).
+    static func conversationLock(
+        conversationId: String?,
+        mirroredLockedIds: [String]?,
+        snapshotDeclaresLock: Bool
+    ) -> NSEConversationLock {
+        guard let conversationId, !conversationId.isEmpty else { return .noConversation }
+        if snapshotDeclaresLock || (mirroredLockedIds ?? []).contains(conversationId) { return .locked }
+        return mirroredLockedIds == nil ? .unknown : .open
+    }
+
+    /// La conversation de cette charge est-elle verrouillée par PIN sur cet
+    /// appareil ? Seul un verrou CONNU scelle le contenu.
     static func isContentLocked(
         conversationId: String?,
         mirroredLockedIds: [String]?,
         snapshotDeclaresLock: Bool
     ) -> Bool {
-        guard let conversationId, !conversationId.isEmpty else { return false }
-        return snapshotDeclaresLock || (mirroredLockedIds ?? []).contains(conversationId)
+        conversationLock(
+            conversationId: conversationId, mirroredLockedIds: mirroredLockedIds, snapshotDeclaresLock: snapshotDeclaresLock
+        ).sealsContent
+    }
+
+    /// La charge a-t-elle été scellée pour une conversation verrouillée ?
+    static func isSealedForLockedConversation(_ userInfo: [AnyHashable: Any]) -> Bool {
+        (userInfo["notificationLocKey"] as? String) == lockedConversationLocKey
+    }
+
+    /// La catégorie, SANS aucune action, d'une bannière de conversation
+    /// verrouillée (#12655, décision porteur : le PIN est exigé). Ni
+    /// « Répondre » ni « Marquer comme lu » : toucher la bannière ouvre la
+    /// conversation, que la porte du routeur garde par le PIN (#11386).
+    static let lockedConversationCategory = "MEESHY_LOCKED_CONVERSATION"
+
+    /// Les appels gardent leurs gestes : décrocher ou rappeler n'écrit rien
+    /// dans le fil, et la décision ne vise que la réponse et la lecture.
+    private static let callCategories: Set<String> = ["MEESHY_CALL_INCOMING", "MEESHY_CALL_MISSED", "MEESHY_CALL"]
+
+    /// **La catégorie que garde une bannière, verrou compris.** Une charge
+    /// scellée, d'une conversation verrouillée, ou dont l'extension ne peut pas
+    /// savoir si elle l'est (fail-closed), perd toute action rapide : elle prend
+    /// `lockedConversationCategory`, quelle que soit la catégorie choisie avant
+    /// (message, mention, vocal, éphémère, détail, ou celle posée par la
+    /// passerelle).
+    static func category(
+        _ chosen: String,
+        under lock: NSEConversationLock,
+        userInfo: [AnyHashable: Any]
+    ) -> String {
+        guard !chosen.isEmpty, !callCategories.contains(chosen) else { return chosen }
+        guard lock.offersQuickActions, !isSealedForLockedConversation(userInfo) else {
+            return lockedConversationCategory
+        }
+        return chosen
     }
 
     /// Masque des bits de cycle de vie de `MessageEffectFlags` — éphémère (0),
@@ -208,6 +251,21 @@ nonisolated enum NSEAttachmentPolicy {
         guard !trimmed.isEmpty else { return nil }
         return Int(trimmed)
     }
+}
+
+/// **Ce que l'extension sait du verrou PIN de la conversation d'une charge**
+/// (#12655). `unknown` n'est pas `open` : sans miroir lisible, l'extension ne
+/// propose aucune action rapide, mais ne scelle pas le contenu — elle n'a pas
+/// la preuve d'un verrou.
+nonisolated enum NSEConversationLock: Equatable, Sendable {
+    case noConversation
+    case open
+    case locked
+    case unknown
+
+    var sealsContent: Bool { self == .locked }
+
+    var offersQuickActions: Bool { self == .open || self == .noConversation }
 }
 
 /// **L'ordre dans lequel l'extension prépare une bannière** (#11387), extrait de

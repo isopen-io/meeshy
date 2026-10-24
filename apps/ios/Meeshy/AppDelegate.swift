@@ -516,7 +516,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             callIncomingCategory,
             callMissedCategory,
             legacyCallCategory
-        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle)))
+        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle) + [LockedConversationNotificationCategory.category]))
     }
 
     // MARK: - Crash Reporting Bootstrap
@@ -654,6 +654,9 @@ enum MeeshyNotificationCategory: String {
     /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
     /// décompte vivant (`MeeshyNotificationContentExtension`).
     case ephemeral = "MEESHY_EPHEMERAL"
+    /// #12655 — une conversation verrouillée par PIN : aucune action rapide
+    /// (`NSEAttachmentPolicy.lockedConversationCategory`).
+    case lockedConversation = "MEESHY_LOCKED_CONVERSATION"
 }
 
 enum MeeshyNotificationAction: String {
