@@ -8,8 +8,16 @@ import { createHash, randomBytes } from 'crypto';
 import { deviceBindingMessage } from '@meeshy/shared/types/e2ee-directory';
 import type { SignatureVerifier } from '../signature-verifier';
 
+/**
+ * Comme `PublicKey.deserialize` de libsignal (mesuré sur 0.105) : les octets
+ * au-delà des 33 de la clé sérialisée sont IGNORÉS, et un `=` final de trop ne
+ * change pas les octets décodés. Deux chaînes différentes désignent donc la même
+ * clé et vérifient les mêmes signatures.
+ */
+const asLibsignalReadsIt = (identityKey: string): string => Buffer.from(identityKey, 'base64').subarray(0, 33).toString('base64');
+
 export const fakeSign = (identityKey: string, message: string): string =>
-  createHash('sha256').update(`${identityKey}|${message}`).digest('base64');
+  createHash('sha256').update(`${asLibsignalReadsIt(identityKey)}|${message}`).digest('base64');
 
 export const fakeVerifier: SignatureVerifier = {
   verify: async ({ identityKey, message, signature }) => fakeSign(identityKey, message) === signature,
@@ -17,8 +25,11 @@ export const fakeVerifier: SignatureVerifier = {
 
 export const randomKey = (bytes = 33): string => randomBytes(bytes).toString('base64');
 
+/** Une clé d'identité Curve25519 sérialisée comme libsignal : l'octet de type 0x05 puis 32 octets. */
+export const randomIdentityKey = (): string => Buffer.concat([Buffer.from([0x05]), randomBytes(32)]).toString('base64');
+
 export function fakeDeviceKeys(options: { oneTime?: number; kyber?: number; firstKeyId?: number; registrationId?: number } = {}) {
-  const identityKey = randomKey();
+  const identityKey = randomIdentityKey();
   const signed = (keyId: number, bytes = 33) => {
     const publicKey = randomKey(bytes);
     return { keyId, publicKey, signature: fakeSign(identityKey, publicKey) };

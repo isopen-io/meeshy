@@ -7,12 +7,12 @@
  * installation qui revient (même identité, même `registrationId`) retrouve sa
  * propre place au lieu d'en consommer une nouvelle à chaque reconnexion.
  */
-import { E2EE_MAX_ACTIVE_DEVICES, LIBSIGNAL_PROTOCOL } from '@meeshy/shared/types/e2ee-directory';
+import { deviceBindingMessage, E2EE_MAX_ACTIVE_DEVICES, LIBSIGNAL_PROTOCOL } from '@meeshy/shared/types/e2ee-directory';
 import { retireDevicesAfterSessionEnd, sweepDevicesOfEndedSessions } from '../device-retirement';
 import { createE2EEDirectory } from '../E2EEDirectory';
 import { createE2EEEnvelopeRelay } from '../E2EEEnvelopeRelay';
 import { createFakeE2EEStore, type FakeE2EEStore } from './fake-e2ee-store';
-import { fakeDeviceKeys, fakeVerifier } from './fake-signatures';
+import { fakeDeviceKeys, fakeSign, fakeVerifier } from './fake-signatures';
 
 const ALICE = 'a1'.repeat(12);
 const BOB = 'b2'.repeat(12);
@@ -275,5 +275,109 @@ describe("un appareil retiré par le propriétaire du compte ne revient pas (rev
     await eraseE2EEDataOfUser(store.prisma as never, ALICE);
 
     expect(store.collections.E2EERevokedIdentity.rows).toHaveLength(0);
+  });
+});
+
+describe("une identité révoquée ne revient ni sous une autre écriture, ni par une course (revue de sécurité, #12546)", () => {
+  const variantsOf = (identityKey: string): string[] => [
+    Buffer.concat([Buffer.from(identityKey, 'base64'), Buffer.from([1, 2, 3])]).toString('base64'),
+    `${identityKey}==`,
+  ];
+
+  async function revoked() {
+    const store = createFakeE2EEStore();
+    [1, 2, 3].forEach((index) => openSession(store, sessionIdOf(index)));
+    const directory = directoryOn(store);
+    const keys = fakeDeviceKeys({ registrationId: 4242 });
+    const { deviceId } = await directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(1), request: enrollmentOf(keys, ALICE) });
+    await directory.retireDevice({ userId: ALICE, deviceId });
+    return { store, directory, keys };
+  }
+
+  it.each([0, 1])("refuse la même clé écrite autrement (variante %i), que libsignal lirait comme la même", async (variant) => {
+    const { store, directory, keys } = await revoked();
+    const identityKey = variantsOf(keys.identityKey)[variant];
+    const timestamp = NOW.getTime();
+    const request = {
+      ...enrollmentOf(keys, ALICE),
+      identityKey,
+      binding: { timestamp, signature: fakeSign(identityKey, Buffer.from(deviceBindingMessage({ userId: ALICE, registrationId: 4242, identityKey, timestamp })).toString('base64')) },
+    };
+
+    await expect(directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request })).rejects.toMatchObject({ status: expect.any(Number) });
+    expect(stateOf(store, ALICE).active).toEqual([]);
+  });
+
+  it("refuse à l'enrôlement une clé d'identité qui n'a pas la forme sérialisée de libsignal (33 octets, type 0x05)", async () => {
+    const store = createFakeE2EEStore();
+    openSession(store, sessionIdOf(1));
+    const keys = fakeDeviceKeys();
+    const identityKey = variantsOf(keys.identityKey)[0];
+    const timestamp = NOW.getTime();
+    const request = {
+      ...enrollmentOf(keys, ALICE),
+      identityKey,
+      binding: { timestamp, signature: fakeSign(identityKey, Buffer.from(deviceBindingMessage({ userId: ALICE, registrationId: keys.registrationId, identityKey, timestamp })).toString('base64')) },
+    };
+
+    await expect(directoryOn(store).enrollDevice({ userId: ALICE, sessionId: sessionIdOf(1), request }))
+      .rejects.toMatchObject({ code: 'E2EE_IDENTITY_KEY_INVALID', status: 400 });
+  });
+
+  it("une révocation qui tombe pendant l'enrôlement de la même identité gagne : l'appareil ne reste pas actif", async () => {
+    const store = createFakeE2EEStore();
+    [1, 2].forEach((index) => openSession(store, sessionIdOf(index)));
+    const keys = fakeDeviceKeys({ registrationId: 4242 });
+    const plain = directoryOn(store);
+    const { deviceId } = await plain.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(1), request: enrollmentOf(keys, ALICE) });
+    closeSession(store, sessionIdOf(1));
+    await retireDevicesAfterSessionEnd(store.prisma as never, { sessionId: sessionIdOf(1) }, (error) => {
+      throw error;
+    });
+    let revokedOnce = false;
+    const racing = {
+      ...store.prisma,
+      e2EERevokedIdentity: {
+        ...store.prisma.e2EERevokedIdentity,
+        findFirst: async (args: unknown) => {
+          const found = await store.prisma.e2EERevokedIdentity.findFirst(args as never);
+          if (!revokedOnce) {
+            revokedOnce = true;
+            await store.prisma.e2EERevokedIdentity.upsert({
+              where: { userId_identityKey: { userId: ALICE, identityKey: keys.identityKey } },
+              create: { userId: ALICE, identityKey: keys.identityKey },
+              update: {},
+            } as never);
+          }
+          return found;
+        },
+      },
+    };
+    const enrolling = createE2EEDirectory({ prisma: racing as never, verifier: fakeVerifier, now: () => NOW });
+
+    await expect(enrolling.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(keys, ALICE) }))
+      .rejects.toMatchObject({ code: 'E2EE_IDENTITY_REVOKED' });
+    expect(stateOf(store, ALICE)).toEqual({ active: [], preKeys: 0 });
+    expect(deviceId).toBe(1);
+  });
+
+  it("une révocation qui a lu les appareils avant qu'une nouvelle place soit prise retire aussi celle-ci", async () => {
+    const store = createFakeE2EEStore();
+    [1, 2].forEach((index) => openSession(store, sessionIdOf(index)));
+    const keys = fakeDeviceKeys({ registrationId: 4242 });
+    const directory = directoryOn(store);
+    const { deviceId } = await directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(1), request: enrollmentOf(keys, ALICE) });
+    const other = fakeDeviceKeys({ registrationId: 4242 });
+    const revoking = createE2EEDirectory({
+      prisma: pausedAfterFirstDeviceRead(store, () =>
+        directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(other, ALICE) }),
+      ) as never,
+      verifier: fakeVerifier,
+      now: () => NOW,
+    });
+
+    await revoking.retireDevice({ userId: ALICE, deviceId });
+
+    expect(stateOf(store, ALICE).active).toEqual(['2:4242']);
   });
 });
