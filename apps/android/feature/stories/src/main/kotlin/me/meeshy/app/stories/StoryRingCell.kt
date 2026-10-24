@@ -36,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -47,7 +46,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.component.MeeshyAvatar
@@ -180,20 +178,12 @@ private fun StoryRingMenu(
 
 @Composable
 private fun StoryAvatar(ring: StoryRing) {
-    if (ring.avatarUrl != null) {
-        AsyncImage(
-            model = ring.avatarUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(StoryEntryMetrics.avatar).clip(CircleShape),
-        )
-    } else {
-        MeeshyAvatar(
-            name = ring.displayName,
-            size = StoryEntryMetrics.avatar,
-            containerColor = hexColor(ring.accentHex),
-        )
-    }
+    MeeshyAvatar(
+        name = ring.displayName,
+        size = StoryEntryMetrics.avatar,
+        containerColor = hexColor(ring.accentHex),
+        imageUrl = ring.avatarUrl,
+    )
 }
 
 @Composable

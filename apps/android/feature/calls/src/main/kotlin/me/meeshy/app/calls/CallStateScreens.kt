@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,33 +33,15 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * The peer block of the call screen, whatever the phase (ringing, connecting,
- * connected, reconnecting, ended): the avatar (audio calls), the name, the status
- * line, the connection-quality bars and the notices about the other side
- * (degraded network, screen capture, muted mic, camera off). Pure glue — every
- * show/hide decision is the [CallUiState]'s; the [accent] is the peer's. Over the video stage
- * ([videoStage]) the avatar and the muted / camera-off notices are on the picture itself.
+ * The peer block of the call screen over the VIDEO stage: the name, the status line, the
+ * connection-quality bars and the notices about the other side (degraded network, screen
+ * capture, muted mic, camera off). Pure glue — every show/hide decision is the [CallUiState]'s;
+ * the [accent] is the peer's. The avatar is not here: on the video stage the picture is the peer,
+ * and the audio stage shows the photo through [CallAudioStage] (#12569, one face per circle).
  */
 @Composable
 internal fun CallPeerBlock(state: CallUiState, accent: Color, videoStage: Boolean = false) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        if (!state.isVideoCall && !videoStage) {
-            Box(
-                modifier = Modifier
-                    .size(96.dp)
-                    .clip(CircleShape)
-                    .background(accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = state.peerName.take(1).uppercase(),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            Spacer(Modifier.height(MeeshySpacing.lg))
-        }
         Text(
             text = state.peerName,
             style = MaterialTheme.typography.headlineSmall,

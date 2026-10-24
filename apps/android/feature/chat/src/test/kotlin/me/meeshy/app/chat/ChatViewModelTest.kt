@@ -47,6 +47,7 @@ import me.meeshy.sdk.model.SentimentLevel
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.AnonymousSessionContext
 import me.meeshy.sdk.model.ApiParticipant
@@ -2073,6 +2074,26 @@ class ChatViewModelTest {
             assertThat(snap.starredAtMillis).isEqualTo(FIXED_NOW)
             assertThat(h.vm.state.value.actionMessageId).isNull()
         }
+
+    @Test
+    fun toggleStar_keeps_the_sender_photo_for_the_starred_list() = runTest(dispatcher) {
+        val fromBob = synced(
+            ApiMessage(
+                id = "m2",
+                conversationId = "c1",
+                senderId = "other",
+                content = "yo",
+                sender = ApiMessageSender(id = "other", displayName = "Bob", avatar = "2026/09/bob/photo.png"),
+            ),
+        )
+        val h = harness(flowOf(CacheResult.Fresh(listOf(fromBob), ageMillis = 0)), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.toggleStar("m2")
+        advanceUntilIdle()
+
+        assertThat(h.starred.starred.value.items.single().senderAvatarUrl).isEqualTo("2026/09/bob/photo.png")
+    }
 
     @Test
     fun toggleStar_unstars_an_already_starred_message() = runTest(dispatcher) {

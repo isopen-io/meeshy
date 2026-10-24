@@ -7,18 +7,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.feature.feed.R
@@ -48,21 +45,7 @@ internal fun FeedPostCardHeader(
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(contentAlignment = Alignment.Center) {
-            MeeshyAvatar(
-                name = post.authorName ?: unknownAuthor,
-                size = 40.dp,
-            )
-            if (!post.authorAvatarUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = post.authorAvatarUrl,
-                    contentDescription = post.authorName ?: unknownAuthor,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape),
-                )
-            }
-        }
+        MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl)
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

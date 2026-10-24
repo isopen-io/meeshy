@@ -17,9 +17,15 @@ const val DIRECT_GENERIC_NAME: String = "Conversation"
 
 private val DIRECT_WIRE_TYPES: Set<String> = setOf(DIRECT_CONVERSATION_TYPE, "dm")
 
+/**
+ * Vrai pour les deux types de fil qui désignent une conversation à deux (`direct`, `dm`), quelle
+ * que soit la casse — le type d'une conversation comme celui que porte le contexte d'une notification.
+ */
+fun isDirectConversationType(type: String?): Boolean = type?.lowercase() in DIRECT_WIRE_TYPES
+
 /** Vrai pour les deux types de fil qui désignent une conversation à deux (`direct`, `dm`). */
 val ApiConversation.isDirect: Boolean
-    get() = type.lowercase() in DIRECT_WIRE_TYPES
+    get() = isDirectConversationType(type)
 
 /**
  * L'AUTRE participant d'un direct, élu contre le lecteur — le résultat de l'unique élection
@@ -138,3 +144,14 @@ fun directConversationRequest(userId: String): CreateConversationRequest =
         title = null,
         participantIds = listOf(userId),
     )
+
+/**
+ * La photo d'une ligne de conversation (#12569, miroir d'iOS `isDirect ? participantAvatarURL :
+ * avatar` et du web `avatarOf`) : celle du pair en direct, celle de la conversation sinon. Jamais
+ * l'une à la place de l'autre : un direct sans photo de pair reste en initiales, il ne prête pas la
+ * photo de la conversation (un artefact legacy). Une valeur blanche n'est pas une photo.
+ */
+fun ApiConversation.displayedAvatar(readerId: String?): String? {
+    val served = if (isDirect) interlocutor(readerId)?.avatarUrl else avatar
+    return served?.takeIf { it.isNotBlank() }
+}

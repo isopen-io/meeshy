@@ -18,10 +18,15 @@ import me.meeshy.sdk.net.apiCall
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Un message trouve, accompagne du titre de sa conversation pour l'affichage. */
+/**
+ * Un message trouve, accompagne du titre de sa conversation pour l'affichage, et de la conversation
+ * elle-meme quand on la connait (cache local ou volet reseau) : c'est elle qui donne sa photo a la
+ * ligne (#12569), meme quand la conversation ne figure pas parmi les conversations trouvees.
+ */
 public data class MessageSearchHit(
     val message: ApiMessage,
     val conversationTitle: String,
+    val conversation: ApiConversation? = null,
 )
 
 /** Le resultat des trois volets de la recherche globale, chacun degradable a vide. */
@@ -132,10 +137,10 @@ public class GlobalSearchRepository @Inject constructor(
         conversationListFailed: Boolean,
     ): SearchPane<MessageSearchHit> = coroutineScope {
         val legs = conversations.map { conversation ->
-            async { conversation.id to apiCall { messageApi.search(conversation.id, query, limit = perConversation) } }
+            async { conversation to apiCall { messageApi.search(conversation.id, query, limit = perConversation) } }
         }.map { it.await() }
-        val hits = legs.flatMap { (id, result) ->
-            result.orEmpty().map { MessageSearchHit(it, titles[id].orEmpty()) }
+        val hits = legs.flatMap { (conversation, result) ->
+            result.orEmpty().map { MessageSearchHit(it, titles[conversation.id].orEmpty(), conversation) }
         }
         val everyLegFailed = legs.isNotEmpty() && legs.all { it.second is NetworkResult.Failure }
         val nothingToAsk = legs.isEmpty() && conversationListFailed

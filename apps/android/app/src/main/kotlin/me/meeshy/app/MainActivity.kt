@@ -33,7 +33,9 @@ import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.resolveDarkMode
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.theme.MeeshyTheme
 import java.util.Locale
 import javax.inject.Inject
@@ -53,6 +55,10 @@ class MainActivity : ComponentActivity() {
     /** Emet quand la passerelle refuse l'identite : [MeeshyApp] y deconnecte. */
     @Inject
     lateinit var sessionExpiry: SessionExpiryNotifier
+
+    /** La base d'API configuree : [LocalMediaBaseUrl] la fournit a tous les avatars (#12569). */
+    @Inject
+    lateinit var config: MeeshyConfig
 
     /** Source des raccourcis dynamiques du lanceur (voir [onResume]). */
     @Inject
@@ -79,13 +85,15 @@ class MainActivity : ComponentActivity() {
             val languageCode by languageViewModel.languageCode.collectAsStateWithLifecycle()
             LocalizedContent(languageCode = languageCode) {
                 MeeshyTheme(darkTheme = themeMode.resolveDarkMode(isSystemInDarkTheme())) {
-                    ProvideRootSplash {
-                        MeeshyApp(
-                            floatingButtonPositions = floatingButtonPositions,
-                            sessionExpiry = sessionExpiry,
-                            launchRoute = launchRoute,
-                            onLaunchRouteConsumed = { launchRoute = null },
-                        )
+                    CompositionLocalProvider(LocalMediaBaseUrl provides config.apiBaseUrl) {
+                        ProvideRootSplash {
+                            MeeshyApp(
+                                floatingButtonPositions = floatingButtonPositions,
+                                sessionExpiry = sessionExpiry,
+                                launchRoute = launchRoute,
+                                onLaunchRouteConsumed = { launchRoute = null },
+                            )
+                        }
                     }
                 }
             }

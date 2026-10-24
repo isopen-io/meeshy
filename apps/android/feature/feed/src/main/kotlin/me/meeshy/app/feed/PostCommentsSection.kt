@@ -52,7 +52,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -194,18 +193,7 @@ private fun CommentRow(
             .fillMaxWidth()
             .alpha(if (comment.isPending) 0.5f else 1f),
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp)
-            if (!comment.authorAvatarUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = comment.authorAvatarUrl,
-                    contentDescription = comment.authorName ?: unknownAuthor,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape),
-                )
-            }
-        }
+        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl)
         Spacer(Modifier.width(MeeshySpacing.sm))
         Column(Modifier.weight(1f)) {
             Column(textBlockSemantics) {
@@ -562,7 +550,7 @@ private fun CommentMentionStrip(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
-                    MeeshyAvatar(name = candidate.displayName, size = 32.dp)
+                    MeeshyAvatar(name = candidate.displayName, size = 32.dp, imageUrl = candidate.avatarURL)
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = candidate.displayName,
