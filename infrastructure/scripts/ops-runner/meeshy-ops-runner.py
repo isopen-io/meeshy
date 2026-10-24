@@ -14,7 +14,10 @@ systemd .path reveille ce runner, qui :
     personne ne tient plus) ;
   - deplace la demande vers done/ ou rejected/ AVANT toute execution, et ne
     recopie jamais le contenu d'une demande refusee ;
-  - applique les delais (sauvegarde 6 h, purge 1 h), memorises dans l'etat ;
+  - applique les delais (sauvegarde 6 h, purge 1 h), memorises dans l'etat, et
+    la fenetre de la purge : de 02:00 a 06:00, heure de Paris (#11452) ; une purge
+    traitee hors fenetre est refusee et nommee (outside-window), meme quand une
+    passerelle ancienne, qui ne connait pas la fenetre, l'a deposee ;
   - n'execute que deux gestes fixes : la sauvegarde de l'environnement (l'instance
     @on-demand de son unite systemd, qui a sa propre rotation et ne fait jamais
     sortir une sauvegarde nocturne, #11450) et la purge des images Docker inutilisees (jamais un volume,
@@ -46,10 +49,19 @@ import subprocess
 import sys
 import tempfile
 import time
+import zoneinfo
 
 ACTIONS = ("backup", "image-prune")
 ENVIRONMENTS = ("staging", "production", "local")
 COOLDOWN_SECONDS = {"backup": 6 * 3600, "image-prune": 3600}
+# La fenetre de la purge (#11452, tranche par le porteur le 2026-10-24) : les heures
+# creuses de l'hote partage, de 02:00 inclus a 06:00 exclu, heure de Paris (heure
+# d'ete comprise, d'ou le fuseau nomme et jamais un decalage fixe). La passerelle
+# refuse deja hors fenetre (OPERATION_OUTSIDE_WINDOW) ; le runner fait foi. La meme
+# definition cote TypeScript : SERVER_OPERATION_WINDOWS, packages/shared/types/admin-ops.ts.
+WINDOWS = {"image-prune": ("Europe/Paris", 2, 6)}
+# Une demande acceptee a 05:59:58 et traitee juste apres 06:00 n'est pas refusee a tort.
+WINDOW_GRACE_SECONDS = 10 * 60
 MAX_REQUEST_BYTES = 1024
 IN_PROGRESS_HORIZON_SECONDS = 2 * 3600
 STALE_TEMP_SECONDS = 60
@@ -227,6 +239,40 @@ def timeliness(request, moment):
     if age < -REQUEST_MAX_FUTURE_SECONDS:
         return "future-request"
     return None
+
+
+def local_hour(window, moment):
+    zone, _, _ = window
+    return moment.astimezone(zoneinfo.ZoneInfo(zone)).hour
+
+
+def window_close(window, moment):
+    """La fermeture de la fenetre du jour local de `moment` (06:00 n'est jamais une heure ambigue a Paris)."""
+    zone, _, end = window
+    local = moment.astimezone(zoneinfo.ZoneInfo(zone))
+    return datetime.datetime.combine(local.date(), datetime.time(end), tzinfo=zoneinfo.ZoneInfo(zone))
+
+
+def window_refusal(request, moment):
+    """Rend None, ou `outside-window` pour une action fenetree traitee hors de sa fenetre.
+
+    La tolerance ne vaut que pour une demande DATEE dans la fenetre : elle reste
+    executable jusqu'a dix minutes apres la fermeture. Un fuseau illisible sur
+    l'hote refuse (fail-closed) : on ne purge pas sans savoir l'heure de Paris.
+    """
+    window = WINDOWS.get(request["action"])
+    if window is None:
+        return None
+    _, start, end = window
+    try:
+        if start <= local_hour(window, moment) < end:
+            return None
+        requested = parse_iso(request["requestedAt"])
+        if start <= local_hour(window, requested) < end and (moment - window_close(window, requested)).total_seconds() <= WINDOW_GRACE_SECONDS:
+            return None
+    except (ValueError, OSError, zoneinfo.ZoneInfoNotFoundError):
+        pass
+    return "outside-window"
 
 
 def read_request(path):
@@ -636,7 +682,8 @@ def handle_request(paths, env, name, state):
 
     request, refusal = validate(raw, env, name)
     if refusal is None:
-        refusal = timeliness(request, now_utc())
+        received = now_utc()
+        refusal = timeliness(request, received) or window_refusal(request, received)
     if refusal:
         archive(path, paths.rejected, rejected_name)
         log("demande refusee : %s" % refusal)

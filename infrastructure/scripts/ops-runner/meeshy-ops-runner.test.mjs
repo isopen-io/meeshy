@@ -33,6 +33,9 @@ const RUNNER = path.join(here, 'meeshy-ops-runner.py');
 const ID_A = '0b4f8a0e-6f43-4a4c-9a4b-2d2c7f7d1c11';
 const ID_B = '1c5f8a0e-6f43-4a4c-9a4b-2d2c7f7d1c22';
 const NOW = '2026-10-12T22:00:00.000Z';
+// La purge n'est permise que de 02:00 à 06:00, heure de Paris (#11452) : NOW tombe à
+// minuit à Paris, NIGHT à 03:00 (heure d'été, UTC+2).
+const NIGHT = '2026-10-13T01:00:00.000Z';
 
 const FAKES = {
   docker: `#!/usr/bin/env bash
@@ -90,6 +93,8 @@ const drop = (body, name = `${(typeof body === 'object' && body.id) || ID_A}.jso
   writeFileSync(file, typeof body === 'string' ? body : JSON.stringify(body));
   return file;
 };
+
+const prune = (overrides = {}) => request({ action: 'image-prune', requestedAt: NIGHT, ...overrides });
 
 const verdict = (generatedAt, status = 'ok') =>
   JSON.stringify({ generatedAt, status, reason: null, lastSuccessAt: generatedAt, lastSuccess: null });
@@ -168,8 +173,8 @@ describe('une demande de sauvegarde valide', () => {
 
 describe('la purge des images', () => {
   it('ne lance que les trois purges fixes, jamais un volume ni system prune, et compte l’espace rendu', () => {
-    drop(request({ action: 'image-prune' }));
-    run();
+    drop(prune());
+    run('process', { OPS_NOW: NIGHT });
     const log = calls();
     assert.deepEqual(log.slice(0, 3), [
       'docker image prune -f',
@@ -201,8 +206,8 @@ print(json.dumps([list(command) for command in module.PRUNE_COMMANDS]))`, RUNNER
   });
 
   it('une purge en échec est publiée en échec', () => {
-    drop(request({ action: 'image-prune' }));
-    run('process', { FAKE_FAIL: 'prune' });
+    drop(prune());
+    run('process', { FAKE_FAIL: 'prune', OPS_NOW: NIGHT });
     assert.equal(opsState().runs['image-prune'].status, 'failed');
     assert.equal(opsState().runs['image-prune'].code, 'prune-failed');
   });
@@ -222,8 +227,8 @@ time.sleep(30)`, file], { stdio: ['ignore', 'pipe', 'inherit'] });
   it('n’efface aucune image tant qu’une promotion tient son verrou : la purge échoue sous une clé fixe', async () => {
     const holder = await holdLock(env.OPS_PROMOTION_LOCK);
     try {
-      drop(request({ action: 'image-prune' }));
-      const result = run('process', { OPS_PROMOTION_LOCK_WAIT: '1' });
+      drop(prune());
+      const result = run('process', { OPS_PROMOTION_LOCK_WAIT: '1', OPS_NOW: NIGHT });
       assert.equal(result.status, 0, result.stderr);
       assert.equal(calls().filter((call) => call.includes('prune')).length, 0);
       const state = opsState();
@@ -235,11 +240,79 @@ time.sleep(30)`, file], { stdio: ['ignore', 'pipe', 'inherit'] });
   });
 
   it('purge sous le verrou de promotion quand personne ne le tient', () => {
-    drop(request({ action: 'image-prune' }));
-    const result = run();
+    drop(prune());
+    const result = run('process', { OPS_NOW: NIGHT });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(opsState().runs['image-prune'].status, 'succeeded');
     assert.ok(existsSync(env.OPS_PROMOTION_LOCK));
+  });
+});
+
+describe('la purge n’est permise qu’aux heures creuses : de 02:00 à 06:00, heure de Paris (#11452)', () => {
+  const pruned = () => calls().some((call) => call.includes('prune'));
+  const outcome = ({ requestedAt, at }) => {
+    rmSync(path.join(base, 'state'), { recursive: true, force: true });
+    rmSync(env.FAKE_LOG, { force: true });
+    drop(prune({ requestedAt }));
+    const result = run('process', { OPS_NOW: at });
+    assert.equal(result.status, 0, result.stderr);
+    const state = opsState();
+    return { status: state.runs['image-prune'].status, code: state.runs['image-prune'].code, pruned: pruned(), accepted: state.lastAcceptedAt['image-prune'] };
+  };
+
+  it('dans la fenêtre, la purge part', () => {
+    assert.equal(outcome({ requestedAt: NIGHT, at: NIGHT }).status, 'succeeded');
+    assert.equal(outcome({ requestedAt: '2026-10-13T00:00:00.000Z', at: '2026-10-13T00:00:00.000Z' }).status, 'succeeded');
+    assert.equal(outcome({ requestedAt: '2026-10-13T03:59:59.000Z', at: '2026-10-13T03:59:59.000Z' }).status, 'succeeded');
+  });
+
+  it('hors fenêtre, la demande est refusée, archivée dans rejected/ et nommée, sans rien purger ni armer le délai — une passerelle ancienne qui ignore la fenêtre est arrêtée ici', () => {
+    drop(prune({ requestedAt: NOW }));
+    run();
+    assert.deepEqual(readdirSync(path.join(base, 'requests')), []);
+    assert.equal(readdirSync(path.join(base, 'rejected')).length, 1);
+    assert.equal(existsSync(path.join(base, 'done')), false);
+    assert.deepEqual(calls(), []);
+    assert.equal(opsState().runs['image-prune'].status, 'rejected');
+    assert.equal(opsState().runs['image-prune'].code, 'outside-window');
+    assert.equal(opsState().lastAcceptedAt['image-prune'], null);
+
+    assert.deepEqual(outcome({ requestedAt: '2026-10-12T23:59:59.000Z', at: '2026-10-12T23:59:59.000Z' }), { status: 'rejected', code: 'outside-window', pruned: false, accepted: null });
+    assert.equal(outcome({ requestedAt: '2026-10-13T04:00:00.000Z', at: '2026-10-13T04:00:00.000Z' }).code, 'outside-window');
+    assert.equal(outcome({ requestedAt: '2026-10-13T12:00:00.000Z', at: '2026-10-13T12:00:00.000Z' }).code, 'outside-window');
+  });
+
+  it('une demande datée dans la fenêtre garde dix minutes de tolérance après 06:00 ; une demande datée après 06:00 n’en a aucune', () => {
+    assert.equal(outcome({ requestedAt: '2026-10-13T03:59:58.000Z', at: '2026-10-13T04:00:30.000Z' }).status, 'succeeded');
+    assert.equal(outcome({ requestedAt: '2026-10-13T03:59:58.000Z', at: '2026-10-13T04:10:00.000Z' }).status, 'succeeded');
+    assert.equal(outcome({ requestedAt: '2026-10-13T03:59:58.000Z', at: '2026-10-13T04:10:01.000Z' }).code, 'outside-window');
+    assert.equal(outcome({ requestedAt: '2026-10-13T04:00:01.000Z', at: '2026-10-13T04:00:30.000Z' }).code, 'outside-window');
+    assert.equal(outcome({ requestedAt: '2026-10-12T23:59:00.000Z', at: '2026-10-13T00:01:00.000Z' }).status, 'succeeded', 'traitée dans la fenêtre, elle part');
+  });
+
+  it('passage à l’heure d’été (dimanche 29 mars 2026, 02:00 → 03:00) : la fenêtre va de 01:00 à 04:00 UTC', () => {
+    assert.equal(outcome({ requestedAt: '2026-03-29T00:59:59.000Z', at: '2026-03-29T00:59:59.000Z' }).code, 'outside-window');
+    assert.equal(outcome({ requestedAt: '2026-03-29T01:00:00.000Z', at: '2026-03-29T01:00:00.000Z' }).status, 'succeeded');
+    assert.equal(outcome({ requestedAt: '2026-03-29T03:59:59.000Z', at: '2026-03-29T03:59:59.000Z' }).status, 'succeeded');
+    assert.equal(outcome({ requestedAt: '2026-03-29T04:00:00.000Z', at: '2026-03-29T04:00:00.000Z' }).code, 'outside-window');
+    assert.equal(outcome({ requestedAt: '2026-03-28T04:30:00.000Z', at: '2026-03-28T04:30:00.000Z' }).status, 'succeeded', 'la veille, à l’heure d’hiver, 05:30 à Paris');
+    assert.equal(outcome({ requestedAt: '2026-03-28T05:00:00.000Z', at: '2026-03-28T05:00:00.000Z' }).code, 'outside-window');
+  });
+
+  it('retour à l’heure d’hiver (dimanche 25 octobre 2026, 03:00 → 02:00) : la fenêtre va de 00:00 à 05:00 UTC, l’heure de 02:00 vécue deux fois', () => {
+    assert.equal(outcome({ requestedAt: '2026-10-24T23:59:59.000Z', at: '2026-10-24T23:59:59.000Z' }).code, 'outside-window');
+    assert.equal(outcome({ requestedAt: '2026-10-25T00:00:00.000Z', at: '2026-10-25T00:00:00.000Z' }).status, 'succeeded');
+    assert.equal(outcome({ requestedAt: '2026-10-25T01:30:00.000Z', at: '2026-10-25T01:30:00.000Z' }).status, 'succeeded');
+    assert.equal(outcome({ requestedAt: '2026-10-25T04:59:59.000Z', at: '2026-10-25T04:59:59.000Z' }).status, 'succeeded');
+    assert.equal(outcome({ requestedAt: '2026-10-25T05:00:00.000Z', at: '2026-10-25T05:00:00.000Z' }).code, 'outside-window');
+    assert.equal(outcome({ requestedAt: '2026-10-25T04:59:58.000Z', at: '2026-10-25T05:10:00.000Z' }).status, 'succeeded', 'la tolérance suit la fermeture de 06:00 CET');
+    assert.equal(outcome({ requestedAt: '2026-10-25T04:59:58.000Z', at: '2026-10-25T05:10:01.000Z' }).code, 'outside-window');
+  });
+
+  it('la sauvegarde n’a pas de fenêtre : elle part à minuit à Paris', () => {
+    drop(request({ requestedAt: NOW }));
+    run();
+    assert.equal(opsState().runs.backup.status, 'succeeded');
   });
 });
 
