@@ -76,10 +76,11 @@ nonisolated enum NSEAttachmentPolicy {
     /// Les images que la NSE OUVRE (#11328). Une liste blanche, pas la famille
     /// `image/*` : le serveur fabrique des rendus AVIF (#11262), et un AVIF
     /// attaché sans être décodé ne produit aucune image sur l'écran verrouillé.
-    /// `heic` reste : c'est le format d'origine d'un iPhone, et le témoin de
-    /// plafond (`image/heic` à la limite) le tient accepté.
+    /// `heic`/`heif` restent : c'est le format d'origine d'un iPhone, encore en
+    /// base pour les pièces jointes antérieures à la conversion (#11263).
+    /// `image/jpg` est l'alias que le serveur accepte et range tel quel.
     static let renderableImageTypes: Set<String> = [
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic",
+        "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif",
     ]
 
     /// Image décodable ou audio — les deux familles qu'iOS rend nativement sur
