@@ -361,30 +361,17 @@ describe('DELETE /attachments/:id — BIGBOSS deletes', () => {
   });
 });
 
-// #11217 — décision porteur du 2026-10-24 : MODERATOR de plateforme est
-// PRIVILÉGIÉ partout. Il retire le message d'autrui qui porte une image
-// illicite ; la pièce jointe elle-même ne doit pas lui résister.
-describe('DELETE /attachments/:id — rôle de plateforme privilégié d’une seule table (#11217)', () => {
-  it('MODERATOR de la plateforme supprime la pièce jointe d’autrui', async () => {
-    mockGetAttachment.mockResolvedValue({ ...MOCK_ATTACHMENT, uploadedBy: 'other-user' });
-    mockDeleteAttachment.mockResolvedValue(undefined);
-    const app = await buildApp({ role: 'MODERATOR' });
-
-    const res = await app.inject({ method: 'DELETE', url: `/attachments/${ATTACHMENT_ID}` });
-
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it.each(['AUDIT', 'ANALYST', 'moderator'])('%s reste ordinaire : 403 sur la pièce jointe d’autrui', async (role) => {
+// #11217 — MODERATOR de plateforme est PRIVILÉGIÉ partout : il retire le
+// message d'autrui, la pièce jointe ne lui résiste pas. AUDIT/ANALYST, non.
+describe('DELETE /attachments/:id — la table des rôles privilégiés (#11217)', () => {
+  it.each([['MODERATOR', 200], ['AUDIT', 403], ['ANALYST', 403], ['moderator', 403]])('%s ⇒ %i', async (role, status) => {
     mockGetAttachment.mockResolvedValue({ ...MOCK_ATTACHMENT, uploadedBy: 'other-user' });
     mockDeleteAttachment.mockReset();
-    const app = await buildApp({ role });
-
+    mockDeleteAttachment.mockResolvedValue(undefined);
+    const app = await buildApp({ role: role as string });
     const res = await app.inject({ method: 'DELETE', url: `/attachments/${ATTACHMENT_ID}` });
-
-    expect(res.statusCode).toBe(403);
-    expect(mockDeleteAttachment).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(status);
+    expect(mockDeleteAttachment).toHaveBeenCalledTimes(status === 200 ? 1 : 0);
     await app.close();
   });
 });
