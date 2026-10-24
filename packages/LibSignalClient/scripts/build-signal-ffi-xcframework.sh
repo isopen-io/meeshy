@@ -22,6 +22,12 @@ fi
 export PATH="$HOME/.cargo/bin:$PATH"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$SRC/target}"
 TARGET_DIR="$CARGO_TARGET_DIR"
+# build_ffi.sh compile les dépendances C en -flto=full : l'archive porterait du
+# bitcode LLVM, que xcodebuild -create-xcframework ne sait pas lire et que seul
+# un éditeur de liens de la même version de LLVM saurait lier. -fno-lto, placé
+# après le sien, l'emporte : objets natifs. La LTO côté Rust reste (code machine).
+export CFLAGS="${CFLAGS:-} -fno-lto"
+export CXXFLAGS="${CXXFLAGS:-} -fno-lto"
 TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios)
 for target in "${TARGETS[@]}"; do
   CARGO_BUILD_TARGET="$target" "$SRC/swift/build_ffi.sh" --release
