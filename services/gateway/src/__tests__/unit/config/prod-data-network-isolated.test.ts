@@ -46,6 +46,10 @@ type NetworkDecl = { realName: string; internal: boolean; external: boolean };
 type Compose = { project: string; services: Map<string, Attachment>; networks: Map<string, NetworkDecl> };
 
 const TOP_LEVEL_KEYS = new Set(['name', 'services', 'networks', 'volumes', 'secrets', 'configs']);
+// Les seules clés lues dans la déclaration d'un réseau : toute autre est une forme inconnue.
+const NETWORK_DECL_KEYS = new Set(['driver', 'name', 'external', 'internal', 'driver_opts', 'ipam', 'labels', 'attachable', 'enable_ipv6']);
+// Une clé simple, sans guillemets, échappement, clé explicite (`? `) ni espace avant les deux-points.
+const PLAIN_KEY = /^([a-z_][a-z0-9_-]*):(\s.*)?$/;
 
 function stripComment(text: string): string {
   return text.replace(/\s+#.*$/, '').trim();
@@ -55,7 +59,7 @@ function stripComment(text: string): string {
 function scalar(raw: string, where: string): string {
   const value = stripComment(raw);
   const unquoted = /^"(.*)"$/.exec(value)?.[1] ?? /^'(.*)'$/.exec(value)?.[1] ?? value;
-  if (!unquoted || /[$&*{}[\]]/.test(unquoted)) throw new FormeInconnue(`${where} : « ${raw.trim()} »`);
+  if (!unquoted || /[$&*{}[\]\\]/.test(unquoted)) throw new FormeInconnue(`${where} : « ${raw.trim()} »`);
   return unquoted;
 }
 
@@ -68,6 +72,23 @@ function bool(raw: string, where: string): boolean {
 
 const isBlankOrComment = (l: string): boolean => /^\s*(#.*)?$/.test(l);
 const indent = (l: string): number => /^ */.exec(l)![0].length;
+
+/**
+ * Le corps d'un service ou d'un réseau : ses clés sont TOUTES à l'indentation `level`,
+ * simples, et (si `allowed` est donné) dans la liste blanche. Un corps indenté autrement,
+ * une clé explicite, échappée ou fusionnée (`<<`) n'est pas lu : il fait tomber le témoin.
+ */
+function assertBody(body: string[], level: number, where: string, allowed?: Set<string>): void {
+  const content = body.filter((l) => !isBlankOrComment(l));
+  if (content.length && indent(content[0]) !== level) throw new FormeInconnue(`${where} : corps indenté à ${indent(content[0])}, pas ${level}`);
+  for (const line of content) {
+    if (/^\s*(- )?(<<|\?)(\s|:|$)/.test(line)) throw new FormeInconnue(`${where} : « ${line.trim()} » (fusion ou clé explicite)`);
+    if (indent(line) !== level) continue;
+    const key = PLAIN_KEY.exec(line.slice(level))?.[1];
+    if (!key) throw new FormeInconnue(`${where} : clé illisible « ${line.trim()} »`);
+    if (allowed && !allowed.has(key)) throw new FormeInconnue(`${where} : clé « ${key} » non lue par le témoin`);
+  }
+}
 
 /** Les lignes qui suivent `start` et sont plus indentées que `level` (lignes vides et commentaires compris). */
 function childLines(lines: string[], start: number, level: number): string[] {
@@ -82,11 +103,12 @@ function childLines(lines: string[], start: number, level: number): string[] {
 function parseServiceNetworks(name: string, body: string[]): Attachment {
   let networks: string[] | null = null;
   let networkMode: string | null = null;
+  assertBody(body, 4, name);
   for (let i = 0; i < body.length; i++) {
     const line = body[i];
     if (isBlankOrComment(line) || indent(line) !== 4) continue;
-    const key = /^ {4}("?[^:"]+"?)\s*:/.exec(line)?.[1] ?? '';
-    if (key === '<<' || key === 'extends') throw new FormeInconnue(`${name} : « ${key} » (les réseaux viendraient d'ailleurs)`);
+    const key = PLAIN_KEY.exec(line.slice(4))![1];
+    if (key === 'extends') throw new FormeInconnue(`${name} : « ${key} » (les réseaux viendraient d'ailleurs)`);
     if (!/network/.test(key)) continue;
     if (key === 'network_mode') {
       networkMode = scalar(line.replace(/^ {4}network_mode:/, ''), `${name}.network_mode`);
@@ -116,7 +138,7 @@ function parseCompose(source: string, fallbackProject: string): Compose {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (isBlankOrComment(line) || indent(line) !== 0) continue;
-    const key = /^([^:\s]+)\s*:/.exec(line)?.[1];
+    const key = PLAIN_KEY.exec(line)?.[1];
     if (!key) throw new FormeInconnue(`clé racine illisible : « ${line} »`);
     if (key.startsWith('x-')) continue;
     if (!TOP_LEVEL_KEYS.has(key)) throw new FormeInconnue(`clé racine « ${key} » non lue par le témoin`);
@@ -141,10 +163,8 @@ function parseCompose(source: string, fallbackProject: string): Compose {
         services.set(name, parseServiceNetworks(name, body));
         continue;
       }
+      assertBody(body, 4, `networks.${name}`, NETWORK_DECL_KEYS);
       const field = (f: string): string | undefined => body.find((l) => new RegExp(`^ {4}${f}:`).test(l))?.replace(new RegExp(`^ {4}${f}:`), '');
-      // Une clé entre guillemets échapperait à la lecture de name/external/internal.
-      const quoted = body.find((l) => /^ {4}["']/.test(l));
-      if (quoted) throw new FormeInconnue(`networks.${name} : « ${quoted.trim()} »`);
       const realName = field('name');
       const external = field('external');
       const internal = field('internal');
@@ -326,6 +346,12 @@ describe('le témoin tombe sur chaque contournement connu (audit de #12705)', ()
     }
   };
 
+  it('la forme dictionnaire est LUE (elle ne tombe pas seulement faute d’être comprise)', () => {
+    const parsed = parseCompose(staging('    networks:\n      prod-data:\n        aliases:\n          - x', '  prod-data:\n    name: meeshy_meeshy-data'), STAGING_PROJECT);
+    expect(parsed.services.get('gateway-staging')).toEqual({ networks: ['prod-data'], networkMode: null });
+    expect(parsed.networks.get('prod-data')?.realName).toBe('meeshy_meeshy-data');
+  });
+
   it('témoin positif : un staging propre est accepté', () => {
     expect(verdict(staging('    networks:\n      - meeshy-staging-network'))).toBe('accepté');
   });
@@ -347,6 +373,14 @@ describe('le témoin tombe sur chaque contournement connu (audit de #12705)', ()
     ['ancre de fusion', staging('    <<: *prod-attachment')],
     ['extends', staging('    extends:\n      file: docker-compose.prod.yml\n      service: gateway')],
     ['include racine', 'include:\n  - docker-compose.prod.yml\n' + staging('    networks:\n      - meeshy-staging-network')],
+    ['M10 corps de service indenté à 8', staging('    networks:\n      - meeshy-staging-network\n  debug:\n        image: alpine\n        networks:\n          - prod-data', '  prod-data:\n    name: meeshy_meeshy-data')],
+    ['M11 déclaration de réseau indentée à 6', staging('    networks:\n      - prod-data', '  prod-data:\n      external: true\n      name: meeshy_meeshy-data')],
+    ['M12 clé explicite', staging('    ? networks\n    : - prod-data', '  prod-data:\n    name: meeshy_meeshy-data')],
+    ['M13 clé échappée', staging('    "netw\\x6frks":\n      - prod-data', '  prod-data:\n    name: meeshy_meeshy-data')],
+    ['M14 fusion dans la déclaration d’un réseau', staging('    networks:\n      - prod-data', '  prod-data:\n    <<: *pn')],
+    ['M15 espace avant les deux-points', staging('    networks:\n      - prod-data', '  prod-data:\n    name : meeshy_meeshy-data')],
+    ['M16 network_mode échappé', staging('    "\\x6eetwork_mode": "container:meeshy-database"')],
+    ['nom échappé', staging('    networks:\n      - prod-data', '  prod-data:\n    name: "meeshy_meeshy-\\x64ata"')],
   ])('%s', (_cas, text) => {
     expect(verdict(text)).not.toBe('accepté');
   });
