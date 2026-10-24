@@ -267,11 +267,27 @@ const ouvre = async (viewport) => {
  * la fenêtre fixe de 500 ms de `networkidle`, payée à chacun des ~740 relevés. */
 const reseauDe = (page) => {
   let partis = 0;
-  let revenus = 0;
-  page.on('request', () => { partis += 1; });
-  page.on('requestfinished', () => { revenus += 1; });
-  page.on('requestfailed', () => { revenus += 1; });
-  return () => (partis === revenus ? String(partis) : undefined);
+  const enVol = new Set();
+  page.on('request', (request) => {
+    partis += 1;
+    enVol.add(request);
+  });
+  page.on('requestfinished', (request) => enVol.delete(request));
+  page.on('requestfailed', (request) => enVol.delete(request));
+  const network = () => (enVol.size === 0 ? String(partis) : undefined);
+  /* Ce que le réseau retenait quand l'attente a buté : sans lui, « rien de peint » ne dit pas si la page attendait un chunk. */
+  network.enVol = () => [...enVol].map((request) => new URL(request.url()).pathname);
+  return network;
+};
+
+/** Ce que la page montrait quand l'attente a buté — la cause d'un « rien de peint », jamais le seul symptôme. */
+const etatDe = async (page, network) => {
+  const vu = await page
+    .evaluate(() => ({ adresse: location.pathname, contenu: document.getElementById('contenu') !== null, texte: (document.body?.innerText ?? '').trim().replace(/\s+/g, ' ').slice(0, 80) }))
+    .catch((cause) => ({ adresse: '?', contenu: false, texte: `page illisible : ${cause?.message ?? cause}` }));
+  const vol = network.enVol();
+  const reseau = vol.length === 0 ? 'réseau au repos' : `${vol.length} requête(s) en vol : ${vol.slice(0, 3).join(', ')}`;
+  return `${vu.adresse}, #contenu ${vu.contenu ? 'présent' : 'absent'}, ${reseau}, texte « ${vu.texte} »`;
 };
 
 const mesure = async (context, adresse) => {
@@ -333,7 +349,7 @@ const progression = (viewport, langue) => async (constate) => {
     await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
     const m = await waitForValueSettled(page, sidewaysReleve, undefined, { network, pret: (r) => !r.sansContenu });
     if (m === undefined || m.sansContenu) {
-      constate(false, `${tag} : la page n'a rien peint de mesurable — le témoin ne mesure rien`);
+      constate(false, `${tag} : la page n'a rien peint de mesurable — le témoin ne mesure rien (${await etatDe(page, network)})`);
       continue;
     }
     bilan.progression += 1;
