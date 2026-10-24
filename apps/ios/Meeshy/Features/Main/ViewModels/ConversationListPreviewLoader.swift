@@ -178,7 +178,7 @@ final class ConversationListPreviewLoader: ObservableObject {
         messageService: MessageServiceProviding,
         cache: ConversationPreviewCacheProviding = LiveConversationPreviewCache(),
         readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) },
-        isLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.isLocked($0) }
+        isLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.hidesContent(of: $0) }
     ) {
         self.messageService = messageService
         self.cache = cache
@@ -238,6 +238,9 @@ final class ConversationListPreviewLoader: ObservableObject {
         currentUserId: @escaping @MainActor @Sendable () -> String
     ) async {
         let cached = await cache.messages(for: conversationId)
+        // Verrouillée PENDANT la lecture du cache (#11387) : rien de lu ne se
+        // publie, et le réseau ne revalide pas.
+        guard !isLocked(conversationId) else { return }
         let fromCache = Self.cachedMessages(in: cached)
         if let fromCache, provenance[conversationId] != .network {
             let translations = await cache.translations(for: fromCache.map(\.id))
@@ -356,6 +359,7 @@ final class ConversationListPreviewLoader: ObservableObject {
         translations: [String: [MessageTranslation]],
         for conversationId: String
     ) {
+        guard !isLocked(conversationId) else { return }
         let snapshot = Self.snapshot(messages: messages, translations: translations, prism: readerPrism())
         states[conversationId] = messages.isEmpty ? .empty : .loaded(snapshot)
     }
@@ -398,6 +402,7 @@ final class ConversationListPreviewLoader: ObservableObject {
                 conversationId: conversationId, offset: 0, limit: Self.previewLimit,
                 includeReplies: false, includeTranslations: true
             )
+            guard !isLocked(conversationId) else { return }
             let userId = currentUserId()
             let username = AuthManager.shared.currentUser?.username
             let prism = readerPrism()

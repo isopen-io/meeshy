@@ -24,7 +24,7 @@ Aucune mesure Prometheus n'existait. Les objectifs de temps de la chaîne média
      - `GET /metrics` seul.
    - Rien n'est poussé : aucune mesure ne quitte le serveur sans qu'un collecteur interne vienne la lire. Le port n'est pas dans le manifeste des routes, qui recense l'API.
 4. **Traducteur** : `audio_pipeline_seconds{stage}` (`whisper`, `nllb`, `tts`). Voir `services/translator/decisions/2026-10-23-l-audio-d-un-message-a-son-histogramme-11257.md`.
-5. **Charge** : `tests/load/media-upload.js` (téléversement de 5 Mo) et `tests/load/vocal-30s.js` (vocal de 30 s jusqu'à sa transcription servie), en k6, contre le staging seulement (la production est refusée par le script).
+5. **Charge** : `tests/load/media-upload.js` (téléversement de 5 Mo) et `tests/load/vocal-30s.js` (vocal de 30 s, de l'upload à l'envoi du message qui le porte ; la chaîne whisper → nllb → tts qu'il déclenche se lit sur `audio_pipeline_seconds`), en k6, contre le staging seulement : `tests/load/target.js` refuse tout hôte `meeshy.me` hors `staging.meeshy.me` avant la première requête. Le WAV de synthèse est un silence ; un enregistrement parlé passe par `K6_VOICE_FILE`. Témoin : `services/metrics/__tests__/load-scripts.test.ts` joue les scripts sur un faux k6 et assert la charge envoyée.
 
 ### Ce qui reste
 
