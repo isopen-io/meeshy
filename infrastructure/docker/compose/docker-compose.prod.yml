@@ -63,10 +63,21 @@ services:
       - traefik_certs:/letsencrypt
       - ./config/dynamic.yaml:/dynamic.yaml:ro
       - /var/log/meeshy/traefik:/var/log/traefik
+    # #11451 — Traefik ne partage QUE des réseaux d'entrée : meeshy-network (les services
+    # exposés de la production) et meeshy-staging-edge (ceux du staging). Les données de
+    # la production (base, Redis, translator, agent) vivent sur meeshy-data, qu'il ne joint pas.
+    # gw_priority -1 (comme sur l'hôte) : la route par défaut de Traefik ne passe jamais
+    # par le réseau du staging.
     networks:
-      - meeshy-network
+      meeshy-network: {}
+      meeshy-staging-edge:
+        gw_priority: -1
     labels:
       - "traefik.enable=true"
+      # #10323 — Traefik a deux réseaux depuis #11451 : ce label ne vaut que pour SES routeurs
+      # (le tableau de bord, api@internal). Les autres services routés multi-réseaux portent
+      # le leur ; --providers.docker.network ci-dessus n'est pas le nom réel (#10323).
+      - "traefik.docker.network=meeshy_meeshy-network"
       # Dashboard Traefik sur traefik.${DOMAIN}
       - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
@@ -91,10 +102,10 @@ services:
       - ./shared/init-mongodb-replica.sh:/docker-entrypoint-initdb.d/init-mongodb-replica.sh:ro
       - ./shared/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
       - ./shared/init-postgresql.sql:/docker-entrypoint-initdb.d/init-postgresql.sql:ro
+    # #11451 — réseau de données INTERNE seulement : ni Traefik, ni aucun service exposé,
+    # ni aucun conteneur du staging ne la joint.
     networks:
-      - meeshy-network
-      # #10289 — réseau privé de l'agent : seuls la passerelle, la base et Redis le partagent.
-      - meeshy-agent-network
+      - meeshy-data
     healthcheck:
       test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh mongodb://localhost:27017/${MONGODB_DATABASE:-meeshy} --quiet || exit 1"]
       interval: 30s
@@ -118,8 +129,11 @@ services:
     depends_on:
       database:
         condition: service_healthy
+    # #11451 — la base par meeshy-data ; meeshy-admin-ui (bridge) porte la publication
+    # loopback : Docker ne publie aucun port d'un conteneur qui n'est que sur un réseau interne.
     networks:
-      - meeshy-network
+      - meeshy-data
+      - meeshy-admin-ui
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
@@ -135,10 +149,9 @@ services:
     command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy volatile-lru
     volumes:
       - redis_data:/data
+    # #11451 — réseau de données INTERNE seulement, comme la base.
     networks:
-      - meeshy-network
-      # #10289 — réseau privé de l'agent : seuls la passerelle, la base et Redis le partagent.
-      - meeshy-agent-network
+      - meeshy-data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -163,8 +176,10 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    # #11451 — même règle que nosqlclient : Redis par meeshy-data, port loopback par meeshy-admin-ui.
     networks:
-      - meeshy-network
+      - meeshy-data
+      - meeshy-admin-ui
     healthcheck:
       test: ["CMD-SHELL", "netstat -an | grep :7843 || exit 1"]
       interval: 30s
@@ -208,8 +223,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # #11451 — la base, Redis et la passerelle par meeshy-data (interne). Sa sortie vers
+    # Hugging Face (modèles absents du cache, HF_TOKEN) passe par un bridge qu'il est seul à occuper.
     networks:
-      - meeshy-network
+      - meeshy-data
+      - meeshy-translator-egress
     healthcheck:
       # Liveness léger (/live = réponse instantanée, sans await DB/ZMQ/modèles).
       # /health faisait des awaits DB+ZMQ+modèles sur le même event-loop que
@@ -392,6 +410,15 @@ services:
       - SESSION_EXPIRY_TRUSTED_DAYS=${SESSION_EXPIRY_TRUSTED_DAYS:-365}
       - MAX_SESSIONS_PER_USER=${MAX_SESSIONS_PER_USER:-10}
       - BRAND_LOGO_URL=${BRAND_LOGO_URL:-}
+      # #11509 — le relais des opérations serveur, ouvert à la production sur feu vert du
+      # porteur (2026-10-24) : les demandes de sauvegarde / purge des images sont DÉPOSÉES
+      # dans OPS_REQUESTS_DIR pour le runner de l'hôte (infrastructure/scripts/ops-runner/,
+      # `install.sh production`), qui publie son état dans OPS_STATE_DIR, monté en lecture
+      # seule. Ni socket Docker ni systemd dans la passerelle. Hôte partagé avec le staging.
+      - OPS_ENVIRONMENT=production
+      - OPS_SHARED_HOST=true
+      - OPS_REQUESTS_DIR=/ops-requests
+      - OPS_STATE_DIR=/ops-state
     volumes:
       - gateway_uploads:/app/uploads
       # NE PAS monter dans le service nginx : ce montage rendrait les sons publics.
@@ -404,14 +431,20 @@ services:
       # #9668 — le SEUL dossier du verdict de sauvegarde, en lecture seule : la passerelle
       # ne voit jamais les sauvegardes elles-mêmes (/opt/meeshy/backups/nightly).
       - ${BACKUP_STATUS_HOST_DIR:-/opt/meeshy/backups/nightly-status}:/backup-status:ro
+      # #11509 — les demandes d'opérations (écrites par la passerelle, uid 1001) et l'état
+      # publié par le runner de l'hôte (lecture seule).
+      - /opt/meeshy/production/ops/requests:/ops-requests
+      - /opt/meeshy/production/ops/state:/ops-state:ro
     depends_on:
       database:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Trois réseaux : meeshy-network (Traefik la route), meeshy-data (base, Redis, translator,
+    # #11451) et meeshy-agent-network (l'agent, #10289).
     networks:
       - meeshy-network
-      # #10289 — réseau privé de l'agent : seuls la passerelle, la base et Redis le partagent.
+      - meeshy-data
       - meeshy-agent-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
@@ -421,7 +454,7 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
-      # #10323 — la passerelle a DEUX réseaux (#10289) : Traefik la joint par le réseau d'entrée,
+      # #10323 — la passerelle a plusieurs réseaux (#10289, #11451) : Traefik la joint par le réseau d'entrée,
       # sous son nom RÉEL (préfixé par le projet compose `meeshy`). Sans ce label, il a pris
       # l'IP du réseau de l'agent, qu'il ne joint pas : gate.meeshy.me en 504 (2026-10-12).
       - "traefik.docker.network=meeshy_meeshy-network"
@@ -568,11 +601,14 @@ services:
     depends_on:
       - database
       - redis
-    # Réseau PRIVÉ seulement (#10289), comme agent-staging : la passerelle le joint
-    # par son nom de service (HTTP 3200, ZMQ 5560/5561). meeshy-network, partagé avec
-    # Traefik, la webapp, static-files et certs-dumper, ne lui servait à rien.
+    # Réseaux PRIVÉS seulement (#10289), comme agent-staging : la passerelle le joint
+    # par son nom de service (HTTP 3200, ZMQ 5560/5561) sur meeshy-agent-network, qui porte
+    # aussi sa sortie vers le fournisseur LLM ; la base et Redis par meeshy-data (#11451).
+    # meeshy-network, partagé avec Traefik, la webapp, static-files et certs-dumper, ne lui
+    # servait à rien.
     networks:
       - meeshy-agent-network
+      - meeshy-data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
       interval: 30s
@@ -748,9 +784,31 @@ volumes:
   frontend_uploads:
 
 networks:
+  # Réseau d'ENTRÉE de la production (#11451) : Traefik et les services qu'il route
+  # (passerelle, webapp, static-files, turn-cert-stub) et certs-dumper. Aucune donnée.
+  # Son nom réel est meeshy_meeshy-network (préfixe du projet compose, #10323).
   meeshy-network:
     driver: bridge
-  # #10289 — agent + passerelle + base + Redis. Bridge (pas `internal`) : l'agent
-  # doit joindre son fournisseur LLM.
+  # Réseau de DONNÉES (#11451) : base, Redis, translator, passerelle, agent et les deux UIs
+  # d'administration. `internal` : aucune sortie, aucune entrée de l'hôte, aucun service
+  # exposé, aucun conteneur du staging. Garde : prod-data-network-isolated.test.ts.
+  meeshy-data:
+    driver: bridge
+    internal: true
+  # #10289 — agent + passerelle. Bridge (pas `internal`) : l'agent doit joindre son
+  # fournisseur LLM. La base et Redis l'ont quitté pour meeshy-data (#11451).
   meeshy-agent-network:
     driver: bridge
+  # #11451 — la sortie du translator vers Hugging Face. Il est seul dessus.
+  meeshy-translator-egress:
+    driver: bridge
+  # #11451 — porte la publication loopback (tunnel SSH, #3640) de nosqlclient et
+  # p3x-redis-ui, que meeshy-data, interne, ne permet pas. Rien d'autre dessus.
+  meeshy-admin-ui:
+    driver: bridge
+  # Réseau d'entrée du STAGING, possédé par aucun des deux projets : créé une fois sur
+  # l'hôte (`docker network create meeshy-staging-edge`). Traefik et les seuls services
+  # exposés du staging le partagent. Garde : prod-data-network-isolated.test.ts.
+  meeshy-staging-edge:
+    external: true
+    name: meeshy-staging-edge

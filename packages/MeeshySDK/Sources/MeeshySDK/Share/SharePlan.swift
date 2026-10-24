@@ -372,7 +372,10 @@ public enum SharePlanner {
     private static func cardOffer(_ kind: ShareCardKind) -> Offer {
         switch kind {
         case .post, .reel: return .plain(.send, .caption, .publishPost, .publishStory, .copyLink, .shareOut)
-        case .story, .profile, .invitation: return .plain(.send, .caption, .copyLink, .shareOut)
+        // D14, revue par le porteur (#12644) : une story se
+        // republie en story, post ou réel, et se recompose au studio.
+        case .story: return .plain(.send, .caption, .publishPost, .publishStory, .publishReel, .studio, .copyLink, .shareOut)
+        case .profile, .invitation: return .plain(.send, .caption, .copyLink, .shareOut)
         }
     }
 

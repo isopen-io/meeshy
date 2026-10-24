@@ -7,7 +7,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MaskedAttachment } from './masked-attachment';
-import { Badges, FailedSendBand } from './message-blocks';
+import { Badges } from './message-blocks';
+import { FailedSendBand } from './failed-send-band';
 import { ProtectionNotice, ViewOnceChip } from './protected-content';
 
 /**

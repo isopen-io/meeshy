@@ -1047,6 +1047,7 @@ const de = {
   'message.menu.more': 'Mehr…',
   'message.menu.react': 'Reagieren',
   'message.menu.addReaction': 'Reaktion hinzufügen',
+  'message.menu.preview': 'Nachrichtenvorschau',
   'message.selection.toolbar': 'Nachrichtenauswahl',
   'message.selection.count': '{count} ausgewählt',
   'message.detail.title': 'Nachrichtendetails',

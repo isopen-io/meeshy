@@ -290,7 +290,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// Cached metadata for the active conversation, hydrated lazily from the
     /// cache when `loadMessages` runs. Used to feed `playAudio` with the
     /// right `conversationName` / `conversationArtworkURL`.
-    @Published var currentConversation: MeeshyConversation?
+    @Published var currentConversation: MeeshyConversation? { didSet { startupDependencies.encryptedEra.conversationChanged(from: oldValue, in: self) } }
 
     #if DEBUG
     private var _testAudioCoordinator: ConversationAudioCoordinator?
@@ -380,6 +380,8 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     let lastReadMessageCreatedAt: Date?
     let isDirect: Bool
     let participantUserId: String?
+    /// Le régime de la ligne qui a ouvert le fil (#11379), lu SYNCHRONE comme `memberJoinedAt`.
+    let encryptionModeAtOpening: String?
     let initialUnreadCount: Int
     let limit = 30
     var nextMessageCursor: String?
@@ -388,6 +390,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// Subscription that mirrors `MessageStore.messagesDidChange` into the
     /// `messages` array.  Established once in `init` after `messageStore` is ready.
     var storeObservation: AnyCancellable?
+    var endToEndOpenings: AnyCancellable?
     var socketHandler: ConversationSocketHandler?
 
     // MARK: - Split Orchestrators (incremental migration scaffold)
@@ -441,8 +444,8 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     private let liveCallJoin: LiveCallJoinContext
     let translationService: TranslationServiceProviding
     let attachmentTranslationService: AttachmentTranslationProviding
-    let messageEncryptor: DirectMessageEncrypting
-    let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
+    /// #3707 — l'E2EE libsignal : le scellement par appareil et le clair que cet appareil a déchiffré.
+    let endToEnd: any EndToEndMessagingProviding
 
     /// Captured at init so the heavy side-effects (DB observation, initial
     /// load, Combine subscriptions, singleton mutations) can be deferred out
@@ -468,7 +471,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         conversationId: String,
         unreadCount: Int = 0,
         isDirect: Bool = false,
-        participantUserId: String? = nil,
+        participantUserId: String? = nil, encryptionMode: String? = nil,
         memberJoinedAt: Date? = nil,
         lastReadMessageId: String? = nil,
         lastReadAt: Date? = nil,
@@ -491,7 +494,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         liveCallJoin: LiveCallJoinContext = .live,
         translationService: TranslationServiceProviding = TranslationService.shared,
         attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared,
-        messageEncryptor: DirectMessageEncrypting = SessionManager.shared,
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
         afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared,
         protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared,
         receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared,
@@ -507,7 +510,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         self.liveCallJoin = liveCallJoin
         self.translationService = translationService
         self.attachmentTranslationService = attachmentTranslationService
-        self.messageEncryptor = messageEncryptor
+        self.endToEnd = endToEnd
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
         self.lastReadMessageId = lastReadMessageId
@@ -515,7 +518,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         self.lastReadMessageCreatedAt = lastReadMessageCreatedAt
         self.initialUnreadCount = unreadCount
         self.isDirect = isDirect
-        self.participantUserId = participantUserId
+        self.participantUserId = participantUserId; self.encryptionModeAtOpening = encryptionMode
         self.isConversationClosed = closedAt != nil
         self.authManager = authManager
         self.messageService = messageService

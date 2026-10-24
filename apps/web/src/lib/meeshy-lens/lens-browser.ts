@@ -1,3 +1,7 @@
+import { createLandmarkDetector, type LandmarkDetector, type LandmarkerPort } from '@/lib/calls/face-landmark-detector';
+import type { FaceDetectorPort } from '@/lib/calls/face-tracker';
+import type { DeviceTier } from '@/lib/device/capability-tier';
+
 import { createLutStage, type LutStage } from './lens-lut-stage';
 import { createLensStage, type LensStage, type LensStageEnv } from './lens-stage';
 
@@ -13,6 +17,12 @@ import { createLensStage, type LensStage, type LensStageEnv } from './lens-stage
  * DANS ses réglages (`LensSettings.files`, #11994), lus et décodés par l'hôte
  * (`call-lens.ts`) : l'étage les y lit, et ses `cube`/`assets` ne sont que le
  * repli d'une lens posée sans fichiers.
+ *
+ * Le VISAGE (W15, #11321) : l'hôte remet son suiveur (`track`) et le détecteur
+ * du navigateur ; l'étage leur adjoint le détecteur à 478 points
+ * (`face-landmark-detector.ts`), bâti au premier visage demandé — donc à la
+ * première lens qui s'y ancre —, et le rend à sa fermeture. Ce code vit ICI,
+ * dans le chunk des lens, et non dans le worker des effets qui a son plafond.
  */
 function browserLutStage(): LutStage | null {
   if (typeof OffscreenCanvas === 'undefined') return null;
@@ -25,12 +35,45 @@ function browserLutStage(): LutStage | null {
   }
 }
 
-export function browserLensStage(options: { readonly face: LensStageEnv['face']; readonly reducedMotion?: () => boolean }): LensStage {
-  return createLensStage({
-    face: options.face,
+export type LensFaceEnv = {
+  readonly track: (detector: FaceDetectorPort) => LensStageEnv['face'];
+  readonly browserDetector: () => FaceDetectorPort | null;
+  readonly tier: () => DeviceTier;
+  readonly now: () => number;
+  readonly load?: () => Promise<LandmarkerPort>;
+};
+
+const loadFaceLandmarker = (): Promise<LandmarkerPort> => import('@/lib/calls/video-effects-segmentation').then((module) => module.loadFaceLandmarker());
+
+function lensFace(env: LensFaceEnv): { readonly face: LensStageEnv['face']; readonly close: () => void } {
+  const state: { face: LensStageEnv['face'] | null; detector: LandmarkDetector | null } = { face: null, detector: null };
+  return {
+    face: (source, frame) => {
+      if (state.face === null) {
+        const detector = createLandmarkDetector({ load: env.load ?? loadFaceLandmarker, tier: env.tier, fallback: env.browserDetector(), now: env.now });
+        state.detector = detector;
+        state.face = env.track(detector);
+      }
+      return state.face(source, frame);
+    },
+    close: () => state.detector?.close(),
+  };
+}
+
+export function browserLensStage(options: { readonly face: LensFaceEnv; readonly reducedMotion?: () => boolean }): LensStage {
+  const face = lensFace(options.face);
+  const stage = createLensStage({
+    face: face.face,
     cube: () => null,
     lut: browserLutStage,
     paint: { assets: () => null },
     ...(options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion }),
   });
+  return {
+    ...stage,
+    close: () => {
+      stage.close();
+      face.close();
+    },
+  };
 }

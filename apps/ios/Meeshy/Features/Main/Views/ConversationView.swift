@@ -262,7 +262,7 @@ struct ConversationView: View {
 
     /// #11214 — le lecteur et la conversation tels que la loi des actions les lit ; un seul site.
     var menuAuthority: ConversationMenuAuthority {
-        ConversationMenuAuthority.make(conversation: liveConversation, currentUser: AuthManager.shared.currentUser, guest: anonymousSession)
+        ConversationMenuAuthority.make(conversation: liveConversation, viewModel: viewModel)
     }
 
     /// « Retirer » le message d'un AUTRE (#11151) — créateur compris, jamais en direct.
@@ -288,7 +288,7 @@ struct ConversationView: View {
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,
             isDirect: conversation?.type == .direct,
-            participantUserId: conversation?.participantUserId,
+            participantUserId: conversation?.participantUserId, encryptionMode: conversation?.encryptionMode,
             memberJoinedAt: conversation?.currentUserJoinedAt,
             // Frontière de lecture (#7198/#7222) — reprise SYNCHRONE de la
             // ligne de liste qui ouvre ce fil, même idiome que
@@ -561,7 +561,7 @@ struct ConversationView: View {
             scrollState: $scrollState,
             overlayState: $overlayState,
             showScript: { readingModeController.select(.script) },
-            reply: { triggerReply(for: $0) }, presentMenu: { presentLongPressMenu(for: $0, cellFrame: nil) },
+            reply: { triggerReply(for: $0) }, menuAuthority: { menuAuthority }, presentMenu: { presentLongPressMenu(for: $0, cellFrame: nil) },
             openViewOnce: { openViewOnce(messageId: $0) },
             openMedia: openMediaFullscreen
         )
@@ -621,7 +621,7 @@ struct ConversationView: View {
             ),
             isHeaderExpanded: composerState.showOptions,
             readingMode: readingModeController.mode,
-            authority: menuAuthority,
+            authority: { menuAuthority },
             messageActions: messageActions,
             actions: ConversationMessageListActions(
                 toggleSelection: { toggleMessageSelection($0) },

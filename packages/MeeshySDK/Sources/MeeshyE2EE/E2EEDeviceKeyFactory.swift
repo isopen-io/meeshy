@@ -7,6 +7,10 @@ import LibSignalClient
 /// publiée a toujours sa clé privée sur l'appareil.
 public protocol E2EEDeviceKeyFactoryProviding: Sendable {
     func enrollment(userId: String, platform: E2EEPlatform, label: String?, now: Date) throws -> E2EEEnrollDeviceRequest
+    /// L'enrôlement d'une installation qui REVIENT (session nouvelle, place
+    /// retrouvée) : sans pré-clés uniques, que la passerelle a effacées au
+    /// retrait ou garde encore — le réapprovisionnement suit, au compte servi.
+    func reenrollment(userId: String, platform: E2EEPlatform, label: String?, now: Date) throws -> E2EEEnrollDeviceRequest
     func replenishment(for stock: E2EEPreKeyStock, now: Date) throws -> E2EEPublishKeysRequest?
 }
 
@@ -18,7 +22,7 @@ public enum E2EEPreKeyPolicy {
     public static let rotationInterval: TimeInterval = 7 * 24 * 60 * 60
 }
 
-public final class E2EEDeviceKeyFactory: E2EEDeviceKeyFactoryProviding, @unchecked Sendable {
+public final class E2EEDeviceKeyFactory: E2EEDeviceKeyFactoryProviding {
     private let identity: E2EELocalIdentity
     private let store: MeeshySignalProtocolStore
     private let vault: any E2EERecordVaultProviding
@@ -34,6 +38,14 @@ public final class E2EEDeviceKeyFactory: E2EEDeviceKeyFactoryProviding, @uncheck
     private var identityKeyBase64: String { identity.keyPair.identityKey.serialize().base64EncodedString() }
 
     public func enrollment(userId: String, platform: E2EEPlatform, label: String?, now: Date) throws -> E2EEEnrollDeviceRequest {
+        try enrollment(userId: userId, platform: platform, label: label, now: now, oneTimeBatch: E2EEPreKeyPolicy.batchSize)
+    }
+
+    public func reenrollment(userId: String, platform: E2EEPlatform, label: String?, now: Date) throws -> E2EEEnrollDeviceRequest {
+        try enrollment(userId: userId, platform: platform, label: label, now: now, oneTimeBatch: 0)
+    }
+
+    private func enrollment(userId: String, platform: E2EEPlatform, label: String?, now: Date, oneTimeBatch: Int) throws -> E2EEEnrollDeviceRequest {
         let timestamp = Int64(now.timeIntervalSince1970 * 1000)
         let message = E2EEDeviceBindingProof.message(
             userId: userId, registrationId: identity.registrationId, identityKey: identityKeyBase64, timestamp: timestamp
@@ -49,8 +61,8 @@ public final class E2EEDeviceKeyFactory: E2EEDeviceKeyFactoryProviding, @uncheck
                     platform: platform,
                     label: label,
                     binding: binding,
-                    oneTimePreKeys: try newOneTimePreKeys(transaction, count: E2EEPreKeyPolicy.batchSize),
-                    kyberPreKeys: try (0..<E2EEPreKeyPolicy.batchSize).map { _ in try newKyberPreKey(transaction, now: now, lastResort: false) }
+                    oneTimePreKeys: try newOneTimePreKeys(transaction, count: oneTimeBatch),
+                    kyberPreKeys: try (0..<oneTimeBatch).map { _ in try newKyberPreKey(transaction, now: now, lastResort: false) }
                 )
             }
         }

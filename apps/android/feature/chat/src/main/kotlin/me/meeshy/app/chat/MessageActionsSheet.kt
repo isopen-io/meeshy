@@ -131,6 +131,7 @@ internal fun MessageActionsSheet(
         isEdited = bubble.isEdited,
         hasText = bubble.text.isNotBlank(),
         hostedEntries = hostedEntries,
+        exitOffer = bubble.exitOffer,
     )
     // The vertical drag on the grabber is resolved by the pure [MessageOverlayDragLaw]
     // SSOT: a strong swipe up expands the compact action sheet into the full language

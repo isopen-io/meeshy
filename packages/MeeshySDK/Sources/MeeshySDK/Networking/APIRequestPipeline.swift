@@ -119,6 +119,12 @@ enum APIFailureVerdict {
         if statusCode == 426 {
             return .thrown(.server(statusCode: 426, message: message ?? "Mise a jour requise"))
         }
+        if statusCode == 400, let refusal = endToEndPlaintextRefusal(data: data, message: message, decoder: decoder) {
+            return .thrown(.rejected(refusal))
+        }
+        if let refusal = endToEndRelayRefusal(statusCode: statusCode, data: data, message: message, decoder: decoder) {
+            return .thrown(.rejected(refusal))
+        }
         if rejectionPolicy == .structured, (400...499).contains(statusCode), ![401, 403, 429].contains(statusCode) {
             return .thrown(structuredRejection(statusCode: statusCode, data: data, message: message, decoder: decoder))
         }
@@ -131,6 +137,25 @@ enum APIFailureVerdict {
         return .thrown(throttledOrServerError(
             statusCode: statusCode, message: message, dailyLimit: dailyLimit, slowMode: slowMode
         ))
+    }
+
+    /// #11379 — le refus d'un clair dans une conversation chiffrée (#11216)
+    /// garde son code sur TOUTE adresse : sans lui, le client lit un 400 opaque
+    /// et rejoue le même clair par le socket, puis par l'outbox.
+    private static func endToEndPlaintextRefusal(data: Data, message: String?, decoder: JSONDecoder) -> APIRejection? {
+        guard let envelope = try? decoder.decode(APIRejectionEnvelope.self, from: data),
+              envelope.code == EndToEndSendGate.serverPlaintextRefusalCode else { return nil }
+        return APIRejection(statusCode: 400, code: envelope.code, message: message ?? "Erreur inconnue")
+    }
+
+    /// #3707 — le refus d'un envoi libsignal (409 Sesame et son écart, 403
+    /// appareil non lié, 400 client périmé) garde son code sur TOUTE adresse :
+    /// l'envoi doit savoir rechiffrer pour les bons appareils, jamais rejouer.
+    private static func endToEndRelayRefusal(statusCode: Int, data: Data, message: String?, decoder: JSONDecoder) -> APIRejection? {
+        guard [400, 403, 409].contains(statusCode),
+              let envelope = try? decoder.decode(APIRejectionEnvelope.self, from: data),
+              let code = envelope.code, E2EEErrorCode.relayRefusals.contains(code) else { return nil }
+        return envelope.rejection(statusCode: statusCode, fallbackMessage: message ?? "Envoi chiffré refusé")
     }
 
     private static func structuredRejection(

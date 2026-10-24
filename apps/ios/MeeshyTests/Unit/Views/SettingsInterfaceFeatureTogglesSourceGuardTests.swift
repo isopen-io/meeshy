@@ -131,7 +131,7 @@ final class SettingsInterfaceFeatureTogglesSourceGuardTests: XCTestCase {
     func test_listReadingModeSubmenu_isOfferedOnlyWhenReadingModesAreOn() throws {
         XCTAssertTrue(
             try code("Features/Main/Views/ConversationListView+Overlays.swift")
-                .contains("if LentilleFeatureFlag.isLentilleListEnabled, LentilleFeatureFlag.isReadingModesEnabled { LentilleReadingModeSubmenu("),
+                .contains("offersReadingModes: LentilleFeatureFlag.isLentilleListEnabled && LentilleFeatureFlag.isReadingModesEnabled"),
             "Modes de lecture coupés ⇒ le menu contextuel de la liste ne propose pas un mode que l'ouverture ignorerait."
         )
     }

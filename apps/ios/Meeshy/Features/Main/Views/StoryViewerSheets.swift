@@ -14,6 +14,9 @@ import MeeshyUI
 /// tap du bouton de partage d'une story).
 struct StoryViewerSheets: ViewModifier {
     @Environment(\.routerCommands) private var router
+    /// « Modifier dans le studio » de la feuille Meeshy (#12644) : la même porte
+    /// que « Composer » du menu « … » et du rail.
+    @Environment(\.meeshyComposeSeedRequest) private var demanderComposer: ((ComposerSeedTarget) -> Void)?
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     let currentStory: StoryItem?
@@ -31,6 +34,22 @@ struct StoryViewerSheets: ViewModifier {
     // presents cleanly after the viewers sheet closes (avoids stacking two
     // sheets and reaching the Router across the sheet boundary).
     @State private var pendingViewerProfile: ProfileSheetUser?
+    /// Le studio demandé depuis la feuille Meeshy : il s'ouvre une fois la
+    /// feuille REFERMÉE — deux présentations ne se chevauchent pas — et la story
+    /// reste en pause jusque-là.
+    @State private var pendingComposeTarget: ComposerSeedTarget?
+
+    /// La graine du studio pour la story COURANTE — `nil` quand la slide ne se
+    /// recrée pas, et la feuille n'offre alors pas le studio (loi 4).
+    private func composeCurrentStory() -> (() -> Void)? {
+        guard demanderComposer != nil, let story = currentStory,
+              let cible = ComposerSeedTarget(
+                  story: story,
+                  // Défaut de COMPOSITION (langue proposée au composer, repli « fr ») — pas une lecture (#11832).
+                  preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+              ) else { return nil }
+        return { pendingComposeTarget = cible }
+    }
 
     func body(content: Content) -> some View {
         content
@@ -66,10 +85,17 @@ struct StoryViewerSheets: ViewModifier {
                 .presentationDragIndicator(.visible)
             }
         }
-        .sheet(item: $sharedContentWrapper, onDismiss: { resumeTimer() }) { wrapper in
+        .sheet(item: $sharedContentWrapper, onDismiss: {
+            guard let cible = pendingComposeTarget, let demanderComposer else { return resumeTimer() }
+            pendingComposeTarget = nil
+            demanderComposer(cible)
+        }) { wrapper in
             ShareSheetView(
                 subject: wrapper.subject,
-                actions: ShareSheetHostActions(onOpenConversation: { router.navigateToConversation($0) }),
+                actions: ShareSheetHostActions(
+                    onOpenConversation: { router.navigateToConversation($0) },
+                    onCompose: composeCurrentStory()
+                ),
                 onDismiss: { sharedContentWrapper = nil }
             )
             .presentationDetents([.medium, .large] as Set<PresentationDetent>)

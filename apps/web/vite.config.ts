@@ -458,6 +458,10 @@ export default defineConfig({
      */
     __FIXTURES__: JSON.stringify(declaredDataSource !== 'gateway'),
     __APP_VERSION__: JSON.stringify(appVersion),
+    /* #12654 — la révision du bundle, de la MÊME `VCS_REF` que le Dockerfile
+       écrit dans `dist/build-info.json` : le contrôleur de mise à jour compare
+       les deux. Absente (build local) ⇒ `null`, jamais une valeur fabriquée. */
+    __BUILD_COMMIT__: JSON.stringify(process.env.VCS_REF?.trim() || null),
     /** La passerelle que le proxy de dev vise (#8287) — l'écran de connexion la
      * montre EN DÉVELOPPEMENT seulement, comme le sélecteur iOS au simulateur. */
     __API_PROXY_TARGET__: JSON.stringify(proxyTarget),
@@ -752,6 +756,18 @@ export default defineConfig({
            * un nom de plus dans la table de préchargement de l'entrée. Un nom
            * pour les deux : lues par les mêmes écrans (liste, fil, jonction).
            */
+          /**
+           * LA TABLE DES RÔLES PRIVILÉGIÉS (#11217) — `platform-privilege`
+           * (`@meeshy/shared`), lue par la loi d'actions (`message-action-policy`,
+           * chargée au geste) et par `participant-helpers`, que l'entrée lit pour
+           * `resolveParticipantAvatar`. Laissée à Rolldown, ce module partagé
+           * réorganisait les morceaux communs : `message-effect-flags`, jusque-là
+           * dans l'entrée, en sortait en morceau à part, et la première peinture
+           * passait le plafond (mesuré sur dev + le lot : 92,99 Ko, 93,01 en CI,
+           * contre 92,87 sur dev). Un nom à elle la laisse aux écrans qui la
+           * lisent : 92,91 Ko, la table des drapeaux revient dans l'entrée.
+           */
+          if (/\/utils\/platform-privilege\.[jt]s$/.test(id)) return 'role-law';
           if (/\/types\/(world-identity|guest-attachment-kind-rules)\.[jt]s$/.test(id)) return 'guest-world-law';
           if (id.endsWith('/src/lib/view/media-transport.ts')) return 'media-time';
           if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments)\.[jt]s$/.test(id)) return 'game-law';

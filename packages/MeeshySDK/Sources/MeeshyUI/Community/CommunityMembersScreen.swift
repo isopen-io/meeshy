@@ -106,7 +106,7 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: role.icon)
                 .font(.system(size: MeeshyIconSize.xxs))
-            Text(role.sectionTitle(in: .module))
+            Text(role.sectionTitle)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
             Text("\(count)")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))

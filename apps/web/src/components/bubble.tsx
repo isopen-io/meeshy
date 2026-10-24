@@ -34,13 +34,13 @@ import {
   Badges,
   Check,
   EditedMark,
-  FailedSendBand,
   Flags,
   PrismPastille,
   Quote,
   ReactionChip,
   reactionEntries,
 } from './message-blocks';
+import { FailedSendBand } from './failed-send-band';
 
 const defaultNow = (): number => Date.now();
 
@@ -86,6 +86,7 @@ export function Bubble({
   sendStartedAt,
   sendFailureReason,
   onRetry,
+  onDiscard,
   revealable = true,
   onJumpToMessage,
   onOpenStory,
@@ -140,6 +141,7 @@ export function Bubble({
    * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
   sendFailureReason?: string;
   onRetry?: () => void;
+  onDiscard?: () => void;
   /**
    * LE CONTENU EST-IL SEULEMENT LA ? (#6862) — `false` quand la charge ne
    * PORTE PAS le texte : la lecture souveraine de l'administration retient
@@ -579,6 +581,7 @@ export function Bubble({
               <FailedSendBand
                 {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
                 {...(onRetry === undefined ? {} : { onRetry })}
+                {...(onDiscard === undefined ? {} : { onDiscard })}
                 textColor="var(--color-error)"
               />
             ) : null}
@@ -636,6 +639,7 @@ export function Bubble({
               <FailedSendBand
                 {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
                 {...(onRetry === undefined ? {} : { onRetry })}
+                {...(onDiscard === undefined ? {} : { onDiscard })}
                 textColor={isMine ? 'var(--color-ios-on-brand)' : 'var(--color-error)'}
               />
             ) : null}

@@ -9,16 +9,17 @@ import { Glyph } from '@/components/glyph';
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { useRowActionNotice } from '@/lib/view/row-action-notice';
 import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
-import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
+import { LensRow, ROW_HEIGHT, type RowPlace } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { accentOf } from '@/lib/accent';
 import { titleOf } from '@/lib/view/conversation';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
-import { LensSection } from '@/components/lens-sticker';
+import { carriedRowCount, LensVirtualSections } from '@/components/lens-virtual-sections';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
 import { useListReorderFlip, useScene } from '@/lib/lens/scene';
+import { useListDepartures } from '@/lib/view/list-departures';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { publicWebOrigin } from '@/lib/links/public-origin';
@@ -518,6 +519,11 @@ export default function ConversationsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, selection, search, viewer.id, overrides, categories, timeZone, minute]);
   useListReorderFlip(frame, visible);
+  /* UNE CONVERSATION QUI QUITTE LA LISTE S'Y REPLIE (#11574) — sous la même
+     portée de filtre et de recherche seulement : changer de filtre remplace la
+     liste, il n'en retire personne. */
+  const { rowMayExit, sectionMayExit } = useListDepartures({ visible, sections });
+  const exitScope = `${selection.join(',')}|${search}`;
 
   /**
    * LE PLIAGE DES SECTIONS (#8694, toute section depuis #10103) — Épingles et
@@ -537,8 +543,8 @@ export default function ConversationsScreen() {
   const folds = sections.map((section) =>
     foldOf(section, section.conversations.map((c) => effectiveUnreadOf(c, overrides))),
   );
-  /** Les rangées RÉELLEMENT montées — World Wide et les sections dépliées. */
-  const shownRows = (world === undefined ? 0 : 1) + sections.reduce((sum, section, i) => (folds[i]?.folded === true ? sum : sum + section.conversations.length), 0);
+  /** Les rangées que la liste PORTE — World Wide et les sections dépliées, montées ou tenues par une cale (#11228). */
+  const shownRows = carriedRowCount({ world, sections, folds });
 
   /**
    * LA SENTINELLE DE DÉFILEMENT INFINI (#6195) — déclarée APRÈS `visible`
@@ -569,10 +575,11 @@ export default function ConversationsScreen() {
   /* UNE RANGÉE DE LA LENTILLE — partagée par les sections et par World Wide
      en tête (#10004) : mêmes signaux, même scène, même peau (#10191), et
      son épingle seulement si on l'a épinglée (#10347). */
-  const lensRowOf = (c: (typeof conversations)[number]) => (
+  const lensRowOf = (c: (typeof conversations)[number], place?: RowPlace) => (
     <LensRow
       key={c.id}
       conversation={c}
+      place={place}
       languages={readerLanguages}
       viewerId={viewer.id ?? ''}
       flags={effectiveFlagsOf(c, overrides)}
@@ -663,6 +670,8 @@ export default function ConversationsScreen() {
            transition, retour animé — voir son doc-comment. */
         style={{ paddingBottom: searchBarHeight, ...pullTransform(pull.phase, pull.offsetPx) }}
         {...(loading ? { 'aria-busy': true, 'aria-label': translate(interfaceLanguage, 'list.loading') } : {})}
+        /* LE TOTAL QUE LA LISTE PORTE (#11228) — virtualisée, elle n'en monte qu'une fenêtre : les gardes lisent ce compte, jamais des nœuds `[data-row]`. */
+        data-row-count={shownRows}
       >
         {/*
           LE RAIL ET LES FILTRES VIVENT DÉSORMAIS DANS LA VUE DÉFILANTE
@@ -757,20 +766,17 @@ export default function ConversationsScreen() {
           en-tête par le suivant au lieu de les empiler tous en haut (revue
           #5694 ; voir le doc-comment de `LensSticker`).
         */}
-        {world === undefined ? null : lensRowOf(world)}
-        {sections.map((section, i) => {
-          const fold = folds[i];
-          return (
-          <LensSection
-            key={section.id}
-            id={section.id}
-            {...(section.category === undefined ? {} : { category: section.category })}
-            {...(fold === undefined ? {} : { fold })}
-          >
-            {fold?.folded === true ? null : section.conversations.map((c) => lensRowOf(c))}
-          </LensSection>
-          );
-        })}
+        {/* LA FENÊTRE (#11228) — seules les rangées visibles sont montées ; des
+            cales gardent la hauteur des autres, donc le collant, la sentinelle
+            et la position de défilement restaurée au retour. */}
+        <LensVirtualSections
+          frame={frame}
+          world={world}
+          sections={sections}
+          folds={folds}
+          rowOf={lensRowOf}
+          exits={{ scope: exitScope, rowMayExit, sectionMayExit }}
+        />
         {/*
           LE PIED DE PAGINATION (#6195) — APRÈS les sections, AVANT les états
           vides (miroir iOS `ConversationListView.swift:1851` →

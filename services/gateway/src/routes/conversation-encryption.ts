@@ -19,7 +19,12 @@ import { validateParams, validateBody } from '../validation/helpers.js';
 import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../validation/conversation-encryption-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
-import { LIVE_MESSAGE_MARK } from '../services/messaging/liveMessage';
+import {
+  noticeBroadcast,
+  postSystemNotice,
+  type SocketNoticeGateway,
+  type SystemNoticeDeps,
+} from '../services/conversations/conversationNotice';
 import { refuserCommeIntrouvable } from './conversations/utils/access-control';
 import { actorHasMinimumRole } from '../utils/conversation-authority';
 import { MemberRole } from '@meeshy/shared/types/role-types';
@@ -31,6 +36,24 @@ const logger = enhancedLogger.child({ module: 'ConversationEncryptionRoutes' });
 
 // EncryptionMode type - defined locally to avoid build order issues
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
+
+/**
+ * La diffusion de l'avis, DÉTACHÉE de la réponse (#11416) : `message:new` et
+ * `conversation:updated` partent par le chemin ordinaire des messages, mais
+ * l'activation ne les attend pas — l'avis est déjà écrit, et une émission
+ * lente ou en panne ne doit ni retenir ni faire échouer le geste.
+ */
+function detachedNoticeBroadcast(gateway: SocketNoticeGateway): SystemNoticeDeps['broadcast'] {
+  const broadcast = noticeBroadcast(gateway);
+  return async (message, conversationId) => {
+    void Promise.resolve(broadcast?.(message, conversationId)).catch((error: unknown) => {
+      logger.warn('encryption notice written but not broadcast', {
+        conversationId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  };
+}
 
 interface EnableEncryptionRequest {
   mode: EncryptionMode;
@@ -195,8 +218,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         // Qui active le chiffrement (#11218) :
         // - un tête-à-tête : chacun des deux participants ;
         // - ailleurs : au moins modérateur DANS la conversation — créateur
-        //   compris — ou ADMIN/BIGBOSS de plateforme membre, qui y agit avec
-        //   les droits du créateur. La liste écrite à la main ignorait
+        //   compris — ou un rôle de plateforme privilégié membre (MODERATOR,
+        //   ADMIN, BIGBOSS — #11217), qui y agit avec les droits du créateur. La liste écrite à la main ignorait
         //   `creator` et le rôle de plateforme. `actorHasMinimumRole` est la
         //   loi d'autorité unique ; un rang illisible y vaut moins qu'un membre.
         const member = conversation.participants.find(m => m.userId === authContext.userId);
@@ -270,20 +293,23 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           select: { id: true }
         });
 
+        // #11416 — l'avis suit le chemin ordinaire d'un message système :
+        // il devient le dernier message du fil, puis part en `message:new`
+        // (room de la conversation) et en `conversation:updated` porteur de
+        // `lastMessageSystemEvent` (rooms personnelles des membres). La ligne
+        // de liste en lit la clé localisable `system.encryption-enabled`
+        // (#7545) ; le web y ferme le régime de chiffrement (#11373).
         if (senderParticipant) {
-          await fastify.prisma.message.create({
-            data: {
+          await postSystemNotice(
+            { prisma: fastify.prisma, broadcast: detachedNoticeBroadcast(fastify.socketIOHandler) },
+            {
               conversationId,
-              senderId: senderParticipant.id,
+              senderParticipantId: senderParticipant.id,
               content: encryptionMessages[mode],
               originalLanguage: 'en',
-              messageType: 'system',
-              // #7545 — la ligne de liste lit une clé localisable
-              // (`system.encryption-enabled`), jamais ce texte anglais.
               metadata: { kind: 'encryption-enabled', mode },
-              ...LIVE_MESSAGE_MARK
-            }
-          });
+            },
+          );
         }
 
         logger.info('Encryption enabled for conversation', { conversationId, mode });

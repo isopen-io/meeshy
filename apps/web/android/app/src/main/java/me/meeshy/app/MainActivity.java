@@ -13,6 +13,7 @@ import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.provider.Settings;
@@ -20,6 +21,7 @@ import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.GeolocationPermissions;
+import android.webkit.MimeTypeMap;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -282,6 +284,10 @@ public class MainActivity extends BridgeActivity {
         suivreTailleDuTexte(getResources().getConfiguration());
         SilentNotificationChannel.ensure(ShellLocale.wrap(this));
         photoPicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::photosPicked);
+        // #12744 — Capacitor garde chaque prise de l'appareil photo ; la nouvelle
+        // WebView ne tient plus les precedentes, la creation les balaie.
+        new Thread(() -> CaptureSweepRules.sweep(getExternalFilesDir(Environment.DIRECTORY_PICTURES), System.currentTimeMillis()),
+            "MeeshyCaptureSweep").start();
         // #8547 — sans `poster`, le web montre le fond du `<video>` jusqu'a sa
         // premiere image ; la WebView dessine son icone « lecture » grise si
         // son client ne fournit pas d'apercu. On garde le client de Capacitor
@@ -300,7 +306,8 @@ public class MainActivity extends BridgeActivity {
             @Override
             @SuppressLint("NewApi")
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback, FileChooserParams params) {
-                String type = PhotoPickRules.pickerType(Build.VERSION.SDK_INT, params.getAcceptTypes(), params.isCaptureEnabled());
+                String type = PhotoPickRules.pickerType(Build.VERSION.SDK_INT, params.getAcceptTypes(), params.isCaptureEnabled(),
+                    MimeTypeMap.getSingleton()::getMimeTypeFromExtension);
                 if (type == null) return super.onShowFileChooser(webView, callback, params);
                 Intent pick = new Intent(MediaStore.ACTION_PICK_IMAGES);
                 if (!PhotoPickRules.BOTH.equals(type)) pick.setType(type);

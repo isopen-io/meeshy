@@ -74,6 +74,7 @@ clock.badge.xmark
 clock.fill
 cloud
 cpu.fill
+crop
 crown.fill
 cursorarrow.click
 delete.left.fill

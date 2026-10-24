@@ -51,7 +51,7 @@ extension MessageListViewController {
         observeRingsAndPresence()
     }
 
-    /// Langue préférée, consentement vocal et terme de recherche exigent de rejouer la registration de chaque item : reconfigure complet.
+    /// Langue préférée, consentement vocal, terme de recherche et régime de chiffrement (#11380) exigent de rejouer la registration de chaque item : reconfigure complet.
     func observeSnapshotTriggers(_ vm: ConversationViewModel) {
         vm.$preferredLanguageRevision
             .receive(on: DispatchQueue.main)
@@ -70,8 +70,8 @@ extension MessageListViewController {
             }
             .store(in: &cancellables)
 
-        vm.$currentSearchQuery
-            .removeDuplicates()
+        Publishers.CombineLatest(vm.$currentSearchQuery, vm.$currentConversation.map { EndToEndRegime(conversation: $0) })
+            .removeDuplicates(by: ==)
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in

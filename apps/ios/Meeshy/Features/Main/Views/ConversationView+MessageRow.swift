@@ -44,6 +44,7 @@ extension ConversationView {
     }
 
     func triggerReply(for msg: Message) {
+        guard MessageRowOffer.of(msg, authority: menuAuthority).canReply else { return } // #12626 — la loi du menu, sur tous les chemins
         // La citation naît de la fabrique UNIQUE du ViewModel — la même que la
         // bulle optimiste (#4945). Ce geste composait la sienne à la main,
         // pauvre de trois champs : sans miniature ThumbHash, sans durée, en
@@ -62,6 +63,7 @@ extension ConversationView {
     /// comme la réponse du plein écran. Une pièce protégée ne se cite pas :
     /// le menu ne l'offre pas, et ce site ne la nomme pas non plus.
     func triggerReply(for msg: Message, citing piece: MessageAttachment) {
+        guard MessageRowOffer.of(msg, authority: menuAuthority).canReply else { return }
         triggerReply(for: msg)
         guard !MessagePieceTarget.isProtected(piece, in: msg) else { return }
         composerState.pendingReplyReference = viewModel.optimisticReplyReference(quoting: msg, citing: piece)
@@ -346,64 +348,30 @@ extension ConversationView {
     }
 
     private func quickReactionActionsRow(messageId: String) -> some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            messageActionButton(icon: MessageActionVerb.reply.filledSymbol, label: MessageActionVerb.reply.label, color: MeeshyColors.indigo300Hex) {
-                if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                    triggerReply(for: msg)
-                }
+        let offer = viewModel.messageIndex(for: messageId).map { MessageRowOffer.of(viewModel.messages[$0], authority: menuAuthority) } ?? .closed
+        let resolve = { viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } }
+        return QuickReactionActionsRow(
+            offer: offer,
+            canCopy: resolve()?.exitOffer.offers(.copy) ?? false,
+            accentColor: accentColor,
+            reply: {
+                if let msg = resolve() { triggerReply(for: msg) }
                 closeReactionBar()
-            }
-            // La loi de sortie décide (#9573) : un contenu qui disparaît, ou
-            // flouté, ne se copie pas — le bouton n'est pas rendu.
-            if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].exitOffer.offers(.copy) }) ?? false {
-                messageActionButton(icon: MessageActionVerb.copy.filledSymbol, label: MessageActionVerb.copy.label, color: MeeshyColors.trackingAccentHex) {
-                    if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                        // Prisme : copie ce que la bulle AFFICHE, drapeau basculé compris (#11233).
-                        MessageExitTransport.copyDisplayed(msg, in: viewModel)
-                    }
-                    closeReactionBar()
-                }
-            }
-            // Le bouton disparaît plutôt que d'offrir une action condamnée
-            // (`Message.isForwardable`, projection de la loi de sortie).
-            if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isForwardable }) ?? false {
-                messageActionButton(icon: MessageActionVerb.forward.filledSymbol, label: MessageActionVerb.forward.label, color: MeeshyColors.warningHex) {
-                    composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
-                    closeReactionBar()
-                }
-            }
-            messageActionButton(icon: MessageActionVerb.delete.filledSymbol, label: MessageActionVerb.delete.label, color: MeeshyColors.errorHex) {
+            },
+            copy: {
+                // Prisme : copie ce que la bulle AFFICHE, drapeau basculé compris (#11233).
+                if let msg = resolve() { MessageExitTransport.copyDisplayed(msg, in: viewModel) }
+                closeReactionBar()
+            },
+            forward: {
+                composerState.forwardMessage = resolve()
+                closeReactionBar()
+            },
+            delete: {
                 requestDeleteMessage(messageId)
                 closeReactionBar()
             }
-        }
-        .padding(.horizontal, MeeshySpacing.sm)
-        .padding(.vertical, MeeshySpacing.xsPlus)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
-                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 8, y: 4)
         )
-        .transition(.scale(scale: 0.8).combined(with: .opacity))
-    }
-
-    func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: MeeshySpacing.xxs) {
-                // Doctrine 82i : icône + micro-label figés — bouton d'action compact
-                // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
-                // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
-                Image(systemName: icon)
-                    .font(.system(size: MeeshyIconSize.md, weight: .medium))
-                    .foregroundColor(Color(hex: color))
-                Text(label)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
-            .frame(width: 60, height: 44)
-        }
-        .accessibilityLabel(label)
     }
 
     func closeReactionBar() {
@@ -527,5 +495,62 @@ enum QuickReactionBarPlacement {
         let maxTop = container.maxY - barHeight
         let clamped = min(max(belowTop, container.minY + topLimit), maxTop)
         return Result(inset: clamped - container.minY)
+    }
+}
+
+/// **La rangée d'actions de la barre de réaction rapide** — une porte de plus
+/// du message (#12626). « Répondre » et « Transférer » n'y sont rendus que si le
+/// verdict de la loi les offre (`MessageRowOffer`, le même que le glissé,
+/// VoiceOver et le menu ; D8 : un flouté se transfère), « Copier » que si la loi
+/// de sortie l'admet (#9573). Un bouton sans effet n'existe pas.
+struct QuickReactionActionsRow: View {
+    let offer: MessageRowOffer
+    let canCopy: Bool
+    let accentColor: String
+    let reply: () -> Void
+    let copy: () -> Void
+    let forward: () -> Void
+    let delete: () -> Void
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            if offer.canReply {
+                Self.actionButton(icon: MessageActionVerb.reply.filledSymbol, label: MessageActionVerb.reply.label, color: MeeshyColors.indigo300Hex, action: reply)
+            }
+            if canCopy {
+                Self.actionButton(icon: MessageActionVerb.copy.filledSymbol, label: MessageActionVerb.copy.label, color: MeeshyColors.trackingAccentHex, action: copy)
+            }
+            if offer.canForward {
+                Self.actionButton(icon: MessageActionVerb.forward.filledSymbol, label: MessageActionVerb.forward.label, color: MeeshyColors.warningHex, action: forward)
+            }
+            Self.actionButton(icon: MessageActionVerb.delete.filledSymbol, label: MessageActionVerb.delete.label, color: MeeshyColors.errorHex, action: delete)
+        }
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xsPlus)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 8, y: 4)
+        )
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
+    }
+
+    static func actionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: MeeshySpacing.xxs) {
+                // Doctrine 82i : icône + micro-label figés — bouton d'action compact
+                // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
+                // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
+                Image(systemName: icon)
+                    .font(.system(size: MeeshyIconSize.md, weight: .medium))
+                    .foregroundColor(Color(hex: color))
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .frame(width: 60, height: 44)
+        }
+        .accessibilityLabel(label)
     }
 }

@@ -86,10 +86,8 @@ nonisolated extension CallFrameRenderer {
 
     static func paintPattern(_ context: CGContext, stage: CallFrameStage) {
         guard let pattern = stage.look.pattern else { return }
-        let size = stage.size
-        let unit = stage.unit
-        let w = size.width
-        let h = size.height
+        let size = stage.size, unit = stage.unit
+        let w = size.width, h = size.height
         let ink = color(pattern.color)
         let path = CGMutablePath()
         context.saveGState()

@@ -24,6 +24,7 @@ class MessageEffectsTest {
         assertThat(MessageEffectFlags.EPHEMERAL).isEqualTo(1L)
         assertThat(MessageEffectFlags.BLURRED).isEqualTo(2L)
         assertThat(MessageEffectFlags.VIEW_ONCE).isEqualTo(4L)
+        assertThat(MessageEffectFlags.EPHEMERAL_AFTER_READ).isEqualTo(8L)
         assertThat(MessageEffectFlags.SHAKE).isEqualTo(256L)
         assertThat(MessageEffectFlags.ZOOM).isEqualTo(512L)
         assertThat(MessageEffectFlags.EXPLODE).isEqualTo(1024L)
@@ -34,6 +35,16 @@ class MessageEffectsTest {
         assertThat(MessageEffectFlags.PULSE).isEqualTo(131072L)
         assertThat(MessageEffectFlags.RAINBOW).isEqualTo(262144L)
         assertThat(MessageEffectFlags.SPARKLE).isEqualTo(524288L)
+    }
+
+    @Test
+    fun ephemeralAfterRead_isALifecycleBit_strippedFromTheVisualRender() {
+        assertThat(MessageEffectFlags.hasLifecycle(MessageEffectFlags.EPHEMERAL_AFTER_READ)).isTrue()
+        val rendered = MessageEffectRenderPlanner.renderEffects(
+            MessageEffects(flags = MessageEffectFlags.EPHEMERAL_AFTER_READ or MessageEffectFlags.GLOW),
+            isDeleted = false,
+        )
+        assertThat(rendered.flags).isEqualTo(MessageEffectFlags.GLOW)
     }
 
     // MARK: - Axis predicates (any-bit intersection per axis)

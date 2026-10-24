@@ -1044,6 +1044,7 @@ const ar = {
   'message.menu.more': 'المزيد…',
   'message.menu.react': 'تفاعل',
   'message.menu.addReaction': 'إضافة تفاعل',
+  'message.menu.preview': 'معاينة الرسالة',
   'message.selection.toolbar': 'تحديد الرسائل',
   'message.selection.count': 'تم تحديد {count}',
   'message.detail.title': 'تفاصيل الرسالة',

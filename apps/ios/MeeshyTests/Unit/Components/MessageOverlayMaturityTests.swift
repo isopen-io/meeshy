@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import GRDB
 import MeeshySDK
 @testable import Meeshy
 
@@ -312,5 +313,123 @@ final class MessageOverlayPreviewFadeTests: XCTestCase {
         XCTAssertFalse(Viewport.hasContentBelow(contentHeight: 400, visibleHeight: 300, scrolledOffset: 100),
                        "arrivé au bout, la dernière ligne est nette")
         XCTAssertFalse(Viewport.hasContentBelow(contentHeight: 400, visibleHeight: 300, scrolledOffset: 140))
+    }
+}
+
+/// **L'hôte de PRODUCTION câble « Supprimer »** (#12625). La loi range
+/// `.deleteMessage` à un geste, mais `reachable` le retire sans rappel : tant que
+/// `ConversationOverlayMenu` ne passait pas `onDelete`, la suppression restait à
+/// deux gestes par « Plus… », et une vue unique n'offrait que « Plus… ». Les
+/// témoins de l'overlay seul passaient, parce qu'ils posent eux-mêmes
+/// `hasDeleteHandler: true` : celui-ci lit le menu que l'hôte MONTE.
+@MainActor
+final class ConversationOverlayMenuDeleteWiringTests: XCTestCase {
+
+    private let viewerId = "6a0ad86a6e21a483b4443d01"
+    private let otherId = "6a0ad86a6e21a483b4443d02"
+    private let conversationId = "6a0ad86a6e21a483b4443d99"
+
+    @MainActor
+    private final class DeleteRequests {
+        var ids: [String] = []
+    }
+
+    private func authority() -> ConversationMenuAuthority {
+        ConversationMenuAuthority(
+            viewer: ConversationViewerAuthority(
+                id: viewerId, participantId: nil, hasAccount: true, isAnonymous: false,
+                platformRoleRaw: "USER", conversationRoleRaw: "member",
+                isActiveMember: true, canSendMessages: true, isDeclaredMinor: false
+            ),
+            conversation: MessageActionPolicy.Conversation(
+                type: "group", encryptionMode: nil, isActive: true, closedAt: nil
+            )
+        )
+    }
+
+    private func message(mine: Bool, viewOnce: Bool = false) -> Message {
+        var message = Message(
+            id: "6a0ad86a6e21a483b4443d11",
+            conversationId: conversationId,
+            senderId: mine ? "6a0ad86a6e21a483b4443da1" : "6a0ad86a6e21a483b4443da2",
+            content: "Bonjour",
+            createdAt: Date().addingTimeInterval(-60),
+            updatedAt: Date().addingTimeInterval(-60),
+            senderUserId: mine ? viewerId : otherId,
+            isMe: mine
+        )
+        message.isViewOnce = viewOnce
+        return message
+    }
+
+    private func viewModel() -> ConversationViewModel {
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: viewerId, username: "lecteur", displayName: "Lecteur", systemLanguage: "fr"))
+        let pool = try! DatabaseQueue()
+        try! MessageDatabaseMigrations.runAll(on: pool)
+        return ConversationViewModel(
+            conversationId: conversationId,
+            authManager: auth,
+            messageService: MockMessageService(),
+            conversationService: MockConversationService(),
+            reactionService: MockReactionService(),
+            reportService: MockReportService(),
+            messageSocket: MockMessageSocket(),
+            dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool))
+        )
+    }
+
+    private func host(_ message: Message, recording requests: DeleteRequests) -> ConversationOverlayMenu {
+        ConversationOverlayMenu(
+            viewModel: viewModel(),
+            overlayState: .constant(ConversationOverlayState()),
+            msg: message,
+            accentColor: "#6366F1",
+            bubbleFrame: .zero,
+            threadLanguage: MessageOverlayMenu.ThreadLanguage(),
+            isDirect: false,
+            authority: authority(),
+            mediaSaveCoordinator: MediaSaveCoordinator(),
+            actions: ConversationMessageActions(
+                reply: { _ in },
+                beginSelection: { _ in },
+                deleteMedia: { _ in },
+                requestDelete: { requests.ids.append($0) },
+                beginEdit: { _ in },
+                export: { _, _ in },
+                compose: { _ in }
+            )
+        )
+    }
+
+    /// Ce que la liste verticale de l'overlay MONTÉ par l'hôte offre — la même
+    /// projection que `MessageOverlayMenu.primaryActions`, sur ses rappels réels.
+    private func offered(by menu: MessageOverlayMenu) -> [PrimaryAction] {
+        MessageOverlayMenu.reachable(
+            MessageActionResolver.primaryActions(menu.menuContext), context: menu.menuContext,
+            hasDeleteHandler: menu.onDelete != nil,
+            hasDeviceTranslationHandler: menu.onTranslateOnDevice != nil)
+    }
+
+    func test_productionHost_ownMessage_offersDeleteInOneGesture() {
+        let menu = host(message(mine: true), recording: DeleteRequests()).overlay
+        XCTAssertTrue(menu.menuContext.canDelete, "témoin : la loi ouvre la suppression à l'auteur")
+        let actions = offered(by: menu)
+        XCTAssertTrue(actions.contains(.deleteMessage), "l'hôte câble « Supprimer » : un geste, pas deux")
+        XCTAssertEqual(Array(actions.suffix(2)), [.deleteMessage, .more], "rouge, juste avant « Plus… »")
+    }
+
+    func test_productionHost_viewOnce_offersDeleteBeforeMore() {
+        let menu = host(message(mine: false, viewOnce: true), recording: DeleteRequests()).overlay
+        XCTAssertEqual(offered(by: menu), [.deleteMessage, .more],
+                       "une vue unique ne montre rien : Supprimer est le seul geste qui reste")
+    }
+
+    func test_productionHost_delete_routesToTheConfirmationOfTheHost() {
+        let requests = DeleteRequests()
+        let target = message(mine: true)
+        host(target, recording: requests).overlay.onDelete?()
+        XCTAssertEqual(requests.ids, [target.id],
+                       "le rappel passe par `requestDelete` : confirmation adaptée, envoi raté abandonné tout de suite")
     }
 }

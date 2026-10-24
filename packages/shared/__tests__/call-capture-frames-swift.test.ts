@@ -203,6 +203,28 @@ describe('le catalogue Swift des cadres de capture', () => {
     pairs.forEach(([typeName, list]) => expect(swiftCases(swift, typeName), typeName).toEqual(list));
   });
 
+  it('une image de scène découpée en neuf morceaux écrit sa découpe ; ailleurs, la découpe fait échouer (#12683)', () => {
+    const framed = extendedFile({}, { scene: [{ id: 'moulure', kind: 'image', depth: 'front', src: 'assets/call-frames/elegant/essai/front.webp', slice: 0.18 }] });
+    expect(renderSwift([framed]).map((file) => file.content).join('\n')).toContain('src: "assets/call-frames/elegant/essai/front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)');
+    const misplaced = extendedFile({}, { scene: [{ id: 'braises', kind: 'particles', depth: 'front', preset: 'sparkles', slice: 0.2 }] });
+    expect(() => renderSwift([misplaced])).toThrow(/scene\[0\]\.slice/);
+  });
+
+  it('les déclinaisons d’un motif s’écrivent sur chacune de ses tranches, ne déclarant que leurs clés (#12685)', () => {
+    const declined = extendedFile({
+      styles: [{ id: 'relief', name: 'Relief', look: { scene: [{ id: 'matiere', kind: 'image', depth: 'back', src: 'assets/call-frames/elegant_essai_back.webp' }] } }],
+    });
+    const swift = renderSwift([declined]).map((file) => file.content).join('\n');
+    expect(swift).toContain('styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/elegant_essai_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil)]))]');
+  });
+
+  it('une déclinaison en double ou une clé inconnue fait échouer la génération en nommant le chemin', () => {
+    const twice = extendedFile({ styles: [{ id: 'relief', name: 'Relief', look: {} }, { id: 'relief', name: 'Bis', look: {} }] });
+    expect(() => renderSwift([twice])).toThrow(/styles/);
+    const unknown = extendedFile({ styles: [{ id: 'relief', name: 'Relief', look: { vernis: true } }] });
+    expect(() => renderSwift([unknown])).toThrow(/styles\[0\]\.look/);
+  });
+
   it('un motif se déplie en un cadre par variante, la variante surchargeant la base clé par clé', () => {
     const frames = expandFiles([
       motifFile('jovial', { groupe: {}, duo: { layout: { arrangement: 'split', margin: 0.05, gap: 0.02, top: 0.1, bottom: 0.1 } } }),

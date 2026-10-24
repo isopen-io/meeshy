@@ -199,7 +199,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
         let outgoing = makeOutgoing(protection: intent)
         let context = makeContext(clientMessageId, intent: intent)
         await fx.sut.stageOptimistic(outgoing, context: context)
-        let payload = await fx.sut.prepareUpload(outgoing, context: context)
+        let payload = fx.sut.prepareUpload(outgoing, context: context)
         return await fx.sut.reconcile(.failure(error), outgoing: outgoing, payload: payload, context: context)
     }
 
