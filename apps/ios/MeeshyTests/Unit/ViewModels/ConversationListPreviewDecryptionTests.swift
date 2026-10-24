@@ -1,3 +1,5 @@
+import Combine
+import CryptoKit
 import XCTest
 import MeeshySDK
 @testable import Meeshy
@@ -27,13 +29,31 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         var isLocked = false
     }
 
+    @MainActor
+    private final class TypeBox {
+        nonisolated deinit {}
+        var isDirect: Bool?
+        init(isDirect: Bool?) { self.isDirect = isDirect }
+    }
+
+    @MainActor
+    private final class Observed {
+        nonisolated deinit {}
+        var phases: [ConversationPreviewPhase] = []
+    }
+
+    private final class ContentLog {
+        var contents: [String] = []
+    }
+
     // MARK: - Fabriques
 
     private func makeSUT(
         cache: CacheResult<[Message]> = .empty,
-        decryptor: MockPreviewDecryptor = MockPreviewDecryptor(),
-        isDirect: Bool = true,
-        isLocked: @escaping @MainActor (String) -> Bool = { _ in false }
+        decryptor: any ConversationPreviewDecrypting = MockPreviewDecryptor(),
+        isDirect: Bool? = true,
+        isLocked: @escaping @MainActor (String) -> Bool = { _ in false },
+        locksDidChange: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher()
     ) -> (sut: ConversationListPreviewLoader, service: MockMessageService) {
         let service = MockMessageService()
         let sut = ConversationListPreviewLoader(
@@ -42,7 +62,8 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             readerPrism: { ["fr"] },
             isLocked: isLocked,
             decryptor: decryptor,
-            isDirectConversation: { _ in isDirect }
+            isDirectConversation: { _ in isDirect },
+            locksDidChange: locksDidChange
         )
         return (sut, service)
     }
@@ -55,18 +76,19 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         Message(
             id: id ?? messageId,
             conversationId: conversationId,
-            senderId: "u-other",
+            senderId: "participant-other",
             content: content ?? ciphertext,
             originalLanguage: "fr",
             isEncrypted: true,
             createdAt: Date(timeIntervalSince1970: 1_000),
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            senderUserId: "user-other"
         )
     }
 
     private func encryptedPage() -> MessagesAPIResponse {
         JSONStub.decode("""
-        {"success":true,"data":[{"id":"\(messageId)","conversationId":"\(conversationId)","senderId":"u-other","content":"\(ciphertext)","originalLanguage":"fr","isEncrypted":true,"createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T08:00:00.000Z","translations":[]}],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        {"success":true,"data":[{"id":"\(messageId)","conversationId":"\(conversationId)","senderId":"participant-other","sender":{"id":"participant-other","userId":"user-other","type":"user"},"content":"\(ciphertext)","originalLanguage":"fr","isEncrypted":true,"createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T08:00:00.000Z","translations":[]}],"pagination":null,"cursorPagination":null,"hasNewer":null}
         """)
     }
 
@@ -86,7 +108,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, true, "le clair porte la provenance du déchiffrement")
         let payloads = await decryptor.receivedPayloads
         XCTAssertEqual(payloads.map(\.messageId), [messageId])
-        XCTAssertEqual(payloads.first?.senderId, "u-other")
+        XCTAssertEqual(payloads.first?.senderId, "user-other", "la session se cherche sous l'utilisateur, jamais sous le Participant")
         XCTAssertEqual(payloads.first?.ciphertext, Data(base64Encoded: ciphertext))
     }
 
@@ -99,6 +121,104 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, true)
+        let payloads = await decryptor.receivedPayloads
+        XCTAssertEqual(payloads.first?.senderId, "user-other", "le REST porte l'utilisateur dans `sender.userId`")
+    }
+
+    // MARK: - Le vrai déchiffreur, un vrai chiffrement
+
+    /// Le critère de fin ne se prouve pas avec un faux déchiffreur qui rend le
+    /// clair sans clé : ici le `DecryptionActor` de production ouvre un vrai
+    /// AES-GCM, avec la clé rangée sous l'identifiant UTILISATEUR du pair.
+    func test_realDecryptionActor_opensTheSealUnderTheSenderUserId() async throws {
+        let key = SymmetricKey(size: .bits256)
+        let sealed = try sealedBase64("Rendez-vous à midi", with: key)
+        let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: ["user-other": key.rawBytes]))
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage(content: sealed)], age: 10), decryptor: decryptor)
+
+        await sut.load(for: conversationId, intent: .prefetch)
+
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
+        XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, true)
+    }
+
+    /// La session rangée sous le PARTICIPANT n'est jamais celle qu'on cherche :
+    /// un `senderId` de message n'identifie pas le pair.
+    func test_realDecryptionActor_sessionUnderTheParticipantId_staysSealed() async throws {
+        let key = SymmetricKey(size: .bits256)
+        let sealed = try sealedBase64("Rendez-vous à midi", with: key)
+        let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: ["participant-other": key.rawBytes]))
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage(content: sealed)], age: 10), decryptor: decryptor)
+
+        await sut.load(for: conversationId, intent: .prefetch)
+
+        XCTAssertEqual(served(sut)?.content, "")
+        XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
+    }
+
+    func test_realDecryptionActor_wrongKey_staysSealed() async throws {
+        let sealed = try sealedBase64("Rendez-vous à midi", with: SymmetricKey(size: .bits256))
+        let other = SymmetricKey(size: .bits256)
+        let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: ["user-other": other.rawBytes]))
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage(content: sealed)], age: 10), decryptor: decryptor)
+
+        await sut.load(for: conversationId, intent: .prefetch)
+
+        XCTAssertEqual(served(sut)?.content, "", "une authentification AES-GCM ratée laisse le scellé, jamais du bruit")
+    }
+
+    private func sealedBase64(_ plaintext: String, with key: SymmetricKey) throws -> String {
+        try XCTUnwrap(AES.GCM.seal(Data(plaintext.utf8), using: key).combined).base64EncodedString()
+    }
+
+    // MARK: - Le type de conversation que la rangée connaît
+
+    /// La rangée sait déjà que la conversation est directe : l'aperçu natif
+    /// se prépare déchiffré sans attendre l'hydratation du store.
+    func test_rowSaysDirect_decryptsWhileTheStoreDoesNotKnowYet() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, isDirect: nil)
+
+        await sut.load(for: conversationId, intent: .prefetch, isDirect: true)
+
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
+    }
+
+    func test_rowSaysGroup_neverDecrypts() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, isDirect: true)
+
+        await sut.load(for: conversationId, intent: .prefetch, isDirect: false)
+
+        XCTAssertEqual(served(sut)?.content, "")
+        let calls = await decryptor.callCount
+        XCTAssertEqual(calls, 0)
+    }
+
+    /// Type encore inconnu : servi scellé, mais rien n'est réputé réglé — le
+    /// chargement suivant retente dès que le type se sait.
+    func test_typeUnknown_staysSealedThenEnsureRetries() async {
+        let type = TypeBox(isDirect: nil)
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let service = MockMessageService()
+        let sut = ConversationListPreviewLoader(
+            messageService: service,
+            cache: MockConversationPreviewCache(messages: .fresh([makeCipherMessage()], age: 10)),
+            readerPrism: { ["fr"] },
+            isLocked: { _ in false },
+            decryptor: decryptor,
+            isDirectConversation: { _ in type.isDirect },
+            locksDidChange: Empty<Void, Never>().eraseToAnyPublisher()
+        )
+
+        await sut.load(for: conversationId, intent: .prefetch)
+        XCTAssertEqual(served(sut)?.content, "", "précondition : type inconnu ⇒ scellé")
+
+        type.isDirect = true
+        await sut.load(for: conversationId, intent: .ensure)
+
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
+        XCTAssertEqual(service.listCallCount, 0, "un cache frais se redéchiffre sans réseau")
     }
 
     /// Cache-first : le cache se sert sans que l'aperçu dise « chargement ».
@@ -191,6 +311,49 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         XCTAssertEqual(calls, 0, "une conversation verrouillée ne déchiffre rien")
     }
 
+    /// Le verrou se pose PENDANT le déchiffrement : le clair n'est jamais
+    /// publié, et lever le verrou ensuite ne le fait pas réapparaître.
+    func test_lockDuringDecryption_neverPublishesThePlaintext() async {
+        let pin = PinLock()
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        await decryptor.setOnDecrypt { pin.isLocked = true }
+        let (sut, service) = makeSUT(
+            cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor, isLocked: { _ in pin.isLocked }
+        )
+        service.listResult = .success(encryptedPage())
+        let log = ContentLog()
+        let id = conversationId
+        let token = sut.$states.sink { log.contents.append(contentsOf: $0[id]?.snapshot?.messages.map(\.content) ?? []) }
+
+        await sut.load(for: conversationId, intent: .open)
+        pin.isLocked = false
+
+        XCTAssertFalse(log.contents.contains("Rendez-vous à midi"), "aucun état publié n'a porté le clair")
+        XCTAssertNotEqual(served(sut)?.content, "Rendez-vous à midi")
+        token.cancel()
+    }
+
+    /// Poser un verrou PURGE le clair déjà servi — masquer ne suffit pas :
+    /// une fois le verrou levé, le clair ne revient pas de la mémoire.
+    func test_lockPosted_purgesThePlaintextFromMemory() async {
+        let pin = PinLock()
+        let locks = PassthroughSubject<Void, Never>()
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(
+            cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor,
+            isLocked: { _ in pin.isLocked }, locksDidChange: locks.eraseToAnyPublisher()
+        )
+        await sut.load(for: conversationId, intent: .prefetch)
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
+
+        pin.isLocked = true
+        locks.send(())
+        pin.isLocked = false
+
+        XCTAssertNil(sut.state(for: conversationId).snapshot, "le clair a quitté la mémoire")
+        XCTAssertEqual(sut.state(for: conversationId).phase, .loading)
+    }
+
     func test_lockAppearsAfterDecryption_dropsThePlaintext() async {
         let pin = PinLock()
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
@@ -206,7 +369,73 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         XCTAssertTrue(sut.messages.isEmpty)
     }
 
+    // MARK: - Purge à la déconnexion
+
+    func test_purge_dropsThePlaintextAndRebuildsTheDecryptor() async {
+        let factory = DecryptorFactory(plaintexts: [messageId: "Rendez-vous à midi"])
+        let sut = ConversationListPreviewLoader(
+            messageService: MockMessageService(),
+            cache: MockConversationPreviewCache(messages: .fresh([makeCipherMessage()], age: 10)),
+            readerPrism: { ["fr"] },
+            isLocked: { _ in false },
+            decryptor: factory.make(),
+            isDirectConversation: { _ in true },
+            locksDidChange: Empty<Void, Never>().eraseToAnyPublisher()
+        )
+        await sut.load(for: conversationId, intent: .prefetch)
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
+
+        sut.purge()
+
+        XCTAssertNil(sut.state(for: conversationId).snapshot)
+        XCTAssertEqual(sut.state(for: conversationId).phase, .loading)
+        XCTAssertTrue(sut.messages.isEmpty)
+        XCTAssertEqual(factory.made, 2, "la mémoire du déchiffreur part avec le compte")
+    }
+
+    /// Un déchiffrement en vol à la déconnexion ne publie rien après la purge.
+    func test_purgeDuringDecryption_publishesNothingAfterwards() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
+        await decryptor.setOnDecrypt { sut.purge() }
+
+        await sut.load(for: conversationId, intent: .prefetch)
+
+        XCTAssertNil(sut.state(for: conversationId).snapshot)
+        XCTAssertTrue(sut.messages.isEmpty)
+    }
+
+    func test_purgeAllLive_purgesEveryLiveLoader() async {
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, _) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
+        await sut.load(for: conversationId, intent: .prefetch)
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
+
+        ConversationListPreviewLoader.purgeAllLive()
+
+        XCTAssertNil(sut.state(for: conversationId).snapshot)
+    }
+
     // MARK: - Cache-first : ce qui est déchiffré ne se re-déchiffre pas
+
+    /// Ouverture sur un cache chiffré : pendant le déchiffrement, l'aperçu
+    /// montre déjà le cache (scellé), jamais un chargement.
+    func test_openOnEncryptedCache_showsTheCacheWhileDecrypting() async {
+        let observed = Observed()
+        let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
+        let (sut, service) = makeSUT(cache: .fresh([makeCipherMessage(updatedAt: restVersion)], age: 10), decryptor: decryptor)
+        service.listResult = .success(encryptedPage())
+        let id = conversationId
+        await decryptor.setOnDecrypt { observed.phases.append(sut.state(for: id).phase) }
+        let log = PhaseLog()
+        let token = sut.$states.sink { log.phases.append($0[id]?.phase) }
+
+        await sut.load(for: conversationId, intent: .open)
+
+        XCTAssertEqual(observed.phases.first, .loaded, "le cache est servi avant que le déchiffrement ne rende")
+        XCTAssertFalse(log.phases.contains(.loading), "un cache non vide ne montre jamais de spinner")
+        token.cancel()
+    }
 
     func test_cacheAlreadyDecrypted_neverCallsTheDecryptor() async {
         var known = makeCipherMessage(updatedAt: restVersion)
@@ -238,6 +467,8 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
     // MARK: - Ce qui part à côté
 
+    /// La seule requête est une LECTURE, et elle ne transporte que ce qui
+    /// désigne la page : ni texte, ni recherche, ni langue d'un clair.
     func test_decryptedPlaintext_neverReachesTheServer() async {
         let decryptor = MockPreviewDecryptor(plaintexts: [messageId: "Rendez-vous à midi"])
         let (sut, service) = makeSUT(cache: .fresh([makeCipherMessage()], age: 10), decryptor: decryptor)
@@ -247,9 +478,16 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
         XCTAssertEqual(service.listCallCount, 1, "une lecture, et rien d'autre")
-        XCTAssertEqual(service.sendCallCount, 0)
-        XCTAssertEqual(service.editCallCount, 0)
         XCTAssertEqual(service.lastListConversationId, conversationId)
+        XCTAssertEqual(service.lastListOffset, 0)
+        XCTAssertEqual(service.lastListLimit, ConversationListPreviewLoader.previewLimit)
+        XCTAssertEqual(service.lastListIncludeReplies, false)
+        XCTAssertEqual(service.lastListIncludeTranslations, true)
+        XCTAssertNil(service.lastListLanguages)
+        let otherCalls = service.sendCallCount + service.editCallCount + service.searchCallCount
+            + service.searchWithCursorCallCount + service.consumeViewOnceCallCount + service.deleteCallCount
+            + service.listBeforeCallCount + service.listAfterCallCount + service.listAroundCallCount
+        XCTAssertEqual(otherCalls, 0, "aucune autre route n'est touchée")
         XCTAssertNil(sut.state(for: conversationId).snapshot?.servedTranslation(for: messageId),
                      "aucune traduction serveur ne double un clair déchiffré")
     }
@@ -285,6 +523,70 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             "un message qui passe de scellé à déchiffré ré-évalue la rangée"
         )
     }
+
+    // MARK: - Une seule construction, une purge câblée
+
+    private static var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // ViewModels
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+    }
+
+    private func productionSources() -> [URL] {
+        let root = Self.appRoot.appendingPathComponent("Meeshy")
+        let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
+        return (enumerator?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
+    }
+
+    /// Le fil et l'aperçu bâtissent leur demande par `DecryptionPayload(decrypting:)` :
+    /// deux constructions avaient déjà divergé (gardes, clé d'expéditeur).
+    func test_noProductionSiteBuildsADecryptionPayloadByHand() throws {
+        let files = productionSources()
+        XCTAssertGreaterThan(files.count, 500, "la garde ne mesurerait RIEN : le dossier Meeshy est introuvable")
+        let handBuilt = try files.filter { url in
+            AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)).contains("DecryptionPayload(messageId:")
+        }
+        XCTAssertEqual(handBuilt.map(\.lastPathComponent), [])
+    }
+
+    func test_logoutPurgesThePreviewLoaders() throws {
+        let container = Self.appRoot.appendingPathComponent("Meeshy/Core/DependencyContainer.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: container, encoding: .utf8))
+        XCTAssertTrue(code.contains("ConversationListPreviewLoader.purgeAllLive()"),
+                      "la déconnexion doit purger les clairs de l'aperçu (resetInMemoryAccountState)")
+    }
+}
+
+/// Un fournisseur de session qui DÉCHIFFRE pour de vrai (AES-GCM combiné,
+/// comme `E2EEService.decrypt`), avec ses clés rangées par identifiant.
+private struct RoundTripSessionProvider: DecryptionSessionProviding {
+    let sessions: [String: Data]
+
+    func decryptMessage(_ ciphertext: Data, from senderId: String) async throws -> Data {
+        guard let raw = sessions[senderId] else { throw MockPreviewDecryptor.Failure.missingSession }
+        return try AES.GCM.open(AES.GCM.SealedBox(combined: ciphertext), using: SymmetricKey(data: raw))
+    }
+}
+
+private extension SymmetricKey {
+    var rawBytes: Data { withUnsafeBytes { Data($0) } }
+}
+
+/// Compte les déchiffreurs fabriqués : une purge en reconstruit un.
+private final class DecryptorFactory {
+    private let plaintexts: [String: String]
+    private(set) var made = 0
+
+    init(plaintexts: [String: String]) {
+        self.plaintexts = plaintexts
+    }
+
+    func make() -> any ConversationPreviewDecrypting {
+        made += 1
+        return MockPreviewDecryptor(plaintexts: plaintexts)
+    }
 }
 
 /// Déchiffreur simulé : rend le clair, l'échec ou l'indécodable que le test a
@@ -297,6 +599,7 @@ actor MockPreviewDecryptor: ConversationPreviewDecrypting {
     private let undecodable: Set<String>
     private(set) var receivedPayloads: [DecryptionPayload] = []
     private(set) var callCount = 0
+    private var onDecrypt: (@MainActor @Sendable () -> Void)?
 
     init(plaintexts: [String: String] = [:], failures: [String: Failure] = [:], undecodable: Set<String> = []) {
         self.plaintexts = plaintexts
@@ -304,9 +607,15 @@ actor MockPreviewDecryptor: ConversationPreviewDecrypting {
         self.undecodable = undecodable
     }
 
+    /// Ce qui arrive PENDANT le déchiffrement : un verrou, une déconnexion.
+    func setOnDecrypt(_ hook: @escaping @MainActor @Sendable () -> Void) {
+        onDecrypt = hook
+    }
+
     func decrypt(_ payloads: [DecryptionPayload]) async -> [DecryptionResult] {
         callCount += 1
         receivedPayloads.append(contentsOf: payloads)
+        if let onDecrypt { await onDecrypt() }
         return payloads.map { payload in
             if let failure = failures[payload.messageId] {
                 return DecryptionResult(messageId: payload.messageId, plaintext: nil, error: failure)
