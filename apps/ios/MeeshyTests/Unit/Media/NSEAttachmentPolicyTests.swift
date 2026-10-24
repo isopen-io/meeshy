@@ -109,6 +109,15 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: "Image/WebP; codecs=vp8", fileSize: nil))
     }
 
+    /// Le serveur ACCEPTE `image/jpg` et le range tel quel (il n'est pas dans
+    /// les formats qu'il convertit), et les pièces jointes `image/heif`
+    /// antérieures à la conversion (#11263) sont toujours en base : la liste
+    /// blanche ne doit pas retirer l'aperçu d'une photo que la NSE décode.
+    func test_lesAliasDeFormatsDecodes_restentAttachables() {
+        XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: "image/jpg", fileSize: 240_000))
+        XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: "IMAGE/HEIF", fileSize: nil))
+    }
+
     // MARK: - La taille telle qu'elle voyage
 
     /// Le gateway sérialise les nombres de sa charge `data` en CHAÎNES (cf.
