@@ -1,3 +1,5 @@
+@import './longpress-veil.css';
+
 /*
  * LE MENU DU MESSAGE (#5814) — feuille propre à l'écran du fil, importée UNE
  * fois par `routes/thread.tsx` comme `thread-scene.css`/`thread-protection.css` :
@@ -25,29 +27,23 @@
   z-index: 41;
 }
 
-/* LE VOILE — teinte + flou, question 1 de la spécification (retenu : parité
-   avec la capture cible, `.contextMenu` natif iOS 26). `color-mix` prend le
-   pourcentage DIRECTEMENT dans MessageOverlayMenu.swift:533 (0,4 clair /
-   0,5 sombre) — un sélecteur de schéma, jamais une lecture JS. Le SOMBRE est
-   le défaut de la table (`:root`, même discipline que `thread-scene.css`/
-   `thread-protection.css`) ; `:root.light` surcharge à 0,4. */
+/* LE VOILE — le MATÉRIAU SYSTÈME de l'appui long (#11222), lu dans ses deux
+   jetons (`longpress-veil.css`, importée en tête de cette feuille) : la même
+   loi que l'aperçu d'une conversation et qu'iOS (`LongPressVeil`). Aucun
+   schéma ne la surcharge.
+   `backdrop-filter` UNE SEULE FOIS, NON PRÉFIXÉ (revue #5814) — écrite avec
+   sa jumelle `-webkit-`, la minification (Lightning CSS) FUSIONNAIT les deux
+   en ne gardant QUE la forme préfixée : mesuré sur le dist,
+   `getComputedStyle(.message-menu-backdrop).backdropFilter === 'none'` et le
+   fond du fil restait NET sous le voile. Le préfixe est le travail du build,
+   jamais de la feuille. Gardé par `check-thread-states.mjs` § 6. */
 .message-menu-backdrop {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background-color: color-mix(in srgb, black 50%, transparent);
-  /* UNE SEULE ÉCRITURE, NON PRÉFIXÉE (revue #5814) — écrite avec sa jumelle
-     `-webkit-`, la minification (Lightning CSS) FUSIONNAIT les deux en ne
-     gardant QUE la forme préfixée : mesuré sur le dist,
-     `getComputedStyle(.message-menu-backdrop).backdropFilter === 'none'` et
-     le fond du fil restait NET sous le voile — le flou tranché en § question 1
-     de la spécification n'atteignait aucun lecteur. Le préfixe est le travail
-     du build, jamais de la feuille. Gardé par `check-thread-states.mjs` § 6. */
-  backdrop-filter: blur(16px);
+  background-color: var(--longpress-veil-tint);
+  backdrop-filter: var(--longpress-veil-backdrop);
   animation: messageMenuBackdropIn 260ms ease-out;
-}
-:root.light .message-menu-backdrop {
-  background-color: color-mix(in srgb, black 40%, transparent);
 }
 
 @keyframes messageMenuBackdropIn {

@@ -5804,3 +5804,21 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 - `measure-weight.mjs` (`dynamic_only: true`) rougit sur le graphe construit si un fichier produit importe le chunk statiquement.
 
 **La limite connue.** Un compte sans rôle d'administration ne voit aucune entrée vers `/adm`, car le barreau Administration du menu flottant lui est caché. Mais s'il tape l'adresse lui-même, la route charge le catalogue, parce que l'écran « Espace réservé » lit `admin.denied.*` dans ce catalogue. La passerelle reste seule juge du droit (`/admin/permissions`). Pour qu'un tel compte ne charge rien, il faudrait vérifier le rôle avant le chargement et sortir les deux libellés du refus vers le catalogue commun, qui a sept langues et un plafond serré. Ce travail se suit dans #12481.
+
+## D-226 — Le voile de l'appui long est le matériau système : un flou de 20 px saturé sous 30 % de noir, lu dans un seul jeton (2026-10-24, #11222)
+
+**Le contexte.** Le menu d'un message (`thread-menu.css`) et l'aperçu d'une conversation tenue (`conversation-peek.css`) floutaient le fond à 16 px sous un noir de 50 % (40 % en clair), chacun dans sa feuille. iOS floutait la conversation à 6, sous un assombrissement de 40 à 62 % selon la surface, et l'aperçu de liste posait déjà `.ultraThinMaterial`. Trois valeurs pour un seul geste.
+
+**La décision (porteur, 2026-10-24).** Le voile de l'appui long est le MATÉRIAU SYSTÈME, une seule loi pour iOS et le web. Sur le web, elle tient dans deux jetons déclarés par `src/styles/longpress-veil.css` :
+- `--longpress-veil-backdrop: blur(20px) saturate(180%)` ;
+- `--longpress-veil-tint: color-mix(in srgb, black 30%, transparent)`, le même dans les deux schémas.
+
+Les deux voiles lisent ces jetons et importent la feuille eux-mêmes (`@import './longpress-veil.css'`) : la dépendance est celle de la feuille, et les jetons ne pèsent pas sur la première peinture. Aucun voile ne garde de flou littéral ni de surcharge `:root.light`.
+
+**Les replis vivent avec la loi.** Sans `backdrop-filter`, la teinte passe à 64 %, pour que le texte du fil ne se lise plus sous le menu. Sous `prefers-reduced-transparency: reduce`, le flou tombe et le voile devient OPAQUE : la surface de l'écran assombrie des mêmes 30 %.
+
+**Le miroir iOS.** `LongPressVeil` (MeeshyUI) pose `.ultraThinMaterial` sous le même 30 %, avec un repli opaque sous Réduire la transparence. Il voile le menu d'un message, l'aperçu d'une pièce et l'aperçu d'une conversation, et l'hôte ne floute plus la conversation (`apps/ios/decisions/2026-10-24-le-voile-de-l-appui-long-est-le-materiau-systeme.md`).
+
+**Les gardes.** `src/styles/longpress-veil.test.ts` lit les feuilles : les valeurs du jeton, ses deux replis, et pour chaque voile, la lecture des deux jetons sans flou littéral ni style inline dans les composants qui le montent. `check-thread-states.mjs` § 6 mesure toujours, sur le style résolu, que le voile floute et teinte. L'inventaire du verre (`scripts/lib/glass-site.mjs`) nomme la feuille de la loi.
+
+**Hors de cette loi.** L'aperçu tiré d'une bannière (`conversation-preview-sheet.tsx`, #8821) garde son voile : ce geste n'est pas un appui long.
