@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +39,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.profile.ProfileAvatar as SocialProfileAvatar
 
 /** Les mesures de l'en-tête de MA page (iOS `bannerAndAvatarSection`). */
@@ -172,7 +170,7 @@ private fun OwnProfileBannerFrame(
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Image,
+                    imageVector = MeeshyIcons.PhotoFilled,
                     contentDescription = stringResource(R.string.profile_change_banner),
                     tint = MeeshyMediaChromeColors.OnMedia,
                     modifier = Modifier.size(14.dp),
@@ -244,7 +242,7 @@ private fun OwnProfileEditableAvatar(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Edit,
+                    imageVector = MeeshyIcons.EditFilled,
                     contentDescription = stringResource(R.string.profile_avatar_edit),
                     tint = MeeshyPalette.White,
                     modifier = Modifier.size(16.dp),

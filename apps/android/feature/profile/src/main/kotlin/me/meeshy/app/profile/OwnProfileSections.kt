@@ -16,21 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.AlternateEmail
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.FormatQuote
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.feature.profile.R
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -159,7 +145,7 @@ private fun OwnProfileRow(
 @Composable
 private fun OwnProfileChevron() {
     Icon(
-        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        imageVector = MeeshyIcons.ChevronForward,
         contentDescription = null,
         tint = MeeshyTheme.tokens.textMuted,
         modifier = Modifier.size(18.dp),
@@ -171,16 +157,16 @@ private fun OwnProfileChevron() {
 @Composable
 private fun OwnProfileIdentitySection(state: OwnProfileUiState, onEvent: (OwnProfileUiEvent) -> Unit) {
     val missing = stringResource(R.string.profile_own_value_missing)
-    OwnProfileSectionBlock(Icons.Filled.AccountBox, stringResource(R.string.profile_section_identity), MeeshyPalette.Indigo500) {
+    OwnProfileSectionBlock(MeeshyIcons.AccountBoxFilled, stringResource(R.string.profile_section_identity), MeeshyPalette.Indigo500) {
         OwnProfileCard {
-            OwnProfileField(Icons.Filled.Person, stringResource(R.string.profile_first_name_label), state.firstName, state.isEditing) {
+            OwnProfileField(MeeshyIcons.PersonFilled, stringResource(R.string.profile_first_name_label), state.firstName, state.isEditing) {
                 onEvent(OwnProfileUiEvent.FirstNameChanged(it))
             }
-            OwnProfileField(Icons.Filled.Person, stringResource(R.string.profile_last_name_label), state.lastName, state.isEditing) {
+            OwnProfileField(MeeshyIcons.PersonFilled, stringResource(R.string.profile_last_name_label), state.lastName, state.isEditing) {
                 onEvent(OwnProfileUiEvent.LastNameChanged(it))
             }
             OwnProfileRow {
-                OwnProfileFieldIcon(Icons.Filled.AlternateEmail)
+                OwnProfileFieldIcon(MeeshyIcons.Mention)
                 Text(
                     text = stringResource(R.string.profile_username),
                     style = MaterialTheme.typography.bodyMedium,
@@ -195,11 +181,11 @@ private fun OwnProfileIdentitySection(state: OwnProfileUiState, onEvent: (OwnPro
                     maxLines = 1,
                 )
             }
-            OwnProfileField(Icons.Filled.Person, stringResource(R.string.profile_display_name_label), state.displayName, state.isEditing) {
+            OwnProfileField(MeeshyIcons.PersonFilled, stringResource(R.string.profile_display_name_label), state.displayName, state.isEditing) {
                 onEvent(OwnProfileUiEvent.DisplayNameChanged(it))
             }
             OwnProfileField(
-                icon = Icons.Filled.FormatQuote,
+                icon = MeeshyIcons.Quote,
                 title = stringResource(R.string.profile_bio_label),
                 value = state.bio,
                 isEditing = state.isEditing,
@@ -258,10 +244,10 @@ private fun OwnProfileField(
 
 @Composable
 private fun OwnProfileContactSection(email: OwnProfileContactLine, phone: OwnProfileContactLine) {
-    OwnProfileSectionBlock(Icons.Filled.Email, stringResource(R.string.profile_section_contact), MeeshyPalette.Indigo300) {
+    OwnProfileSectionBlock(MeeshyIcons.MailFilled, stringResource(R.string.profile_section_contact), MeeshyPalette.Indigo300) {
         OwnProfileCard {
-            OwnProfileContactRow(Icons.Filled.Email, stringResource(R.string.profile_email), email)
-            OwnProfileContactRow(Icons.Filled.Phone, stringResource(R.string.profile_phone), phone)
+            OwnProfileContactRow(MeeshyIcons.MailFilled, stringResource(R.string.profile_email), email)
+            OwnProfileContactRow(MeeshyIcons.PhoneFilled, stringResource(R.string.profile_phone), phone)
         }
     }
 }
@@ -305,7 +291,7 @@ private fun OwnProfileVerificationBadge(verification: ContactVerification) {
 
 @Composable
 private fun OwnProfileLanguagesSection(rows: List<OwnProfileLanguageRow>, onPick: (OwnProfileLanguageSlot) -> Unit) {
-    OwnProfileSectionBlock(Icons.Filled.Language, stringResource(R.string.profile_section_languages), MeeshyPalette.Error) {
+    OwnProfileSectionBlock(MeeshyIcons.GlobeFilled, stringResource(R.string.profile_section_languages), MeeshyPalette.Error) {
         OwnProfileCard {
             rows.forEach { row -> OwnProfileLanguageRowView(row, onPick) }
         }
@@ -317,7 +303,7 @@ private fun OwnProfileLanguageRowView(row: OwnProfileLanguageRow, onPick: (OwnPr
     val tokens = MeeshyTheme.tokens
     val tap = if (row.isPickable) Modifier.clickable(role = Role.Button) { onPick(row.slot) } else Modifier
     OwnProfileRow(tap.semantics(mergeDescendants = true) {}) {
-        OwnProfileFieldIcon(Icons.Filled.Language)
+        OwnProfileFieldIcon(MeeshyIcons.GlobeFilled)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
             Text(
                 text = stringResource(languageSlotTitle(row.slot)),
@@ -378,11 +364,11 @@ private fun OwnProfileStatsSection(
     destinations: OwnProfileDestinations,
 ) {
     val title = stringResource(R.string.profile_section_stats)
-    OwnProfileSectionBlock(Icons.Filled.BarChart, title, MeeshyPalette.Indigo300) {
+    OwnProfileSectionBlock(MeeshyIcons.ChartBar, title, MeeshyPalette.Indigo300) {
         OwnProfileStatCardsRow(title, presentation.statCards, destinations.onOpenStats.takeIf { presentation.statsOpenable })
         destinations.onOpenProgression?.takeIf { presentation.showsProgression }?.let { open ->
             OwnProfileEntry(
-                icon = Icons.Filled.EmojiEvents,
+                icon = MeeshyIcons.Trophy,
                 tint = MeeshyPalette.Warning,
                 title = stringResource(R.string.profile_progression_title),
                 subtitle = stringResource(R.string.profile_progression_subtitle),
@@ -391,7 +377,7 @@ private fun OwnProfileStatsSection(
         }
         destinations.onOpenDecor?.takeIf { presentation.showsDecor }?.let { open ->
             OwnProfileEntry(
-                icon = Icons.Filled.Palette,
+                icon = MeeshyIcons.Palette,
                 tint = MeeshyPalette.Indigo500,
                 title = stringResource(R.string.profile_decor_title),
                 subtitle = stringResource(R.string.profile_decor_subtitle),
@@ -483,14 +469,14 @@ private fun OwnProfileEntry(icon: ImageVector, tint: Color, title: String, subti
 @Composable
 private fun OwnProfileFriendRequestsSection(badge: String?, count: Int, onOpen: () -> Unit) {
     val pending = stringResource(R.string.profile_own_friend_requests_pending, count.coerceAtLeast(0))
-    OwnProfileSectionBlock(Icons.Filled.PersonAdd, stringResource(R.string.profile_section_requests), MeeshyPalette.Indigo500) {
+    OwnProfileSectionBlock(MeeshyIcons.PersonAdd, stringResource(R.string.profile_section_requests), MeeshyPalette.Indigo500) {
         OwnProfileCard {
             OwnProfileRow(
                 Modifier
                     .clickable(role = Role.Button, onClick = onOpen)
                     .semantics(mergeDescendants = true) { if (badge != null) stateDescription = pending },
             ) {
-                OwnProfileFieldIcon(Icons.Filled.People)
+                OwnProfileFieldIcon(MeeshyIcons.PeopleFilled)
                 Text(
                     text = stringResource(R.string.profile_friend_requests),
                     style = MaterialTheme.typography.bodyMedium,
@@ -520,7 +506,7 @@ private fun OwnProfileFriendRequestsSection(badge: String?, count: Int, onOpen: 
 
 @Composable
 private fun OwnProfileMemberSinceSection(memberSinceEpochMillis: Long?) {
-    OwnProfileSectionBlock(Icons.Filled.CalendarToday, stringResource(R.string.profile_section_member_since), MeeshyPalette.Indigo600) {
+    OwnProfileSectionBlock(MeeshyIcons.CalendarFilled, stringResource(R.string.profile_section_member_since), MeeshyPalette.Indigo600) {
         OwnProfileCard {
             OwnProfileRow {
                 Text(
