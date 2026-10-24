@@ -33,16 +33,10 @@ const SRC = new URL('../src/', import.meta.url).pathname;
  * n'atteint pas le composant, avec l'endroit EXACT où la chaîne s'arrête.
  */
 /**
- * LE REGISTRE AVAIT ÉTÉ VIDÉ PAR #6985 — et c'est resté un état, pas un oubli,
- * jusqu'à #7813 : `routes/share-link-arrivals-parts.tsx` (liste complète des
- * arrivées d'un lien) monte un `Avatar` sans `src` (#9357). Le type qui
- * alimente cet écran, `LinkArrival`
- * (`lib/api/link-arrivals.ts`), ne porte que `displayName`, `isAnonymous`,
- * `country`, `language` et `joinedAt` — son décodeur (`WirePage`) garde
- * EXACTEMENT ces champs, « même si une charge en portait plus » (commentaire
- * du fichier). Aucune photo n'atteint donc ce composant : la chaîne s'arrête
- * au décodeur de `GET links.byLinkIdArrivals`, qui ne demande ni ne reçoit de
- * visage pour une liste d'arrivées anonymes ou non.
+ * LE REGISTRE AVAIT ÉTÉ VIDÉ PAR #6985, puis rempli de deux surfaces dont la
+ * passerelle ne servait pas la photo. La liste complète des arrivées d'un lien
+ * (#7813, #9357) a été soldée par #12571 : la passerelle sert `avatar` sur
+ * `GET links/:linkId/arrivals` (additif), l'entrée a quitté ce registre.
  *
  * Une surface ne peut revenir ici que si la donnée n'existe PAS, jamais parce
  * qu'on ne l'a pas branchée, et avec l'endroit EXACT où la chaîne s'arrête.
@@ -53,12 +47,6 @@ const EXEMPTIONS = [
     combien: 1,
     pourquoi:
       "ContactFace sans compte Meeshy associé : seule la vCard du carnet de l'auteur existe, et sa PHOTO n'est pas lue (vcard.ts ne garde ni PHOTO ni LOGO) — la chaîne s'arrête à l'analyse de la carte (#12571)",
-  },
-  {
-    fichier: 'routes/share-link-arrivals-parts.tsx',
-    combien: 1,
-    pourquoi:
-      "LinkArrival (lib/api/link-arrivals.ts) et son décodeur WirePage ne portent aucun champ photo — la chaîne s'arrête au décodage de GET links.byLinkIdArrivals (#7813, #9357)",
   },
   {
     fichier: 'components/world-participant-card-sheet.tsx',
