@@ -17,16 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.chrome.unreadBadgeLabel
-import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshyPalette
-
-/**
- * `true` quand l'avatar doit afficher la PHOTO plutot que les initiales — une URL
- * vide ou blanche n'est pas une photo. Pur, teste en JVM.
- */
-internal fun chromeAvatarUsesPhoto(avatarUrl: String?): Boolean = !avatarUrl.isNullOrBlank()
 
 /**
  * The avatar's loadable address: the session stores a KEY (`avatars/user/<id>.jpg`), which
@@ -65,7 +58,7 @@ internal fun ChromeAvatarButton(user: MeeshyUser?, avatarUrl: String?, unreadCou
                 .padding(3.dp),
             contentAlignment = Alignment.Center,
         ) {
-            // Initials first, the photo over them once it loads — never an empty ring.
+            // One face: the photo once loaded, its initials standing in until then — never an empty ring.
             MeeshyAvatar(name = displayName, size = 44.dp, imageUrl = avatarUrl)
         }
         if (!menuExpanded && unreadCount > 0) {
