@@ -8,7 +8,7 @@ import { banner, mount, push, windowClient } from '@/test-support/sw-push-harnes
 
 import type { CoqueNative } from '@/lib/native-shell';
 
-import { drainNotificationTelemetry, drainShellNotificationTelemetry, type IdbFactoryLike } from './notification-telemetry';
+import { drainNotificationTelemetry, drainOnEachReturn, drainShellNotificationTelemetry, type IdbFactoryLike } from './notification-telemetry';
 
 /**
  * L'ENTONNOIR DES NOTIFICATIONS (#10507) — le worker écrit, la page vide la
@@ -162,5 +162,83 @@ describe('#10938 — ce que la coque Android a noté app fermée passe dans la f
   test('le démarrage vide la coque à côté du service worker', () => {
     const main = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'main.tsx'), 'utf8');
     expect(main).toContain('drainShellNotificationTelemetry(coqueCourante()');
+  });
+});
+
+function page(initial: DocumentVisibilityState) {
+  const listeners: Array<() => void> = [];
+  const host = {
+    visibilityState: initial,
+    addEventListener: (_type: 'visibilitychange', listener: () => void) => listeners.push(listener),
+    removeEventListener: (_type: 'visibilitychange', listener: () => void) => {
+      const index = listeners.indexOf(listener);
+      if (index >= 0) listeners.splice(index, 1);
+    },
+  };
+  const become = (state: DocumentVisibilityState): void => {
+    host.visibilityState = state;
+    [...listeners].forEach((listener) => listener());
+  };
+  return { host, become, listeners };
+}
+
+describe('#12585 — la coque reprend la page sans la recharger : l’entonnoir se vide aussi au retour', () => {
+  test('vidé au démarrage, puis à chaque retour au premier plan, jamais quand la page se cache', () => {
+    const { host, become } = page('visible');
+    let drains = 0;
+    drainOnEachReturn(host, () => {
+      drains += 1;
+    });
+    expect(drains).toBe(1);
+    become('hidden');
+    expect(drains).toBe(1);
+    become('visible');
+    expect(drains).toBe(2);
+    become('hidden');
+    become('visible');
+    expect(drains).toBe(3);
+  });
+
+  test('le retrait arrête la vidange au retour', () => {
+    const { host, become, listeners } = page('visible');
+    let drains = 0;
+    const stop = drainOnEachReturn(host, () => {
+      drains += 1;
+    });
+    stop();
+    become('hidden');
+    become('visible');
+    expect(drains).toBe(1);
+    expect(listeners).toEqual([]);
+  });
+
+  test('une bannière notée pendant que la coque était en arrière-plan part au retour, une seule fois', async () => {
+    const queue: { lines: string[] } = { lines: [] };
+    const coque: CoqueNative = {
+      PluginHeaders: [{ name: 'MeeshyNotificationSettings', methods: [{ name: 'drainNotificationEvents' }] }],
+      nativePromise: () => {
+        const events = queue.lines;
+        queue.lines = [];
+        return Promise.resolve({ events });
+      },
+    };
+    const { host, become } = page('visible');
+    const recorded: SocialEventV2Input[] = [];
+    const pending: Promise<number>[] = [];
+    drainOnEachReturn(host, () => {
+      pending.push(drainShellNotificationTelemetry(coque, (event) => recorded.push(event)));
+    });
+    become('hidden');
+    queue.lines = [shellLine('received'), shellLine('displayed')];
+    become('visible');
+    become('hidden');
+    become('visible');
+    await Promise.all(pending);
+    expect(recorded.map((event) => event.action)).toEqual(['received', 'displayed']);
+  });
+
+  test('le démarrage branche la vidange sur le retour de la page', () => {
+    const main = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'main.tsx'), 'utf8');
+    expect(main).toContain('drainOnEachReturn(document,');
   });
 });
