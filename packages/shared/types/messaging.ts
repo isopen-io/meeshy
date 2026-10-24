@@ -5,6 +5,7 @@
  * Gateway WebSocket ↔ Frontend communication
  */
 
+import type { E2EEDevicesMismatch } from './e2ee-directory.js';
 import type { ApiResponse } from './api-responses.js';
 import type { SocketIOMessage } from './socketio-events.js';
 import type { EncryptedPayload } from './encryption.js';
@@ -261,6 +262,12 @@ export interface MessageResponse extends ApiResponse<SocketIOMessage> {
    * au lieu de le ranger en échec.
    */
   readonly retryAfter?: number;
+  /**
+   * Posé par le seul refus `E2EE_DEVICES_MISMATCH` (Sesame, #3706) : les
+   * appareils manquants, en trop ou périmés que le client doit résoudre avant
+   * de rechiffrer et renvoyer.
+   */
+  readonly e2eeMismatch?: E2EEDevicesMismatch;
 }
 
 // ===== ÉVÉNEMENTS WEBSOCKET UNIFIÉS =====

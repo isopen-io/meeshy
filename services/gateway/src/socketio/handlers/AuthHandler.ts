@@ -1,4 +1,5 @@
 import type { MeeshySocket as Socket } from '../typed-socket';
+import { joinE2EEDeviceRoom } from '../../services/e2ee/device-room';
 import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
@@ -405,6 +406,8 @@ export class AuthHandler {
     // On range l'IDENTIFIANT, jamais le jeton : le clair n'a aucune raison de
     // survivre à cette ligne.
     await this._attachSessionId(socket, user.id, decoded.sid);
+    // #3706 — la room de l'appareil E2EE lié à CETTE session : ses seules enveloppes y arrivent.
+    await joinE2EEDeviceRoom(socket, this.prisma, { userId: user.id, sessionId: decoded.sid });
 
     await this._joinUserConversations(socket, user.id, false);
 

@@ -10,6 +10,8 @@ import type {
 import {
   ENCRYPTION_ENVELOPE_SHAPE,
   noSilentDowngrade,
+  libsignalSendComplete,
+  LIBSIGNAL_SEND_ISSUE,
   NO_SILENT_DOWNGRADE_ISSUE,
 } from './encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from './mention-list.js';
@@ -98,7 +100,7 @@ export const SocketMessageSendSchema = z.object({
   // jamais la base sur le chemin d'envoi PRIMAIRE. Voir l'unité pour le récit
   // complet du défaut.
   ...ENCRYPTION_ENVELOPE_SHAPE,
-}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
+}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE).refine(libsignalSendComplete, LIBSIGNAL_SEND_ISSUE);
 
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;
 
@@ -143,7 +145,7 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   // schéma-ci ne la portait pas davantage : une pièce jointe envoyée dans une
   // conversation chiffrée perdait son chiffré exactement de la même façon.
   ...ENCRYPTION_ENVELOPE_SHAPE,
-}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
+}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE).refine(libsignalSendComplete, LIBSIGNAL_SEND_ISSUE);
 
 export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageSendWithAttachmentsSchema>;
 

@@ -1,7 +1,10 @@
+import { useEffect } from 'react';
+
 import { routeInSpace } from '@/lib/admin/admin-space';
 import { ADMIN_GROUPS } from '@/lib/admin/sections';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { useOptionalRoute } from '@/lib/router';
 import { Link } from '@/routes/route-table';
 
 import { AdminGlyph } from './admin-glyph';
@@ -15,18 +18,31 @@ import { BRAND, EDGE, INK, INK2, SURFACE, toneBackground } from './tone';
  * Il ne liste que ce que `reach.sections` porte — visible ET prête — et saute le
  * tableau de bord, où l'on se trouve : jamais une tuile qui ne mène nulle part,
  * jamais une tuile pour la page qu'on regarde.
+ *
+ * `?group=<id>` (#12670) — l'adresse du maillon de GROUPE d'un fil d'Ariane : le
+ * titre du groupe reçoit le focus et vient dans la vue. Un groupe inconnu, ou
+ * absent pour ce lecteur, ne déplace rien.
  */
 export function AdminSectionDirectory({ language, reach }: { readonly language: AdminLanguage; readonly reach: AdminReach }) {
   const groupes = ADMIN_GROUPS.map((groupe) => ({
     groupe,
     tuiles: reach.sections.filter((section) => section.group === groupe.id && section.id !== 'dashboard'),
   })).filter(({ tuiles }) => tuiles.length > 0);
+  const vise = useOptionalRoute()?.search.get('group') ?? null;
+  const present = vise !== null && groupes.some(({ groupe }) => groupe.id === vise);
+
+  useEffect(() => {
+    if (!present) return;
+    const titre = document.getElementById(`admin-group-${vise}`);
+    titre?.focus({ preventScroll: true });
+    titre?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }, [vise, present]);
 
   return (
     <div className="grid gap-6" data-admin-directory>
       {groupes.map(({ groupe, tuiles }) => (
         <section key={groupe.id} aria-labelledby={`admin-group-${groupe.id}`} className="grid gap-3" data-admin-group={groupe.id}>
-          <h2 id={`admin-group-${groupe.id}`} className="text-title font-semibold" style={{ color: INK }}>
+          <h2 id={`admin-group-${groupe.id}`} tabIndex={-1} className="scroll-mt-4 text-title font-semibold outline-none" style={{ color: INK }}>
             {translateAdmin(language, groupe.labelKey)}
           </h2>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

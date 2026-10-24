@@ -8,6 +8,7 @@
  * `messages-list.ts`. Voir `messages.ts` pour le composeur
  * (`registerMessagesRoutes`).
  */
+import { e2eeUpgradeRequired } from '../../services/e2ee/e2ee-upgrade-required';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EphemeralReaderResolution } from './ephemeralReaderDeadlines';
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
@@ -558,6 +559,7 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           // Chiffrement
           isEncrypted: message.isEncrypted,
           encryptionMode: message.encryptionMode,
+          e2eeUpgradeRequired: e2eeUpgradeRequired(message),
 
           // Timestamps
           createdAt: message.createdAt,

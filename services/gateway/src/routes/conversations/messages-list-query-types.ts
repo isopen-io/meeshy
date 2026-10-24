@@ -241,6 +241,8 @@ export type MappedMessageRow = MessageProtectionRow & {
   currentUserReactions: readonly string[];
   isEncrypted?: boolean | null;
   encryptionMode?: string | null;
+  /** #3706 — un client sans libsignal invite à mettre à jour au lieu d'une bulle vide. */
+  e2eeUpgradeRequired: boolean;
   createdAt: Date;
   updatedAt?: Date | null;
   validatedMentions?: unknown;

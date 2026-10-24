@@ -137,11 +137,7 @@ export function AdminTrackingLinkPanel({ language, linkId, reach, deps = apiDeps
       <AdminPageHeader
         language={language}
         title={title}
-        crumbs={[
-          { label: translateAdmin(language, 'admin.group.growth') },
-          { label: translateAdmin(language, 'admin.nav.trackingLinks'), target: listTarget },
-          { label: title },
-        ]}
+        place={{ section: 'trackingLinks', fiche: true }}
       />
       <AdminOfflineNotice language={language} />
       <AdminFiche

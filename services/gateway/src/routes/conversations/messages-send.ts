@@ -28,6 +28,8 @@ import {
   ENCRYPTION_ENVELOPE_SHAPE,
   noSilentDowngrade,
   NO_SILENT_DOWNGRADE_ISSUE,
+  libsignalSendComplete,
+  LIBSIGNAL_SEND_ISSUE,
   toEncryptedPayload,
 } from '../../validation/encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
@@ -39,9 +41,15 @@ import { admitMessageAttachments } from '../../services/messaging/attachmentSend
 import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import { E2EE_PLAINTEXT_REFUSED } from '../../services/messaging/e2eePlaintextAdmission';
+import { relayRefusalStatus } from '../../services/e2ee/e2ee-relay-errors';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { withQuoteServedToReader } from './ephemeralReaderDeadlines';
+
+const e2eeDeviceRefsSchema = {
+  type: 'array',
+  items: { type: 'object', properties: { userId: { type: 'string' }, deviceId: { type: 'integer' } } },
+} as const;
 
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
 // légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
@@ -120,7 +128,7 @@ export const SendMessageBodySchema = z.object({
     Boolean(data.location) ||
     Boolean(data.sticker),
   { message: 'Le message ne peut pas être vide', path: ['content'] },
-).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
+).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE).refine(libsignalSendComplete, LIBSIGNAL_SEND_ISSUE);
 
 /**
  * Enregistre la route d'envoi de message.
@@ -184,6 +192,9 @@ export function registerSendMessageRoute(
             description: 'Encryption mode. Case-insensitive on input, normalised lowercase. Defaults to e2ee when encryptedContent is present.'
           },
           encryptionMetadata: { type: 'object', description: 'Encryption metadata' },
+          encryptionProtocol: { type: 'string', enum: ['libsignal-v1'], description: 'libsignal-v1 (#3706) : envelopes requises, encryptionMetadata.senderDeviceId requis' },
+          envelopes: { type: 'array', maxItems: 32, items: { type: 'object', additionalProperties: true }, description: 'Une enveloppe libsignal opaque par appareil destinataire { userId, deviceId, registrationId, type, body }' },
+          unapprovedOwnDevices: { type: 'array', items: { type: 'integer' }, description: 'Mes appareils non approuvés, exclus de l’envoi (spec § 3.5)' },
           isEncrypted: {
             type: 'boolean',
             description: 'Optional echo of the encryption fact. When true, encryptedContent is REQUIRED — the server never downgrades a message declared encrypted to plaintext.'
@@ -220,6 +231,16 @@ export function registerSendMessageRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        409: {
+          description: 'Envoi libsignal refusé (#3706) : E2EE_DEVICES_MISMATCH (Sesame) ou E2EE_REGIME_CHANGED',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            missing: e2eeDeviceRefsSchema,
+            extra: e2eeDeviceRefsSchema,
+            stale: e2eeDeviceRefsSchema,
+          }
+        },
         429: {
           description: 'Meeshy Global — un compte de moins de 24 h écrit un message toutes les 30 s (#7740)',
           ...errorResponseSchema,
@@ -260,9 +281,6 @@ export function registerSendMessageRoute(
         forwardedFromConversationId,
         forwardedAttachmentIds,
         copyAttachmentsFromMessageId,
-        encryptedContent,
-        encryptionMode,
-        encryptionMetadata,
         attachmentIds,
         isBlurred,
         expiresAt,
@@ -426,7 +444,7 @@ export function registerSendMessageRoute(
         // le compte comme porteur de contenu), et le drapeau sans le chiffré
         // faisait mentir le `!` puis écrivait le message EN CLAIR. Le schéma
         // refuse désormais le second cas ; ici on sert le premier.
-        encryptedPayload: toEncryptedPayload({ encryptedContent, encryptionMode, encryptionMetadata }),
+        encryptedPayload: toEncryptedPayload(bodyResult.data, { sessionId: authRequest.authContext.sessionId ?? null }),
         metadata: {
           source: 'rest' as const,
           requestId: request.id
@@ -470,6 +488,14 @@ export function registerSendMessageRoute(
         // #9598 — un transfert refusé porte son motif STABLE ; `error` reste
         // la phrase que les anciens clients affichent.
         // #11216 — un clair refusé dans une conversation e2ee : 400 et son code stable.
+        // #3706 — un refus du relais libsignal : 409 Sesame (avec l'écart), 403, ou 400 lisible.
+        const relayStatus = relayRefusalStatus(result.code);
+        if (relayStatus) {
+          return sendError(reply, relayStatus, result.error || 'Envoi chiffré refusé', {
+            code: result.code,
+            ...(result.e2eeMismatch ? { details: { ...result.e2eeMismatch } } : {}),
+          });
+        }
         if (isForwardRefusalCode(result.code) || result.code === E2EE_PLAINTEXT_REFUSED) {
           return sendBadRequest(reply, result.error || 'Invalid message request', { code: result.code });
         }

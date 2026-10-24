@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E2EE0A11C0DE0000000000A1 /* MeeshyE2EE in Frameworks */ = {isa = PBXBuildFile; productRef = 15B28F20F597F2DEBF2A1D2F /* MeeshyE2EE */; };
+		E2EE0A11C0DE0000000000A2 /* MeeshyE2EE in Frameworks */ = {isa = PBXBuildFile; productRef = DBDBBEF1C16D0ADFD1C615E6 /* MeeshyE2EE */; };
 		0008D7D5B479D759E7DBC760 /* MediaSaveDeduplicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2624CEAC671EFD3549C7B59C /* MediaSaveDeduplicationTests.swift */; };
 		000948901E548E0CAC33E529 /* StatusBubbleControllerReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ABF76B8551B950BB417F705 /* StatusBubbleControllerReplyTests.swift */; };
 		000DFCA6AC3E9CFFAC1E6305 /* CameraZoomPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49F4D0129AD7BD10774B4315 /* CameraZoomPolicyTests.swift */; };
@@ -7908,6 +7910,7 @@
 			files = (
 				CF12F2974D5A8817B0FB5B04 /* MeeshySDK in Frameworks */,
 				5417656F328506C9D3A880A5 /* MeeshyUI in Frameworks */,
+				E2EE0A11C0DE0000000000A1 /* MeeshyE2EE in Frameworks */,
 				B6C08A5ABE618788713805FF /* FirebaseCore in Frameworks */,
 				AA0DF9BCD956607E42753A80 /* FirebaseAnalytics in Frameworks */,
 				04367E1EFB4B8B6CB9CADC4B /* FirebaseCrashlytics in Frameworks */,
@@ -7929,6 +7932,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E4A4724D86933186E23940FE /* MeeshySDK in Frameworks */,
+				E2EE0A11C0DE0000000000A2 /* MeeshyE2EE in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -12975,6 +12979,7 @@
 			packageProductDependencies = (
 				A2EA1255277DE18035F0BAFF /* MeeshySDK */,
 				52A8D6C05F60D2E8F5BFDC9F /* MeeshyUI */,
+				15B28F20F597F2DEBF2A1D2F /* MeeshyE2EE */,
 				0D8EBE6D7309ECE7C1B43543 /* FirebaseCore */,
 				D623A2A1169AC2D85BD5C39E /* FirebaseAnalytics */,
 				F663439EC4A4DBE488A8F631 /* FirebaseCrashlytics */,
@@ -13017,6 +13022,7 @@
 			name = MeeshyNotificationExtension;
 			packageProductDependencies = (
 				2D4BD86B5E825E53F2008016 /* MeeshySDK */,
+				DBDBBEF1C16D0ADFD1C615E6 /* MeeshyE2EE */,
 			);
 			productName = MeeshyNotificationExtension;
 			productReference = F32020DBA8C778D5742E506D /* MeeshyNotificationExtension.appex */;
@@ -17792,6 +17798,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		15B28F20F597F2DEBF2A1D2F /* MeeshyE2EE */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MeeshyE2EE;
+		};
+		DBDBBEF1C16D0ADFD1C615E6 /* MeeshyE2EE */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MeeshyE2EE;
+		};
 		0D8EBE6D7309ECE7C1B43543 /* FirebaseCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B00C913D859D2C11C2D660DF /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

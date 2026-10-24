@@ -185,7 +185,7 @@ export default function AdminAnonymousScreen() {
             language={language}
             title={title}
             subtitle={translateAdmin(language, 'admin.nav.anonymous.hint')}
-            crumbs={[{ label: translateAdmin(language, 'admin.group.people') }, { label: title }]}
+            place={{ section: 'anonymous' }}
           />
           <AdminAnonymousPanel language={language} />
         </div>
