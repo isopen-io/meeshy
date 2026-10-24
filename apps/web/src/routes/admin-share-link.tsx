@@ -140,11 +140,7 @@ export function AdminShareLinkPanel({ language, shareLinkId, reach, deps = apiDe
       <AdminPageHeader
         language={language}
         title={title}
-        crumbs={[
-          { label: translateAdmin(language, 'admin.group.exchanges') },
-          { label: translateAdmin(language, 'admin.nav.shareLinks'), target: listTarget },
-          { label: title },
-        ]}
+        place={{ section: 'shareLinks', fiche: true }}
       />
       <AdminOfflineNotice language={language} />
       <AdminFiche

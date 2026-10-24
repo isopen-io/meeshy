@@ -152,7 +152,7 @@ export function AdminAuditPanel({ language, deps = apiDeps, now = defaultNow }: 
         language={language}
         title={translateAdmin(language, 'admin.nav.audit')}
         subtitle={translateAdmin(language, 'admin.audit.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.moderation') }, { label: translateAdmin(language, 'admin.nav.audit') }]}
+        place={{ section: 'audit' }}
       />
       <AdminOfflineNotice language={language} />
       {adminId === undefined

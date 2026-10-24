@@ -151,7 +151,7 @@ export function AdminBroadcastsPanel({ language, deps = apiDeps, now = defaultNo
         language={language}
         title={translateAdmin(language, 'admin.nav.broadcasts')}
         subtitle={translateAdmin(language, 'admin.broadcast.list.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.growth') }, { label: translateAdmin(language, 'admin.nav.broadcasts') }]}
+        place={{ section: 'broadcasts' }}
         actions={
           <button
             type="button"
