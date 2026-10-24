@@ -82,7 +82,7 @@ final class ComposerCaptureEditTextTests: XCTestCase {
         let (session, _) = try sessionAvecTexte()
         session.saveTakeToPhotos()
         await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
-        XCTAssertFalse(session.takeSaveState.offersSave, "enregistrée, la flèche s'en va")
+        XCTAssertEqual(session.takeSaveState, .saved, "enregistrée, la flèche s'en va")
         session.retouchTexts.addText()
         let id = try XCTUnwrap(session.retouchTexts.typingId)
         session.retouchTexts.write("Encore", in: id)

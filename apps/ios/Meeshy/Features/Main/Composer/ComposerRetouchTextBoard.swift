@@ -75,8 +75,17 @@ final class ComposerRetouchTextBoard: ObservableObject {
 
     /// L'empreinte du contenu, du style et de la position : elle change dès qu'un texte change.
     var fingerprint: String {
-        let octets = (try? JSONEncoder().encode(texts.filter { !$0.text.isEmpty })) ?? Data()
-        return String(octets.hashValue)
+        texts.filter { !$0.text.isEmpty }.map(Self.signature).joined(separator: "|")
+    }
+
+    /// Ce qui se VOIT d'un texte, champ par champ : l'identité du modèle (z, ancre) ou l'ordre d'un
+    /// dictionnaire n'entrent pas dans l'empreinte, sans quoi la flèche reviendrait sans geste.
+    private static func signature(_ t: StoryTextObject) -> String {
+        [t.text, "\(t.x)", "\(t.y)", "\(t.scale)", "\(t.rotation)", "\(t.fontSize)", t.fontFamily,
+         t.textStyle ?? "", t.textColor ?? "", t.textAlign ?? "", t.textBg ?? "", t.textEffect ?? "",
+         String(describing: t.backgroundStyle), t.frameShape ?? "", "\(t.framePaddingScale ?? 0)",
+         "\(t.frameBorderWidth ?? 0)", t.frameBorderColor ?? "", t.borderColor ?? "", "\(t.borderWidth ?? 0)",
+         t.fontWeight ?? ""].joined(separator: ",")
     }
 
     /// L'outil Texte est montré : un texte neuf s'ouvre en saisie quand la planche est vide.
