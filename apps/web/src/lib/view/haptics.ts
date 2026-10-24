@@ -14,12 +14,26 @@
  * en arrière-plan, geste utilisateur manquant) ne casse jamais le geste — on
  * rend `false`.
  *
- * LE POINT D'INJECTION. Dans la coque Capacitor, un plugin natif sait jouer un
- * vrai retour haptique là où le navigateur ne sait que vibrer :
- * `installHapticsDriver` lui passe la main sans qu'aucun appelant ne change.
- * La sonnerie d'appel (`lib/calls/call-tones.ts`) reste à part : elle n'est
- * pas un retour de geste, c'est une alerte qui dure.
+ * LA COQUE ANDROID (#11229). `@capacitor/haptics` 8.0.2 (plugin `Haptics`)
+ * joue le retour NOMMÉ par le vibreur du système, en forme d'onde et
+ * d'amplitude, là où le navigateur ne sait qu'une durée à pleine force.
+ * Contrat LU dans `HapticsPlugin.java` : `impact({ style })` (`LIGHT`,
+ * `MEDIUM` — `HapticsImpactType.java`) et `notification({ type })` (`SUCCESS`
+ * — `HapticsNotificationType.java`). Le plugin est lu comme la coque le
+ * DÉCLARE (`PluginHeaders`, motif `native-shell.ts`), jamais par
+ * `@capacitor/core` : hors coque, rien n'est chargé, le premier rendu web ne
+ * paie rien. Une coque qui ne déclare pas le plugin (construite avant lui, ou
+ * la coque iOS, non resynchronisée) ou pas la méthode garde la vibration du
+ * navigateur. Un motif libre reste au navigateur : le plugin ne sait jouer
+ * qu'une durée.
+ *
+ * LE POINT D'INJECTION. `installHapticsDriver` passe la main à un autre
+ * moteur sans qu'aucun appelant ne change ; un hôte EXPLICITE passe avant
+ * tout. La sonnerie d'appel (`lib/calls/call-tones.ts`) reste à part : elle
+ * n'est pas un retour de geste, c'est une alerte qui dure.
  */
+
+import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
 /** Durées en millisecondes. Courtes : un geste, pas une alarme. */
 export const HAPTIC_CUES = {
@@ -31,7 +45,7 @@ export const HAPTIC_CUES = {
 export type HapticCue = keyof typeof HAPTIC_CUES;
 export type ImpactStrength = Extract<HapticCue, 'light' | 'medium'>;
 
-/** Ce qui JOUE un retour : la vibration du navigateur par défaut, un plugin natif demain. */
+/** Ce qui JOUE un retour : le plugin natif dans la coque, la vibration du navigateur ailleurs. */
 export type HapticsDriver = {
   readonly cue: (name: HapticCue) => boolean;
   readonly pattern: (ms: readonly number[]) => boolean;
@@ -53,6 +67,40 @@ export const vibrationDriver = (host: VibrateHost | undefined): HapticsDriver =>
   pattern: (ms) => vibrateWith(host, ms),
 });
 
+const HAPTICS_PLUGIN = 'Haptics';
+
+type NativeCue = { readonly method: 'impact' | 'notification'; readonly options: object };
+
+const NATIVE_CUES: Readonly<Record<HapticCue, NativeCue>> = {
+  light: { method: 'impact', options: { style: 'LIGHT' } },
+  medium: { method: 'impact', options: { style: 'MEDIUM' } },
+  success: { method: 'notification', options: { type: 'SUCCESS' } },
+};
+
+const ignoreRejection = (): undefined => undefined;
+
+const dispatchNative = (call: (options: object) => Promise<unknown>, options: object): boolean => {
+  try {
+    void call(options).catch(ignoreRejection);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Le plugin `Haptics` de la coque pour les retours nommés, la vibration de `fallback` pour le reste. */
+export const shellHapticsDriver = (coque: CoqueNative | undefined, fallback: VibrateHost | undefined): HapticsDriver => {
+  const vibration = vibrationDriver(fallback);
+  return {
+    cue: (name) => {
+      const { method, options } = NATIVE_CUES[name];
+      const call = appelNatifMethode(coque, HAPTICS_PLUGIN, method);
+      return call === null ? vibration.cue(name) : dispatchNative(call, options);
+    },
+    pattern: vibration.pattern,
+  };
+};
+
 const browserHost = (): VibrateHost | undefined => (typeof navigator === 'undefined' ? undefined : navigator);
 
 /**
@@ -65,9 +113,9 @@ export function installHapticsDriver(driver: HapticsDriver | null): void {
   registry.driver = driver;
 }
 
-/** Un hôte EXPLICITE (témoin, appelant qui sait) passe avant tout moteur installé. */
+/** Un hôte EXPLICITE (témoin, appelant qui sait) passe avant tout moteur installé, qui passe avant la coque courante. */
 const driverFor = (host: VibrateHost | undefined): HapticsDriver =>
-  host !== undefined ? vibrationDriver(host) : (registry.driver ?? vibrationDriver(browserHost()));
+  host !== undefined ? vibrationDriver(host) : (registry.driver ?? shellHapticsDriver(coqueCourante(), browserHost()));
 
 export const impact = (strength: ImpactStrength, host?: VibrateHost): boolean => driverFor(host).cue(strength);
 

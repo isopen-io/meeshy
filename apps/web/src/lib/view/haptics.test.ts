@@ -25,7 +25,7 @@ const recordingHost = () => {
 };
 
 const withCapacitor = (coque: CoqueNative | undefined): void => {
-  (globalThis as { Capacitor?: CoqueNative }).Capacitor = coque;
+  (globalThis as { Capacitor?: CoqueNative | undefined }).Capacitor = coque;
 };
 
 afterEach(() => {
