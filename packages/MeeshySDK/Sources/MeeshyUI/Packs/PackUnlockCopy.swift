@@ -46,17 +46,12 @@ enum PackUnlockCopy {
         Locale(identifier: language == "ar" ? "ar-u-nu-latn" : language)
     }
 
+    /// Les styles de format sont mis en cache par Foundation : une rangée redessinée n'alloue aucun formateur.
     static func formatCount(_ value: Int, language: String) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = locale(language)
-        return formatter.string(from: NSNumber(value: value)) ?? String(value)
+        value.formatted(.number.locale(locale(language)))
     }
 
     static func formatDate(_ date: Date, language: String) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = locale(language)
-        formatter.setLocalizedDateFormatFromTemplate("dMMMM")
-        return formatter.string(from: date)
+        date.formatted(.dateTime.day().month(.wide).locale(locale(language)))
     }
 }

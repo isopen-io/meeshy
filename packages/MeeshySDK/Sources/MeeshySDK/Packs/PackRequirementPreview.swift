@@ -102,27 +102,14 @@ public struct PackWindowPreview: Codable, Hashable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(state, forKey: .state)
-        try c.encodeIfPresent(startsAt.map(Self.iso), forKey: .startsAt)
-        try c.encodeIfPresent(endsAt.map(Self.iso), forKey: .endsAt)
+        try c.encodeIfPresent(startsAt.map(WireDate.string(from:)), forKey: .startsAt)
+        try c.encodeIfPresent(endsAt.map(WireDate.string(from:)), forKey: .endsAt)
     }
 
-    /// Une date illisible tombe seule : la fenêtre garde son état.
+    /// Une date illisible tombe seule : la fenêtre garde son état. Le format est celui du fil (`WireDate`).
     private static func date(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Date? {
         guard let raw = try? c.decodeIfPresent(String.self, forKey: key) else { return nil }
-        return parse(raw)
-    }
-
-    private static func parse(_ raw: String) -> Date? {
-        let plain = ISO8601DateFormatter()
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fractional.date(from: raw) ?? plain.date(from: raw)
-    }
-
-    private static func iso(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: date)
+        return WireDate.date(from: raw)
     }
 }
 
