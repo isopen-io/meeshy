@@ -30,7 +30,12 @@ class ConversationViewerAuthorityTest {
         }
         assertThat(viewer(platformRole = "BIGBOSS", conversationRole = "creator").effectiveRank)
             .isEqualTo(MemberRole.CREATOR.level)
-        assertThat(viewer(platformRole = "admin").effectiveRole).isEqualTo(MemberRole.CREATOR)
+    }
+
+    @Test
+    fun `a lowercase platform role does not take the creator rank, unlike the admin console`() {
+        assertThat(viewer(platformRole = "admin").effectiveRole).isEqualTo(MemberRole.MEMBER)
+        assertThat(viewer(platformRole = "admin").administersPlatform).isTrue()
     }
 
     @Test
