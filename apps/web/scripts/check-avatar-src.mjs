@@ -141,6 +141,55 @@ for (const chemin of fichiers) {
   }
 }
 
+/**
+ * **AUCUNE `<img>` D'AVATAR HORS DE `components/avatar.tsx`** (#12571) — la
+ * moitié que la garde ci-dessus ne voyait pas : elle ne regarde que les
+ * montages de `<Avatar|AuthorAvatar|PeerAvatar|RingedAvatar>`, donc une
+ * `<img src={avatar}>` écrite à la main passait VERTE par absence. C'était le
+ * cas de `call-people-sheet.tsx` : sans `attachmentSrc` (une clé de stockage se
+ * résout contre le chemin de la page et casse), sans `onError` (un cercle vide,
+ * ni photo ni initiales), sans les initiales de la loi. Une `<img>` d'avatar —
+ * reconnue par son texte (`avatar`, `portrait`) ou par le composant qui la
+ * porte (`…Avatar`, `Portrait`) — vit dans `Avatar`, qui résout la référence,
+ * rend les initiales À LA PLACE de la photo qui échoue et les masque dès qu'elle
+ * charge. Seuls les rendus qui ne sont PAS un disque (un avatar carré
+ * d'entité) peuvent porter la leur, inscrits ci-dessous avec ce qui prouve
+ * qu'ils rendent la photo OU les initiales.
+ */
+const VISAGES_UNIQUES = [
+  {
+    fichier: 'routes/communities-parts.tsx',
+    combien: 1,
+    preuve: 'data-avatar-initials',
+    pourquoi: "EntityAvatar : avatar CARRÉ d'une communauté (iOS kind .entity), la photo précède et masque ses initiales (avatar.css)",
+  },
+  {
+    fichier: 'components/conversation-link-card.tsx',
+    combien: 1,
+    preuve: 'failedSrc',
+    pourquoi: "Portrait : rend la photo OU les initiales (un `failedSrc` par adresse), le modèle à généraliser",
+  },
+];
+
+const IMG_AVATAR = /avatar|portrait/i;
+const COMPOSANT_AVATAR = /(Avatar|Portrait)/;
+const imgsAvatar = new Map();
+for (const chemin of fichiers) {
+  const cle = relative(SRC, chemin);
+  if (cle === 'components/avatar.tsx') continue;
+  const source = readFileSync(chemin, 'utf8');
+  for (let i = source.indexOf('<img'); i !== -1; i = source.indexOf('<img', i + 1)) {
+    const apres = source[i + 4];
+    if (apres !== undefined && /[A-Za-z0-9_]/.test(apres)) continue;
+    const element = elementAt(source, i);
+    const declarations = [...source.slice(0, i).matchAll(/(?:^|\n)(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)|(?:^|\n)(?:export\s+)?const\s+([A-Za-z0-9_]+)\s*=\s*\(/g)];
+    const dernier = declarations.at(-1);
+    const porteur = dernier === undefined ? '' : (dernier[1] ?? dernier[2] ?? '');
+    if (!IMG_AVATAR.test(element) && !COMPOSANT_AVATAR.test(porteur)) continue;
+    imgsAvatar.set(cle, (imgsAvatar.get(cle) ?? 0) + 1);
+  }
+}
+
 const failures = [];
 
 for (const exemption of EXEMPTIONS) {
@@ -157,6 +206,27 @@ for (const exemption of EXEMPTIONS) {
     );
   }
   muettes.delete(exemption.fichier);
+}
+
+for (const visage of VISAGES_UNIQUES) {
+  const trouvees = imgsAvatar.get(visage.fichier) ?? 0;
+  if (trouvees === 0) {
+    failures.push(`VISAGE UNIQUE PÉRIMÉ — « ${visage.fichier} » ne monte plus d'<img> d'avatar : retirer son entrée du registre (${visage.pourquoi})`);
+    continue;
+  }
+  if (trouvees !== visage.combien) {
+    failures.push(`VISAGE UNIQUE DÉSACCORDÉ — « ${visage.fichier} » monte ${trouvees} <img> d'avatar, le registre en déclare ${visage.combien}`);
+  }
+  if (!readFileSync(join(SRC, visage.fichier), 'utf8').includes(visage.preuve)) {
+    failures.push(`VISAGE UNIQUE SANS PREUVE — « ${visage.fichier} » ne contient plus « ${visage.preuve} » : ${visage.pourquoi}`);
+  }
+  imgsAvatar.delete(visage.fichier);
+}
+
+for (const [fichier, combien] of imgsAvatar) {
+  failures.push(
+    `IMG D'AVATAR HORS DE \`Avatar\` — « ${fichier} » écrit ${combien} \`<img>\` d'avatar à la main. Monter \`Avatar\` / \`PeerAvatar\` (\`src\` + \`initialsOf\`) : il résout la référence (\`attachmentSrc\`), rend les initiales si la photo échoue et ne les montre jamais sous la photo chargée.`,
+  );
 }
 
 for (const [fichier, combien] of muettes) {

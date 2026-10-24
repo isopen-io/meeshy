@@ -199,12 +199,12 @@
 
 /*
  * UN SEUL VISAGE (#12571) — les initiales ne sont que le PLACEHOLDER du
- * chargement. `Avatar` pose `data-loaded` sur l'`<img>` à son `load` ; l'`<img>`
+ * chargement. `Avatar` pose `data-loaded` sur l'`<img>` à son `load` (`Avatar`, et l'avatar carré d'une communauté) ; l'`<img>`
  * précède le nœud d'initiales dans le DOM, donc cette règle de frère le masque
  * sans état ni hook. `visibility` plutôt que `display` : la boîte garde sa
  * place (la racine a une taille explicite) et un PNG transparent ne laisse plus
  * voir de dégradé dessous — ni le liseré de deux cercles de même rayon.
  */
-.avatar-root > img[data-loaded] ~ [data-avatar-initials] {
+img[data-loaded] ~ [data-avatar-initials] {
   visibility: hidden;
 }
