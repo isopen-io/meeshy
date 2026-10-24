@@ -350,36 +350,11 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         }
         if let retouched { image = retouched }
 
-        // Pipeline order per §14.2.5:
-        // 1. Low-light boost (automatic)
+        // 1. Low-light boost (automatic), a sensor correction like step 0.
         image = applyLowLightBoost(to: image, boost: lowLightBoost)
-        // 2. Colorimetry — #9289 : une teinte du catalogue est UN étalonnage en une passe,
-        // qui épargne la peau ; un réglage fait à la main garde la chaîne de filtres.
-        if hasChosenFilters {
-            image = VideoFilterColorimetry.graded(image, config: cfg)
-        }
-        // 3. Background blur, at the tier the ladder and the device allow
-        if cfg.backgroundBlurEnabled {
-            image = backgroundBlur.apply(
-                to: image,
-                pixelBuffer: pixelBuffer,
-                radius: cfg.backgroundBlurRadius,
-                tier: ladder.blurTier(isConstrained: isConstrained),
-                timestamp: clock()
-            )
-        }
-        // 4. Stylized face preset (skin smoothing is the retouch of step 0)
-        let faceEffect = cfg.activeFaceEffect
-        if faceEffect.isStylized {
-            image = faceEffects.render(
-                faceEffect,
-                on: image,
-                pixelBuffer: pixelBuffer,
-                rotation: rotation,
-                intensity: cfg.skinSmoothingIntensity,
-                isDegraded: ladder.tier != .balanced || ladder.isSmoothingDegraded || isConstrained
-            )
-        }
+        // 2. #11298 — the lens stages, painted by LensPainter in lens order.
+        image = lensStages(for: cfg, pixelBuffer: pixelBuffer, rotation: rotation,
+                           ladder: ladder, isConstrained: isConstrained).paint(image)
 
         // PERF-014: render into a pool-allocated output buffer instead of
         // mutating the capturer's input buffer. Falls back to in-place
@@ -398,6 +373,46 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         recordFrame(elapsedMs: elapsed * 1000, blurActive: cfg.backgroundBlurEnabled)
 
         return output
+    }
+
+    /// #11298 — Les étages de lens d'une trame : flou de fond, au palier que
+    /// l'échelle et l'appareil permettent ; colorimétrie (#9289 : une teinte du
+    /// catalogue est UN étalonnage qui épargne la peau, un réglage à la main
+    /// garde la chaîne de filtres) ; effet stylisé du visage — le lissage de la
+    /// peau est la retouche de l'étape 0.
+    func lensStages(
+        for cfg: VideoFilterConfig,
+        pixelBuffer: CVPixelBuffer,
+        rotation: Int,
+        ladder: CallVideoDegradation,
+        isConstrained: Bool
+    ) -> CallLensStages {
+        let faceEffect = cfg.activeFaceEffect
+        let isFaceDegraded = ladder.tier != .balanced || ladder.isSmoothingDegraded || isConstrained
+        return CallLensStages(
+            backgroundBlur: cfg.backgroundBlurEnabled ? { [backgroundBlur, clock] image in
+                backgroundBlur.apply(
+                    to: image,
+                    pixelBuffer: pixelBuffer,
+                    radius: cfg.backgroundBlurRadius,
+                    tier: ladder.blurTier(isConstrained: isConstrained),
+                    timestamp: clock()
+                )
+            } : nil,
+            colorimetry: cfg.isEnabled || cfg.hasAdvancedFilters ? { image in
+                VideoFilterColorimetry.graded(image, config: cfg)
+            } : nil,
+            faceEffect: faceEffect.isStylized ? { [faceEffects] image in
+                faceEffects.render(
+                    faceEffect,
+                    on: image,
+                    pixelBuffer: pixelBuffer,
+                    rotation: rotation,
+                    intensity: cfg.skinSmoothingIntensity,
+                    isDegraded: isFaceDegraded
+                )
+            } : nil
+        )
     }
 
     /// PERF-014: Lazily build a CVPixelBufferPool sized to the first frame we
