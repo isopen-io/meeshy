@@ -40,7 +40,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.TextUnit
+import coil.ImageLoader
 import coil.decode.DataSource
+import coil.imageLoader
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
@@ -265,8 +268,9 @@ public fun MeeshyAvatar(
 /**
  * Le cercle d'avatar, UN seul visage ([AvatarFace.layer]) : les initiales tiennent la place de la photo
  * tant qu'elle charge ou si elle échoue (ni spinner, ni « Réessayer »), et sont RETIRÉES dès qu'elle
- * s'affiche. La photo remplit le cercle en `Crop` : une image non carrée ne laisse ni bande de dégradé
- * ni initiales autour d'elle.
+ * s'affiche. Une photo déjà en mémoire tient le cercle dès la première image ([AvatarPhotoState.firstFrame]) :
+ * une ligne qui revient à l'écran ne fait pas clignoter ses initiales. La photo remplit le cercle en `Crop` :
+ * une image non carrée ne laisse ni bande de dégradé ni initiales autour d'elle.
  */
 @Composable
 private fun AvatarDisc(
@@ -277,8 +281,11 @@ private fun AvatarDisc(
     fontSize: TextUnit,
     modifier: Modifier = Modifier,
 ) {
-    var photoState by remember(face) { mutableStateOf(AvatarPhotoState.Loading) }
-    var warm by remember(face) { mutableStateOf(false) }
+    val context = LocalContext.current
+    val sidePx = with(LocalDensity.current) { size.roundToPx() }
+    val resident = remember(face, sidePx) { face is AvatarFace.Photo && context.imageLoader.holds(face.model, sidePx) }
+    var photoState by remember(face) { mutableStateOf(AvatarPhotoState.firstFrame(resident)) }
+    var warm by remember(face) { mutableStateOf(resident) }
     val layer = face.layer(photoState)
     Box(
         modifier = modifier
@@ -302,13 +309,14 @@ private fun AvatarDisc(
                 animationSpec = if (warm) snap() else tween(PHOTO_FADE_MILLIS),
                 label = "avatarPhotoFade",
             )
+            val request = remember(face.model, context) { ImageRequest.Builder(context).data(face.model).build() }
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(face.model).build(),
+                model = request,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 onState = { state ->
-                    warm = (state as? AsyncImagePainter.State.Success)?.result?.dataSource == DataSource.MEMORY_CACHE
-                    photoState = state.toPhotoState()
+                    if (state is AsyncImagePainter.State.Success) warm = state.result.dataSource == DataSource.MEMORY_CACHE
+                    photoState = photoState.then(state.toPhotoState())
                 },
                 modifier = Modifier.size(size).alpha(photoAlpha),
             )
@@ -318,6 +326,15 @@ private fun AvatarDisc(
 
 /** Le fondu de la photo qui remplace les initiales (iOS : 0,15 s) ; une photo déjà en mémoire s'affiche d'emblée. */
 private const val PHOTO_FADE_MILLIS = 150
+
+/**
+ * La photo est-elle déjà en mémoire à une taille qui couvre le cercle ? Lecture synchrone, sans requête :
+ * une valeur qui couvre les deux côtés est celle que Coil servira sans recharger.
+ */
+private fun ImageLoader.holds(model: String, sidePx: Int): Boolean {
+    val bitmap = memoryCache?.get(MemoryCache.Key(model))?.bitmap ?: return false
+    return bitmap.width >= sidePx && bitmap.height >= sidePx
+}
 
 private fun AsyncImagePainter.State.toPhotoState(): AvatarPhotoState = when (this) {
     is AsyncImagePainter.State.Success -> AvatarPhotoState.Success

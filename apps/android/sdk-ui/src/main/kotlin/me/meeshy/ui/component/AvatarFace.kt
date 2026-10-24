@@ -6,7 +6,25 @@ import me.meeshy.sdk.util.resolveServedImageUrl
  * L'état du chargement d'une photo d'avatar, tel que le moteur d'image le rapporte. Aucun état
  * « nouvelle tentative » : un avatar n'a ni spinner ni bouton (D2, miroir de `CachedAvatarImage`).
  */
-public enum class AvatarPhotoState { Loading, Success, Error }
+public enum class AvatarPhotoState {
+    Loading, Success, Error;
+
+    /**
+     * L'état après ce que le moteur rapporte. Une photo déjà montrée ne retombe pas en initiales parce
+     * que le moteur annonce qu'il charge : Coil le dit toujours AVANT de lire sa mémoire, y compris
+     * pour une photo que [firstFrame] a déjà montrée.
+     */
+    public fun then(reported: AvatarPhotoState): AvatarPhotoState =
+        if (this == Success && reported == Loading) Success else reported
+
+    public companion object {
+        /**
+         * L'état de la première image : une photo déjà en mémoire à la taille du cercle la tient d'emblée
+         * (miroir de la sonde `WarmImageProbe` de `CachedAvatarImage`) ; sinon les initiales l'attendent.
+         */
+        public fun firstFrame(isResident: Boolean): AvatarPhotoState = if (isResident) Success else Loading
+    }
+}
 
 /** Le calque qui se dessine dans le cercle : UN seul, jamais les deux. */
 public sealed interface AvatarLayer {

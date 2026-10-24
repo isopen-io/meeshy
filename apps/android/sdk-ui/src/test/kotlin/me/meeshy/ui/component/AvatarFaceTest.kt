@@ -114,4 +114,36 @@ class AvatarFaceTest {
             assertThat(face.layer(state)).isEqualTo(AvatarLayer.Initials("A"))
         }
     }
+
+    // MARK: la première image, et ce que le moteur rapporte ensuite
+
+    @Test
+    fun `une photo deja en memoire se montre des la premiere image`() {
+        val face = AvatarFace.resolve("Alice", imageUrl = "2026/09/abc/photo.png", apiBaseUrl = base)
+
+        assertThat(face.layer(AvatarPhotoState.firstFrame(isResident = true))).isInstanceOf(AvatarLayer.Photo::class.java)
+    }
+
+    @Test
+    fun `une photo absente de la memoire commence par ses initiales`() {
+        val face = AvatarFace.resolve("Alice", imageUrl = "2026/09/abc/photo.png", apiBaseUrl = base)
+
+        assertThat(face.layer(AvatarPhotoState.firstFrame(isResident = false))).isEqualTo(AvatarLayer.Initials("A"))
+    }
+
+    @Test
+    fun `une photo montree ne retombe pas en initiales quand le moteur annonce qu'il charge`() {
+        assertThat(AvatarPhotoState.Success.then(AvatarPhotoState.Loading)).isEqualTo(AvatarPhotoState.Success)
+    }
+
+    @Test
+    fun `une erreur apres une photo rend les initiales`() {
+        assertThat(AvatarPhotoState.Success.then(AvatarPhotoState.Error)).isEqualTo(AvatarPhotoState.Error)
+    }
+
+    @Test
+    fun `hors photo montree, l'etat suit ce que le moteur rapporte`() {
+        assertThat(AvatarPhotoState.Loading.then(AvatarPhotoState.Success)).isEqualTo(AvatarPhotoState.Success)
+        assertThat(AvatarPhotoState.Error.then(AvatarPhotoState.Loading)).isEqualTo(AvatarPhotoState.Loading)
+    }
 }
