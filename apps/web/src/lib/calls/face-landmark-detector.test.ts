@@ -51,8 +51,18 @@ describe('le chargement à la demande', () => {
     const [found] = await h.detector.detect(source);
     await h.detector.detect(source);
     expect(h.loads).toHaveLength(1);
-    expect(found?.landmarks).toHaveLength(FACE_LANDMARK_COUNT);
+    expect(h.detector.landmarks()).toHaveLength(FACE_LANDMARK_COUNT);
     expect(found?.boundingBox).toEqual({ x: 80, y: 45, width: 160, height: 90 });
+  });
+
+  test('les points du dernier visage lu : aucun pendant le repli, 478 ensuite', async () => {
+    const h = harness({ tier: 'high' });
+    expect(h.detector.landmarks()).toBeNull();
+    await h.detector.detect(source);
+    expect(h.detector.landmarks()).toBeNull();
+    await flush();
+    await h.detector.detect(source);
+    expect(h.detector.landmarks()).toHaveLength(FACE_LANDMARK_COUNT);
   });
 
   test('l’horloge qu’on donne au modèle ne recule jamais', async () => {
@@ -114,6 +124,30 @@ describe('un modèle qui ne charge pas', () => {
     await detector.detect(source);
     await flush();
     expect(await detector.detect(source)).toEqual([]);
+    expect(detector.landmarks()).toBeNull();
+  });
+
+  test('un modèle arrivé après close est rendu aussitôt, et plus rien ne se charge', async () => {
+    let closed = 0;
+    let release: (port: LandmarkerPort) => void = () => undefined;
+    const loads: number[] = [];
+    const late: LandmarkerPort = { detect: () => points(), close: () => void (closed += 1) };
+    const detector = createLandmarkDetector({ load: () => (loads.push(1), new Promise<LandmarkerPort>((resolve) => (release = resolve))), tier: () => 'high', fallback: browser, now: () => 1 });
+    await detector.detect(source);
+    detector.close();
+    release(late);
+    await flush();
+    expect(closed).toBe(1);
+    expect(await detector.detect(source)).toEqual([{ boundingBox: browserBox }]);
+    expect(loads).toHaveLength(1);
+  });
+
+  test('close avant tout visage : aucun chargement ensuite', async () => {
+    const h = harness({ tier: 'high' });
+    h.detector.close();
+    await h.detector.detect(source);
+    await flush();
+    expect(h.loads).toHaveLength(0);
   });
 
   test('close rend le modèle', async () => {

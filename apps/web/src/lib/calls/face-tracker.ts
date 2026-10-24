@@ -1,5 +1,4 @@
 import { heuristicFaceBox, shouldDetect, smoothFaceBox, type Box } from './face-effects';
-import type { FaceLandmarks } from './face-landmarks';
 
 /**
  * **LE VISAGE, IMAGE APRÈS IMAGE** (#8551, #8552) — partagé par le traitement
@@ -13,8 +12,7 @@ import type { FaceLandmarks } from './face-landmarks';
  * l'échelle de l'image.
  */
 
-/** Un visage lu : sa boîte, et ses 478 points (normalisés) quand le détecteur est le Landmarker de MediaPipe (W15, #11321). */
-type Detected = { readonly boundingBox: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }; readonly landmarks?: FaceLandmarks };
+type Detected = { readonly boundingBox: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } };
 
 export type FaceDetectorPort = { readonly detect: (source: CanvasImageSource) => Promise<readonly Detected[]> };
 
@@ -38,15 +36,7 @@ const boxOf = (found: readonly Detected[]): Box | null => {
   return first === undefined || first.width <= 0 ? null : { x: first.x, y: first.y, width: first.width, height: first.height };
 };
 
-const landmarksOf = (found: readonly Detected[]): FaceLandmarks | null => (boxOf(found) === null ? null : (found[0]?.landmarks ?? null));
-
-type Seen = { readonly box: Box | null; readonly landmarks: FaceLandmarks | null };
-
-export type FaceTracker = {
-  readonly next: (source: CanvasImageSource, frame: { readonly width: number; readonly height: number }, frameIndex: number) => Box;
-  /** Les points du dernier visage lu, ou `null` : pas de point sans le Landmarker, ni sans visage. */
-  readonly landmarks: () => FaceLandmarks | null;
-};
+export type FaceTracker = { readonly next: (source: CanvasImageSource, frame: { readonly width: number; readonly height: number }, frameIndex: number) => Box };
 
 /** La largeur de l'image que lit le détecteur (#9100) : un visage s'y trouve, et la relecture GPU → CPU d'une image 720p ne se paie plus. */
 export const DETECT_WIDTH = 320;
@@ -72,37 +62,37 @@ const scaled = (box: Box | null, factor: number): Box | null => (box === null ||
 
 export function createFaceTracker(detector: FaceDetectorPort | null, options: { readonly resize?: ResizePort } = {}): FaceTracker {
   const resize = options.resize ?? browserResize();
-  const state: { seen: Seen; shown: Box | null; busy: boolean } = { seen: { box: null, landmarks: null }, shown: null, busy: false };
-  const read = async (port: FaceDetectorPort, source: CanvasImageSource, width: number): Promise<Seen> => {
-    if (width <= DETECT_WIDTH) {
-      const found = await port.detect(source);
-      return { box: boxOf(found), landmarks: landmarksOf(found) };
-    }
+  const state: { seen: Box | null; shown: Box | null; busy: boolean } = { seen: null, shown: null, busy: false };
+  const read = async (port: FaceDetectorPort, source: CanvasImageSource, width: number): Promise<Box | null> => {
+    if (width <= DETECT_WIDTH) return boxOf(await port.detect(source));
     const reduced = await resize(source, { from: width, to: DETECT_WIDTH });
     try {
-      const found = await port.detect(reduced.image);
-      return { box: scaled(boxOf(found), width / reduced.width), landmarks: landmarksOf(found) };
+      return scaled(boxOf(await port.detect(reduced.image)), width / reduced.width);
     } finally {
       reduced.close();
     }
   };
-  const settle = (seen: Seen): void => {
-    state.seen = seen;
-    state.busy = false;
-  };
   const ask = (source: CanvasImageSource, width: number): void => {
     if (detector === null || state.busy) return;
     state.busy = true;
-    read(detector, source, width).then(settle, () => settle({ box: null, landmarks: null }));
+    read(detector, source, width).then(
+      (box) => {
+        state.seen = box;
+        state.busy = false;
+      },
+      () => {
+        state.seen = null;
+        state.busy = false;
+      },
+    );
   };
   return {
     next: (source, frame, frameIndex) => {
       if (shouldDetect(frameIndex)) ask(source, frame.width);
-      const target = state.seen.box ?? heuristicFaceBox(frame);
-      state.shown = state.seen.box === null ? target : smoothFaceBox(state.shown, target);
+      const target = state.seen ?? heuristicFaceBox(frame);
+      state.shown = state.seen === null ? target : smoothFaceBox(state.shown, target);
       return state.shown;
     },
-    landmarks: () => state.seen.landmarks,
   };
 }
 

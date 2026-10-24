@@ -27,7 +27,7 @@ describe('un chunk atteint par import() seulement', () => {
 
   test('il rejoint le chunk du segmenter, que le navigateur ne demande que par import()', () => {
     expect(read(join(here, 'video-effects-segmentation.ts'))).toMatch(/export \{ loadFaceLandmarker \} from '\.\/face-landmarker'/);
-    expect(read(join(here, 'video-effects-browser.ts'))).toMatch(/import\(['"]\.\/video-effects-segmentation['"]\)\.then\(\(module\) => module\.loadFaceLandmarker\(\)\)/);
+    expect(read(join(webRoot, 'src', 'lib', 'meeshy-lens', 'lens-browser.ts'))).toMatch(/import\(['"]@\/lib\/calls\/video-effects-segmentation['"]\)\.then\(\(module\) => module\.loadFaceLandmarker\(\)\)/);
   });
 });
 
@@ -47,6 +47,8 @@ describe('servi par Meeshy, jamais précaché', () => {
     const pwa = read(join(webRoot, 'vite', 'pwa.ts'));
     expect(pwa).toContain("'assets/video-effects-segmentation-*.js'");
     expect(pwa).toContain("'assets/vision_wasm_*'");
+    expect(pwa).toMatch(/globPatterns: \[[^\]]*\]/);
+    expect(pwa.match(/globPatterns: \[[^\]]*\]/)?.[0]).not.toMatch(/task|tflite|wasm/);
   });
 
   test('le budget du chunk dit le modèle de plus, et reste dynamique seulement', () => {

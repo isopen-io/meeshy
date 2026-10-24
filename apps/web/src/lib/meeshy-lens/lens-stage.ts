@@ -1,6 +1,6 @@
 import type { Lens } from '@meeshy/shared/types/lens-format';
 
-import { heuristicFaceBox, type Box } from '@/lib/calls/face-effects';
+import type { Box } from '@/lib/calls/face-effects';
 import type { Surface2D } from '@/lib/calls/video-effects-frames';
 
 import type { FrameSize } from './face-anchor';
@@ -51,6 +51,9 @@ export type LensStage = {
 
 const FROZEN_T = 0;
 
+/* Une lens sans couche de visage ne lit pas la boîte : l'image entière en tient lieu, sans rien importer du moteur des effets (le chunk de l'étage n'en dépend pas). */
+const unusedFace = (frame: FrameSize): Box => ({ x: 0, y: 0, width: frame.width, height: frame.height });
+
 export function createLensStage(env: LensStageEnv): LensStage {
   let lut: LutStage | null | undefined;
   /* Les derniers fichiers remis : l'hôte ne les renvoie pas à chaque réglage (`video-effects-pipeline.ts`),
@@ -61,7 +64,7 @@ export function createLensStage(env: LensStageEnv): LensStage {
   return {
     plan: (settings, source, frame, t) => {
       filesOf(settings);
-      return planLens({ ...settings, frame, face: lensUsesFace(settings.lens) ? env.face(source, frame) : heuristicFaceBox(frame), t: env.reducedMotion?.() === true ? FROZEN_T : t });
+      return planLens({ ...settings, frame, face: lensUsesFace(settings.lens, settings.level) ? env.face(source, frame) : unusedFace(frame), t: env.reducedMotion?.() === true ? FROZEN_T : t });
     },
     grade: (image, settings, frame) => {
       const op = lensLutOf(settings.lens, settings.level);

@@ -10,7 +10,7 @@ import type { Box } from './face-effects';
  * coordonnées unitaires » d'iOS (`CallFaceTracker`), et suivent un changement
  * de résolution sans attendre la lecture suivante.
  *
- * Ce module est LÉGER (aucune dépendance de MediaPipe) : le suiveur et les
+ * Ce module est LÉGER (aucune dépendance de MediaPipe) : le détecteur (`face-landmark-detector.ts`) et les
  * lens le lisent, le modèle vit dans son chunk.
  */
 export const FACE_LANDMARK_COUNT = 478;

@@ -2,6 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import type { Lens, LensLayer } from '@meeshy/shared/types/lens-format';
 
+import type { LandmarkerPort } from '@/lib/calls/face-landmark-detector';
+import type { FaceDetectorPort } from '@/lib/calls/face-tracker';
+
+import { browserLensStage } from './lens-browser';
 import { lensUsesFace } from './lens-plan';
 import { createLensStage, type LensSettings } from './lens-stage';
 
@@ -39,6 +43,14 @@ describe('lensUsesFace', () => {
     expect(lensUsesFace(withLayers([]))).toBe(false);
     expect(lensUsesFace(withLayers([grade, onScreen, snow]))).toBe(false);
   });
+
+  test('une couche de visage que le palier masque ne compte pas', () => {
+    const lens: Lens = { ...withLayers([grade, onFace, snowOnFace]), fallbacks: { reduced: { hide: ['couronne'] } } };
+    expect(lensUsesFace(lens, 'full')).toBe(true);
+    expect(lensUsesFace(lens, 'reduced')).toBe(true);
+    expect(lensUsesFace(lens, 'minimal')).toBe(false);
+    expect(lensUsesFace({ ...withLayers([onFace]), fallbacks: { reduced: { hide: ['couronne'] } } }, 'reduced')).toBe(false);
+  });
 });
 
 describe('l’étage ne demande le visage que s’il sert', () => {
@@ -69,5 +81,46 @@ describe('l’étage ne demande le visage que s’il sert', () => {
     const { stage } = stageWith();
     const [op] = stage.plan(settingsOf([onScreen]), source, size, 0);
     expect(op?.kind === 'sticker' ? [op.x, op.y] : null).toEqual([640, 360]);
+  });
+});
+
+describe('l’étage du navigateur rend le modèle à sa fermeture', () => {
+  const size = { width: 320, height: 180 };
+  const source = { width: 320, height: 180 } as unknown as CanvasImageSource;
+  const settings: LensSettings = { lens: withLayers([onFace]), languages: ['fr'], level: 'full' };
+  const browser: FaceDetectorPort = { detect: async () => [] };
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  const stageWith = () => {
+    const calls = { loads: 0, closed: 0, tracked: 0 };
+    const landmarker: LandmarkerPort = { detect: () => null, close: () => void (calls.closed += 1) };
+    const stage = browserLensStage({
+      face: {
+        track: (detector) => (source, frame) => (calls.tracked += 1, void detector.detect(source), { x: 0, y: 0, width: frame.width / 2, height: frame.height / 2 }),
+        browserDetector: () => browser,
+        tier: () => 'high',
+        now: () => 1,
+        load: async () => (calls.loads += 1, landmarker),
+      },
+    });
+    return { stage, calls };
+  };
+
+  test('une lens de visage charge le modèle une fois, et la fermeture de l’étage le rend', async () => {
+    const { stage, calls } = stageWith();
+    stage.plan(settings, source, size, 0);
+    stage.plan(settings, source, size, 40);
+    await flush();
+    stage.close();
+    expect(calls.loads).toBe(1);
+    expect(calls.closed).toBe(1);
+  });
+
+  test('une lens sans visage ne bâtit ni suiveur ni modèle', async () => {
+    const { stage, calls } = stageWith();
+    stage.plan({ ...settings, lens: withLayers([onScreen]) }, source, size, 0);
+    await flush();
+    stage.close();
+    expect([calls.tracked, calls.loads, calls.closed]).toEqual([0, 0, 0]);
   });
 });
