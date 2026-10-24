@@ -1,0 +1,80 @@
+import CryptoKit
+import Foundation
+import GRDB
+import XCTest
+@testable import MeeshyE2EE
+
+/// L'app et l'extension de notification déchiffrent pour le MÊME appareil, sur
+/// la même base du groupe d'apps (spec § 4.4). Ce témoin simule les deux
+/// processus : deux connexions distinctes au même fichier, deux descripteurs
+/// sur le même fichier de verrou, deux stores. Ils déchiffrent EN MÊME TEMPS le
+/// flux d'Alice. La session ne doit jamais bifurquer : chaque message s'ouvre
+/// exactement une fois, aucun ne se rouvre, et la session continue après.
+final class E2EEProcessLockConcurrencyTests: XCTestCase {
+    private let alice = String(repeating: "a1", count: 12)
+    private let bob = String(repeating: "b2", count: 12)
+
+    func test_twoProcessesDecryptingUnderTheFileLock_neverForkTheSession() throws {
+        let databasePath = E2EETestDevice.temporaryPath("sqlite")
+        let lockPath = E2EETestDevice.temporaryPath("lock")
+        let sealingKey = SymmetricKey(size: .bits256)
+        let bobIdentity = E2EELocalIdentity.generate()
+        let app = try E2EETestDevice.make(userId: bob, identity: bobIdentity, writer: DatabasePool(path: databasePath), sealingKey: sealingKey, lockPath: lockPath)
+        let extensionProcess = try E2EETestDevice.make(userId: bob, identity: bobIdentity, writer: DatabasePool(path: databasePath), sealingKey: sealingKey, lockPath: lockPath)
+        let aliceDevice = try E2EETestDevice.make(userId: alice)
+
+        let enrollment = try app.factory.enrollment(userId: bob, platform: .ios, label: nil, now: Date())
+        try aliceDevice.cipher.startSession(with: E2EETestDirectory.bundle(of: enrollment, deviceId: 1), of: bob)
+        let opening = try aliceDevice.cipher.encrypt(Data("ouverture".utf8), for: app.address)
+        _ = try app.cipher.decrypt(opening, from: aliceDevice.address)
+        let reply = try app.cipher.encrypt(Data("ok".utf8), for: aliceDevice.address)
+        _ = try aliceDevice.cipher.decrypt(reply, from: app.address)
+
+        let stream = try (0..<60).map { index in try aliceDevice.cipher.encrypt(Data("m\(index)".utf8), for: app.address) }
+        let opened = OpenedLedger()
+        DispatchQueue.concurrentPerform(iterations: stream.count * 2) { iteration in
+            let device = iteration.isMultiple(of: 2) ? app : extensionProcess
+            let message = stream[iteration / 2]
+            if let plain = try? device.cipher.decrypt(message, from: aliceDevice.address) {
+                opened.record(String(decoding: plain, as: UTF8.self))
+            }
+        }
+
+        XCTAssertEqual(opened.counts.values.filter { $0 > 1 }.count, 0, "aucun message ne s'ouvre deux fois")
+        XCTAssertEqual(Set(opened.counts.keys), Set((0..<60).map { "m\($0)" }), "chaque message s'ouvre une fois")
+        let next = try aliceDevice.cipher.encrypt(Data("après".utf8), for: app.address)
+        XCTAssertEqual(String(decoding: try extensionProcess.cipher.decrypt(next, from: aliceDevice.address), as: UTF8.self), "après")
+    }
+
+    func test_theLockExcludesTwoHoldersOfTheSameFile() throws {
+        let path = E2EETestDevice.temporaryPath("lock")
+        let first = E2EEProcessLock(path: path)
+        let second = E2EEProcessLock(path: path)
+        let inside = OpenedLedger()
+
+        DispatchQueue.concurrentPerform(iterations: 40) { iteration in
+            let lock = iteration.isMultiple(of: 2) ? first : second
+            try? lock.withLock {
+                inside.enter()
+                usleep(500)
+                inside.leave()
+            }
+        }
+
+        XCTAssertEqual(inside.maximumConcurrency, 1)
+    }
+}
+
+private final class OpenedLedger: @unchecked Sendable {
+    private let lock = NSLock()
+    private var opened: [String: Int] = [:]
+    private var current = 0
+    private var maximum = 0
+
+    func record(_ text: String) { lock.withLock { opened[text, default: 0] += 1 } }
+    var counts: [String: Int] { lock.withLock { opened } }
+
+    func enter() { lock.withLock { current += 1; maximum = max(maximum, current) } }
+    func leave() { lock.withLock { current -= 1 } }
+    var maximumConcurrency: Int { lock.withLock { maximum } }
+}

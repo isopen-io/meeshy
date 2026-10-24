@@ -20,7 +20,8 @@ final class SendFailureRecoveryTests: XCTestCase {
             holdSlowMode: { id, slowMode, _ in log.entries.append("hold:\(id):\(slowMode.retryAfterSeconds)") },
             registerServerId: { tempId, serverId in
                 log.entries.append("register:\(tempId)->\(serverId) after:\(coordinator.callLog.joined(separator: ","))")
-            }
+            },
+            adoptEndToEnd: { log.entries.append("adoptEndToEnd") }
         )
         return (SendFailureRecovery(toast: toast), coordinator, toast, log, hooks)
     }
@@ -33,24 +34,26 @@ final class SendFailureRecoveryTests: XCTestCase {
         SendAttemptContext(clientMessageId: MessageID("temp_1"), startedAt: Date(), intent: .none, language: "fr", reusesExistingRow: false)
     }
 
-    private func makePayload() -> SealedOutgoingPayload {
+    private func makePayload(sealed: Bool = false) -> SealedOutgoingPayload {
+        let content = sealed ? "c2VjcmV0" : "Bonjour"
         let request = makeOutgoing().wireRequest(
-            content: "Bonjour",
-            isEncrypted: false,
-            encryptionMode: nil,
+            content: content,
+            isEncrypted: sealed,
+            encryptionMode: sealed ? "E2EE" : nil,
             context: makeContext(),
             wireEffectFlags: nil
         )
-        return SealedOutgoingPayload(request: request, content: "Bonjour", isEncrypted: false)
+        return SealedOutgoingPayload(request: request, content: content, isEncrypted: sealed)
     }
 
     private func recover(
         _ error: any Error,
         fallbackEligible: Bool = true,
+        sealed: Bool = false,
         using fixture: (sut: SendFailureRecovery, coordinator: MockConversationSendCoordinator, toast: MockFeedbackToast, log: HookLog, hooks: SendRecoveryHooks)
     ) async -> Result<SentMessageReceipt, SendFailure> {
         await fixture.sut.recover(
-            from: error, outgoing: makeOutgoing(), payload: makePayload(), context: makeContext(),
+            from: error, outgoing: makeOutgoing(), payload: makePayload(sealed: sealed), context: makeContext(),
             fallbackEligible: fallbackEligible, coordinator: fixture.coordinator, hooks: fixture.hooks
         )
     }
@@ -110,5 +113,45 @@ final class SendFailureRecoveryTests: XCTestCase {
 
         XCTAssertEqual(result, .failure(fixture.coordinator.enqueueForRetryResult))
         XCTAssertEqual(fixture.coordinator.callLog, ["recordFailure", "enqueueForRetry"])
+    }
+
+    // MARK: - #11379 — le refus serveur d'une conversation chiffrée
+
+    private var plaintextRefusal: MeeshyError {
+        .rejected(APIRejection(statusCode: 400, code: EndToEndSendGate.serverPlaintextRefusalCode, message: "Conversation chiffrée"))
+    }
+
+    /// Le « second verrou » ne doit pas devenir un rejeu : le clair refusé ne
+    /// repart ni par le socket ni par l'outbox, et le fil apprend le régime.
+    func test_recover_serverRefusesPlaintext_neitherFallbackNorOutbox_adoptsEndToEnd() async {
+        let fixture = makeSUT()
+
+        let result = await recover(plaintextRefusal, using: fixture)
+
+        XCTAssertEqual(result, .failure(.endToEndUnsealed(.plaintextRefusedByServer)))
+        XCTAssertEqual(fixture.coordinator.callLog, ["markFailed"], "ni emitSocketFallback, ni enqueueForRetry")
+        XCTAssertEqual(fixture.log.entries, ["adoptEndToEnd"])
+        XCTAssertEqual(fixture.toast.errorMessages, [EndToEndSendRefusal.plaintextRefusedByServer.userMessage])
+    }
+
+    /// Un envoi scellé refusé en 4xx (enveloppe pas encore acceptée) n'est pas
+    /// une coupure réseau : le motif le dit, et rien ne repart.
+    func test_recover_sealedSendRefusedByServer_saysEnvelopeRefused_withoutFallback() async {
+        let fixture = makeSUT()
+
+        let result = await recover(MeeshyError.server(statusCode: 400, message: "Validation error"), sealed: true, using: fixture)
+
+        XCTAssertEqual(result, .failure(.endToEndUnsealed(.envelopeRefusedByServer)))
+        XCTAssertEqual(fixture.coordinator.callLog, ["markFailed"])
+        XCTAssertEqual(fixture.toast.errorMessages, [EndToEndSendRefusal.envelopeRefusedByServer.userMessage])
+    }
+
+    func test_recover_sealedSendTimedOut_staysOutboxUnsealable_neverReQueuedInClear() async {
+        let fixture = makeSUT()
+
+        let result = await recover(URLError(.timedOut), sealed: true, using: fixture)
+
+        XCTAssertEqual(result, .failure(.endToEndUnsealed(.outboxUnsealable)))
+        XCTAssertEqual(fixture.coordinator.callLog, ["emitSocketFallback", "markFailed"])
     }
 }

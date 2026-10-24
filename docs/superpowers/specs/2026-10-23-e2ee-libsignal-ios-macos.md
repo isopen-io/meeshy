@@ -81,7 +81,7 @@ libsignal est sous **AGPL-3.0**. L'intégrer dans une application publiée sur l
 ### 3.1 Un appareil, une identité
 
 - Chaque installation (iPhone, Mac) génère **sa propre** paire d'identité libsignal (`IdentityKeyPair.generate()`) et son `registrationId` (14 bits, aléatoire, par installation). La clé privée ne quitte jamais l'appareil.
-- Le serveur attribue un **`deviceId`** entier dans `1…127` (plage acceptée par `ProtocolAddress` de libsignal), par utilisateur, **jamais réutilisé** pour ce compte (un appareil retiré garde son numéro ; un nouvel appareil prend le suivant). Le `deviceId` libsignal est distinct du `PushToken.deviceId` (chaîne opaque du système) ; le lien entre les deux est un champ du nouvel annuaire.
+- Le serveur attribue un **`deviceId`** entier dans `1…127` (plage acceptée par `ProtocolAddress` de libsignal), par utilisateur. **Un compte a au plus `E2EE_MAX_ACTIVE_DEVICES` (16) appareils actifs, sur les places `1…16`** : un nouvel appareil prend la plus petite place libre, et un appareil retiré (session finie, retrait explicite) rend la sienne — jamais à la même `registrationId`, qui est ce qui signale au 409 `stale` l'émetteur dont la session visait l'ancien occupant (#12543). La borne vient de Sesame : un envoi en tête-à-tête vise les appareils du destinataire et les autres appareils de l'émetteur, au plus 2 × 16 − 1 = 31 enveloppes, sous le plafond de 32. Un compteur jamais décrémenté (la première version) épuisait la plage en 127 réinstallations et laissait les appareils morts rendre le compte injoignable. Le `deviceId` libsignal est distinct du `PushToken.deviceId` (chaîne opaque du système) ; le lien entre les deux est un champ du nouvel annuaire.
 - **Pourquoi une identité par appareil plutôt qu'une identité de compte partagée** (modèle Signal, où les appareils liés reçoivent la clé d'identité du compte par le protocole de provisionnement) : transférer une clé privée d'identité d'un appareil à l'autre exige un canal de provisionnement que libsignal Swift n'expose pas comme primitive publique ; le recomposer serait une construction maison. L'identité par appareil n'introduit aucune composition nouvelle. Son coût : un numéro de sécurité **par appareil** du contact (§ 7.3), et l'approbation de mes propres appareils (§ 3.5). Le passage à une identité de compte partagée est listé au § 10 et exige une revue externe.
 
 ### 3.2 Ce que publie un appareil
@@ -120,11 +120,10 @@ model E2EEOneTimePreKey {      // EC et Kyber, un document par clé
   @@unique([userId, deviceId, kind, keyId])
   @@index([userId, deviceId, kind, usedAt])
 }
-model E2EEDeviceCounter { userId @unique, nextDeviceId Int }   // deviceId jamais réutilisé
 ```
 
 - **Réservation atomique** : `findOneAndUpdate({ userId, deviceId, kind, usedAt: null }, { $set: { usedAt: now, usedBy } })` par appareil cible, une EC et une Kyber par bundle servi. Aucune lecture puis écriture. Pas de clé unique EC disponible : le bundle part sans (PQXDH le permet) ; pas de Kyber unique : la pré-clé Kyber de dernier recours.
-- **Attribution du `deviceId`** : `findOneAndUpdate` avec `$inc` sur `E2EEDeviceCounter`, `upsert`.
+- **Attribution du `deviceId`** : la plus petite place libre ; une place neuve se prend par `create` (l'index unique `(userId, deviceId)` départage deux enrôlements simultanés), une place retirée par un `updateMany` conditionné à `retiredAt` non nul. L'appareil d'une session finie est retiré (`services/gateway/src/services/e2ee/device-retirement.ts`).
 - Aucun champ de clé privée n'existe dans ces modèles ; un test de schéma l'interdit (aucun nom en `*Private*`, aucun champ `privateKey` dans un JSON).
 - **Routes** (préfixe `/api/v1/e2ee/`, sans toucher `/signal/*`) :
   - `POST /e2ee/devices` — enrôle l'appareil courant, rend `deviceId` (idempotent par `registrationId` + clé d'identité).
@@ -199,7 +198,7 @@ model MessageEnvelope {
 ```
 
   Une enveloppe est **effacée** quand l'appareil destinataire accuse réception (`POST /e2ee/envelopes/ack`), et au plus tard après 30 jours (balayage). Un appareil ne lit **que** ses enveloppes.
-- **Distribution** : la socket authentifiée déclare son `e2eeDeviceId` (handshake `auth`) et rejoint la salle `device:<userId>:<deviceId>`. `message:new` part comme aujourd'hui vers la salle de l'utilisateur, sans enveloppe ; `e2ee:envelope` part vers la salle de l'appareil avec la sienne. Au retour en ligne : `GET /e2ee/envelopes?after=` (pagination par curseur).
+- **Distribution** : la socket authentifiée déclare son `e2eeDeviceId` (handshake `auth`) et rejoint la salle de sa génération `device:<userId>:<deviceId>:<registrationId>` (une place reprise par une autre installation n'en partage jamais la salle, et le retrait en fait sortir, #12592). `message:new` part comme aujourd'hui vers la salle de l'utilisateur, sans enveloppe ; `e2ee:envelope` part vers la salle de l'appareil avec la sienne. Au retour en ligne : `GET /e2ee/envelopes?after=` (pagination par curseur).
 - **Rétrocompatibilité** : un ancien client lit `content = E2EE_CONTENT_PLACEHOLDER` et `isEncrypted: true`, et rend un message chiffré illisible ; la passerelle ajoute `e2eeUpgradeRequired: true` au message servi pour que les versions suivantes affichent « Mettez à jour Meeshy pour lire ce message ». Un ancien client qui ENVOIE dans une conversation `e2ee` reçoit déjà 400 ; le code devient `E2EE_CLIENT_OUTDATED`, avec un message lisible. Rien n'est perdu en silence.
 
 ### 4.4 Stockage local

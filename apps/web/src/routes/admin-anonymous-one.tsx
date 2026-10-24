@@ -149,18 +149,14 @@ export function AdminAnonymousFiche({
   const arrived = adminMomentOf(fiche.joinedAt, moment, language);
   const languageLabel = fiche.language === '' ? translateAdmin(language, 'admin.value.noLanguage') : sentenceCase(languageName(fiche.language, language), language);
   const when = (iso: string | null) => <AdminMomentText moment={adminMomentOf(iso, moment, language)} variant="both" />;
-  const title = translateAdmin(language, 'admin.anonymous.title');
+  const title = entity.label;
 
   return (
     <div className="grid gap-6" data-admin-anonymous-one={fiche.id}>
       <AdminPageHeader
         language={language}
         title={title}
-        crumbs={[
-          { label: translateAdmin(language, 'admin.group.people') },
-          { label: translateAdmin(language, 'admin.nav.anonymous'), target: { kind: 'section', section: 'anonymous' } },
-          { label: entity.label },
-        ]}
+        place={{ section: 'anonymous', fiche: true }}
       />
       <AdminOfflineNotice language={language} />
       <AdminFiche

@@ -147,12 +147,13 @@
 // tient lieu vit dans `scripts/lib/lecture-workflow.mjs` — son en-tête dit ce
 // qu'elle rend, et à quel analyseur elle a été CONFRONTÉE avant d'être crue.
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
   commandsOf,
+  compositeOf,
   jobsOf,
   managerInvoked,
   matrixContextsOf,
@@ -168,6 +169,7 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const WORKFLOWS_DIRECTORY = '.github/workflows';
 const WORKFLOW = `${WORKFLOWS_DIRECTORY}/ci.yml`;
+const ACTIONS_DIRECTORY = '.github/actions';
 
 // Le gestionnaire par DÉFAUT quand un workflow ne déclare pas le choix. Mesuré :
 // `ci.yml` et `docker.yml` posent tous deux
@@ -271,9 +273,19 @@ const readWorld = (root) => {
       file: `${WORKFLOWS_DIRECTORY}/${file}`,
       text: readFileSync(join(root, WORKFLOWS_DIRECTORY, file), 'utf8'),
     }));
+  const actions = existsSync(join(root, ACTIONS_DIRECTORY))
+    ? readdirSync(join(root, ACTIONS_DIRECTORY))
+        .filter((name) => existsSync(join(root, ACTIONS_DIRECTORY, name, 'action.yml')))
+        .sort()
+        .map((name) => ({
+          uses: `./${ACTIONS_DIRECTORY}/${name}`,
+          text: readFileSync(join(root, ACTIONS_DIRECTORY, name, 'action.yml'), 'utf8'),
+        }))
+    : [];
   return {
     root,
     workflows,
+    actions,
     turbo: JSON.parse(readFileSync(join(root, 'turbo.json'), 'utf8')),
     workspaces,
   };
@@ -312,7 +324,7 @@ const renderRun = (world, graph) => {
         for (const scenario of workflowScenarios) {
           const context = { env: { PACKAGE_MANAGER: scenario }, matrix };
           const rendered = steps
-            .map((step) => renderStep(step, context))
+            .flatMap((step) => expandStep(step, context, world))
             .filter((step) => step.runs);
           executions.push({
             workflow: workflow.file,
@@ -328,6 +340,35 @@ const renderRun = (world, graph) => {
     }
   }
   return { scenarios: [...scenarios], executions };
+};
+
+/**
+ * Une étape qui appelle une action COMPOSITE locale (#12557) se rend en SES
+ * étapes, entrées résolues : sans cela, l'installation de bun ou de pnpm passée
+ * dans `.github/actions/preparer-js` deviendrait invisible, et l'invariant (2)
+ * rougirait sur chaque job — ou pire, une lecture qui l'ignorerait le rendrait
+ * aveugle. Une action locale introuvable ou non composite rend l'étape
+ * ILLISIBLE, ce que l'invariant (0) rapporte.
+ */
+const expandStep = (step, context, world) => {
+  if (step.uses === null || !step.uses.startsWith('./')) return [renderStep(step, context)];
+  const outer = renderStep(step, context);
+  if (!outer.runs || outer.illisible !== null) return [outer];
+  const action = world.actions.find((candidate) => candidate.uses === step.uses.replace(/\/$/, ''));
+  if (action === undefined) return [{ ...outer, illisible: `action locale ${step.uses} introuvable` }];
+  const { composite, defaults, steps } = compositeOf(action.text);
+  if (!composite || steps.length === 0) return [{ ...outer, illisible: `${step.uses} n'est pas une action composite lisible` }];
+  try {
+    const inputs = Object.fromEntries(
+      Object.entries({ ...defaults, ...step.with }).map(([key, value]) => [key, render(value, context)]),
+    );
+    return steps.map((inner) => {
+      const rendered = renderStep(inner, { ...context, inputs });
+      return { ...rendered, line: step.line, renderedName: `${outer.renderedName} › ${rendered.renderedName}` };
+    });
+  } catch (error) {
+    return [{ ...outer, illisible: error.message }];
+  }
 };
 
 /**
@@ -594,6 +635,7 @@ const mutate = (world, apply) => {
   const copy = {
     ...world,
     workflows: world.workflows.map((entry) => ({ ...entry })),
+    actions: world.actions.map((entry) => ({ ...entry })),
     workspaces: world.workspaces.map((workspace) => ({
       ...workspace,
       manifest: structuredClone(workspace.manifest),
@@ -631,7 +673,9 @@ const inJob = (world, job, needle, replacement) => {
   const end = tail.slice(1).search(/\n {2}[A-Za-z0-9_-]+:\n/);
   const body = end === -1 ? tail : tail.slice(0, end + 1);
   const rest = end === -1 ? '' : tail.slice(end + 1);
-  ci.text = head + body.replace(needle, replacement) + rest;
+  const muted = body.replace(needle, replacement);
+  if (muted === body) throw new Error(`sonde sans cible dans le job « ${job} » : ${needle}`);
+  ci.text = head + muted + rest;
 };
 
 const MUTATIONS = [
@@ -682,14 +726,16 @@ const MUTATIONS = [
     "sans qu'aucune étape antérieure n'ait construit @meeshy/shared",
   ],
   [
-    "l'étape « Setup bun » du job build réservée au scénario pnpm",
-    (world) =>
-      inJob(
-        world,
-        'build',
-        /(- name: Setup bun\n        if: env\.PACKAGE_MANAGER == )'bun'/,
-        "$1'pnpm'",
-      ),
+    // #12557 — l'installation de bun vit dans l'action composite : la sonde la
+    // vise LÀ, et prouve du même coup que la lecture traverse l'appel.
+    "l'étape « Setup bun » de l'action preparer-js réservée au scénario pnpm",
+    (world) => {
+      const action = world.actions.find((candidate) => candidate.uses.endsWith('/preparer-js'));
+      if (action === undefined) throw new Error('action « preparer-js » introuvable');
+      const muted = action.text.replace(/(- name: Setup bun\n      if: env\.PACKAGE_MANAGER == )'bun'/, "$1'pnpm'");
+      if (muted === action.text) throw new Error('sonde « Setup bun » sans cible dans preparer-js');
+      action.text = muted;
+    },
     "invoque bun, qu'aucune étape antérieure du job n'installe",
   ],
   [

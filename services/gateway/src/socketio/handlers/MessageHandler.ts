@@ -303,7 +303,7 @@ export class MessageHandler {
       // était lue sur le `data` BRUT, sous un nom — `encryptedPayload` —
       // qu'aucun client n'émet et qu'aucun schéma ne produit : seul champ de
       // tout ce chemin à échapper au schéma, donc toujours `undefined`.
-      const encryptedPayload = toEncryptedPayload(validated);
+      const encryptedPayload = toEncryptedPayload(validated, { sessionId: (socket.data as { sessionId?: string } | undefined)?.sessionId ?? null });
 
       // RÈGLE JUMELLE de `MessageValidator.validateRequest` — une seule loi
       // (`carriesNonTextBody`, qui dit chaque porteur et pourquoi) : ce
