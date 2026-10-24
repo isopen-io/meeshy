@@ -182,8 +182,11 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
 
     func test_preview_isChosenByTheReadingModeLaw() throws {
         let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
-        XCTAssertTrue(menu.contains("MessageOverlayPreviewKind.resolve(readingMode: threadLanguage.readingMode)"),
-                      "La face de l'aperçu se lit au mode de lecture du fil, par la loi pure.")
+        XCTAssertTrue(menu.contains("MessageOverlayPreviewTouch.resolve(message: message, readingMode: threadLanguage.readingMode)"),
+                      "La face de l'aperçu se lit au mode de lecture du fil, par la loi pure (#11339 : avec sa zone tactile).")
+        let law = try source("Features/Main/Components/MessageOverlayPreviewMedia.swift")
+        XCTAssertTrue(law.contains("MessageOverlayPreviewKind.resolve(readingMode: readingMode)"),
+                      "La loi de l'aperçu choisit sa face par la loi du mode de lecture.")
         let cell = try source("Features/Main/Components/MessageOverlayCellPreview.swift")
         XCTAssertTrue(cell.contains("FocalRow(input:"), "La face rangée plate rend la `FocalRow` du fil.")
         XCTAssertTrue(cell.contains("ThemedMessageBubble"), "La face bulle rend la `ThemedMessageBubble` du fil.")
@@ -396,5 +399,36 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
             code.contains(".onChange(of: overlayState.showOverlayMenu)"),
             "Un `.onChange` brut a remplacé `.adaptiveOnChange` — régression de la convention du dépôt."
         )
+    }
+
+    // MARK: - #11339 — l'aperçu lit vocaux et vidéos, dans les trois modes
+
+    /// Le masque de l'aperçu ne se perce qu'aux BOUTONS de lecture que les
+    /// lecteurs du SDK déclarent (`MediaPlayControlAnchorKey`), jamais au
+    /// lecteur entier : citation, pied et drapeaux, forme d'onde et surface de
+    /// la vidéo restent sous le masque. Le vocal part par le ViewModel de l'hôte.
+    func test_preview_playbackHoles_areThePlayButtonsOnly_andPlayThroughTheViewModel() throws {
+        let router = try source("Features/Main/Views/Bubble/AudioBubbleRouter.swift")
+        XCTAssertFalse(router.contains("PlaybackZone"), "Le lecteur entier n'est pas une zone de lecture.")
+        let video = try source("Features/Main/Views/VideoAvailabilityResolver.swift")
+        XCTAssertFalse(video.contains("PlaybackZone"), "La surface de la vidéo n'est pas une zone de lecture.")
+
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertTrue(menu.contains(".overlayPreferenceValue(MediaPlayControlAnchorKey.self)"), "Le masque lit les boutons de lecture.")
+        XCTAssertTrue(menu.contains("interactive: touch.offersPlayback"), "Le contenu ne se touche que s'il porte un bouton lisible.")
+        XCTAssertTrue(menu.contains("bubble.onPlayAudio = { playFromPreview($0) }"), "La bulle de l'aperçu lit le vocal.")
+        XCTAssertTrue(menu.contains("onPlayAudio: { playFromPreview($0) }"), "La rangée plate de l'aperçu lit le vocal.")
+        XCTAssertTrue(menu.contains(".onDisappear { stopPreviewPlayback() }"), "La fermeture arrête la lecture lancée.")
+        XCTAssertFalse(menu.contains("ConversationAudioCoordinator.shared.play("),
+                       "L'overlay ne recompose aucune entrée de file : le ViewModel la construit, comme dans le fil.")
+
+        let host = try source("Features/Main/Views/ConversationView+OverlayMenu.swift")
+        XCTAssertTrue(host.contains("viewModel.playAudio(attachmentId: attachmentId, continuesQueue: false)"),
+                      "L'hôte rend le vocal de l'aperçu au ViewModel, sans file à la suite.")
+
+        let cell = try source("Features/Main/Components/MessageOverlayCellPreview.swift")
+        XCTAssertTrue(cell.contains("FocalRow(input: input, actions: rowActions)"))
+        XCTAssertTrue(cell.contains("actions.onPlayAudio = onPlayAudio"))
+        XCTAssertTrue(cell.contains(".allowsHitTesting(interactive)"))
     }
 }

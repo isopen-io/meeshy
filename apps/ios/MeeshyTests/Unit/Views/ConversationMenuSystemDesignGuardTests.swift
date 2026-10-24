@@ -618,6 +618,55 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         }
     }
 
+    /// **Aucun `MessageOverlayMenu` de production ne se monte sans `onDelete`**
+    /// (#12625). L'overlay retire `.deleteMessage` quand le rappel manque (un
+    /// contrôle existe s'il a un effet) : un hôte qui l'oublie renvoie la
+    /// suppression à deux gestes par « Plus… », en silence, pendant que les
+    /// témoins de l'overlay — montés avec `hasDeleteHandler: true` — restent verts.
+    func test_everyProductionOverlayMount_wiresDelete() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let files = (FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? [])
+            .filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(files.count, 500, "la garde ne lirait RIEN : le dossier Meeshy est introuvable")
+
+        let mounts: [(file: String, arguments: String)] = try files.flatMap { url -> [(file: String, arguments: String)] in
+            let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            return Self.overlayMounts(in: code).map { (file: url.lastPathComponent, arguments: $0) }
+        }
+        XCTAssertFalse(mounts.isEmpty, "témoin : l'hôte de conversation monte l'overlay")
+        for mount in mounts {
+            XCTAssertTrue(mount.arguments.contains("onDelete:"),
+                          "\(mount.file) monte MessageOverlayMenu sans onDelete : « Supprimer » disparaît du menu")
+        }
+    }
+
+    /// Les arguments de chaque appel `MessageOverlayMenu(` — l'identifiant seul,
+    /// jamais un nom qui le prolonge — jusqu'à sa parenthèse fermante.
+    private static func overlayMounts(in code: String) -> [String] {
+        let call = "MessageOverlayMenu("
+        var mounts: [String] = []
+        var cursor = code.startIndex
+        while let range = code.range(of: call, range: cursor..<code.endIndex) {
+            cursor = range.upperBound
+            let before = range.lowerBound == code.startIndex ? nil : code[code.index(before: range.lowerBound)]
+            if let before, before.isLetter || before.isNumber || before == "_" || before == "." { continue }
+            var depth = 1
+            var end = range.upperBound
+            while end < code.endIndex, depth > 0 {
+                if code[end] == "(" { depth += 1 }
+                if code[end] == ")" { depth -= 1 }
+                end = code.index(after: end)
+            }
+            mounts.append(String(code[range.upperBound..<end]))
+        }
+        return mounts
+    }
+
     // MARK: - Aperçu du menu natif = la bulle « prise de sa position »
     //
     // Feedback device 2026-07-14 : l'aperçu doit PRÉSERVER le format de la

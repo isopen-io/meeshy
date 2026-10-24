@@ -18,10 +18,10 @@ public enum ContentRemovalPolicy {
     ]
 
     private static let conversationModeratorRoles: Set<String> = ["ADMIN", "MODERATOR", "CREATOR"]
-    private static let platformModeratorRoles: Set<String> = ["MODERATOR", "ADMIN", "BIGBOSS"]
-
+    /// `PlatformRole.privileged`, la table unique des rôles de plateforme privilégiés (#11217),
+    /// lue EXACTEMENT comme la passerelle : un « moderator » en minuscules ne modère pas.
     public static func isPlatformModerator(_ platformRole: String?) -> Bool {
-        platformModeratorRoles.contains(platformRole?.uppercased() ?? "")
+        PlatformRole(raw: platformRole)?.isPrivileged ?? false
     }
 
     public static func mayRemoveMessage(

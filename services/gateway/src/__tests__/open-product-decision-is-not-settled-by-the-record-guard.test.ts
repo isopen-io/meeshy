@@ -18,7 +18,8 @@
  *
  * Quand le porteur aura tranché dans l'issue, le lot qui consigne sa réponse
  * retire le cas de la table et pose le statut définitif, en citant le
- * commentaire qui tranche.
+ * commentaire qui tranche. #11452 a été arbitré par le porteur le 2026-10-24
+ * (issuecomment-6386322651) : son cas a quitté la table.
  *
  * @jest-environment node
  */
@@ -37,12 +38,6 @@ type OpenDecision = Readonly<{
 }>;
 
 const OPEN_DECISIONS: readonly OpenDecision[] = [
-  {
-    record:
-      'services/gateway/decisions/2026-10-21-les-operations-serveur-s-ouvrent-au-rang-d-administration-11441.md',
-    openIssue: '#11452',
-    point: 'registre #11441 — la portée machine du nettoyage (voie 1)',
-  },
   {
     record:
       'services/gateway/decisions/2026-10-21-le-signal-immortalisee-voyage-par-l-identifiant-d-etape-seul-10162.md',

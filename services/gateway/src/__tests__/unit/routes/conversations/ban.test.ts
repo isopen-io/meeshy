@@ -458,10 +458,10 @@ describe('PATCH ban — le créateur reste protégé quelle que soit la casse (#
  * n'est pas l'hôte, ce qui reste le comportement d'avant ce lot.
  */
 describe('Bannir — l’autorité de plateforme (#3941)', () => {
-  it('laisse un ADMIN de la plateforme, simple membre, bannir un membre', async () => {
+  it.each(['ADMIN', 'MODERATOR'])('laisse un %s de la plateforme, simple membre, bannir un membre (#11217)', async (platformRole) => {
     const app = await buildApp({
       prisma: makePrisma({ currentRole: 'member', targetRole: 'member' }),
-      platformRole: 'ADMIN',
+      platformRole,
     });
 
     const res = await app.inject({
@@ -490,10 +490,10 @@ describe('Bannir — l’autorité de plateforme (#3941)', () => {
     await app.close();
   });
 
-  it('un MODERATOR de la plateforme reste un participant ordinaire', async () => {
+  it.each(['AUDIT', 'ANALYST'])('un %s de la plateforme reste un participant ordinaire', async (platformRole) => {
     const app = await buildApp({
       prisma: makePrisma({ currentRole: 'member', targetRole: 'member' }),
-      platformRole: 'MODERATOR',
+      platformRole,
     });
 
     const res = await app.inject({

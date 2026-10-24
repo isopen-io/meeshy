@@ -12,6 +12,13 @@
     <string name="chat_delete_confirm_cancel">Abbrechen</string>
     <string name="chat_delete_confirm_hint">„Für alle löschen“ ist 2 Std. nach dem Senden möglich.</string>
     <string name="chat_delete_confirm_title">Diese Nachricht löschen?</string>
+    <string name="chat_exit_blocked_after_read">Sie verschwindet nach dem Lesen: Sie kann nicht weitergeleitet, gesichert oder geteilt werden.</string>
+    <string name="chat_exit_blocked_attachment_not_in_source">Dieses Element gehört nicht mehr zur Nachricht.</string>
+    <string name="chat_exit_blocked_encrypted_source">Dieser verschlüsselte Inhalt wird von diesem Gerät kopiert.</string>
+    <string name="chat_exit_blocked_source_unavailable">Die ursprüngliche Nachricht ist nicht mehr verfügbar.</string>
+    <string name="chat_exit_blocked_title">Diese Nachricht bleibt in Meeshy</string>
+    <string name="chat_exit_blocked_understood">Verstanden</string>
+    <string name="chat_exit_blocked_view_once">Sie ist einmalig ansehbar: Sie kann nicht weitergeleitet, gesichert oder geteilt werden. Sie bleibt im Chat, bis sie gesehen wurde.</string>
     <string name="common_cancel">Abbrechen</string>
     <string name="common_send">Senden</string>
     <string name="common_unknown">Unbekannt</string>

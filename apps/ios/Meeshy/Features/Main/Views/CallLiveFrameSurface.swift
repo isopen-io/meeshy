@@ -14,6 +14,8 @@ struct CallLiveFrameSurface: UIViewRepresentable {
     let sources: [String: CallLiveFrameVideoSource]
     /// Les encarts du chrome de l'appel, en points (#9777) : la rangée d'en-tête et la pilule s'y posent.
     let chromeInsets: (top: CGFloat, bottom: CGFloat)
+    /// #12683 — les ornements animés se jouent, sauf sous « Réduire les animations » ou quand l'appareil se protège.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeCoordinator() -> CallLiveFrameRenderer {
         CallLiveFrameRenderer()
@@ -25,7 +27,9 @@ struct CallLiveFrameSurface: UIViewRepresentable {
 
     func updateUIView(_ view: MTKView, context: Context) {
         context.coordinator.update(design: design, people: people, texts: texts, sources: sources,
-                                   chromeInsets: chromeInsets, view: view)
+                                   chromeInsets: chromeInsets,
+                                   playsMotion: CallLiveFrameRule.playsMotion(design, reduceMotion: reduceMotion, isDeviceConstrained: CallVideoDegradation.isDeviceConstrained()),
+                                   view: view)
     }
 
     static func dismantleUIView(_ view: MTKView, coordinator: CallLiveFrameRenderer) {
@@ -50,8 +54,11 @@ final class CallLiveFrameRenderer: NSObject, MTKViewDelegate {
     private var people: [CallFramePerson] = []
     private var texts: CallFrameTexts?
     private var chromeInsets: (top: CGFloat, bottom: CGFloat) = (0, 0)
+    private var playsMotion = false
     private var requested: CallLiveFrameLayerInputs?
     private var scene: CallLiveFrameScene?
+    private weak var view: MTKView?
+    private var motionLayer: CallFrameMotionLayer?
 
     nonisolated deinit {}
 
@@ -85,16 +92,18 @@ final class CallLiveFrameRenderer: NSObject, MTKViewDelegate {
         view.backgroundColor = .clear
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         view.isUserInteractionEnabled = false
+        self.view = view
         return view
     }
 
     func update(design: CallFrameDesign, people: [CallFramePerson], texts: CallFrameTexts, sources: [String: CallLiveFrameVideoSource],
-                chromeInsets: (top: CGFloat, bottom: CGFloat), view: MTKView) {
+                chromeInsets: (top: CGFloat, bottom: CGFloat), playsMotion: Bool = false, view: MTKView) {
         if self.design?.id != design.id { meter.reset(limitMs: CallLiveFrameBudget.limitMs(for: design.cost)) }
         self.design = design
         self.people = people
         self.texts = texts
         self.chromeInsets = chromeInsets
+        self.playsMotion = playsMotion
         feed.attach(sources)
         requestPaintIfNeeded(view: view)
     }
@@ -105,6 +114,7 @@ final class CallLiveFrameRenderer: NSObject, MTKViewDelegate {
         feed.detachAll()
         scene = nil
         requested = nil
+        installMotion(nil, in: view)
     }
 
     // MARK: - Peindre, quand une entrée change
@@ -115,7 +125,8 @@ final class CallLiveFrameRenderer: NSObject, MTKViewDelegate {
         guard size != .zero else { return }
         let reserve = CallLiveFrameRule.chromeReserve(viewHeight: view.bounds.height, topInset: chromeInsets.top,
                                                       bottomInset: chromeInsets.bottom)
-        let inputs = CallLiveFrameLayerInputs(frameId: design.id, people: people, texts: texts, size: size, reserve: reserve)
+        let inputs = CallLiveFrameLayerInputs(frameId: design.id, people: people, texts: texts, size: size, reserve: reserve,
+                                              animates: playsMotion && CallLiveFrameRule.animates(design))
         guard CallLiveFrameRule.needsRepaint(current: requested, next: inputs) else { return }
         requested = inputs
         let deliver: @MainActor (CallLiveFrameScene?) -> Void = { [weak self] painted in
@@ -150,11 +161,24 @@ final class CallLiveFrameRenderer: NSObject, MTKViewDelegate {
     private func install(_ painted: CallLiveFrameScene?, for inputs: CallLiveFrameLayerInputs) {
         guard requested == inputs, let painted else { return }
         scene = painted
+        installMotion(painted.motion, in: view)
+    }
+
+    /// #12683 — les ornements animés, au-dessus de la couche Metal : Core Animation les joue seul.
+    private func installMotion(_ motion: CallFrameMotionScene?, in view: MTKView?) {
+        motionLayer?.removeFromSuperlayer()
+        motionLayer = nil
+        guard let motion, let view else { return }
+        let layer = CallFrameMotionLayer(scene: motion)
+        layer.fit(into: view.bounds.size)
+        view.layer.addSublayer(layer)
+        motionLayer = layer
     }
 
     // MARK: - MTKViewDelegate
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+        motionLayer?.fit(into: view.bounds.size)
         requestPaintIfNeeded(view: view)
     }
 

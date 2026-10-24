@@ -168,13 +168,35 @@ final class CallLiveFrameRuleTests: XCTestCase {
         XCTAssertEqual(display(design, constrained: true), .suspended(design, .deviceConstrained))
     }
 
-    func test_display_reduceMotion_suspendsAnAnimatedFrame() {
-        let design = makeDesign(motion: .loop)
+    func test_display_reduceMotion_suspendsAFrameWhoseSceneMoves() {
+        let layer = CallFrameSceneLayer(id: "glow", kind: .light, depth: .back, src: nil, preset: nil, color: "#FFFFFF", amount: 0.5, maxParticles: nil)
+        let design = makeDesign(scene: [layer])
         XCTAssertEqual(display(design, reduceMotion: true), .suspended(design, .reduceMotion))
+    }
+
+    func test_display_reduceMotion_keepsAFrameWithMovingOrnamentsStill() {
+        let design = makeDesign(motion: .loop)
+        XCTAssertEqual(display(design, reduceMotion: true), .frame(design))
+        XCTAssertFalse(CallLiveFrameRule.playsMotion(design, reduceMotion: true, isDeviceConstrained: false))
+    }
+
+    func test_playsMotion_animatedFrame_playsUnlessTheDeviceProtectsItself() {
+        let design = makeDesign(motion: .loop)
+        XCTAssertTrue(CallLiveFrameRule.playsMotion(design, reduceMotion: false, isDeviceConstrained: false))
+        XCTAssertFalse(CallLiveFrameRule.playsMotion(design, reduceMotion: false, isDeviceConstrained: true))
+        XCTAssertFalse(CallLiveFrameRule.playsMotion(makeDesign(), reduceMotion: false, isDeviceConstrained: false))
     }
 
     func test_display_reduceMotion_keepsAStaticFrame() {
         let design = makeDesign()
+        XCTAssertEqual(display(design, reduceMotion: true), .frame(design))
+    }
+
+    func test_animates_illustrationOnly_isStillAndKeepsItsStillState() {
+        let image = CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/test_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil)
+        let design = makeDesign(scene: [image])
+        XCTAssertFalse(CallLiveFrameRule.animates(design))
+        XCTAssertTrue(CallLiveFrameRule.hasStillState(design))
         XCTAssertEqual(display(design, reduceMotion: true), .frame(design))
     }
 

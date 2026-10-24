@@ -261,6 +261,43 @@
       }
     },
     {
+      "_label": "direct-moderator-plateforme-non-membre",
+      "input": {
+        "conversation": {
+          "type": "direct",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "MODERATOR",
+          "conversationRole": null,
+          "isActiveMember": false,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": false,
+        "deleteForAll": false,
+        "hide": false,
+        "report": false,
+        "manageMembers": false,
+        "adminOpen": false,
+        "call": false,
+        "videoCall": false,
+        "e2eeBadge": false
+      }
+    },
+    {
       "_label": "direct-audit",
       "input": {
         "conversation": {
@@ -654,16 +691,53 @@
         }
       },
       "expected": {
-        "rename": false,
-        "invite": false,
+        "rename": true,
+        "invite": true,
         "leave": true,
-        "deleteForAll": false,
+        "deleteForAll": true,
         "hide": true,
         "report": true,
-        "manageMembers": false,
+        "manageMembers": true,
         "adminOpen": false,
         "call": true,
         "videoCall": true,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "group-moderator-plateforme-non-membre",
+      "input": {
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "MODERATOR",
+          "conversationRole": null,
+          "isActiveMember": false,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": false,
+        "deleteForAll": false,
+        "hide": false,
+        "report": false,
+        "manageMembers": false,
+        "adminOpen": false,
+        "call": false,
+        "videoCall": false,
         "e2eeBadge": false
       }
     },
@@ -1061,12 +1135,49 @@
         }
       },
       "expected": {
-        "rename": false,
+        "rename": true,
         "invite": true,
         "leave": true,
-        "deleteForAll": false,
+        "deleteForAll": true,
         "hide": true,
         "report": true,
+        "manageMembers": true,
+        "adminOpen": false,
+        "call": false,
+        "videoCall": false,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "public-moderator-plateforme-non-membre",
+      "input": {
+        "conversation": {
+          "type": "public",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "MODERATOR",
+          "conversationRole": null,
+          "isActiveMember": false,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": false,
+        "deleteForAll": false,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": false,
         "call": false,
@@ -1469,11 +1580,48 @@
       },
       "expected": {
         "rename": false,
-        "invite": false,
+        "invite": true,
         "leave": false,
         "deleteForAll": false,
         "hide": true,
         "report": true,
+        "manageMembers": true,
+        "adminOpen": false,
+        "call": false,
+        "videoCall": false,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "global-moderator-plateforme-non-membre",
+      "input": {
+        "conversation": {
+          "type": "global",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "MODERATOR",
+          "conversationRole": null,
+          "isActiveMember": false,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": false,
+        "deleteForAll": false,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": false,
         "call": false,
@@ -1875,12 +2023,49 @@
         }
       },
       "expected": {
-        "rename": false,
-        "invite": false,
+        "rename": true,
+        "invite": true,
         "leave": true,
-        "deleteForAll": false,
+        "deleteForAll": true,
         "hide": true,
         "report": true,
+        "manageMembers": true,
+        "adminOpen": false,
+        "call": false,
+        "videoCall": false,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "broadcast-moderator-plateforme-non-membre",
+      "input": {
+        "conversation": {
+          "type": "broadcast",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "MODERATOR",
+          "conversationRole": null,
+          "isActiveMember": false,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": false,
+        "deleteForAll": false,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": false,
         "call": false,
@@ -2288,6 +2473,43 @@
         "deleteForAll": false,
         "hide": true,
         "report": true,
+        "manageMembers": false,
+        "adminOpen": false,
+        "call": false,
+        "videoCall": false,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "secret-moderator-plateforme-non-membre",
+      "input": {
+        "conversation": {
+          "type": "secret",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "MODERATOR",
+          "conversationRole": null,
+          "isActiveMember": false,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": false,
+        "deleteForAll": false,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": false,
         "call": false,

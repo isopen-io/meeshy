@@ -1,6 +1,8 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ContentExitLaw
+import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.PinAction
 import org.junit.Test
 
@@ -21,6 +23,7 @@ class MessageActionMenuTest {
         isEdited: Boolean = false,
         hasText: Boolean = true,
         hostedEntries: Set<MessageAction> = emptySet(),
+        exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
     ) = MessageActionContext(
         isDeleted = isDeleted,
         isPending = isPending,
@@ -36,7 +39,46 @@ class MessageActionMenuTest {
         isEdited = isEdited,
         hasText = hasText,
         hostedEntries = hostedEntries,
+        exitOffer = exitOffer,
     )
+
+    private fun offer(law: ContentExitLaw, blur: Boolean = false) =
+        MessageExitOffer(law, holdsBlur = blur, isEncrypted = false)
+
+    @Test
+    fun a_view_once_message_offers_no_exit_entry() {
+        val actions = MessageActionMenu.actions(
+            ctx(
+                hasOpenableFile = true,
+                hostedEntries = setOf(MessageAction.ExportCard),
+                exitOffer = offer(ContentExitLaw.ViewOnce),
+            ),
+        )
+        assertThat(actions).containsNoneOf(
+            MessageAction.Forward,
+            MessageAction.Copy,
+            MessageAction.OpenFile,
+            MessageAction.ShareFile,
+            MessageAction.ExportCard,
+        )
+        assertThat(actions).contains(MessageAction.Reply)
+    }
+
+    @Test
+    fun a_timed_flame_message_can_only_be_forwarded() {
+        val actions = MessageActionMenu.actions(
+            ctx(hasOpenableFile = true, exitOffer = offer(ContentExitLaw.timedFlame(60))),
+        )
+        assertThat(actions).contains(MessageAction.Forward)
+        assertThat(actions).containsNoneOf(MessageAction.Copy, MessageAction.OpenFile, MessageAction.ShareFile)
+    }
+
+    @Test
+    fun a_blurred_message_is_forwardable_but_not_copyable() {
+        val actions = MessageActionMenu.actions(ctx(exitOffer = offer(ContentExitLaw.Ordinary, blur = true)))
+        assertThat(actions).contains(MessageAction.Forward)
+        assertThat(actions).doesNotContain(MessageAction.Copy)
+    }
 
     // MARK: - isActionable derivation
 
