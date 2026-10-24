@@ -23,13 +23,16 @@ let package = Package(
         .binaryTarget(
             name: "SignalFfi",
             url: "https://github.com/isopen-io/meeshy/releases/download/libsignal-ffi-v0.105.4/SignalFfi.xcframework.zip",
-            checksum: "CHECKSUM_PENDING"
+            checksum: "ca4d60ac81b69c6e9c02668797aa838a10c2454954c9f6ee23c18e7ae6af6529"
         ),
         .target(
             name: "LibSignalClient",
             dependencies: ["SignalFfi"],
             path: "Sources/LibSignalClient",
-            swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
+            swiftSettings: [.enableExperimentalFeature("StrictConcurrency")],
+            // BoringSSL, dans libsignal_ffi, est en C++ : sans libc++, un
+            // binaire qui ne la tient pas d'ailleurs (les tests) ne se lie pas.
+            linkerSettings: [.linkedLibrary("c++")]
         ),
         .testTarget(
             name: "LibSignalClientTests",

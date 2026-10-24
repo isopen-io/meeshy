@@ -7,6 +7,8 @@ spec `docs/superpowers/specs/2026-10-23-e2ee-libsignal-ios-macos.md` § 2.2).
   `swift/Sources/LibSignalClient` et `swift/Tests/LibSignalClientTests` au tag. `LICENSE`
   (AGPL-3.0-only) et `acknowledgments-ios.plist` (licences des dépendances Rust) viennent du même
   tag. libsignal ne publie pas de fichier NOTICE : `acknowledgments-ios.plist` en tient lieu.
+  Seule différence de forme : dans le dépôt amont, les fichiers de `Tests/LibSignalClientTests/Resources`
+  sont des liens symboliques vers `rust/…/tests` ; ils sont ici recopiés tels quels (contenu identique).
 - `SignalFfi` : `SignalFfi.xcframework` (tranches `ios-arm64` et `ios-arm64_x86_64-simulator`),
   construit depuis le même tag par `scripts/build-signal-ffi-xcframework.sh`, dans le workflow
   `.github/workflows/libsignal-ffi.yml`, avec le Xcode des builds de l'app. Il est publié en release
