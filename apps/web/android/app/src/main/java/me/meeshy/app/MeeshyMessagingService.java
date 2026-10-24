@@ -224,13 +224,17 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
     /**
      * Best-effort, comme `sw-push.js` : un accuse manque (pas de credential,
      * reseau coupe) laisse le message « envoye » jusqu'a la reconnexion — l'etat
-     * d'avant #8124, jamais pire. `onMessageReceived` et `handleIntent` tournent
-     * deja hors du fil principal : l'appel reseau y est permis.
+     * d'avant #8124, jamais pire. Il part hors du fil des pushs (#12623) : un
+     * reseau lent ne retarde plus la banniere du message suivant.
      */
     private void acknowledgeDelivery(PushDeliveryReceipt receipt) {
         if (receipt == null) return;
         String[] header = CallShellStore.credentialHeader(this);
         if (header == null) return;
+        ReceiptDispatch.run(() -> post(receipt, header));
+    }
+
+    private static void post(PushDeliveryReceipt receipt, String[] header) {
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) URI.create(receipt.url).toURL().openConnection();

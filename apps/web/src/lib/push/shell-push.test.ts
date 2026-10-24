@@ -286,6 +286,15 @@ describe('la coque accuse la remise d’un message reçu UNE fois, en natif (#11
     expect(received).toContain('forward("sendRemoteMessage"');
     expect(received).toContain('acknowledgeDelivery(PushDeliveryReceipt.of(');
   });
+
+  test('l’accusé part hors du fil des pushs, comme `accuserRemise` en parallèle de la bannière (#12623)', () => {
+    const service = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../android/app/src/main/java/me/meeshy/app/MeeshyMessagingService.java'),
+      'utf8',
+    );
+    const acknowledge = service.slice(service.indexOf('private void acknowledgeDelivery('), service.indexOf('public void onNewToken('));
+    expect(acknowledge).toContain('ReceiptDispatch.run(');
+  });
 });
 
 describe('ce que la coque lit de la charge', () => {
