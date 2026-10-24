@@ -34,6 +34,7 @@ import {
   subtitleSourceSelect,
   type SubtitleCarrier,
 } from '../../services/attachments/servedSubtitles';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -478,10 +479,10 @@ export async function registerMetadataRoutes(
         if (isAnonymous) {
           hasPermission = attachment.uploadedBy === userId && attachment.isAnonymous;
         } else {
-          const isAdmin = authContext.registeredUser?.role === 'ADMIN' ||
-                         authContext.registeredUser?.role === 'BIGBOSS';
-
-          hasPermission = attachment.uploadedBy === userId || isAdmin;
+          // Retirer le média d'autrui est un geste de modération de contenu :
+          // la table des rôles de plateforme privilégiés le gouverne (#11217).
+          hasPermission = attachment.uploadedBy === userId ||
+            isPrivilegedPlatformRole(authContext.registeredUser?.role);
         }
 
         if (!hasPermission) {

@@ -14,9 +14,9 @@ import Foundation
 /// - `platformRole` EXACT pour modérer, sans casse pour administrer
 ///   (`PlatformRole`).
 ///
-/// Rang EFFECTIF : un ADMIN ou BIGBOSS de plateforme MEMBRE ACTIF vaut le
-/// créateur, jamais au-dessus ; MODERATOR, AUDIT et ANALYST y gardent le rang
-/// de leur ligne. Un lecteur qui porte `isAnonymous` est un invité, quel que
+/// Rang EFFECTIF : un rôle de plateforme PRIVILÉGIÉ (MODERATOR, ADMIN ou
+/// BIGBOSS, `PlatformRole.privileged`, #11217) MEMBRE ACTIF vaut le créateur,
+/// jamais au-dessus ; AUDIT et ANALYST y gardent le rang de leur ligne. Un lecteur qui porte `isAnonymous` est un invité, quel que
 /// soit `hasAccount` (fermé par défaut).
 ///
 /// Comme l'`ActionViewer` TypeScript, l'initialiseur n'a AUCUN défaut hors
@@ -78,10 +78,11 @@ public struct ConversationViewerAuthority: Equatable, Sendable {
     /// Le niveau de la LIGNE — 0 hors membre actif ou rang illisible.
     public var memberRank: Int { isActiveMember ? memberRole?.level ?? 0 : 0 }
 
-    /// `effectiveConversationRole` : `nil` hors membre actif, rang de la ligne casse pliée.
+    /// `effectiveConversationRole` : `nil` hors membre actif, créateur pour un rôle
+    /// de plateforme privilégié (lu EXACTEMENT), sinon le rang de la ligne casse pliée.
     public var effectiveRole: MemberRole? {
         guard isActiveMember else { return nil }
-        return administersPlatform ? .creator : conversationRoleRaw.flatMap { MemberRole(rawValue: $0.lowercased()) }
+        return moderatesPlatform ? .creator : conversationRoleRaw.flatMap { MemberRole(rawValue: $0.lowercased()) }
     }
 
     public var effectiveRank: Int { effectiveRole?.level ?? 0 }

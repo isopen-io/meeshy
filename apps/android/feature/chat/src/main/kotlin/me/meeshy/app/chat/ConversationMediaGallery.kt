@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.MessageExit
 import me.meeshy.ui.component.bubble.BubbleContent
 
 /**
@@ -144,7 +145,7 @@ public object ConversationMediaGallery {
                         senderName = senderName,
                         createdAtIso = createdAtIso,
                         alt = it.alt,
-                        isProtected = isProtected,
+                        isProtected = isProtected || !message.exitOffer.offers(MessageExit.SAVE),
                     ),
                 )
             }

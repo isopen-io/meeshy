@@ -5,16 +5,16 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import androidx.navigation.navDeepLink
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.feed.UserPostsScreen
+import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.notifications.NotificationsScreen
-import me.meeshy.app.profile.ProfileScreen
+import me.meeshy.app.profile.OwnProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
 
-/** Contacts, notifications, profils et signalement. */
+/** Contacts, notifications, ma page et signalement ; la fiche d'un tiers vit dans [ProfileNavGraph]. */
 internal fun NavGraphBuilder.socialNavGraph(
     navController: NavHostController,
 ) {
@@ -47,22 +47,10 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenProfile = { navController.navigate(Routes.profile(it)) },
         )
     }
-    composable(
-        route = Routes.PROFILE_USER,
-        arguments = listOf(navArgument("userId") { type = NavType.StringType }),
-        deepLinks = listOf(
-            navDeepLink { uriPattern = Routes.PROFILE_DEEP_LINK },
-            navDeepLink { uriPattern = Routes.PROFILE_SHARE_APP_DEEP_LINK },
-            navDeepLink { uriPattern = Routes.PROFILE_SHARE_WEB_DEEP_LINK },
-        ),
-    ) {
-        ProfileScreen(
+    composable(ProfileRoutes.OWN) {
+        OwnProfileScreen(
             onBack = { navController.popBackStack() },
-            onReport = { userId, username ->
-                navController.navigate(Routes.reportUser(userId, username))
-            },
             onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
-            onOpenConversation = { conversationId -> navController.navigate(Routes.chat(conversationId)) },
         )
     }
     composable(

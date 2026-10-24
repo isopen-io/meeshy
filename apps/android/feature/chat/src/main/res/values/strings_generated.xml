@@ -12,6 +12,13 @@
     <string name="chat_delete_confirm_cancel">Cancel</string>
     <string name="chat_delete_confirm_hint">Delete for everyone is available for 2 h after sending.</string>
     <string name="chat_delete_confirm_title">Delete this message?</string>
+    <string name="chat_exit_blocked_after_read">It disappears after reading: it can’t be forwarded, saved or shared.</string>
+    <string name="chat_exit_blocked_attachment_not_in_source">This item is no longer part of the message.</string>
+    <string name="chat_exit_blocked_encrypted_source">This encrypted content is copied from this device.</string>
+    <string name="chat_exit_blocked_source_unavailable">The original message is no longer available.</string>
+    <string name="chat_exit_blocked_title">This message stays in Meeshy</string>
+    <string name="chat_exit_blocked_understood">Got it</string>
+    <string name="chat_exit_blocked_view_once">It’s view-once: it can’t be forwarded, saved or shared. It stays in the conversation until it’s seen.</string>
     <string name="common_cancel">Cancel</string>
     <string name="common_send">Send</string>
     <string name="common_unknown">Unknown</string>
