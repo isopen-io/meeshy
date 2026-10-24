@@ -97,6 +97,12 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     let report: Bool
     let adminOpen: Bool
     let removal: Removal?
+    /// Appeler le pair d'un direct — l'appel du menu compose UN pair, donc
+    /// jamais un groupe ni soi-même (`CallPermission.canStartCall`).
+    let call: Bool
+    let videoCall: Bool
+    /// « Paramètres du groupe » — MODERATOR+ sur un type qui se gère (#11230).
+    let groupSettings: Bool
 
     static func make(conversation: MeeshyConversation, currentUser: MeeshyUser?) -> ConversationRowMenuCapabilities {
         let actions = ConversationActionPolicy.actions(for: ConversationActionPolicy.Input(
@@ -113,13 +119,17 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
         let talksToSelf = conversation.type == .direct
             && conversation.participantUserId != nil
             && conversation.participantUserId == currentUser?.id
+        let talksToPeer = conversation.type == .direct && conversation.participantUserId != nil && !talksToSelf
         return ConversationRowMenuCapabilities(
             rename: actions.rename,
             invite: actions.invite,
             leave: actions.leave,
             report: actions.report && !talksToSelf,
             adminOpen: actions.adminOpen,
-            removal: actions.hide ? (conversation.type == .direct ? .delete : .hide) : nil
+            removal: actions.hide ? (conversation.type == .direct ? .delete : .hide) : nil,
+            call: actions.call && talksToPeer,
+            videoCall: actions.videoCall && talksToPeer,
+            groupSettings: actions.manageMembers && conversation.type != .direct
         )
     }
 

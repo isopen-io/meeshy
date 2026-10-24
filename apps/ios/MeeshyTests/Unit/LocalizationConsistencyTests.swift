@@ -176,6 +176,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
+        // #11230 — les libellés du menu d'une rangée ont quitté le menu custom
+        // pour le catalogue que les deux chemins d'OS lisent : le cliquet suit.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMenuCatalog.swift",
         "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",  // 20
         "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17

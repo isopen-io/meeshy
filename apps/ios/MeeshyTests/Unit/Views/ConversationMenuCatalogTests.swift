@@ -8,6 +8,7 @@ import MeeshySDK
 /// menu custom de repli) parcourent. Le catalogue est pur : il ne lit que les
 /// verdicts de la loi (`ConversationRowMenuCapabilities`, projection de
 /// `ConversationActionPolicy`) et l'état de la rangée.
+@MainActor
 final class ConversationMenuCatalogTests: XCTestCase {
 
     private func makeUser(id: String = "me", role: String? = "USER", isAnonymous: Bool? = false) -> MeeshyUser {
