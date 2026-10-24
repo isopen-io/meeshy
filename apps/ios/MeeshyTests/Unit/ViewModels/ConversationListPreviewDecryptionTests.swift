@@ -212,6 +212,42 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         XCTAssertTrue(ConversationPreviewRenderer.isSealed(try XCTUnwrap(served(sut))))
     }
 
+    /// F1 (audit de #12722) : UN déchiffreur sert toutes les conversations de
+    /// l'aperçu. Le même message (même identifiant, même cryptogramme), rejoué
+    /// par un serveur malveillant dans la directe avec Carol après avoir été
+    /// ouvert dans celle avec Bob, ne sort jamais du mémo : il reste scellé.
+    func test_memo_neverOpensAnotherConversationsCiphertext() async throws {
+        let bob = SymmetricKey(size: .bits256)
+        let sealed = try sealedBase64("Code 4242", with: bob)
+        let decryptor = DecryptionActor(provider: RoundTripSessionProvider(sessions: [
+            "user-bob": bob.rawBytes, "user-carol": SymmetricKey(size: .bits256).rawBytes
+        ]))
+        func row(_ conversation: String, _ sender: String) -> Message {
+            Message(
+                id: messageId, conversationId: conversation, senderId: sender, content: sealed,
+                originalLanguage: "fr", isEncrypted: true,
+                createdAt: Date(timeIntervalSince1970: 1_000), updatedAt: Date(timeIntervalSince1970: 1_000)
+            )
+        }
+        let sut = ConversationListPreviewLoader(
+            messageService: MockMessageService(),
+            cache: PerConversationPreviewCache(["cB": [row("cB", "user-bob")], "cC": [row("cC", "user-carol")]]),
+            readerPrism: { ["fr"] },
+            isLocked: { _ in false },
+            decryptor: decryptor,
+            directness: { $0 == "cB" ? .direct(peerUserId: "user-bob") : .direct(peerUserId: "user-carol") },
+            locksDidChange: Empty<Void, Never>().eraseToAnyPublisher(),
+            regimeMemory: EndToEndRegimeMemory(defaults: nil)
+        )
+
+        await sut.load(for: "cB", intent: .prefetch, currentUserId: reader)
+        XCTAssertEqual(sut.state(for: "cB").snapshot?.messages.first?.content, "Code 4242", "précondition")
+        await sut.load(for: "cC", intent: .prefetch, currentUserId: reader)
+
+        XCTAssertEqual(sut.state(for: "cC").snapshot?.messages.first?.content, "", "le clair de Bob ne s'affiche jamais chez Carol")
+        XCTAssertEqual(sut.state(for: "cC").snapshot?.messages.first?.isContentDecryptedOnDevice, false)
+    }
+
     /// Mon propre message s'ouvre avec la session du PAIR : c'est la clé
     /// symétrique sous laquelle `SessionManager.encryptMessage(_:for:)` l'a
     /// scellé (m3). Aucune session n'est rangée sous le lecteur.
@@ -946,6 +982,19 @@ private struct RoundTripSessionProvider: DecryptionSessionProviding {
 
 private extension SymmetricKey {
     var rawBytes: Data { withUnsafeBytes { Data($0) } }
+}
+
+/// Un cache dont chaque conversation sert ses propres lignes.
+@MainActor
+private struct PerConversationPreviewCache: ConversationPreviewCacheProviding {
+    let byConversation: [String: [Message]]
+    init(_ byConversation: [String: [Message]]) { self.byConversation = byConversation }
+
+    func messages(for conversationId: String) async -> CacheResult<[Message]> {
+        .fresh(byConversation[conversationId] ?? [], age: 10)
+    }
+
+    func translations(for messageIds: [String]) async -> [String: [MessageTranslation]] { [:] }
 }
 
 /// Compte les déchiffreurs fabriqués : une purge en reconstruit un.
