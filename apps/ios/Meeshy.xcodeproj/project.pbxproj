@@ -498,6 +498,7 @@
 		1FD9037A11EBB68AAC3F2082 /* CallStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B720FDFB9FC649A7B7D4436E /* CallStateMachineTests.swift */; };
 		2005E3212659AB22AB2ED002 /* DiskPressureSweeperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEA5E5038CD616E45D56610B /* DiskPressureSweeperTests.swift */; };
 		2010B5D6A67AF253B2FA4685 /* SendFailureRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8938FDE0D01F5BFADEF30ED7 /* SendFailureRecovery.swift */; };
+		7E61F005BB365057DE54192E /* EndToEndSendSealer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50131E6A0AF95B6F1D7E895B /* EndToEndSendSealer.swift */; };
 		20113A20BB1AB30DED558033 /* AuthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1C8242E81A7A84C68ABAE4 /* AuthModels.swift */; };
 		20407CC2B00D51A6A651E03B /* MessageGroupLanguageFanOutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54188ED24C6434C94E85CD8F /* MessageGroupLanguageFanOutTests.swift */; };
 		2049E269E8D0C5C520A74226 /* SyncPillPauseGestureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13B6AFBDCA69220393EF2C4D /* SyncPillPauseGestureTests.swift */; };
@@ -6137,6 +6138,7 @@
 		8925239EF7490BAF428580E7 /* MessageOverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageOverlayMenu.swift; sourceTree = "<group>"; };
 		89358F433413340DE4654028 /* ConversationListView+SwipeActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationListView+SwipeActions.swift"; sourceTree = "<group>"; };
 		8938FDE0D01F5BFADEF30ED7 /* SendFailureRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendFailureRecovery.swift; sourceTree = "<group>"; };
+		50131E6A0AF95B6F1D7E895B /* EndToEndSendSealer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndSendSealer.swift; sourceTree = "<group>"; };
 		89452E6BAD2BD1F92523633A /* AudioAvailabilityResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioAvailabilityResolver.swift; sourceTree = "<group>"; };
 		894FBB9F357FE901EA504623 /* MessageListViewController+Snapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+Snapshot.swift"; sourceTree = "<group>"; };
 		89557B8BAE780EE13671E59B /* MessageCardExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCardExportSheet.swift; sourceTree = "<group>"; };
@@ -10563,6 +10565,7 @@
 				69E0A593F37B60AC8F318A2A /* QuotedAudioResolver.swift */,
 				29FE101663FD4C0CF996CAD7 /* QuotedReferenceFactory.swift */,
 				8938FDE0D01F5BFADEF30ED7 /* SendFailureRecovery.swift */,
+				50131E6A0AF95B6F1D7E895B /* EndToEndSendSealer.swift */,
 				DF094CAEBDC3D735F5C02E84 /* StarredSnapshotFactory.swift */,
 				CA37708088983C1CA8A5B217 /* TranscriptionRetryScheduler.swift */,
 				CEDBFC7ADE8F860441DBF4D6 /* VoiceConsentGate.swift */,
@@ -15078,6 +15081,7 @@
 				746A36B380D91187B82502D3 /* SecurityView.swift in Sources */,
 				7E9A3E62668E323504DAB220 /* SendEligibility.swift in Sources */,
 				2010B5D6A67AF253B2FA4685 /* SendFailureRecovery.swift in Sources */,
+				7E61F005BB365057DE54192E /* EndToEndSendSealer.swift in Sources */,
 				B0D7E40571139F02318F6457 /* SendPlaceTileLaw.swift in Sources */,
 				E4CB55F889FD4A7CB0F6FA14 /* ServerTranscriptionWait.swift in Sources */,
 				D1B0271718F16F2E5D608BFE /* SessionClosedNoticeView.swift in Sources */,

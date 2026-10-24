@@ -53,8 +53,22 @@ struct SendFailureRecovery: SendFailureRecoveryProviding {
             return .success(receipt)
         }
 
+        guard !payload.isEncrypted else {
+            return .failure(await refuseClearRetry(tempId: tempId, coordinator: coordinator))
+        }
         await coordinator.recordFailure(error, localId: tempId)
         return .failure(await coordinator.enqueueForRetry(outgoing, context: context, cause: error))
+    }
+
+    /// #11379 — la file de relance porte `outgoing`, donc le texte EN CLAIR :
+    /// un envoi qui était scellé n'y entre jamais. La bulle reste en échec, et
+    /// « Réessayer » rescelle le texte au renvoi.
+    private func refuseClearRetry(tempId: String, coordinator: any ConversationSendCoordinatorProviding) async -> SendFailure {
+        let refusal = EndToEndSendRefusal.outboxUnsealable
+        Logger.messages.warning("perf:ios.send.fail.e2ee clientMessageId=\(tempId, privacy: .public) — sealed send never re-queued in clear")
+        await coordinator.markFailed(localId: tempId, reason: refusal.userMessage)
+        toast.showError(refusal.userMessage)
+        return .endToEndUnsealed(refusal)
     }
 
     /// Refus DÉFINITIFS : retenter ne réussirait jamais, donc ni repli socket

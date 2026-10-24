@@ -103058,6 +103058,241 @@
         }
       }
     },
+    "conversation.send.e2ee.sessionUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التشفير غير متاح: لم تُرسل الرسالة. اضغط لإعادة المحاولة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselung nicht verfügbar: Die Nachricht wurde nicht gesendet. Tippe, um es erneut zu versuchen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encryption unavailable: the message wasn’t sent. Tap to try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado no disponible: el mensaje no se envió. Toca para reintentar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrement indisponible : le message n’est pas parti. Touchez pour réessayer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografia non disponibile: il messaggio non è stato inviato. Tocca per riprovare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografia indisponível: a mensagem não foi enviada. Toque para tentar novamente."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.recipientUnsealable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه المحادثة المشفرة لا تقبل الإرسال من هذا الجهاز بعد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese verschlüsselte Unterhaltung akzeptiert noch keine Nachrichten von diesem Gerät."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This encrypted conversation doesn’t accept messages from this device yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversación cifrada aún no acepta envíos desde este dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette conversation chiffrée n’accepte pas encore d’envoi depuis cet appareil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa conversazione crittografata non accetta ancora invii da questo dispositivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversa criptografada ainda não aceita envios deste dispositivo."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.contentUnsealable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محادثة مشفرة: لا يمكن إرسال المرفقات والمواقع والملصقات بعد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselte Unterhaltung: Anhänge, Orte und Sticker können noch nicht gesendet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted conversation: attachments, places and stickers can’t be sent yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversación cifrada: aún no se pueden enviar adjuntos, ubicaciones ni stickers."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversation chiffrée : pièces jointes, lieux et stickers ne peuvent pas encore être envoyés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversazione crittografata: allegati, luoghi e sticker non possono ancora essere inviati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversa criptografada: anexos, locais e figurinhas ainda não podem ser enviados."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.outboxUnsealable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تُرسل الرسالة المشفرة: أعد المحاولة عند الاتصال."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselte Nachricht nicht gesendet: Versuche es erneut, sobald du online bist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted message not sent: try again once you’re online."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensaje cifrado no enviado: vuelve a intentarlo cuando tengas conexión."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message chiffré non envoyé : réessayez une fois connecté."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messaggio crittografato non inviato: riprova quando sei connesso."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensagem criptografada não enviada: tente novamente quando estiver conectado."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.editUnsealable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محادثة مشفرة: لا يمكن تعديل الرسائل بعد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselte Unterhaltung: Nachrichten können noch nicht bearbeitet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted conversation: messages can’t be edited yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversación cifrada: los mensajes aún no se pueden editar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversation chiffrée : un message ne peut pas encore être modifié."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversazione crittografata: i messaggi non possono ancora essere modificati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversa criptografada: as mensagens ainda não podem ser editadas."
+          }
+        }
+      }
+    },
     "conversation.storyUnavailable": {
       "extractionState": "manual",
       "localizations": {
