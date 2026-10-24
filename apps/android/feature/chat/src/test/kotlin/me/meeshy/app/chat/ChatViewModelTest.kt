@@ -3634,9 +3634,9 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun startEdit_is_allowed_while_the_message_is_still_inside_the_two_hour_window() = runTest(dispatcher) {
+    fun startEdit_is_allowed_while_the_message_is_still_inside_the_24_hour_window() = runTest(dispatcher) {
         val h = harness(
-            messageCreatedAt(senderId = "me", createdAt = "2026-07-07T11:30:00Z"),
+            messageCreatedAt(senderId = "me", createdAt = "2026-07-06T12:00:00Z"),
             currentUser = me,
         )
         advanceUntilIdle()
@@ -3648,9 +3648,9 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun startEdit_is_blocked_once_the_two_hour_edit_window_has_passed() = runTest(dispatcher) {
+    fun startEdit_is_blocked_once_the_24_hour_edit_window_has_passed() = runTest(dispatcher) {
         val h = harness(
-            messageCreatedAt(senderId = "me", createdAt = "2026-07-07T09:00:00Z"),
+            messageCreatedAt(senderId = "me", createdAt = "2026-07-06T11:59:59Z"),
             currentUser = me,
         )
         advanceUntilIdle()
