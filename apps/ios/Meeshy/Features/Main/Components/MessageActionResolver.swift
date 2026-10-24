@@ -439,7 +439,10 @@ enum MessageActionResolver {
         // supprimer.
         let showsContent = !ctx.isBlurred
         var actions: [MoreItem] = ctx.canReply ? [.reply] : []
-        if showsContent && ctx.canForward && ctx.exits.offers(.forward) { actions.append(.forward) }
+        // D8 (#10949) : un flouté se TRANSFÈRE, flou hérité — la loi de sortie
+        // le dit (`MessageExitOffer.offers(.forward)`), la feuille ne la
+        // resserre pas ; glissé et VoiceOver lisent ce verdict (#12626).
+        if ctx.canForward && ctx.exits.offers(.forward) { actions.append(.forward) }
         actions.append(.thread)
         if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
         if ctx.hasText && showsContent && ctx.exits.offers(.copy) { actions.append(.copy) }

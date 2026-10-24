@@ -14,6 +14,90 @@ struct BubbleInlinePagingPreferenceKey: PreferenceKey {
     }
 }
 
+/// **Ce qu'une rangée offre HORS du menu — glissé, VoiceOver, double toucher**
+/// (#12626, #11214).
+///
+/// Le menu d'appui long lit la loi du message (`MessageActionPolicy`, par
+/// `MessageMenuContext.make`) ; le glissé, les actions nommées et le menu
+/// système de la rangée en sont d'autres portes, et n'offrent jamais ce que le
+/// menu refuse au même message. Le verdict est celui du MENU — ce que sa
+/// feuille « Plus… » range —, jamais une règle locale, et il se lit UNE fois
+/// par configuration de cellule. Un contrôle existe s'il a un effet : sans
+/// verdict, le côté du glissé ne s'arme pas et l'action nommée n'est pas exposée.
+struct MessageRowOffer: Equatable {
+    enum Action: Hashable {
+        case reply, forward
+
+        var accessibilityName: String {
+            switch self {
+            case .reply: return String(localized: "a11y.message.actions.reply", bundle: .main)
+            case .forward: return String(localized: "a11y.message.actions.forward", bundle: .main)
+            }
+        }
+    }
+
+    /// « Éditer » au double toucher : l'auteur, dans la fenêtre de la loi, sur un texte.
+    let canEdit: Bool
+    let canReply: Bool
+    let canForward: Bool
+
+    static let closed = MessageRowOffer(canReply: false, canForward: false)
+
+    init(canEdit: Bool = false, canReply: Bool, canForward: Bool) {
+        self.canEdit = canEdit
+        self.canReply = canReply
+        self.canForward = canForward
+    }
+
+    init(menu: MessageMenuContext) {
+        let offered = MessageActionResolver.moreSections(menu).flatMap { section -> [MoreItem] in
+            switch section {
+            case .actions(let items), .info(let items), .moderation(let items): return items
+            }
+        }
+        self.init(
+            canEdit: menu.isMine && menu.canEdit && menu.hasText,
+            canReply: offered.contains(.reply),
+            canForward: offered.contains(.forward)
+        )
+    }
+
+    /// La loi d'UN message, lue par la fabrique unique. Les faits locaux du
+    /// menu (favori, révisions, stickers) ne décident ni d'une édition, ni
+    /// d'une réponse, ni d'un transfert : la projection pure suffit, sans singleton.
+    static func of(_ message: Message, authority: ConversationMenuAuthority, now: Date = Date()) -> MessageRowOffer {
+        MessageRowOffer(menu: MessageMenuContext.make(message: message, facts: MessageMenuFacts(), authority: authority, now: now))
+    }
+
+    var armsAnySide: Bool { canReply || canForward }
+
+    var accessibilityActions: [Action] {
+        (canReply ? [Action.reply] : []) + (canForward ? [Action.forward] : [])
+    }
+
+    /// Jusqu'où la bulle suit le doigt d'un côté que la loi refuse : assez pour
+    /// lire l'horodatage du glissé, jamais jusqu'au seuil — ni icône d'action,
+    /// ni haptique, ni validation.
+    static var stampReach: CGFloat { BubbleSwipeResistance.commitDistance - 1 }
+
+    /// Le décalage que la bulle prend pour `tracked`. `replyDirection` oriente
+    /// vers la réponse ; un côté offert suit le doigt, un côté refusé s'arrête
+    /// sous le seuil.
+    func trackedOffset(_ tracked: CGFloat, replyDirection: CGFloat) -> CGFloat {
+        let directed = tracked * replyDirection
+        let armed = directed > 0 ? canReply : canForward
+        guard !armed, abs(tracked) > Self.stampReach else { return tracked }
+        return tracked < 0 ? -Self.stampReach : Self.stampReach
+    }
+
+    /// L'action que valide un glissé relâché, ou `nil`.
+    func committed(directedOffset: CGFloat) -> Action? {
+        if canReply && BubbleSwipeResistance.commits(offset: directedOffset) { return .reply }
+        if canForward && BubbleSwipeResistance.commits(offset: -directedOffset) { return .forward }
+        return nil
+    }
+}
+
 /// Wraps a bubble with a horizontal swipe gesture that fires either a reply
 /// or forward action. Restored from the pre-bubble-decompose `+MessageRow`
 /// SwiftUI list layout — the new UICollectionView host (MessageListViewController)
@@ -47,8 +131,9 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// indépendant de `isMine` (tous les messages sont alignés pareil).
     /// `false` (bulles) : convention historique.
     var uniformFlatDirection: Bool = false
-    let onSwipeReply: () -> Void
-    let onSwipeForward: () -> Void
+    /// `nil` ⇒ la loi refuse : le côté ne s'arme pas, l'action nommée n'existe pas (#12626).
+    let onSwipeReply: (() -> Void)?
+    let onSwipeForward: (() -> Void)?
     /// Long press triggers the message's contextual options (reply, forward,
     /// reactions, copy, delete, …). The container fires the haptic so each
     /// caller doesn't have to.
@@ -87,6 +172,10 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// bar vidéo. Remplace l'ancien paramètre `isScrubbing` qui n'était câblé
     /// par aucun call site — la protection scrubbing → swipe était inopérante.
     @State private var isMediaScrubbing: Bool = false
+
+    private var offer: MessageRowOffer {
+        MessageRowOffer(canReply: onSwipeReply != nil, canForward: onSwipeForward != nil)
+    }
 
     private var replyDirection: CGFloat {
         BubbleSwipeResistance.replyDirection(uniformFlatRow: uniformFlatDirection, isMine: isMine)
@@ -156,9 +245,7 @@ struct BubbleSwipeContainer<Content: View>: View {
             content()
                 .padding(.leading, selectionShift)
                 .offset(x: offset)
-                .accessibilityAction(named: String(localized: "a11y.message.actions.reply", bundle: .main)) { onSwipeReply() }
-                .accessibilityAction(named: String(localized: "a11y.message.actions.forward", bundle: .main)) { onSwipeForward() }
-                .accessibilityAction(named: String(localized: "a11y.message.actions.long_press", bundle: .main)) { onLongPress() }
+                .accessibilityActions { rowAccessibilityActions }
                 // Pas de `GeometryReader` + préférence par cellule : hébergée
                 // dans une `UIHostingConfiguration`, la préférence ne franchit
                 // jamais la frontière UIKit jusqu'à `ConversationView` — la
@@ -245,6 +332,23 @@ struct BubbleSwipeContainer<Content: View>: View {
         }
     }
 
+    /// Les actions nommées de la rangée : ce que la loi offre au glissé, puis
+    /// l'ouverture du menu, toujours là.
+    @ViewBuilder
+    private var rowAccessibilityActions: some View {
+        ForEach(offer.accessibilityActions, id: \.self) { action in
+            Button(action.accessibilityName) { perform(action) }
+        }
+        Button(String(localized: "a11y.message.actions.long_press", bundle: .main)) { onLongPress() }
+    }
+
+    private func perform(_ action: MessageRowOffer.Action) {
+        switch action {
+        case .reply: onSwipeReply?()
+        case .forward: onSwipeForward?()
+        }
+    }
+
     @ViewBuilder
     private var swipeIndicator: some View {
         let directed = offset * replyDirection
@@ -312,7 +416,10 @@ struct BubbleSwipeContainer<Content: View>: View {
                     ),
                     resistance: resistance
                 ) else { return }
-                offset = BubbleSwipeResistance.trackedOffset(translation: h)
+                // Un côté que la loi refuse ne s'arme pas : la bulle s'arrête
+                // sous le seuil, l'horodatage reste lisible, aucune action ne
+                // s'annonce qui ne partirait pas (#12626).
+                offset = offer.trackedOffset(BubbleSwipeResistance.trackedOffset(translation: h), replyDirection: replyDirection)
                 // Light haptic the moment we cross the commit threshold
                 // (and only once per drag) so the user feels the bubble
                 // "snap" into the action zone before they let go.
@@ -325,12 +432,8 @@ struct BubbleSwipeContainer<Content: View>: View {
                 }
             }
             .onEnded { _ in
-                let directed = offset * replyDirection
-                if BubbleSwipeResistance.commits(offset: directed) {
-                    onSwipeReply()
-                    HapticFeedback.success()
-                } else if BubbleSwipeResistance.commits(offset: -directed) {
-                    onSwipeForward()
+                if let action = offer.committed(directedOffset: offset * replyDirection) {
+                    perform(action)
                     HapticFeedback.success()
                 }
                 didCrossThreshold = false
@@ -605,10 +708,11 @@ struct MessageListView: UIViewControllerRepresentable {
     /// et non le menu longpress ». Les deux sont distincts : l'appui long
     /// ouvre l'overlay (réactions + actions), celui-ci la feuille complète.
     var onOpenMoreSheet: ((String) -> Void)?
-    /// **Le prédicat d'éditabilité est REMIS, jamais recalculé.** La règle vit
-    /// dans `MessageMenuContext.make` ; en poser une seconde ici
-    /// garantirait qu'elles divergent au premier ajustement de l'une.
-    var canEditMessage: ((String) -> Bool)?
+    /// **Ce que la rangée offre hors du menu est REMIS, jamais recalculé**
+    /// (#11214, #12626) : éditer au double toucher, répondre et transférer au
+    /// glissé et à VoiceOver. La règle vit dans `MessageMenuContext.make` ; en
+    /// poser une seconde ici garantirait qu'elles divergent. Absent ⇒ rien.
+    var rowOffer: ((Message) -> MessageRowOffer)?
     /// User-initiated reaction add. Carries the message id and the tapped
     /// bubble cell's on-screen frame (window coords, `nil` when the cell is
     /// not realized) so the quick-reaction bar can anchor to the bubble.
@@ -736,7 +840,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onComposeFromMessage = onComposeFromMessage
         vc.onImagineFromMessage = onImagineFromMessage
         vc.onOpenMoreSheet = onOpenMoreSheet
-        vc.canEditMessage = canEditMessage
+        vc.rowOffer = rowOffer
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -856,7 +960,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onComposeFromMessage = onComposeFromMessage
         vc.onImagineFromMessage = onImagineFromMessage
         vc.onOpenMoreSheet = onOpenMoreSheet
-        vc.canEditMessage = canEditMessage
+        vc.rowOffer = rowOffer
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
