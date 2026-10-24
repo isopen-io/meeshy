@@ -153,3 +153,16 @@ fun resolveSafeMediaUrl(url: String, apiBaseUrl: String?): String? {
     val local = me.meeshy.sdk.model.net.MediaUrlPolicy.isLocalEnvironment(apiBaseUrl)
     return resolved.takeIf { me.meeshy.sdk.model.net.MediaUrlPolicy.isAllowed(it, local) }
 }
+
+/**
+ * L'adresse chargeable d'une image SERVIE par la passerelle (avatar, bannière), ou `null` (⇒ repli :
+ * initiales, dessin, couleur unie) quand rien n'est servi, quand la valeur est un URI local
+ * (`file:` / `content:` — une charge serveur ne désigne jamais un fichier de l'appareil) ou quand la
+ * politique média la refuse. LE site unique des images servies : aucun appelant ne passe une valeur
+ * serveur à un chargeur par un autre chemin (#12569).
+ */
+fun resolveServedImageUrl(raw: String?, apiBaseUrl: String?): String? {
+    val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    if (value.startsWith("file:", ignoreCase = true) || value.startsWith("content:", ignoreCase = true)) return null
+    return resolveSafeMediaUrl(value, apiBaseUrl)
+}

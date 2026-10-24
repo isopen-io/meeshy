@@ -82,6 +82,7 @@ fun NotificationBannerHost(
                     },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     avatarName = shown.avatarName,
+                    avatarUrl = shown.avatarUrl,
                     onTap = {
                         viewModel.dismiss()
                         shown.conversationId?.let(onOpenConversation)

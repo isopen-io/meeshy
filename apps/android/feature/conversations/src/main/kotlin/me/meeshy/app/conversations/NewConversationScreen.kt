@@ -338,7 +338,7 @@ private fun UserRow(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
         Box {
-            MeeshyAvatar(name = user.displayName, size = 44.dp)
+            MeeshyAvatar(name = user.displayName, size = 44.dp, imageUrl = user.avatarUrl)
             meeshyPresenceDotColor(
                 if (user.isOnline) PresenceState.ONLINE else PresenceState.OFFLINE,
             )?.let { dot ->

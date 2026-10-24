@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -186,18 +185,7 @@ private fun SavedPostCard(
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(contentAlignment = Alignment.Center) {
-                    MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp)
-                    if (!post.authorAvatarUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = post.authorAvatarUrl,
-                            contentDescription = post.authorName ?: unknownAuthor,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                        )
-                    }
-                }
+                MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl)
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column(Modifier.weight(1f)) {
                     Text(

@@ -61,6 +61,7 @@ internal fun MentionSuggestionStrip(
                         name = candidate.displayName,
                         size = 36.dp,
                         containerColor = accentColor,
+                        imageUrl = candidate.avatarURL,
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

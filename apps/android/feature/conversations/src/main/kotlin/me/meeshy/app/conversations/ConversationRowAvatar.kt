@@ -30,6 +30,7 @@ internal fun ConversationRowAvatar(
     moodEmoji: String?,
     here: ConversationHere,
     modifier: Modifier = Modifier,
+    imageUrl: String? = null,
 ) {
     val ring = LentilleMetrics.Avatar.ringWidth
     Box(
@@ -48,6 +49,7 @@ internal fun ConversationRowAvatar(
             moodEmoji = moodEmoji,
             here = here,
             enablePulse = false,
+            imageUrl = imageUrl,
         )
     }
 }

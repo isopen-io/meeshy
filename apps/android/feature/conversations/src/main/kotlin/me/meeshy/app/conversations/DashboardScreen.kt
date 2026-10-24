@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.displayedAvatar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -124,6 +125,7 @@ fun DashboardScreen(
                 RecentConversationRow(
                     conversation = conversation,
                     title = conversation.displayTitle(state.currentUserId),
+                    avatarUrl = conversation.displayedAvatar(state.currentUserId),
                     onClick = { onOpenConversation(conversation.id) },
                 )
             }
@@ -210,7 +212,7 @@ private fun UnreadCard(unreadTotal: Int) {
 }
 
 @Composable
-private fun RecentConversationRow(conversation: ApiConversation, title: String, onClick: () -> Unit) {
+private fun RecentConversationRow(conversation: ApiConversation, title: String, avatarUrl: String?, onClick: () -> Unit) {
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.lg),
         modifier = Modifier
@@ -223,7 +225,7 @@ private fun RecentConversationRow(conversation: ApiConversation, title: String, 
             modifier = Modifier.padding(MeeshySpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MeeshyAvatar(name = title, size = 40.dp)
+            MeeshyAvatar(name = title, size = 40.dp, imageUrl = avatarUrl)
             Spacer(Modifier.width(MeeshySpacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
