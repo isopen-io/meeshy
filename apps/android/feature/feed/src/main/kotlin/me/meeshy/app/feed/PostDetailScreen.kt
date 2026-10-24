@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -67,7 +66,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.PostReactionPaletteState
 import me.meeshy.sdk.model.PostReactionPick
@@ -225,18 +223,7 @@ private fun PostDetailContent(
         ) {
             Column(Modifier.padding(MeeshySpacing.lg)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(contentAlignment = Alignment.Center) {
-                        MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 44.dp)
-                        if (!post.authorAvatarUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = post.authorAvatarUrl,
-                                contentDescription = post.authorName ?: unknownAuthor,
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape),
-                            )
-                        }
-                    }
+                    MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 44.dp, imageUrl = post.authorAvatarUrl)
                     Spacer(Modifier.width(MeeshySpacing.md))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -136,7 +136,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
   /**
    * POST /api/v1/conversations/:conversationId/encryption
    * Enable encryption for a conversation (immutable - cannot be disabled).
-   * Restricted to platform administrators (#12517, utils/encryption-activation-policy.ts).
+   * Restricted to platform ANALYST and above (#12517, #12588, utils/encryption-activation-policy.ts).
    */
   fastify.post<{
     Params: EncryptionStatusParams;
@@ -205,7 +205,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         }
 
         if (!mayActivateConversationEncryption({ platformRole: member.user?.role })) {
-          return sendForbidden(reply, 'Encryption can only be enabled by a platform administrator for now', {
+          return sendForbidden(reply, 'Encryption can only be enabled by a platform staff role (ANALYST or above) for now', {
             code: ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
           });
         }

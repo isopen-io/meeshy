@@ -96,14 +96,9 @@ struct ContactCardDetailSheet: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
-            ZStack {
-                Circle().fill(LinearGradient(colors: [accent, accent.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Text(Self.initials(model.card?.displayName ?? ""))
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(.white)
-            }
-            .frame(width: 52, height: 52)
-            .accessibilityHidden(true)
+            face(of: model.primaryAccount, context: .custom(52))
+                .frame(width: 52, height: 52)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(model.card?.displayName ?? "")
@@ -141,14 +136,17 @@ struct ContactCardDetailSheet: View {
     // MARK: - Sur Meeshy
 
     private func meeshySection(_ account: PublicContactAccount) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let showsFace = model.sectionShowsFace(for: account)
+        return VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {
                 banner(account)
-                MeeshyAvatar(name: account.displayName, context: .storyViewer, accentColor: accentHex, avatarURL: account.avatarUrl, isDark: colorScheme == .dark)
-                    .padding(MeeshySpacing.xxs)
-                    .background(Circle().fill(.ultraThinMaterial))
-                    .offset(x: 12, y: 22)
-                    .accessibilityHidden(true)
+                if showsFace {
+                    face(of: account, context: .storyViewer)
+                        .padding(MeeshySpacing.xxs)
+                        .background(Circle().fill(.ultraThinMaterial))
+                        .offset(x: 12, y: 22)
+                        .accessibilityHidden(true)
+                }
             }
             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "contact-card.on-meeshy", defaultValue: "Sur Meeshy", bundle: .main))
@@ -174,7 +172,7 @@ struct ContactCardDetailSheet: View {
                     .padding(.top, MeeshySpacing.xsPlus)
             }
             .padding(.horizontal, MeeshySpacing.md)
-            .padding(.top, MeeshySpacing.xxxl)
+            .padding(.top, showsFace ? MeeshySpacing.xxxl : MeeshySpacing.md)
             .padding(.bottom, MeeshySpacing.md)
             .accessibilityElement(children: .contain)
         }
@@ -238,9 +236,11 @@ struct ContactCardDetailSheet: View {
         }
     }
 
-    static func initials(_ name: String) -> String {
-        let letters = MeeshyAvatar.initials(for: name)
-        return letters.isEmpty ? "?" : letters
+    /// Le visage d'un compte, celui de la bulle : sa photo, sinon ses initiales ;
+    /// sans compte associé, les initiales du nom de la carte. Site unique de
+    /// l'en-tête et des sections.
+    private func face(of account: PublicContactAccount?, context: AvatarContext) -> some View {
+        MeeshyAvatar(name: account?.displayName ?? model.card?.displayName ?? "", context: context, accentColor: accentHex, avatarURL: account?.avatarUrl, isDark: colorScheme == .dark)
     }
 }
 

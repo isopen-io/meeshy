@@ -10,9 +10,9 @@ name: CI
 
 on:
   push:
-    branches: [main, dev, develop]
+    branches: [main, dev]
   pull_request:
-    branches: [main, dev, develop]
+    branches: [main, dev]
   workflow_dispatch:
     inputs:
       package_manager:
@@ -116,19 +116,24 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # CHANGES: ce que la poussée touche (#7711)
-  # Les quatre jobs du traducteur ne tournent que si un fichier qu'ils lisent
-  # a changé ; tout le reste tourne toujours. La règle et ses cas vivent dans
-  # `scripts/ci-affected.mjs` (en cas de doute, tout tourne).
+  # CHANGES: ce que la poussée touche (#7711, #12531)
+  # Quatre zones ne tournent que si un fichier qu'elles lisent a changé : les
+  # quatre jobs du traducteur, la coque Android, les cadres de gloire et les
+  # gardes navigateur du web. Tout le reste tourne toujours. La règle et ses cas
+  # vivent dans `scripts/ci-affected.mjs` (en cas de doute, tout tourne).
   # ===========================================================================
   changes:
-    name: Changes
+    name: Zones touchées
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
       translator: ${{ steps.affected.outputs.translator }}
       shell_android: ${{ steps.affected.outputs.shell_android }}
       glory_frames: ${{ steps.affected.outputs.glory_frames }}
+      web_navigateur: ${{ steps.affected.outputs.web_navigateur }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -139,11 +144,43 @@ jobs:
       - name: Self-test
         run: node scripts/ci-affected.mjs --self-test
 
+      # La base de comparaison d'une POUSSÉE est le dernier run VERT de ce workflow sur
+      # cette branche, pas la poussée précédente : une poussée évincée par la suivante,
+      # ou un run resté rouge, emporterait sinon son diff avec lui et une zone serait
+      # sautée à tort. Même résolveur que `docker.yml` (#6551). Tant que la branche est
+      # rouge, la base recule et davantage de zones tournent : sûr par construction.
+      # `--event push` écarte les runs de PR, qui ont testé un commit de fusion.
+      # Le résolveur ne reçoit JAMAIS `github.event.before` : son repli sur la poussée
+      # précédente, juste pour une image, ferait ici sauter une zone sans preuve. Relevé
+      # en échec, aucun vert connu ou SHA disparu de l'historique : aucune base, tout tourne.
+      - name: Dernier run vert de ce workflow sur cette branche
+        id: dernier_vert
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if SHA=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch "$GITHUB_REF_NAME" \
+            --event push --status success --limit 1 --json headSha --jq '.[0].headSha // empty'); then
+            [ -n "$SHA" ] || echo "::notice title=Zones touchées::aucun run vert connu sur $GITHUB_REF_NAME, tout tourne."
+          else
+            SHA=""
+            echo "::warning title=Zones touchées::relevé du dernier run vert impossible, tout tourne."
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Base de comparaison
+        id: base
+        if: github.event_name == 'push'
+        env:
+          LAST_SUCCESSFUL_SHA: ${{ steps.dernier_vert.outputs.sha }}
+        run: |
+          node scripts/resolve-docker-detect-base.mjs | tee -a "$GITHUB_OUTPUT"
+
       - name: Detect affected domains
         id: affected
         env:
           CI_EVENT: ${{ github.event_name }}
-          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_BASE: ${{ github.event.pull_request.base.sha || steps.base.outputs.base }}
           CI_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/ci-affected.mjs >> "$GITHUB_OUTPUT"
 
@@ -151,7 +188,7 @@ jobs:
   # QUALITY: Lint & Type-check (Fast feedback)
   # ===========================================================================
   quality:
-    name: Quality (${{ github.event.inputs.package_manager || 'bun' }})
+    name: Qualité TS (${{ github.event.inputs.package_manager || 'bun' }})
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -368,19 +405,34 @@ jobs:
       - name: any debt ratchet (gateway + shared + web)
         run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
 
-      # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
-      # sans appelant se compte comme un lecteur : un décideur qui cherche qui
-      # consomme un champ voit la déclaration `case foo(...)` /
-      # `foo: '/chemin'` et GARDE, alors que rien ne l'appelle jamais. Les
-      # deux catalogues (`packages/MeeshySDK/.../Networking/Endpoints/*.swift`,
-      # `packages/shared/api/endpoints.ts`) sont GÉNÉRÉS depuis
-      # `services/gateway/route-manifest.json` — un marqueur posé à la main
-      # sur une entrée y serait écrasé (ou rejeté par le cliquet de
-      # régénération TS) à la prochaine régénération. Ces deux cliquets à deux
-      # sens gardent donc le compte de dette à CÔTÉ des catalogues plutôt que
-      # dedans, sur le modèle du ratchet de types ci-dessus.
-      - name: Swift catalog dead-entries ratchet
-        run: node scripts/check-swift-catalog-dead-entries.mjs --self-test && node scripts/check-swift-catalog-dead-entries.mjs
+      # #10385, #11441 — le runner des opérations serveur : liste blanche, délais,
+      # demandes refusées, et la publication des conteneurs de SON environnement
+      # (étiquette revérifiée, aucun secret, sous le plafond de la passerelle),
+      # confrontée au schéma partagé par bun. `docker` et `systemctl` sont des doubles.
+      - name: Ops runner witness
+        run: node --test infrastructure/scripts/ops-runner/meeshy-ops-runner.test.mjs
+
+  # ===========================================================================
+  # GARDES DU DÉPÔT : des cliquets purs, sans installation ni build
+  # ===========================================================================
+  # Une garde juge là où vivent ses entrées. Celles-ci lisent le DÉPÔT (workflows,
+  # compose, Makefile, catalogues) et rien de ce que `quality` construit : les
+  # sortir de `quality` fait qu'un cliquet rouge ne saute plus aucun « Tests · »
+  # (ils dépendent de `quality`, pas de ce job), alors que « Verdict CI » rougit
+  # quand même. `quality` ne garde que ce qui rend les tests sans objet quand il
+  # échoue : installation, build de shared, lint, types, jetons web, dette `any`.
+  gardes-depot:
+    name: Gardes du dépôt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: TS catalog dead-entries ratchet
         run: node scripts/check-ts-catalog-dead-entries.mjs --self-test && node scripts/check-ts-catalog-dead-entries.mjs
@@ -390,19 +442,6 @@ jobs:
       # littérale (348 lignes → 0), et cette étape l'interdit.
       - name: web API literal prohibition
         run: node scripts/check-web-api-literals.mjs --self-test && node scripts/check-web-api-literals.mjs
-
-      # #3678 — la règle d'accent (CLAUDE.md § « Conversation Accent Color »)
-      # veut qu'un composant lié au contexte d'une conversation utilise
-      # `accentColor`/`colorPalette`, jamais une couleur en dur. Le golden
-      # partagé qui PROUVE le calcul existe déjà (accent.vectors.json, joué
-      # par les 3 clients) ; ce cliquet ferme l'autre moitié du critère de
-      # fin de #3678 en empêchant le CONTOURNEMENT (`Color(hex:)` hors
-      # `Theme/`) de grossir en silence.
-      - name: Accent color hardcoding ratchet
-        run: node scripts/check-accent-color-hardcoding.mjs --self-test && node scripts/check-accent-color-hardcoding.mjs
-
-      - name: Law literals guard
-        run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
 
       # L'invariant porte sur le `bun.lock` de la RACINE et sur tous les
       # manifestes que la racine déclare comme workspaces : sa surface est le
@@ -492,6 +531,12 @@ jobs:
       - name: CI summary coverage guard
         run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
 
+      - name: CI verdict witness
+        run: node scripts/ci/needs-verdict.mjs --self-test
+
+      - name: Web navigator zone read-set guard
+        run: node scripts/ci/check-web-navigateur-read-set.mjs --self-test && node scripts/ci/check-web-navigateur-read-set.mjs
+
       # Pas de mode « balayage du dépôt » ici : `resolve-docker-detect-base.mjs`
       # est une fonction de décision PURE (docker.yml § job `detect`, #6551),
       # invoquée à l'exécution avec le SHA du dernier run réussi et
@@ -548,19 +593,6 @@ jobs:
       - name: Tracked symlinks guard
         run: node scripts/check-tracked-symlinks.mjs --self-test && node scripts/check-tracked-symlinks.mjs
 
-      # #6545 — le run iOS déclenché sur `promote/main-39224d5fc9` est tombé
-      # avant toute compilation : `xcodebuild -resolvePackageDependencies`
-      # échouait quatre fois avec la MÊME erreur (« already exists in file
-      # system », une entrée du cache d'artefacts SwiftPM DU RUNNER), et la
-      # boucle de reprise — qui n'attendait et rejouait que pour une panne
-      # réseau — ne pouvait pas en sortir. La logique a quitté `ios.yml` pour
-      # `scripts/ci/resolve-spm-packages.sh`, rejouable ici (faux
-      # `xcodebuild`/`sleep` sur PATH) sans macOS : collision purgée sans
-      # dormir, panne réseau toujours retentée avec attente, échec réel
-      # toujours définitif après 4 essais.
-      - name: iOS SPM resolve retry guard
-        run: node scripts/check-ios-spm-resolve-retry.mjs --self-test && node scripts/check-ios-spm-resolve-retry.mjs
-
       # #4544 — le validateur de déploiement ne tient plus de liste : il DÉRIVE
       # ses variables exigées de la garde ci-dessus. Un témoin qui comparerait
       # les deux listes ne prouverait rien, deux copies coïncidant toujours le
@@ -598,20 +630,6 @@ jobs:
       - name: Nightly backup verdict witness
         run: node --test infrastructure/scripts/production-backup/meeshy-nightly-backup.test.mjs
 
-      # #10385, #11441 — le runner des opérations serveur : liste blanche, délais,
-      # demandes refusées, et la publication des conteneurs de SON environnement
-      # (étiquette revérifiée, aucun secret, sous le plafond de la passerelle),
-      # confrontée au schéma partagé par bun. `docker` et `systemctl` sont des doubles.
-      - name: Ops runner witness
-        run: node --test infrastructure/scripts/ops-runner/meeshy-ops-runner.test.mjs
-
-      # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
-      # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
-      # ~15 min et meurt à la première erreur, alors que ce garde les liste
-      # toutes avant même que le job iOS ne démarre.
-      - name: ViewBuilder statement-chaining guard
-        run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
-
   # ===========================================================================
   # CACHE INSTITUTIONNEL: les cinq pages restent ELLES-MÊMES à la deuxième visite
   # ===========================================================================
@@ -630,10 +648,11 @@ jobs:
   # la mesure de première peinture (elle n'installe le service worker qu'à la
   # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
   # visite : c'est exactement ce que ce job fait.
-  institutionnel-v3:
-    name: Peaux web (institutionnel, Lentille, états et virtualisation du fil)
+  web-navigateur:
+    name: Web · gardes navigateur (Playwright)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.web_navigateur == 'true'
     # #8580 — 53 gates Playwright en série : le job franchissait ses 25 min
     # (24 min 23 s puis annulé à 25 min 15 s sur #8593) dès que les gates
     # d'appel ont gagné leurs témoins. Le plafond suit la charge mesurée.
@@ -1353,7 +1372,7 @@ jobs:
   # la poussée touche ce que le pilote LIT (`shell_android`,
   # `scripts/ci-affected.mjs`). iOS reste local (runner macOS, #5657).
   shell-android:
-    name: Coque Android (apps/web)
+    name: Android coque · APK de recette
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.shell_android == 'true'
@@ -1460,7 +1479,7 @@ jobs:
   # Chromium ; seul ce job lit `docs/product/cadres-de-gloire/` (domaine
   # `glory_frames`, `scripts/ci-affected.mjs`), il n'installe rien du monorepo.
   glory-frames:
-    name: Cadres de gloire (empiètement)
+    name: Cadres de gloire · empiètement
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.glory_frames == 'true'
@@ -1583,7 +1602,7 @@ jobs:
   # runners lents franchissaient 25 min sans aucun échec. Filet en attendant
   # l'accélération de ts-jest (isolatedModules, mesurée 584 → 268 s en local).
   test:
-    name: Test ${{ matrix.package.name }}
+    name: Tests · ${{ matrix.package.name }}
     runs-on: ubuntu-latest
     needs: quality
     timeout-minutes: ${{ matrix.package.timeoutMinutes }}
@@ -1743,7 +1762,7 @@ jobs:
   # jobs dédiés.
   # ===========================================================================
   test-python:
-    name: Test Python (translator)
+    name: Traducteur · tests Python
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -1884,7 +1903,7 @@ jobs:
   # Generates audio samples and uploads as artifacts
   # ===========================================================================
   test-audio-pipeline:
-    name: Audio Pipeline Tests
+    name: Traducteur · pipeline audio
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -2037,7 +2056,7 @@ jobs:
   # Tests UnifiedTTSService, TranscriptionService, and E2E voice pipeline
   # ===========================================================================
   test-tts-stt:
-    name: TTS/STT Integration
+    name: Traducteur · TTS et STT
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -2202,7 +2221,7 @@ jobs:
   # Complete coverage for Voice API endpoints and handlers
   # ===========================================================================
   test-voice-api:
-    name: Voice API Tests
+    name: Traducteur · API vocale
     runs-on: ubuntu-latest
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
@@ -2359,7 +2378,7 @@ jobs:
   # Comprehensive pipeline tests matching Python XTTS test script
   # ===========================================================================
   test-voice-e2e:
-    name: Voice E2E Benchmark
+    name: Traducteur · banc vocal de bout en bout
     runs-on: ubuntu-latest
     needs: [quality, test-voice-api]
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[e2e]')
@@ -2430,7 +2449,7 @@ jobs:
   # SECURITY: Vulnerability Scan
   # ===========================================================================
   security:
-    name: Security
+    name: Sécurité · Trivy du dépôt
     runs-on: ubuntu-latest
     # Sans `security-events: write`, l'envoi du SARIF échoue sur les pushes de
     # dev (« Resource not accessible by integration », masqué par
@@ -2465,7 +2484,7 @@ jobs:
   # PRISMA: Validate schema and check migrations
   # ===========================================================================
   prisma:
-    name: Prisma
+    name: Prisma · schéma et client
     runs-on: ubuntu-latest
     needs: quality
     steps:
@@ -2544,7 +2563,7 @@ jobs:
   # BUILD: Verify builds work (like in Dockerfiles)
   # ===========================================================================
   build:
-    name: Build (${{ github.event.inputs.package_manager || 'bun' }})
+    name: Build · shared, passerelle, agent (${{ github.event.inputs.package_manager || 'bun' }})
     runs-on: ubuntu-latest
     needs: [quality, test, prisma]
     steps:
@@ -2654,30 +2673,41 @@ jobs:
   # SUMMARY
   # ===========================================================================
   summary:
-    name: Summary
+    name: Verdict CI
     runs-on: ubuntu-latest
-    needs: [changes, quality, institutionnel-v3, shell-android, glory-frames, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [changes, quality, gardes-depot, web-navigateur, shell-android, glory-frames, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
-      - name: Pipeline Summary
+      - name: Checkout (le script du verdict seul)
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/ci
+          fetch-depth: 1
+
+      - name: Tableau
         run: |
-          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## CI — verdict" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package Manager:** ${{ env.PACKAGE_MANAGER }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Changes (translator: ${{ needs.changes.outputs.translator }}) | ${{ needs.changes.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Peaux web (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Coque Android (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Zones touchées (translator: ${{ needs.changes.outputs.translator }}) | ${{ needs.changes.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Qualité TS | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gardes du dépôt | ${{ needs.gardes-depot.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web · gardes navigateur (web_navigateur: ${{ needs.changes.outputs.web_navigateur }}) | ${{ needs.web-navigateur.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android coque (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cadres de gloire (glory_frames: ${{ needs.changes.outputs.glory_frames }}) | ${{ needs.glory-frames.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| TTS/STT Integration | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Voice API Tests | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Voice E2E Benchmark | ${{ needs.test-voice-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Prisma | ${{ needs.prisma.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests · paquets Node | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · tests Python | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · pipeline audio | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · TTS et STT | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · API vocale | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · banc vocal de bout en bout | ${{ needs.test-voice-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prisma · schéma et client | ${{ needs.prisma.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sécurité · Trivy du dépôt | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build · shared, passerelle, agent | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+      - name: Verdict
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/ci/needs-verdict.mjs

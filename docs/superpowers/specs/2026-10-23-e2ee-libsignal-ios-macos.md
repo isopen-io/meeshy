@@ -3,7 +3,7 @@
 **Date** : 2026-10-23 · **Statut** : PROPOSÉE (conception, aucune ligne de production écrite)
 **Directive porteur 2026-10-23** : « un E2EE efficace, commutable et opérationnel sur iOS et macOS ; masquer le bouton sauf pour les admins de la plateforme ».
 **Milestone** : « Chiffrement de bout en bout vérifiable (libsignal) » (#28).
-**Cadre** : #9224 (E2EE optionnel par conversation), #9229 (fail-closed), #9223 (rétrocompatibilité, staging d'abord), #12517 (activation réservée aux administrateurs tant que la recette n'est pas verte).
+**Cadre** : #9224 (E2EE optionnel par conversation), #9229 (fail-closed), #9223 (rétrocompatibilité, staging d'abord), #12517 (activation réservée à un rôle de plateforme tant que la recette n'est pas verte), #12588 (rôle minimal ANALYST depuis le 2026-10-24).
 **Décisions liées** : `packages/MeeshySDK/decisions/2026-10-23-l-e2ee-ios-et-macos-repose-sur-libsignal-par-appareil.md`, `services/gateway/decisions/2026-10-23-la-passerelle-est-un-annuaire-de-cles-par-appareil-et-un-relais-d-enveloppes.md`.
 
 Ce document ne déclare aucune garantie acquise. Ce que libsignal garantit est l'objet de ses propres analyses publiées. L'intégration que décrit ce document (stockage des clés, routage des enveloppes, approbation des appareils, pièces jointes, extension de notification) n'a reçu **aucune revue externe**. Une revue cryptographique tierce est requise avant la production (#3710), et l'usage d'une bibliothèque sous AGPL-3.0 dans l'application publiée exige un **avis juridique signé** (#11548).
@@ -231,8 +231,8 @@ model MessageEnvelope {
 
 ### 5.3 Qui peut basculer
 
-- La politique « administrateurs de la plateforme seulement » (#12517, ADMIN et BIGBOSS) **reste** tant que la recette à deux appareils (§ 8) n'est pas verte.
-- Elle se relâche en **un point** : la passerelle sert `canToggleEncryption` dans `GET /conversations/:id/encryption`, calculé par une seule fonction de politique (variable `E2EE_TOGGLE_POLICY = admins | members`, défaut `admins`). iOS rend le bouton si et seulement si `canToggleEncryption` ; `ConversationEncryptionActivationPolicy` devient la lecture de ce champ (repli : rôle ADMIN/BIGBOSS si le champ manque, pour les réponses d'une passerelle plus ancienne). La garde 403 de la passerelle fait foi.
+- La politique « rôle de plateforme ANALYST au minimum » (#12517 pour ADMIN et BIGBOSS, élargie à MODERATOR, AUDIT et ANALYST par directives porteur du 2026-10-24, #12588 ; USER refusé, appartenance à la conversation toujours exigée) **reste** tant que la recette à deux appareils (§ 8) n'est pas verte.
+- Elle se relâche en **un point** : la passerelle sert `canToggleEncryption` dans `GET /conversations/:id/encryption`, calculé par une seule fonction de politique (variable `E2EE_TOGGLE_POLICY = admins | members`, défaut `admins`). iOS rend le bouton si et seulement si `canToggleEncryption` ; `ConversationEncryptionActivationPolicy` devient la lecture de ce champ (repli : rôle ANALYST ou supérieur si le champ manque, pour les réponses d'une passerelle plus ancienne). La garde 403 de la passerelle fait foi.
 
 ---
 

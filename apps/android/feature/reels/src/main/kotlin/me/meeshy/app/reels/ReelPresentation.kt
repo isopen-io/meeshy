@@ -1,6 +1,7 @@
 package me.meeshy.app.reels
 
 import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.displayContent
@@ -73,7 +74,7 @@ object ReelBuilder {
                     authorId = post.author?.id,
                     authorName = (post.author?.displayName ?: post.author?.username)
                         ?.takeIf { it.isNotBlank() },
-                    authorAvatarUrl = post.author?.avatar?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    authorAvatarUrl = resolveServedImageUrl(post.author?.avatar, mediaBaseUrl),
                     caption = (preferences?.let(post::displayContent) ?: post.content)?.takeIf { it.isNotBlank() },
                     isCaptionTranslated = preferences?.let(post::isTranslated) == true,
                     likeCount = post.likeCount ?: 0,

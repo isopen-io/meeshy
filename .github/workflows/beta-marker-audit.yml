@@ -1,10 +1,10 @@
-name: Beta marker conflict audit
+name: Veille · marqueurs bêta et saut de CI sur main
 
 # Témoin périodique du piège documenté par l'issue #6351 : un commit poussé
 # sur `main` qui porte à la fois un marqueur (beta) et un marqueur de saut CI
 # ([skip ci], [ci skip], [no ci], [skip actions], [actions skip],
 # skip-checks:true) fait supprimer par GitHub TOUS les workflows du push qui
-# le porte — y compris « iOS (beta) → Xcode Cloud »
+# le porte — y compris « iOS · bêta Xcode Cloud »
 # (.github/workflows/ios-beta-trigger.yml), qui ne peut alors pas se voir
 # lui-même démarrer, ni se voir manquer.
 #

@@ -147,6 +147,7 @@ private fun StorySendTargetList(
                     size = 40.dp,
                     containerColor = hexColor(target.accentHex).takeIf { it != Color.Unspecified }
                         ?: hexColor(accentHex),
+                    imageUrl = target.avatar,
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(

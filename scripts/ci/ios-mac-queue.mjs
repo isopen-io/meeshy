@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// File d'attente des suites iOS complètes [#9751]
+// File d'attente des suites iOS et SDK complètes [#9751]
 //
 // L'org tourne sur l'offre Free : 5 jobs macOS simultanés pour tout le compte.
 // Une suite complète en prend 5 à elle seule (build + 4 tranches, #9692). Deux
@@ -13,8 +13,8 @@
 // ubuntu qui ne coûte aucune place Mac : il attend qu'aucun run iOS PLUS
 // ANCIEN n'ait de suite complète en cours ou en attente.
 //
-// Une suite complète se reconnaît à ses jobs : la file elle-même, le build des
-// produits de test, ou une tranche. Les runs de compilation seule n'en ont
+// Une suite complète (app iOS ou SDK) se reconnaît à ses jobs : la file elle-même,
+// le build des produits de test, ou une tranche. Les runs de compilation seule n'en ont
 // aucun et ne bloquent personne.
 //
 // La file ne bloque jamais la CI : une erreur d'API ou une attente qui passe
@@ -24,7 +24,8 @@
 //   node scripts/ci/ios-mac-queue.mjs [--poll-seconds 90] [--max-minutes 150]
 
 export const QUEUE_JOB = "File d'attente Mac";
-const FULL_SUITE_JOB = /^(File d'attente Mac|Build app \(produits de test\)|Tests unitaires — tranche \d+)$/;
+export const QUEUE_WORKFLOWS = ['ios.yml', 'sdk-tests.yml'];
+const FULL_SUITE_JOB = /^(File d'attente Mac|Build app \(produits de test\)|Tests unitaires — tranche \d+|Build SDK \(produits de test\)|Tests SDK — tranche \d+)$/;
 
 export const holdsMac = (jobs) =>
   jobs.some((job) => job.status !== 'completed' && FULL_SUITE_JOB.test(job.name));
@@ -48,8 +49,10 @@ const api = async (path) => {
   return response.json();
 };
 
+// Les suites iOS ET SDK se disputent les mêmes cinq Mac : une seule file, ordonnée par l'identifiant de run.
 const unfinishedRuns = async () =>
-  (await api('/actions/workflows/ios.yml/runs?per_page=50')).workflow_runs
+  (await Promise.all(QUEUE_WORKFLOWS.map((workflow) => api(`/actions/workflows/${workflow}/runs?per_page=50`))))
+    .flatMap((page) => page.workflow_runs)
     .filter((run) => run.status !== 'completed')
     .map((run) => ({ id: run.id, status: run.status }));
 

@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.displayedAvatar
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,6 +55,7 @@ internal fun ConversationFlatRow(
             storyRing = model.storyRing,
             moodEmoji = model.moodEmoji,
             here = model.here,
+            imageUrl = model.conversation.displayedAvatar(model.currentUserId),
         )
         Column(
             modifier = Modifier.weight(1f),

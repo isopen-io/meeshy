@@ -1,7 +1,13 @@
-import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { PRESENCE_HERE_HEX, PRESENCE_HEX } from '@meeshy/shared/utils/user-presence';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { Avatar } from './avatar';
 
@@ -55,17 +61,19 @@ describe('Avatar — pastille de présence', () => {
  */
 describe('Avatar — le portrait (`src`)', () => {
   /**
-   * SANS ÉTAT LOCAL (revue-correction #5893) — le dégradé d'initiales reste
-   * TOUJOURS monté, la photo le RECOUVRE : c'est ce qui permet à `Avatar`
-   * de rester appelable comme une fonction PURE par
-   * `living-summary.test.tsx#expand`, sans dispatcher de hooks.
+   * UN SEUL VISAGE (#12571) — le dégradé d'initiales n'est qu'un PLACEHOLDER :
+   * il est monté tant que la photo charge, puis la règle de frère d'`avatar.css`
+   * le masque dès que l'`<img>` porte `data-loaded`. Il reste dans l'arbre pour
+   * que `Avatar` demeure appelable comme une fonction PURE
+   * (`living-summary.test.tsx#expand`), sans dispatcher de hooks.
    */
-  test('src fourni ⇒ une <img> lazy POSÉE SUR le dégradé d’initiales, jamais à sa place', () => {
+  test('src fourni ⇒ une <img> lazy AVANT le placeholder d’initiales, qui ne sert que le temps du chargement', () => {
     const html = renderToStaticMarkup(<Avatar initials="LD" color="#4F46E5" size={44} src="https://cdn.example/lea.jpg" name="Léa Dupont" />);
     expect(html).toContain('<img');
     expect(html).toContain('src="https://cdn.example/lea.jpg"');
     expect(html).toContain('loading="lazy"');
     expect(html).toContain('linear-gradient');
+    expect(html.indexOf('<img')).toBeLessThan(html.indexOf('data-avatar-initials'));
   });
 
   test('src absent ⇒ le dégradé d’initiales SEUL, comme avant ce lot', () => {
@@ -204,5 +212,103 @@ describe('Avatar — le pair est DANS la conversation (#8892)', () => {
     const html = renderToStaticMarkup(<Avatar initials="KM" color="#4F46E5" size={44} presence="online" here={false} />);
     expect(html).toContain(PRESENCE_HEX.success);
     expect(html).not.toContain(PRESENCE_HERE_HEX);
+  });
+});
+
+
+/**
+ * **UN SEUL VISAGE, ET LE NOM ACCESSIBLE TOUJOURS LÀ** (#12571) — des
+ * interactions réelles (`load`, `error`, changement de `src`) : le rendu
+ * statique ne les rejoue pas.
+ */
+describe('Avatar — la photo REMPLACE les initiales, elle ne les recouvre pas (#12571)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  let cleanup: (() => void) | null = null;
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+  });
+
+  const mount = (src: string, name: string | null = 'Léa Dupont') => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const draw = (next: string) =>
+      act(() => root.render(<Avatar initials="LD" color="#4F46E5" size={44} src={next} {...(name === null ? {} : { name })} />));
+    draw(src);
+    cleanup = () => {
+      act(() => root.unmount());
+      container.remove();
+    };
+    return { container, draw };
+  };
+  const img = (container: HTMLElement) => container.querySelector('img');
+  const fire = (target: Element | null, type: 'load' | 'error') => act(() => void target?.dispatchEvent(new Event(type)));
+
+  test('la photo chargée porte `data-loaded` : la règle de frère masque alors les initiales', () => {
+    const { container } = mount('https://cdn.example/a.png');
+    expect(img(container)?.hasAttribute('data-loaded')).toBe(false);
+    expect(container.querySelector('[data-avatar-initials]')).not.toBeNull();
+    fire(img(container), 'load');
+    expect(img(container)?.hasAttribute('data-loaded')).toBe(true);
+  });
+
+  test('avatar.css masque les initiales QUAND la photo est chargée — la règle de frère existe', () => {
+    const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/img\[data-loaded\]\s*~\s*\[data-avatar-initials\]\s*\{[^}]*visibility:\s*hidden/);
+  });
+
+  test('une photo en échec rend les initiales et le nom accessible reste là', () => {
+    const { container } = mount('https://cdn.example/a.png');
+    fire(img(container), 'error');
+    expect(img(container)?.style.display).toBe('none');
+    expect(container.querySelector('[data-avatar-initials]')?.textContent).toBe('LD');
+    const root = container.querySelector('.avatar-root');
+    expect(root?.getAttribute('role')).toBe('img');
+    expect(root?.getAttribute('aria-label')).toBe('Léa Dupont');
+  });
+
+  test('le nom accessible est porté par la racine AVANT, PENDANT et APRÈS le chargement — jamais deux fois', () => {
+    const { container } = mount('https://cdn.example/a.png');
+    expect(container.querySelector('.avatar-root')?.getAttribute('aria-label')).toBe('Léa Dupont');
+    fire(img(container), 'load');
+    expect(container.querySelector('.avatar-root')?.getAttribute('aria-label')).toBe('Léa Dupont');
+    expect(img(container)?.getAttribute('alt')).toBe('');
+    expect(container.querySelector('[data-avatar-initials]')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  test('un avatar sans nom reste muet pour le lecteur d’écran', () => {
+    const { container } = mount('https://cdn.example/a.png', null);
+    expect(container.querySelector('.avatar-root')?.hasAttribute('aria-label')).toBe(false);
+    expect(container.querySelector('.avatar-root')?.getAttribute('role')).toBeNull();
+  });
+
+  test('après un échec, une NOUVELLE photo s’affiche : le `display:none` posé à la main ne survit pas au changement de src', () => {
+    const { container, draw } = mount('https://cdn.example/a.png');
+    fire(img(container), 'error');
+    expect(img(container)?.style.display).toBe('none');
+    draw('https://cdn.example/b.png');
+    const next = img(container);
+    expect(next?.getAttribute('src')).toBe('https://cdn.example/b.png');
+    expect(next?.style.display).not.toBe('none');
+    expect(next?.hasAttribute('data-loaded')).toBe(false);
+  });
+
+  test('une photo chargée puis remplacée repart du placeholder : `data-loaded` ne se transmet pas à la suivante', () => {
+    const { container, draw } = mount('https://cdn.example/a.png');
+    fire(img(container), 'load');
+    draw('https://cdn.example/b.png');
+    expect(img(container)?.getAttribute('src')).toBe('https://cdn.example/b.png');
+    expect(img(container)?.hasAttribute('data-loaded')).toBe(false);
   });
 });

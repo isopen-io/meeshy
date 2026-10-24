@@ -42,7 +42,7 @@ struct ConversationInfoSecurityRow: View {
     }
 
     // Tête-à-tête : l'entrée ouvre la feuille de détail ; l'activation n'y est
-    // proposée qu'à un administrateur de la plateforme (#12517).
+    // proposée qu'à un rôle de plateforme ANALYST ou supérieur (#12517, #12588).
     private var directEntry: some View {
         Button {
             HapticFeedback.light()

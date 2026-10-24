@@ -71,6 +71,7 @@ const self = (over: Partial<StoryRailSelfEntry> = {}): StoryRailSelfEntry => ({
   hasAnyStory: false,
   moodEmoji: undefined,
   avatar: undefined,
+  displayName: undefined,
   ...over,
 });
 
@@ -387,5 +388,18 @@ describe('où mènent les deux portes', () => {
       self: self({ hasActiveStory: false, hasAnyStory: true }),
     });
     expect(el.querySelector('[data-story-self-open]')?.getAttribute('href')).toBe('/stories/mine');
+  });
+});
+
+describe('ma pastille sans photo porte MES initiales (#12571)', () => {
+  test('les initiales du nom de session, pas celles du libellé « ma story »', () => {
+    const el = mount({ variant: 'grande', groups: [], self: self({ displayName: 'Théo (foot)' }) });
+    const initiales = el.querySelector('li[data-story-self] [data-avatar-initials]');
+    expect(initiales?.textContent).toBe('TF');
+  });
+
+  test('sans nom connu : « ? », jamais les lettres du libellé', () => {
+    const el = mount({ variant: 'grande', groups: [], self: self() });
+    expect(el.querySelector('li[data-story-self] [data-avatar-initials]')?.textContent).toBe('?');
   });
 });

@@ -386,7 +386,7 @@
     "Meeshy::BubbleStandardLayout": 1663,
     "Meeshy::CallFrameRenderer": 2583,
     "Meeshy::CallManager": 6555,
-    "Meeshy::CallView": 3374,
+    "Meeshy::CallView": 3317,
     "Meeshy::ComposerCaptureSession": 1638,
     "Meeshy::ConversationListView": 1944,
     "Meeshy::ConversationListViewModel": 2365,

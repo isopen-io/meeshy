@@ -79,6 +79,7 @@ fun MeeshyApp(
     val extensions = hiltViewModel<AppExtensionsViewModel>().extensions
     val authState by authViewModel.state.collectAsStateWithLifecycle()
     val callState by callViewModel.state.collectAsStateWithLifecycle()
+    val callPeerVisual by callViewModel.peerVisual.collectAsStateWithLifecycle()
 
     LaunchedEffect(authState.isAuthenticated) {
         chromeViewModel.warmUpIfAuthenticated(authState.isAuthenticated)
@@ -161,6 +162,7 @@ fun MeeshyApp(
                     if (showsCallPill) {
                         CallPill(
                             state = callState,
+                            peerAvatarUrl = callPeerVisual.avatarUrl,
                             onClick = {
                                 navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
                                     launchSingleTop = true

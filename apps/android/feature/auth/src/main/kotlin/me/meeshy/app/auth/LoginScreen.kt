@@ -387,7 +387,7 @@ private fun SelectedAccountForm(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.registration_back))
             }
             Spacer(modifier = Modifier.width(MeeshySpacing.sm))
-            MeeshyAvatar(name = account.shortName, size = 40.dp)
+            MeeshyAvatar(name = account.shortName, size = 40.dp, imageUrl = account.avatarUrl)
             Column(modifier = Modifier.padding(start = MeeshySpacing.md)) {
                 Text(
                     text = account.shortName,

@@ -153,6 +153,12 @@ final class ContactCardViewModel: ObservableObject {
     /// Le compte montré dans la bulle : le premier rendu par le serveur.
     var primaryAccount: PublicContactAccount? { accounts.first }
 
+    /// Un visage par personne sur la fiche (#12568) : l'en-tête porte celui du
+    /// compte principal, que sa section « Sur Meeshy » ne répète pas.
+    func sectionShowsFace(for account: PublicContactAccount) -> Bool {
+        account.id != primaryAccount?.id
+    }
+
     func load() async {
         let loaded: VCard?
         if let card {

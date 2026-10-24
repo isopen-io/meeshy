@@ -13,7 +13,8 @@ import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice, AdminSkeleton }
 import { INK, INK2, TONE_COLOR } from '@/components/admin/tone';
 import { shareLinkStateOf } from '@/lib/admin/interpret/enums';
 import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
-import { personInitials, shareLinkLabel } from '@/lib/admin/interpret/labels';
+import { shareLinkLabel } from '@/lib/admin/interpret/labels';
+import { initialsOf } from '@/lib/view/conversation';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { useAdminOpen } from '@/lib/admin/use-admin-open';
@@ -170,7 +171,7 @@ export function AdminAnonymousFiche({
             title={entity.label}
             secondary={translateAdmin(language, 'admin.people.anonymous.kind')}
             avatar={{
-              initials: personInitials(entity.label),
+              initials: initialsOf(entity.label),
               color: 'var(--color-ios-ink-3)',
               src: entity.avatarUrl ?? null,
               ...(entity.presence === undefined ? {} : { presence: entity.presence }),

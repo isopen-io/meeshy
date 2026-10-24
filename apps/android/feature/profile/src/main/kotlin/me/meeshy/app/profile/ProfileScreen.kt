@@ -72,7 +72,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ImageUploadTarget
@@ -213,7 +212,6 @@ fun ProfileScreen(
             // Avatar — completion ring + presence dot when viewing (not editing).
             Box(contentAlignment = Alignment.Center) {
                 val user = state.user
-                val avatarDescription = stringResource(R.string.profile_avatar)
                 if (!state.isEditing) {
                     header?.completionPercent?.let { percent ->
                         ProfileCompletionRing(
@@ -237,18 +235,12 @@ fun ProfileScreen(
                             base
                         }
                     }
-                if (user?.avatar != null) {
-                    AsyncImage(
-                        model = user.avatar,
-                        contentDescription = user.displayName ?: avatarDescription,
-                        modifier = avatarModifier,
-                    )
-                } else {
-                    MeeshyAvatar(
-                        name = user?.displayName ?: user?.username ?: "?",
-                        modifier = avatarModifier,
-                    )
-                }
+                MeeshyAvatar(
+                    name = user?.displayName ?: user?.username ?: "?",
+                    size = 96.dp,
+                    modifier = avatarModifier,
+                    imageUrl = user?.avatar,
+                )
                 if (uploadingAvatar) {
                     Surface(
                         color = MeeshyTheme.tokens.backgroundPrimary.copy(alpha = 0.55f),

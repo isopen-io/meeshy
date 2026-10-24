@@ -2,6 +2,8 @@ package me.meeshy.ui.component
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -24,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -36,8 +39,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.TextUnit
+import coil.ImageLoader
+import coil.decode.DataSource
+import coil.imageLoader
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.avatar.AvatarAccessibilityLabel
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
@@ -87,8 +96,9 @@ public fun meeshyPresenceDotColor(presence: PresenceState?): Color? = when (pres
  * of *which* size/ring/presence a given surface uses (iOS `AvatarContext`) stays
  * app-side.
  *
- * [imageUrl] is the person's photo (iOS `avatarURL:`): it covers the initials once
- * loaded, and the initials stay visible while it loads or if it fails.
+ * [imageUrl] is the person's photo reference (iOS `avatarURL:`), resolved HERE ([AvatarFace]) so no
+ * caller composes an address. ONE face at a time: the initials stand IN PLACE of the photo while it
+ * loads or if it fails, and are removed once it shows — never layered under it (#12569).
  */
 @Composable
 public fun MeeshyAvatar(
@@ -114,6 +124,8 @@ public fun MeeshyAvatar(
     val gradientEnd = secondaryColor ?: containerColor.copy(alpha = 0.6f)
     val dotColor = meeshyPresenceDotColor(presence)
     val dotBorderColor = MeeshyTheme.tokens.backgroundPrimary
+    val apiBaseUrl = LocalMediaBaseUrl.current
+    val face = remember(name, imageUrl, apiBaseUrl) { AvatarFace.resolve(name, imageUrl, apiBaseUrl) }
 
     Box(modifier = modifier.size(boxSize), contentAlignment = Alignment.Center) {
         when (storyRing) {
@@ -128,30 +140,14 @@ public fun MeeshyAvatar(
             StoryRingState.None -> Unit
         }
 
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(containerColor, gradientEnd)))
-                .semantics { contentDescription = name.ifBlank { fallbackDescription } },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = avatarInitials(name),
-                color = contentColor,
-                fontFamily = NunitoFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = textSize,
-            )
-            imageUrl?.takeIf { it.isNotBlank() }?.let { url ->
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(size),
-                )
-            }
-        }
+        AvatarDisc(
+            face = face,
+            size = size,
+            brush = Brush.linearGradient(listOf(containerColor, gradientEnd)),
+            contentColor = contentColor,
+            fontSize = textSize,
+            modifier = Modifier.semantics { contentDescription = name.ifBlank { fallbackDescription } },
+        )
 
         if (!moodEmoji.isNullOrEmpty()) {
             Text(
@@ -210,8 +206,11 @@ public fun MeeshyAvatar(
     enablePulse: Boolean = context.defaultPulse,
     onMoodTap: (() -> Unit)? = null,
     ring: AvatarRingDesign? = null,
+    imageUrl: String? = null,
 ) {
     val reduceMotion = LocalReduceMotion.current
+    val apiBaseUrl = LocalMediaBaseUrl.current
+    val face = remember(name, imageUrl, apiBaseUrl) { AvatarFace.resolve(name, imageUrl, apiBaseUrl) }
     val density = LocalDensity.current
     val size = context.size.dp
     val effectiveRing = if (isUser && context.showsStoryRing) storyRing else StoryRingState.None
@@ -244,22 +243,14 @@ public fun MeeshyAvatar(
                 StoryRingState.Read -> Box(Modifier.size(frame).border(context.ringWidth.dp, containerColor.copy(alpha = 0.3f), CircleShape))
                 StoryRingState.None -> Unit
             }
-            Box(
-                modifier = Modifier
-                    .size(size)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(containerColor, gradientEnd)))
-                    .semantics { contentDescription = spokenName },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = avatarInitials(name),
-                    color = contentColor,
-                    fontFamily = NunitoFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = with(density) { context.initialFont.dp.toSp() },
-                )
-            }
+            AvatarDisc(
+                face = face,
+                size = size,
+                brush = Brush.linearGradient(listOf(containerColor, gradientEnd)),
+                contentColor = contentColor,
+                fontSize = with(density) { context.initialFont.dp.toSp() },
+                modifier = Modifier.semantics { contentDescription = spokenName },
+            )
         }
         AvatarCorner(
             corner = corner,
@@ -272,6 +263,83 @@ public fun MeeshyAvatar(
             modifier = Modifier.align(Alignment.BottomEnd),
         )
     }
+}
+
+/**
+ * Le cercle d'avatar, UN seul visage ([AvatarFace.layer]) : les initiales tiennent la place de la photo
+ * tant qu'elle charge ou si elle échoue (ni spinner, ni « Réessayer »), et sont RETIRÉES dès qu'elle
+ * s'affiche. Une photo déjà en mémoire tient le cercle dès la première image ([AvatarPhotoState.firstFrame]) :
+ * une ligne qui revient à l'écran ne fait pas clignoter ses initiales. La photo remplit le cercle en `Crop` :
+ * une image non carrée ne laisse ni bande de dégradé ni initiales autour d'elle.
+ */
+@Composable
+private fun AvatarDisc(
+    face: AvatarFace,
+    size: Dp,
+    brush: Brush,
+    contentColor: Color,
+    fontSize: TextUnit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val sidePx = with(LocalDensity.current) { size.roundToPx() }
+    val resident = remember(face, sidePx) { face is AvatarFace.Photo && context.imageLoader.holds(face.model, sidePx) }
+    var photoState by remember(face) { mutableStateOf(AvatarPhotoState.firstFrame(resident)) }
+    var warm by remember(face) { mutableStateOf(resident) }
+    val layer = face.layer(photoState)
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(brush),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (layer is AvatarLayer.Initials) {
+            Text(
+                text = layer.text,
+                color = contentColor,
+                fontFamily = NunitoFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = fontSize,
+            )
+        }
+        if (face is AvatarFace.Photo) {
+            val photoAlpha by animateFloatAsState(
+                targetValue = if (photoState == AvatarPhotoState.Success) 1f else 0f,
+                animationSpec = if (warm) snap() else tween(PHOTO_FADE_MILLIS),
+                label = "avatarPhotoFade",
+            )
+            val request = remember(face.model, context) { ImageRequest.Builder(context).data(face.model).build() }
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onState = { state ->
+                    if (state is AsyncImagePainter.State.Success) warm = state.result.dataSource == DataSource.MEMORY_CACHE
+                    photoState = photoState.then(state.toPhotoState())
+                },
+                modifier = Modifier.size(size).alpha(photoAlpha),
+            )
+        }
+    }
+}
+
+/** Le fondu de la photo qui remplace les initiales (iOS : 0,15 s) ; une photo déjà en mémoire s'affiche d'emblée. */
+private const val PHOTO_FADE_MILLIS = 150
+
+/**
+ * La photo est-elle déjà en mémoire à une taille qui couvre le cercle ? Lecture synchrone, sans requête :
+ * une valeur qui couvre les deux côtés est celle que Coil servira sans recharger.
+ */
+private fun ImageLoader.holds(model: String, sidePx: Int): Boolean {
+    val bitmap = memoryCache?.get(MemoryCache.Key(model))?.bitmap ?: return false
+    return bitmap.width >= sidePx && bitmap.height >= sidePx
+}
+
+private fun AsyncImagePainter.State.toPhotoState(): AvatarPhotoState = when (this) {
+    is AsyncImagePainter.State.Success -> AvatarPhotoState.Success
+    is AsyncImagePainter.State.Error -> AvatarPhotoState.Error
+    else -> AvatarPhotoState.Loading
 }
 
 @Composable
