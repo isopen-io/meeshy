@@ -220,11 +220,24 @@ const textField = (record: Record<string, unknown>, key: string): string | undef
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 
+/**
+ * #12822 — une ligne qui porte un TEXTE en clair n'est pas scellée, même avec
+ * un chiffré à côté : avant le chiffrement au repos, l'édition réécrivait
+ * `content` sans toucher `encryptedContent`. Ouvrir le chiffré y ressusciterait
+ * le texte d'AVANT l'édition. Le texte stocké fait foi, sans migration.
+ */
+const carriesStoredText = (row: AtRestReadableRow): boolean =>
+  typeof row.content === 'string' && row.content.length > 0;
+
 export const isSealedAtRest = (row: AtRestReadableRow): boolean =>
   row.isEncrypted === true
   && isServerAtRestMode(row.encryptionMode)
   && typeof row.encryptedContent === 'string'
-  && row.encryptedContent.length > 0;
+  && row.encryptedContent.length > 0
+  && !carriesStoredText(row);
+
+const carriesStaleCiphertext = (row: AtRestReadableRow): boolean =>
+  carriesStoredText(row) && (row.isEncrypted === true || (typeof row.encryptedContent === 'string' && row.encryptedContent.length > 0));
 
 function envelopeOf(row: AtRestReadableRow): AtRestEnvelope | null {
   const metadata = asRecord(row.encryptionMetadata);
@@ -311,6 +324,7 @@ export async function revealAtRest<T extends AtRestReadableRow>(row: T, keyring:
   const translations = 'translations' in row
     ? await revealTranslations(row.translations, conversationId, keyring)
     : undefined;
+  if (carriesStaleCiphertext(row)) return servedClearAtRest(row, String(row.content), translations);
   if (!isSealedAtRest(row)) return translations === undefined ? row : { ...row, translations };
   const envelope = envelopeOf(row);
   if (!envelope) return logUnreadable(row, new ServerAtRestUnreadableError('malformed'));

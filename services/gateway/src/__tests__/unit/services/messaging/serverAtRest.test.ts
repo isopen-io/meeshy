@@ -4,6 +4,7 @@
  * et tout échec (clé absente, clé erronée, ligne déplacée) est EXPLICITE.
  */
 import { describe, it, expect, beforeEach, afterAll } from '@jest/globals';
+import { translationSourceOf } from '../../../../services/messaging/atRestTranslationSource';
 import {
   openBytes,
   readMasterKey,
@@ -329,5 +330,36 @@ describe('une clé qui ne s’ouvre PAS n’est jamais remplacée ; une clé ABS
     await expect(service.sealAtRest({ plaintext: SECRET, conversationId: CONVERSATION, preferredKeyId: lost }))
       .rejects.toMatchObject({ code: SERVER_AT_REST_UNAVAILABLE });
     expect(store.designations.get(CONVERSATION)).toBe(lost);
+  });
+});
+
+describe('une ligne server ÉDITÉE avant le chiffrement au repos (content réécrit, chiffré périmé à côté)', () => {
+  const EDITED = 'message corrigé, code retiré';
+  const editedRow = async (service: EncryptionService): Promise<AtRestReadableRow> =>
+    sealedRow(service, { content: EDITED });
+
+  it('la lecture sert le texte ÉDITÉ et n’ouvre jamais le chiffré d’avant', async () => {
+    const service = withMasterKey(MASTER_A);
+    const served = await revealAtRest(await editedRow(service), service);
+    expect(served).toMatchObject({ content: EDITED, isEncrypted: false, encryptedContent: null, encryptionMetadata: null });
+    expect(JSON.stringify(served)).not.toContain('18 h');
+  });
+
+  it('même sans aucune clé lisible, le texte édité est servi, jamais scellé', async () => {
+    const row = await editedRow(withMasterKey(MASTER_A));
+    const served = await revealAtRest(row, withMasterKey(MASTER_B));
+    expect(served).toMatchObject({ content: EDITED, isEncrypted: false, encryptedContent: null });
+  });
+
+  it('la retraduction lit le texte édité', async () => {
+    const service = withMasterKey(MASTER_A);
+    const source = await translationSourceOf(await editedRow(service), service);
+    expect(source).toMatchObject({ readable: true, row: { content: EDITED } });
+  });
+
+  it('une citation éditée sort aussi éditée', async () => {
+    const service = withMasterKey(MASTER_A);
+    const [served] = await revealAtRestRows([{ ...(await sealedRow(service)), replyTo: await editedRow(service) }], service);
+    expect(served.replyTo).toMatchObject({ content: EDITED, isEncrypted: false });
   });
 });
