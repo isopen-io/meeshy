@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import type { Virtualizer } from '@tanstack/react-virtual';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
@@ -10,6 +12,7 @@ import type { ThreadScene } from '@/lib/reading-mode/scene';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { ARRIVAL_MOTION_MS } from '@/lib/view/arrival-motion';
 
 import { ThreadModes } from './thread-modes';
 
@@ -188,5 +191,31 @@ describe('mon envoi confirmé ne rejoue pas son arrivée', () => {
     const confirmed = { ...messageOf('s-1', sentAt), clientMessageId: 'cid-1' };
     await mounter.rerender(host, view([...OLD, confirmed]));
     expect(arriving(host)).toEqual([]);
+  });
+});
+
+describe('la feuille qui joue l’arrivée', () => {
+  const sheet = readFileSync(new URL('../styles/thread-scene.css', import.meta.url).pathname, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const ruleOf = (selector: string, css: string): string => {
+    const start = css.indexOf(`${selector} {`);
+    return start === -1 ? '' : css.slice(start, css.indexOf('}', start));
+  };
+
+  test('la classe joue une animation dont la durée est celle que l’hôte tient (ARRIVAL_MOTION_MS)', () => {
+    const rule = ruleOf('.thread-row-arrival', sheet);
+    expect(rule).toContain('animation: thread-row-arrive');
+    expect(rule).toContain(`${ARRIVAL_MOTION_MS}ms`);
+  });
+
+  test('« Réduire les animations » coupe l’animation dans la feuille aussi', () => {
+    const reduced = sheet.slice(sheet.indexOf('@media (prefers-reduced-motion: reduce)', sheet.indexOf('@keyframes thread-row-arrive')));
+    expect(ruleOf('.thread-row-arrival', reduced)).toContain('animation: none');
+  });
+
+  test('n’anime que opacity et transform — jamais la géométrie que le virtualiseur mesure', () => {
+    const start = sheet.indexOf('@keyframes thread-row-arrive');
+    const keyframes = sheet.slice(start, sheet.indexOf('@media', start));
+    const properties = [...keyframes.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
+    expect(new Set(properties)).toEqual(new Set(['opacity', 'transform']));
   });
 });

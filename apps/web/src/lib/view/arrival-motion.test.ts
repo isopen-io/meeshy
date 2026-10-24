@@ -38,6 +38,12 @@ describe('animatedArrival — la règle pure', () => {
     expect(animatedArrival({ previous: new Set(), next, now: NOW, reduceMotion: false })).toBe(null);
   });
 
+  test('une fenêtre entièrement neuve (autre conversation, saut lointain) ⇒ premier rendu, aucune animation', () => {
+    const other = [entry('p', 120), entry('q', 60), entry('r', 1)];
+    expect(arrivalCauseOf({ previous: keysOf(HISTORY), next: other, now: NOW })).toBe('first-render');
+    expect(animatedArrival({ previous: keysOf(HISTORY), next: other, now: NOW, reduceMotion: false })).toBe(null);
+  });
+
   test('« Réduire les animations » ⇒ aucune animation', () => {
     const next = [...HISTORY, entry('d', 1)];
     expect(animatedArrival({ previous: keysOf(HISTORY), next, now: NOW, reduceMotion: true })).toBe(null);
@@ -77,5 +83,10 @@ describe('arrivalCauseOf — la cause du lot', () => {
   test('une horloge d’appareil en retard sur le serveur (date future) reste du temps réel', () => {
     const previous = keysOf(HISTORY);
     expect(arrivalCauseOf({ previous, next: [...HISTORY, entry('d', -5)], now: NOW })).toBe('realtime');
+  });
+
+  test('une date illisible ne prouve aucune fraîcheur ⇒ rattrapage', () => {
+    const previous = keysOf(HISTORY);
+    expect(arrivalCauseOf({ previous, next: [...HISTORY, { key: 'd', createdAt: Number.NaN }], now: NOW })).toBe('catch-up');
   });
 });

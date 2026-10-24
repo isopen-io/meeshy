@@ -61,6 +61,16 @@ final class MessageArrivalMotionTests: XCTestCase {
         XCTAssertNil(animated(previous: [], newestFirst: ["d"] + history, createdAt: dates(["d": 1])))
     }
 
+    func test_animated_entirelyNewWindow_isAFirstRender_animatesNothing() {
+        let other = ["r", "q", "p"]
+        let createdAt = dates(["p": 120, "q": 60, "r": 1])
+        XCTAssertEqual(
+            MessageArrivalMotion.cause(previous: Set(history), newestFirst: other, createdAt: createdAt, now: now),
+            .firstRender
+        )
+        XCTAssertNil(animated(previous: Set(history), newestFirst: other, createdAt: createdAt))
+    }
+
     func test_animated_reduceMotion_animatesNothing() {
         XCTAssertNil(animated(
             previous: Set(history),

@@ -5804,3 +5804,17 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 - `measure-weight.mjs` (`dynamic_only: true`) rougit sur le graphe construit si un fichier produit importe le chunk statiquement.
 
 **La limite connue.** Un compte sans rôle d'administration ne voit aucune entrée vers `/adm`, car le barreau Administration du menu flottant lui est caché. Mais s'il tape l'adresse lui-même, la route charge le catalogue, parce que l'écran « Espace réservé » lit `admin.denied.*` dans ce catalogue. La passerelle reste seule juge du droit (`/admin/permissions`). Pour qu'un tel compte ne charge rien, il faudrait vérifier le rôle avant le chargement et sortir les deux libellés du refus vers le catalogue commun, qui a sept langues et un plafond serré. Ce travail se suit dans #12481.
+
+## D-226 — Seul le dernier message arrivé s'anime à son entrée dans le fil (décision porteur 2026-10-24, #11223)
+
+**Le contexte.** Une rangée neuve du fil apparaissait sans mouvement. Le porteur a tranché le 2026-10-24 : **seul le DERNIER message arrivé s'anime** ; un lot chargé d'un coup (reconnexion, pagination, rattrapage) apparaît sans animation, sur le web comme sur iOS.
+
+**La décision.**
+- La règle est pure : `animatedArrival` / `arrivalCauseOf` (`lib/view/arrival-motion.ts`), jumelle d'iOS `MessageArrivalMotion` (même énoncé, même fenêtre de 30 s, mêmes quatre causes). Parmi les messages nouveaux d'un rendu du fil, seul le plus récent s'anime, et seulement s'il arrive en temps réel. `first-render` : aucun message en commun avec le rendu précédent. `pagination` : le plus récent des nouveaux n'est pas en queue. `catch-up` : il date de plus de 30 s (ou sa date est illisible). `realtime` : tout le reste, mon propre envoi compris.
+- La cause se lit sur le RENDU, jamais sur un canal de côté : le socket, la relecture TanStack et l'outbox écrivent tous dans la même liste.
+- `useArrivalMotion` (`lib/view/use-arrival-motion.ts`) tient le rendu précédent et l'arrivée en cours dans des références (aucun rendu de plus de la liste). L'identité d'un message est `clientMessageId ?? id` : la confirmation de mon envoi (nouvel `id`) n'est pas une arrivée. L'arrivée est tenue `ARRIVAL_MOTION_MS` (320 ms), pour qu'une traduction ou un accusé qui refait la liste ne coupe pas l'animation.
+- `ThreadModes` pose `data-arriving` et `.thread-row-arrival` sur le nœud des deux peaux (bulle et rangée plate), jamais sur le `<li>`, dont le `transform` porte la position virtualisée. L'animation (`thread-scene.css`) ne touche que `opacity` et `transform` : la hauteur mesurée et le défilement automatique ne changent pas. `prefers-reduced-motion` la coupe, dans la règle comme dans la feuille.
+
+**Les gardes.** `lib/view/arrival-motion.test.ts` (la règle) et `routes/thread-modes-arrival.test.tsx` (le chemin produit : premier rendu, un message, cinq d'un coup, pagination, rattrapage, Réduire les animations, traduction qui suit l'arrivée, Focal, envoi confirmé ; et la feuille : durée égale à `ARRIVAL_MOTION_MS`, coupure sous Réduire les animations, seules `opacity` et `transform` animées).
+
+**La limite connue.** Le premier message d'une conversation vide ne s'anime pas, la règle y voit un premier rendu. Une arrivée réelle dont la date diffère de plus de 30 s de l'horloge de l'appareil apparaît sans animation.

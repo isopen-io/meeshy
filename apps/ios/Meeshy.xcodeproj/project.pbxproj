@@ -3535,6 +3535,7 @@
 		E6353FE850515109CE573386 /* LocalizedStringKeyLiteralGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96E59706495A95336CA6B005 /* LocalizedStringKeyLiteralGuardTests.swift */; };
 		E63BB31D48A3051B655442FC /* MessageListViewController+ApplySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 022AE0C006F7788ACC383C90 /* MessageListViewController+ApplySnapshot.swift */; };
 		0E4D923EBBAAB414DA30F306 /* MessageArrivalMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E233E66F1D911235C15B39B /* MessageArrivalMotion.swift */; };
+		B4536FAADDF859057E469481 /* MessageArrivalAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 881E3BBB3649ADCDD2217160 /* MessageArrivalAnimator.swift */; };
 		E64CE802525AFEF18F7635C9 /* MessageViewsConsumption.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7EE86667ED1C27D20033EA4 /* MessageViewsConsumption.swift */; };
 		E688FC6BF00024E493A875EB /* StoryVisibilityUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E743D541B65151C0D8EE1EA6 /* StoryVisibilityUpdateTests.swift */; };
 		E6902627C844A83221A4239B /* MediaSaveLabelGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35C181B964C489B26FA9B0E1 /* MediaSaveLabelGuardTests.swift */; };
@@ -4052,6 +4053,7 @@
 		0226F5770E6998D19E645084 /* ConversationAudioQueueFeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAudioQueueFeedTests.swift; sourceTree = "<group>"; };
 		022AE0C006F7788ACC383C90 /* MessageListViewController+ApplySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+ApplySnapshot.swift"; sourceTree = "<group>"; };
 		1E233E66F1D911235C15B39B /* MessageArrivalMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageArrivalMotion.swift; sourceTree = "<group>"; };
+		881E3BBB3649ADCDD2217160 /* MessageArrivalAnimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageArrivalAnimator.swift; sourceTree = "<group>"; };
 		022EEC25CC603EC14648FCB5 /* ComposerFrameBandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerFrameBandTests.swift; sourceTree = "<group>"; };
 		02641E6835953967E026C8AE /* ConversationSendActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSendActivity.swift; sourceTree = "<group>"; };
 		02664DA183825A5E44A28C71 /* MockConversationSyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockConversationSyncEngine.swift; sourceTree = "<group>"; };
@@ -11245,6 +11247,7 @@
 				54E7324E9E4316F0824954FC /* MessageListViewController+Appearance.swift */,
 				022AE0C006F7788ACC383C90 /* MessageListViewController+ApplySnapshot.swift */,
 				1E233E66F1D911235C15B39B /* MessageArrivalMotion.swift */,
+				881E3BBB3649ADCDD2217160 /* MessageArrivalAnimator.swift */,
 				27B6A4675DFD2DF81F9CD76E /* MessageListViewController+ContentCapture.swift */,
 				2A27FB9A82744E2B894172D4 /* MessageListViewController+ConversationStartCell.swift */,
 				4F53B5DEB007196D765486A9 /* MessageListViewController+ConversationViewers.swift */,
@@ -14687,6 +14690,7 @@
 				8868BD0BA6C42215670D8E68 /* MessageListViewController+Appearance.swift in Sources */,
 				E63BB31D48A3051B655442FC /* MessageListViewController+ApplySnapshot.swift in Sources */,
 				0E4D923EBBAAB414DA30F306 /* MessageArrivalMotion.swift in Sources */,
+				B4536FAADDF859057E469481 /* MessageArrivalAnimator.swift in Sources */,
 				DC3B6CE1E859F05D2C1F353E /* MessageListViewController+ContentCapture.swift in Sources */,
 				5BB25A8899E1EB9D138B60C6 /* MessageListViewController+ConversationStartCell.swift in Sources */,
 				52AA3700F01BEDB6FABE5964 /* MessageListViewController+ConversationViewers.swift in Sources */,

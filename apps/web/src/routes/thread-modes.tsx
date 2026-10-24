@@ -47,6 +47,7 @@ import type { SwipeOutcome } from '@/lib/view/swipe';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { useScreenCaptureReports } from '@/lib/capture/use-screen-capture-reports';
 import { captureProps, sealedProps } from '@/lib/view/content-exit';
+import { useArrivalMotion } from '@/lib/view/use-arrival-motion';
 
 /**
  * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE, déplacé ICI avec le
@@ -359,7 +360,12 @@ export function ThreadModes({
   readonly unreadCount?: number;
 }) {
   const viewerId = viewer.id ?? '';
-  const capsuleTargetId = useMemo(() => reactionCapsuleTargetId({ messages: placed.map((p) => p.message), viewerId }), [placed, viewerId]);
+  const placedMessages = useMemo(() => placed.map((p) => p.message), [placed]);
+  const capsuleTargetId = useMemo(() => reactionCapsuleTargetId({ messages: placedMessages, viewerId }), [placedMessages, viewerId]);
+  /* SEUL LE DERNIER MESSAGE ARRIVÉ S'ANIME (#11223) — déclaré avant le retour
+     anticipé du Résumé, qui doit voir passer les rendus pour ne pas prendre son
+     retour au fil pour une arrivée. */
+  const arrivingId = useArrivalMotion(placedMessages);
 
   /**
    * LE REGISTRE DES PHASES DE RÉVÉLATION (#7142) — déclaré ICI, avant le
@@ -748,7 +754,11 @@ export function ThreadModes({
                     voisins se resserrent à mesure, sans saut de liste. Avec
                     `prefers-reduced-motion`, la feuille retombe sur un fondu. */}
                 <div
-                  {...(rowPhase === 'destroying' ? { 'data-destroying': '', className: 'ephemeral-destroying' } : {})}
+                  {...(rowPhase === 'destroying'
+                    ? { 'data-destroying': '', className: 'ephemeral-destroying' }
+                    : p.message.id === arrivingId
+                      ? { 'data-arriving': '', className: 'thread-row-arrival' }
+                      : {})}
                   {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
                   {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
                   {...sealedProps(p.message, Date.now())}
