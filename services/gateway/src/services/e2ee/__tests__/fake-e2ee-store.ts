@@ -59,6 +59,9 @@ const ordered = (rows: Row[], orderBy?: Record<string, 'asc' | 'desc'>): Row[] =
   });
 };
 
+/** Une lecture rend une COPIE, comme MongoDB : une écriture ultérieure ne la change pas sous les pieds du lecteur. */
+const snapshot = (row: Row): Row => ({ ...row });
+
 type UniqueKey = readonly string[];
 
 class FakeCollection {
@@ -84,15 +87,17 @@ class FakeCollection {
     return {
       findFirst: async (args: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> } = {}) => {
         await tick();
-        return ordered(this.rows.filter((row) => matches(row, args.where)), args.orderBy)[0] ?? null;
+        const found = ordered(this.rows.filter((row) => matches(row, args.where)), args.orderBy)[0];
+        return found ? snapshot(found) : null;
       },
       findUnique: async (args: { where: Where }) => {
         await tick();
-        return this.rows.find((row) => matches(row, args.where)) ?? null;
+        const found = this.rows.find((row) => matches(row, args.where));
+        return found ? snapshot(found) : null;
       },
       findMany: async (args: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'>; take?: number } = {}) => {
         await tick();
-        const found = ordered(this.rows.filter((row) => matches(row, args.where)), args.orderBy);
+        const found = ordered(this.rows.filter((row) => matches(row, args.where)), args.orderBy).map(snapshot);
         return args.take === undefined ? found : found.slice(0, args.take);
       },
       count: async (args: { where?: Where } = {}) => {
