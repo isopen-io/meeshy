@@ -1,11 +1,12 @@
 import XCTest
 @testable import Meeshy
 
-/// **#9953 (porteur 2026-10-10)** : le bouton du rail republie désormais en
-/// STORY d'un tap (`StoryDirectRepost`, cible `.story`), et l'ancrage revient au
-/// menu « … » sous « Partager ▸ Republier en post », à côté de « Republier en
-/// réel ». Deux CIBLES différentes — l'éphémère reste éphémère, le post dure —
-/// donc toujours deux dessins.
+/// **#9953 (porteur 2026-10-10), puis #12644** : le bouton du rail republie en
+/// STORY d'un tap (`StoryDirectRepost`, cible `.story`), et l'ancrage — la
+/// republication EN POST — vit désormais dans la feuille de partage Meeshy
+/// qu'ouvre « Envoyer » (pastille « Post » de la zone « Publier »). Deux CIBLES
+/// différentes — l'éphémère reste éphémère, le post dure — donc toujours deux
+/// dessins.
 ///
 /// Garde de NON-RÉGRESSION — deux glyphes DISTINCTS pour deux permanences
 /// différentes (ligne V0 bis de la planche web, `KeepOnFeedIcon` dans
@@ -101,69 +102,42 @@ final class StoryViewerAnchorGlyphGuardTests: XCTestCase {
         return window
     }
 
-    /// L'ANCRAGE (« garder sur mon fil » — republication directe, un tap),
-    /// identifié par sa clé localisée `story.viewer.repostAsPost`.
-    private func anchorWindow() throws -> String {
-        let windows = balancedWindow(from: "label: {", in: try source())
-        let matches = windows.filter { $0.contains("story.viewer.repostAsPost") }
-        XCTAssertEqual(
-            matches.count, 1,
-            "L'ancrage (republication directe) doit apparaître EXACTEMENT une fois " +
-            "(clé « story.viewer.repostAsPost »). \(matches.count) trouvé(s) — le bouton a été " +
-            "déplacé, dupliqué ou sa clé renommée."
-        )
-        guard let window = matches.first else {
-            throw XCTSkip("Bouton d'ancrage introuvable — voir l'assertion ci-dessus.")
-        }
-        return window
+    /// L'ANCRAGE : le glyphe de la pastille « Post » de la feuille Meeshy
+    /// (`ShareSheetView.symbol(for:)`), qui republie la story en post (#12644).
+    private func anchorGlyph() throws -> String {
+        let actions = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Share/ShareSheetView+Actions.swift")
+        let start = try XCTUnwrap(actions.range(of: "private static func symbol(for target: PublicationTarget) -> String {"),
+                                  "La table des glyphes de publication a disparu de la feuille.")
+        let line = try XCTUnwrap(actions[start.upperBound...].range(of: "case .post: return \""),
+                                 "La pastille « Post » n'a plus de glyphe.")
+        let rest = actions[line.upperBound...]
+        let end = try XCTUnwrap(rest.firstIndex(of: "\""))
+        return String(rest[..<end])
     }
 
     // MARK: - Les deux glyphes DIFFÈRENT
 
     func test_railRepostAndAnchor_neverShareTheirGlyph() throws {
         let railWindow = try railRepostWindow()
-        let anchorGlyphWindow = try anchorWindow()
+        let anchor = try anchorGlyph()
 
-        XCTAssertFalse(
-            anchorGlyphWindow.contains("arrow.2.squarepath"),
-            "L'ancrage (republication directe, « garder sur mon fil ») ne doit plus porter " +
-            "arrow.2.squarepath — c'est le glyphe du bouton du rail (ouverture du composeur), " +
-            "une permanence DIFFÉRENTE. Fenêtre :\n\(anchorGlyphWindow)"
-        )
+        XCTAssertNotEqual(anchor, "arrow.2.squarepath",
+                          "La republication en post ne porte pas le glyphe du rail (republier en story).")
         XCTAssertTrue(
             railWindow.contains("arrow.2.squarepath"),
-            "Le bouton du rail garde arrow.2.squarepath — ce correctif ne touche que l'ancrage. " +
-            "Fenêtre :\n\(railWindow)"
-        )
-    }
-
-    func test_anchor_wearsTheInfinityGlyph() throws {
-        XCTAssertTrue(
-            try anchorWindow().contains("systemImage: \"infinity\""),
-            "L'ancrage doit porter infinity — permanence (story → post durable), sans reprendre " +
-            "le dessin d'une action produit distincte."
+            "Le bouton du rail garde arrow.2.squarepath. Fenêtre :\n\(railWindow)"
         )
     }
 
     // MARK: - L'ancrage ne reprend AUCUN glyphe déjà porté par une action produit distincte
-    // ailleurs dans l'app (constat de revue R3-bookmark-collision-produit, 2026-08-25) : deux
-    // permanences différentes ne partagent pas un dessin, à l'échelle de l'APP, pas seulement
-    // du fichier — `bookmark.fill` désigne déjà « Publications enregistrées »
-    // (SettingsView.swift:606, PostDetailView.swift:1130/:1820, ReelsPlayerView.swift:1168,
-    // ReelFeedCard.swift:458) ; `pin`/`pin.fill` désigne déjà « épingler »
-    // (MessageActionsMenu.swift:103, FeedPostCard.swift:907, ConversationListView.swift:931) ;
-    // `archivebox`/`archivebox.fill` désigne déjà « archiver »
-    // (ConversationPreferencesTab.swift:358, ConversationListView.swift:971).
+    // ailleurs dans l'app (constat de revue R3-bookmark-collision-produit) : `bookmark` désigne
+    // déjà « Publications enregistrées », `pin` « épingler », `archivebox` « archiver ».
 
     func test_anchor_neverReusesAProductGlyphOwnedElsewhere() throws {
-        let window = try anchorWindow()
+        let anchor = try anchorGlyph()
         for reserved in ["bookmark", "pin", "archivebox"] {
-            XCTAssertFalse(
-                window.contains("systemImage: \"\(reserved)"),
-                "L'ancrage ne doit pas porter un glyphe qui commence par « \(reserved) » — ce " +
-                "dessin désigne déjà, ailleurs dans l'app, une action produit distincte (favoris, " +
-                "épinglage ou archivage). Fenêtre :\n\(window)"
-            )
+            XCTAssertFalse(anchor.hasPrefix(reserved),
+                           "La republication en post ne porte pas « \(anchor) » : ce dessin désigne déjà une action produit distincte.")
         }
     }
 }

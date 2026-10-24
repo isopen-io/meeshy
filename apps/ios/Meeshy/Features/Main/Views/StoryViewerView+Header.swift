@@ -27,15 +27,21 @@ import MeeshyUI
 /// geste n'est pas disponible (VoiceOver, Switch Control).
 ///
 /// Le même menu pour TOUT lecteur, sa story ou celle d'un autre : la lecture
-/// (plein écran, transcription), « Composer », UN sous-menu « Partager »
-/// (exporter en vidéo, partager à un ami, republier en post ou en réel),
+/// (plein écran, transcription ▸ langue), « Composer », « Exporter en vidéo »,
 /// l'action sur la story (signaler, ou supprimer la sienne), puis « Fermer ».
-/// Envoyer et « Republier » (en story, d'un tap) restent au rail.
+///
+/// **Le menu ne double pas le rail** (porteur, #12644). « Envoyer » ouvre la
+/// feuille de partage MEESHY, qui porte l'envoi à des personnes, la
+/// republication (story, post, réel), le studio et le partage hors de Meeshy ;
+/// « Republier » republie en story d'un tap. « Composer » est la republication
+/// qui passe par le composer — le type s'y choisit à l'envoi, statut compris.
 nonisolated enum StoryOptionsMenuEntry: Hashable {
     case fullscreen
     case transcript
     case compose
-    case share
+    /// La feuille d'export au choix de la LANGUE (`StoryExportShareSheet`) :
+    /// une vidéo avec tous les objets de la scène, son intro et sa sortie.
+    case exportVideo
     case report
     /// #11535 — la modération rend PRIVÉE la story d'un autre, avec un motif.
     case makePrivate
@@ -45,54 +51,38 @@ nonisolated enum StoryOptionsMenuEntry: Hashable {
     case close
 }
 
-/// Le sous-menu « Partager ».
-/// - `exportVideo` : la feuille d'export au choix de la LANGUE
-///   (`StoryExportShareSheet`), qu'offrait le bouton « Partager » du rail auteur.
-/// - `shareWithFriend` : la feuille du système — le lien traçable, et le
-///   fichier pour « Enregistrer la vidéo », AirDrop, Fichiers.
-/// - `repostAsPost` / `repostAsReel` : la republication d'un tap
-///   (`StoryDirectRepost`), la même que « Republier » du rail, vers une autre
-///   cible.
-nonisolated enum StoryShareMenuEntry: Hashable {
-    case exportVideo
-    case shareWithFriend
-    case repostAsPost
-    case repostAsReel
-}
-
 nonisolated struct StoryOptionsMenuPlan: Equatable {
     let sections: [[StoryOptionsMenuEntry]]
-    let shareEntries: [StoryShareMenuEntry]
 
     var entries: [StoryOptionsMenuEntry] { sections.flatMap { $0 } }
 
-    /// `isPublicStory` ne garde que « Partager à un ami » : son lien
-    /// `meeshy.me/l/…` s'ouvre sans compte et élargirait l'audience d'une story
-    /// FRIENDS ou PRIVATE. L'export vidéo, lui, est offert sur toute story —
-    /// comme l'était « Enregistrer » (#8823). Republier en post ou en réel est
-    /// offert sur TOUTE story, la sienne comprise (porteur, 2026-10-10), et sur
-    /// toute audience — la loi d'audience du serveur borne le résultat.
+    /// L'export vidéo est offert sur toute story — comme l'était « Enregistrer »
+    /// (#8823) : le fichier ne quitte l'appareil que par le geste de l'auteur
+    /// de l'export, et la feuille Meeshy garde la loi d'audience du lien.
     static func resolve(
         hasStory: Bool,
         isOwnStory: Bool,
-        isPublicStory: Bool,
         hasAudioTranscript: Bool,
         canCompose: Bool,
         canRemove: Bool = false
     ) -> StoryOptionsMenuPlan {
         let reading: [StoryOptionsMenuEntry] = hasAudioTranscript ? [.fullscreen, .transcript] : [.fullscreen]
         guard hasStory else {
-            return StoryOptionsMenuPlan(sections: [reading, [.close]], shareEntries: [])
+            return StoryOptionsMenuPlan(sections: [reading, [.close]])
         }
-        let composing: [StoryOptionsMenuEntry] = canCompose ? [.compose] : []
-        let exporting: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
-        let sharing: [StoryShareMenuEntry] = exporting + [.repostAsPost, .repostAsReel]
+        let making: [StoryOptionsMenuEntry] = canCompose ? [.compose, .exportVideo] : [.exportVideo]
         let acting: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .makePrivate, .remove] : [.report])
-        return StoryOptionsMenuPlan(
-            sections: [reading, composing, [.share], acting, [.close]].filter { !$0.isEmpty },
-            shareEntries: sharing
-        )
+        return StoryOptionsMenuPlan(sections: [reading, making, acting, [.close]])
     }
+}
+
+/// **Ce que le sous-menu « Transcription » offre** (#12646) : les langues où
+/// la transcription se LIT, celle que le lecteur sert (la coche), et le choix —
+/// la langue d'exploration du rail, jamais un second état.
+struct StoryTranscriptMenu {
+    let languages: [TranslationLanguage]
+    let servedLanguage: String?
+    let select: (String?) -> Void
 }
 
 // MARK: - Story Header
@@ -119,55 +109,19 @@ struct StoryHeaderView: View {
     let hasAudioTranscript: Bool
     /// Bascule d'affichage de la transcription, pilotée depuis le menu « … ».
     @Binding var showAudioTranscript: Bool
+    /// Le sous-menu « Transcription » (#12646), résolu par le parent.
+    let transcriptMenu: StoryTranscriptMenu
 
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var showReportSheet: Bool
 
-    /// Holds the freshly-minted `meeshy.me/l/<token>` URL for the current
-    /// story share — the sheet at the end of `body` presents the system
-    /// share UI as soon as it's non-nil and clears it on dismiss.
-    @State private var shareableStoryLink: ShareableLink?
-
-    /// Mints a TrackingLink for the given story (gateway route is shared
-    /// with posts — a story IS a `PostType.STORY`), then surfaces the
-    /// `meeshy.me/l/<token>` URL through `shareableStoryLink` so the
-    /// system share sheet picks it up. Falls back to the raw URL when the
-    /// mint fails so the user always has something to share.
-    @MainActor
-    private func mintAndShareStory(_ story: StoryItem) async {
-        let storyId = story.id
-        let fallback = makeStoryExternalShareURL(storyId)
-        do {
-            let result = try await PostService.shared.share(
-                postId: storyId,
-                platform: "system",
-                generateLink: true
-            )
-            if let shortUrl = result.shortUrl, let url = URL(string: shortUrl) {
-                shareableStoryLink = ShareableLink(url: url, fileSource: .story(story, author: currentGroup.map(StoryExportAuthor.init(group:))))
-                HapticFeedback.light()
-                return
-            }
-        } catch {
-            // intentional fall-through: try raw URL fallback
-        }
-        if let fallback {
-            shareableStoryLink = ShareableLink(url: fallback, fileSource: .story(story, author: currentGroup.map(StoryExportAuthor.init(group:))))
-            HapticFeedback.light()
-        } else {
-            FeedbackToastManager.shared.showError(
-                String(localized: "story.viewer.share.link.unavailable", defaultValue: "Lien indisponible", bundle: .main))
-        }
-    }
-
     /// Le partage INTERNE a quitté le menu (#9953) : « Envoyer » reste au rail.
     @Binding var sharedContentWrapper: SharedContentWrapper?
 
-    /// « Partager ▸ Exporter en vidéo » (#9953) : la feuille d'export au choix
+    /// « Exporter en vidéo » (#9953) : la feuille d'export au choix
     /// de la langue, présentée par le lecteur.
     @Binding var showExportShareSheet: Bool
 
-    let makeStoryExternalShareURL: (String) -> URL?
     /// `nil` : l'auteur supprime ; un motif : la modération retire (#11151).
     let deleteCurrentStory: (_ reason: String?) -> Void
     /// #11535 — la modération rend la story d'un autre privée, avec un motif.
@@ -380,7 +334,7 @@ struct StoryHeaderView: View {
                 ForEach(plan.sections, id: \.self) { section in
                     Section {
                         ForEach(section, id: \.self) { entry in
-                            optionsMenuItem(entry, shareEntries: plan.shareEntries)
+                            optionsMenuItem(entry)
                         }
                     }
                 }
@@ -426,18 +380,12 @@ struct StoryHeaderView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(item: $shareableStoryLink) { link in
-            // Trackable `meeshy.me/l/<token>` URL minted in
-            // `mintAndShareStory` — the author owns the analytics.
-            ShareSheet(activityItems: link.activityItems)
-        }
     }
 
     private var optionsMenuPlan: StoryOptionsMenuPlan {
         StoryOptionsMenuPlan.resolve(
             hasStory: currentStory != nil && currentGroup != nil,
             isOwnStory: isOwnStory,
-            isPublicStory: currentStory?.isPublic ?? false,
             hasAudioTranscript: hasAudioTranscript,
             canCompose: composableSlide != nil && demanderComposer != nil,
             canRemove: ContentRemovalPolicy.mayRemovePublication(authoredByViewer: isOwnStory, platformRole: AuthManager.shared.currentUser?.role)
@@ -445,7 +393,7 @@ struct StoryHeaderView: View {
     }
 
     @ViewBuilder
-    private func optionsMenuItem(_ entry: StoryOptionsMenuEntry, shareEntries: [StoryShareMenuEntry]) -> some View {
+    private func optionsMenuItem(_ entry: StoryOptionsMenuEntry) -> some View {
         switch entry {
         case .fullscreen:
             // Plein écran (session) : au repos, le chrome suit le mode — caché
@@ -468,19 +416,14 @@ struct StoryHeaderView: View {
             }
         case .transcript:
             // Item 7a : la transcription vit dans les options, jamais en
-            // bandeau permanent ; elle suit la langue choisie par « Traductions ».
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showAudioTranscript.toggle()
-                }
+            // bandeau permanent. Son sous-menu choisit AUSSI la langue
+            // (#12646) — la même langue d'exploration que « Traductions ».
+            Menu {
+                transcriptMenuContent
+                    .onAppear { optionsMenuPresenceChange?(true) }
             } label: {
-                Label(
-                    showAudioTranscript
-                        ? String(localized: "story.viewer.transcript.hide", defaultValue: "Masquer la transcription", bundle: .main)
-                        : String(localized: "story.viewer.transcript.show", defaultValue: "Afficher la transcription", bundle: .main),
-                    systemImage: showAudioTranscript ? "captions.bubble.fill" : "captions.bubble"
-                )
+                Label(String(localized: "story.viewer.transcript.title", defaultValue: "Transcription", bundle: .main),
+                      systemImage: showAudioTranscript ? "captions.bubble.fill" : "captions.bubble")
             }
         case .compose:
             // « Composer » (#6085) : même libellé et même glyphe que dans la
@@ -496,13 +439,14 @@ struct StoryHeaderView: View {
                           systemImage: "wand.and.stars")
                 }
             }
-        case .share:
-            Menu {
-                ForEach(shareEntries, id: \.self) { shareMenuItem($0) }
-                    .onAppear { optionsMenuPresenceChange?(true) }
+        case .exportVideo:
+            // La feuille d'export EXISTANTE, au choix de la langue, présentée
+            // par le lecteur. Posée SUR la story : elle boucle (#9821).
+            Button {
+                HapticFeedback.light()
+                showExportShareSheet = true
             } label: {
-                Label(String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main),
-                      systemImage: "square.and.arrow.up")
+                Label(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo", bundle: .main), systemImage: "film")
             }
         case .report, .makePrivate, .remove, .delete:
             actingMenuItem(entry)
@@ -549,47 +493,51 @@ struct StoryHeaderView: View {
             }
         // Exhaustif, sans `default:` : une entrée nouvelle (#11535 a ajouté
         // `.makePrivate`) ne disparaît plus du menu en silence (#11151).
-        case .fullscreen, .transcript, .compose, .share, .close:
+        case .fullscreen, .transcript, .compose, .exportVideo, .close:
             EmptyView()
         }
     }
 
+    /// « Masquer » quand elle est affichée, puis une entrée par langue où elle
+    /// se lit ; la langue servie porte la coche. Sans langue connue, une seule
+    /// entrée l'affiche dans la langue que le Prisme sert.
     @ViewBuilder
-    private func shareMenuItem(_ entry: StoryShareMenuEntry) -> some View {
-        switch entry {
-        case .exportVideo:
-            // La feuille d'export EXISTANTE, au choix de la langue, présentée
-            // par le lecteur. Posée SUR la story : elle boucle (#9821).
+    private var transcriptMenuContent: some View {
+        if showAudioTranscript {
             Button {
                 HapticFeedback.light()
-                showExportShareSheet = true
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAudioTranscript = false }
             } label: {
-                Label(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo", bundle: .main), systemImage: "film")
+                Label(String(localized: "story.viewer.transcript.hide", defaultValue: "Masquer la transcription", bundle: .main),
+                      systemImage: "captions.bubble.fill")
             }
-        case .shareWithFriend:
-            // La feuille du système : le lien traçable `meeshy.me/l/<token>`,
-            // frappé au tap, et le fichier rendu à la demande.
-            if let story = currentStory {
+        }
+        if transcriptMenu.languages.isEmpty {
+            if !showAudioTranscript {
                 Button {
-                    Task { await mintAndShareStory(story) }
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAudioTranscript = true }
                 } label: {
-                    Label(String(localized: "story.viewer.share.friend", defaultValue: "Partager à un ami", bundle: .main), systemImage: "person.2")
+                    Label(String(localized: "story.viewer.transcript.show", defaultValue: "Afficher la transcription", bundle: .main),
+                          systemImage: "captions.bubble")
                 }
             }
-        case .repostAsPost:
-            if let story = currentStory {
+        } else {
+            ForEach(transcriptMenu.languages) { language in
                 Button {
-                    StoryDirectRepost.publish(story, as: .post)
+                    HapticFeedback.light()
+                    // La langue déjà servie s'affiche sans rien changer d'autre :
+                    // seule une AUTRE langue fait basculer toute la story.
+                    if !StoryLanguageQuickBar.isActive(language.id, active: transcriptMenu.servedLanguage) {
+                        transcriptMenu.select(language.id)
+                    }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAudioTranscript = true }
                 } label: {
-                    Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "infinity")
-                }
-            }
-        case .repostAsReel:
-            if let story = currentStory {
-                Button {
-                    StoryDirectRepost.publish(story, as: .reel)
-                } label: {
-                    Label(String(localized: "story.viewer.repostAsReel", defaultValue: "Republier en réel", bundle: .main), systemImage: "play.rectangle.on.rectangle")
+                    if showAudioTranscript && StoryLanguageQuickBar.isActive(language.id, active: transcriptMenu.servedLanguage) {
+                        Label("\(language.flag) \(language.name)", systemImage: "checkmark")
+                    } else {
+                        Text("\(language.flag) \(language.name)")
+                    }
                 }
             }
         }

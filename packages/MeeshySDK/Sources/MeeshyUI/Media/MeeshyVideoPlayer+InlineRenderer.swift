@@ -110,7 +110,7 @@ internal struct _InlineRenderer: View {
                         manager: manager,
                         accentColor: player.accentColor,
                         controls: player.controls,
-                        onExpand: player.onExpand
+                        onExpand: player.onExpand, attachmentId: player.attachment.id
                     )
                     .transition(.opacity)
                 }
@@ -248,6 +248,7 @@ internal struct _InlineRenderer: View {
         }
         .accessibilityLabel(playButtonAccessibilityLabel)
         .disabled(isDownloading)
+        .mediaPlayControlAnchor(attachmentId: player.attachment.id)
     }
 
     @ViewBuilder

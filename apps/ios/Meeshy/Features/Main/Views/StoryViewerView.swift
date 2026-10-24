@@ -639,17 +639,6 @@ struct StoryViewerView: View {
         ))
     }
 
-    // MARK: - External share URL builder
-
-    /// Builds the public web URL surfaced through ShareLink so the story can
-    /// be shared outside Meeshy (Messages, Mail, other apps). Aligned with
-    /// the existing pattern in `SharePickerView.swift` that already references
-    /// `https://meeshy.me/story/<id>`. Returns nil if the story id is empty.
-    private func makeStoryExternalShareURL(_ storyId: String) -> URL? {
-        guard !storyId.isEmpty else { return nil }
-        return URL(string: "https://meeshy.me/story/\(storyId)")
-    }
-
     @State var showEmojiStrip = false // internal for cross-file extension access
     /// Réaction en vol vers le cœur (remplace la big reaction 100 pt).
     @State var reactionFlight: StoryReactionFlight?
@@ -802,7 +791,6 @@ struct StoryViewerView: View {
                 makeStoryCommentRow(comment, readerLanguages: readerLanguages)
             },
             toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
-            makeStoryExternalShareURL: { makeStoryExternalShareURL($0) },
             storyWithdrawal: StoryWithdrawalActions(delete: { deleteCurrentStory(reason: $0) }, makePrivate: { StoryPrivatization.makePrivate(currentStory, of: currentGroup, reason: $0, viewModel: viewModel, dismiss: dismissViewer) }),
             dismissViewer: { dismissViewer() },
             reportStory: { storyId, reportType, reason in

@@ -227,7 +227,7 @@ final class ComposerPhotoLookTests: XCTestCase {
             XCTAssertFalse(peintre.contains(jumelle) || loi.contains(jumelle), "aucune jumelle de la colorimétrie")
         }
         let flux = try Self.code("Meeshy/Features/Main/Services/VideoFilterPipeline.swift")
-        XCTAssertTrue(flux.contains("image = VideoFilterColorimetry.graded(image, config: cfg)"),
+        XCTAssertTrue(flux.contains("VideoFilterColorimetry.graded(image, config: cfg)"),
                       "le flux d'appel et la photo partagent UNE colorimétrie")
     }
 

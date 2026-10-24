@@ -31,6 +31,8 @@ nonisolated struct CallLiveFrameLayerInputs: Equatable, Sendable {
     let size: CGSize
     /// Les bandes de l'écran que les contrôles de l'appel couvrent (#9777).
     var reserve: CallFrameChromeReserve = .none
+    /// #12683 — les ornements animés se jouent : ils quittent les couches fixes pour Core Animation.
+    var animates: Bool = false
 }
 
 /// **LE CADRE EN DIRECT D'UN APPEL À DEUX** (#9214, doc frames 06 § 4, étape 3.2) — les
@@ -61,9 +63,22 @@ nonisolated enum CallLiveFrameRule {
         return CallFrameMood.allCases.filter { served.contains($0.rawValue) }
     }
 
-    /// Un cadre bouge s'il porte un ornement animé ou une couche de scène.
+    /// Un cadre bouge s'il porte un ornement animé ou une couche de scène qui bouge (une illustration
+    /// `image` est fixe, #12683).
     static func animates(_ design: CallFrameDesign) -> Bool {
-        design.look.ornaments.contains { $0.motion != .still } || !design.look.scene.isEmpty
+        design.look.ornaments.contains { $0.motion != .still } || design.look.scene.contains { $0.kind != .image }
+    }
+
+    /// #12683 — un cadre dont seuls les ornements bougent a un état FIXE complet : ses ornements
+    /// peints à leur place, ses illustrations aussi. Une couche de scène animée n'a pas encore d'image fixe de repli.
+    static func hasStillState(_ design: CallFrameDesign) -> Bool {
+        design.look.scene.allSatisfy { $0.kind == .image }
+    }
+
+    /// Les ornements s'animent-ils à l'écran ? Jamais sous « Réduire les animations », ni quand
+    /// l'appareil se protège ; sinon dès que le cadre déclare un mouvement.
+    static func playsMotion(_ design: CallFrameDesign, reduceMotion: Bool, isDeviceConstrained: Bool) -> Bool {
+        animates(design) && !reduceMotion && !isDeviceConstrained
     }
 
     /// #9287 — l'interrupteur « Cadre » de la capture : toucher le cadre déjà gardé le retire,
@@ -74,7 +89,7 @@ nonisolated enum CallLiveFrameRule {
 
     /// L'interrupteur se montre sur un cadre du catalogue servi en direct, en duo vidéo.
     static func mayHold(frameId: String, isOffered: Bool, in catalogue: [CallFrameDesign] = CallFrameCatalogue.all) -> Bool {
-        guard isOffered, let design = catalogue.first(where: { $0.id == frameId }) else { return false }
+        guard isOffered, let design = CallFrameCatalogue.frame(id: frameId, in: catalogue) else { return false }
         return isEligible(design)
     }
 
@@ -92,7 +107,8 @@ nonisolated enum CallLiveFrameRule {
     }
 
     /// Le cadre choisi devient-il visible ? Duo seulement ; coupé quand l'appareil se protège ;
-    /// coupé sous « Réduire les animations » s'il bouge — un cadre statique reste permis.
+    /// sous « Réduire les animations », un cadre qui a un état fixe se montre immobile (#12683),
+    /// un cadre dont la scène bouge reste masqué.
     static func display(
         frameId: String?,
         participants: Int,
@@ -101,9 +117,9 @@ nonisolated enum CallLiveFrameRule {
         in catalogue: [CallFrameDesign] = CallFrameCatalogue.all
     ) -> CallLiveFrameDisplay {
         guard participants == people, let frameId,
-              let design = catalogue.first(where: { $0.id == frameId }), isEligible(design) else { return .none }
+              let design = CallFrameCatalogue.frame(id: frameId, in: catalogue), isEligible(design) else { return .none }
         if isDeviceConstrained { return .suspended(design, .deviceConstrained) }
-        if reduceMotion && animates(design) { return .suspended(design, .reduceMotion) }
+        if reduceMotion && animates(design) && !hasStillState(design) { return .suspended(design, .reduceMotion) }
         return .frame(design)
     }
 

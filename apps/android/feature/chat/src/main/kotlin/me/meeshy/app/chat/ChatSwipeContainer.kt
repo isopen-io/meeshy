@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +28,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import me.meeshy.ui.component.bubble.BubbleGestureArbiter
+import me.meeshy.ui.component.bubble.LocalBubbleGestureArbiter
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -36,6 +39,10 @@ import me.meeshy.ui.theme.MeeshySpacing
  * and fires [onReply] with a haptic once released past the commit threshold. The
  * "when to arm / when to commit" product decision is the pure [SwipeToReply]
  * core; this is the exempt Compose gesture glue.
+ *
+ * The bubble's widgets can make the swipe stand down through the [BubbleGestureArbiter] provided
+ * to [content] (a media scrubber, an open carousel, a selection): a drag that starts — or
+ * continues — while any of them holds a claim neither moves the bubble nor replies.
  */
 @Composable
 internal fun SwipeToReplyContainer(
@@ -50,6 +57,8 @@ internal fun SwipeToReplyContainer(
     val isRtl = rememberIsRtl()
     var swipe by remember { mutableStateOf(SwipeReplyState()) }
     var rawTranslation by remember { mutableStateOf(0f) }
+    val arbiter = remember { BubbleGestureArbiter() }
+    var yielding by remember { mutableStateOf(false) }
     val animatedOffset by animateFloatAsState(
         targetValue = swipe.offset,
         label = "swipe-to-reply-offset",
@@ -73,13 +82,16 @@ internal fun SwipeToReplyContainer(
                 .offset { IntOffset(swipeReadingDelta(animatedOffset, isRtl).roundToInt(), 0) }
                 .pointerInput(direction, isRtl) {
                     detectHorizontalDragGestures(
-                        onDragStart = { rawTranslation = 0f },
+                        onDragStart = {
+                            rawTranslation = 0f
+                            yielding = arbiter.suppressSwipe
+                        },
                         onDragCancel = {
                             rawTranslation = 0f
                             swipe = SwipeReplyState()
                         },
                         onDragEnd = {
-                            if (SwipeToReply.onRelease(swipe, direction) == SwipeReplyRelease.Commit) {
+                            if (!yielding && SwipeToReply.onRelease(swipe, direction) == SwipeReplyRelease.Commit) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onReply()
                             }
@@ -87,18 +99,27 @@ internal fun SwipeToReplyContainer(
                             swipe = SwipeReplyState()
                         },
                         onHorizontalDrag = { change, dragAmount ->
-                            rawTranslation += swipeReadingDelta(dragAmount, isRtl)
-                            val drag = SwipeToReply.onDrag(swipe, rawTranslation, direction)
-                            if (drag.armedHaptic) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (yielding || arbiter.suppressSwipe) {
+                                // A widget of the bubble owns this drag: stand down.
+                                yielding = true
+                                rawTranslation = 0f
+                                swipe = SwipeReplyState()
+                            } else {
+                                rawTranslation += swipeReadingDelta(dragAmount, isRtl)
+                                val drag = SwipeToReply.onDrag(swipe, rawTranslation, direction)
+                                if (drag.armedHaptic) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                }
+                                swipe = drag.state
+                                change.consume()
                             }
-                            swipe = drag.state
-                            change.consume()
                         },
                     )
                 },
         ) {
-            content()
+            CompositionLocalProvider(LocalBubbleGestureArbiter provides arbiter) {
+                content()
+            }
         }
     }
 }

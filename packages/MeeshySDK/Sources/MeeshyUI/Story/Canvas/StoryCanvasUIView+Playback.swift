@@ -233,7 +233,7 @@ extension StoryCanvasUIView {
         // Preview timeline active → l'engine possède audio ET transport ;
         // les boucles vidéo libres de l'édition reprennent à la sortie.
         guard mode == .edit, (playsVideoInEditMode || playsAudioInEditMode),
-              !isTimelinePreviewActive else { return }
+              !isTimelinePreviewActive, !StoryEditPlaybackCover.covers(self) else { return }
         // Éditeur sonore (choix produit) : pose la session `.playback` pour que
         // l'audio des vidéos qui bouclent ET des clips audio soit audible même
         // silent-switch ON. Idempotent / call-aware via la source unique.

@@ -137,7 +137,55 @@ final class ComposerRetouchTextBoardTests: XCTestCase {
         XCTAssertNil(planche.overlay(canvas: CGSize(width: 216, height: 384)), "une coquille vide ne se cuit pas")
         try ecrire("Bonjour", in: planche)
         let calque = try XCTUnwrap(planche.overlay(canvas: CGSize(width: 216, height: 384)))
-        XCTAssertEqual(calque.width, 216)
-        XCTAssertEqual(calque.height, 384)
+        XCTAssertEqual(calque.ink?.width, 216)
+        XCTAssertEqual(calque.ink?.height, 384)
+        XCTAssertTrue(calque.glass.isEmpty, "sans fond Verre, aucune vitre")
+    }
+
+    // MARK: - Le fond Verre (#12602)
+
+    private func vitrer(_ planche: ComposerRetouchTextBoard) {
+        var slide = planche.scene.currentSlide
+        slide.effects.textObjects[0].backgroundStyle = .glass(radius: 24)
+        planche.scene.currentSlide = slide
+    }
+
+    func test_overlay_aGlassText_carriesItsPane_withTheInk() throws {
+        let planche = ComposerRetouchTextBoard()
+        planche.begin()
+        try ecrire("Bonjour", in: planche)
+        vitrer(planche)
+        let calque = try XCTUnwrap(planche.overlay(canvas: CGSize(width: 216, height: 384)))
+        XCTAssertNotNil(calque.ink)
+        XCTAssertEqual(calque.glass.count, 1, "la vitre part avec l'encre : la prise se floute à l'export")
+        XCTAssertEqual(calque.glass.first?.mask.width, 216)
+    }
+
+    func test_previewGlass_isNilWithoutGlass_andHalfTheCanvasWithIt() throws {
+        let planche = ComposerRetouchTextBoard()
+        let toile = CGSize(width: 216, height: 384)
+        XCTAssertNil(planche.previewGlass(canvas: toile))
+        planche.begin()
+        try ecrire("Bonjour", in: planche)
+        XCTAssertNil(planche.previewGlass(canvas: toile), "un texte sans verre ne floute rien")
+        vitrer(planche)
+        let calque = try XCTUnwrap(planche.previewGlass(canvas: toile))
+        XCTAssertNil(calque.ink, "l'aperçu ne remet que les vitres : le canvas peint l'encre")
+        XCTAssertEqual(calque.glass.first?.mask.width, 108)
+        XCTAssertEqual(calque.glass.first?.mask.height, 192)
+    }
+
+    func test_previewGlass_isBakedOnce_untilATextChanges() throws {
+        let planche = ComposerRetouchTextBoard()
+        let toile = CGSize(width: 216, height: 384)
+        planche.begin()
+        try ecrire("Bonjour", in: planche)
+        vitrer(planche)
+        let premier = try XCTUnwrap(planche.previewGlass(canvas: toile))
+        XCTAssertEqual(planche.previewGlass(canvas: toile), premier, "rien n'a changé : le même calque, l'aperçu ne se repeint pas")
+        var slide = planche.scene.currentSlide
+        slide.effects.textObjects[0].x = 0.2
+        planche.scene.currentSlide = slide
+        XCTAssertNotEqual(planche.previewGlass(canvas: toile), premier, "le texte a bougé : la vitre le suit")
     }
 }

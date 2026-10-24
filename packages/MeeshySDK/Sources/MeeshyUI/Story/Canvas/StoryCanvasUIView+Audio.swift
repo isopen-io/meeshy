@@ -374,7 +374,7 @@ extension StoryCanvasUIView {
     /// passe planifiée à neuf entre à la phase partagée de la slide, jamais au
     /// début (`StoryCanvasEditAudioOwnership.swift`, #10362).
     func startEditAudioPlayback() {
-        guard mode == .edit, playsAudioInEditMode, !isTimelinePreviewActive else { return }
+        guard mode == .edit, playsAudioInEditMode, !isTimelinePreviewActive, !StoryEditPlaybackCover.covers(self) else { return }
         guard !MediaSessionCoordinator.shared.isCallActive else { return }
         guard !isAudioMuted else { return }
         guard mayPlayEditAudio else { return }

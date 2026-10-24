@@ -25,19 +25,21 @@ nonisolated enum CallFrameCatalogue {
     /// Le nombre a changé : le même motif dans la variante de la nouvelle tranche ;
     /// sinon le premier cadre de la même ambiance ; sinon `nil` (l'hôte retombe sur un classique).
     static func reconcile(selectedId: String, people: Int, in frames: [CallFrameDesign] = all) -> CallFrameDesign? {
-        if let current = frames.first(where: { $0.id == selectedId }), current.serves(people: people) {
+        if let current = CallFrameStyleRule.resolve(id: selectedId, in: frames), current.serves(people: people) {
             return current
         }
         let parts = selectedId.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
         let motif = parts.prefix(2).joined(separator: ".")
         if let sibling = frames.first(where: { $0.motif == motif && $0.serves(people: people) }) {
-            return sibling
+            let style = parts.count == 4 ? sibling.styles.first { $0.id == parts[3] } : nil
+            return style.map { CallFrameStyleRule.styled(sibling, with: $0) } ?? sibling
         }
         let mood = parts.first ?? ""
         return frames.first { $0.mood.rawValue == mood && $0.serves(people: people) }
     }
 
+    /// Un cadre par son identifiant, de base ou décliné (#12685).
     static func frame(id: String, in frames: [CallFrameDesign] = all) -> CallFrameDesign? {
-        frames.first { $0.id == id }
+        CallFrameStyleRule.resolve(id: id, in: frames)
     }
 }
