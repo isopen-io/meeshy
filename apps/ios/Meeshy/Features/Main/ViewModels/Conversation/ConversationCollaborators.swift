@@ -13,8 +13,6 @@ struct ConversationCollaborators {
     let failureRecovery: any SendFailureRecoveryProviding
     /// Le régime appris APRÈS l'ouverture du fil (#11379).
     let regimeLedger: EndToEndRegimeLedger
-    /// Le déchiffrement sur l'appareil des messages du fil (#11232) — un par fil.
-    let decryptor: any OnDeviceMessageDecrypting
 
     init(
         persistence: MessagePersistenceActor,
@@ -26,8 +24,7 @@ struct ConversationCollaborators {
         windowFetcher: (any ConversationWindowFetcherProviding)? = nil,
         stager: (any OptimisticMessageStagerProviding)? = nil,
         failureRecovery: (any SendFailureRecoveryProviding)? = nil,
-        regimeLedger: EndToEndRegimeLedger? = nil,
-        decryptor: (any OnDeviceMessageDecrypting)? = nil
+        regimeLedger: EndToEndRegimeLedger? = nil
     ) {
         self.readReceipts = readReceipts ?? ConversationReadReceiptSender(syncEngine: syncEngine)
         self.voiceConsent = voiceConsent ?? VoiceConsentGate()
@@ -36,6 +33,5 @@ struct ConversationCollaborators {
         self.stager = stager ?? OptimisticMessageStager(persistence: persistence)
         self.failureRecovery = failureRecovery ?? SendFailureRecovery()
         self.regimeLedger = regimeLedger ?? .shared
-        self.decryptor = decryptor ?? DecryptionActor(provider: LiveSessionProvider())
     }
 }

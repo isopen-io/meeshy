@@ -262,7 +262,7 @@ struct ConversationView: View {
 
     /// #11214 — le lecteur et la conversation tels que la loi des actions les lit ; un seul site.
     var menuAuthority: ConversationMenuAuthority {
-        ConversationMenuAuthority.make(conversation: liveConversation, currentUser: AuthManager.shared.currentUser, guest: anonymousSession)
+        ConversationMenuAuthority.make(conversation: liveConversation, viewModel: viewModel)
     }
 
     /// « Retirer » le message d'un AUTRE (#11151) — créateur compris, jamais en direct.

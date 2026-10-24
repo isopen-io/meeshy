@@ -11,7 +11,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Registers/re-registers the FCM device token with the gateway (ARCHITECTURE.md §8).
+ * Registers/re-registers the FCM device token with the gateway (ARCHITECTURE.md §8), declaring
+ * the data-only rendering capability of the push pipeline.
  */
 @Singleton
 class PushTokenHandler @Inject constructor(
@@ -22,8 +23,14 @@ class PushTokenHandler @Inject constructor(
     fun onTokenRefresh(token: String) {
         scope.launch {
             runCatching {
-                notificationRepository.registerDeviceToken(token)
+                notificationRepository.registerDeviceToken(dataOnlyCapableRequest(token))
             }.onFailure { Timber.e(it, "Failed to register FCM token") }
         }
     }
 }
+
+/** The FCM token request declaring that this client renders data-only pushes itself. */
+internal fun dataOnlyCapableRequest(token: String): RegisterDeviceTokenRequest =
+    RegisterDeviceTokenRequest.fcm(token).copy(
+        capabilities = listOf(RegisterDeviceTokenRequest.CAPABILITY_DATA_ONLY),
+    )

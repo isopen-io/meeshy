@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_own_value_missing">—</string>
+    <string name="profile_own_friend_requests_pending">%1$d pendentes</string>
+</resources>

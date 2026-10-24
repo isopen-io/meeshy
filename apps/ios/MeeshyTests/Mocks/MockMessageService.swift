@@ -36,6 +36,9 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         {"id":"000000000000000000000001","conversationId":"000000000000000000000002","senderId":"000000000000000000000099","content":"","messageType":null,"createdAt":"2026-01-01T00:00:00.000Z"}
         """)
     )
+    /// Une file de réponses d'envoi, consommée avant `sendResult` (un 409 Sesame puis l'acquittement).
+    var sendResults: [Result<SendMessageResponseData, Error>] = []
+    private(set) var sentRequests: [SendMessageRequest] = []
     var editResult: Result<APIMessage, Error> = .success(
         JSONStub.decode("""
         {"id":"000000000000000000000001","conversationId":"000000000000000000000002","senderId":"000000000000000000000099","createdAt":"2026-01-01T00:00:00.000Z"}
@@ -226,11 +229,14 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     }
 
     nonisolated func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData {
-        await MainActor.run {
+        let queued = await MainActor.run { () -> Result<SendMessageResponseData, Error>? in
             sendCallCount += 1
             lastSendConversationId = conversationId
             lastSendRequest = request
+            sentRequests.append(request)
+            return sendResults.isEmpty ? nil : sendResults.removeFirst()
         }
+        if let queued { return try queued.get() }
         return try sendResult.get()
     }
 

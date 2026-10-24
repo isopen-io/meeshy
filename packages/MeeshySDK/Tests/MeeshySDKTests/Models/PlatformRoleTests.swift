@@ -102,6 +102,7 @@ struct PlatformRoleTests {
 
     @Test func auditAndAnalystHoldNoActionPrivilege() {
         for role in [PlatformRole.audit, .analyst, .user, .agent] {
+            #expect(!role.isPrivileged, "\(role.rawValue)")
             #expect(!role.moderatesContent, "\(role.rawValue)")
             #expect(!role.administers, "\(role.rawValue)")
         }
@@ -109,6 +110,20 @@ struct PlatformRoleTests {
         #expect(!PlatformRole.moderator.administers)
         #expect(PlatformRole.admin.administers)
         #expect(PlatformRole.bigboss.administers)
+    }
+
+    /// Miroir de `PRIVILEGED_PLATFORM_ROLES` (`packages/shared/utils/platform-privilege.ts`, #11217).
+    @Test func thePrivilegedTableMirrorsTheSharedOne() {
+        let privilegedRawValues = Set(PlatformRole.privileged.map { $0.rawValue })
+        let privilegedRolesModerate = PlatformRole.allCases.filter { $0.isPrivileged }.allSatisfy { $0.moderatesContent }
+        #expect(privilegedRawValues == ["MODERATOR", "ADMIN", "BIGBOSS"])
+        #expect(privilegedRolesModerate)
+    }
+
+    @Test func contentRemovalReadsTheSameTable() {
+        for role in PlatformRole.allCases {
+            #expect(ContentRemovalPolicy.isPlatformModerator(role.rawValue) == role.isPrivileged, "\(role.rawValue)")
+        }
     }
 
     @Test func auditHasNoEditPrivilegeOnSomeoneElsesMessage_aModeratorHasOne() {
@@ -145,8 +160,17 @@ struct PlatformRoleTests {
         #expect(outsider.administersPlatform)
     }
 
-    @Test func aPlatformModeratorAuditOrAnalystKeepsTheRoleOfTheirLine() {
-        for role in ["MODERATOR", "AUDIT", "ANALYST"] {
+    @Test func aPlatformModeratorWhoIsAMemberActsAsTheCreatorLikeAnAdmin() {
+        let moderator = authority(platformRole: "MODERATOR")
+        let admin = authority(platformRole: "ADMIN")
+        #expect(moderator.effectiveRole == .creator)
+        #expect(moderator.effectiveRank == admin.effectiveRank)
+        #expect(!moderator.administersPlatform)
+        #expect(authority(platformRole: "moderator").effectiveRole == .member)
+    }
+
+    @Test func aPlatformAuditOrAnalystKeepsTheRoleOfTheirLine() {
+        for role in ["AUDIT", "ANALYST"] {
             #expect(authority(platformRole: role).effectiveRole == .member, "\(role)")
             #expect(authority(platformRole: role, conversationRole: "admin").effectiveRole == .admin, "\(role)")
         }

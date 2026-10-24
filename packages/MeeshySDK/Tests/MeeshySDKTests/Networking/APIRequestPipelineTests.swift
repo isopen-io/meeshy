@@ -157,6 +157,28 @@ final class APIRequestPipelineTests: XCTestCase {
         XCTAssertEqual(rejection.message, "Conversation chiffrée")
     }
 
+    func test_classify_e2eeDevicesMismatch_carriesTheSesameGapOnAnOpaqueEndpoint() {
+        let body = #"{"success":false,"error":"Liste d'appareils","code":"E2EE_DEVICES_MISMATCH","missing":[{"userId":"b","deviceId":2}],"extra":[],"stale":[{"userId":"b","deviceId":1}]}"#
+        guard case MeeshyError.rejected(let rejection)? = thrown(classify(status: 409, body: body)) else {
+            return XCTFail("un 409 Sesame garde son écart sur toute adresse")
+        }
+        XCTAssertEqual(rejection.code, "E2EE_DEVICES_MISMATCH")
+        XCTAssertEqual(rejection.e2eeMismatch, E2EEDevicesMismatch(
+            missing: [E2EEDeviceRef(userId: "b", deviceId: 2)], extra: [], stale: [E2EEDeviceRef(userId: "b", deviceId: 1)]
+        ))
+    }
+
+    func test_classify_e2eeDeviceNotBound_isATypedRefusal_notASessionFailure() {
+        let body = #"{"success":false,"error":"Appareil non lié","code":"E2EE_DEVICE_NOT_BOUND"}"#
+        let error = thrown(classify(status: 403, body: body))
+        XCTAssertEqual(error?.e2eeCode, "E2EE_DEVICE_NOT_BOUND")
+    }
+
+    func test_classify_aForbiddenWithAnE2EECode_onAStructuredEndpoint_stillSurfacesTheCode() {
+        let body = #"{"success":false,"error":"Clés interdites","code":"E2EE_KEYS_FORBIDDEN"}"#
+        XCTAssertEqual(thrown(classify(status: 403, body: body, rejection: .structured))?.e2eeCode, "E2EE_KEYS_FORBIDDEN")
+    }
+
     func test_classify_opaquePolicy_anyOther400Code_staysAServerError() {
         let error = thrown(classify(status: 400, body: #"{"error":"Validation error","code":"VALIDATION_ERROR"}"#))
         XCTAssertEqual(serverParts(error)?.status, 400)

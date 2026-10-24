@@ -3,9 +3,6 @@ package me.meeshy.app.profile
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -13,28 +10,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -43,15 +34,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,28 +52,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.LanguageData
-import androidx.compose.material3.TopAppBarDefaults
-import kotlinx.coroutines.flow.MutableSharedFlow
-import me.meeshy.ui.component.ConnectionFeedbackHost
-import me.meeshy.ui.component.FeedbackKind
-import me.meeshy.ui.component.FeedbackToastHost
-import me.meeshy.ui.component.FeedbackToastRequest
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.format.RelativeTimeLongText
 import me.meeshy.ui.format.rememberRelativeTimeLongStrings
-import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -95,389 +71,209 @@ import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 
+/*
+ * Les briques COMMUNES aux deux pages de profil : MA page ([OwnProfileScreen], session,
+ * edition, partage) et celle d'un tiers ([PublicProfileScreen], conservee jusqu'a la
+ * feuille profil). Chaque brique est une projection sans etat de ses arguments.
+ */
+
+/** La barre haute d'une page de profil : retour (couleur d'accent, parite iOS `CollapsibleHeader`) et titre « Profil ». */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(
-    onBack: () -> Unit,
-    onReport: (userId: String, username: String) -> Unit = { _, _ -> },
-    onViewPosts: (userId: String) -> Unit = {},
-    onOpenConversation: (conversationId: String) -> Unit = {},
-    viewModel: ProfileViewModel = hiltViewModel(),
-    uploadViewModel: AvatarBannerUploadViewModel = hiltViewModel(),
-    actionsViewModel: ProfileActionsViewModel = hiltViewModel(),
-) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
-    val actionsState by actionsViewModel.state.collectAsStateWithLifecycle()
-    val actionToasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 4) }
-    val viewedUser = state.user
-    LaunchedEffect(viewedUser?.id, state.isOwnProfile) {
-        val id = viewedUser?.id?.takeIf { it.isNotBlank() }
-        if (id != null && !state.isOwnProfile) actionsViewModel.bind(id, isAnonymous = viewedUser.isAnonymous == true)
-    }
-    LaunchedEffect(actionsViewModel) {
-        actionsViewModel.events.collect { event ->
-            when (event) {
-                is ProfileActionEvent.OpenConversation -> onOpenConversation(event.conversationId)
-                is ProfileActionEvent.Toast -> actionToasts.tryEmit(event.feedback.toToastRequest())
+internal fun ProfileTopBar(onBack: () -> Unit, actions: @Composable RowScope.() -> Unit) {
+    TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent,
+            titleContentColor = MeeshyTheme.tokens.textPrimary,
+            navigationIconContentColor = MeeshyPalette.Indigo500,
+            actionIconContentColor = MeeshyPalette.Indigo500,
+        ),
+        title = { Text(stringResource(R.string.profile_title)) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.profile_back))
             }
-        }
-    }
-    val snackbar = remember { SnackbarHostState() }
-    var shareTarget by remember { mutableStateOf<ProfileSharePresentation?>(null) }
-
-    val context = LocalContext.current
-    val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.contentResolver.readMediaUploadItem(it) }
-            ?.let { uploadViewModel.onImagePicked(ImageUploadTarget.AVATAR, it) }
-    }
-    val bannerPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { context.contentResolver.readMediaUploadItem(it) }
-            ?.let { uploadViewModel.onImagePicked(ImageUploadTarget.BANNER, it) }
-    }
-    val imageOnly = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-
-    LaunchedEffect(state.errorMessage) {
-        state.errorMessage?.let { snackbar.showSnackbar(it) }
-    }
-    val uploadErrorMessage = uploadState.error?.let { stringResource(it.messageRes()) }
-    LaunchedEffect(uploadErrorMessage) {
-        uploadErrorMessage?.let {
-            snackbar.showSnackbar(it)
-            uploadViewModel.dismissError()
-        }
-    }
-
-    MeeshyBackground {
-    Scaffold(
-        containerColor = Color.Transparent,
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent,
-                    titleContentColor = MeeshyTheme.tokens.textPrimary,
-                    navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
-                    actionIconContentColor = MeeshyPalette.Indigo500,
-                ),
-                title = { Text(if (state.isEditing) stringResource(R.string.profile_edit_title) else stringResource(R.string.profile_title)) },
-                navigationIcon = {
-                    IconButton(onClick = if (state.isEditing) viewModel::cancelEditing else onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.profile_back))
-                    }
-                },
-                actions = {
-                    if (!state.isEditing) {
-                        state.user?.let { user ->
-                            ProfileShareBuilder.build(user)?.let { share ->
-                                IconButton(onClick = { shareTarget = share }) {
-                                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.profile_share_action))
-                                }
-                            }
-                        }
-                    }
-                    when {
-                        state.isEditing -> Unit
-                        state.isOwnProfile -> {
-                            IconButton(onClick = viewModel::startEditing) {
-                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_edit))
-                            }
-                        }
-                        else -> Unit
-                    }
-                },
-            )
         },
-        snackbarHost = { SnackbarHost(snackbar) },
-    ) { padding ->
-        if (state.isLoading) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            return@Scaffold
-        }
+        actions = actions,
+    )
+}
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(MeeshySpacing.xl),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
-        ) {
-            val header = state.user?.let { ProfileHeaderBuilder.build(it, System.currentTimeMillis()) }
-            state.user?.takeIf { !state.isEditing }?.let { ProfileBanner(user = it) }
-
-            // Avatar — completion ring + presence dot when viewing (not editing).
-            Box(contentAlignment = Alignment.Center) {
-                val user = state.user
-                if (!state.isEditing) {
-                    header?.completionPercent?.let { percent ->
-                        ProfileCompletionRing(
-                            percent = percent,
-                            color = MeeshyPalette.Indigo500,
-                            track = MeeshyTheme.tokens.backgroundTertiary,
-                            modifier = Modifier.size(108.dp),
-                        )
-                    }
-                }
-                val uploadingAvatar = uploadState.uploading == ImageUploadTarget.AVATAR
-                val avatarModifier = Modifier
-                    .size(96.dp)
-                    .clip(CircleShape)
-                    .let { base ->
-                        if (state.isEditing) {
-                            base.clickable(enabled = uploadState.uploading == null) {
-                                avatarPicker.launch(imageOnly)
-                            }
-                        } else {
-                            base
-                        }
-                    }
-                MeeshyAvatar(
-                    name = user?.displayName ?: user?.username ?: "?",
-                    size = 96.dp,
-                    modifier = avatarModifier,
-                    imageUrl = user?.avatar,
+/**
+ * L'avatar d'une page de profil : anneau de completude et point de presence en lecture ;
+ * en edition, [onPick] le rend touchable et une pastille crayon le signale.
+ */
+@Composable
+internal fun ProfileAvatar(
+    user: MeeshyUser?,
+    header: ProfileHeaderPresentation?,
+    isEditing: Boolean = false,
+    isUploading: Boolean = false,
+    pickEnabled: Boolean = true,
+    onPick: (() -> Unit)? = null,
+) {
+    Box(contentAlignment = Alignment.Center) {
+        if (!isEditing) {
+            header?.completionPercent?.let { percent ->
+                ProfileCompletionRing(
+                    percent = percent,
+                    color = MeeshyPalette.Indigo500,
+                    track = MeeshyTheme.tokens.backgroundTertiary,
+                    modifier = Modifier.size(108.dp),
                 )
-                if (uploadingAvatar) {
-                    Surface(
-                        color = MeeshyTheme.tokens.backgroundPrimary.copy(alpha = 0.55f),
-                        shape = CircleShape,
-                        modifier = Modifier.size(96.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(Modifier.size(28.dp))
-                        }
-                    }
-                }
-                if (state.isEditing && !uploadingAvatar) {
-                    Surface(
-                        color = MeeshyPalette.Indigo500,
-                        shape = CircleShape,
-                        border = BorderStroke(2.dp, MeeshyTheme.tokens.backgroundPrimary),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(30.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = stringResource(R.string.profile_change_avatar),
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                    }
-                }
-                if (!state.isEditing) {
-                    meeshyPresenceDotColor(header?.presence)?.let { dot ->
-                        Surface(
-                            color = dot,
-                            shape = CircleShape,
-                            border = BorderStroke(2.dp, MeeshyTheme.tokens.backgroundPrimary),
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .size(20.dp),
-                        ) {}
-                    }
-                }
-            }
-
-            if (state.isEditing) {
-                val uploadingBanner = uploadState.uploading == ImageUploadTarget.BANNER
-                TextButton(
-                    onClick = { bannerPicker.launch(imageOnly) },
-                    enabled = uploadState.uploading == null,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (uploadingBanner) {
-                        CircularProgressIndicator(Modifier.size(18.dp))
-                        Spacer(Modifier.width(MeeshySpacing.sm))
-                    }
-                    Text(stringResource(R.string.profile_change_banner))
-                }
-                OutlinedTextField(
-                    value = state.firstName,
-                    onValueChange = viewModel::onFirstNameChange,
-                    label = { Text(stringResource(R.string.profile_first_name_label)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = state.lastName,
-                    onValueChange = viewModel::onLastNameChange,
-                    label = { Text(stringResource(R.string.profile_last_name_label)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = state.displayName,
-                    onValueChange = viewModel::onDisplayNameChange,
-                    label = { Text(stringResource(R.string.profile_display_name_label)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = state.bio,
-                    onValueChange = viewModel::onBioChange,
-                    label = { Text(stringResource(R.string.profile_bio_label)) },
-                    minLines = 3,
-                    maxLines = 5,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                ContentLanguageField(
-                    label = stringResource(R.string.profile_system_language_label),
-                    selectedCode = state.systemLanguage,
-                    onSelect = viewModel::onSystemLanguageChange,
-                )
-                ContentLanguageField(
-                    label = stringResource(R.string.profile_regional_language_label),
-                    selectedCode = state.regionalLanguage,
-                    onSelect = viewModel::onRegionalLanguageChange,
-                )
-                ContentLanguageField(
-                    label = stringResource(R.string.profile_custom_language_label),
-                    selectedCode = state.customDestinationLanguage,
-                    onSelect = viewModel::onCustomDestinationLanguageChange,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-                ) {
-                    TextButton(onClick = viewModel::cancelEditing, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.profile_cancel))
-                    }
-                    Button(
-                        onClick = viewModel::saveProfile,
-                        enabled = !state.isSaving,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        if (state.isSaving) CircularProgressIndicator(Modifier.size(20.dp))
-                        else Text(stringResource(R.string.profile_save))
-                    }
-                }
-            } else {
-                Text(
-                    text = header?.displayName ?: stringResource(R.string.profile_unknown),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                header?.handle?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-                header?.lastSeenEpochMillis?.let { lastSeen ->
-                    val longStrings = rememberRelativeTimeLongStrings()
-                    val relative = RelativeTimeLongText.long(
-                        epochMillis = lastSeen,
-                        referenceMillis = System.currentTimeMillis(),
-                        zone = ZoneId.systemDefault(),
-                        locale = Locale.getDefault(),
-                        strings = longStrings,
-                    )
-                    Text(
-                        text = stringResource(R.string.profile_last_seen, relative),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-                header?.bio?.let {
-                    Spacer(Modifier.height(4.dp))
-                    Text(text = it, style = MaterialTheme.typography.bodyMedium)
-                }
-                if (header?.hasE2EE == true) {
-                    Spacer(Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = MeeshyPalette.Indigo500,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = stringResource(R.string.profile_e2ee),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MeeshyPalette.Indigo500,
-                        )
-                    }
-                }
-                header?.completionPercent?.let { percent ->
-                    Text(
-                        text = stringResource(R.string.profile_completion, percent),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-                header?.memberSinceEpochMillis?.let { millis ->
-                    Text(
-                        text = stringResource(R.string.profile_member_since, formatMemberSince(millis)),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-                val actionPlan = actionsState.plan
-                if (!state.isOwnProfile && actionPlan != null && state.user != null) {
-                    val user = state.user!!
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    ProfileActionsSection(
-                        plan = actionPlan,
-                        displayName = header?.displayName ?: user.username,
-                        isOpeningConversation = actionsState.isOpeningConversation,
-                        callbacks = ProfileActionCallbacks(
-                            onSendMessage = actionsViewModel::sendMessage,
-                            onRequest = actionsViewModel::requestConnection,
-                            onCancel = actionsViewModel::cancelConnection,
-                            onResend = actionsViewModel::resendConnection,
-                            onAccept = actionsViewModel::acceptConnection,
-                            onDecline = actionsViewModel::declineConnection,
-                            onBlock = actionsViewModel::block,
-                            onUnblock = actionsViewModel::unblock,
-                            onReport = { onReport(user.id, user.username) },
-                        ),
-                    )
-                }
-                header?.let { ProfileDetailsSection(it) }
-                state.user?.id?.takeIf { it.isNotBlank() }?.let { id ->
-                    ProfilePostsRow(onClick = { onViewPosts(id) })
-                }
-                state.stats?.let { ProfileStatsSection(it) }
-                state.timeline?.let { ProfileTimelineSection(it) }
             }
         }
-    }
-
-    ConnectionFeedbackHost(feedback = actionsViewModel.connectionFeedback)
-    FeedbackToastHost(toasts = actionToasts)
-    }
-
-    shareTarget?.let { share ->
-        ProfileShareSheet(share = share, onDismiss = { shareTarget = null })
+        val avatarModifier = Modifier
+            .size(96.dp)
+            .clip(CircleShape)
+            .let { base ->
+                if (isEditing && onPick != null) base.clickable(enabled = pickEnabled, onClick = onPick) else base
+            }
+        MeeshyAvatar(
+            name = user?.displayName ?: user?.username ?: "?",
+            size = 96.dp,
+            modifier = avatarModifier,
+            imageUrl = user?.avatar,
+        )
+        if (isUploading) {
+            Surface(
+                color = MeeshyTheme.tokens.backgroundPrimary.copy(alpha = 0.55f),
+                shape = CircleShape,
+                modifier = Modifier.size(96.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(28.dp))
+                }
+            }
+        }
+        if (isEditing && !isUploading) {
+            Surface(
+                color = MeeshyPalette.Indigo500,
+                shape = CircleShape,
+                border = BorderStroke(2.dp, MeeshyTheme.tokens.backgroundPrimary),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(30.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = stringResource(R.string.profile_change_avatar),
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+        if (!isEditing) {
+            meeshyPresenceDotColor(header?.presence)?.let { dot ->
+                Surface(
+                    color = dot,
+                    shape = CircleShape,
+                    border = BorderStroke(2.dp, MeeshyTheme.tokens.backgroundPrimary),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(20.dp),
+                ) {}
+            }
+        }
     }
 }
 
-private fun ProfileActionFeedback.toToastRequest(): FeedbackToastRequest = FeedbackToastRequest(
-    messageRes = when (this) {
-        ProfileActionFeedback.UserBlocked -> R.string.profile_toast_user_blocked
-        ProfileActionFeedback.BlockFailed -> R.string.profile_toast_block_failed
-        ProfileActionFeedback.UserUnblocked -> R.string.profile_toast_user_unblocked
-        ProfileActionFeedback.UnblockFailed -> R.string.profile_toast_unblock_failed
-        ProfileActionFeedback.OpenConversationFailed -> R.string.profile_open_conversation_error
-    },
-    kind = if (isError) FeedbackKind.Error else FeedbackKind.Success,
-)
+/** Les lignes d'identite en lecture : nom, pseudo, derniere activite, bio, E2EE, completude, membre depuis. */
+@Composable
+internal fun ProfileIdentityLines(header: ProfileHeaderPresentation?) {
+    Text(
+        text = header?.displayName ?: stringResource(R.string.profile_unknown),
+        style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold,
+    )
+    header?.handle?.let {
+        Text(
+            text = it,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+    }
+    header?.lastSeenEpochMillis?.let { lastSeen ->
+        val longStrings = rememberRelativeTimeLongStrings()
+        val relative = RelativeTimeLongText.long(
+            epochMillis = lastSeen,
+            referenceMillis = System.currentTimeMillis(),
+            zone = ZoneId.systemDefault(),
+            locale = Locale.getDefault(),
+            strings = longStrings,
+        )
+        Text(
+            text = stringResource(R.string.profile_last_seen, relative),
+            style = MaterialTheme.typography.labelMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+    }
+    header?.bio?.let {
+        Spacer(Modifier.height(4.dp))
+        Text(text = it, style = MaterialTheme.typography.bodyMedium)
+    }
+    if (header?.hasE2EE == true) {
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.Lock,
+                contentDescription = null,
+                tint = MeeshyPalette.Indigo500,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = stringResource(R.string.profile_e2ee),
+                style = MaterialTheme.typography.labelMedium,
+                color = MeeshyPalette.Indigo500,
+            )
+        }
+    }
+    header?.completionPercent?.let { percent ->
+        Text(
+            text = stringResource(R.string.profile_completion, percent),
+            style = MaterialTheme.typography.labelMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+    }
+    header?.memberSinceEpochMillis?.let { millis ->
+        Text(
+            text = stringResource(R.string.profile_member_since, formatMemberSince(millis)),
+            style = MaterialTheme.typography.labelMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+    }
+}
+
+/**
+ * Le corps en lecture d'une page de profil, sous l'avatar : identite, [actions] (la page
+ * d'un tiers y pose ses boutons ; ma page n'en a pas), details, postes, statistiques et
+ * activite.
+ */
+@Composable
+internal fun ProfileReadOnlyBody(
+    userId: String?,
+    header: ProfileHeaderPresentation?,
+    stats: UserStatsPresentation?,
+    timeline: StatsTimelinePresentation?,
+    onViewPosts: (userId: String) -> Unit,
+    actions: @Composable () -> Unit = {},
+) {
+    ProfileIdentityLines(header)
+    actions()
+    header?.let { ProfileDetailsSection(it) }
+    userId?.takeIf { it.isNotBlank() }?.let { id ->
+        ProfilePostsRow(onClick = { onViewPosts(id) })
+    }
+    stats?.let { ProfileStatsSection(it) }
+    timeline?.let { ProfileTimelineSection(it) }
+}
 
 /** A tappable row leading to this user's authored-posts feed. */
 @Composable
-private fun ProfilePostsRow(onClick: () -> Unit) {
+internal fun ProfilePostsRow(onClick: () -> Unit) {
     Spacer(Modifier.height(MeeshySpacing.md))
     Row(
         modifier = Modifier
@@ -512,7 +308,7 @@ private fun ProfilePostsRow(onClick: () -> Unit) {
 
 /** The read-only activity stats dashboard — counter tiles + achievement badges. */
 @Composable
-private fun ProfileStatsSection(stats: UserStatsPresentation) {
+internal fun ProfileStatsSection(stats: UserStatsPresentation) {
     if (stats.tiles.isEmpty()) return
     Spacer(Modifier.height(MeeshySpacing.md))
     Column(
@@ -567,7 +363,7 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
 
 /** The read-only 30-day activity sparkline — accent-coherent line + area chart. */
 @Composable
-private fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
+internal fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
     if (timeline.bars.isEmpty()) return
     val accent = MeeshyPalette.Indigo500
     Spacer(Modifier.height(MeeshySpacing.md))
@@ -718,12 +514,12 @@ private fun statMetricLabel(metric: StatMetric): Int = when (metric) {
 }
 
 /** Localized medium-date label for the "member since" line. */
-private fun formatMemberSince(epochMillis: Long): String =
+internal fun formatMemberSince(epochMillis: Long): String =
     DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMillis))
 
 /** The read-only secondary identity rows (languages · country · timezone). */
 @Composable
-private fun ProfileDetailsSection(header: ProfileHeaderPresentation) {
+internal fun ProfileDetailsSection(header: ProfileHeaderPresentation) {
     val rows = remember(header) { ProfileDetailRows.build(header) }
     if (rows.isEmpty()) return
     Spacer(Modifier.height(4.dp))
@@ -766,7 +562,7 @@ private fun profileDetailLabel(kind: ProfileDetailKind): Int = when (kind) {
 
 /** A circular progress ring around the avatar showing the profile-completion percentage. */
 @Composable
-private fun ProfileCompletionRing(
+internal fun ProfileCompletionRing(
     percent: Int,
     color: Color,
     track: Color,
@@ -807,7 +603,7 @@ private fun ProfileCompletionRing(
  * buffer, keeping this composable a stateless projection of its argument.
  */
 @Composable
-private fun ContentLanguageField(
+internal fun ContentLanguageField(
     label: String,
     selectedCode: String,
     onSelect: (String) -> Unit,
@@ -848,7 +644,7 @@ private fun ContentLanguageField(
 }
 
 /** Maps an [ImageUploadError] to the user-facing string shown in the snackbar. */
-private fun ImageUploadError.messageRes(): Int = when (this) {
+internal fun ImageUploadError.messageRes(): Int = when (this) {
     ImageUploadError.EMPTY -> R.string.profile_image_error_empty
     ImageUploadError.UNSUPPORTED_TYPE -> R.string.profile_image_error_type
     ImageUploadError.TOO_LARGE -> R.string.profile_image_error_too_large
@@ -862,7 +658,7 @@ private fun ImageUploadError.messageRes(): Int = when (this) {
  * filename/MIME defaulting lives in `MediaUpload`, and the accept/reject decision in
  * `ImageUploadValidator`, so this stays a thin reader.
  */
-private fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
+internal fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
     val bytes = runCatching { openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: return null
     val mimeType = getType(uri).orEmpty()
     val fileName = displayName(uri).orEmpty()

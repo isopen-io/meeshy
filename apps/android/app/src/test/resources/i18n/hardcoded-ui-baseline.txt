@@ -21,4 +21,3 @@ contentDescription | sdk-ui/src/main/kotlin/me/meeshy/ui/component/recording/Voi
 # Nom du canal de notifications des messages, écrit deux fois (installeur de canaux et service FCM)
 # et visible dans les réglages système : à passer en ressource par le lot du pipeline push.
 NotificationChannel | app/src/main/kotlin/me/meeshy/app/push/NotificationChannelInstaller.kt | Messages
-NotificationChannel | app/src/main/kotlin/me/meeshy/app/push/MeeshyFcmService.kt | Messages

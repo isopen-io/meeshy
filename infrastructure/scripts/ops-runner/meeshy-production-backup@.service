@@ -1,0 +1,24 @@
+[Unit]
+Description=Sauvegarde de la production Meeshy, %i (base verifiee, medias, configuration)
+# Le gabarit de la production (#11509) : le relais d'operations lance l'instance @on-demand.
+# La nocturne reste meeshy-nightly-backup.timer/.service (#9665), sur le MEME script, le MEME
+# dossier et le MEME verrou : les deux ne tournent jamais ensemble, et chaque origine a sa
+# rotation (#11450). Toute instance autre que nightly ou on-demand est refusee par le script.
+Documentation=https://github.com/isopen-io/meeshy/issues/11509 https://github.com/isopen-io/meeshy/issues/11450
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+Environment=BACKUP_ORIGIN=%i
+Environment=COMPOSE_DIR=/opt/meeshy/production
+Environment=BACKUP_ROOT=/opt/meeshy/backups/nightly
+Environment=DB_CONTAINER=meeshy-database
+Environment="VOLUMES=meeshy_gateway_uploads meeshy_gateway_sounds meeshy_frontend_uploads meeshy_redis_data"
+Environment=STATUS_DIR=/opt/meeshy/backups/nightly-status
+Environment=LOCK_FILE=/run/meeshy-nightly-backup.lock
+ExecStart=/opt/meeshy/production/ops/bin/meeshy-nightly-backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=4h

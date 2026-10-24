@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { conversationStore } from '@/lib/conversation-store';
+import { discardSend, type DiscardOutcome } from '@/lib/send/discard-send';
 import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
 import { notePublicationParticipation } from '@/lib/view/publication-participation';
@@ -455,6 +456,11 @@ export function retrySendAction(params: {
     clientMessageId,
     deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online },
   });
+}
+
+/** `discardSendAction` (#12632) — même motif : lié à `appQueryClient` et à `outboxStore`. `null` : rien à abandonner. */
+export function discardSendAction(params: { readonly conversationId: string; readonly clientMessageId: string }): DiscardOutcome | null {
+  return discardSend({ ...params, deps: { queryClient: appQueryClient, outbox: outboxStore } });
 }
 
 /**

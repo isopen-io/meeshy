@@ -1,48 +1,19 @@
 package me.meeshy.app.push
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.Context
-import android.content.Intent
-import android.media.AudioAttributes
-import android.media.RingtoneManager
-import androidx.core.app.NotificationCompat
-import androidx.core.app.Person
-import androidx.work.WorkManager
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
-import me.meeshy.app.MainActivity
-import me.meeshy.app.R
-import me.meeshy.sdk.model.PushPresentationDecision
-import me.meeshy.sdk.model.PushPresentationPolicy
-import me.meeshy.sdk.model.call.CallStopPush
-import me.meeshy.sdk.model.call.IncomingCallPush
-import me.meeshy.sdk.model.call.IncomingCallPushRoute
-import me.meeshy.sdk.notification.ActiveConversationStore
-import me.meeshy.sdk.notification.NotificationPreferencesStore
-import me.meeshy.sdk.outbox.OutboxFlushWorker
-import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.socket.SocketManager
 import timber.log.Timber
-import java.time.LocalDateTime
 import javax.inject.Inject
 
 /**
- * FCM push handler (ARCHITECTURE.md §8).
- * New token registration → persisted on server via [NotificationRepository.registerDeviceToken].
- * Incoming push → routed by kind:
- *  - a **call** data push ([IncomingCallPushRoute.Ring]) fires a full-screen,
- *    CATEGORY_CALL notification so a backgrounded/killed device rings; duplicates
- *    are suppressed by [IncomingCallRingStore].
- *  - a **stop-ring** data push ([IncomingCallPushRoute.StopRing] —
- *    `call_cancel` / `call_answered_elsewhere`) cancels that notification so the
- *    device stops ringing for a call that ended or was answered on another device.
- *  - a **revocation** data push (`notification_revoked`, [NotificationRevocationParser])
- *    cancels the banners the server retracted (reaction undone, message / post /
- *    comment deleted) — data-only, so it reaches this service even when killed.
- *  - any other push shows the rich message notification + triggers an outbox flush.
+ * FCM push entry point (ARCHITECTURE.md §8) — a thin dispatcher, never edited to add a
+ * behaviour :
+ *  - a new token is registered on the gateway ([PushTokenHandler]) ;
+ *  - each push is decoded ONCE ([IncomingPush], `PushPayload`) and handed to
+ *    [PushMessageDispatcher] : call ring / stop-ring ([IncomingCallNotificationPresenter]),
+ *    revocation ([RevocationPushHandler]), message pipeline ([MessageNotificationPresenter]),
+ *    then every [PushObserver] (`@IntoSet`).
  */
 @AndroidEntryPoint
 class MeeshyFcmService : FirebaseMessagingService() {
@@ -51,19 +22,7 @@ class MeeshyFcmService : FirebaseMessagingService() {
     lateinit var pushHandler: PushTokenHandler
 
     @Inject
-    lateinit var ringStore: IncomingCallRingStore
-
-    @Inject
-    lateinit var session: SessionRepository
-
-    @Inject
-    lateinit var socketManager: SocketManager
-
-    @Inject
-    lateinit var notificationPreferencesStore: NotificationPreferencesStore
-
-    @Inject
-    lateinit var activeConversationStore: ActiveConversationStore
+    lateinit var dispatcher: PushMessageDispatcher
 
     override fun onNewToken(token: String) {
         Timber.d("FCM token refreshed")
@@ -71,225 +30,16 @@ class MeeshyFcmService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        Timber.d("FCM message: ${message.data}")
-
-        when (val route = ringStore.route(message.data, System.currentTimeMillis(), selfUserId = session.currentUserId)) {
-            is IncomingCallPushRoute.Ring -> showIncomingCallNotification(route.push)
-            is IncomingCallPushRoute.StopRing -> cancelIncomingCallNotification(route.push)
-            is IncomingCallPushRoute.Suppress -> Timber.d("Suppressed call push: ${route.reason}")
-            IncomingCallPushRoute.NotACallPush -> handleDataPush(message)
-        }
-    }
-
-    /**
-     * La révocation passe AVANT le chemin message : elle est data-only, sans
-     * bloc `notification`, que [handleMessagePush] ignore par construction.
-     */
-    private fun handleDataPush(message: RemoteMessage) {
-        val revocation = NotificationRevocationParser.parse(message.data)
-        if (revocation != null) {
-            cancelRevokedNotifications(revocation)
-            return
-        }
-        handleMessagePush(message)
-    }
-
-    private fun cancelRevokedNotifications(revocation: NotificationRevocation) {
-        Timber.d("Revocation push: ${revocation.notificationIds.size} notification(s)")
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        revocation.notificationManagerIds().forEach { manager.cancel(it) }
-        revocation.systemRenderedTags().forEach { manager.cancel(it, 0) }
-    }
-
-    private fun cancelIncomingCallNotification(push: CallStopPush) {
-        Timber.d("Stop-ring push (${push.type}) for call ${push.callId}")
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.cancel(push.callId.hashCode())
-    }
-
-    private fun handleMessagePush(message: RemoteMessage) {
-        // Trigger outbox flush on any non-call push (connectivity may be restored).
-        WorkManager.getInstance(applicationContext)
-            .enqueue(OutboxFlushWorker.buildRequest())
-
-        val notification = message.notification ?: return
-
-        // Un push message reçu au PREMIER PLAN (le seul cas où `onMessageReceived` porte un
-        // bloc `notification`) ne lève une bannière système que si la présentation l'autorise :
-        // le socket vivant sert déjà le toast in-app, la conversation ouverte est sous les yeux,
-        // et les préférences (push maître / heures calmes / bascule par type) gardent le reste.
-        // Cf. [PushPresentationPolicy] — pendant du résolveur `willPresent` d'iOS.
-        val decision = PushPresentationPolicy.decide(
-            socketConnected = socketManager.isConnected,
-            preferences = notificationPreferencesStore.preferences.value,
-            rawType = message.data["type"],
-            conversationId = message.data["conversationId"],
-            activeConversationId = activeConversationStore.conversationId.value,
-            now = LocalDateTime.now(),
+        val notification = message.notification
+        Timber.d("FCM message received (type=%s)", message.data["type"])
+        dispatcher.dispatch(
+            IncomingPush.of(
+                data = message.data,
+                notificationTitle = notification?.title,
+                notificationBody = notification?.body,
+                hasNotificationBlock = notification != null,
+            ),
         )
-        if (decision !is PushPresentationDecision.Alert) return
-
-        showNotification(
-            title = notification.title ?: "Meeshy",
-            body = notification.body ?: "",
-            // Le TYPE décide de l'index de la bannière : le gateway pose
-            // `data.conversationId` pour TOUS les types, réactions comprises,
-            // et l'indexer par conversation les ferait toutes s'écraser avec le
-            // message courant du fil. Cf. [MessageNotificationId].
-            type = message.data["type"],
-            conversationId = message.data["conversationId"],
-            notificationId = message.data["notificationId"],
-            playSound = decision.playSound,
-        )
-    }
-
-    private fun showIncomingCallNotification(push: IncomingCallPush) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(
-            NotificationChannel(
-                NotificationChannelIds.CHANNEL_CALLS,
-                getString(R.string.call_channel_name),
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply {
-                description = getString(R.string.call_channel_description)
-                setShowBadge(false)
-                // Sonnerie APPAREIL en usage ring (volume sonnerie, mode
-                // silencieux respecté) : écran allumé/déverrouillé, le ring
-                // arrive en heads-up — sans son de canal il n'émettait qu'un
-                // ding de notification. Écran verrouillé, le full-screen
-                // intent ouvre l'app qui sonne via son CallToneController.
-                setSound(
-                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build(),
-                )
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 1_000, 800, 1_000, 800)
-            },
-        )
-        // Les canaux sont IMMUABLES après création : les installs existantes
-        // gardaient l'ancien canal muet — on le supprime pour que le nouveau
-        // (id v2) porte la sonnerie partout.
-        manager.deleteNotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_CALLS)
-
-        val fullScreenIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_CALL_ID, push.callId)
-            push.conversationId?.let { putExtra(EXTRA_CONVERSATION_ID, it) }
-            putExtra(EXTRA_CALLER_NAME, push.displayName)
-            putExtra(EXTRA_IS_VIDEO, push.isVideo)
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            push.callId.hashCode(),
-            fullScreenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        // Bouton « Refuser » (CallStyle) : coupe la sonnerie ET prévient le
-        // correspondant — sans lui, refuser n'existait pas et l'appelant
-        // sonnait 60 s dans le vide.
-        val declinePendingIntent = PendingIntent.getBroadcast(
-            this,
-            ("decline:" + push.callId).hashCode(),
-            Intent(this, DeclineCallReceiver::class.java).putExtra(EXTRA_CALL_ID, push.callId),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        // Bouton « Répondre » : mêmes extras que le full-screen intent + le flag
-        // auto-answer — l'écran d'appel décroche directement (gated permissions)
-        // au lieu d'exiger un second tap sur Accepter. RequestCode distinct :
-        // un même requestCode écraserait le PendingIntent du tap/full-screen.
-        val answerIntent = Intent(fullScreenIntent).putExtra(EXTRA_AUTO_ANSWER, true)
-        val answerPendingIntent = PendingIntent.getActivity(
-            this,
-            ("answer:" + push.callId).hashCode(),
-            answerIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        // Prisme : le push d'appel est data-only et le serveur a déjà résolu la
-        // langue de l'utilisateur (data.title/body localisés) — les ressources
-        // (locale appareil) ne servent que de fallback pour un gateway antérieur.
-        val fallbackBody = getString(
-            if (push.isVideo) R.string.call_incoming_video else R.string.call_incoming_audio,
-        )
-        val caller = Person.Builder()
-            .setName(push.displayName)
-            .setImportant(true)
-            .build()
-        val notification = NotificationCompat.Builder(this, NotificationChannelIds.CHANNEL_CALLS)
-            .setSmallIcon(android.R.drawable.sym_call_incoming)
-            .setContentTitle(push.title ?: push.displayName)
-            .setContentText(push.body ?: fallbackBody)
-            .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setOngoing(true)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .setFullScreenIntent(pendingIntent, true)
-            // Répondre = décroche directement (auto-answer) ; Refuser =
-            // DeclineCallReceiver. Sur API < 31, CallStyle dégrade en
-            // notification standard avec les deux actions.
-            .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declinePendingIntent, answerPendingIntent))
-            .build()
-
-        manager.notify(push.callId.hashCode(), notification)
-    }
-
-    private fun showNotification(
-        title: String,
-        body: String,
-        type: String?,
-        conversationId: String?,
-        notificationId: String?,
-        playSound: Boolean,
-    ) {
-        // The channel is created eagerly at process start
-        // (NotificationChannelInstaller, MeeshyApplication.onCreate) — this
-        // idempotent call is a defensive belt-and-suspenders only, kept so a
-        // foreground-received push never depends on that ordering.
-        val channelId = NotificationChannelIds.CHANNEL_MESSAGES
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        manager.createNotificationChannel(
-            NotificationChannel(channelId, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "New messages and mentions"
-            },
-        )
-
-        val tapIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            conversationId?.let { putExtra("conversationId", it) }
-        }
-        // Un seul index pour l'intent ET la bannière — celui que la révocation
-        // annule (MessageNotificationId) : la conversation pour un ARRIVAGE de
-        // message, la notification pour tout le reste, même quand la charge
-        // porte une conversation (les sociales se recouvraient sur 0, puis sur
-        // l'index du message courant).
-        val notificationManagerId = MessageNotificationId.of(type, conversationId, notificationId)
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            notificationManagerId,
-            tapIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            // « Sons » coupé ⇒ bannière silencieuse (ni son ni vibration) — la
-            // décision vient de [PushPresentationPolicy], pas d'un canal figé.
-            .setSilent(!playSound)
-            .build()
-
-        manager.notify(notificationManagerId, notification)
     }
 
     companion object {

@@ -68,6 +68,9 @@ extension ConversationViewModel {
     /// snapshot to `[MeeshyMessage]`, replaces `messages`, and calls
     /// `objectWillChange` so SwiftUI re-renders.
     func subscribeToMessageStore() {
+        // #3707 — une enveloppe de CETTE conversation ouverte : le fil relit le magasin, qui pose le clair.
+        endToEndOpenings = EndToEndThreadPlaintexts.openings(of: conversationId, from: endToEnd)
+            .sink { [weak messageStore] in messageStore?.messagesDidChange.send() }
         storeObservation = messageStore.messagesDidChange
             .sink { [weak self] in
                 // Defer to a fresh runloop tick via DispatchQueue.main.async — a
@@ -83,15 +86,11 @@ extension ConversationViewModel {
                     let generation = self.storeRefreshGeneration
                     let userId = self.currentUserId
                     let mapped = self.messageStore.domainMessages(currentUserId: userId)
-                    // E2EE: encrypted DMs are persisted as ciphertext — the
-                    // socket and REST ingestion paths both store `api.content`
-                    // verbatim, so cleartext never touches disk. Decrypt the
-                    // mapped snapshot in memory so every store-driven refresh
-                    // surfaces readable content. Meeshy E2EE uses a per-peer
-                    // symmetric key, so re-decrypting the same ciphertext on
-                    // each refresh is idempotent and cheap.
-                    let needsDecryption = self.isDirect
-                        && mapped.contains { $0.isEncrypted && !$0.content.isEmpty }
+                    // E2EE (#3707) : la base ne garde que le littéral servi ;
+                    // le clair vient de la base scellée de libsignal, posé en
+                    // mémoire à chaque relecture (lecture locale, pas de
+                    // déchiffrement : l'enveloppe a été ouverte une fois).
+                    let needsDecryption = mapped.contains(where: EndToEndThreadPlaintexts.awaitsPlaintext)
                     guard needsDecryption else {
                         // Même slice, aucun `await` entre les deux : les
                         // métadonnées suivent l'id que la bulle vient de prendre.
@@ -229,19 +228,8 @@ extension ConversationViewModel {
 
     // MARK: - Decryption
 
+    /// Pose le clair que cet appareil a déchiffré ou écrit (#3707).
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
-        // Clé sous le PAIR local, jamais sous l'expéditeur affirmé (#11232, #12757) ; pair inconnu ⇒ rien.
-        guard isDirect, let peer = DirectSessionPeer(peerUserId: participantUserId ?? currentConversation?.participantUserId, readerUserId: currentUserId) else { return }
-        let payloads = msgs.compactMap { DecryptionPayload(decrypting: $0, under: peer) }
-        guard !payloads.isEmpty else { return }
-
-        let results = await decryptionActor.decrypt(payloads)
-        let resultsByMessageId = Dictionary(results.map { ($0.messageId, $0) }, uniquingKeysWith: { first, _ in first })
-
-        for i in msgs.indices {
-            if let plaintext = resultsByMessageId[msgs[i].id]?.plaintext {
-                msgs[i].adoptDecryptedContent(plaintext)
-            }
-        }
+        await EndToEndThreadPlaintexts.resolve(&msgs, from: endToEnd, conversationId: conversationId)
     }
 }

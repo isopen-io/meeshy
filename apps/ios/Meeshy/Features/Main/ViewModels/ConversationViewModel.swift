@@ -390,6 +390,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// Subscription that mirrors `MessageStore.messagesDidChange` into the
     /// `messages` array.  Established once in `init` after `messageStore` is ready.
     var storeObservation: AnyCancellable?
+    var endToEndOpenings: AnyCancellable?
     var socketHandler: ConversationSocketHandler?
 
     // MARK: - Split Orchestrators (incremental migration scaffold)
@@ -443,8 +444,8 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     private let liveCallJoin: LiveCallJoinContext
     let translationService: TranslationServiceProviding
     let attachmentTranslationService: AttachmentTranslationProviding
-    let messageEncryptor: DirectMessageEncrypting
-    var decryptionActor: any OnDeviceMessageDecrypting { collaborators.decryptor }
+    /// #3707 — l'E2EE libsignal : le scellement par appareil et le clair que cet appareil a déchiffré.
+    let endToEnd: any EndToEndMessagingProviding
 
     /// Captured at init so the heavy side-effects (DB observation, initial
     /// load, Combine subscriptions, singleton mutations) can be deferred out
@@ -493,7 +494,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         liveCallJoin: LiveCallJoinContext = .live,
         translationService: TranslationServiceProviding = TranslationService.shared,
         attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared,
-        messageEncryptor: DirectMessageEncrypting = SessionManager.shared,
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
         afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared,
         protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared,
         receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared,
@@ -509,7 +510,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         self.liveCallJoin = liveCallJoin
         self.translationService = translationService
         self.attachmentTranslationService = attachmentTranslationService
-        self.messageEncryptor = messageEncryptor
+        self.endToEnd = endToEnd
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
         self.lastReadMessageId = lastReadMessageId

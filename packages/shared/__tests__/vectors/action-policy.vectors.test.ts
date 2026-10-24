@@ -57,3 +57,28 @@ describe('vecteurs : conversation-actions', () => {
     expect(conversationActionsFor(vector.input)).toEqual(vector.expected);
   });
 });
+
+describe('« Supprimer pour moi » suit la participation active (#11415)', () => {
+  const departed = messageVectors.filter((vector) => !vector.input.viewer.isActiveMember);
+
+  it('aucun lecteur hors participation active ne se voit offrir « pour moi », comme DELETE /messages/:id/delete-for-me', () => {
+    expect(departed.map((vector) => vector._label)).toEqual(
+      expect.arrayContaining([
+        'non-membre-supprimer-pour-moi-refuse',
+        'ancien-membre-supprimer-pour-moi-refuse',
+        'ancien-membre-son-propre-message-ne-se-supprime-plus-pour-moi',
+        'ancien-membre-message-supprime-ne-se-masque-plus',
+      ]),
+    );
+    departed.forEach((vector) => {
+      expect(vector.expected.verdicts.deleteForMe).toBe(false);
+      expect(vector.expected.groups.destructive).not.toContain('deleteForMe');
+    });
+  });
+
+  it('un participant actif garde « pour moi »', () => {
+    const active = messageVectors.find((vector) => vector._label === 'membre-actif-supprimer-pour-moi');
+    expect(active?.expected.verdicts.deleteForMe).toBe(true);
+    expect(active?.expected.groups.destructive).toContain('deleteForMe');
+  });
+});
