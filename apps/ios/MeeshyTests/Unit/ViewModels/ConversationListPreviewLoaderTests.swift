@@ -21,7 +21,9 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
     ) -> (sut: ConversationListPreviewLoader, service: MockMessageService, cache: MockConversationPreviewCache) {
         let service = MockMessageService()
         let cacheMock = MockConversationPreviewCache(messages: cache, translations: cachedTranslations)
-        let sut = ConversationListPreviewLoader(messageService: service, cache: cacheMock, readerPrism: { prism })
+        let sut = ConversationListPreviewLoader(
+            messageService: service, cache: cacheMock, readerPrism: { prism }, isDirectConversation: { _ in false }
+        )
         return (sut, service, cacheMock)
     }
 
@@ -248,7 +250,9 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         service.listResult = .success(page(content: "réseau"))
         let cache = MockConversationPreviewCache(messages: .stale([makeMessage(content: "en cache")], age: 4_000))
         cache.holdsNextRead = true
-        let sut = ConversationListPreviewLoader(messageService: service, cache: cache, readerPrism: { ["fr"] })
+        let sut = ConversationListPreviewLoader(
+            messageService: service, cache: cache, readerPrism: { ["fr"] }, isDirectConversation: { _ in false }
+        )
         let id = conversationId
 
         let prefetch = Task { await sut.load(for: id, intent: .prefetch) }

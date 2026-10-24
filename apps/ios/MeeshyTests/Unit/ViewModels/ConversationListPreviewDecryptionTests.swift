@@ -17,9 +17,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
     private let ciphertext = "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eA=="
     private let restVersion = Date(timeIntervalSince1970: 1_792_310_400)
 
-    @MainActor
     private final class PhaseLog {
-        nonisolated deinit {}
         var phases: [ConversationPreviewPhase?] = []
     }
 
