@@ -4480,6 +4480,185 @@
       ]
     },
     {
+      "_label": "e2ee-moderator-plateforme-ne-modifie-pas-autrui",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": "e2ee",
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "MODERATOR",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "copy",
+            "translate"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "report"
+          ],
+          "moderation": [
+            "remove"
+          ],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": {
+            "reasonRequired": true
+          },
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": "device",
+          "transcribe": null,
+          "sentiment": null,
+          "forward": false,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": "e2ee-server-feature-absent"
+        }
+      },
+      "clientStricter": [
+        "edit"
+      ]
+    },
+    {
+      "_label": "serveur-moderator-plateforme-modifie-autrui",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": "server",
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "MODERATOR",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "edit",
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [
+            "remove"
+          ],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": {
+            "asModerator": true,
+            "windowEndsAt": null
+          },
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": {
+            "reasonRequired": true
+          },
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
       "_label": "serveur-photo-ne-se-transfere-pas",
       "input": {
         "message": {

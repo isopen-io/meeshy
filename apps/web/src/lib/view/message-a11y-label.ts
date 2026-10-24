@@ -1,3 +1,5 @@
+import { editedByThirdParty } from '@meeshy/shared/utils/message-edit-attribution';
+
 import { isAfterReadMessage } from './after-read';
 import { kindOf } from './message';
 import type { Delivery } from './message';
@@ -340,7 +342,8 @@ export function composeMessageLabel({
     if (word !== undefined) segments.push(word);
   }
 
-  if (message.isEdited) segments.push('modifié');
+  /* #11375 — la modification d'un modérateur se PRONONCE comme elle se voit. */
+  if (message.isEdited) segments.push(editedByThirdParty(message) ? translate(language, 'message.editedByModerator') : 'modifié');
   if (message.pinnedAt !== undefined) segments.push('épinglé');
   /**
    * « TRANSFÉRÉ » APRÈS « ÉPINGLÉ » (#5936, § 9 Q8 de la spécification) —

@@ -129,7 +129,7 @@ extension MessageRecord {
             messageType: msgType,
             messageSource: msgSource,
             isEdited: isEdited,
-            editedAt: editedAt,
+            editedAt: editedAt, editedById: editedById,
             deletedAt: deletedAt,
             replyToId: replyToId,
             storyReplyToId: storyReplyToId,

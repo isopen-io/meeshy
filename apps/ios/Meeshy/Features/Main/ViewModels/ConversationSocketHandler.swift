@@ -568,7 +568,9 @@ final class ConversationSocketHandler {
                 newContent: apiMsg.content ?? "",
                 editedAt: apiMsg.editedAt ?? Date(),
                 marksEdited: apiMsg.isEdited ?? true,
-                arrivalsNotice: apiMsg.arrivalsNotice
+                arrivalsNotice: apiMsg.arrivalsNotice,
+                // #11375 — l'auteur servi : le modérateur est gravé, l'auteur efface la mention.
+                authorship: apiMsg.editAuthorship
             )
         } catch {
             Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")

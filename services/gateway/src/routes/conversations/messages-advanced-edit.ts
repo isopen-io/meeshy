@@ -30,8 +30,11 @@ import {
   isEditRefused,
   describeEditRefusalForSocket,
   editRefusalCode,
+  editAttributionOf,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../../services/messaging/messageEditAdmission';
+import { editAttributionReaderOf } from '../../services/messaging/editAttributionReader';
+import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import {
@@ -305,6 +308,8 @@ export function registerEditMessagePutRoute(
           ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...nextMetadata
         },
@@ -471,7 +476,10 @@ export function registerEditMessagePutRoute(
       // reflète cet état : `[]`. Cette phrase désignait auparavant la retraduction qui SUIT, qui invalidait
       // trop tard pour la charge déjà composée.
       const messageResponse = {
-        ...updatedMessage,
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
         conversationId,
         // #7927 — la citation passe par la garde UNIQUE : l'`include` sert la
         // ligne CITÉE entière, texte d'un parent supprimé ou protégé compris,
@@ -733,6 +741,8 @@ export function registerEditMessagePatchRoute(
           content: processedContent,
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...patchedMetadata
         },
@@ -822,7 +832,10 @@ export function registerEditMessagePatchRoute(
       }
 
       const messageResponse = {
-        ...updatedMessage,
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
         conversationId: message.conversationId,
         translations: transformTranslationsToArray(
           messageId,

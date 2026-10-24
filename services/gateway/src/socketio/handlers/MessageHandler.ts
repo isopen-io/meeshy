@@ -103,9 +103,9 @@ import {
   describeEditRefusalForSocket,
 } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { writeGuardedMessageEdit } from '../../services/messaging/messageEditWrite';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
-import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -846,43 +846,26 @@ export class MessageHandler {
         ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, editedLinks.trackingLinks) }
         : {};
 
-      // Optimistic-concurrency guard: only write while the message is still
-      // non-deleted. A `message:delete` landing between the read above and
-      // this write would otherwise resurrect the row with edited content
-      // (unconditional `update` by id succeeds regardless of `deletedAt`),
-      // and the gateway would broadcast MESSAGE_EDITED for a message clients
-      // already removed. Mirrors the guarded `updateMany` used by
-      // handleMessageDelete's lastMessageAt recompute.
-      const editedAt = new Date();
-      const editResult = await this.prisma.message.updateMany({
-        where: { id: validated.messageId, deletedAt: null },
-        data: {
-          content: editedContent,
-          isEdited: true,
-          editedAt,
-          translations: null,
-          ...nextMetadata,
+      const { written, editedAt, editedBy } = await writeGuardedMessageEdit({
+        prisma: this.prisma,
+        messageId: validated.messageId,
+        content: editedContent,
+        admission,
+        editorUserId: userId,
+        nextMetadata,
+        previous: {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          senderUserId: message.sender?.userId ?? null,
+          previousContent: message.content,
         },
       });
 
-      if (editResult.count === 0) {
+      if (!written) {
         this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
         return;
       }
-
-      // Les effets DURABLES de l'édition (compteurs, notifications, traductions
-      // partagées d'avant) vivent dans `applyMessageEditEffects`, une fois pour
-      // les quatre transports. `editedAt` est l'instant ÉCRIT ci-dessus, remis
-      // tel quel : la version de source d'une traduction partagée en est l'ISO.
-      await applyMessageEditEffects(this.prisma, {
-        id: message.id,
-        conversationId: message.conversationId,
-        senderId: message.senderId,
-        senderUserId: message.sender?.userId ?? null,
-        previousContent: message.content,
-        content: editedContent,
-        editedAt,
-      });
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
       // n'écrivait AUCUNE mention : ni ligne `Mention`, ni `validatedMentions`,
@@ -924,6 +907,7 @@ export class MessageHandler {
           content: editedContent,
           isEdited: true,
           editedAt,
+          editedBy,
         }),
         sender: message.sender,
       };

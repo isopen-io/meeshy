@@ -44,6 +44,7 @@
  */
 
 import { isDeclaredMinor } from '@meeshy/shared/utils/age';
+import { AUTHOR_EDIT, type MessageEditorColumns } from '@meeshy/shared/utils/message-edit-attribution';
 import { GLOBAL_CONVERSATION_TYPE } from '@meeshy/shared/utils/global-minor-restriction';
 import { captureNoticeOf } from './captureNoticeVisibility.js';
 import {
@@ -103,6 +104,8 @@ export type MessageEditAdmission =
       readonly admitted: true;
       /** L'éditeur n'est pas l'auteur : il édite au titre de son rôle global. */
       readonly asModerator: boolean;
+      /** #11375 — ce rôle global, posé sur la seule branche `asModerator` : il est ENREGISTRÉ avec la modification. */
+      readonly editorRole?: string;
       /** L'auteur a dépassé 24h et son rôle global lui a ouvert la porte. */
       readonly windowBypassed: boolean;
     }
@@ -314,6 +317,21 @@ export function describeEditRefusalForSocket(reason: MessageEditRefusal): string
   }
 }
 
+/**
+ * #11375 — CE QUE L'ÉCRITURE ENREGISTRE comme auteur de la modification.
+ *
+ * Décision porteur du 2026-10-24 : un modérateur de plateforme modifie le
+ * message d'un autre À VISAGE DÉCOUVERT. Les quatre transports d'édition
+ * répandent ce résultat dans leur écriture (`thirdPartyEditorId` / `thirdPartyEditorRole`) :
+ * le tiers est enregistré avec son rôle, et l'AUTEUR qui réécrit remet les deux
+ * colonnes à `null` — la mention dit qui a écrit la DERNIÈRE version. Un refus
+ * n'enregistre personne.
+ */
+export function editAttributionOf(admission: MessageEditAdmission, editorUserId: string): MessageEditorColumns {
+  if (isEditRefused(admission) || !admission.asModerator) return AUTHOR_EDIT;
+  return { thirdPartyEditorId: editorUserId, thirdPartyEditorRole: admission.editorRole ?? null };
+}
+
 /** Le code STABLE d'un refus d'édition, quand il en a un — les transports le servent à côté de la phrase. */
 export function editRefusalCode(reason: MessageEditRefusal): string | undefined {
   return reason === 'end-to-end-encrypted' ? E2EE_PLAINTEXT_REFUSED : undefined;
@@ -338,7 +356,7 @@ async function decideMessageEdit(
     const role = membership.globalRole;
     if (!role || !PRIVILEGED_GLOBAL_ROLES.has(role)) return REFUSE('not-author');
 
-    return { admitted: true, asModerator: true, windowBypassed: false };
+    return { admitted: true, asModerator: true, windowBypassed: false, editorRole: role };
   }
 
   const ageMs = now - new Date(message.createdAt ?? NaN).getTime();

@@ -796,15 +796,7 @@ extension ConversationSyncEngine {
         for apiMessage: APIMessage, content: String
     ) -> RealtimeMessageMutation {
         guard let callSummary = apiMessage.callSummary else {
-            // L'horloge SERVEUR, jamais celle de l'appareil : `markEdited`
-            // compare cet instant au précédent pour rejeter les échos
-            // désordonnés, ce qui n'a de sens qu'entre horloges comparables.
-            return .edited(
-                messageId: apiMessage.id,
-                content: content,
-                editedAt: apiMessage.editedAt ?? Date(),
-                marksEdited: apiMessage.isEdited ?? true
-            )
+            return .servedEdit(of: apiMessage, content: content)
         }
         return .callNoticeUpdated(
             messageId: apiMessage.id,

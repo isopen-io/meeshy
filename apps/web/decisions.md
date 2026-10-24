@@ -5854,3 +5854,14 @@ Les deux voiles lisent ces jetons et importent la feuille eux-mêmes (`@import '
 
 **Les gardes.** `lib/view/message-preview-playback.test.ts` (zone tactile, relais, inertie, arrêt à la fermeture, vidéo déjà en lecture, protection, ordre de tabulation et entrées désactivées) et `components/message-menu-preview-playback.test.tsx` (par le menu entier : clic ⇒ lecture et menu ouvert, Échap ⇒ pause, vue unique ⇒ rien, Tab ⇒ le bouton puis la première entrée puis la deuxième, Maj+Tab ⇒ le bouton puis la dernière).
 
+
+## D-229 — « Modifier » est réoffert au modérateur de plateforme sur le message d'autrui, et la bulle dit « modifié par un modérateur » (décision porteur 2026-10-24, #11375 ; supplante #11372 sur ce point)
+
+**Le contexte.** #11372 avait retiré « Modifier » du menu quand l'éditeur n'est pas l'auteur : la passerelle admettait la modification d'un modérateur de plateforme (`asModerator`) sans rien en enregistrer, et les membres lisaient « modifié » comme si l'auteur avait écrit le texte. Le porteur a tranché le 2026-10-24 : la modification est AUTORISÉE, à visage découvert.
+
+**La décision.**
+- La loi partagée (`messageActionsFor`, `packages/shared/utils/message-action-policy.ts`) offre `edit` au modérateur de plateforme (MODERATOR, ADMIN, BIGBOSS — #11217) sur le message d'autrui, jamais en E2EE ; le web la consomme (`lib/view/message-actions.ts`) et ne la réécrit pas.
+- La bulle et la rangée focale disent « modifié par un modérateur » (`message.editedByModerator`, sept catalogues) quand la charge porte un `editedById` non vide (`editedByThirdParty`, `packages/shared/utils/message-edit-attribution.ts`). La passerelle sert l'identité du modérateur aux seuls ADMIN / BIGBOSS et au modérateur lui-même ; les autres lecteurs — et toute diffusion `message:edited` — reçoivent la marque `"moderator"`, que le web ne montre jamais : seule la mention s'affiche.
+- `withServedEditor` (`lib/api/realtime-message-mutations.ts`) distingue la clé absente (on garde l'état), `null` (l'auteur a réécrit, la mention s'efface) et une valeur.
+
+**Référence.** Décision passerelle : `services/gateway/decisions/2026-10-24-un-moderateur-qui-modifie-le-message-d-autrui-le-fait-a-visage-decouvert-11375.md`.

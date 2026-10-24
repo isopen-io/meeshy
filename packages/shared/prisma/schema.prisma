@@ -1019,6 +1019,16 @@ model Message {
   metadata                    Json?
   isEdited                    Boolean   @default(false)
   editedAt                    DateTime?
+  /// #11375 — `User.id` du TIERS (modérateur de plateforme) qui a fait la
+  /// dernière modification ; `null` (ou absent, lignes antérieures) quand c'est
+  /// l'auteur. Nommé à part du fil (`editedById`) À DESSEIN : aucun schéma de
+  /// réponse ne déclare cette colonne, une ligne brute ne la sert donc jamais ;
+  /// seule `servedEditAttribution` la projette, et l'identité ne part qu'à
+  /// ADMIN / BIGBOSS et au modérateur lui-même.
+  /// @see packages/shared/utils/message-edit-attribution.ts
+  thirdPartyEditorId          String?   @db.ObjectId
+  /// #11375 — rôle GLOBAL (`User.role`) de ce tiers au moment de la modification.
+  thirdPartyEditorRole        String?
   deletedAt                   DateTime?
   replyToId                   String?   @db.ObjectId
   /// ID du post cité quand le message répond à un post (status/story/reel/post).
