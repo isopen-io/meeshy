@@ -621,7 +621,7 @@ struct ConversationView: View {
             ),
             isHeaderExpanded: composerState.showOptions,
             readingMode: readingModeController.mode,
-            authority: menuAuthority,
+            authority: { menuAuthority },
             messageActions: messageActions,
             actions: ConversationMessageListActions(
                 toggleSelection: { toggleMessageSelection($0) },

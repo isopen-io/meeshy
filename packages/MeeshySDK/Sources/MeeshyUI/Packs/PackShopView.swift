@@ -34,6 +34,10 @@ public struct PackRow: Identifiable, Hashable, Sendable {
     public let price: Int?
     /// Un pack payant non possédé s'ACHÈTE ; les autres s'installent.
     public let owned: Bool
+    /// Le serveur dit que le pack n'est pas encore débloqué : ni « Installer » ni « Acheter » (S21, #11276).
+    public let locked: Bool
+    /// Ce qui reste à débloquer, en une ligne déjà traduite ; `nil` = rien à dire.
+    public let unlockText: String?
 
     public var id: String { slug }
 
@@ -42,7 +46,7 @@ public struct PackRow: Identifiable, Hashable, Sendable {
 
     public init(slug: String, name: String, author: String = "", description: String = "",
                 installed: Bool, removable: Bool = true, cover: PackCover = .none, usageText: String? = nil,
-                price: Int? = nil, owned: Bool = true) {
+                price: Int? = nil, owned: Bool = true, locked: Bool = false, unlockText: String? = nil) {
         self.slug = slug
         self.name = name
         self.author = author
@@ -53,6 +57,8 @@ public struct PackRow: Identifiable, Hashable, Sendable {
         self.usageText = usageText
         self.price = price
         self.owned = owned
+        self.locked = locked
+        self.unlockText = unlockText
     }
 }
 
@@ -162,9 +168,17 @@ public struct PackShopView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
+                if let unlock = row.unlockText {
+                    Label(unlock, systemImage: row.locked ? "lock.fill" : "clock")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("shop.unlock.\(row.slug)")
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if !row.installed || row.removable {
+            if Self.showsLocked(row) {
+                lockedBadge(row)
+            } else if !row.installed || row.removable {
                 toggleButton(row)
             }
         }
@@ -179,6 +193,21 @@ public struct PackShopView: View {
         .id(row.slug)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(row.slug == focusedSlug ? .isSelected : [])
+    }
+
+    /// Un pack pas encore débloqué ne s'installe ni ne s'achète : « À débloquer » prend la place du bouton.
+    /// Installé, il se retire toujours.
+    static func showsLocked(_ row: PackRow) -> Bool {
+        row.locked && !row.installed
+    }
+
+    private func lockedBadge(_ row: PackRow) -> some View {
+        Text(PackUnlockCopy.lockedTitle)
+            .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("shop.locked.\(row.slug)")
     }
 
     /// Un pack PAYANT que je possède le dit (« Possédé ») ; un pack gratuit n'a rien à déclarer.

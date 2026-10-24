@@ -1,6 +1,7 @@
 import XCTest
 import CoreImage
 import CoreVideo
+import MeeshyUI
 @testable import Meeshy
 
 #if canImport(WebRTC)
@@ -376,6 +377,106 @@ final class VideoFilterPipelineTests: XCTestCase {
                 )
             }
         }
+    }
+}
+
+// MARK: - #11298 — l'appel peint ses étages par LE peintre de lens
+
+final class CallLensStagesTests: XCTestCase {
+
+    /// Le fond est remplacé d'abord, l'étalonnage harmonise ensuite la personne
+    /// ET son fond, l'effet du visage se pose sur l'image étalonnée — l'ordre
+    /// du composer, plus celui que l'appel tenait (colorimétrie puis flou).
+    func test_paint_blursThenGradesThenStylizes() {
+        let journal = StageJournal()
+        let stages = CallLensStages(
+            backgroundBlur: { journal.note("segmentation"); return $0 },
+            colorimetry: { journal.note("lut"); return $0 },
+            faceEffect: { journal.note("face"); return $0 }
+        )
+
+        _ = stages.paint(Self.solid(red: 1, green: 0, blue: 0))
+
+        XCTAssertEqual(journal.entries, ["segmentation", "lut", "face"])
+    }
+
+    /// Le fond remplacé passe sous l'étalonnage : un fond bleu, inversé par la
+    /// colorimétrie, sort jaune.
+    func test_paint_gradesTheReplacedBackground() throws {
+        let stages = CallLensStages(
+            backgroundBlur: { _ in Self.solid(red: 0, green: 0, blue: 1) },
+            colorimetry: { $0.applyingFilter("CIColorInvert") },
+            faceEffect: nil
+        )
+
+        let pixel = try XCTUnwrap(Self.pixel(of: stages.paint(Self.solid(red: 1, green: 0, blue: 0))))
+
+        XCTAssertEqual(pixel.red, 255, accuracy: 2)
+        XCTAssertEqual(pixel.green, 255, accuracy: 2)
+        XCTAssertEqual(pixel.blue, 0, accuracy: 2)
+    }
+
+    func test_passes_skipAbsentStages() {
+        let stages = CallLensStages(backgroundBlur: nil, colorimetry: { $0 }, faceEffect: nil)
+
+        XCTAssertEqual(stages.passes.map(\.stage), [.lut])
+    }
+
+    private static func solid(red: CGFloat, green: CGFloat, blue: CGFloat) -> CIImage {
+        CIImage(color: CIColor(red: red, green: green, blue: blue))
+            .cropped(to: CGRect(x: 0, y: 0, width: 4, height: 4))
+    }
+
+    private static func pixel(of image: CIImage) -> (red: Double, green: Double, blue: Double)? {
+        var octets = [UInt8](repeating: 0, count: 4)
+        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        CIContext(options: [.workingColorSpace: NSNull()]).render(
+            image, toBitmap: &octets, rowBytes: 4,
+            bounds: CGRect(x: 1, y: 1, width: 1, height: 1), format: .RGBA8, colorSpace: srgb
+        )
+        return (Double(octets[0]), Double(octets[1]), Double(octets[2]))
+    }
+}
+
+private final class StageJournal {
+    private(set) var entries: [String] = []
+
+    func note(_ entry: String) {
+        entries.append(entry)
+    }
+}
+
+@MainActor
+final class VideoFilterPipelineLensStagesTests: XCTestCase {
+
+    private func makePixelBuffer() -> CVPixelBuffer {
+        var pixelBuffer: CVPixelBuffer?
+        let attrs: [String: Any] = [kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
+        let status = CVPixelBufferCreate(kCFAllocatorDefault, 64, 64, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pixelBuffer)
+        precondition(status == kCVReturnSuccess, "CVPixelBufferCreate failed")
+        return pixelBuffer!
+    }
+
+    private func stages(for config: VideoFilterConfig) -> [LensStage] {
+        VideoFilterPipeline(isPowerConstrained: { false })
+            .lensStages(for: config, pixelBuffer: makePixelBuffer(), rotation: 0,
+                        ladder: CallVideoDegradation(), isConstrained: false)
+            .passes.map(\.stage)
+    }
+
+    func test_lensStages_blurLookAndFaceEffect_declareSegmentationLutFace() {
+        var config = VideoFilterPreset.warm.config.selectingFaceEffect(.toad)
+        config.backgroundBlurEnabled = true
+
+        XCTAssertEqual(stages(for: config), [.segmentation, .lut, .face])
+    }
+
+    func test_lensStages_noChosenFilter_declareNothing() {
+        XCTAssertEqual(stages(for: .default), [])
+    }
+
+    func test_lensStages_lookOnly_declareTheLutAlone() {
+        XCTAssertEqual(stages(for: VideoFilterPreset.vivid.config), [.lut])
     }
 }
 
