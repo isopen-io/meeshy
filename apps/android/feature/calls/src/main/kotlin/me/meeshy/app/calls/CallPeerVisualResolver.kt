@@ -52,11 +52,14 @@ class CallPeerVisualResolver @Inject constructor(
             avatarUrl = safe(config.peerAvatarUrl) ?: safe(interlocutor?.avatarUrl) ?: safe(groupAvatar(conversation)),
             bannerUrl = safe(config.peerBannerUrl) ?: safe(groupBanner(conversation)),
         )
-        if (cached != CallPeerVisual.EMPTY) emit(cached)
+        val me = session.currentUser.value
+        val selfName = me?.effectiveDisplayName?.takeIf { it.isNotBlank() }
+        val selfAvatar = safe(me?.avatar)
+        if (cached != CallPeerVisual.EMPTY) emit(cached.copy(selfName = selfName, selfAvatarUrl = selfAvatar))
         val peerId = config.peerId.ifBlank { interlocutor?.userId.orEmpty() }
         if (peerId.isBlank() || peerId == selfId) return@flow
         val profile = attempt { users.getProfile(peerId).getOrNull() } ?: return@flow
-        emit(visualOf(profile, cached))
+        emit(visualOf(profile, cached).copy(selfName = selfName, selfAvatarUrl = selfAvatar))
     }
 
     private suspend fun conversationOf(id: String): ApiConversation? {

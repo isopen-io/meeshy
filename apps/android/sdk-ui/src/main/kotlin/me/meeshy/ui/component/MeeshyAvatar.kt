@@ -3,6 +3,7 @@ package me.meeshy.ui.component
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.TextUnit
+import coil.decode.DataSource
 import coil.request.ImageRequest
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
@@ -276,6 +278,7 @@ private fun AvatarDisc(
     modifier: Modifier = Modifier,
 ) {
     var photoState by remember(face) { mutableStateOf(AvatarPhotoState.Loading) }
+    var warm by remember(face) { mutableStateOf(false) }
     val layer = face.layer(photoState)
     Box(
         modifier = modifier
@@ -296,21 +299,24 @@ private fun AvatarDisc(
         if (face is AvatarFace.Photo) {
             val photoAlpha by animateFloatAsState(
                 targetValue = if (photoState == AvatarPhotoState.Success) 1f else 0f,
-                animationSpec = tween(PHOTO_FADE_MILLIS),
+                animationSpec = if (warm) snap() else tween(PHOTO_FADE_MILLIS),
                 label = "avatarPhotoFade",
             )
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current).data(face.model).build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                onState = { state -> photoState = state.toPhotoState() },
+                onState = { state ->
+                    warm = (state as? AsyncImagePainter.State.Success)?.result?.dataSource == DataSource.MEMORY_CACHE
+                    photoState = state.toPhotoState()
+                },
                 modifier = Modifier.size(size).alpha(photoAlpha),
             )
         }
     }
 }
 
-/** Le fondu de la photo qui remplace les initiales (iOS : 0,15 s). */
+/** Le fondu de la photo qui remplace les initiales (iOS : 0,15 s) ; une photo déjà en mémoire s'affiche d'emblée. */
 private const val PHOTO_FADE_MILLIS = 150
 
 private fun AsyncImagePainter.State.toPhotoState(): AvatarPhotoState = when (this) {
