@@ -14,8 +14,10 @@
 //   - une annulation n'est JAMAIS verte (`CANCELLED`, `TIMED_OUT`, `STALE`… sont rouges) ;
 //   - un check relancé est jugé sur sa DERNIÈRE exécution (même workflow, même nom).
 //
-// Sorties : 0 vert, 1 rouge (les checks nommés), 3 en cours. `--attendre <min>` relit
-// toutes les 60 s jusqu'à un verdict ou l'échéance (en cours ⇒ 3).
+// Sorties : 0 vert, 1 rouge (les checks nommés), 3 en cours, 2 l'OUTIL n'a pas pu lire
+// (`gh` en erreur — un 401 passager a été mesuré) : une panne de lecture n'est jamais
+// un verdict. `--attendre <min>` relit toutes les 60 s, pannes de lecture comprises,
+// jusqu'à un verdict ou l'échéance.
 //
 // Usage :
 //   node scripts/ci/pr-verte.mjs <numéro> [--attendre 45]
@@ -74,7 +76,7 @@ const autoTest = () => {
 };
 
 const lit = (numero) => {
-  const sortie = execFileSync('gh', ['pr', 'view', String(numero), '--repo', 'isopen-io/meeshy', '--json', 'state,headRefOid,statusCheckRollup'], { encoding: 'utf8' });
+  const sortie = execFileSync('gh', ['pr', 'view', String(numero), '--repo', 'isopen-io/meeshy', '--json', 'state,headRefOid,statusCheckRollup'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   return JSON.parse(sortie);
 };
 
@@ -88,7 +90,17 @@ const main = async () => {
   const i = process.argv.indexOf('--attendre');
   const echeance = Date.now() + (i === -1 ? 0 : Number(process.argv[i + 1]) * 60_000);
   for (;;) {
-    const pr = lit(numero);
+    let pr;
+    try {
+      pr = lit(numero);
+    } catch (error) {
+      if (Date.now() >= echeance) {
+        console.error(`PR #${numero} : lecture impossible — ${String(error.stderr ?? error.message).trim()}`);
+        process.exit(2);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 60_000));
+      continue;
+    }
     const v = pr.state === 'OPEN' ? juge(pr.statusCheckRollup) : { etat: 'rouge', code: 1, detail: [`PR ${pr.state}`] };
     if (v.code !== 3 || Date.now() >= echeance) {
       console.log(`PR #${numero} @ ${pr.headRefOid.slice(0, 10)} : ${v.etat} — ${v.detail.join(', ')}`);

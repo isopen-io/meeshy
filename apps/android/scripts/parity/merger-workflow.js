@@ -57,7 +57,7 @@ function watchPrompt(giveUp, skip) {
 Load tools with ToolSearch "select:mcp__github__list_pull_requests,mcp__github__pull_request_read,mcp__github__merge_pull_request,mcp__github__add_issue_comment".
 1. List them: mcp__github__list_pull_requests owner isopen-io repo meeshy base dev state open perPage 100 fields ["number","head","mergeable_state"] (page 2, 3… while a page is full). Keep those whose head.ref starts with "claude/android-"; key = head.ref without that prefix. Ignore these PR numbers entirely: ${JSON.stringify(skip)}.
 2. For each kept PR, judge it with the repository's ONE green-PR tool (#12559), from the meeshy repository root, in Bash: node scripts/ci/pr-verte.mjs <n>
-   - exit 3 → pending (a check is still queued or running, or "Verdict CI" has not reported yet).
+   - exit 3 → pending (a check is still queued or running, or "Verdict CI" has not reported yet); exit 2 → the tool could not read the PR (gh error): treat as pending.
    - exit 1 → red: the tool names the failing checks (a cancelled or timed-out check is NEVER green); take each url from mcp__github__pull_request_read method "get_check_runs".
    - exit 0 → green. Call mcp__github__pull_request_read method "get" for mergeable_state and head.sha: "dirty" → conflict; otherwise merge it: mcp__github__merge_pull_request owner isopen-io repo meeshy pullNumber <n> merge_method "merge" expectedHeadSha <head sha>; do NOT pass commit_title or commit_message (the default title "Merge pull request #n from isopen-io/claude/android-<key>" is the program's merge ledger). Success → merged. Refused for conflicts → conflict; other refusal → merge-failed with the message in note.
    - red → failed = [{name, url: details_url}].

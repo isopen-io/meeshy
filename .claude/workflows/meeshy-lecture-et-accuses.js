@@ -516,7 +516,7 @@ Tu es l'agent de LIVRAISON de ce tour : tu es le seul autorisé à fusionner, et
 1. \`cd ${REPO_PAR_CHAINE[l.chaine]} && gh pr view ${num} --json state,mergeStateStatus,headRefName,baseRefName\` — la PR doit être OPEN vers ${BASE}.
    Si mergeStateStatus est DIRTY/BEHIND : \`git fetch origin && git checkout <headRefName> && git merge origin/${BASE}\`
    (jamais rebase), résous en gardant les deux apports, rejoue les gates rapides de la plateforme, pousse.
-2. \`node scripts/ci/pr-verte.mjs ${num} --attendre 45\` (l'outil UNIQUE du dépôt, #12559 : 0 vert, 1 rouge avec les checks nommés, 3 encore en cours ; une annulation n'est jamais verte, « Verdict CI » doit être présent). Rends la sortie.
+2. \`node scripts/ci/pr-verte.mjs ${num} --attendre 45\` (l'outil UNIQUE du dépôt, #12559 : 0 vert, 1 rouge avec les checks nommés, 3 encore en cours, 2 lecture impossible — relance ; une annulation n'est jamais verte, « Verdict CI » doit être présent). Rends la sortie.
 3. Pour une PR iOS (branche d'un lot I<n>) : \`gh pr view ${num} --json headRefOid,commits -q '.commits[-1].messageHeadline'\` — si le sujet de la TÊTE ne contient pas « run test », le vert n'est qu'une compilation : pose un commit VIDE \`test(ios): … — run test (Refs #<issue>)\` sur la branche (par \`git commit-tree\` + \`git push origin <sha>:refs/heads/<branche>\`, sans checkout), puis REVIENS à l'étape 2 sur la nouvelle tête. TOUT VERT ⇒ \`gh pr merge ${num} --merge\` (JAMAIS --auto, JAMAIS --squash) puis \`gh pr view ${num} --json mergedAt,mergeCommit\`.
    UN ROUGE ⇒ ne fusionne pas ; lis le job (\`gh run view <id> --log-failed | tail -60\`) ; si le rouge est CAUSÉ
    par le lot, corrige-le en TDD sur la branche, pousse, et reprends à l'étape 2 (une fois) ; s'il est
@@ -740,7 +740,7 @@ ${livres.map((r) => `- ${r.cle}${r.issue ? ` (#${r.issue})` : ''} : ${r.livraiso
 
 A. FUSIONNER AU VERT, PUIS ATTENDRE LE DÉPLOIEMENT (jamais de push sur ${BASE}, jamais \`--auto\`) :
 1. Pour chaque PR de lot encore ouverte (\`gh pr list --state open --search "head:lot/"\`) : \`node scripts/ci/pr-verte.mjs <n> --attendre 40\`
-   (l'outil UNIQUE du dépôt, #12559 : 0 vert, 1 rouge, 3 encore en cours). Pour une PR iOS, un vert ne compte que si le SUJET du commit de
+   (l'outil UNIQUE du dépôt, #12559 : 0 vert, 1 rouge, 3 encore en cours, 2 lecture impossible — relance). Pour une PR iOS, un vert ne compte que si le SUJET du commit de
    tête contient « run test » (sinon commit vide \`test(ios): … — run test\`, et on rattend). TOUT VERT ⇒ \`gh pr merge <n> --merge\` puis
    \`gh pr view <n> --json mergedAt\` → fusionnees. Une PR ROUGE : lis le job rouge
    (\`gh run view <id> --log-failed | tail -80\`) ; rouge PRÉEXISTANT (même job rouge sur origin/${BASE}) ⇒
