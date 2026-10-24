@@ -70,6 +70,9 @@ struct MessageOverlayCellPreview: View {
     let message: Message
     let isDark: Bool
     let accentHex: String
+    /// **Lire un vocal depuis l'aperçu** (#11339) : le bouton du lecteur de la
+    /// cellule appelle ici, comme dans le fil. Exclu d'`Equatable`.
+    var onPlayAudio: ((String) -> Void)? = nil
 
     /// Les heures d'une rangée au repos ne se montrent qu'au défilement
     /// (`FocalRevealedTime`) : l'aperçu porte son propre révélé, fermé, comme
@@ -91,7 +94,7 @@ struct MessageOverlayCellPreview: View {
     private var faceView: some View {
         switch face {
         case .flatRow(let input):
-            FocalRow(input: input, actions: FocalRowActions())
+            FocalRow(input: input, actions: rowActions)
                 .environmentObject(timestampReveal)
                 .fixedSize(horizontal: false, vertical: true)
                 .background(
@@ -105,6 +108,41 @@ struct MessageOverlayCellPreview: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, Self.bubbleMargin)
         }
+    }
+
+    /// La rangée plate ne reçoit que la lecture (#11339) : le reste de ses
+    /// rappels reste vide, l'aperçu n'est pas le fil.
+    private var rowActions: FocalRowActions {
+        var actions = FocalRowActions()
+        actions.onPlayAudio = onPlayAudio
+        return actions
+    }
+}
+
+// MARK: - Le masque de l'aperçu : tout sauf la lecture (#11339)
+
+/// **Le masque posé sur l'aperçu** : il prend chaque toucher HORS des zones de
+/// lecture — un toucher y ferme le menu, comme le voile ; un glissement remonte
+/// au geste du cluster —, et laisse passer ceux qui tombent DANS une zone
+/// jusqu'au lecteur de la cellule. Un tracé pair-impair : le cadre plein, les
+/// zones en trous.
+struct MessageOverlayPreviewTouchMask: View {
+    let holes: [CGRect]
+    let onTapOutside: () -> Void
+
+    var body: some View {
+        Color.clear
+            .contentShape(MessageOverlayPreviewTouchShape(holes: holes), eoFill: true)
+            .onTapGesture(perform: onTapOutside)
+            .accessibilityHidden(true)
+    }
+}
+
+nonisolated struct MessageOverlayPreviewTouchShape: Shape {
+    let holes: [CGRect]
+
+    func path(in rect: CGRect) -> Path {
+        holes.reduce(into: Path(rect)) { path, hole in path.addRect(hole) }
     }
 }
 
@@ -196,15 +234,18 @@ nonisolated enum MessageOverlayPreviewFit {
 
 /// **Le cadre où l'aperçu réduit se pose** : à `naturalSize × scale`, ancré à
 /// son bord natif, borné à `visibleHeight`. Quand le contenu réduit dépasse
-/// encore, il défile à l'intérieur — le contenu lui-même ne reçoit aucun
-/// toucher (c'est une image de la cellule, pas un lecteur), seul le cadre
-/// défile ; un fondu en pied dit qu'il y a une suite.
+/// encore, il défile à l'intérieur — le contenu ne reçoit de toucher que dans
+/// ses zones de lecture (#11339), seul le cadre défile ; un fondu en pied dit
+/// qu'il y a une suite.
 struct MessageOverlayPreviewViewport<Content: View>: View {
     let scale: CGFloat
     let naturalSize: CGSize
     let visibleHeight: CGFloat
     let scrolls: Bool
     let isTrailing: Bool
+    /// L'aperçu porte une zone de lecture (#11339) : son contenu reçoit les
+    /// touchers, que le masque de l'aperçu trie. Sinon, une image inerte.
+    var interactive: Bool = false
     @ViewBuilder let content: Content
 
     private static var fadeHeight: CGFloat { 24 }
@@ -229,7 +270,7 @@ struct MessageOverlayPreviewViewport<Content: View>: View {
         let alignment: Alignment = isTrailing ? .topTrailing : .topLeading
         let anchor: UnitPoint = isTrailing ? .topTrailing : .topLeading
         let scaled = content
-            .allowsHitTesting(false)
+            .allowsHitTesting(interactive)
             .scaleEffect(scale, anchor: anchor)
             .frame(width: width, height: naturalSize.height * scale, alignment: alignment)
         if scrolls {

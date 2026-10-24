@@ -59,7 +59,10 @@ struct ConversationMessageListLayer: View {
     let insets: ConversationListInsets
     let isHeaderExpanded: Bool
     let readingMode: ReadingModeOrchestrator.ConversationReadingMode
-    let authority: ConversationMenuAuthority
+    /// Relue au moment d'agir (#12626) : `MessageListView` est monté derrière
+    /// `.equatable()`, qui garde les closures de la dernière mise à jour — une
+    /// valeur capturée y survivrait à un changement de rôle ou de chiffrement.
+    let authority: () -> ConversationMenuAuthority
     let messageActions: ConversationMessageActions
     let actions: ConversationMessageListActions
 
@@ -204,23 +207,8 @@ struct ConversationMessageListLayer: View {
                 overlayState.storyViewerStartAtFirstUnviewed = true
                 overlayState.showStoryViewer = true
             },
-            onSwipeReply: { messageId in
-                // Restore swipe-to-reply: BubbleSwipeContainer commits when
-                // the bubble crosses the reply threshold. We resolve the
-                // message and reuse triggerReply() so the composer mirrors
-                // the legacy long-press / context menu reply path.
-                guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                messageActions.reply(msg)
-            },
-            onSwipeForward: { messageId in
-                // #4021 — swipe-to-forward ARME la sélection multiple,
-                // même contrat que le "Transférer" du menu long-press
-                // ci-dessus. HapticFeedback already fires inside the
-                // swipe container — we only seed the selection here.
-                guard let msg = viewModel.messages.first(where: { $0.id == messageId }),
-                      msg.isForwardable else { return }
-                messageActions.beginSelection(msg.id)
-            },
+            onSwipeReply: { swipeReply($0) },
+            onSwipeForward: { swipeForward($0) },
             onLongPress: { messageId, cellFrame in
                 guard overlayState.longPressEnabled else { return }
                 // Exclusivité mutuelle : si la barre de quick-reaction est
@@ -290,7 +278,7 @@ struct ConversationMessageListLayer: View {
                 overlayState.moreSheetInitialItem = nil
                 overlayState.detailSheetMessage = msg
             },
-            canEditMessage: { editable($0) },
+            rowOffer: { MessageRowOffer.of($0, authority: authority()) },
             onAddReaction: { messageId, bubbleFrame in
                 // Exclusivité mutuelle : ouvrir la barre de quick-reaction
                 // ferme d'abord l'overlay d'appui-long s'il est visible.
@@ -387,11 +375,22 @@ struct ConversationMessageListLayer: View {
         .ignoresSafeArea(.container, edges: [.top, .bottom])
     }
 
-    /// #11214 — l'éditabilité du double toucher est REMISE par la fabrique
-    /// unique, que l'overlay et la feuille « Plus… » lisent aussi.
-    private func editable(_ messageId: String) -> Bool {
-        guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return false }
-        let menu = MessageMenuContext.make(message: msg, viewModel: viewModel, authority: authority)
-        return menu.isMine && menu.canEdit && menu.hasText
+    /// Restore swipe-to-reply: BubbleSwipeContainer commits when the bubble
+    /// crosses the reply threshold. `triggerReply` mirrors the long-press reply
+    /// path and re-reads the law (#12626) — glissé, VoiceOver, double toucher.
+    private func swipeReply(_ messageId: String) {
+        guard let index = viewModel.messageIndex(for: messageId) else { return }
+        messageActions.reply(viewModel.messages[index])
+    }
+
+    /// #4021 — swipe-to-forward ARME la sélection multiple, même contrat que le
+    /// « Transférer » du menu. #12626 — le verdict de la loi (E2EE, avis, envoi
+    /// raté), pas la seule loi de sortie, relu au moment d'agir. HapticFeedback
+    /// already fires inside the swipe container.
+    private func swipeForward(_ messageId: String) {
+        guard let index = viewModel.messageIndex(for: messageId) else { return }
+        let msg = viewModel.messages[index]
+        guard MessageRowOffer.of(msg, authority: authority()).canForward else { return }
+        messageActions.beginSelection(msg.id)
     }
 }

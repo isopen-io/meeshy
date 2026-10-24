@@ -110,8 +110,18 @@ export type RowState = {
 
 const AT_REST: RowState = { magnified: false, alpha: 1, scale: 1, breathing: 0 };
 
+/** La place d'une rangée dans SA section — `aria-posinset` / `aria-setsize` (#11228). */
+export type RowPlace = { readonly position: number; readonly size: number };
+
 export type LensRowProps = {
   conversation: Conversation;
+  /**
+   * SA PLACE DANS SA SECTION (#11228) — la liste est virtualisée : les cales
+   * `aria-hidden` ne comptent pas pour le lecteur d'écran, qui annoncerait
+   * « 3 sur 18 » une section de cinq cents. Absente (World Wide, seule hors
+   * section), la rangée n'annonce rien.
+   */
+  place?: RowPlace | undefined;
   languages: readonly string[];
   viewerId: string;
   status?: RowState;
@@ -251,6 +261,7 @@ function useRowGestures(swipe: RowSwipeProps, press: RowPressProps) {
 
 function LensRowImpl({
   conversation,
+  place,
   languages,
   viewerId,
   status = AT_REST,
@@ -440,6 +451,7 @@ function LensRowImpl({
   return (
     <li
       data-row={conversation.id}
+      {...(place === undefined ? {} : { 'aria-posinset': place.position, 'aria-setsize': place.size })}
       /**
        * `group` : ancre `RowActions` (second enfant, ci-dessous) pour
        * `group-hover`/`group-focus-within` — le bouton d'actions ne reste
@@ -884,6 +896,7 @@ function LensRowImpl({
  */
 export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if (prev.conversation !== next.conversation) return false;
+  if (prev.place?.position !== next.place?.position || prev.place?.size !== next.place?.size) return false;
   if (prev.languages !== next.languages) return false;
   if (prev.viewerId !== next.viewerId) return false;
   if (prev.unreadCount !== next.unreadCount) return false;

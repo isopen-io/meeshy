@@ -70,6 +70,9 @@ struct ConversationPieceRetouch: View {
             life.detach()
             session.disarm()
         }
+        // Un plein écran ne prévient pas l'écran qu'il recouvre (#9052) : la retouche se déclare,
+        // et la scène du studio se tait dessous jusqu'à sa fermeture (#12605).
+        .coversScenePlayback()
         .statusBarHidden()
     }
 

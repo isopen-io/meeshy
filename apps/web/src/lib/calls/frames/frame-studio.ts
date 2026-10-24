@@ -8,6 +8,8 @@ import { loadFrameFonts } from './frame-fonts';
 import { paintFrame, type FrameFace } from './frame-paint';
 import type { Surface2D } from './frame-paint-kit';
 import { composeFrame, defaultCanvasFactory, frameLayerCache, type CanvasFactory } from './frame-render';
+import { browserImageLoader, deferredFrameImages } from './frame-scene-assets';
+import { type FrameImageStore } from './frame-scene-image';
 import type { CaptureFrame, FrameMood } from './frame-spec';
 import type { FramePerson, FrameTexts } from './frame-text';
 
@@ -25,7 +27,9 @@ import type { FramePerson, FrameTexts } from './frame-text';
  *
  * Les polices des cadres se chargent à la création de l'atelier ; les
  * couches peintes avant elles sont jetées quand elles arrivent, et se
- * repeignent à l'image suivante.
+ * repeignent à l'image suivante. Les illustrations d'une scène (#12683)
+ * suivent la même loi, mais À LA DEMANDE : une image ne se charge qu'à la
+ * première peinture qui la réclame, et son arrivée jette les couches aussi.
  */
 
 /** Une vidéo de l'appel, telle que `visibleTiles` la lit : à qui elle est, et ce qu'elle montre. */
@@ -97,17 +101,24 @@ type StudioOptions = {
   readonly fonts?: Pick<FontFaceSet, 'load'> | undefined;
   /** Les contextes de la surface qui propose (#10146) : la capture par défaut, l'appel vidéo pour le direct. */
   readonly uses?: readonly FrameUseContext[];
+  /** Les illustrations des scènes ; par défaut, les fichiers du pack chargés par le navigateur à la demande. */
+  readonly images?: (onLoaded: () => void) => FrameImageStore;
 };
+
+const browserImages = (onLoaded: () => void): FrameImageStore =>
+  deferredFrameImages({ urls: () => import('./frame-scene-urls').then((module) => module.frameAssetUrls()), load: browserImageLoader, onLoaded });
 
 export function createFrameStudio(options: StudioOptions = {}): FrameStudio {
   const frames = options.frames ?? captureFrames();
   const factory = options.factory ?? defaultCanvasFactory;
-  const caches = { thumb: frameLayerCache(factory, THUMB_LAYERS), preview: frameLayerCache(factory, PREVIEW_LAYERS) };
-  const fonts = 'fonts' in options ? options.fonts : typeof document === 'undefined' ? undefined : document.fonts;
-  const ready = loadFrameFonts(frames, fonts).then(() => {
+  const forget = (): void => {
     caches.thumb.clear();
     caches.preview.clear();
-  });
+  };
+  const images = (options.images ?? browserImages)(forget);
+  const caches = { thumb: frameLayerCache(factory, THUMB_LAYERS, images), preview: frameLayerCache(factory, PREVIEW_LAYERS, images) };
+  const fonts = 'fonts' in options ? options.fonts : typeof document === 'undefined' ? undefined : document.fonts;
+  const ready = loadFrameFonts(frames, fonts).then(forget);
   const byId = new Map(frames.map((frame) => [frame.id, frame]));
   const offered = offeredFor(frames, options.uses ?? CAPTURE_FRAME_USES);
   return {
@@ -122,7 +133,7 @@ export function createFrameStudio(options: StudioOptions = {}): FrameStudio {
     draw: (context, frame, shot, tier) => {
       const reserve = shot.chrome === undefined ? undefined : chromeReserveOnScreen({ ...shot.chrome, canvas: shot.size });
       const layers = tier === 'still' ? null : caches[tier].get(frame, shot.people, shot.size, shot.texts, reserve);
-      if (layers === null) paintFrame(context, frame, shot.people, shot.faces, shot.texts, shot.size);
+      if (layers === null) paintFrame(context, frame, shot.people, shot.faces, shot.texts, shot.size, images);
       else composeFrame(context, layers, shot.faces);
     },
     ready,

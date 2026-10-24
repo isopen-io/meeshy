@@ -86,12 +86,22 @@ extension MediaContext {
     /// l'utilisateur choisit pour économiser des données (`compressImagesOnUpload`) :
     /// budget du contexte et qualité de sa préférence. Un avatar se réduit toujours :
     /// il ne s'affiche jamais en grand.
-    nonisolated func outgoingImagePolicy(compresses: Bool, qualityPercent: Int, keepsLocation: Bool) -> OutgoingImagePolicy {
+    nonisolated func outgoingImagePolicy(compresses: Bool, qualityPercent: Int, keepsLocation: Bool,
+                                         heicDelivery: HEICDelivery = .jpegCompatibility) -> OutgoingImagePolicy {
         let forte = compresses || self == .avatar
         return OutgoingImagePolicy(maxPixelDimension: maxImageDimension, compresses: forte,
                                    quality: forte ? OutgoingImagePolicy.quality(percent: qualityPercent)
                                                   : OutgoingImagePolicy.perceptualQuality,
-                                   keepsLocation: keepsLocation)
+                                   keepsLocation: keepsLocation, heicDelivery: heicDelivery)
+    }
+
+    /// **Un HEIC part tel quel (#11291), mais seulement là où l'envoi sait
+    /// repartir en JPEG q 0,92 quand le serveur le refuse** : les pièces d'un
+    /// MESSAGE (`TusMediaGroupUploader`, rejeu hors ligne de l'outbox). Story,
+    /// publication, commentaire et avatar gardent le JPEG de compatibilité. Le
+    /// mémo des refus (24 h) évite de remonter un HEIC à un serveur qui l'a refusé.
+    nonisolated func heicDelivery(in defaults: UserDefaults = .standard, now: Date = Date()) -> HEICDelivery {
+        self == .message ? HEICDeliveryMemo.delivery(in: defaults, now: now) : .jpegCompatibility
     }
 
     /// La politique servie par les préférences de l'utilisateur.
@@ -100,7 +110,8 @@ extension MediaContext {
         let document = UserPreferencesManager.shared.document
         return outgoingImagePolicy(compresses: document.compressImagesOnUpload,
                                    qualityPercent: document.imageCompressionQuality,
-                                   keepsLocation: OutgoingImageLocationSetting.stored())
+                                   keepsLocation: OutgoingImageLocationSetting.stored(),
+                                   heicDelivery: heicDelivery())
     }
 }
 

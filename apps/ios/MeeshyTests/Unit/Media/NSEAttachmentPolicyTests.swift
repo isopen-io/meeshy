@@ -81,6 +81,43 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertFalse(NSEAttachmentPolicy.isRenderableFamily("videoimage/mp4"))
     }
 
+    // MARK: - #11328 — la NSE n'attache que ce qu'elle sait décoder
+
+    /// **Le serveur fabrique des rendus AVIF** (#11262). Un AVIF qu'on
+    /// attacherait sans le décoder ne produit aucune image sur l'écran
+    /// verrouillé : la notification part sans enrichissement, sans rien dire.
+    func test_unAvif_estRefuse_quelleQueSoitSaTailleOuSaFacon() {
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/avif", fileSize: 240_000))
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/avif", fileSize: nil))
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "IMAGE/AVIF; charset=binary", fileSize: 240_000))
+    }
+
+    /// Une image que la NSE ne sait pas ouvrir n'a rien à faire dans
+    /// l'enveloppe : la liste blanche refuse ce qu'elle ne nomme pas.
+    func test_unFormatImageQueLaNSENeSaitPasDecoder_estRefuse() {
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/svg+xml", fileSize: 4_000))
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/bmp", fileSize: 240_000))
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/tiff", fileSize: nil))
+    }
+
+    /// Les formats que la NSE décode restent attachables, casse et paramètres
+    /// de type compris : la liste blanche ne doit pas casser ce qui marche.
+    func test_lesFormatsImageQueLaNSEDecode_sontAcceptes() {
+        for mimeType in ["image/jpeg", "image/png", "image/gif", "image/webp", "image/heic"] {
+            XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: mimeType, fileSize: 240_000), mimeType)
+        }
+        XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: "Image/WebP; codecs=vp8", fileSize: nil))
+    }
+
+    /// Le serveur ACCEPTE `image/jpg` et le range tel quel (il n'est pas dans
+    /// les formats qu'il convertit), et les pièces jointes `image/heif`
+    /// antérieures à la conversion (#11263) sont toujours en base : la liste
+    /// blanche ne doit pas retirer l'aperçu d'une photo que la NSE décode.
+    func test_lesAliasDeFormatsDecodes_restentAttachables() {
+        XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: "image/jpg", fileSize: 240_000))
+        XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: "IMAGE/HEIF", fileSize: nil))
+    }
+
     // MARK: - La taille telle qu'elle voyage
 
     /// Le gateway sérialise les nombres de sa charge `data` en CHAÎNES (cf.

@@ -54,6 +54,8 @@ internal class ConversationCacheSource(
     private val accountProvider: SyncAccountProvider = SyncAccountProvider.None,
     private val checkpoints: SyncCheckpointStore = SyncCheckpointStore(syncMetaDao),
     private val ownership: SyncOwnership<Unit> = SyncOwnership(),
+    /** Conversations created here moments ago: a full sweep that does not serve them yet keeps them. */
+    private val protectedIds: () -> Set<String> = { emptySet() },
 ) : SwrCacheSource<List<ApiConversation>> {
 
     override fun observe(): Flow<List<ApiConversation>?> =
@@ -355,7 +357,7 @@ internal class ConversationCacheSource(
      * from crashing when SQLite actually enforces the limit.
      */
     private suspend fun pruneMissing(keptIds: List<String>) {
-        val kept = keptIds.toHashSet()
+        val kept = keptIds.toHashSet().apply { addAll(protectedIds()) }
         val toDelete = conversationDao.allIds().filterNot { it in kept }
         toDelete.chunked(DELETE_CHUNK_SIZE).forEach { chunk ->
             conversationDao.deleteByIds(chunk)

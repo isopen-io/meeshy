@@ -75,3 +75,120 @@ struct ConversationOverlayState {
     var showReplyThread = false
     var replyThreadParentId: String? = nil
 }
+
+// MARK: - Le message tenu, relu dans le fil (#12627)
+
+/// **Ce que les surcouches tiennent se relit dans le fil, jamais dans la copie
+/// prise au geste** (#12627). La copie gardait copiable un message supprimé pour
+/// tous pendant que le menu restait ouvert, et un envoi `cid_…` accusé n'y offrait
+/// ni réponse ni suppression.
+///
+/// L'identité est STABLE à travers l'accusé : la ligne optimiste (`cid_…`) cède sa
+/// place à la ligne servie (`pendingServerIds`), et l'une se retrouve par l'autre.
+nonisolated enum OverlayHeldMessage {
+
+    enum Resolution {
+        case live(Message)
+        case withdrawn
+
+        var liveMessage: Message? {
+            guard case .live(let message) = self else { return nil }
+            return message
+        }
+    }
+
+    /// Ce que l'hôte observe : un emplacement ne change qu'au retrait ou à un
+    /// changement d'identité, jamais pour une épingle ou une réaction — celles-là
+    /// se recomposent au rendu, sans réécrire l'état ni rejouer l'entrée.
+    enum Slot: Equatable {
+        case empty
+        case live(String)
+        case withdrawn
+    }
+
+    /// Les identités sous lesquelles le fil peut porter le message tenu : l'id
+    /// servi d'abord (l'accusé gagne sur la ligne optimiste qu'il remplace).
+    static func identities(of held: Message, pendingServerIds: [String: String]) -> [String] {
+        let acknowledged = pendingServerIds[held.id]
+        let optimistic = pendingServerIds.first { $0.value == held.id }?.key
+        return [acknowledged, held.id, held.clientMessageId, optimistic].compactMap { $0 }
+    }
+
+    /// Retiré : absent du fil, supprimé DEPUIS le geste, échu ou en combustion.
+    /// Un message déjà supprimé au geste garde son menu de pierre tombale
+    /// (« Supprimer pour moi ») : il n'a rien perdu depuis.
+    static func resolve(
+        _ held: Message,
+        pendingServerIds: [String: String],
+        now: Date,
+        lookup: (String) -> Message?
+    ) -> Resolution {
+        guard let live = identities(of: held, pendingServerIds: pendingServerIds).compactMap(lookup).first else {
+            return .withdrawn
+        }
+        let deletedSinceTheGesture = live.isDeleted && !held.isDeleted
+        let expired = live.expiresAt.map { $0 <= now } ?? false
+        return deletedSinceTheGesture || expired || live.isBurning ? .withdrawn : .live(live)
+    }
+
+    static func slot(of held: Message?, _ resolve: (Message) -> Resolution) -> Slot {
+        guard let held else { return .empty }
+        return resolve(held).liveMessage.map { Slot.live($0.id) } ?? Slot.withdrawn
+    }
+}
+
+/// La surcouche après relecture, et si un retrait s'est fait SOUS LES YEUX du
+/// lecteur (menu ou feuille ouverts) — VoiceOver le dit alors.
+///
+/// `changesState` : faux quand tout ce qui est tenu vit encore sous le même id —
+/// l'hôte n'écrit alors rien, et l'ouverture du menu ne paie aucun rendu de plus.
+struct OverlayHeldReconciliation {
+    let state: ConversationOverlayState
+    let announcesWithdrawal: Bool
+    let changesState: Bool
+}
+
+extension ConversationOverlayState {
+
+    /// Les quatre surcouches qui tiennent un message et en exposent le contenu :
+    /// le menu, la feuille « Plus… », le partage et le sélecteur de réaction.
+    func heldSlots(_ resolve: (Message) -> OverlayHeldMessage.Resolution) -> [OverlayHeldMessage.Slot] {
+        [overlayMessage, detailSheetMessage, shareMessage, fullReactionPickerMessage]
+            .map { OverlayHeldMessage.slot(of: $0, resolve) }
+    }
+
+    /// Referme ce qui tient un message retiré ; réancre le menu sur l'id servi
+    /// (la cellule masquée sous l'aperçu se lit à `overlayMessage.id`).
+    func reconciled(_ resolve: (Message) -> OverlayHeldMessage.Resolution) -> OverlayHeldReconciliation {
+        let menu = overlayMessage.map(resolve)
+        let menuWithdrawn = menu.map { $0.liveMessage == nil } ?? false
+        let sheetWithdrawn = detailSheetMessage.map { resolve($0).liveMessage == nil } ?? false
+        let shareWithdrawn = shareMessage.map { resolve($0).liveMessage == nil } ?? false
+        let pickerWithdrawn = fullReactionPickerMessage.map { resolve($0).liveMessage == nil } ?? false
+
+        var next = self
+        next.overlayMessage = menuWithdrawn ? nil : (menu?.liveMessage ?? overlayMessage)
+        next.showOverlayMenu = showOverlayMenu && !menuWithdrawn
+        next.overlayPieceId = menuWithdrawn ? nil : overlayPieceId
+        next.detailSheetMessage = sheetWithdrawn ? nil : detailSheetMessage
+        next.moreSheetInitialItem = sheetWithdrawn ? nil : moreSheetInitialItem
+        next.shareMessage = shareWithdrawn ? nil : shareMessage
+        next.fullReactionPickerMessage = pickerWithdrawn ? nil : fullReactionPickerMessage
+
+        let withdrawn = menuWithdrawn || sheetWithdrawn || shareWithdrawn || pickerWithdrawn
+        let reanchored = menu?.liveMessage.map { $0.id != overlayMessage?.id } ?? false
+        let shown = (menuWithdrawn && showOverlayMenu) || sheetWithdrawn || shareWithdrawn || pickerWithdrawn
+        return OverlayHeldReconciliation(state: next, announcesWithdrawal: shown, changesState: withdrawn || reanchored)
+    }
+}
+
+extension OverlayHeldMessage {
+
+    /// Le message tenu, relu dans le fil du ViewModel par son identité stable.
+    @MainActor
+    static func resolve(_ held: Message, in viewModel: ConversationViewModel, now: Date = Date()) -> Resolution {
+        resolve(held, pendingServerIds: viewModel.pendingServerIds, now: now) { id in
+            viewModel.messageIndex(for: id).map { viewModel.messages[$0] }
+        }
+    }
+}
