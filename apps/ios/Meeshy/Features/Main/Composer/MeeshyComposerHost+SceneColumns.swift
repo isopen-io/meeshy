@@ -225,9 +225,9 @@ extension MeeshyComposerHost {
             // deux autres surfaces qui portent un son.
             editSceneSound(id)
         case .media, .sticker, .place:
-            // **L'édition EN PLACE** (#9138) : ses sous-outils à droite, leurs
-            // options depuis le haut — jamais l'ancien écran plein.
-            beginInlineEdit(id)
+            // **Une image ou une vidéo s'ouvre dans LA retouche** (#12590) ; le reste, et un média
+            // sans source locale, gardent l'édition EN PLACE (#9138).
+            if kind != .media || !requestSceneMediaRetouch(id) { beginInlineEdit(id) }
             HapticFeedback.medium()
         }
     }

@@ -128,7 +128,8 @@ nonisolated enum CallMontageLayout {
     private static func screen(count: Int, in bounds: CGRect) -> [CallMontageSlot] {
         switch count {
         case 1:
-            return [CallMontageSlot(frame: bounds, shape: .rectangle)]
+            let solo = CallMontageSoloLayout.screen(in: bounds)
+            return [CallMontageSlot(frame: solo.screen, shape: .roundedRectangle, cornerRadius: solo.cornerRadius)]
         case 2:
             let width = bounds.width * 0.28
             let height = width * 16 / 9
@@ -145,6 +146,10 @@ nonisolated enum CallMontageLayout {
     }
 
     private static func mosaic(count: Int, in bounds: CGRect) -> [CallMontageSlot] {
+        if count == 1 {
+            return [CallMontageSlot(frame: CallMontageSoloLayout.mosaic(in: bounds).slot, shape: .roundedRectangle,
+                                    cornerRadius: bounds.width * 0.03)]
+        }
         let gap = bounds.width * 0.02
         return cells(count: count, in: bounds.insetBy(dx: gap, dy: gap), gap: gap)
             .map { CallMontageSlot(frame: $0, shape: .roundedRectangle, cornerRadius: bounds.width * 0.03) }

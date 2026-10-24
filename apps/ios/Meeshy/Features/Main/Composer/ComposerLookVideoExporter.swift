@@ -42,9 +42,10 @@ nonisolated enum ComposerLookVideoExporter {
     static func export(_ url: URL, look: ComposerPhotoLook, framing: ComposerFraming = .identity,
                        timeRange: CMTimeRange? = nil, aspect: CGFloat = ComposerLookPainter.designAspect,
                        person: CallFramePerson, date: Date, uses: ComposerVideoUses = .gallery,
-                       declaredSpaceName: String? = nil, audioGain: Float = 1) async -> ComposerVideoRendition? {
+                       declaredSpaceName: String? = nil, audioGain: Float = 1,
+                       overlay: CGImage? = nil) async -> ComposerVideoRendition? {
         let asset = AVURLAsset(url: url)
-        switch plan(look: look, framing: framing, timeRange: timeRange, audioGain: audioGain) {
+        switch plan(look: look, framing: framing, timeRange: timeRange, audioGain: audioGain, hasOverlay: overlay != nil) {
         case .untouched: return ComposerVideoRendition(same: url, uses: uses)
         case .trimOnly(let plage): return await trimmed(asset, timeRange: plage).map { ComposerVideoRendition(same: $0, uses: uses) }
         case .render: break
@@ -58,11 +59,12 @@ nonisolated enum ComposerLookVideoExporter {
             let scene = ComposerLookPainter.scene(for: look, canvas: toile, date: date, person: person)
             if look.frame != ComposerPhotoFrame.none, scene == nil { throw UnpaintedFrame() }
             let visages = ComposerFaceEffects.export()
+            let calque = overlay.map { CIImage(cgImage: $0) }
             let composition = AVMutableVideoComposition(asset: asset) { @Sendable request in
                 let declare = declaredSpaceName.flatMap { CGColorSpace(name: $0 as CFString) }
                 let image = ComposerLookPainter.paint(request.sourceImage, look: look, framing: framing,
                                                       scene: scene, canvas: toile, declared: declare,
-                                                      faces: visages)
+                                                      faces: visages, overlay: calque)
                 request.finish(with: image.cropped(to: CGRect(origin: .zero, size: toile)), context: nil)
             }
             guard MeeshyVideoWatermarkBaker.sizesMatch(composition.renderSize, upright) else { return nil }
@@ -140,9 +142,10 @@ nonisolated enum ComposerLookVideoExporter {
         case render
     }
 
+    /// `hasOverlay` : un texte posé par-dessus (#12591) touche aux échantillons, comme un look.
     static func plan(look: ComposerPhotoLook, framing: ComposerFraming, timeRange: CMTimeRange?,
-                     audioGain: Float) -> Plan {
-        guard !paints(look: look, framing: framing, audioGain: audioGain) else { return .render }
+                     audioGain: Float, hasOverlay: Bool = false) -> Plan {
+        guard !hasOverlay, !paints(look: look, framing: framing, audioGain: audioGain) else { return .render }
         return timeRange.map(Plan.trimOnly) ?? .untouched
     }
 

@@ -90,11 +90,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # #12595 — un passage qui tombe pendant « Deploy to staging » (docker.yml)
+      # trouve le conteneur en cours de recréation : Traefik rend 404 le temps
+      # du healthcheck. La lecture réessaie donc environ une minute et demie, et
+      # `--retry-all-errors` est requis pour qu'un 404 soit réessayé. Une cible
+      # vraiment absente rougit toujours.
       - name: Lire la révision servie par /health
         id: health
         run: |
           set -euo pipefail
-          BODY=$(curl -fsS --max-time 10 "${{ matrix.target.url }}") || {
+          BODY=$(curl -fsS --max-time 10 --retry 6 --retry-delay 15 --retry-all-errors "${{ matrix.target.url }}") || {
             echo "::error::${{ matrix.target.name }} — /health injoignable sur ${{ matrix.target.url }}"
             exit 1
           }

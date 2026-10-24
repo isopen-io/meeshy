@@ -6,6 +6,8 @@ import Foundation
 nonisolated enum ComposerEditTool: Equatable, Hashable, Sendable, CaseIterable {
     /// Les équerres autour de l'image, et les proportions par presets.
     case crop
+    /// Du texte posé sur l'image, avec les outils de texte du composer (#12591).
+    case text
     /// La barre de coupe de la prise.
     case trim
     /// Le spectre vocal en couleur et la ligne de volume.
@@ -42,8 +44,8 @@ nonisolated enum ComposerEditTools {
     /// coupe, et son son se règle si elle en a un ; un son se coupe et se règle.
     static func offered(_ take: ComposerEditTake) -> [ComposerEditTool] {
         switch take {
-        case .photo: return [.crop]
-        case .video(let son): return son ? [.crop, .trim, .sound] : [.crop, .trim]
+        case .photo: return [.crop, .text]
+        case .video(let son): return son ? [.crop, .text, .trim, .sound] : [.crop, .text, .trim]
         case .audio: return [.trim, .sound]
         }
     }
@@ -83,7 +85,18 @@ nonisolated enum ComposerEditTools {
     /// sous une bande ou éteint, il se montre. Les autres ne bougent pas.
     static func toggled(_ active: Set<ComposerEditTool>, tapping tool: ComposerEditTool,
                         familyOpen: Bool) -> Set<ComposerEditTool> {
-        isShown(tool, active: active, familyOpen: familyOpen) ? active.subtracting([tool]) : active.union([tool])
+        guard !isShown(tool, active: active, familyOpen: familyOpen) else { return active.subtracting([tool]) }
+        return active.union([tool]).subtracting(excluded(by: tool))
+    }
+
+    /// **Texte et Recadrer s'excluent** (#12591) : tous deux prennent la scène — l'un pour ses
+    /// crochets, l'autre pour sa saisie. Montrer l'un range l'autre.
+    static func excluded(by tool: ComposerEditTool) -> Set<ComposerEditTool> {
+        switch tool {
+        case .crop: return [.text]
+        case .text: return [.crop]
+        case .trim, .sound: return []
+        }
     }
 
     /// L'ordre des panneaux sous la scène, de haut en bas : les proportions,
@@ -112,6 +125,7 @@ nonisolated enum ComposerEditTools {
     static func panel(for tool: ComposerEditTool) -> ComposerEditPanel {
         switch tool {
         case .crop: return .presets
+        case .text: return .none
         case .trim: return .trim
         case .sound: return .sound
         }
