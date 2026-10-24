@@ -34,8 +34,11 @@ class RouteManifestRatchetTest {
          * qui y revient : c'est un alias du profil public, qu'aucune interface ne vise (#4161, #4250).
          * 254 : plus `GET /attachments/:attachmentId/subtitles/:lang`, servie par la passerelle depuis
          * #11329 et sans interface Retrofit encore.
+         * 263 : plus les huit routes /e2ee de l'annuaire par appareil (#3706, #12543, #12592) et
+         * `DELETE /users/register-device-token`, servies par la passerelle depuis le 2026-10-24 ; le
+         * client Kotlin les portera avec le lot E2EE, bloqué sur sa décision de dérivation.
          */
-        const val TO_PORT_CEILING = 254
+        const val TO_PORT_CEILING = 263
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
