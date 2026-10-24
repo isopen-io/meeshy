@@ -261,7 +261,10 @@ final class LongPressPreviewGuardTests: XCTestCase {
     /// (l'entrée du menu natif, le glissé de rangée) lisent la loi du verrou.
     func test_detachedWindowPaths_readTheLock() throws {
         let overlay = normalizedCode(try source(Self.overlayPath))
-        XCTAssertTrue(overlay.contains("DetachedWindowOpener.shared.isAvailable, ConversationOpenRoute.mayDetach(conversation.id)"))
+        XCTAssertTrue(overlay.contains("isLocked: ConversationLockManager.shared.isLocked(conversation.id),"))
+        XCTAssertTrue(overlay.contains("windowsAvailable: DetachedWindowOpener.shared.isAvailable,"))
+        let catalog = normalizedCode(try source("Meeshy/Features/Main/Views/ConversationMenuCatalog.swift"))
+        XCTAssertTrue(catalog.contains("(.detach, input.windowsAvailable && ConversationOpenRoute.mayDetach(isLocked: input.isLocked))"))
         let rows = normalizedCode(try source(Self.nativePath))
         XCTAssertTrue(rows.contains("ConversationOpenRoute.mayDetach(conversation.id)"))
         for path in [Self.overlayPath, Self.nativePath] {

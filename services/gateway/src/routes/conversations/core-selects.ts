@@ -297,6 +297,9 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   autoTranslateEnabled: true,
   // #10720 — le chiffrement est optionnel par conversation : la fiche le lit ici.
   encryptionMode: true,
+  // #11380 — depuis quand : un message en clair ANTÉRIEUR est de l'historique,
+  // un message en clair postérieur se signale chez le lecteur.
+  encryptionEnabledAt: true,
   // #7545 — ce qui s'est passé DEPUIS le dernier message, résolu en une
   // lecture batchée par page (`loadConversationListActivity`).
   lastReactionId: true,

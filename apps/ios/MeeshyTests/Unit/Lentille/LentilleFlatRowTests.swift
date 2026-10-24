@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Tests MINIMAUX embarqués de `LentilleConversationRow` (contrat LWS-7,
@@ -90,6 +91,32 @@ final class LentilleFlatRowTests: XCTestCase {
             ConversationPreviewLine.preview(for: read, viewerId: "u-me", preferredLanguages: ["fr"], now: Self.pinnedDate).kind,
             "non lue ou lue, la ligne compose le même aperçu"
         )
+    }
+
+    // MARK: - #11575 — le compte de non-lus se dit en toutes lettres
+
+    /// La pastille est décorative dans l'élément combiné de la rangée : c'est
+    /// le libellé de RANGÉE qui annonce le compte, avec la phrase accordée
+    /// d'`UnreadCountLabel.messages` — la même que l'étiquette de la pastille
+    /// du web (`unreadMessagesLabel`), jamais un chiffre nu.
+    func test_accessibilityLabel_unread_saysTheCountInFullWords() {
+        let row = LentilleConversationRow(conversation: makeConversation(unreadCount: 5), preferredContentLanguages: ["fr"])
+
+        XCTAssertTrue(row.accessibilityLabel.contains(UnreadCountLabel.messages(5)))
+    }
+
+    /// Au-delà de 99, la pastille AFFICHE « 99+ » (`NotificationBadge.displayed`) ;
+    /// le libellé de rangée d'iOS, lui, dit le compte EXACT — jamais le texte
+    /// plafonné de la pastille, jamais un compte rabattu à 99. Le web dit
+    /// « plus de 99 messages non lus » : l'écart est consigné par #12671.
+    func test_accessibilityLabel_beyondNinetyNine_saysTheExactCountNeverTheBadgeCap() {
+        let row = LentilleConversationRow(conversation: makeConversation(unreadCount: 120), preferredContentLanguages: ["fr"])
+        let label = row.accessibilityLabel
+
+        XCTAssertEqual(NotificationBadge.displayed(120), "99+", "témoin de contrôle : la pastille plafonne bien")
+        XCTAssertFalse(label.contains(NotificationBadge.displayed(120)), "l'oreille n'entend pas le texte de la pastille")
+        XCTAssertTrue(label.contains(UnreadCountLabel.messages(120)), "le compte exact est dit")
+        XCTAssertFalse(label.contains(UnreadCountLabel.messages(99)), "le compte n'est pas rabattu à 99")
     }
 
     // MARK: - `==` — COPIÉ depuis `ThemedConversationRow.==` puis ÉTENDU au bridge

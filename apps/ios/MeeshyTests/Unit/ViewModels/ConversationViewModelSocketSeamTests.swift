@@ -141,7 +141,7 @@ final class ConversationViewModelSocketSeamTests: XCTestCase {
         let outgoing = makeOutgoing()
         let context = makeContext("cid_emit_1")
         await sut.stageOptimistic(outgoing, context: context)
-        let payload = await sut.prepareUpload(outgoing, context: context)
+        let payload = try await sut.prepareUpload(outgoing, context: context).get()
 
         let receipt = try await sut.emit(outgoing, payload: payload, context: context)
 
@@ -156,7 +156,7 @@ final class ConversationViewModelSocketSeamTests: XCTestCase {
         let outgoing = makeOutgoing()
         let context = makeContext("cid_emit_2")
         await sut.stageOptimistic(outgoing, context: context)
-        let payload = await sut.prepareUpload(outgoing, context: context)
+        let payload = try await sut.prepareUpload(outgoing, context: context).get()
 
         let receipt = try await sut.emit(outgoing, payload: payload, context: context)
 
@@ -173,7 +173,7 @@ final class ConversationViewModelSocketSeamTests: XCTestCase {
         let outgoing = makeOutgoing()
         let context = makeContext("cid_emit_3")
         await sut.stageOptimistic(outgoing, context: context)
-        let payload = await sut.prepareUpload(outgoing, context: context)
+        let payload = try await sut.prepareUpload(outgoing, context: context).get()
 
         do {
             _ = try await sut.emit(outgoing, payload: payload, context: context)

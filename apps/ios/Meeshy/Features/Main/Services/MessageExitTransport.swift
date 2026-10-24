@@ -33,8 +33,8 @@ enum MessageExitTransport {
     static func displayedText(_ message: Message, in viewModel: ConversationViewModel) -> String {
         BubbleContent.displayedText(
             of: message,
-            translations: viewModel.messageTranslations[message.id] ?? [],
-            preferredTranslation: viewModel.preferredTranslation(for: message.id),
+            translations: UnencryptedMessageGate.translations(of: message, in: viewModel),
+            preferredTranslation: UnencryptedMessageGate.preferredTranslation(of: message, in: viewModel),
             activeDisplayLangCode: viewModel.bubbleLanguageSelections[message.id]?.activeDisplayLangCode
         )
     }

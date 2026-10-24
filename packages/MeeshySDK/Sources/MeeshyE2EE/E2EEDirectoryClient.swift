@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 
 /// Le client des huit routes de l'annuaire par appareil et du relais
-/// d'enveloppes (#3706, spec 2026-10-23 § 3.3 et § 4.3). Il ne connaît ni
+/// d'enveloppes (#3706, spec E2EE libsignal § 3.3 et § 4.3). Il ne connaît ni
 /// libsignal ni le trousseau : il transporte des clés publiques et des
 /// enveloppes opaques. Chaque appel part au nom de la session courante, que la
 /// passerelle lie à l'appareil.
