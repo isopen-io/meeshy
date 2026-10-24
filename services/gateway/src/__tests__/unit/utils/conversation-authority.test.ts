@@ -26,17 +26,30 @@ import {
  *   sens. C'est la lecture CONSERVATRICE, et elle est explicite parce que
  *   `getEffectiveRole` (échelle unifiée du paquet partagé) rendrait l'inverse :
  *   elle place ADMIN (80) AU-DESSUS de CREATOR (70).
- * - **« de la plateforme »** — ADMIN et BIGBOSS seulement. MODERATOR, AUDIT et
- *   ANALYST sont des utilisateurs ordinaires dans une conversation, comme le
- *   dit déjà la loi de visibilité de la présence.
+ * - **« de la plateforme »** — les rôles PRIVILÉGIÉS de la table partagée
+ *   (`PRIVILEGED_PLATFORM_ROLES`) : MODERATOR, ADMIN et BIGBOSS, depuis la
+ *   décision porteur du 2026-10-24 (#11217, « privilégié partout »). AUDIT et
+ *   ANALYST restent des participants ordinaires.
  */
 describe('L’autorité d’un acteur dans une conversation (#3941)', () => {
   describe('actsWithCreatorRights', () => {
-    it.each(['ADMIN', 'BIGBOSS'])('%s de la plateforme agit avec les droits du créateur', (platformRole) => {
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])('%s de la plateforme agit avec les droits du créateur', (platformRole) => {
       expect(actsWithCreatorRights({ conversationRole: 'member', platformRole })).toBe(true);
     });
 
-    it.each(['USER', 'MODERATOR', 'AUDIT', 'ANALYST', 'AGENT'])(
+    it('MODERATOR de plateforme vaut ADMIN dans la conversation (#11217)', () => {
+      const moderator = { conversationRole: 'member', platformRole: 'MODERATOR' };
+      const admin = { conversationRole: 'member', platformRole: 'ADMIN' };
+      expect(effectiveConversationRole(moderator)).toBe(effectiveConversationRole(admin));
+      expect(actorRoleLevel(moderator)).toBe(actorRoleLevel(admin));
+      expect(actorHasMinimumRole(moderator, 'admin')).toBe(true);
+    });
+
+    it.each(['moderator', 'Admin'])('« %s » ne se lit pas : la table compare EXACTEMENT', (platformRole) => {
+      expect(actsWithCreatorRights({ conversationRole: 'member', platformRole })).toBe(false);
+    });
+
+    it.each(['USER', 'AUDIT', 'ANALYST', 'AGENT'])(
       '%s est un participant ordinaire — aucun bypass',
       (platformRole) => {
         expect(actsWithCreatorRights({ conversationRole: 'member', platformRole })).toBe(false);
