@@ -188,7 +188,7 @@ final class LivingSummaryEntryMenuTests: XCTestCase {
 
     func test_everyFaceAndEveryEpisode_carriesTheMenu() throws {
         for path in ["Features/Main/Focal/Summary/FaceRampView.swift", "Features/Main/Focal/Summary/EpisodeListView.swift"] {
-            XCTAssertTrue(try source(path).contains(".summaryEntryMenu("), "`\(path)` n'ouvre aucun menu à l'appui long")
+            XCTAssertTrue(try source(path).contains("SummaryEntryMenuModifier(target:"), "`\(path)` n'ouvre aucun menu à l'appui long")
         }
         let modifier = try source("Features/Main/Focal/Summary/SummaryEntryMenu.swift")
         XCTAssertTrue(modifier.contains(".contextMenu"), "l'appui long ouvre le menu système")
