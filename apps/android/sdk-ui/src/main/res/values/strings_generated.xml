@@ -91,6 +91,16 @@
     <string name="retouch_style_redcarpet">Red carpet</string>
     <string name="retouch_style_screen">Screen</string>
     <string name="retouch_style_strip">Photo booth</string>
+    <string name="retouch_text_add">Add text</string>
+    <string name="retouch_text_align_center">CENTER</string>
+    <string name="retouch_text_align_left">LEFT</string>
+    <string name="retouch_text_align_right">RIGHT</string>
+    <string name="retouch_text_color">Text color</string>
+    <string name="retouch_text_style_bold">BOLD</string>
+    <string name="retouch_text_style_classic">CLASSIC</string>
+    <string name="retouch_text_style_handwriting">HANDWRITING</string>
+    <string name="retouch_text_style_neon">NEON</string>
+    <string name="retouch_text_style_typewriter">TYPEWRITER</string>
     <string name="retouch_tool_crop">Crop</string>
     <string name="retouch_tool_sound">Sound</string>
     <string name="retouch_tool_text">Text</string>
