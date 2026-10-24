@@ -49,6 +49,7 @@ const es = {
   'message.menu.retry': 'Reintentar',
   'message.menu.discard': 'Descartar',
   'message.send.discarded': 'Mensaje descartado',
+  'message.send.discarded.uncertain': 'Descartado en este dispositivo: puede que ya se haya entregado',
   'message.menu.translateOnDevice': 'Traducir en el dispositivo',
   'message.menu.translateOnDevice.queued': 'Traducción solicitada a este dispositivo',
   'message.menu.translateOnDevice.consent': 'Activa «Traducir en este dispositivo» en los ajustes',

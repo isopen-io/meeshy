@@ -51,15 +51,8 @@ import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
 import { linkRenderingOf } from '@/lib/view/sender-links';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
-import {
-  Badges,
-  Check,
-  EditedMark,
-  FailedSendBand,
-  Quote,
-  reactionEntries,
-  RowQuote,
-} from './message-blocks';
+import { Badges, Check, EditedMark, Quote, reactionEntries, RowQuote } from './message-blocks';
+import { FailedSendBand } from './failed-send-band';
 
 const defaultNow = (): number => Date.now();
 

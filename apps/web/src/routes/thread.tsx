@@ -842,7 +842,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             startedAtOf={startedAtOf}
             reasonOf={reasonOf}
             permanentOf={permanentOf}
-            retry={retry} retryableOf={messageMenu.retryableOf} discard={discard} discardableOf={messageMenu.discardableOf}
+            retry={retry} retryableOf={messageMenu.retryableOf} discard={messageMenu.discard} discardableOf={messageMenu.discardableOf}
             displayLanguageOf={messageMenu.displayLanguageOf}
             myReactionsOf={messageMenu.myReactionsOf}
             selection={messageMenu.selection}

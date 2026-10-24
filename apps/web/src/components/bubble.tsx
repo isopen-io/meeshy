@@ -34,13 +34,13 @@ import {
   Badges,
   Check,
   EditedMark,
-  FailedSendBand,
   Flags,
   PrismPastille,
   Quote,
   ReactionChip,
   reactionEntries,
 } from './message-blocks';
+import { FailedSendBand } from './failed-send-band';
 
 const defaultNow = (): number => Date.now();
 

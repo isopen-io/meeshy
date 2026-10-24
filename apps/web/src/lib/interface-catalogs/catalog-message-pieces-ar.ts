@@ -49,6 +49,7 @@ const ar = {
   'message.menu.retry': 'إعادة المحاولة',
   'message.menu.discard': 'تجاهل',
   'message.send.discarded': 'تم تجاهل الرسالة',
+  'message.send.discarded.uncertain': 'تم التجاهل على هذا الجهاز — ربما وصلت الرسالة بالفعل',
   'message.menu.translateOnDevice': 'الترجمة على الجهاز',
   'message.menu.translateOnDevice.queued': 'طُلبت الترجمة على هذا الجهاز',
   'message.menu.translateOnDevice.consent': 'فعّل «الترجمة على هذا الجهاز» في الإعدادات',

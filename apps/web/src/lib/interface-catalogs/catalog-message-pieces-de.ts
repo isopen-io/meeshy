@@ -49,6 +49,7 @@ const de = {
   'message.menu.retry': 'Erneut versuchen',
   'message.menu.discard': 'Verwerfen',
   'message.send.discarded': 'Nachricht verworfen',
+  'message.send.discarded.uncertain': 'Auf diesem Gerät verworfen – sie wurde eventuell schon zugestellt',
   'message.menu.translateOnDevice': 'Auf dem Gerät übersetzen',
   'message.menu.translateOnDevice.queued': 'Übersetzung auf diesem Gerät angefordert',
   'message.menu.translateOnDevice.consent': 'Aktiviere „Auf diesem Gerät übersetzen“ in den Einstellungen',

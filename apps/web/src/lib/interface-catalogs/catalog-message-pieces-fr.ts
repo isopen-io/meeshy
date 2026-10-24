@@ -53,6 +53,7 @@ const fr = {
   'message.menu.retry': 'Réessayer',
   'message.menu.discard': 'Abandonner',
   'message.send.discarded': 'Envoi abandonné',
+  'message.send.discarded.uncertain': 'Envoi abandonné sur cet appareil — il a pu être reçu',
   'message.menu.translateOnDevice': 'Traduire sur l’appareil',
   'message.menu.translateOnDevice.queued': 'Traduction demandée à cet appareil',
   'message.menu.translateOnDevice.consent': 'Activez « Traduire sur cet appareil » dans les réglages',

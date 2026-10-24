@@ -148,4 +148,26 @@ describe('useMessageMenu — « Abandonner » un envoi en échec', () => {
     expect(api().discardableOf('cid_flight')).toBe(false);
     expect(api().discardableOf('m-confirmed')).toBe(false);
   });
+
+  test('abandonner depuis le menu rend le focus à la rangée voisine, jamais au document', () => {
+    const { api, open } = mount();
+    container.querySelector<HTMLElement>('[data-row="cid_refused"]')?.focus();
+    open('cid_refused');
+    act(() => api().onMenuAction('cid_refused', 'discard'));
+    act(() => api().onCloseMenu());
+    expect((document.activeElement as HTMLElement | null)?.dataset.row).toBe('cid_failed');
+  });
+
+  test('abandonner depuis la bande pose le focus sur la rangée voisine avant que la sienne parte', () => {
+    const { api, discarded } = mount();
+    act(() => api().discard('cid_failed'));
+    expect(discarded).toEqual(['cid_failed']);
+    expect((document.activeElement as HTMLElement | null)?.dataset.row).toBe('cid_refused');
+  });
+
+  test('la bande n’abandonne pas un envoi en vol', () => {
+    const { api, discarded } = mount();
+    act(() => api().discard('cid_flight'));
+    expect(discarded).toEqual([]);
+  });
 });

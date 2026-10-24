@@ -6,7 +6,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { FailedSendBand } from './message-blocks';
+import { FailedSendBand } from './failed-send-band';
 
 /**
  * #12632 — LA BANDE « NON ENVOYÉ » PORTE « ABANDONNER ». Un refus permanent
@@ -77,6 +77,15 @@ describe('« Abandonner » sur la bande d’un envoi en échec', () => {
     expect(retried).toEqual([]);
     act(() => retry?.click());
     expect(retried).toEqual(['r']);
+  });
+
+  test('les deux gestes sont séparés : un filet muet les tient à distance, « Abandonner » en bout de bande', () => {
+    const host = mount(<FailedSendBand onRetry={() => undefined} onDiscard={() => undefined} textColor="var(--color-error)" />);
+    const retry = host.querySelector('button[data-send-failed="retryable"]');
+    const separator = host.querySelector('[data-send-separator]');
+    expect(separator?.getAttribute('aria-hidden')).toBe('true');
+    expect(retry?.nextElementSibling).toBe(separator);
+    expect(separator?.nextElementSibling).toBe(discardOf(host));
   });
 
   test('sans geste d’abandon remis, la bande reste telle qu’elle était', () => {

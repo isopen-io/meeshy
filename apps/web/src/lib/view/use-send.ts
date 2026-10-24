@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { isPermanentFailure } from '@/lib/api/outcome';
-import { retrySendAction, sendAction } from '@/lib/api/query';
+import { discardSendAction, retrySendAction, sendAction } from '@/lib/api/query';
 import type { Message, Participant } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
@@ -93,10 +93,12 @@ export function useSend(params: {
   ) => void;
   readonly retry: (messageId: string) => void;
   /**
-   * ABANDONNER UN ENVOI EN ÉCHEC (#12632) — retire l'entrée de l'outbox sans la
-   * compter confirmée (`outboxStore.discard`) : la bulle quitte le fil. Un envoi
-   * encore EN VOL ne s'abandonne pas, sa confirmation peut encore arriver.
-   * L'issue se dit dans la région vivante, dans le catalogue du fil.
+   * ABANDONNER UN ENVOI EN ÉCHEC (#12632) — la règle vit dans `discardSend`
+   * (`send/discard-send.ts`) : l'entrée quitte l'outbox sans compter de
+   * confirmation, la bulle quitte le fil ET la ligne de liste rend sa place au
+   * message qui précède. Un envoi encore EN VOL ne s'abandonne pas. L'issue se
+   * dit dans la région vivante ; après un échec AMBIGU (coupure, délai, 5xx),
+   * elle ne promet pas que le message n'est pas parti.
    */
   readonly discard: (messageId: string) => void;
 } {
@@ -177,12 +179,13 @@ export function useSend(params: {
 
   const discard = useCallback(
     (messageId: string) => {
-      if (entries.find((entry) => entry.message.id === messageId)?.delivery !== 'failed') return;
-      outboxStore.getState().discard(conversationId, messageId);
+      const outcome = discardSendAction({ conversationId, clientMessageId: messageId });
+      if (outcome === null) return;
       const language = currentInterfaceLanguage();
-      if (isMessagePiecesCatalogLoaded(language)) announce(translateMessagePieces(language, 'message.send.discarded'));
+      if (!isMessagePiecesCatalogLoaded(language)) return;
+      announce(translateMessagePieces(language, outcome.uncertain ? 'message.send.discarded.uncertain' : 'message.send.discarded'));
     },
-    [entries, conversationId, announce],
+    [conversationId, announce],
   );
 
   const failedCount = useMemo(

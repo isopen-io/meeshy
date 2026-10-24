@@ -6,6 +6,10 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadMessagePiecesCatalog, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { localMessageOf } from '@/lib/send/local-message';
 import { entriesOf, outboxStore } from '@/lib/send/outbox-store';
+import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
+import { offerLastMessage } from '@/lib/api/list-preview';
+import { appQueryClient } from '@/lib/api/query-client';
+import type { Conversation } from '@/lib/api/types';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { useSend } from './use-send';
@@ -37,11 +41,30 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-const enqueue = (conversationId: string, clientMessageId: string, delivery: 'pending' | 'failed') => {
+const enqueue = (conversationId: string, clientMessageId: string, delivery: 'pending' | 'failed', status = 403) => {
   const message = localMessageOf({ clientMessageId, conversationId, viewerId: 'u-viewer', content: 'salut', originalLanguage: 'fr', now: new Date(0) });
   outboxStore.getState().enqueue(conversationId, { message, delivery: 'pending', attempts: 1, startedAt: 0 });
-  if (delivery === 'failed') outboxStore.getState().markFailed(conversationId, clientMessageId, { ok: false, status: 403, error: 'refusé' });
+  offerLastMessage(appQueryClient, conversationId, message);
+  if (delivery === 'failed') outboxStore.getState().markFailed(conversationId, clientMessageId, { ok: false, status, error: 'refusé' });
 };
+
+const seedRow = (conversationId: string) =>
+  appQueryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
+    pages: [
+      {
+        conversations: [{ id: conversationId, type: 'direct', participants: [], unreadCount: 0 } as unknown as Conversation],
+        pagination: { limit: 30, offset: 0, total: 1, hasMore: false },
+        cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+      },
+    ],
+    pageParams: [undefined],
+  });
+
+const rowOf = (conversationId: string): Conversation | undefined =>
+  appQueryClient
+    .getQueryData<{ readonly pages: readonly { readonly conversations: readonly Conversation[] }[] }>(CONVERSATIONS_QUERY_KEY)
+    ?.pages.flatMap((p) => p.conversations)
+    .find((c) => c.id === conversationId);
 
 function mount(conversationId: string) {
   const announced: string[] = [];
@@ -67,6 +90,22 @@ describe('useSend.discard', () => {
     expect(api().pending).toEqual([]);
     expect(announced.at(-1)).toBe(translateMessagePieces('fr', 'message.send.discarded'));
     expect(outboxStore.getState().confirmed['c-discard']).toBeUndefined();
+  });
+
+  test('la ligne de liste ne dit plus l’envoi abandonné', () => {
+    seedRow('c-row');
+    enqueue('c-row', 'cid_row', 'failed');
+    expect(rowOf('c-row')?.lastMessage?.id).toBe('cid_row');
+    const { api } = mount('c-row');
+    act(() => api().discard('cid_row'));
+    expect(rowOf('c-row')?.lastMessage ?? undefined).toBeUndefined();
+  });
+
+  test('après un échec ambigu, l’annonce ne promet pas que le message n’est pas parti', () => {
+    enqueue('c-ambiguous', 'cid_c', 'failed', 504);
+    const { api, announced } = mount('c-ambiguous');
+    act(() => api().discard('cid_c'));
+    expect(announced.at(-1)).toBe(translateMessagePieces('fr', 'message.send.discarded.uncertain'));
   });
 
   test('un envoi encore en vol ne s’abandonne pas', () => {
