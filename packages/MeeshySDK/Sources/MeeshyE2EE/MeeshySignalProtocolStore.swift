@@ -11,7 +11,7 @@ import LibSignalClient
 /// est acceptée ; une identité qui change est enregistrée et signalée
 /// (`.replacedExisting`), l'envoi continue (politique Signal par défaut).
 public final class MeeshySignalProtocolStore: IdentityKeyStore, PreKeyStore, SignedPreKeyStore, KyberPreKeyStore,
-    SessionStore, SenderKeyStore, @unchecked Sendable
+    SessionStore, SenderKeyStore, Sendable
 {
     private let identity: E2EELocalIdentity
 

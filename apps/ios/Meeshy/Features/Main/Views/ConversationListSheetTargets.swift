@@ -48,6 +48,9 @@ struct ConversationListSheetTargets {
     /// Celle dont le panneau d'informations est présenté.
     @Indirect var info: Conversation? = nil
 
+    /// Celle dont les réglages sont présentés (« Paramètres du groupe », #11230).
+    @Indirect var settings: Conversation? = nil
+
     /// Celle dont la feuille d'invitation est présentée.
     @Indirect var inviteSheet: Conversation? = nil
 

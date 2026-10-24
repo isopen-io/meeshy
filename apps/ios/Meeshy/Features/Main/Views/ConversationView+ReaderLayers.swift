@@ -133,6 +133,10 @@ struct ConversationSummaryLayer: View {
     @Binding var scrollState: ConversationScrollState
     let showScript: () -> Void
     let reply: (Message) -> Void
+    /// #11225 — le lecteur et la conversation tels que la loi des actions les
+    /// lit, relus à CHAQUE question : un droit retiré pendant que le Résumé est
+    /// ouvert ne s'offre plus.
+    let menuAuthority: () -> ConversationMenuAuthority
 
     var body: some View {
         LivingSummaryHost(
@@ -148,19 +152,16 @@ struct ConversationSummaryLayer: View {
             // `viewModel.messages`). Le digest, lui, ne se recompose
             // jamais : c'est pourquoi il ne contient PLUS leur texte.
             protections: LivingSummaryProtections.entries(messages: viewModel.messages),
+            // Le toucher d'un visage mène à sa première preuve ET la cite — par
+            // la porte du menu, donc seulement si la loi d'actions l'admet
+            // (comme le web, `summaryExits`). Celui d'un épisode y mène seulement.
             onReplyToPerson: { entry in
-                showScript()
-                guard let targetId = entry.evidenceMessageIds.first,
-                      let msg = viewModel.messages.first(where: { $0.id == targetId }) else { return }
-                reply(msg)
-                scrollState.scrollToMessageId = targetId
-                scrollState.scrollToMessageTrigger += 1
+                guard let targetId = SummaryEntryAction.target(of: entry) else { showScript(); return }
+                entryMenu.run(.reply, targetId)
             },
             onOpenEpisode: { episode in
-                showScript()
-                guard let targetId = episode.messageIds.first else { return }
-                scrollState.scrollToMessageId = targetId
-                scrollState.scrollToMessageTrigger += 1
+                guard let targetId = SummaryEntryAction.target(of: episode) else { showScript(); return }
+                entryMenu.run(.goToMessage, targetId)
             },
             onResumeThread: {
                 showScript()
@@ -172,7 +173,32 @@ struct ConversationSummaryLayer: View {
                     scrollState.scrollToMessageId = firstUnread
                     scrollState.scrollToMessageTrigger += 1
                 }
+            },
+            entryMenu: entryMenu
+        )
+    }
+
+    /// #11225 — Aller au message · Répondre, sur le message qu'une entrée du
+    /// Résumé désigne. « Aller » rend la main au Script et y défile ; « Répondre »
+    /// y défile ET cite le message, si la loi d'actions du SDK l'admet encore.
+    private var entryMenu: SummaryEntryMenu {
+        SummaryEntryMenu.make(
+            offered: { messageId in
+                SummaryEntryAction.offered(for: message(messageId), authority: menuAuthority(), now: Date())
+            },
+            goTo: { messageId in
+                showScript()
+                scrollState.scrollToMessageId = messageId
+                scrollState.scrollToMessageTrigger += 1
+            },
+            reply: { messageId in
+                guard let target = message(messageId) else { return }
+                reply(target)
             }
         )
+    }
+
+    private func message(_ id: String) -> Message? {
+        viewModel.messageIndex(for: id).map { viewModel.messages[$0] }
     }
 }
