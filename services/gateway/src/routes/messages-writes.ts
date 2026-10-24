@@ -203,7 +203,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (admission.reason === 'end-to-end-encrypted') {
+        if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
         }
         if (admission.reason === 'minor-global') {

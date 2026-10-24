@@ -12,6 +12,7 @@ import { declaredReplyProtection } from './replyProtectionContagion';
 import { assertPlaintextAdmitted, E2EE_CONTENT_PLACEHOLDER, type EncryptionRegime } from './e2eePlaintextAdmission';
 import { admitSendUnderRegime } from './e2eeSendAdmission';
 import { persistAdmittedEnvelopes } from './e2eeEnvelopePersistence';
+import { isSealedAtRest, isServerAtRestMode, revealAtRest, servedClearAtRest, ServerAtRestUnavailableError } from './serverAtRest';
 import type { E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
@@ -207,63 +208,25 @@ export class MessageProcessor {
       };
     }
 
-    try {
-      // Server mode: encrypt content server-side
-      if (mode === 'server') {
-        const encrypted = await this.encryptionService.encryptMessage(
-          content,
-          'server',
-          conversationId
-        );
-
-        return {
-          isEncrypted: true,
-          mode: 'server',
-          encryptedContent: encrypted.ciphertext,
-          encryptionMetadata: encrypted.metadata as Prisma.InputJsonValue
-        };
-      }
-
-      // Hybrid mode: encrypt the server layer
-      if (mode === 'hybrid') {
-        const serverLayer = await this.encryptionService.encryptHybridServerLayer(
-          content,
-          conversationId
-        );
-
-        return {
-          isEncrypted: true,
-          mode: 'hybrid',
-          encryptedContent: serverLayer.ciphertext,
-          encryptionMetadata: {
-            mode: 'hybrid',
-            protocol: 'aes-256-gcm',
-            keyId: serverLayer.keyId,
-            iv: serverLayer.iv,
-            authTag: serverLayer.authTag,
-            canTranslate: true,
-            timestamp: Date.now()
-          } as Prisma.InputJsonValue
-        };
-      }
-
-      // Unknown mode - fallback to plaintext
-      logger.warn(`[MessageProcessor] Unknown encryption mode: ${mode}`);
-      return {
-        isEncrypted: false,
-        mode: null,
-        encryptedContent: null,
-        encryptionMetadata: null
-      };
-    } catch (error) {
-      logger.error('[MessageProcessor] Encryption failed', error);
-      return {
-        isEncrypted: false,
-        mode: null,
-        encryptedContent: null,
-        encryptionMetadata: null
-      };
+    // #11381 — un mode que la passerelle ne sait pas chiffrer est REFUSÉ, comme
+    // une clé absente : la conversation se croit chiffrée, rien ne s'y écrit en clair.
+    if (!isServerAtRestMode(mode)) {
+      logger.warn(`[MessageProcessor] Unknown encryption mode refused: ${mode}`);
+      throw new ServerAtRestUnavailableError('unknown-mode');
     }
+
+    const servedMode: EncryptionMode = mode.toLowerCase() === 'hybrid' ? 'hybrid' : 'server';
+    const sealed = await this.encryptionService.sealAtRest({
+      plaintext: content,
+      conversationId,
+      preferredKeyId: conversation.serverEncryptionKeyId ?? null,
+    });
+    return {
+      isEncrypted: true,
+      mode: servedMode,
+      encryptedContent: sealed.ciphertext,
+      encryptionMetadata: { mode: servedMode, ...sealed.metadata, canTranslate: true } as Prisma.InputJsonValue
+    };
   }
 
   private readEncryptionRegime(conversationId: string): Promise<EncryptionRegime | null> {
@@ -350,7 +313,9 @@ export class MessageProcessor {
     //
     // Un expéditeur non inscrit (invité anonyme, participant introuvable) ne
     // voit aucune adresse suivie (#10286) : ni réécriture, ni carte.
-    const linkAuthor = !endToEnd && this.containsLinks(data.content)
+    // #11381 — au repos, aucune adresse ne se range en clair à côté du chiffré.
+    const sealedAtRest = Boolean(regime?.encryptionEnabledAt) && isServerAtRestMode(regime?.encryptionMode);
+    const linkAuthor = !endToEnd && !sealedAtRest && this.containsLinks(data.content)
       ? await this.resolveLinkTrackingAuthor(data.senderId)
       : UNTRACKED_LINK_AUTHOR;
 
@@ -482,8 +447,8 @@ export class MessageProcessor {
     });
 
     if (alreadySent) {
-      (alreadySent as Message & { isDuplicate?: boolean }).isDuplicate = true;
-      return { ...alreadySent, timestamp: alreadySent.createdAt } as Message;
+      const servedDuplicate = await revealAtRest(alreadySent, this.encryptionService);
+      return { ...servedDuplicate, isDuplicate: true, timestamp: alreadySent.createdAt } as Message;
     }
 
     let message: Message;
@@ -569,7 +534,7 @@ export class MessageProcessor {
         });
         throw e;
       }
-      message = existing;
+      message = await revealAtRest(existing, this.encryptionService);
       isDuplicate = true;
       logger.info('Idempotent dedup hit on clientMessageId', {
         conversationId: data.conversationId,
@@ -678,8 +643,11 @@ export class MessageProcessor {
       corrWithMsg
     );
 
+    // #11381 — l'expéditeur, `message:new` et la traduction reçoivent le CLAIR ;
+    // la base n'a reçu que le chiffré (ÉTAPE 3) et la notification (ÉTAPE 6) son placeholder.
+    const served = isSealedAtRest(message) ? servedClearAtRest(message, processedContent.trim()) : message;
     return {
-      ...message,
+      ...served,
       timestamp: message.createdAt
     } as Message;
   }

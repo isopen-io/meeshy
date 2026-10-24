@@ -51,6 +51,7 @@ import { announceConversationLanguageChange } from '../message-translation/conve
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
 import { isE2eePlaintextRefusal } from './e2eePlaintextAdmission';
+import { isServerAtRestUnavailable } from './serverAtRest';
 import { isE2eeRelayRefusal } from '../e2ee/e2ee-relay-errors';
 import { persistableEncryption } from './e2eeRelayPayload';
 
@@ -546,6 +547,11 @@ export class MessagingService {
       // #11216 — un clair refusé en e2ee n'est pas une panne : son motif voyage en `code`.
       if (isE2eePlaintextRefusal(error)) {
         logger.info('e2ee plaintext refused', { ...corr });
+        return this.createErrorResponse(error.message, error.code);
+      }
+      // #11381 — sans clé maîtresse, un message server/hybrid est refusé, jamais écrit en clair.
+      if (isServerAtRestUnavailable(error)) {
+        logger.warn('server at-rest encryption unavailable', { ...corr, reason: error.reason });
         return this.createErrorResponse(error.message, error.code);
       }
       // #3706 — un envoi libsignal refusé (Sesame, appareil, ancien client) : son code et son écart voyagent.

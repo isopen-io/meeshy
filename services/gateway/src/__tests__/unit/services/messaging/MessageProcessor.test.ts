@@ -57,12 +57,11 @@ jest.mock('../../../../services/MentionService', () => ({
   })),
 }));
 
-const mockEncryptMessage = jest.fn() as jest.Mock<any>;
-const mockEncryptHybridServerLayer = jest.fn() as jest.Mock<any>;
+const mockSealAtRest = jest.fn() as jest.Mock<any>;
 jest.mock('../../../../services/EncryptionService', () => ({
   EncryptionService: jest.fn().mockImplementation(() => ({
-    encryptMessage: (...a: any[]) => mockEncryptMessage(...a),
-    encryptHybridServerLayer: (...a: any[]) => mockEncryptHybridServerLayer(...a),
+    sealAtRest: (...a: any[]) => mockSealAtRest(...a),
+    openAtRest: jest.fn(async () => { throw new Error('not opened in these tests'); }),
   })),
 }));
 
@@ -411,18 +410,19 @@ describe('MessageProcessor.getEncryptionContext', () => {
     expect(ctx.mode).toBe('e2ee');
   });
 
-  it('encrypts server-side in server mode', async () => {
+  it('encrypts at rest in server mode, under the key the conversation designates', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'server', encryptionEnabledAt: new Date(), serverEncryptionKeyId: 'key-1' });
-    mockEncryptMessage.mockResolvedValue({ ciphertext: 'enc-ct', metadata: { keyId: 'key-1' } });
+    mockSealAtRest.mockResolvedValue({ ciphertext: 'enc-ct', metadata: { protocol: 'aes-256-gcm', keyId: 'key-1', iv: 'iv', authTag: 'tag', aad: 'conversation:v1' } });
     const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
+    expect(mockSealAtRest).toHaveBeenCalledWith({ plaintext: 'hello', conversationId: CONV_ID, preferredKeyId: 'key-1' });
     expect(ctx.isEncrypted).toBe(true);
     expect(ctx.mode).toBe('server');
     expect(ctx.encryptedContent).toBe('enc-ct');
   });
 
-  it('encrypts server layer in hybrid mode', async () => {
+  it('encrypts at rest in hybrid mode (#11374 : hybrid = au repos, jamais de bout en bout)', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'hybrid', encryptionEnabledAt: new Date(), serverEncryptionKeyId: 'key-2' });
-    mockEncryptHybridServerLayer.mockResolvedValue({ ciphertext: 'hyb-ct', keyId: 'key-2', iv: 'iv', authTag: 'tag' });
+    mockSealAtRest.mockResolvedValue({ ciphertext: 'hyb-ct', metadata: { protocol: 'aes-256-gcm', keyId: 'key-2', iv: 'iv', authTag: 'tag', aad: 'conversation:v1' } });
     const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
     expect(ctx.isEncrypted).toBe(true);
     expect(ctx.mode).toBe('hybrid');
@@ -430,18 +430,15 @@ describe('MessageProcessor.getEncryptionContext', () => {
     expect((ctx.encryptionMetadata as Record<string, unknown>)?.canTranslate).toBe(true);
   });
 
-  it('falls back to no encryption for unknown mode', async () => {
+  it('#11381 — refuses an unknown mode instead of writing plaintext', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'quantum', encryptionEnabledAt: new Date(), serverEncryptionKeyId: 'k' });
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
-    expect(ctx.isEncrypted).toBe(false);
-    expect(ctx.mode).toBeNull();
+    await expect(processor.getEncryptionContext(CONV_ID, 'hello', 'text')).rejects.toMatchObject({ code: 'SERVER_AT_REST_UNAVAILABLE' });
   });
 
-  it('falls back to no encryption when encryption service throws', async () => {
+  it('#11381 — propagates an encryption failure instead of writing plaintext (fail-closed)', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'server', encryptionEnabledAt: new Date(), serverEncryptionKeyId: 'k' });
-    mockEncryptMessage.mockRejectedValue(new Error('KMS unavailable'));
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
-    expect(ctx.isEncrypted).toBe(false);
+    mockSealAtRest.mockRejectedValue(new Error('KMS unavailable'));
+    await expect(processor.getEncryptionContext(CONV_ID, 'hello', 'text')).rejects.toThrow('KMS unavailable');
   });
 });
 

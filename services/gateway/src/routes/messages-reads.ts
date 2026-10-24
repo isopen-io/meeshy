@@ -4,6 +4,8 @@
  * GET /attachments/:attachmentId/status-details. Issue #4284. Point d'entrée :
  * messages.ts.
  */
+import { lazyKeyring, revealAtRest } from '../services/messaging/serverAtRest';
+import { getEncryptionService } from '../services/EncryptionService';
 import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { attachmentFullSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
@@ -385,7 +387,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       );
 
       // #7950 — la citation d'une story retirée sort expurgée de `metadata`.
-      const [citedMessage] = await servePostReplyCitations(prisma, [message]);
+      // #11381 — un message `server`/`hybrid` sort en clair, ses traductions comprises.
+      const opened = await revealAtRest(message, lazyKeyring(() => getEncryptionService(prisma)));
+      const [citedMessage] = await servePostReplyCitations(prisma, [opened]);
       return sendSuccess(reply, projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
         ...citedMessage,
         // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
@@ -411,7 +415,7 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         // au moins une traduction.
         translations: transformTranslationsToArray(
           messageId,
-          (message as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+          (opened as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
         ),
         // Les mêmes valeurs écrasent aussi les champs de premier niveau issus
         // du `select` : les trois clients y décodent leurs coches de livraison.

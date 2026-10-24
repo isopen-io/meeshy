@@ -290,8 +290,12 @@ export function buildMessageListSelect(options: {
         reactionCount: true,
 
         // ===== CHIFFREMENT =====
+        // #11381 — le chiffré et ses métadonnées sont LUS pour que la passerelle
+        // ouvre un message `server`/`hybrid` (`revealAtRestRows`) ; ils ne sortent pas.
         isEncrypted: true,
         encryptionMode: true,
+        encryptedContent: true,
+        encryptionMetadata: true,
 
         // ===== TIMESTAMPS =====
         createdAt: true,
@@ -371,6 +375,10 @@ export function buildMessageListSelect(options: {
             effectFlags: true,
             isEncrypted: true,
             encryptionMode: true,
+            // #11381 — la citation d'un message au repos s'ouvre comme la racine.
+            conversationId: true,
+            encryptedContent: true,
+            encryptionMetadata: true,
             // Le TYPE porte l'icône du placeholder servi à un message protégé
             // (`protectedPreview` : « 👁️ 🖼️ ») ; sans lui toute citation
             // masquée se lit « 👁️ 💬 », quel que soit son média.

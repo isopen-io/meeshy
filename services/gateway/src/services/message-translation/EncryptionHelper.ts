@@ -6,6 +6,7 @@
 import * as crypto from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { ServerAtRestUnavailableError } from '../messaging/serverAtRest';
 
 const logger = enhancedLogger.child({ module: 'EncryptionHelper' });
 
@@ -72,15 +73,8 @@ export class EncryptionHelper {
   ): Promise<TranslationEncryptionData & { encryptedContent: string }> {
     const keyData = await this.getConversationEncryptionKey(conversationId);
 
-    if (!keyData) {
-      return {
-        encryptedContent: plaintext,
-        isEncrypted: false,
-        encryptionKeyId: null,
-        encryptionIv: null,
-        encryptionAuthTag: null
-      };
-    }
+    // #11381 — une traduction d'un message chiffré au repos ne se range JAMAIS en clair.
+    if (!keyData) throw new ServerAtRestUnavailableError('key-unavailable');
 
     // Generate IV (12 bytes for AES-GCM)
     const iv = crypto.randomBytes(12);

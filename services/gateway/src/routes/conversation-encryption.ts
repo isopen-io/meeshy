@@ -18,7 +18,8 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { validateParams, validateBody } from '../validation/helpers.js';
 import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../validation/conversation-encryption-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
+import { isServerAtRestUnavailable } from '../services/messaging/serverAtRest';
 import {
   noticeBroadcast,
   postSystemNotice,
@@ -278,7 +279,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         const encryptionMessages: Record<EncryptionMode, string> = {
           e2ee: '🔒 End-to-end encryption enabled. Messages are now fully encrypted.',
           server: '🔐 Server-side encryption enabled. Messages are encrypted with translation support.',
-          hybrid: '🔐🔒 Hybrid encryption enabled. Messages are double-encrypted with E2EE + server layer. Translation is supported.',
+          // #11374 — `hybrid` est chiffré AU REPOS, comme `server` : jamais « de bout en bout ».
+          hybrid: '🔐 Server-side encryption enabled. Messages are encrypted at rest with translation support.',
         };
 
         const encryptionLabels: Record<EncryptionMode, string> = {
@@ -321,6 +323,11 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         }), { message: `${encryptionLabels[mode]} encryption enabled successfully` });
 
       } catch (error) {
+        // #11381 — sans clé maîtresse, aucun mode `server`/`hybrid` ne s'active.
+        if (isServerAtRestUnavailable(error)) {
+          logger.error('Server encryption unavailable: ENCRYPTION_MASTER_KEY missing or invalid', { reason: error.reason });
+          return sendError(reply, 503, error.message, { code: error.code });
+        }
         logger.error('Error enabling encryption', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }

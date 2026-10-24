@@ -69,6 +69,8 @@ import {
 import { loadCurrentUserConsumptionMap, loadMessageReadStatusMap } from './messages-list-reader-state';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import type { RawMessageRow } from './messages-list-query-types';
+import { lazyKeyring, revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { getEncryptionService } from '../../services/EncryptionService';
 import { loadReaderReactionsByMessage } from './messages-reader-reactions';
 import {
   isEphemeralServableToReader,
@@ -553,7 +555,9 @@ export function registerMessagesListRoute(
       // `MessageProtectionContext`/`MessageProtectionFields`,
       // `routes/admin/media-protection.ts`) — cast unique, ici, plutôt qu'un
       // `any` répété à chaque site d'usage.
-      const messages = rawMessages as unknown as RawMessageRow[];
+      // #11381 — un message `server`/`hybrid` est ouvert ICI, avant toute
+      // projection : la page sert du clair, la base ne garde que le chiffré.
+      const messages = await revealAtRestRows(rawMessages as unknown as RawMessageRow[], lazyKeyring(() => getEncryptionService(prisma)));
 
       // #4177 — travail mort retiré (`currentUserReactions` revient au #7936,
       // DÉCLARÉ cette fois — plus bas) : ce bloc calculait `currentUserReactions`
