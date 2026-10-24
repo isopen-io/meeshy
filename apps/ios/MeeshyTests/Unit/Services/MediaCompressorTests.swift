@@ -216,24 +216,26 @@ final class MediaCompressorTests: XCTestCase {
 
     /// Une passerelle qui convertit (S8, #11263) reçoit le HEIC de l'iPhone tel
     /// quel : mêmes octets, `image/heic`, aucune génération d'encodage.
-    func test_compressImageData_nativeHEICPolicy_keepsTheHEICBytesAndMime() throws {
+    func test_compressImageData_nativeHEICPolicy_keepsTheHEICBytesAndMime() async throws {
         let sut = makeSUT()
         let heicData = makeHEICData()
         let policy = MediaContext.message.outgoingImagePolicy(compresses: false, qualityPercent: 85,
                                                               keepsLocation: false, heicDelivery: .native)
 
-        let result = try XCTUnwrap(sut.compressImageData(heicData, policy: policy))
+        let compressed = await sut.compressImageData(heicData, policy: policy)
+        let result = try XCTUnwrap(compressed)
 
         XCTAssertEqual(result.mimeType, "image/heic")
         XCTAssertEqual(result.fileExtension, "heic")
         XCTAssertEqual(result.data, heicData)
     }
 
-    func test_compressImageData_defaultPolicy_stillTranscodesHEICToJPEG() throws {
+    func test_compressImageData_defaultPolicy_stillTranscodesHEICToJPEG() async throws {
         let sut = makeSUT()
         let policy = MediaContext.message.outgoingImagePolicy(compresses: false, qualityPercent: 85, keepsLocation: false)
 
-        let result = try XCTUnwrap(sut.compressImageData(makeHEICData(), policy: policy))
+        let compressed = await sut.compressImageData(makeHEICData(), policy: policy)
+        let result = try XCTUnwrap(compressed)
 
         XCTAssertEqual(result.mimeType, "image/jpeg")
         XCTAssertEqual([UInt8](result.data.prefix(3)), [0xFF, 0xD8, 0xFF])
