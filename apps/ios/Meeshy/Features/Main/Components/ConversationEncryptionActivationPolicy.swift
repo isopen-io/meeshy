@@ -1,15 +1,21 @@
 import Foundation
 import MeeshySDK
 
-/// QUI peut activer le chiffrement d'une conversation (#12517, directive du
-/// porteur) — miroir de `mayActivateConversationEncryption`
+/// QUI peut activer le chiffrement d'une conversation (#12517, #12588,
+/// directives du porteur) — miroir de `mayActivateConversationEncryption`
 /// (`services/gateway/src/utils/encryption-activation-policy.ts`). Tant que
-/// l'E2EE n'est pas opérationnel, seuls ADMIN et BIGBOSS de la plateforme
-/// l'activent ; la passerelle fait foi par son 403. La relâcher se fait ici et
-/// dans la passerelle, nulle part ailleurs. Fermée par défaut.
+/// l'E2EE n'est pas opérationnel, l'activation est réservée à un rôle de
+/// plateforme ANALYST ou supérieur (ANALYST, AUDIT, MODERATOR, ADMIN, BIGBOSS),
+/// la casse repliée ; USER et AGENT ne l'ont pas. La passerelle fait foi par son
+/// 403 et exige en plus l'appartenance à la conversation. La relâcher se fait
+/// ici et dans la passerelle, nulle part ailleurs. Fermée par défaut : un rôle
+/// absent ou illisible n'accorde rien.
 enum ConversationEncryptionActivationPolicy {
+    static let minimumPlatformRole: PlatformRole = .analyst
+
     static func mayActivate(platformRole: String?) -> Bool {
-        PlatformRole(caseFolding: platformRole)?.administers ?? false
+        guard let role = PlatformRole(caseFolding: platformRole) else { return false }
+        return role >= minimumPlatformRole
     }
 }
 

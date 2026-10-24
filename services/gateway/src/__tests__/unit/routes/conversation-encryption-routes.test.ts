@@ -287,7 +287,15 @@ describe('POST /conversations/:conversationId/encryption', () => {
     ['un BIGBOSS de plateforme membre d’un groupe', { role: 'member', user: { role: 'BIGBOSS' } }, 'group'],
     ['un ADMIN de plateforme dans un tête-à-tête, rôle en minuscules', { role: 'member', user: { role: 'admin' } }, 'direct'],
     ['un BIGBOSS de plateforme créateur du groupe', { role: 'creator', user: { role: 'BIGBOSS' } }, 'group'],
-  ])('active le chiffrement pour %s (#12517)', async (_label, member, type) => {
+    ['un MODERATOR de plateforme dans un tête-à-tête', { role: 'member', user: { role: 'MODERATOR' } }, 'direct'],
+    ['un MODERATOR de plateforme dans un tête-à-tête, rôle en minuscules', { role: 'member', user: { role: 'moderator' } }, 'direct'],
+    ['un MODERATOR de plateforme créateur du groupe', { role: 'creator', user: { role: 'MODERATOR' } }, 'group'],
+    ['un MODERATOR de plateforme modérateur du groupe', { role: 'moderator', user: { role: 'Moderator' } }, 'group'],
+    ['un AUDIT de plateforme dans un tête-à-tête', { role: 'member', user: { role: 'AUDIT' } }, 'direct'],
+    ['un AUDIT de plateforme créateur du groupe, rôle en minuscules', { role: 'creator', user: { role: 'audit' } }, 'group'],
+    ['un ANALYST de plateforme dans un tête-à-tête', { role: 'member', user: { role: 'ANALYST' } }, 'direct'],
+    ['un ANALYST de plateforme créateur du groupe, rôle en minuscules', { role: 'creator', user: { role: 'analyst' } }, 'group'],
+  ])('active le chiffrement pour %s (#12517, #12588)', async (_label, member, type) => {
     const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, ...member }], type } });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(res.statusCode).toBe(200);
@@ -298,8 +306,9 @@ describe('POST /conversations/:conversationId/encryption', () => {
     ['le créateur USER d’un groupe', { role: 'creator', user: { role: 'USER' } }, 'group'],
     ['un administrateur USER du groupe', { role: 'admin', user: { role: 'USER' } }, 'group'],
     ['un modérateur USER du groupe', { role: 'MODERATOR', user: { role: 'USER' } }, 'group'],
-    ['un MODERATOR de plateforme simple membre', { role: 'member', user: { role: 'MODERATOR' } }, 'group'],
-    ['un AUDIT de plateforme dans un tête-à-tête', { role: 'member', user: { role: 'AUDIT' } }, 'direct'],
+    ['un MODERATOR de plateforme simple membre d’un groupe — rang de conversation insuffisant', { role: 'member', user: { role: 'MODERATOR' } }, 'group'],
+    ['un AUDIT de plateforme simple membre d’un groupe — rang de conversation insuffisant', { role: 'member', user: { role: 'AUDIT' } }, 'group'],
+    ['un ANALYST de plateforme simple membre d’un groupe — rang de conversation insuffisant', { role: 'member', user: { role: 'ANALYST' } }, 'group'],
     ['un USER dans un tête-à-tête', { role: 'member', user: { role: 'USER' } }, 'direct'],
     ['un rôle de plateforme absent dans un tête-à-tête — fermé par défaut', { role: 'member', user: null }, 'direct'],
     ['un rang illisible (owner) — fermé par défaut', { role: 'owner', user: { role: 'USER' } }, 'group'],
@@ -312,6 +321,48 @@ describe('POST /conversations/:conversationId/encryption', () => {
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(res.statusCode).toBe(403);
     expect(prisma.conversation.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    ['e2ee', 'MODERATOR'],
+    ['server', 'moderator'],
+    ['hybrid', 'Moderator'],
+    ['e2ee', 'AUDIT'],
+    ['server', 'audit'],
+    ['hybrid', 'Audit'],
+    ['e2ee', 'ANALYST'],
+    ['server', 'analyst'],
+    ['hybrid', 'Analyst'],
+  ])('un rôle de plateforme ANALYST ou supérieur active le mode %s (rôle %s, #12588)', async (mode, role) => {
+    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, role: 'member', user: { role } }], type: 'direct' } });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode } });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it.each(['MODERATOR', 'AUDIT', 'ANALYST', 'ADMIN'])('un %s de plateforme étranger à la conversation reste refusé (#12588)', async (role) => {
+    testAuthContext = { isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role } };
+    const prisma = makePrisma({ conversation: { participants: [{ userId: OTHER_ID, role: 'creator', user: { role: 'USER' } }], type: 'direct' } });
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', prisma as unknown);
+    await app.register(encryptionRoutes);
+    await app.ready();
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    ['e2ee', 'USER'],
+    ['server', 'user'],
+    ['hybrid', 'AGENT'],
+  ])('la restriction couvre le mode %s pour %s et porte un code lisible (#12517, #12588)', async (mode, role) => {
+    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, role: 'creator', user: { role } }], type: 'group' } });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ success: false, code: 'ENCRYPTION_ACTIVATION_RESTRICTED' });
     await app.close();
   });
 
