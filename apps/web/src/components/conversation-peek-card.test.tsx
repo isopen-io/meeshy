@@ -418,6 +418,10 @@ describe('conversation-peek.css — le fond sous la carte (#12633)', () => {
     expect(rule('.conversation-peek-card > .thread-backdrop:not([data-appearance])')).toContain('display: none');
   });
 
+  test('un modèle ancré en bas à droite se retourne en RTL, sans le chunk du fil', () => {
+    expect(rule("[dir='rtl'] .conversation-peek-card > .thread-backdrop[data-flip-rtl]")).toContain('transform: scaleX(-1)');
+  });
+
   test('sur un fond peint, l’en-tête garde la surface opaque de la carte', () => {
     expect(rule('.conversation-peek-card[data-peek-backdrop] .conversation-peek-header')).toContain('background-color: var(--color-ios-card);');
   });
