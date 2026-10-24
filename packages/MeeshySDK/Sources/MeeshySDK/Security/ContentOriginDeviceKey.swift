@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os
 import Security
 
 // MARK: - Le secret qui scelle la provenance d'un clair déchiffré (#11402)
@@ -40,16 +41,20 @@ protocol ContentOriginKeyVault: Sendable {
 /// Un trousseau indisponible n'est jamais écrasé : le processus scelle avec
 /// une clé éphémère, et ce qu'elle scelle ne se vérifie plus après lui
 /// (fail-closed — le message redevient scellé, son texte reste affiché).
+/// L'éphémère n'est pas définitive (#12721) : le trousseau se relit aux accès
+/// suivants, et la clé gardée la remplace dès le premier déverrouillage.
 enum ContentOriginDeviceKey {
     static let byteCount = 32
 
-    /// La clé de ce processus, résolue une fois.
-    static let current: Data = resolve(using: KeychainContentOriginVault(), generate: ContentOriginDeviceKey.generate)
+    private static let process = ContentOriginKeyHolder(vault: KeychainContentOriginVault(), generate: { generate() })
 
-    static func resolve(using vault: some ContentOriginKeyVault, generate: () -> Data) -> Data {
+    /// La clé de ce processus : la gardée dès qu'elle se lit, l'éphémère d'ici là.
+    static var current: Data { process.current() }
+
+    static func resolve(using vault: some ContentOriginKeyVault, generate: () -> Data) -> ContentOriginKeyResolution {
         switch vault.read() {
-        case .value(let stored): return stored
-        case .unavailable: return generate()
+        case .value(let stored): return .durable(stored)
+        case .unavailable: return .ephemeral(generate())
         case .absent: return store(generate(), in: vault)
         }
     }
@@ -58,9 +63,76 @@ enum ContentOriginDeviceKey {
         SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
     }
 
-    private static func store(_ fresh: Data, in vault: some ContentOriginKeyVault) -> Data {
-        guard vault.add(fresh) == .duplicate, case .value(let stored) = vault.read() else { return fresh }
-        return stored
+    private static func store(_ fresh: Data, in vault: some ContentOriginKeyVault) -> ContentOriginKeyResolution {
+        switch vault.add(fresh) {
+        case .stored: return .durable(fresh)
+        case .failed: return .ephemeral(fresh)
+        case .duplicate:
+            guard case .value(let stored) = vault.read() else { return .ephemeral(fresh) }
+            return .durable(stored)
+        }
+    }
+}
+
+/// Ce que la résolution a donné : une clé GARDÉE, qui tient pour le processus,
+/// ou une clé du seul processus, qui attend que le trousseau se rouvre.
+enum ContentOriginKeyResolution: Equatable, Sendable {
+    case durable(Data)
+    case ephemeral(Data)
+
+    var key: Data {
+        switch self {
+        case .durable(let key), .ephemeral(let key): return key
+        }
+    }
+}
+
+/// La clé d'un processus. Une clé gardée ne se relit plus. Une éphémère reste
+/// la MÊME tant que le trousseau est fermé (ce qu'elle a scellé se vérifie
+/// encore), et le trousseau se retente au plus une fois par `retryInterval`,
+/// pour qu'une liste rendue avant le déverrouillage ne le sollicite pas à
+/// chaque bulle. S'il se rouvre VIDE, c'est l'éphémère qui s'y garde : ce
+/// qu'elle a scellé pendant le verrouillage reste vérifiable.
+final class ContentOriginKeyHolder: Sendable {
+    private struct Held: Sendable {
+        let resolution: ContentOriginKeyResolution
+        let readAt: Date
+
+        func isSettled(at instant: Date, retryInterval: TimeInterval) -> Bool {
+            guard case .ephemeral = resolution else { return true }
+            return instant.timeIntervalSince(readAt) < retryInterval
+        }
+    }
+
+    private let vault: any ContentOriginKeyVault
+    private let generate: @Sendable () -> Data
+    private let now: @Sendable () -> Date
+    private let retryInterval: TimeInterval
+    private let held = OSAllocatedUnfairLock<Held?>(initialState: nil)
+
+    init(
+        vault: any ContentOriginKeyVault,
+        generate: @escaping @Sendable () -> Data,
+        now: @escaping @Sendable () -> Date = { Date() },
+        retryInterval: TimeInterval = 1
+    ) {
+        self.vault = vault
+        self.generate = generate
+        self.now = now
+        self.retryInterval = retryInterval
+    }
+
+    func current() -> Data {
+        held.withLock { slot in
+            let instant = now()
+            if let settled = slot, settled.isSettled(at: instant, retryInterval: retryInterval) {
+                return settled.resolution.key
+            }
+            let candidate = slot?.resolution.key ?? generate()
+            let resolution = ContentOriginDeviceKey.resolve(using: vault) { candidate }
+            slot = Held(resolution: resolution, readAt: instant)
+            return resolution.key
+        }
     }
 }
 
