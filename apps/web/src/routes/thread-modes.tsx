@@ -47,7 +47,7 @@ import type { SwipeOutcome } from '@/lib/view/swipe';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { useScreenCaptureReports } from '@/lib/capture/use-screen-capture-reports';
 import { captureProps, sealedProps } from '@/lib/view/content-exit';
-import { useArrivalMotion } from '@/lib/view/use-arrival-motion';
+import { threadRowKeyOf, useArrivalMotion } from '@/lib/view/use-arrival-motion';
 
 /**
  * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE, déplacé ICI avec le
@@ -365,7 +365,7 @@ export function ThreadModes({
   /* SEUL LE DERNIER MESSAGE ARRIVÉ S'ANIME (#11223) — déclaré avant le retour
      anticipé du Résumé, qui doit voir passer les rendus pour ne pas prendre son
      retour au fil pour une arrivée. */
-  const arrivingId = useArrivalMotion(placedMessages);
+  const arrivingKey = useArrivalMotion(placedMessages);
 
   /**
    * LE REGISTRE DES PHASES DE RÉVÉLATION (#7142) — déclaré ICI, avant le
@@ -662,7 +662,7 @@ export function ThreadModes({
                 : { ...rowSwipeOffer, onAction: (outcome: SwipeOutcome) => onSwipeAction(p.message.id, outcome) };
             return (
               <li
-                key={p.message.id}
+                key={threadRowKeyOf(p.message)}
                 data-index={row.index}
                 ref={virtualizer.measureElement}
                 style={{
@@ -756,7 +756,7 @@ export function ThreadModes({
                 <div
                   {...(rowPhase === 'destroying'
                     ? { 'data-destroying': '', className: 'ephemeral-destroying' }
-                    : p.message.id === arrivingId
+                    : threadRowKeyOf(p.message) === arrivingKey
                       ? { 'data-arriving': '', className: 'thread-row-arrival' }
                       : {})}
                   {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}

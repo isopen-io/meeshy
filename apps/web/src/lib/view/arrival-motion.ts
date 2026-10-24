@@ -45,6 +45,13 @@ export const ARRIVAL_FRESHNESS_MS = 30_000;
 /** La durée de l'animation d'arrivée (`.thread-row-arrival`, `thread-scene.css`). */
 export const ARRIVAL_MOTION_MS = 320;
 
+/**
+ * La courbe de l'entrée — les points de contrôle d'iOS
+ * (`MessageArrivalMotion.timingControlPoints`) : même geste, même mouvement,
+ * sans dépassement (aucun point au-delà de 1, la rangée se pose sans rebond).
+ */
+export const ARRIVAL_MOTION_CURVE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
 const newestNewOf = ({ previous, next }: ArrivalInput): ArrivalEntry | undefined =>
   next.findLast((entry) => !previous.has(entry.key));
 

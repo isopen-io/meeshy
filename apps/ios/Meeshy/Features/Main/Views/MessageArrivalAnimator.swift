@@ -15,6 +15,8 @@ import UIKit
 /// Un type VALEUR tenu par le contrôleur : aucune `deinit` à isoler.
 struct MessageArrivalAnimator {
 
+    static let animationKey = "meeshy.messageArrival"
+
     private var pending: (item: MessageListItem, armedAt: Date)?
 
     /// `previous` vide ⇒ premier rendu. Une pose sans arrivée ne désarme pas la
@@ -25,11 +27,7 @@ struct MessageArrivalAnimator {
         store: MessageStore,
         now: Date = Date()
     ) {
-        let reduceMotion = MeeshyMotion.shouldReduce(
-            system: UIAccessibility.isReduceMotionEnabled,
-            userForced: MeeshyAccessibilityPreferences.shared.reduceMotion
-        )
-        let arrival = MessageArrivalMotion.animated(
+        arm(
             previous: previous,
             newestFirst: items,
             createdAt: { item in
@@ -37,9 +35,29 @@ struct MessageArrivalAnimator {
                 return store.message(for: localId)?.createdAt
             },
             now: now,
-            reduceMotion: reduceMotion
+            reduceMotion: MeeshyMotion.shouldReduce(
+                system: UIAccessibility.isReduceMotionEnabled,
+                userForced: MeeshyAccessibilityPreferences.shared.reduceMotion
+            )
         )
-        guard let arrival else { return }
+    }
+
+    /// Le même armement, ses deux lectures du monde (dates, Réduire les
+    /// animations) passées en paramètres.
+    mutating func arm(
+        previous: Set<MessageListItem>,
+        newestFirst items: [MessageListItem],
+        createdAt: (MessageListItem) -> Date?,
+        now: Date,
+        reduceMotion: Bool
+    ) {
+        guard let arrival = MessageArrivalMotion.animated(
+            previous: previous,
+            newestFirst: items,
+            createdAt: createdAt,
+            now: now,
+            reduceMotion: reduceMotion
+        ) else { return }
         pending = (item: arrival, armedAt: now)
     }
 
@@ -49,7 +67,7 @@ struct MessageArrivalAnimator {
         guard let armed = pending, item == armed.item else { return }
         pending = nil
         guard MessageArrivalMotion.playsOnDisplay(armedAt: armed.armedAt, now: now) else { return }
-        cell.layer.add(Self.entrance(), forKey: "meeshy.messageArrival")
+        cell.layer.add(Self.entrance(), forKey: Self.animationKey)
     }
 
     /// Le fil est renversé (`scaleY: -1`) : un décalage NÉGATIF dans son repère
@@ -68,7 +86,8 @@ struct MessageArrivalAnimator {
         let group = CAAnimationGroup()
         group.animations = [fade, lift]
         group.duration = MessageArrivalMotion.duration
-        group.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+        let points = MessageArrivalMotion.timingControlPoints
+        group.timingFunction = CAMediaTimingFunction(controlPoints: points[0], points[1], points[2], points[3])
         group.fillMode = .backwards
         return group
     }

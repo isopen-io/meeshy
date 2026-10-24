@@ -44,6 +44,10 @@ nonisolated enum MessageArrivalMotion {
     /// Échelle de départ de la cellule.
     static let startScale: CGFloat = 0.97
 
+    /// Courbe de l'entrée, jumelle du web (`ARRIVAL_MOTION_CURVE`) : aucun point
+    /// au-delà de 1, la cellule se pose sans rebond, sur les deux plateformes.
+    static let timingControlPoints: [Float] = [0.22, 1, 0.36, 1]
+
     /// Une arrivée armée ne se joue qu'à une cellule réalisée dans cette fenêtre :
     /// une cellule qui n'apparaît que plus tard (le lecteur était remonté dans
     /// l'historique, puis redescend) montre un message déjà arrivé, pas une arrivée.

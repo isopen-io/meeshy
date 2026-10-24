@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 @testable import Meeshy
 
@@ -151,5 +152,124 @@ final class MessageArrivalMotionTests: XCTestCase {
             armedAt: armedAt,
             now: armedAt.addingTimeInterval(MessageArrivalMotion.displayWindow + 0.1)
         ))
+    }
+}
+
+/// #11223 — le CÂBLAGE de la loi, que `MessageArrivalMotionTests` ne voit pas :
+/// l'animateur que le contrôleur tient pose bien l'entrée sur la couche de SA
+/// cellule (et nulle part ailleurs), et le contrôleur l'arme à la pose puis la
+/// joue au `willDisplay`. Retirer l'une des deux lignes, ou armer contre un
+/// rendu précédent vide, rougit ici.
+@MainActor
+final class MessageArrivalAnimatorTests: XCTestCase {
+
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+    private let history: [MessageListItem] = [.message(localId: "c"), .message(localId: "b"), .message(localId: "a")]
+    private let arrival = MessageListItem.message(localId: "d")
+
+    private func createdAt(_ ages: [String: TimeInterval]) -> (MessageListItem) -> Date? {
+        { item in
+            guard case .message(let localId) = item else { return nil }
+            return ages[localId].map { self.now.addingTimeInterval(-$0) }
+        }
+    }
+
+    private var datedHistory: (MessageListItem) -> Date? {
+        createdAt(["a": 600, "b": 500, "c": 400, "d": 1, "z": 9000])
+    }
+
+    private func cell() -> UICollectionViewCell {
+        UICollectionViewCell(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+    }
+
+    private func entrance(on cell: UICollectionViewCell) -> CAAnimation? {
+        cell.layer.animation(forKey: MessageArrivalAnimator.animationKey)
+    }
+
+    private func armed(previous: [MessageListItem], next: [MessageListItem], reduceMotion: Bool = false) -> MessageArrivalAnimator {
+        var animator = MessageArrivalAnimator()
+        animator.arm(
+            previous: Set(previous),
+            newestFirst: next,
+            createdAt: datedHistory,
+            now: now,
+            reduceMotion: reduceMotion
+        )
+        return animator
+    }
+
+    func test_play_realtimeArrival_addsTheEntranceOnItsCellOnly() {
+        var animator = armed(previous: history, next: [arrival] + history)
+        let other = cell()
+        animator.play(on: other, item: history[0], now: now)
+        XCTAssertNil(entrance(on: other), "seule la cellule du message arrivé reçoit l'entrée")
+        let target = cell()
+        animator.play(on: target, item: arrival, now: now)
+        XCTAssertNotNil(entrance(on: target))
+    }
+
+    func test_play_isPlayedOnce_aReusedCellDoesNotReplayIt() {
+        var animator = armed(previous: history, next: [arrival] + history)
+        animator.play(on: cell(), item: arrival, now: now)
+        let again = cell()
+        animator.play(on: again, item: arrival, now: now)
+        XCTAssertNil(entrance(on: again), "la même arrivée ne se rejoue pas à la réalisation suivante de sa cellule")
+    }
+
+    func test_play_firstRender_addsNothing() {
+        var animator = armed(previous: [], next: [arrival] + history)
+        let target = cell()
+        animator.play(on: target, item: arrival, now: now)
+        XCTAssertNil(entrance(on: target))
+    }
+
+    func test_play_olderPage_addsNothing() {
+        let older = MessageListItem.message(localId: "z")
+        var animator = armed(previous: history, next: history + [older])
+        let target = cell()
+        animator.play(on: target, item: older, now: now)
+        XCTAssertNil(entrance(on: target))
+    }
+
+    func test_play_reduceMotion_addsNothing() {
+        var animator = armed(previous: history, next: [arrival] + history, reduceMotion: true)
+        let target = cell()
+        animator.play(on: target, item: arrival, now: now)
+        XCTAssertNil(entrance(on: target))
+    }
+
+    func test_play_cellRealizedPastTheDisplayWindow_addsNothing() {
+        var animator = armed(previous: history, next: [arrival] + history)
+        let target = cell()
+        animator.play(on: target, item: arrival, now: now.addingTimeInterval(MessageArrivalMotion.displayWindow + 0.1))
+        XCTAssertNil(entrance(on: target))
+    }
+
+    func test_entrance_lastsTheTwinDuration_onTheTwinCurve_withoutOvershoot() {
+        var animator = armed(previous: history, next: [arrival] + history)
+        let target = cell()
+        animator.play(on: target, item: arrival, now: now)
+        XCTAssertEqual(entrance(on: target)?.duration ?? 0, MessageArrivalMotion.duration, accuracy: 0.0001)
+        XCTAssertEqual(MessageArrivalMotion.timingControlPoints, [0.22, 1, 0.36, 1],
+            "la courbe est celle du web (ARRIVAL_MOTION_CURVE) : même geste, même mouvement")
+        XCTAssertTrue(MessageArrivalMotion.timingControlPoints.allSatisfy { $0 <= 1 }, "aucun dépassement : la cellule se pose sans rebond")
+    }
+
+    // MARK: - Le contrôleur arme à la pose et joue au willDisplay
+
+    func test_controller_armsAgainstThePreviousPose_beforeNotingTheArrival() throws {
+        let text = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/MessageListViewController+ApplySnapshot.swift")
+        let arm = try XCTUnwrap(text.range(of: "arrivalMotion.arm(previous: previousSnapshotCount == 0 ? [] : previousItems, newestFirst: messageItems, store: store)"),
+            "applySnapshot doit armer l'arrivée contre la pose PRÉCÉDENTE (vide au premier rendu)")
+        let note = try XCTUnwrap(text.range(of: "noteArrival(messageItems: messageItems, previousItems: previousItems"))
+        XCTAssertLessThan(arm.lowerBound, note.lowerBound, "l'armement précède noteArrival, qui avance la pose de référence")
+    }
+
+    func test_controller_playsTheArrivalOnTheCellAboutToBeDisplayed() throws {
+        let text = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/MessageListViewController+ScrollDelegate.swift")
+        let willDisplay = try XCTUnwrap(text.range(of: "willDisplay cell: UICollectionViewCell"))
+        let play = try XCTUnwrap(text.range(of: "arrivalMotion.play(on: cell, item: dataSource.itemIdentifier(for: indexPath))"),
+            "willDisplay doit jouer l'arrivée armée sur la cellule réalisée")
+        XCTAssertLessThan(willDisplay.lowerBound, play.lowerBound)
     }
 }

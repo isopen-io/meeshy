@@ -12,7 +12,7 @@ import type { ThreadScene } from '@/lib/reading-mode/scene';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import { ARRIVAL_MOTION_MS } from '@/lib/view/arrival-motion';
+import { ARRIVAL_MOTION_CURVE, ARRIVAL_MOTION_MS } from '@/lib/view/arrival-motion';
 
 import { ThreadModes } from './thread-modes';
 
@@ -89,6 +89,27 @@ const SCENE: ThreadScene = { elected: null, noteProgrammaticScroll: () => {} } a
 
 const secondsAgo = (seconds: number): Date => new Date(Date.now() - seconds * 1000);
 const OLD = ['m-1', 'm-2', 'm-3'].map((id, i) => messageOf(id, secondsAgo(3600 - i * 60)));
+
+const viewOfPlaced = (
+  placed: readonly PlacedMessage[],
+  { mode = 'bubbles', mounted = placed.length }: { readonly mode?: ConversationReadingMode; readonly mounted?: number } = {},
+) => (
+  <ThreadModes
+    mode={mode}
+    viewer={VIEWER}
+    placed={placed}
+    virtualizer={virtualizerOf(mounted)}
+    scene={SCENE}
+    readerLanguages={['fr']}
+    group={false}
+    highlightedId={null}
+    expiredIds={new Set()}
+    jumpToMessage={() => {}}
+    typists={[]}
+  />
+);
+
+const pastTheHold = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, ARRIVAL_MOTION_MS + 60));
 
 const view = (messages: readonly Message[], mode: ConversationReadingMode = 'bubbles') => {
   const placed = messages.map(placeOf);
@@ -181,14 +202,49 @@ describe('l’animation d’arrivée, montée sur le chemin produit', () => {
   });
 });
 
-describe('mon envoi confirmé ne rejoue pas son arrivée', () => {
-  test('l’optimiste s’anime, sa confirmation (nouvel id, même clientMessageId) ne s’anime pas une seconde fois', async () => {
+describe('l’arrivée est tenue le temps de SON animation, jamais au-delà', () => {
+  test('passé la tenue, une rangée REMONTÉE (virtualiseur, liste inchangée) ne rejoue pas l’arrivée d’un message ancien', async () => {
     const host = await mounter.mount(view(OLD));
-    const sentAt = secondsAgo(1);
-    const optimistic = { ...messageOf('cid-1', sentAt), clientMessageId: 'cid-1' };
+    const placed = [...OLD, messageOf('m-4', secondsAgo(1))].map(placeOf);
+    await mounter.rerender(host, viewOfPlaced(placed));
+    expect(arriving(host)).toEqual(['m-4']);
+    await pastTheHold();
+    await mounter.rerender(host, viewOfPlaced(placed, { mounted: 3 }));
+    await mounter.rerender(host, viewOfPlaced(placed, { mounted: 4 }));
+    expect(arriving(host)).toEqual([]);
+  });
+
+  test('passé la tenue, un aller-retour par le Résumé ne rejoue pas l’arrivée', async () => {
+    const host = await mounter.mount(view(OLD));
+    const placed = [...OLD, messageOf('m-4', secondsAgo(1))].map(placeOf);
+    await mounter.rerender(host, viewOfPlaced(placed));
+    await pastTheHold();
+    await mounter.rerender(host, viewOfPlaced(placed, { mode: 'summary' }));
+    await mounter.rerender(host, viewOfPlaced(placed));
+    expect(arriving(host)).toEqual([]);
+  });
+});
+
+describe('mon envoi confirmé ne rejoue pas son arrivée, et ne la coupe pas', () => {
+  const sentAt = secondsAgo(1);
+  const optimistic = { ...messageOf('cid-1', sentAt), clientMessageId: 'cid-1' };
+  const confirmed = { ...messageOf('s-1', sentAt), clientMessageId: 'cid-1' };
+  const nodeOf = (host: HTMLElement): Element | null => host.querySelector('[data-row="cid-1"], [data-row="s-1"]');
+
+  test('l’accusé pendant l’animation garde la MÊME rangée, qui finit son entrée (aucune coupure nette)', async () => {
+    const host = await mounter.mount(view(OLD));
     await mounter.rerender(host, view([...OLD, optimistic]));
     expect(arriving(host)).toEqual(['cid-1']);
-    const confirmed = { ...messageOf('s-1', sentAt), clientMessageId: 'cid-1' };
+    const before = nodeOf(host);
+    await mounter.rerender(host, view([...OLD, confirmed]));
+    expect(nodeOf(host)).toBe(before);
+    expect(arriving(host)).toEqual(['s-1']);
+  });
+
+  test('l’accusé après l’animation n’est pas une seconde arrivée', async () => {
+    const host = await mounter.mount(view(OLD));
+    await mounter.rerender(host, view([...OLD, optimistic]));
+    await pastTheHold();
     await mounter.rerender(host, view([...OLD, confirmed]));
     expect(arriving(host)).toEqual([]);
   });
@@ -205,6 +261,12 @@ describe('la feuille qui joue l’arrivée', () => {
     const rule = ruleOf('.thread-row-arrival', sheet);
     expect(rule).toContain('animation: thread-row-arrive');
     expect(rule).toContain(`${ARRIVAL_MOTION_MS}ms`);
+  });
+
+  test('la courbe est celle d’iOS, sans dépassement : la rangée se pose, elle ne rebondit pas', () => {
+    expect(ruleOf('.thread-row-arrival', sheet)).toContain(ARRIVAL_MOTION_CURVE);
+    const points = [...ARRIVAL_MOTION_CURVE.matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => Number(m[0]));
+    expect(points).toEqual([0.22, 1, 0.36, 1]);
   });
 
   test('« Réduire les animations » coupe l’animation dans la feuille aussi', () => {

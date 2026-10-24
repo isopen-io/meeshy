@@ -223,7 +223,7 @@ ol:has([data-unfolded]) .unfold-stage:not([data-unfolded]) {
    plus. La durée est `ARRIVAL_MOTION_MS` (`arrival-motion.ts`), le temps
    pendant lequel l'hôte TIENT la classe. */
 .thread-row-arrival {
-  animation: thread-row-arrive 320ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+  animation: thread-row-arrive 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
   transform-origin: 50% 100%;
 }
 @keyframes thread-row-arrive {
