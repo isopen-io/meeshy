@@ -591,7 +591,7 @@ private final class DecryptorFactory {
 
 /// Déchiffreur simulé : rend le clair, l'échec ou l'indécodable que le test a
 /// posé par message, et compte ses appels.
-actor MockPreviewDecryptor: ConversationPreviewDecrypting {
+actor MockPreviewDecryptor {
     enum Failure: Error { case missingSession, authenticationFailed }
 
     private let plaintexts: [String: String]
@@ -629,3 +629,8 @@ actor MockPreviewDecryptor: ConversationPreviewDecrypting {
         }
     }
 }
+
+// Conformité posée en extension, comme `DecryptionActor` : sur la déclaration,
+// le protocole `nonisolated` rendrait l'init synchrone de l'acteur `nonisolated`,
+// ce que Swift refuse.
+extension MockPreviewDecryptor: ConversationPreviewDecrypting {}
