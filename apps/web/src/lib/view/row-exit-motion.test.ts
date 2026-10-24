@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { ARRIVAL_MOTION_CURVE, ARRIVAL_MOTION_MS } from './arrival-motion';
-import { ROW_EXIT_CURVE, ROW_EXIT_MS, createRowExitStore, rowExitOf, type RowExitSchedule } from './row-exit-motion';
+import { ROW_EXIT_CURVE, ROW_EXIT_MS, createRowExitStore, paintedSchedule, rowExitOf, type RowExitSchedule } from './row-exit-motion';
 
 /**
  * #12634 — UN MESSAGE MASQUÉ « POUR MOI » SORT DU FIL EN SE REPLIANT. La
@@ -127,5 +127,34 @@ describe('le retour — la rangée se déplie à sa place', () => {
     exit.unfold(ids('m-1'));
     expect([...store.getState().leaving]).toEqual(['m-2']);
     expect([...store.getState().returning]).toEqual(['m-1']);
+  });
+});
+
+/**
+ * L'HORLOGE DU REPLI PART DE LA PREMIÈRE IMAGE, PAS DU CLIC. La feuille joue
+ * le fondu à partir du premier calcul de style ; sur un fil occupé (mesuré au
+ * navigateur : des images de 60 ms juste après la fermeture du dialogue), un
+ * minuteur parti au clic retirait la rangée alors que son fondu commençait à
+ * peine — elle disparaissait d'un coup, pleinement opaque.
+ */
+describe('paintedSchedule — le délai se compte depuis l’image qui peint la sortie', () => {
+  test('le délai ne court qu’à partir de la prochaine image', () => {
+    const frames: (() => void)[] = [];
+    const timers: { readonly run: () => void; readonly ms: number }[] = [];
+    const schedule = paintedSchedule({
+      requestFrame: (callback) => {
+        frames.push(callback);
+      },
+      setTimer: (run, ms) => {
+        timers.push({ run, ms });
+      },
+    });
+    const ran: string[] = [];
+    schedule(() => ran.push('retirée'), ROW_EXIT_MS);
+    expect(timers).toEqual([]);
+    frames.splice(0).forEach((frame) => frame());
+    expect(timers.map((t) => t.ms)).toEqual([ROW_EXIT_MS]);
+    timers.splice(0).forEach((t) => t.run());
+    expect(ran).toEqual(['retirée']);
   });
 });

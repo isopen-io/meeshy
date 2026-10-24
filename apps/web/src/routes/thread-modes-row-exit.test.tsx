@@ -100,7 +100,9 @@ const view = (ids: readonly string[]) => {
 };
 
 const rowsWith = (host: HTMLElement, attribute: string): readonly string[] =>
-  [...host.querySelectorAll(`[${attribute}]`)].map((node) => node.getAttribute('data-row') ?? '');
+  [...host.querySelectorAll(`[${attribute}]`)].map((node) => node.getAttribute('data-row') ?? node.querySelector('[data-row]')?.getAttribute('data-row') ?? '');
+
+const itemOf = (host: HTMLElement, id: string): HTMLElement | null => host.querySelector<HTMLElement>(`[data-row="${id}"]`)?.closest('li') ?? null;
 
 const settling = (host: HTMLElement): boolean => host.querySelector('ol[data-rows-settling]') !== null;
 
@@ -112,13 +114,32 @@ describe('la sortie et le retour, montés sur le chemin produit', () => {
     expect(settling(host)).toBe(false);
   });
 
-  test('une rangée qui sort reste MONTÉE, sous la classe qui joue son repli, et les suivantes glissent', async () => {
+  test('une rangée qui sort reste MONTÉE : son <li> entier se replie, sans plus compter dans la hauteur du fil', async () => {
     const host = await mounter.mount(view(['m-1', 'm-2', 'm-3']));
     act(() => rowExitStore.setState({ leaving: new Set(['m-2']), returning: new Set() }));
     expect(rowsWith(host, 'data-leaving')).toEqual(['m-2']);
-    expect(host.querySelector('[data-row="m-2"]')?.classList.contains('thread-row-leaving')).toBe(true);
-    expect(host.querySelector('[data-row="m-2"]')?.getAttribute('aria-hidden')).toBe('true');
+    const item = itemOf(host, 'm-2');
+    expect(item?.classList.contains('thread-row-leaving')).toBe(true);
+    expect(item?.style.height).toBe('0px');
+    expect(item?.style.transform).toBe('translateY(88px)');
     expect(settling(host)).toBe(true);
+  });
+
+  test('une rangée qui sort n’est plus ni lue ni atteinte : cachée aux lecteurs d’écran ET hors du clavier', async () => {
+    const host = await mounter.mount(view(['m-1', 'm-2', 'm-3']));
+    act(() => rowExitStore.setState({ leaving: new Set(['m-2']), returning: new Set() }));
+    const item = itemOf(host, 'm-2');
+    expect(item?.getAttribute('aria-hidden')).toBe('true');
+    expect(item?.hasAttribute('inert') || (item as (HTMLElement & { inert?: boolean }) | null)?.inert === true).toBe(true);
+    expect(host.querySelector('[data-row="m-2"]')?.hasAttribute('tabindex')).toBe(false);
+    expect(itemOf(host, 'm-1')?.hasAttribute('data-leaving')).toBe(false);
+  });
+
+  test('les autres rangées gardent leur place et leur hauteur', async () => {
+    const host = await mounter.mount(view(['m-1', 'm-2', 'm-3']));
+    act(() => rowExitStore.setState({ leaving: new Set(['m-2']), returning: new Set() }));
+    expect(itemOf(host, 'm-3')?.style.height).toBe('');
+    expect(itemOf(host, 'm-3')?.getAttribute('aria-hidden')).toBeNull();
   });
 
   test('une sélection : toutes les rangées visées sortent ensemble', async () => {
@@ -137,6 +158,56 @@ describe('la sortie et le retour, montés sur le chemin produit', () => {
   });
 });
 
+/**
+ * LES VOISINES GLISSENT DEPUIS LÀ OÙ ELLES ÉTAIENT PEINTES (`row-settle-flip.ts`).
+ * La mesure réelle (rabat du défilement compris) est au navigateur
+ * (`scripts/check-thread-row-exit.mjs`) ; ici, le câblage : la rangée déplacée
+ * reçoit une animation qui part de son ancienne place et rejoint la nouvelle.
+ */
+describe('le glissement des voisines, câblé sur le chemin produit', () => {
+  const recordAnimations = () => {
+    const played: { readonly row: string; readonly from: string; readonly to: string }[] = [];
+    const proto = HTMLElement.prototype as unknown as { animate?: unknown };
+    const saved = Object.getOwnPropertyDescriptor(proto, 'animate');
+    proto.animate = function animate(this: HTMLElement, keyframes: readonly Keyframe[]) {
+      played.push({
+        row: this.querySelector('[data-row]')?.getAttribute('data-row') ?? '',
+        from: String(keyframes[0]?.transform),
+        to: String(keyframes[1]?.transform),
+      });
+      return { cancel: () => {}, playState: 'running' };
+    };
+    const restore = () => {
+      if (saved === undefined) delete proto.animate;
+      else Object.defineProperty(proto, 'animate', saved);
+    };
+    return { played, restore };
+  };
+
+  test('une rangée rendue pousse la suivante : celle-ci repart de son ancienne place', async () => {
+    const animations = recordAnimations();
+    try {
+      const host = await mounter.mount(view(['m-1', 'm-3']));
+      act(() => rowExitStore.setState({ leaving: new Set(), returning: new Set(['m-2']) }));
+      await mounter.rerender(host, view(['m-1', 'm-2', 'm-3']));
+      expect(animations.played).toEqual([{ row: 'm-3', from: 'translateY(88px)', to: 'translateY(176px)' }]);
+    } finally {
+      animations.restore();
+    }
+  });
+
+  test('hors sortie et retour, une rangée qui change de place ne glisse pas (arrivée, page préfixée)', async () => {
+    const animations = recordAnimations();
+    try {
+      const host = await mounter.mount(view(['m-1', 'm-3']));
+      await mounter.rerender(host, view(['m-1', 'm-2', 'm-3']));
+      expect(animations.played).toEqual([]);
+    } finally {
+      animations.restore();
+    }
+  });
+});
+
 describe('la feuille qui joue la sortie et le retour', () => {
   const sheet = readFileSync(new URL('../styles/thread-scene.css', import.meta.url).pathname, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const ruleOf = (selector: string, css: string): string => {
@@ -150,30 +221,27 @@ describe('la feuille qui joue la sortie et le retour', () => {
   };
 
   test('la sortie et le retour durent ROW_EXIT_MS, sur la courbe partagée', () => {
-    [ruleOf('.thread-row-leaving', sheet), ruleOf('.thread-row-returning', sheet)].forEach((rule) => {
-      expect(rule).toContain(`${ROW_EXIT_MS}ms`);
-      expect(rule).toContain(ROW_EXIT_CURVE);
-    });
+    [ruleOf('.thread-row-leaving', sheet), ruleOf(".thread-row-leaving > [role='article']", sheet), ruleOf('.thread-row-returning', sheet)].forEach(
+      (rule) => {
+        expect(rule).toContain(`${ROW_EXIT_MS}ms`);
+        expect(rule).toContain(ROW_EXIT_CURVE);
+      },
+    );
   });
 
-  test('la rangée qui sort quitte le flux : sa hauteur mesurée tombe, les suivantes remontent', () => {
-    expect(ruleOf('.thread-row-leaving', sheet)).toContain('position: absolute');
-  });
-
-  test('les rangées glissent par leur transform pendant le repli, sur la même durée', () => {
-    const rule = ruleOf('[data-rows-settling] > li', sheet);
-    expect(rule).toContain('transition: transform');
-    expect(rule).toContain(`${ROW_EXIT_MS}ms`);
+  test('le glissement des voisines ne se déclare plus dans la feuille : il se MESURE à l’écran (row-settle-flip.ts)', () => {
+    expect(sheet).not.toContain('[data-rows-settling] > li');
   });
 
   test('seuls opacity et transform s’animent — jamais la géométrie (#11314)', () => {
-    expect(new Set(keyframesOf('thread-row-leave'))).toEqual(new Set(['opacity', 'transform']));
+    expect(new Set(keyframesOf('thread-row-leave'))).toEqual(new Set(['opacity']));
+    expect(new Set(keyframesOf('thread-row-shrink'))).toEqual(new Set(['transform']));
     expect(new Set(keyframesOf('thread-row-return'))).toEqual(new Set(['opacity', 'transform']));
   });
 
-  test('« Réduire les animations » : ni repli, ni dépliage, ni glissement dans la feuille non plus', () => {
+  test('« Réduire les animations » : ni repli, ni dépliage dans la feuille non plus', () => {
     const reduced = sheet.slice(sheet.indexOf('@media (prefers-reduced-motion: reduce)', sheet.indexOf('@keyframes thread-row-return')));
-    expect(ruleOf('.thread-row-leaving', reduced)).toContain('animation: none');
-    expect(reduced).toContain('transition: none');
+    expect(reduced.slice(0, reduced.indexOf('}'))).toContain('animation: none');
+    expect(ruleOf('.thread-row-returning', reduced)).toContain('animation: none');
   });
 });

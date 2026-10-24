@@ -78,9 +78,34 @@ const union = (set: ReadonlySet<string>, ids: ReadonlySet<string>): ReadonlySet<
 const without = (set: ReadonlySet<string>, ids: ReadonlySet<string>): ReadonlySet<string> =>
   [...set].some((id) => ids.has(id)) ? new Set([...set].filter((id) => !ids.has(id))) : set;
 
-const timeoutSchedule: RowExitSchedule = (run, ms) => {
-  setTimeout(run, ms);
-};
+/**
+ * LE DÉLAI SE COMPTE DEPUIS L'IMAGE QUI PEINT LA SORTIE. La feuille démarre
+ * le fondu au premier calcul de style qui voit `.thread-row-leaving` ; un
+ * rappel d'image tourne juste avant ce calcul, dans la même image. Sur un fil
+ * occupé (mesuré : des images de 60 ms à la fermeture du dialogue), un
+ * minuteur parti au clic retirait la rangée au début de son fondu, encore
+ * opaque. Hors navigateur, le minuteur part tout de suite.
+ */
+export function paintedSchedule(params: {
+  readonly requestFrame?: (callback: () => void) => void;
+  readonly setTimer: (run: () => void, ms: number) => void;
+}): RowExitSchedule {
+  const { requestFrame, setTimer } = params;
+  return (run, ms) => {
+    if (requestFrame === undefined) {
+      setTimer(run, ms);
+      return;
+    }
+    requestFrame(() => setTimer(run, ms));
+  };
+}
+
+const timeoutSchedule: RowExitSchedule = paintedSchedule({
+  ...(typeof requestAnimationFrame === 'function' ? { requestFrame: (callback: () => void) => void requestAnimationFrame(callback) } : {}),
+  setTimer: (run, ms) => {
+    setTimeout(run, ms);
+  },
+});
 
 export function rowExitOf(params: {
   readonly store: StoreApi<RowExitState>;

@@ -48,7 +48,8 @@ import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { useScreenCaptureReports } from '@/lib/capture/use-screen-capture-reports';
 import { captureProps, sealedProps } from '@/lib/view/content-exit';
 import { threadRowKeyOf, useArrivalMotion } from '@/lib/view/use-arrival-motion';
-import { useRowExit, type RowExitState } from '@/lib/view/row-exit-motion';
+import type { RowExitState } from '@/lib/view/row-exit-motion';
+import { useThreadRowExit } from '@/lib/view/use-thread-row-exit';
 
 /**
  * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE, déplacé ICI avec le
@@ -151,16 +152,24 @@ export type ThreadSummaryCapability = {
 
 /**
  * LE MOUVEMENT D'UNE RANGÉE, UN SEUL À LA FOIS — la combustion d'un éphémère
- * (#7468) prime, puis la sortie d'un message masqué « pour moi » et son retour
- * (#12634), puis l'arrivée (#11223). Une rangée qui sort n'est plus lue : elle
- * quitte l'arbre d'accessibilité dès le geste, l'issue se dit dans la région vivante.
+ * (#7468) prime, puis le retour d'un message masqué « pour moi » (#12634), puis
+ * l'arrivée (#11223). La SORTIE ne se pose pas ici : elle se joue sur le `<li>`
+ * entier (`rowLeavingProps`), qui emporte séparateurs, capsule et note.
  */
 function rowMotionProps(row: { readonly destroying: boolean; readonly id: string; readonly arriving: boolean; readonly exit: RowExitState }) {
   if (row.destroying) return { 'data-destroying': '', className: 'ephemeral-destroying' };
-  if (row.exit.leaving.has(row.id)) return { 'data-leaving': '', className: 'thread-row-leaving', 'aria-hidden': true };
   if (row.exit.returning.has(row.id)) return { 'data-returning': '', className: 'thread-row-returning' };
   return row.arriving ? { 'data-arriving': '', className: 'thread-row-arrival' } : {};
 }
+
+/**
+ * LA RANGÉE QUI SORT (#12634) — son `<li>` ne compte plus dans la hauteur du
+ * fil (`height: 0`, le contenu reste peint à sa place), le virtualiseur
+ * remonte les suivantes et `useRowSettle` les fait glisser. Elle n'est plus
+ * lue ni atteinte : `inert` la retire du clavier ET des lecteurs d'écran ;
+ * l'issue se dit dans la région vivante.
+ */
+const rowLeavingProps = { 'data-leaving': '', className: 'thread-row-leaving', 'aria-hidden': true, inert: true } as const;
 
 export function ThreadModes({
   mode,
@@ -385,8 +394,8 @@ export function ThreadModes({
      anticipé du Résumé, qui doit voir passer les rendus pour ne pas prendre son
      retour au fil pour une arrivée. */
   const arrivingKey = useArrivalMotion(placedMessages);
-  /* UN MESSAGE MASQUÉ « POUR MOI » SORT EN SE REPLIANT (#12634, `row-exit-motion.ts`). */
-  const rowExit = useRowExit();
+  /* UN MESSAGE MASQUÉ « POUR MOI » SORT EN SE REPLIANT (#12634, `use-thread-row-exit.ts`). */
+  const { exit: rowExit, listRef: rowListRef, settling: rowsSettling } = useThreadRowExit({ placed, virtualizer });
 
   /**
    * LE REGISTRE DES PHASES DE RÉVÉLATION (#7142) — déclaré ICI, avant le
@@ -535,8 +544,9 @@ export function ThreadModes({
         )}
 
         <ol
+          ref={rowListRef}
           data-thread-rows={placed.length}
-          {...(rowExit.leaving.size > 0 || rowExit.returning.size > 0 ? { 'data-rows-settling': '' } : {})}
+          {...(rowsSettling ? { 'data-rows-settling': '' } : {})}
           style={{
             position: 'relative',
             width: '100%',
@@ -669,6 +679,7 @@ export function ThreadModes({
               phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
             });
             const rowReact = onReact !== undefined && reactableOf?.(p.message) === true ? onReact : undefined;
+            const rowLeaving = rowExit.leaving.has(p.message.id);
             const rowOffersReactionCapsule =
               rowReact !== undefined &&
               onExpandReactions !== undefined &&
@@ -687,13 +698,16 @@ export function ThreadModes({
               <li
                 key={threadRowKeyOf(p.message)}
                 data-index={row.index}
+                data-row-key={threadRowKeyOf(p.message)}
                 ref={virtualizer.measureElement}
+                {...(rowLeaving ? rowLeavingProps : {})}
                 style={{
                   position: 'absolute',
                   insetInlineStart: 0,
                   top: 0,
                   width: '100%',
                   transform: `translateY(${row.start}px)`,
+                  ...(rowLeaving ? { height: 0 } : {}),
                   /* CHAQUE rangée est un CONTEXTE D'EMPILEMENT (`transform`), et
                      les rangées se peignent dans l'ordre du DOM : les
                      superpositions de l'élue qui DÉBORDENT vers le bas (bande de
@@ -782,7 +796,7 @@ export function ThreadModes({
                   {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
                   {...sealedProps(p.message, Date.now())}
                   {...rowCapture}
-                  {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
+                  {...(isSystemMessage(p.message) || longPress === undefined || rowLeaving ? {} : { tabIndex: 0, ...longPress })}
                   role="article"
                   aria-label={rowLabel}
                   {...(rowServed.language === '' ? {} : { lang: rowServed.language })}
