@@ -622,9 +622,9 @@ jobs:
     # aucun verdict. Les étapes restent LITTÉRALES (`gate-ci-parity.test.ts`,
     # `check-web-navigateur-read-set.mjs` les lisent) ; seule leur condition
     # porte `matrix.tranche`. L'équilibre vient des durées mesurées par étape
-    # sur dev (#12622 : runs 40081153594 et 40082491974, ~420 s de gardes par
-    # tranche ; le cadre téléphone, qui relève désormais trois contextes à la
-    # fois, ne partage la sienne qu'avec des gardes courtes) :
+    # sur dev (#12622 : runs 40081153594, 40082491974 et 40085428201, ~420 s
+    # de gardes par tranche ; le cadre téléphone, ~350 s en relevant trois
+    # contextes à la fois, ne partage la sienne qu'avec des gardes courtes) :
     # une garde NOUVELLE va dans la tranche la plus légère du dernier relevé.
     # `fail-fast: false` — même règle que `!cancelled()` plus bas : une tranche
     # rouge n'en tait pas trois autres.
@@ -739,7 +739,7 @@ jobs:
       # glisser tenu n'ouvre rien et suit le pointeur sans retard, la place
       # survit au rechargement, un réel de carte ramène au même défilement.
       - name: Gate disque du Flux (bascule, appui long, glisser)
-        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
         run: |
           cd apps/web
           node scripts/check-feed-disc.mjs
