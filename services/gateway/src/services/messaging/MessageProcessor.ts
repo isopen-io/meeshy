@@ -367,10 +367,11 @@ export class MessageProcessor {
     let encryptionContext: MessageEncryptionContext;
 
     if (carriesCiphertext) {
-      const metadata = data.encryptionMetadata as Record<string, unknown>;
+      // #12562 — un chiffré n'est admis QUE dans une conversation e2ee : le
+      // mode de la ligne est celui de la conversation, jamais celui du client.
       encryptionContext = {
         isEncrypted: true,
-        mode: endToEnd ? 'e2ee' : (metadata.mode as EncryptionMode) || 'e2ee',
+        mode: 'e2ee',
         encryptedContent: data.encryptedContent,
         encryptionMetadata: data.encryptionMetadata
       };
