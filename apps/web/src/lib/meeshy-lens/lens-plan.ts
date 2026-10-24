@@ -63,6 +63,9 @@ const fract = (value: number): number => value - Math.floor(value);
 
 const round = (value: number): number => Math.round(value * 100) / 100;
 
+/** Une couche au moins s'ancre-t-elle au VISAGE ? Sinon la lens se joue sans chercher de visage (W15, #11321). */
+export const lensUsesFace = (lens: Lens): boolean => lens.layers.some((layer) => 'anchor' in layer && layer.anchor?.type === 'face');
+
 const hiddenAt = (lens: Lens, level: LensLevel): ReadonlySet<string> => {
   if (level === 'full') return new Set();
   const reduced = lens.fallbacks?.reduced?.hide ?? [];

@@ -27,7 +27,7 @@ const onFace: LensLayer = { kind: 'sticker', id: 'couronne', asset: 'aaaaaaaaaaa
 const onScreen: LensLayer = { kind: 'sticker', id: 'logo', asset: 'bbbbbbbbbbbbbbbb.png', anchor: { type: 'screen', x: 0.5, y: 0.5 }, size: 0.2 };
 const grade: LensLayer = { kind: 'lut', id: 'g', asset: 'cccccccccccccccc.png' };
 const snow: LensLayer = { kind: 'particles', id: 'neige', preset: 'snow', density: 'low' };
-const snowOnFace: LensLayer = { kind: 'particles', id: 'aura', preset: 'sparkle', density: 'low', anchor: { type: 'face', point: 'forehead' } };
+const snowOnFace: LensLayer = { kind: 'particles', id: 'aura', preset: 'sparkles', density: 'low', anchor: { type: 'face', point: 'forehead' } };
 
 describe('lensUsesFace', () => {
   test('une ancre de visage, sur un sticker, un texte ou des particules', () => {
@@ -67,6 +67,7 @@ describe('l’étage ne demande le visage que s’il sert', () => {
 
   test('sans ancre de visage, le plan reste celui d’une boîte supposée au centre', () => {
     const { stage } = stageWith();
-    expect(stage.plan(settingsOf([onScreen]), source, size, 0)).toEqual([expect.objectContaining({ kind: 'sticker', x: 640, y: 360 })]);
+    const [op] = stage.plan(settingsOf([onScreen]), source, size, 0);
+    expect(op?.kind === 'sticker' ? [op.x, op.y] : null).toEqual([640, 360]);
   });
 });

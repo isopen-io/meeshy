@@ -3,6 +3,7 @@ import { lazyLensStage } from '@/lib/meeshy-lens/lens-lazy';
 import { currentDeviceTier } from '../device/capability-tier';
 
 import { browserReducedMotion, createFaceLayer } from './face-effects-draw';
+import { createLandmarkDetector, type LandmarkerPort } from './face-landmark-detector';
 import { browserFaceDetector, createFaceTracker, type FaceTracker } from './face-tracker';
 import { createSegmentedBlur, segmentIntervalFor, type SegmenterPort } from './video-effects-blur';
 import { createBlurCompositor } from './video-effects-compositor';
@@ -55,11 +56,19 @@ export function browserBlur(): BlurStage | null {
   }
 }
 
-/** Le visage que suit l'étage des lens : son propre détecteur, bâti à la première image qui porte une lens. */
+const loadFaceLandmarker = (): Promise<LandmarkerPort> => import('./video-effects-segmentation').then((module) => module.loadFaceLandmarker());
+
+/**
+ * Le visage que suit l'étage des lens : son propre suiveur, bâti à la première
+ * image qui demande un visage — l'étage ne le demande qu'à une lens ancrée au
+ * visage (`lensUsesFace`). Sur un appareil de palier A, il lit 478 points
+ * (`face-landmarker.ts`, chargé alors seulement) ; ailleurs, et tant que le
+ * modèle charge, le détecteur du navigateur.
+ */
 function lensFace(): (source: CanvasImageSource, frame: { readonly width: number; readonly height: number }) => Box {
   const state: { tracker: FaceTracker | null; frame: number } = { tracker: null, frame: 0 };
   return (source, frame) => {
-    state.tracker ??= createFaceTracker(browserFaceDetector());
+    state.tracker ??= createFaceTracker(createLandmarkDetector({ load: loadFaceLandmarker, tier: currentDeviceTier, fallback: browserFaceDetector(), now }));
     state.frame += 1;
     return state.tracker.next(source, frame, state.frame - 1);
   };

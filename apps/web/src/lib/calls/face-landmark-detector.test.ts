@@ -71,18 +71,22 @@ describe('le chargement à la demande', () => {
 });
 
 describe('le palier A seulement', () => {
-  test.each(['low', 'mid'] as const)('un appareil %s ne charge jamais le modèle et garde le navigateur', async (tier) => {
-    const h = harness({ tier });
-    await h.detector.detect(source);
-    await flush();
-    expect(await h.detector.detect(source)).toEqual([{ boundingBox: browserBox }]);
-    expect(h.loads).toHaveLength(0);
+  test('un appareil bas ou moyen ne charge jamais le modèle et garde le navigateur', async () => {
+    for (const tier of ['low', 'mid'] as const) {
+      const h = harness({ tier });
+      await h.detector.detect(source);
+      await flush();
+      expect(await h.detector.detect(source)).toEqual([{ boundingBox: browserBox }]);
+      expect(h.loads).toHaveLength(0);
+    }
   });
 
-  test.each(['high', 'pro'] as const)('un appareil %s charge le modèle', async (tier) => {
-    const h = harness({ tier });
-    await h.detector.detect(source);
-    expect(h.loads).toHaveLength(1);
+  test('un appareil haut ou pro charge le modèle', async () => {
+    for (const tier of ['high', 'pro'] as const) {
+      const h = harness({ tier });
+      await h.detector.detect(source);
+      expect(h.loads).toHaveLength(1);
+    }
   });
 });
 
