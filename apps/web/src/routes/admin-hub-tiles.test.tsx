@@ -188,3 +188,27 @@ describe('le hub reste DANS l’espace où l’on est (D-76)', () => {
     resetAdminRouter(mounter);
   });
 });
+
+/**
+ * LE TABLEAU DE BORD PORTE LE NOM QUE LE MENU LUI DONNE (#12670) — « Tableau de bord »,
+ * jamais « Administration » d'un côté et « Tableau de bord » de l'autre ; et le
+ * maillon de GROUPE d'un fil d'Ariane (`?group=`) y mène sur ce groupe.
+ */
+describe('le tableau de bord, nommé et adressable par groupe (#12670)', () => {
+  test('son titre est celui de son entrée de menu', async () => {
+    const host = await hub('BIGBOSS');
+    expect(host.querySelector('h1')?.textContent).toBe('Tableau de bord');
+  });
+
+  test('`?group=people` amène la lecture sur le groupe Personnes : son titre reçoit le focus', async () => {
+    await mountAdminAt(mounter, '/adm?group=people', adminIdentityFixture({ role: 'BIGBOSS' }), '[data-admin-group="people"]');
+    expect(document.activeElement?.id).toBe('admin-group-people');
+    resetAdminRouter(mounter);
+  });
+
+  test('un groupe inconnu ne déplace rien', async () => {
+    await mountAdminAt(mounter, '/adm?group=nimporte', adminIdentityFixture({ role: 'BIGBOSS' }), '[data-admin-group="people"]');
+    expect(document.activeElement?.id ?? '').not.toContain('admin-group-');
+    resetAdminRouter(mounter);
+  });
+});

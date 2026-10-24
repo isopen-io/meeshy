@@ -82,7 +82,9 @@ export function AdminListToolbar({
         </label>
       )}
       {(filters ?? []).map((filter) => (
-        <label key={filter.id} className="grid gap-1">
+        /* `min-w-0` + `w-full` : un `<select>` à largeur en pourcentage est COMPRESSIBLE, sa
+           plus longue option n'impose plus sa largeur à la page (débordement à 430 px, #12670). */
+        <label key={filter.id} className="grid min-w-0 max-w-full gap-1">
           <span className="text-caption" style={{ color: INK2 }}>
             {filter.label}
           </span>
@@ -91,7 +93,7 @@ export function AdminListToolbar({
             {...(filter.anchor === undefined ? {} : { [filter.anchor]: '' })}
             value={filter.value}
             onChange={(event) => filter.onChange(event.target.value)}
-            className={`rounded-chip px-3 text-body ${FOCUS}`}
+            className={`w-full rounded-chip px-3 text-body ${FOCUS}`}
             style={FIELD}
           >
             {filter.options.map((option) => (

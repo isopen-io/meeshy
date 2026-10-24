@@ -11,7 +11,6 @@ import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { BRAND, INK2 } from '@/components/admin/tone';
-import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { interpretPostState, interpretPostType, interpretPostVisibility } from '@/lib/admin/interpret/enums';
 import { personLabel, personSecondary, postLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -213,11 +212,7 @@ export function AdminPostPanel({
     <AdminPageHeader
       language={language}
       title={name ?? section}
-      crumbs={[
-        { label: translateAdmin(language, `admin.group.${adminGroupOf('posts')}`) },
-        { label: section, target: { kind: 'section', section: 'posts' } },
-        ...(name === null ? [] : [{ label: name }]),
-      ]}
+      place={{ section: 'posts', fiche: true }}
     />
   );
 
