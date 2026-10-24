@@ -72,4 +72,13 @@ final class StoryEditPlaybackCoverTests: XCTestCase {
         StoryEditPlaybackCover.end(couverture)
         XCTAssertTrue(scene.backgroundLayer.isPlaybackActive, "la fermeture la relance")
     }
+
+    func test_aSceneThatIdledUnderTheCover_getsItsSoundBack_notItsVideoLoop() {
+        let scene = canvas()
+        let couverture = StoryEditPlaybackCover.begin()
+        scene._driveEditClockForTesting(now: CACurrentMediaTime() + 3_600)
+        XCTAssertTrue(scene.isEditClockThrottled, "fusible : la scène s'est mise au repos sous la couverture")
+        StoryEditPlaybackCover.end(couverture)
+        XCTAssertFalse(scene.backgroundLayer.isPlaybackActive, "au repos, la boucle vidéo attend la prochaine touche")
+    }
 }
