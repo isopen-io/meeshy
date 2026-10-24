@@ -17,6 +17,11 @@ final class EndToEndRegimeLedger {
 
     private var sealedConversationIds: Set<String> = []
 
+    // Isolé au MainActor par défaut : une deinit isolée tue xctest au démontage
+    // hors d'une tâche (iOS 18.4+/26, Swift #85663).
+    // Garde : MainActorDeinitSourceGuardTests / check-ios-isolated-deinits.sh.
+    nonisolated deinit {}
+
     func learn(mode: String?, for conversationId: String) {
         guard EndToEndSendGate.requiresSeal(conversationEncryptionModes: [mode]) else { return }
         sealedConversationIds.insert(conversationId)
