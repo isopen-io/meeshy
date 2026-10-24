@@ -59,6 +59,7 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ForwardRefusalReason
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.mention.MentionSearch
@@ -2688,7 +2689,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val forward = h.vm.state.value.forward!!
-        assertThat(forward.refusal).isEqualTo(me.meeshy.sdk.model.ForwardRefusalReason.VIEW_ONCE)
+        assertThat(forward.refusal).isEqualTo(ForwardRefusalReason.VIEW_ONCE)
         assertThat(forward.targets).isEmpty()
     }
 
@@ -2707,7 +2708,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
-        assertThat(h.vm.state.value.forward!!.refusal).isEqualTo(me.meeshy.sdk.model.ForwardRefusalReason.AFTER_READ)
+        assertThat(h.vm.state.value.forward!!.refusal).isEqualTo(ForwardRefusalReason.AFTER_READ)
     }
 
     @Test
@@ -2773,7 +2774,7 @@ class ChatViewModelTest {
         h.vm.onForwardGatewayRefusal("view-once-not-forwardable")
         advanceUntilIdle()
 
-        assertThat(h.vm.state.value.forward!!.refusal).isEqualTo(me.meeshy.sdk.model.ForwardRefusalReason.VIEW_ONCE)
+        assertThat(h.vm.state.value.forward!!.refusal).isEqualTo(ForwardRefusalReason.VIEW_ONCE)
     }
 
     @Test
