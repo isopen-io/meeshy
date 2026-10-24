@@ -2,6 +2,7 @@ import { LENS_LIMITS, LENS_SCHEMA_VERSION, type LENS_DENSITIES, type LENS_FACE_P
 import type { GloryFrameFont } from '@meeshy/shared/types/glory-frame-format';
 import { measureLensCost } from '@meeshy/shared/types/lens-pack';
 
+import { PAPER } from '@/lib/mee/art';
 import { slugOf } from '@/lib/sticker-packs/draft';
 
 import { assetAddressOf, type Digest } from './submission';
@@ -71,7 +72,7 @@ export function newDraftLayer(kind: DraftLayerKind, key: string): DraftLayer {
     case 'sticker':
       return { key, kind, file: null, place: 'screen-center', size: 0.3 };
     case 'text':
-      return { key, kind, text: '', font: 'Manrope', color: '#FFFFFF', size: 0.08, place: 'screen-bottom' };
+      return { key, kind, text: '', font: 'Manrope', color: PAPER, size: 0.08, place: 'screen-bottom' };
     case 'particles':
       return { key, kind, preset: 'sparkles', density: 'mid' };
     case 'lut':

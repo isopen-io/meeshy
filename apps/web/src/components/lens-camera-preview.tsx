@@ -121,11 +121,12 @@ export function LensCameraPreview({
         ref={video}
         {...(isLive ? { 'data-lens-preview-live': '' } : {})}
         hidden={!isLive}
+        aria-label={lensEditorText(language, 'preview.title')}
         muted
         playsInline
         autoPlay
         className="aspect-[3/4] w-full max-w-xs justify-self-center rounded-2xl object-cover"
-        style={{ backgroundColor: 'var(--color-ios-fill)', transform: 'scaleX(-1)' }}
+        style={{ backgroundColor: 'var(--color-ios-fill)' }}
       />
       {isLive ? (
         <button type="button" data-lens-preview-stop onClick={end} className="min-h-11 justify-self-start rounded-full px-4" style={{ backgroundColor: 'var(--color-ios-fill)' }}>

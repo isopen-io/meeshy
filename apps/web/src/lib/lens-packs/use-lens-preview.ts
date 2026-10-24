@@ -33,7 +33,7 @@ export function previewLensOf(draft: LensDraft, context: { readonly addresses: R
     name: draft.name.trim() === '' ? PREVIEW_NAME : draft.name,
     author: draft.author.trim() === '' ? PREVIEW_NAME : draft.author,
     surfaces: ['capture'],
-    endsOn: lensDraftProblems(draft).includes('window') ? draft.startsOn : draft.endsOn,
+    ...(lensDraftProblems(draft).includes('window') ? { startsOn: context.today, endsOn: context.today } : {}),
     layers,
   };
   const parsed = parseLens(lensDocumentOf(playable, context));

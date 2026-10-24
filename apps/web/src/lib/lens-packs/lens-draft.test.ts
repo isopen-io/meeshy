@@ -20,7 +20,7 @@ const draftOf = (extra: Partial<LensDraft> = {}): LensDraft => ({ ...emptyLensDr
 
 const sticker = (file: File | null): DraftLayer => ({ key: 'l1', kind: 'sticker', file, place: 'forehead', size: 0.3 });
 
-const textLayer = (text: string): DraftLayer => ({ key: 'l2', kind: 'text', text, font: 'Manrope', color: '#FFFFFF', size: 0.08, place: 'screen-bottom' });
+const textLayer = (text: string): DraftLayer => ({ key: 'l2', kind: 'text', text, font: 'Manrope', color: '#ffffff', size: 0.08, place: 'screen-bottom' });
 
 const snow: DraftLayer = { key: 'l3', kind: 'particles', preset: 'snow', density: 'high' };
 
