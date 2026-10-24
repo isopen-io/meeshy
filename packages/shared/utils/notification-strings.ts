@@ -39,7 +39,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'attachment.contact',
   'content.location', 'content.sticker', 'content.invitation',
   'content.storyReply.yours', 'content.storyReply.other',
-  'content.action.openMap', 'content.action.join', 'message.action.reply',
+  'content.action.openMap', 'content.action.join', 'message.action.reply', 'message.action.listen', 'message.action.pause',
   'login.newDevice.title',
   'push.private',
   'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',

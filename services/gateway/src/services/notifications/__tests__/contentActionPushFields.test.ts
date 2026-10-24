@@ -24,7 +24,7 @@ describe('contentActionPushFields — les libellés des actions que le service w
         detailTravels: true,
         language: language('fr').resolve,
       }),
-    ).resolves.toEqual({ contentActionLabel: 'Ouvrir la carte', replyActionLabel: 'Répondre' });
+    ).resolves.toEqual({ contentActionLabel: 'Ouvrir la carte', replyActionLabel: 'Répondre', listenActionLabel: 'Écouter', pauseActionLabel: 'Pause' });
   });
 
   it('une invitation offre « Join » à un lecteur anglophone', async () => {
@@ -36,7 +36,7 @@ describe('contentActionPushFields — les libellés des actions que le service w
         detailTravels: true,
         language: language('en').resolve,
       }),
-    ).resolves.toEqual({ contentActionLabel: 'Join', replyActionLabel: 'Reply' });
+    ).resolves.toEqual({ contentActionLabel: 'Join', replyActionLabel: 'Reply', listenActionLabel: 'Listen', pauseActionLabel: 'Pause' });
   });
 
   it('un message protégé ou masqué garde « Répondre » mais n’annonce aucune action de CONTENU', async () => {
@@ -48,7 +48,7 @@ describe('contentActionPushFields — les libellés des actions que le service w
         detailTravels: false,
         language: language('de').resolve,
       }),
-    ).resolves.toEqual({ replyActionLabel: 'Antworten' });
+    ).resolves.toEqual({ replyActionLabel: 'Antworten', listenActionLabel: 'Anhören', pauseActionLabel: 'Pause' });
   });
 
   it('un lien, un contact ou un sticker n’appellent que « Répondre »', async () => {
@@ -60,7 +60,18 @@ describe('contentActionPushFields — les libellés des actions que le service w
         detailTravels: true,
         language: language('it').resolve,
       }),
-    ).resolves.toEqual({ replyActionLabel: 'Rispondi' });
+    ).resolves.toEqual({ replyActionLabel: 'Rispondi', listenActionLabel: 'Ascolta', pauseActionLabel: 'Pausa' });
+  });
+
+  it('« Écouter » et « Pause » d’un vocal parlent la langue de « Répondre », celle de la bannière (#12473)', async () => {
+    const fields = await contentActionPushFields({
+      type: 'new_message',
+      conversationId: 'conv-1',
+      detail: undefined,
+      detailTravels: true,
+      language: language('es').resolve,
+    });
+    expect([fields.replyActionLabel, fields.listenActionLabel, fields.pauseActionLabel]).toEqual(['Responder', 'Escuchar', 'Pausa']);
   });
 
   it('hors message de conversation, aucune clé et aucune langue résolue', async () => {

@@ -159,6 +159,17 @@ final class NotificationVoiceRules {
         return String.format(Locale.ROOT, "%d:%02d", minutes, rest);
     }
 
+    /**
+     * #12473 — « Ecouter » ⇄ « Pause » dans la langue de la banniere, que la
+     * passerelle envoie avec « Repondre » ; les ressources de la coque, qui
+     * suivent la langue de l'appareil, ne servent qu'en repli.
+     */
+    static String actionLabel(Map<String, String> data, boolean playing, String fallback) {
+        String sent = data == null ? null : data.get(playing ? "pauseActionLabel" : "listenActionLabel");
+        String label = sent == null ? "" : sent.trim();
+        return label.isEmpty() ? fallback : label;
+    }
+
     static String playerTitle(Voice voice, String fallback) {
         return voice.author.isEmpty() ? fallback : voice.author;
     }

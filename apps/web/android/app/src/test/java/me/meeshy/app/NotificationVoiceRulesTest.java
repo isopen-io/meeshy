@@ -352,4 +352,19 @@ public class NotificationVoiceRulesTest {
         assertFalse(NotificationVoiceRules.revealOnLockScreen(0));
         assertFalse(NotificationVoiceRules.revealOnLockScreen(-1));
     }
+
+    @Test
+    public void lactionParleLaLangueDeLaBanniereQuandLaPasserelleLaDonne() {
+        Map<String, String> data = with("listenActionLabel", " Écouter ");
+        data.put("pauseActionLabel", "Pause");
+        assertEquals("Écouter", NotificationVoiceRules.actionLabel(data, false, "Listen"));
+        assertEquals("Pause", NotificationVoiceRules.actionLabel(data, true, "Pause"));
+    }
+
+    @Test
+    public void sansLibelleDeLaPasserelleLaCoqueGardeSesRessources() {
+        assertEquals("Listen", NotificationVoiceRules.actionLabel(voicePush(), false, "Listen"));
+        assertEquals("Pause", NotificationVoiceRules.actionLabel(with("pauseActionLabel", "  "), true, "Pause"));
+        assertEquals("Listen", NotificationVoiceRules.actionLabel(null, false, "Listen"));
+    }
 }

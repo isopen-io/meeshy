@@ -57,7 +57,7 @@ final class NotificationVoiceBanner {
         "notificationLocKey", "encryptedContent", "gcm.notification.tag", "gcm.n.tag", KEY_ORIGIN,
         // #10891 / #10906 — les actions de la banniere se reposent a chaque
         // bascule Ecouter ⇄ Pause.
-        "replyActionLabel", "contentActionLabel", "locationLat", "locationLon", "locationName", "inviteUrl",
+        "replyActionLabel", "contentActionLabel", "listenActionLabel", "pauseActionLabel", "locationLat", "locationLon", "locationName", "inviteUrl",
         // #10908 — « Rappeler » sur la banniere d'un appel manque.
         "callBackLabel", "callType", "conversationType",
         // #10921 — l'intention de balayage porte la notification et son post.
@@ -184,7 +184,8 @@ final class NotificationVoiceBanner {
             ? PendingIntent.getForegroundService(context, request, intent, flags)
             : PendingIntent.getService(context, request, intent, flags);
         int icon = playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play;
-        String label = context.getString(playing ? R.string.notification_voice_pause : R.string.notification_voice_listen);
+        String label = NotificationVoiceRules.actionLabel(
+            data, playing, context.getString(playing ? R.string.notification_voice_pause : R.string.notification_voice_listen));
         return new Notification.Action.Builder(Icon.createWithResource(context, icon), label, pending).build();
     }
 }

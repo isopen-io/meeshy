@@ -16,6 +16,11 @@ import { notificationString, type NotificationStringKey } from '@meeshy/shared/u
  *   d'une action dirait à lui seul ce que le message contient.
  * - `replyActionLabel` — « Répondre », sur tout message de conversation. Il ne
  *   dit rien du contenu : il voyage aussi pour un message protégé ou masqué.
+ * - `listenActionLabel` / `pauseActionLabel` — « Écouter » ⇄ « Pause », que la
+ *   coque Android pose sur la bannière d'un vocal (#10641). Ses ressources
+ *   suivaient la langue de l'APPAREIL, la bannière celle du destinataire :
+ *   « Listen » s'affichait à côté de « Répondre » (#12473). La coque garde ses
+ *   ressources en repli, pour une passerelle qui ne les envoie pas encore.
  */
 
 const REPLYABLE_TYPES: ReadonlySet<string> = new Set([
@@ -37,6 +42,8 @@ export type ContentActionPushInput = {
 export type ContentActionPushFields = {
   readonly contentActionLabel?: string;
   readonly replyActionLabel?: string;
+  readonly listenActionLabel?: string;
+  readonly pauseActionLabel?: string;
 };
 
 function contentActionKey(detail: NotificationContentDetail | undefined): NotificationStringKey | null {
@@ -52,5 +59,7 @@ export async function contentActionPushFields(input: ContentActionPushInput): Pr
   return {
     ...(key ? { contentActionLabel: notificationString(lang, key) } : {}),
     replyActionLabel: notificationString(lang, 'message.action.reply'),
+    listenActionLabel: notificationString(lang, 'message.action.listen'),
+    pauseActionLabel: notificationString(lang, 'message.action.pause'),
   };
 }
