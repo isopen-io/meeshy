@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Meeshy
 
 /// #12590 — **« Modifier » une image ou une vidéo de la scène ouvre la retouche, quand le média a
@@ -58,5 +59,37 @@ final class ComposerSceneMediaRetouchRuleTests: XCTestCase {
 
     func test_anObjectWithNothing_isNotOffered() {
         XCTAssertFalse(ComposerSceneMediaRetouchRule.offers(faits()))
+    }
+}
+
+/// #12590 — **le média que « Terminé » rend s'écrit sous `<nouvel id>.<ext>`** : la convention qui
+/// relie un bitmap à sa clé de canvas, et le même fichier pour le document et pour la scène.
+@MainActor
+final class ComposerSceneMediaDeliveryTests: XCTestCase {
+
+    func test_delivery_ofAnImage_isWrittenUnderTheNewObjectId_andSharedByDocumentAndScene() async throws {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 20, height: 10)).image { contexte in
+            UIColor.red.setFill()
+            contexte.fill(CGRect(x: 0, y: 0, width: 20, height: 10))
+        }
+        let id = UUID().uuidString
+        let livre = try XCTUnwrap(await ComposerSceneMediaRetouch.delivery(of: .image(image), objectId: id))
+        XCTAssertEqual(livre.media.url.deletingPathExtension().lastPathComponent, id)
+        XCTAssertEqual(livre.media.mimeType, "image/jpeg")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: livre.media.url.path))
+        guard case .image(_, let fichier) = livre.source else { return XCTFail("une image") }
+        XCTAssertEqual(fichier, livre.media.url, "le document et la scène portent le MÊME fichier")
+    }
+
+    func test_delivery_ofAVideo_movesTheFileUnderTheNewObjectId() async throws {
+        let brut = FileManager.default.temporaryDirectory.appendingPathComponent("retouche-\(UUID().uuidString).mov")
+        try Data(repeating: 0x2A, count: 64).write(to: brut)
+        let id = UUID().uuidString
+        let livre = try XCTUnwrap(await ComposerSceneMediaRetouch.delivery(of: .video(brut), objectId: id))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: brut.path), "le rendu de l'exporteur est déplacé, pas copié")
+        XCTAssertEqual(livre.media.url.lastPathComponent, "\(id).mov")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: livre.media.url.path))
+        guard case .video(let fichier, _, _, _) = livre.source else { return XCTFail("une vidéo") }
+        XCTAssertEqual(fichier, livre.media.url)
     }
 }
