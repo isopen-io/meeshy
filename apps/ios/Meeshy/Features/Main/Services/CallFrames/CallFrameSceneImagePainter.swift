@@ -58,16 +58,18 @@ nonisolated enum CallFrameSceneImagePainter {
     static func nineSlicePieces(source: CGSize, target: CGRect, slice: CGFloat) -> [(source: CGRect, target: CGRect)] {
         let from = min(source.width, source.height) * slice
         let to = min(target.width, target.height) * slice
-        let sourceColumns = [0, from, source.width - from, source.width]
-        let sourceRows = [0, from, source.height - from, source.height]
-        let targetColumns = [target.minX, target.minX + to, target.maxX - to, target.maxX]
-        let targetRows = [target.minY, target.minY + to, target.maxY - to, target.maxY]
-        return (0 ..< 3).flatMap { row in
+        let sourceColumns: [CGFloat] = [0, from, source.width - from, source.width]
+        let sourceRows: [CGFloat] = [0, from, source.height - from, source.height]
+        let targetColumns: [CGFloat] = [target.minX, target.minX + to, target.maxX - to, target.maxX]
+        let targetRows: [CGFloat] = [target.minY, target.minY + to, target.maxY - to, target.maxY]
+        func cell(_ columns: [CGFloat], _ rows: [CGFloat], column: Int, row: Int) -> CGRect {
+            CGRect(x: columns[column], y: rows[row],
+                   width: columns[column + 1] - columns[column], height: rows[row + 1] - rows[row])
+        }
+        return (0 ..< 3).flatMap { row -> [(source: CGRect, target: CGRect)] in
             (0 ..< 3).map { column in
-                (source: CGRect(x: sourceColumns[column], y: sourceRows[row],
-                                width: sourceColumns[column + 1] - sourceColumns[column], height: sourceRows[row + 1] - sourceRows[row]),
-                 target: CGRect(x: targetColumns[column], y: targetRows[row],
-                                width: targetColumns[column + 1] - targetColumns[column], height: targetRows[row + 1] - targetRows[row]))
+                (source: cell(sourceColumns, sourceRows, column: column, row: row),
+                 target: cell(targetColumns, targetRows, column: column, row: row))
             }
         }
     }
