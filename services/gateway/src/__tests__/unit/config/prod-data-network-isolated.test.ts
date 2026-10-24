@@ -55,9 +55,13 @@ function stripComment(text: string): string {
   return text.replace(/\s+#.*$/, '').trim();
 }
 
-/** Un scalaire simple, guillemets ôtés. Interpolation, ancre ou alias : forme inconnue. */
+/**
+ * Un scalaire simple, guillemets ôtés. Interpolation, ancre, alias, étiquette (`!!str`),
+ * scalaire en bloc (`>-`, `|`), directive ou échappement : forme inconnue.
+ */
 function scalar(raw: string, where: string): string {
   const value = stripComment(raw);
+  if (/^[!>|%@`]/.test(value)) throw new FormeInconnue(`${where} : « ${raw.trim()} »`);
   const unquoted = /^"(.*)"$/.exec(value)?.[1] ?? /^'(.*)'$/.exec(value)?.[1] ?? value;
   if (!unquoted || /[$&*{}[\]\\]/.test(unquoted)) throw new FormeInconnue(`${where} : « ${raw.trim()} »`);
   return unquoted;
@@ -195,6 +199,29 @@ function realNetworksOf(service: Attachment, compose: Compose, where: string): s
  * la production autre que meeshy-staging-edge, ou partageant une pile réseau qui
  * n'est pas la sienne.
  */
+/**
+ * La fusion de Compose (`-f staging -f surcouche`) : un service redéclaré garde l'union
+ * de ses réseaux et le `network_mode` posé par l'un ou l'autre fichier. Un réseau déclaré
+ * dans deux fichiers verrait ses champs fusionnés : le témoin refuse de le lire.
+ */
+function mergeStaging(files: Compose[]): Compose {
+  const merged: Compose = { project: STAGING_PROJECT, services: new Map(), networks: new Map() };
+  for (const file of files) {
+    file.networks.forEach((decl, key) => {
+      if (merged.networks.has(key)) throw new FormeInconnue(`réseau « ${key} » déclaré dans deux fichiers du staging`);
+      merged.networks.set(key, decl);
+    });
+    file.services.forEach((service, name) => {
+      const before = merged.services.get(name);
+      merged.services.set(name, {
+        networks: [...new Set([...(before?.networks ?? []), ...service.networks])],
+        networkMode: service.networkMode ?? before?.networkMode ?? null,
+      });
+    });
+  }
+  return merged;
+}
+
 function isolationViolations(prod: Compose, stagingFiles: Compose[]): string[] {
   const prodNetworks = new Set([...prod.networks.values()].map((n) => n.realName));
   for (const service of prod.services.values()) {
@@ -202,13 +229,12 @@ function isolationViolations(prod: Compose, stagingFiles: Compose[]): string[] {
   }
   prodNetworks.delete(STAGING_EDGE);
 
-  const merged: Compose = { project: STAGING_PROJECT, services: new Map(), networks: new Map() };
-  for (const file of stagingFiles) {
-    file.networks.forEach((v, k) => merged.networks.set(k, v));
-    file.services.forEach((v, k) => merged.services.set(k, v));
-  }
+  const merged = mergeStaging(stagingFiles);
+  // Chaque fichier seul ET leur fusion : une surcouche qui redéclare un service ne
+  // masque jamais les rattachements que le fichier principal lui donne.
+  const attachments = [...stagingFiles.flatMap((f) => [...f.services]), ...merged.services];
   const out: string[] = [];
-  for (const [name, service] of merged.services) {
+  for (const [name, service] of attachments) {
     const mode = service.networkMode;
     if (mode !== null) {
       const sibling = /^service:(.+)$/.exec(mode)?.[1];
@@ -250,7 +276,8 @@ describe("le staging ne partage aucun réseau avec la production, hors meeshy-st
   });
 
   it('le seul réseau externe du staging est meeshy-staging-edge, et seuls les services routés du staging y sont', () => {
-    expect([...staging.networks.values()].filter((n) => n.external).map((n) => n.realName)).toEqual([STAGING_EDGE]);
+    // Surcouche S3 comprise : elle pourrait déclarer son propre réseau externe.
+    expect([...mergeStaging([staging, mediaS3]).networks.values()].filter((n) => n.external).map((n) => n.realName)).toEqual([STAGING_EDGE]);
     const routes = [...staging.services.keys()].filter((name) => /traefik\.enable=true/.test(serviceText(stagingSource, name))).sort();
     expect(membersOf(staging, STAGING_EDGE)).toEqual(routes);
     for (const s of ['database-staging', 'redis-staging', 'translator-staging', 'agent-staging']) {
@@ -336,9 +363,10 @@ describe('le témoin tombe sur chaque contournement connu (audit de #12705)', ()
       networks,
     ].join('\n');
 
-  const verdict = (text: string): string => {
+  const verdict = (text: string, overlay?: string): string => {
     try {
-      const v = isolationViolations(prod, [parseCompose(text, STAGING_PROJECT)]);
+      const files = [text, ...(overlay === undefined ? [] : [overlay])].map((t) => parseCompose(t, STAGING_PROJECT));
+      const v = isolationViolations(prod, files);
       return v.length ? `violation: ${v.join(', ')}` : 'accepté';
     } catch (e) {
       if (e instanceof FormeInconnue) return `forme refusée: ${e.message}`;
@@ -381,7 +409,24 @@ describe('le témoin tombe sur chaque contournement connu (audit de #12705)', ()
     ['M15 espace avant les deux-points', staging('    networks:\n      - prod-data', '  prod-data:\n    name : meeshy_meeshy-data')],
     ['M16 network_mode échappé', staging('    "\\x6eetwork_mode": "container:meeshy-database"')],
     ['nom échappé', staging('    networks:\n      - prod-data', '  prod-data:\n    name: "meeshy_meeshy-\\x64ata"')],
+    ['C étiquette !!str', staging('    networks:\n      - prod-data', '  prod-data:\n    name: !!str meeshy_meeshy-data')],
+    ['A scalaire en bloc', staging('    networks:\n      - prod-data', '  prod-data:\n    name: >-\n      meeshy_meeshy-data')],
   ])('%s', (_cas, text) => {
     expect(verdict(text)).not.toBe('accepté');
+  });
+
+  // Surcouche : `-f docker-compose.staging.yml -f docker-compose.staging.media-s3.yml`.
+  const overlay = (body: string): string => `services:\n${body}\n`;
+  it.each([
+    ['D surcouche qui redéclare un service muni de network_mode', staging('    network_mode: "container:meeshy-database"'), overlay('  gateway-staging:\n    labels:\n      - "x=y"')],
+    ['E surcouche qui redéclare un service joint aux données', staging('    networks:\n      - prod-data', '  prod-data:\n    name: meeshy_meeshy-data'), overlay('  gateway-staging:\n    networks:\n      - meeshy-staging-network')],
+    ['B étiquette dans la surcouche', staging('    networks:\n      - meeshy-staging-network'), 'services:\n  extra:\n    image: alpine\n    networks:\n      - prod-data\nnetworks:\n  prod-data:\n    external: true\n    name: !!str meeshy_meeshy-data\n'],
+    ['surcouche qui joint directement un réseau de la production', staging('    networks:\n      - meeshy-staging-network'), 'services:\n  extra:\n    image: alpine\n    networks:\n      - prod-data\nnetworks:\n  prod-data:\n    external: true\n    name: meeshy_meeshy-data\n'],
+  ])('%s', (_cas, main, extra) => {
+    expect(verdict(main, extra)).not.toBe('accepté');
+  });
+
+  it('témoin positif : la surcouche réelle, ajoutée à un staging propre, est acceptée', () => {
+    expect(verdict(staging('    networks:\n      - meeshy-staging-network'), read('docker-compose.staging.media-s3.yml'))).toBe('accepté');
   });
 });
