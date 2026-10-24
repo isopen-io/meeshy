@@ -92,6 +92,27 @@ final class LentilleFlatRowTests: XCTestCase {
         )
     }
 
+    // MARK: - #11575 — le compte de non-lus se dit en toutes lettres
+
+    /// La pastille est décorative dans l'élément combiné de la rangée : c'est
+    /// le libellé de RANGÉE qui annonce le compte, avec la phrase accordée
+    /// d'`UnreadCountLabel.messages` — la même que l'étiquette de la pastille
+    /// du web (`unreadMessagesLabel`), jamais un chiffre nu.
+    func test_accessibilityLabel_unread_saysTheCountInFullWords() {
+        let row = LentilleConversationRow(conversation: makeConversation(unreadCount: 5), preferredContentLanguages: ["fr"])
+
+        XCTAssertTrue(row.accessibilityLabel.contains(UnreadCountLabel.messages(5)))
+    }
+
+    /// Au-delà de 99, la pastille AFFICHE « 99+ » ; l'oreille, elle, n'entend
+    /// jamais ce texte de pastille comme s'il était un nombre.
+    func test_accessibilityLabel_beyondNinetyNine_neverSaysTheBadgeText() {
+        let row = LentilleConversationRow(conversation: makeConversation(unreadCount: 120), preferredContentLanguages: ["fr"])
+
+        XCTAssertTrue(row.accessibilityLabel.contains(UnreadCountLabel.messages(120)))
+        XCTAssertFalse(row.accessibilityLabel.contains("99+"))
+    }
+
     // MARK: - `==` — COPIÉ depuis `ThemedConversationRow.==` puis ÉTENDU au bridge
 
     /// Le critère explicite de la tâche : « deux valeurs de pont ⇒ non
