@@ -118,6 +118,51 @@ nonisolated enum NSEAttachmentPolicy {
         return flags & lifecycleFlagsMask != 0
     }
 
+    /// La clé du corps d'une notification de conversation VERROUILLÉE PAR PIN
+    /// (#11387) : un libellé du catalogue de l'extension, jamais du contenu.
+    static let lockedConversationLocKey = "notification.locked_conversation"
+
+    /// **Le verrou PIN protège le CONTENU** (#11387). La charge d'une
+    /// conversation verrouillée DÉCLARE une protection (`notificationLocKey`, que `declaresProtection` lit) : le
+    /// média, le détail, la vignette et le lecteur audio la respectent sans
+    /// qu'aucun n'ait à connaître le verrou, et le corps se lit au catalogue.
+    /// Les clés de routage restent : toucher la bannière ouvre la
+    /// conversation, que la porte du routeur garde par le PIN (#11386).
+    static func sealingLockedConversation(_ userInfo: [AnyHashable: Any], isLocked: Bool) -> [AnyHashable: Any] {
+        guard isLocked else { return userInfo }
+        return userInfo.merging([AnyHashable("notificationLocKey"): lockedConversationLocKey]) { _, sealed in sealed }
+    }
+
+    /// La clé App Group où l'app MIROITE le jeu COMPLET des conversations
+    /// verrouillées (#11387). Le cliché `conversation_snapshots` ne connaît que
+    /// la liste chargée (pages de 100) : un « coffre » ancien en sortait, et sa
+    /// bannière partait en clair. Le miroir, lui, est écrit par le gestionnaire
+    /// de verrous à chaque changement et au lancement.
+    static let lockedConversationIdsKey = "locked_conversation_ids"
+
+    /// Écrit le miroir. Un jeu vide RETIRE la clé : la déconnexion (qui lève
+    /// tous les verrous) ne laisse rien derrière elle.
+    static func mirrorLockedConversationIds(_ ids: Set<String>, into defaults: UserDefaults?) {
+        guard let defaults else { return }
+        guard !ids.isEmpty else {
+            defaults.removeObject(forKey: lockedConversationIdsKey)
+            return
+        }
+        defaults.set(ids.sorted(), forKey: lockedConversationIdsKey)
+    }
+
+    /// **La conversation de cette charge est-elle verrouillée par PIN sur cet
+    /// appareil ?** Le miroir fait foi ; le drapeau du cliché ne sert que de
+    /// renfort (il ne peut qu'AJOUTER un verrou, jamais en retirer un).
+    static func isContentLocked(
+        conversationId: String?,
+        mirroredLockedIds: [String]?,
+        snapshotDeclaresLock: Bool
+    ) -> Bool {
+        guard let conversationId, !conversationId.isEmpty else { return false }
+        return snapshotDeclaresLock || (mirroredLockedIds ?? []).contains(conversationId)
+    }
+
     /// Masque des bits de cycle de vie de `MessageEffectFlags` — éphémère (0),
     /// flouté (1), vue unique (2). Écrit ici plutôt qu'importé : ce fichier ne
     /// dépend que de Foundation, et c'est cette absence de dépendance qui le
@@ -152,5 +197,43 @@ nonisolated enum NSEAttachmentPolicy {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
         return Int(trimmed)
+    }
+}
+
+/// **L'ordre dans lequel l'extension prépare une bannière** (#11387), extrait de
+/// `NotificationService.prepareBestAttempt` pour être ÉPROUVABLE : un verrou PIN
+/// ne se garde que si la charge est scellée AVANT toute décision (catégorie,
+/// média, détail) et si le corps est remplacé APRÈS toute réécriture — et une
+/// conversation verrouillée ne dépose rien de son message dans le groupe d'app
+/// (« aucun préchargement ne met en cache les messages d'une conversation
+/// verrouillée », décision porteur du 2026-10-24).
+nonisolated enum NSEPreparationStep: Equatable, Sendable {
+    case sealLockedConversation
+    case applyCategory
+    case applyBadge
+    case applyThreading
+    case applyPreferences
+    case updateUnreadCount
+    case syncMessage
+    case prefetchSocial
+    case prePersistMessage
+    case postDeliveryReceipt
+    case rewriteBody
+    case applyEphemeralDeadline
+    case sweepExpiredBanners
+    case replaceBodyWithLockLabel
+
+    static func plan(isLockedConversation: Bool) -> [NSEPreparationStep] {
+        let decisions: [NSEPreparationStep] = [
+            .applyCategory, .applyBadge, .applyThreading, .applyPreferences, .updateUnreadCount,
+        ]
+        let staging: [NSEPreparationStep] = isLockedConversation
+            ? [.prefetchSocial]
+            : [.syncMessage, .prefetchSocial, .prePersistMessage]
+        let rewrites: [NSEPreparationStep] = [
+            .postDeliveryReceipt, .rewriteBody, .applyEphemeralDeadline, .sweepExpiredBanners,
+        ]
+        guard isLockedConversation else { return decisions + staging + rewrites }
+        return [.sealLockedConversation] + decisions + staging + rewrites + [.replaceBodyWithLockLabel]
     }
 }

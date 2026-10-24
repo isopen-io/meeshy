@@ -211,7 +211,7 @@ export function AdminConversationsPanel({ language, deps = apiDeps, now = defaul
         language={language}
         title={translateAdmin(language, 'admin.nav.conversations')}
         subtitle={translateAdmin(language, 'admin.conversation.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.exchanges') }, { label: translateAdmin(language, 'admin.nav.conversations') }]}
+        place={{ section: 'conversations' }}
       />
       <AdminOfflineNotice language={language} />
       {scopedCommunity === undefined ? null : (

@@ -188,15 +188,8 @@ describe('l’en-tête de page', () => {
     expect(host.querySelector('[data-admin-page-actions] button')?.textContent).toBe('Éditer');
   });
 
-  test('le fil d’Ariane : navigation nommée, liste ordonnée, dernier élément = page courante, sans lien', async () => {
-    const host = await mount(
-      <AdminPageHeader
-        language="fr"
-        title="Awa Diop"
-        crumbs={[{ label: 'Personnes' }, { label: 'Comptes', target: { kind: 'section', section: 'users' } }, { label: 'Awa Diop' }]}
-      />,
-      adminIdentityFixture({ role: 'BIGBOSS' }),
-    );
+  test('le fil d’Ariane se DÉRIVE du lieu : groupe › section › objet, le dernier est la page courante (#12670)', async () => {
+    const host = await mount(<AdminPageHeader language="fr" title="Awa Diop" place={{ section: 'users', fiche: true }} />, adminIdentityFixture({ role: 'BIGBOSS' }));
     const nav = host.querySelector('nav');
     expect(nav?.getAttribute('aria-label')).toBe('Fil d’Ariane');
     const items = [...(nav?.querySelectorAll('li') ?? [])];
@@ -206,12 +199,52 @@ describe('l’en-tête de page', () => {
     expect(items[2]?.querySelector('a')).toBeNull();
   });
 
-  test('un maillon dont la section n’est pas ouverte au lecteur est un texte, pas un lien', async () => {
+  test('le maillon du GROUPE mène au tableau de bord, sur ce groupe', async () => {
+    const host = await mount(<AdminPageHeader language="fr" title="Comptes" place={{ section: 'users' }} />, adminIdentityFixture({ role: 'BIGBOSS' }));
+    const groupe = host.querySelector('[data-admin-trail-step="group"] a');
+    expect(groupe?.textContent).toBe('Personnes');
+    expect(groupe?.getAttribute('href')).toBe('/admin?group=people');
+  });
+
+  test('une liste : le fil s’arrête à elle, lieu courant, sans lien', async () => {
+    const host = await mount(<AdminPageHeader language="fr" title="Comptes" place={{ section: 'users' }} />, adminIdentityFixture({ role: 'BIGBOSS' }));
+    const items = [...host.querySelectorAll('nav li')];
+    expect(items.map((item) => item.textContent)).toEqual(['Personnes', 'Comptes']);
+    expect(items[1]?.querySelector('a')).toBeNull();
+    expect(items[1]?.querySelector('[aria-current="page"]')).not.toBeNull();
+  });
+
+  test('une FICHE a pour titre le NOM de l’objet, et son genre en surtitre', async () => {
+    const host = await mount(<AdminPageHeader language="fr" title="Awa Diop" place={{ section: 'users', fiche: true }} />, adminIdentityFixture({ role: 'BIGBOSS' }));
+    expect(host.querySelector('h1')?.textContent).toBe('Awa Diop');
+    expect(host.querySelector('[data-admin-page-kind]')?.textContent).toBe('Membre');
+  });
+
+  test('une fiche dont le nom n’est pas encore lu : le fil s’arrête à la section', async () => {
     const host = await mount(
-      <AdminPageHeader language="fr" title="x" crumbs={[{ label: 'Comptes', target: { kind: 'section', section: 'users' } }, { label: 'Nom' }]} />,
-      adminIdentityFixture({ role: 'MODERATOR' }),
+      <AdminPageHeader language="fr" title="Conversation" place={{ section: 'conversations', fiche: true, object: null }} />,
+      adminIdentityFixture({ role: 'BIGBOSS' }),
     );
-    expect(host.querySelector('nav a')).toBeNull();
+    expect([...host.querySelectorAll('nav li')].map((item) => item.textContent)).toEqual(['Échanges', 'Conversations']);
+  });
+
+  test('le fil ne se dessine que dès `md` : sur un téléphone, la barre du haut nomme déjà le parent', async () => {
+    const host = await mount(<AdminPageHeader language="fr" title="Comptes" place={{ section: 'users' }} />, adminIdentityFixture({ role: 'BIGBOSS' }));
+    expect(host.querySelector('nav')?.className).toContain('hidden');
+    expect(host.querySelector('nav')?.className).toContain('md:block');
+  });
+
+  test('le tableau de bord, racine, n’a pas de fil ; sans lieu, pas de fil non plus', async () => {
+    const hub = await mount(<AdminPageHeader language="fr" title="Tableau de bord" place={{ section: 'dashboard' }} />, adminIdentityFixture({ role: 'BIGBOSS' }));
+    expect(hub.querySelector('nav')).toBeNull();
+    const nu = await mount(<AdminPageHeader language="fr" title="x" />, adminIdentityFixture({ role: 'BIGBOSS' }));
+    expect(nu.querySelector('nav')).toBeNull();
+  });
+
+  test('un maillon dont la section n’est pas ouverte au lecteur est un texte, pas un lien', async () => {
+    const host = await mount(<AdminPageHeader language="fr" title="Nom" place={{ section: 'users', fiche: true }} />, adminIdentityFixture({ role: 'MODERATOR' }));
+    expect(host.querySelector('[data-admin-trail-step="section"] a')).toBeNull();
+    expect(host.querySelector('[data-admin-trail-step="section"]')?.textContent).toBe('Comptes');
   });
 });
 
