@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.SyncMetaDao
-import me.meeshy.core.database.dao.upsertKeepingLocal
 import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
@@ -43,6 +42,13 @@ internal class MessageCacheSource(
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
+
+    /**
+     * Every snapshot write goes through the field-level merge: local columns kept, nothing
+     * regresses, pending outbox mutations protected, unchanged rows left unwritten — and the
+     * echoed `cid_` bridged to its server id, the optimistic bubble replaced in place.
+     */
+    private val ingestion = MessageIngestPipeline(database)
 
     /**
      * #5189 — bounded to [historyWindow] rather than the conversation's whole
@@ -184,11 +190,8 @@ internal class MessageCacheSource(
     private suspend fun persist(messages: List<ApiMessage>, newEtag: String?) {
         val now = clock.nowMillis()
         val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
-        val ackedLocalIds = messages.mapNotNull { it.clientMessageId }
         database.withTransaction {
-            messageDao.upsertKeepingLocal(rows)
-            recordAcks(messages, now)
-            if (ackedLocalIds.isNotEmpty()) messageDao.deleteByIds(ackedLocalIds)
+            ingestion.mergeInTransaction(messages, now, conversationId)
             if (rows.isEmpty()) {
                 messageDao.deleteMissing(conversationId, emptyList())
             } else {
@@ -211,22 +214,10 @@ internal class MessageCacheSource(
      */
     private suspend fun persistAfterBackfill(messages: List<ApiMessage>) {
         val now = clock.nowMillis()
-        val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
-        val ackedLocalIds = messages.mapNotNull { it.clientMessageId }
         val currentEtag = syncMetaDao.etag(resourceKey)
         database.withTransaction {
-            messageDao.upsertKeepingLocal(rows)
-            recordAcks(messages, now)
-            if (ackedLocalIds.isNotEmpty()) messageDao.deleteByIds(ackedLocalIds)
+            ingestion.mergeInTransaction(messages, now, conversationId)
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, currentEtag, null))
-        }
-    }
-
-    /** The server echoed the `cid_` it was sent: bridge it to the server id so late events find the row. */
-    private suspend fun recordAcks(messages: List<ApiMessage>, now: Long) {
-        messages.forEach { message ->
-            val localId = message.clientMessageId ?: return@forEach
-            MessageIdReconciliation.recordAck(database, localId, message.id, conversationId, now)
         }
     }
 
