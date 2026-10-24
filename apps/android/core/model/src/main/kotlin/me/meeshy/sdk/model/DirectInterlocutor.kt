@@ -138,3 +138,14 @@ fun directConversationRequest(userId: String): CreateConversationRequest =
         title = null,
         participantIds = listOf(userId),
     )
+
+/**
+ * La photo d'une ligne de conversation (#12569, miroir d'iOS `isDirect ? participantAvatarURL :
+ * avatar` et du web `avatarOf`) : celle du pair en direct, celle de la conversation sinon. Jamais
+ * l'une à la place de l'autre : un direct sans photo de pair reste en initiales, il ne prête pas la
+ * photo de la conversation (un artefact legacy). Une valeur blanche n'est pas une photo.
+ */
+fun ApiConversation.displayedAvatar(readerId: String?): String? {
+    val served = if (isDirect) interlocutor(readerId)?.avatarUrl else avatar
+    return served?.takeIf { it.isNotBlank() }
+}
