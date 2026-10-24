@@ -1,6 +1,5 @@
 package me.meeshy.app.profile
 
-import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -26,7 +25,7 @@ import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class ProfileViewModelTimelineTest {
+class OwnProfileViewModelTimelineTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -60,12 +59,11 @@ class ProfileViewModelTimelineTest {
         userRepo: UserRepository,
         statsCache: ProfileStatsCacheRepository = coldStatsCache(),
     ) =
-        ProfileViewModel(
+        OwnProfileViewModel(
             sessionRepository = session,
             userRepository = userRepo,
             statsCache = statsCache,
             workManager = mockk(relaxed = true),
-            savedStateHandle = SavedStateHandle(),
         )
 
     private fun sessionWith(flow: MutableStateFlow<MeeshyUser?>): SessionRepository {
@@ -142,24 +140,6 @@ class ProfileViewModelTimelineTest {
         val userRepo = mockk<UserRepository>(relaxed = true)
 
         val vm = ownProfileViewModel(sessionWith(MutableStateFlow(null)), userRepo)
-        advanceUntilIdle()
-
-        assertThat(vm.state.value.timeline).isNull()
-        coVerify(exactly = 0) { userRepo.getUserStatsTimeline(any()) }
-    }
-
-    @Test
-    fun otherProfile_neverLoadsTheTimeline_becauseItIsAMeOnlyEndpoint() = runTest(dispatcher) {
-        val userRepo = mockk<UserRepository>(relaxed = true)
-        coEvery { userRepo.getProfile("u9") } returns NetworkResult.Success(user("u9"))
-
-        val vm = ProfileViewModel(
-            sessionRepository = mockk(relaxed = true),
-            userRepository = userRepo,
-            statsCache = coldStatsCache(),
-            workManager = mockk(relaxed = true),
-            savedStateHandle = SavedStateHandle(mapOf(ProfileViewModel.USER_ID_ARG to "u9")),
-        )
         advanceUntilIdle()
 
         assertThat(vm.state.value.timeline).isNull()

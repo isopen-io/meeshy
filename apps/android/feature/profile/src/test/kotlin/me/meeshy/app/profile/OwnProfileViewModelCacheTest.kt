@@ -1,6 +1,5 @@
 package me.meeshy.app.profile
 
-import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -27,19 +26,19 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Cache-first behaviour of the profile dashboard: the stats grid and the 30-day
+ * Cache-first behaviour of my page's dashboard: the stats grid and the 30-day
  * timeline must paint from the Room cache before the network answers (or when it
  * never answers), and a successful network fetch must write through so the next
  * cold launch has fresher data. See ARCHITECTURE.md §4 (cache-first, network-second).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class ProfileViewModelCacheTest {
+class OwnProfileViewModelCacheTest {
 
     private val dispatcher = StandardTestDispatcher()
 
     private fun user(id: String = "u1") = MeeshyUser(id = id, username = "alice")
 
-    private fun messagesTileValue(state: ProfileUiState): String? =
+    private fun messagesTileValue(state: OwnProfileUiState): String? =
         state.stats?.tiles?.firstOrNull { it.metric == StatMetric.MESSAGES }?.formattedValue
 
     private val cachedStats = UserStats(totalMessages = 42)
@@ -60,31 +59,18 @@ class ProfileViewModelCacheTest {
         Dispatchers.resetMain()
     }
 
-    private fun otherProfileVm(
-        userRepo: UserRepository,
-        statsCache: ProfileStatsCacheRepository,
-        viewedId: String = "u1",
-    ) = ProfileViewModel(
-        sessionRepository = mockk(relaxed = true),
-        userRepository = userRepo,
-        statsCache = statsCache,
-        workManager = mockk(relaxed = true),
-        savedStateHandle = SavedStateHandle(mapOf(ProfileViewModel.USER_ID_ARG to viewedId)),
-    )
-
     private fun ownProfileVm(
         flow: MutableStateFlow<MeeshyUser?>,
         userRepo: UserRepository,
         statsCache: ProfileStatsCacheRepository,
-    ): ProfileViewModel {
+    ): OwnProfileViewModel {
         val session = mockk<SessionRepository>()
         every { session.currentUser } returns flow
-        return ProfileViewModel(
+        return OwnProfileViewModel(
             sessionRepository = session,
             userRepository = userRepo,
             statsCache = statsCache,
             workManager = mockk(relaxed = true),
-            savedStateHandle = SavedStateHandle(),
         )
     }
 
@@ -94,11 +80,10 @@ class ProfileViewModelCacheTest {
     fun stats_paintFromCache_evenWhenTheNetworkFetchFails() = runTest(dispatcher) {
         val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
         coEvery { cache.cachedStats("u1") } returns cachedStats
-        val userRepo = mockk<UserRepository>()
-        coEvery { userRepo.getProfile("u1") } returns NetworkResult.Success(user())
+        val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStats("u1") } returns NetworkResult.Failure(ApiError("boom"))
 
-        val vm = otherProfileVm(userRepo, cache)
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo, cache)
         advanceUntilIdle()
 
         assertThat(vm.state.value.stats).isNotNull()
@@ -110,11 +95,10 @@ class ProfileViewModelCacheTest {
     fun stats_writeThroughToCache_onASuccessfulNetworkFetch() = runTest(dispatcher) {
         val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
         coEvery { cache.cachedStats("u1") } returns null
-        val userRepo = mockk<UserRepository>()
-        coEvery { userRepo.getProfile("u1") } returns NetworkResult.Success(user())
+        val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStats("u1") } returns NetworkResult.Success(networkStats)
 
-        val vm = otherProfileVm(userRepo, cache)
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo, cache)
         advanceUntilIdle()
 
         assertThat(messagesTileValue(vm.state.value)).isEqualTo("99")
@@ -125,11 +109,10 @@ class ProfileViewModelCacheTest {
     fun stats_networkResultOverwritesTheCachedPaint_whenBothArePresent() = runTest(dispatcher) {
         val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
         coEvery { cache.cachedStats("u1") } returns cachedStats
-        val userRepo = mockk<UserRepository>()
-        coEvery { userRepo.getProfile("u1") } returns NetworkResult.Success(user())
+        val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStats("u1") } returns NetworkResult.Success(networkStats)
 
-        val vm = otherProfileVm(userRepo, cache)
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo, cache)
         advanceUntilIdle()
 
         // network is truth — the fresher value replaces the cached paint
