@@ -109,6 +109,7 @@ jest.mock('../../../services/TrackingLinkService', () => ({
   })),
 }));
 
+import { MASKED_MODERATOR_EDITOR } from '@meeshy/shared/utils/message-edit-attribution';
 import messageRoutes from '../../../routes/messages';
 import { registerMessagesAdvancedRoutes } from '../../../routes/conversations/messages-advanced';
 
@@ -123,6 +124,7 @@ type Editor = { readonly userId: string; readonly globalRole: string };
 const AUTHOR: Editor = { userId: AUTHOR_ID, globalRole: 'USER' };
 const PLATFORM_MODERATOR: Editor = { userId: MODERATOR_ID, globalRole: 'MODERATOR' };
 const ORDINARY_MEMBER: Editor = { userId: MODERATOR_ID, globalRole: 'USER' };
+const PLATFORM_ADMIN: Editor = { userId: MODERATOR_ID, globalRole: 'ADMIN' };
 
 function buildPrisma(editor: Editor, previously: Record<string, unknown>) {
   const row: Record<string, unknown> = {
@@ -248,26 +250,42 @@ describe('#11375 — la modification par un modérateur est enregistrée, servie
 
   for (const transport of TRANSPORTS) {
     describe(transport.name, () => {
-      it('un MODERATOR de plateforme sur le message d’autrui : écrit, servi et diffusé à visage découvert', async () => {
+      it('un MODERATOR de plateforme sur le message d’autrui : écrit, rendu à lui-même, diffusé SANS son identité', async () => {
         const { app, prisma } = await buildApp(PLATFORM_MODERATOR);
 
         const res = await transport.inject(app);
 
         expect(res.statusCode).toBe(200);
-        expect(writtenData(prisma)).toMatchObject({ editedById: MODERATOR_ID, editedByRole: 'MODERATOR' });
-        expect(editedPayload()).toMatchObject({ editedById: MODERATOR_ID, editedByRole: 'MODERATOR' });
+        expect(writtenData(prisma)).toMatchObject({ thirdPartyEditorId: MODERATOR_ID, thirdPartyEditorRole: 'MODERATOR' });
+        expect(editedPayload()).toMatchObject({ editedById: MASKED_MODERATOR_EDITOR, editedByRole: null });
+        expect(JSON.stringify(editedPayload())).not.toContain(MODERATOR_ID);
+        expect(editedPayload()).not.toHaveProperty('thirdPartyEditorId');
+        expect(editedPayload()).not.toHaveProperty('thirdPartyEditorRole');
         expect(res.json().data).toMatchObject({ editedById: MODERATOR_ID, editedByRole: 'MODERATOR' });
+        expect(res.json().data).not.toHaveProperty('thirdPartyEditorId');
         await app.close();
       });
 
-      it('l’auteur qui réécrit après un modérateur efface la mention : null écrit et diffusé', async () => {
-        const { app, prisma } = await buildApp(AUTHOR, { editedById: MODERATOR_ID, editedByRole: 'MODERATOR' });
+      it('un ADMIN de plateforme : son rang est enregistré, la room ne lit que la mention', async () => {
+        const { app, prisma } = await buildApp(PLATFORM_ADMIN);
 
         const res = await transport.inject(app);
 
         expect(res.statusCode).toBe(200);
-        expect(writtenData(prisma)).toMatchObject({ editedById: null, editedByRole: null });
+        expect(writtenData(prisma)).toMatchObject({ thirdPartyEditorId: MODERATOR_ID, thirdPartyEditorRole: 'ADMIN' });
+        expect(editedPayload()).toMatchObject({ editedById: MASKED_MODERATOR_EDITOR, editedByRole: null });
+        await app.close();
+      });
+
+      it('l’auteur qui réécrit après un modérateur efface la mention : null écrit et diffusé', async () => {
+        const { app, prisma } = await buildApp(AUTHOR, { thirdPartyEditorId: MODERATOR_ID, thirdPartyEditorRole: 'MODERATOR' });
+
+        const res = await transport.inject(app);
+
+        expect(res.statusCode).toBe(200);
+        expect(writtenData(prisma)).toMatchObject({ thirdPartyEditorId: null, thirdPartyEditorRole: null });
         expect(editedPayload()).toMatchObject({ editedById: null, editedByRole: null });
+        expect(res.json().data).toMatchObject({ editedById: null, editedByRole: null });
         await app.close();
       });
 

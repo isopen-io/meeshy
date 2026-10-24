@@ -100,10 +100,10 @@ import {
   admitMessageEdit,
   editRefusalCode,
   isEditRefused,
-  editAttributionOf,
   describeEditRefusalForSocket,
 } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { writeGuardedMessageEdit } from '../../services/messaging/messageEditWrite';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
@@ -847,24 +847,16 @@ export class MessageHandler {
         ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, editedLinks.trackingLinks) }
         : {};
 
-      // Optimistic-concurrency guard (write only while non-deleted, else a
-      // concurrent `message:delete` would be resurrected and re-broadcast).
-      // #11375 — the moderator is recorded; the author clears the mention.
-      const editedAt = new Date();
-      const editedBy = editAttributionOf(admission, userId);
-      const editResult = await this.prisma.message.updateMany({
-        where: { id: validated.messageId, deletedAt: null },
-        data: {
-          content: editedContent,
-          isEdited: true,
-          editedAt,
-          ...editedBy,
-          translations: null,
-          ...nextMetadata,
-        },
+      const { written, editedAt, editedBy } = await writeGuardedMessageEdit({
+        prisma: this.prisma,
+        messageId: validated.messageId,
+        content: editedContent,
+        admission,
+        editorUserId: userId,
+        nextMetadata,
       });
 
-      if (editResult.count === 0) {
+      if (!written) {
         this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
         return;
       }

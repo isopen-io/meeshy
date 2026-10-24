@@ -44,7 +44,7 @@
  */
 
 import { isDeclaredMinor } from '@meeshy/shared/utils/age';
-import { AUTHOR_EDIT, type MessageEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
+import { AUTHOR_EDIT, type MessageEditorColumns } from '@meeshy/shared/utils/message-edit-attribution';
 import { GLOBAL_CONVERSATION_TYPE } from '@meeshy/shared/utils/global-minor-restriction';
 import { captureNoticeOf } from './captureNoticeVisibility.js';
 import {
@@ -322,14 +322,14 @@ export function describeEditRefusalForSocket(reason: MessageEditRefusal): string
  *
  * Décision porteur du 2026-10-24 : un modérateur de plateforme modifie le
  * message d'un autre À VISAGE DÉCOUVERT. Les quatre transports d'édition
- * répandent ce résultat dans leur écriture (`editedById` / `editedByRole`) :
+ * répandent ce résultat dans leur écriture (`thirdPartyEditorId` / `thirdPartyEditorRole`) :
  * le tiers est enregistré avec son rôle, et l'AUTEUR qui réécrit remet les deux
  * colonnes à `null` — la mention dit qui a écrit la DERNIÈRE version. Un refus
  * n'enregistre personne.
  */
-export function editAttributionOf(admission: MessageEditAdmission, editorUserId: string): MessageEditAttribution {
+export function editAttributionOf(admission: MessageEditAdmission, editorUserId: string): MessageEditorColumns {
   if (isEditRefused(admission) || !admission.asModerator) return AUTHOR_EDIT;
-  return { editedById: editorUserId, editedByRole: admission.editorRole ?? null };
+  return { thirdPartyEditorId: editorUserId, thirdPartyEditorRole: admission.editorRole ?? null };
 }
 
 /** Le code STABLE d'un refus d'édition, quand il en a un — les transports le servent à côté de la phrase. */

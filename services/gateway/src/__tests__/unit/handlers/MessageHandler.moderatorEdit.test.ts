@@ -3,12 +3,13 @@
  *
  * #11375 — le transport d'édition PRIMAIRE du web (socket `message:edit`)
  * enregistre l'auteur d'une modification faite par un modérateur de plateforme
- * et le diffuse dans `message:edited`. Ce transport compose sa charge depuis la
+ * et en diffuse la MENTION (jamais l'identité) dans `message:edited`. Ce transport compose sa charge depuis la
  * ligne LUE AVANT l'écriture : il doit donc DÉCLARER l'attribution qu'il vient
  * d'écrire, sans quoi il diffuserait celle d'avant.
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
+import { MASKED_MODERATOR_EDITOR } from '@meeshy/shared/utils/message-edit-attribution';
 
 
 // All mocks typed as jest.fn<() => any> to avoid TS2556 issues with spread args
@@ -189,7 +190,7 @@ function setup(editor: { readonly id: string; readonly participantId: string }, 
 }
 
 describe('socket `message:edit` — #11375, la modification par un modérateur est à visage découvert', () => {
-  it('un MODERATOR de plateforme sur le message d’autrui : écrit et diffusé avec son identité et son rôle', async () => {
+  it('un MODERATOR de plateforme sur le message d’autrui : écrit avec son identité et son rôle, diffusé sous la seule mention', async () => {
     const { handler, prisma, socket, edited } = setup(MODERATOR, 'MODERATOR');
     const callback = jest.fn();
 
@@ -197,9 +198,10 @@ describe('socket `message:edit` — #11375, la modification par un modérateur e
 
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     expect(prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ editedById: MODERATOR.id, editedByRole: 'MODERATOR' }),
+      data: expect.objectContaining({ thirdPartyEditorId: MODERATOR.id, thirdPartyEditorRole: 'MODERATOR' }),
     }));
-    expect(edited()).toMatchObject({ editedById: MODERATOR.id, editedByRole: 'MODERATOR' });
+    expect(edited()).toMatchObject({ editedById: MASKED_MODERATOR_EDITOR, editedByRole: null });
+    expect(JSON.stringify(edited())).not.toContain(MODERATOR.id);
   });
 
   it('l’auteur : les deux colonnes remises à null, et null diffusé', async () => {
@@ -208,7 +210,7 @@ describe('socket `message:edit` — #11375, la modification par un modérateur e
     await handler.handleMessageEdit(socket, { messageId: MESSAGE_ID, content: 'après' }, jest.fn());
 
     expect(prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ editedById: null, editedByRole: null }),
+      data: expect.objectContaining({ thirdPartyEditorId: null, thirdPartyEditorRole: null }),
     }));
     expect(edited()).toMatchObject({ editedById: null, editedByRole: null });
   });

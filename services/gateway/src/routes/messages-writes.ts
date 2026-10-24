@@ -21,6 +21,8 @@ import {
   editAttributionOf,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../services/messaging/messageEditAdmission';
+import { editAttributionReaderOf } from '../services/messaging/editAttributionReader';
+import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../services/messaging/conversationWriteAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../services/moderation/contentRemoval';
@@ -401,7 +403,10 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // l'invalidation qui vivait dans le bloc de retraduction — placée APRÈS
       // la relecture, elle arrivait trop tard pour la charge déjà composée.
       const transformedMessage = {
-        ...updatedMessage,
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
         translations: transformTranslationsToArray(
           messageId,
           (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations

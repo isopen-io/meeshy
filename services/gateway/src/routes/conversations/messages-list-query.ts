@@ -48,6 +48,7 @@ import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
+import { servedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import type {
   AttachmentAudioTranslationEntry,
@@ -263,8 +264,8 @@ export function buildMessageListSelect(options: {
         isEdited: true,
         editedAt: true,
         // #11375 — l'auteur d'une modification faite par un modérateur.
-        editedById: true,
-        editedByRole: true,
+        thirdPartyEditorId: true,
+        thirdPartyEditorRole: true,
         deletedAt: true,
 
         // ===== REPLY / FORWARD =====
@@ -470,6 +471,8 @@ export type MessageRowMappingContext = {
    * protégées. Absent ou `null` (aucune clé posée) ⇒ l'adresse d'avant.
    */
   readerFileUrlSigner?: ReaderFileUrlSigner | null;
+  /** #11375 — le lecteur, juge de ce qu'il lit de l'auteur d'une modification. Absent ⇒ la mention seule. */
+  editAttributionReader?: EditAttributionReader;
 };
 
 /** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
@@ -513,6 +516,8 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           // Édition/Suppression
           isEdited: message.isEdited,
           editedAt: message.editedAt,
+          // #11375 — servi PAR LECTEUR : la mention à tous, l'identité à qui en rend compte.
+          ...servedEditAttribution(message, ctx.editAttributionReader),
           deletedAt: message.deletedAt,
 
           // Reply/Forward

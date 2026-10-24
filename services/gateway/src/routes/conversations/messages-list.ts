@@ -69,6 +69,7 @@ import {
 import { loadCurrentUserConsumptionMap, loadMessageReadStatusMap } from './messages-list-reader-state';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import type { RawMessageRow } from './messages-list-query-types';
+import { editAttributionReaderOf } from '../../services/messaging/editAttributionReader';
 import { loadReaderReactionsByMessage } from './messages-reader-reactions';
 import {
   isEphemeralServableToReader,
@@ -736,6 +737,7 @@ export function registerMessagesListRoute(
         ephemeralDeadlines,
         readerReactions,
         readerFileUrlSigner: readerFileUrlSignerFromEnv(new Date()),
+        editAttributionReader: editAttributionReaderOf(authRequest.authContext),
       }));
 
       // ===== ENRICHIR LES MESSAGES FORWARDÉS =====

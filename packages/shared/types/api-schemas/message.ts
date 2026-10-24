@@ -158,8 +158,8 @@ export const messageSchema = {
     // State
     isEdited: { type: 'boolean', description: 'Message has been edited' },
     editedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Edit timestamp' },
-    editedById: { type: 'string', nullable: true, description: '#11375 — User.id of the platform moderator who made the last edit; null when the author did' },
-    editedByRole: { type: 'string', nullable: true, description: '#11375 — global role of that moderator at edit time' },
+    editedById: { type: 'string', nullable: true, description: '#11375 — the third-party (platform moderator) editor of the last version, as served to THIS reader: his User.id for ADMIN/BIGBOSS and himself, the mark "moderator" otherwise; null when the author did' },
+    editedByRole: { type: 'string', nullable: true, description: '#11375 — that moderator\'s global role at edit time, served only with his identity; null otherwise' },
     deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Deletion timestamp (null = not deleted)' },
 
     // Reply & Forward

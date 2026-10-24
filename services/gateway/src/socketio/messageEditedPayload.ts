@@ -1,6 +1,6 @@
 import type { Message } from '@meeshy/shared/types/index';
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events';
-import type { MessageEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
+import { servedEditAttribution, type MessageEditorColumns } from '@meeshy/shared/utils/message-edit-attribution';
 
 /**
  * Source UNIQUE du NOYAU de la charge utile `message:edited`.
@@ -79,14 +79,20 @@ export type MessageEditedCoreInputs = {
    * d'appel). Le transport socket, qui compose depuis la ligne d'AVANT, le
    * déclare — sans quoi il diffuserait l'attribution précédente.
    */
-  readonly editedBy?: MessageEditAttribution;
+  readonly editedBy?: MessageEditorColumns;
 };
 
-type AttributedRow = { readonly editedById?: string | null; readonly editedByRole?: string | null };
+type AttributedRow = Partial<MessageEditorColumns>;
 
-/** `null` explicite, jamais une clé absente : un client qui fusionne `{ ...cached, ...payload }` efface ainsi une mention périmée. */
-const wireEditAttribution = (message: AttributedRow, declared: MessageEditAttribution | undefined): MessageEditAttribution =>
-  declared ?? { editedById: message.editedById ?? null, editedByRole: message.editedByRole ?? null };
+/**
+ * `message:edited` part à une ROOM — membres ordinaires et invités anonymes
+ * compris — : l'auteur de la modification y est servi SANS lecteur nommé, donc
+ * masqué (la mention, jamais l'identité ni le rang). `null` explicite, jamais
+ * une clé absente : un client qui fusionne `{ ...cached, ...payload }` efface
+ * ainsi une mention périmée.
+ */
+const wireEditAttribution = (message: AttributedRow, declared: MessageEditorColumns | undefined) =>
+  servedEditAttribution(declared ?? message);
 
 /**
  * `senderId` du FIL : un `User.id`, jamais le `Participant.id` de la colonne.
@@ -122,7 +128,7 @@ export function resolveWireSenderId(message: Message): string | undefined {
  * que sur `buildMessageNewPayload`.
  */
 export function buildMessageEditedCore(
-  message: Message,
+  message: Message & AttributedRow,
   inputs: MessageEditedCoreInputs
 ) {
   return {

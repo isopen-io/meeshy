@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { withServedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from '../conversations/utils/message-sender-select';
@@ -112,9 +113,10 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   metadata: true,
   isEdited: true,
   editedAt: true,
-  // #11375 — l'auteur d'une modification faite par un modérateur.
-  editedById: true,
-  editedByRole: true,
+  // #11375 — l'auteur d'une modification faite par un modérateur : LU, jamais
+  // servi brut — `serializeSyncMessage` le projette par lecteur.
+  thirdPartyEditorId: true,
+  thirdPartyEditorRole: true,
   replyToId: true,
   reactionSummary: true,
   reactionCount: true,
@@ -274,6 +276,7 @@ function serializeSyncMessage(
   message: SyncMessage,
   readerParticipantId: string | undefined,
   signer: ReaderFileUrlSigner | null,
+  editReader: EditAttributionReader | undefined,
 ): Record<string, unknown> {
   // `translations` et `attachments` sont des colonnes PROJETABLES depuis
   // #4173 : une projection qui ne les nomme pas les laisse absentes de la
@@ -282,7 +285,9 @@ function serializeSyncMessage(
   // vide, qui affirmerait « ce message n'a ni traduction ni pièce jointe ».
   const brut = message as Partial<SyncMessage>;
   return {
-    ...message,
+    // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes ; lues
+    // (profil par défaut), elles se servent PAR LECTEUR, sinon rien ne part.
+    ...(brut.thirdPartyEditorId === undefined ? message : withServedEditAttribution(message, editReader)),
     ...(brut.translations === undefined
       ? {}
       : {
@@ -472,6 +477,8 @@ export async function syncMessages(opts: {
   cursor?: SyncCursor;
   /** `?fields=messages.…` déjà analysé — `null` ⇒ le profil par défaut, RENDABLE. */
   fields?: FieldSet;
+  /** #11375 — le lecteur, juge de ce qu'il lit de l'auteur d'une modification. Absent ⇒ la mention seule. */
+  editAttributionReader?: EditAttributionReader;
 }): Promise<SyncCollectionResult<Record<string, unknown>>> {
   const { prisma, identity, sinceDate, cap, scope, cursor } = opts;
   const fields = opts.fields ?? null;
@@ -608,7 +615,7 @@ export async function syncMessages(opts: {
         withReaderReactions(
           m,
           restrictFields(
-            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId), fileUrlSigner),
+            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId), fileUrlSigner, opts.editAttributionReader),
             fields,
             servedPinned,
           ),
