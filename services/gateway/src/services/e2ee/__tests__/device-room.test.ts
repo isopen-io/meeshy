@@ -12,11 +12,11 @@ const fakeSocket = (sessionId?: string) => {
 describe("la room socket d'un appareil E2EE (#3706)", () => {
   it("fait entrer la socket dans la room de l'appareil lié à SA session", async () => {
     const store = createFakeE2EEStore();
-    store.collections.E2EEDevice.insert({ userId: ALICE, deviceId: 3, sessionId: SESSION });
+    store.collections.E2EEDevice.insert({ userId: ALICE, deviceId: 3, registrationId: 41, sessionId: SESSION });
     const socket = fakeSocket(SESSION);
 
     await expect(joinE2EEDeviceRoom(socket, store.prisma as never, { userId: ALICE, sessionId: SESSION })).resolves.toBe(3);
-    expect(socket.rooms).toEqual([`device:${ALICE}:3`]);
+    expect(socket.rooms).toEqual([`device:${ALICE}:3:41`]);
   });
 
   it("n'entre dans aucune room sans appareil actif lié à la session", async () => {
@@ -34,9 +34,9 @@ describe("la room socket d'un appareil E2EE (#3706)", () => {
     const other = fakeSocket('d4'.repeat(12));
     const io = { in: (room: string) => ({ fetchSockets: async () => (room === `user:${ALICE}` ? [mine, other] : []) }) };
 
-    await joinSessionSocketsToDeviceRoom(io, { userId: ALICE, sessionId: SESSION, deviceId: 2 });
+    await joinSessionSocketsToDeviceRoom(io, { userId: ALICE, sessionId: SESSION, deviceId: 2, registrationId: 42 });
 
-    expect(mine.rooms).toEqual([`device:${ALICE}:2`]);
+    expect(mine.rooms).toEqual([`device:${ALICE}:2:42`]);
     expect(other.rooms).toEqual([]);
   });
 });

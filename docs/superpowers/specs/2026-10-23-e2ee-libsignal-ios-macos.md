@@ -198,7 +198,7 @@ model MessageEnvelope {
 ```
 
   Une enveloppe est **effacée** quand l'appareil destinataire accuse réception (`POST /e2ee/envelopes/ack`), et au plus tard après 30 jours (balayage). Un appareil ne lit **que** ses enveloppes.
-- **Distribution** : la socket authentifiée déclare son `e2eeDeviceId` (handshake `auth`) et rejoint la salle `device:<userId>:<deviceId>`. `message:new` part comme aujourd'hui vers la salle de l'utilisateur, sans enveloppe ; `e2ee:envelope` part vers la salle de l'appareil avec la sienne. Au retour en ligne : `GET /e2ee/envelopes?after=` (pagination par curseur).
+- **Distribution** : la socket authentifiée déclare son `e2eeDeviceId` (handshake `auth`) et rejoint la salle de sa génération `device:<userId>:<deviceId>:<registrationId>` (une place reprise par une autre installation n'en partage jamais la salle, et le retrait en fait sortir, #12592). `message:new` part comme aujourd'hui vers la salle de l'utilisateur, sans enveloppe ; `e2ee:envelope` part vers la salle de l'appareil avec la sienne. Au retour en ligne : `GET /e2ee/envelopes?after=` (pagination par curseur).
 - **Rétrocompatibilité** : un ancien client lit `content = E2EE_CONTENT_PLACEHOLDER` et `isEncrypted: true`, et rend un message chiffré illisible ; la passerelle ajoute `e2eeUpgradeRequired: true` au message servi pour que les versions suivantes affichent « Mettez à jour Meeshy pour lire ce message ». Un ancien client qui ENVOIE dans une conversation `e2ee` reçoit déjà 400 ; le code devient `E2EE_CLIENT_OUTDATED`, avec un message lisible. Rien n'est perdu en silence.
 
 ### 4.4 Stockage local

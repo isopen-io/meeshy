@@ -10,6 +10,8 @@
  * enveloppe par appareil actif) puis incapable d'enrôler.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { leaveDeviceRooms } from './device-room';
+import { currentE2EEIO } from './envelope-delivery';
 
 export type RetirementPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession'>;
 
@@ -32,7 +34,11 @@ export type RetirableDevice = {
 
 export const RETIRABLE_DEVICE = { id: true, userId: true, deviceId: true, registrationId: true, sessionId: true } as const;
 
-/** Retire chaque appareil lu, s'il est toujours celui qu'on a lu, et efface ce que SA génération ne lira jamais. */
+/**
+ * Retire chaque appareil lu, s'il est toujours celui qu'on a lu, et efface ce
+ * que SA génération ne lira jamais ; ses sockets quittent la room de sa
+ * génération (#12592).
+ */
 export async function retireDeviceRows(
   prisma: RowsPrisma,
   params: { readonly devices: readonly RetirableDevice[]; readonly now: Date },
@@ -47,6 +53,7 @@ export async function retireDeviceRows(
     await eraseGeneration(prisma, device);
     retired.push(device);
   }
+  leaveDeviceRooms(currentE2EEIO(), retired);
   return retired;
 }
 

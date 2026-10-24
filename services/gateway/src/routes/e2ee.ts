@@ -74,7 +74,7 @@ export type E2EERouteDeps = {
   readonly relay: E2EEEnvelopeRelay;
   readonly mayReadKeysOf: (requesterUserId: string, targetUserId: string) => Promise<boolean>;
   /** Après un enrôlement : les sockets déjà ouvertes de la session rejoignent la room de l'appareil. */
-  readonly onEnrolled?: (enrolled: Caller & { readonly deviceId: number }) => Promise<void>;
+  readonly onEnrolled?: (enrolled: Caller & { readonly deviceId: number; readonly registrationId: number }) => Promise<void>;
 };
 
 function callerOf(request: FastifyRequest): Caller | null {
@@ -125,7 +125,7 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
     const body = parsedOr400(reply, e2eeEnrollDeviceRequestSchema.safeParse(request.body));
     if (!body) return;
     const enrolled = await deps.directory.enrollDevice({ ...caller, request: body });
-    await deps.onEnrolled?.({ ...caller, deviceId: enrolled.deviceId }).catch((error: unknown) =>
+    await deps.onEnrolled?.({ ...caller, deviceId: enrolled.deviceId, registrationId: body.registrationId }).catch((error: unknown) =>
       logger.warn('e2ee device room not joined after enrolment', { error }),
     );
     return sendSuccess(reply, enrolled, { statusCode: enrolled.created ? 201 : 200 });

@@ -304,7 +304,7 @@ describe('E2EE de bout en bout à deux appareils, libsignal réel (#3706)', () =
     } as unknown as MessageRequest;
     const response = await service.handleMessage(request, ALICE_PARTICIPANT);
     expect(response.success).toBe(true);
-    expect(emitted).toEqual([expect.objectContaining({ room: `device:${BOB}:1`, event: 'e2ee:envelope' })]);
+    expect(emitted).toEqual([expect.objectContaining({ room: `device:${BOB}:1:${bobKeys.registrationId as number}`, event: 'e2ee:envelope' })]);
 
     // 4. Ce qu'un ancien client reçoit : le littéral et l'invitation à mettre à jour.
     const wire = buildMessageNewPayload(messages[0] as unknown as Message, { conversationId: CONVERSATION } as never);

@@ -42,9 +42,11 @@ s'il envoie dans une conversation chiffrée : rien n'est perdu en silence.
   ses enveloppes. L'enrôlement exige donc une signature XEdDSA de `deviceBindingMessage(userId, registrationId,
   identityKey, timestamp)` (`@meeshy/shared/types/e2ee-directory`), à ±10 min de l'horloge passerelle. C'est une
   composition écrite par Meeshy à partir de primitives libsignal : surface de revue externe (#3710).
-- *Salle socket par appareil* : la socket rejoint `device:<userId>:<deviceId>` d'après l'appareil ACTIF lié à SA
-  session (`sid` vérifié du JWT), jamais d'après un `e2eeDeviceId` déclaré au handshake ; un enrôlement fait
-  entrer les sockets déjà ouvertes de la session.
+- *Salle socket par appareil* : la socket rejoint `device:<userId>:<deviceId>:<registrationId>` d'après l'appareil
+  ACTIF lié à SA session (`sid` vérifié du JWT), jamais d'après un `e2eeDeviceId` déclaré au handshake ; un enrôlement
+  fait entrer les sockets déjà ouvertes de la session. La salle nomme la GÉNÉRATION, pas la place : une place se
+  reprend, et la socket restée d'un appareil retiré ne reçoit rien de celle qui lui succède ; le retrait la fait
+  sortir de sa salle (#12592).
 - *Compteur* : le champ s'appelle `lastDeviceId` (dernier numéro attribué, 0 = aucun), pas `nextDeviceId`.
 - *Garde du régime* : `regimeEpoch` n'est pas encore comparé (le champ `encryptionEpoch` arrive avec #12522) ;
   des enveloppes vers une conversation qui n'est plus `e2ee` rendent déjà 409 `E2EE_REGIME_CHANGED`.

@@ -27,7 +27,7 @@ export type AdmittedRelay = {
 };
 
 export type EnvelopeDelivery = {
-  readonly recipient: { readonly userId: string; readonly deviceId: number };
+  readonly recipient: { readonly userId: string; readonly deviceId: number; readonly registrationId: number };
   readonly envelope: E2EEServedEnvelope;
 };
 
@@ -119,7 +119,7 @@ export class E2EEEnvelopeRelay {
     });
     const rows = await this.prisma.messageEnvelope.findMany({ where: { messageId } });
     return rows.map((row) => ({
-      recipient: { userId: row.recipientUserId, deviceId: row.recipientDeviceId },
+      recipient: { userId: row.recipientUserId, deviceId: row.recipientDeviceId, registrationId: row.recipientRegistrationId },
       envelope: served(row),
     }));
   }

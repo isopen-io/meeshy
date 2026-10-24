@@ -30,8 +30,12 @@ import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-na
 export const ROOMS = {
   conversation: (id: string) => `conversation:${id}`,
   user: (id: string) => `user:${id}`,
-  /** Un appareil E2EE enrôlé (#3706) : seule sa socket, liée à sa session, y entre. */
-  device: (userId: string, deviceId: number) => `device:${userId}:${deviceId}`,
+  /**
+   * Un appareil E2EE enrôlé (#3706) : seule sa socket, liée à sa session, y entre.
+   * La room nomme la GÉNÉRATION (place + registrationId) : une place se reprend
+   * par une autre installation, qui ne partage jamais la room de l'ancienne (#12592).
+   */
+  device: (userId: string, deviceId: number, registrationId: number) => `device:${userId}:${deviceId}:${registrationId}`,
   feed: (id: string) => `feed:${id}`,
   call: (id: string) => `call:${id}`,
   post: (id: string) => `post:${id}`,
