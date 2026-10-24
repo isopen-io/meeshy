@@ -117,13 +117,23 @@ fail() {
 }
 
 exec 9>"$LOCK_FILE"
-# Une exécution concurrente ne publie rien : celle qui tient le verrou publiera.
-flock -n 9 || { echo "une sauvegarde est déjà en cours" >&2; exit 1; }
+# Une demande concurrente ne publie rien : celle qui tient le verrou publiera. La
+# NOCTURNE, elle, attend (#11509) : une sauvegarde à la demande lancée vers minuit ne
+# doit pas la faire sauter en silence — la série des nocturnes vieillirait d'un jour
+# sans verdict ni alerte. Si l'attente échoue, elle le publie.
+if [[ "$BACKUP_ORIGIN" == nightly ]]; then
+  flock -w "${NIGHTLY_LOCK_WAIT_SECONDS:-10800}" 9 \
+    || { write_status failed "verrou de sauvegarde tenu au-delà de l'attente de la nocturne" || true; echo "verrou de sauvegarde toujours pris" >&2; exit 1; }
+else
+  flock -n 9 || { echo "une sauvegarde est déjà en cours" >&2; exit 1; }
+fi
 
 STAMP="$(date -u +%Y%m%dT%H%MZ)"
 WORK="$BACKUP_ROOT/.en-cours-$STAMP"
 DEST="$BACKUP_ROOT/$STAMP"
-RESTORE_CT="meeshy-backup-restore-check-$STAMP"
+# Propre à CETTE exécution (#11509) : staging et production partagent l'hôte, et deux
+# sauvegardes lancées dans la même minute ne doivent ni se heurter ni s'effacer.
+RESTORE_CT="meeshy-backup-restore-check-$BACKUP_ORIGIN-$STAMP-$$"
 FAILED_LINE=""
 
 cleanup() {
