@@ -83,7 +83,7 @@ describe('lensDraftProblems', () => {
   test('un sticker sans image, un texte vide, une fenêtre à l’envers, aucune surface : chacun se dit', () => {
     expect(lensDraftProblems(draftOf({ layers: [sticker(null)] }))).toEqual(['file']);
     expect(lensDraftProblems(draftOf({ layers: [textLayer('  ')] }))).toEqual(['text']);
-    expect(lensDraftProblems(draftOf({ layers: [textLayer('Salut')], endsOn: '2026-10-24' }))).toEqual(['window']);
+    expect(lensDraftProblems(draftOf({ layers: [textLayer('Salut')], endsOn: '2026-10-20' }))).toEqual(['window']);
     expect(lensDraftProblems(draftOf({ layers: [textLayer('Salut')], surfaces: [] }))).toEqual(['surfaces']);
   });
 

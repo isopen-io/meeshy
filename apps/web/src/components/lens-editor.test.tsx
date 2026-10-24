@@ -8,7 +8,7 @@ import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-b
 import { lensEditorTextKeysOf } from '@/lib/lens-packs/editor-texts';
 import type { Digest } from '@/lib/lens-packs/submission';
 import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
-import { createActMounter, typeInto } from '@/test-support/act-mount';
+import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import type { CameraPreviewPort } from './lens-camera-preview';
@@ -100,10 +100,10 @@ describe('LensSubmit — composer sans code', () => {
     const host = await mount(deps);
     expect(host.querySelector('[data-lens-editor]')).not.toBeNull();
 
-    typeInto(host.querySelector<HTMLInputElement>('[data-lens-name]'), 'Aurore Polaire');
-    typeInto(host.querySelector<HTMLInputElement>('[data-lens-author]'), 'Studio Nord');
+    mounter.type(host, '[data-lens-name]', 'Aurore Polaire');
+    mounter.type(host, '[data-lens-author]', 'Studio Nord');
     await mounter.click(host.querySelector<HTMLElement>('[data-lens-add="text"]'));
-    typeInto(host.querySelector<HTMLInputElement>('[data-lens-layer-text]'), 'Joyeux Noël');
+    mounter.type(host, '[data-lens-layer-text]', 'Joyeux Noël');
     await mounter.click(host.querySelector<HTMLElement>('[data-lens-add="sticker"]'));
     await choose(host.querySelector<HTMLInputElement>('[data-lens-layer-file]'), [new File(['aaaaaaaaaaaaaaaa'], 'couronne.png', { type: 'image/png' })]);
 
@@ -145,16 +145,16 @@ describe('LensSubmit — composer sans code', () => {
     const { deps } = gateway(() => ({ ok: true, data: [] }));
     const { port, seen } = previewHarness();
     const host = await mount(deps, port);
-    typeInto(host.querySelector<HTMLInputElement>('[data-lens-name]'), 'Aurore');
-    typeInto(host.querySelector<HTMLInputElement>('[data-lens-author]'), 'Studio Nord');
+    mounter.type(host, '[data-lens-name]', 'Aurore');
+    mounter.type(host, '[data-lens-author]', 'Studio Nord');
     await mounter.click(host.querySelector<HTMLElement>('[data-lens-add="text"]'));
-    typeInto(host.querySelector<HTMLInputElement>('[data-lens-layer-text]'), 'Bonjour');
+    mounter.type(host, '[data-lens-layer-text]', 'Bonjour');
     await mounter.click(host.querySelector<HTMLElement>('[data-lens-preview-try]'));
     await until(() => host.querySelector('[data-lens-preview-live]') !== null);
     await until(() => seen.read()?.lens.layers[0]?.kind === 'text');
     expect(seen.read()?.lens.layers[0]).toMatchObject({ text: { fr: 'Bonjour' } });
 
-    typeInto(host.querySelector<HTMLInputElement>('[data-lens-layer-text]'), 'Bonsoir');
+    mounter.type(host, '[data-lens-layer-text]', 'Bonsoir');
     await until(() => {
       const layer = seen.read()?.lens.layers[0];
       return layer?.kind === 'text' && layer.text.fr === 'Bonsoir';
