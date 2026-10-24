@@ -314,6 +314,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 accentColor = accentColor,
                 onQueryChange = actions.onForwardQueryChange,
                 onForwardTo = actions.forwardTo,
+                onDismiss = actions.closeForward,
                 modifier = Modifier.navigationBarsPadding(),
             )
         }

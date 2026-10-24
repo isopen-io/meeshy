@@ -3,6 +3,7 @@ package me.meeshy.ui.component.bubble
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageExitOffer
 
 @Immutable
 sealed class DeliveryStatus {
@@ -99,6 +100,8 @@ public data class BubbleContent(
     val replyToIsMe: Boolean = false,
     /** True when an outgoing message has been in flight long enough to be called slow. */
     val isSlowSend: Boolean = false,
+    /** What this message lets out of Meeshy (forward, copy, save, share…) — read by every exit instead of a raw flag. */
+    val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
 )
 
 /**
