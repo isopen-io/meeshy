@@ -27,7 +27,7 @@ public final class StoryBackgroundPlaybackQoE {
     private var observer: PlaybackQoEObserver?
     private weak var observedPlayer: AVPlayer?
 
-    public init(
+    public nonisolated init(
         emit: @escaping @MainActor (SocialEventV2) -> Void = { SocialEventsV2Hub.shared.emit($0) },
         clockMs: @escaping @MainActor () -> Int = { Int(CACurrentMediaTime() * 1_000) }
     ) {
