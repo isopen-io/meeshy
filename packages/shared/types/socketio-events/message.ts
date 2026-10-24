@@ -8,6 +8,7 @@
 
 // Import unified Participant types
 import type { ParticipantType } from '../participant.js';
+import type { E2EEEnvelope, LIBSIGNAL_PROTOCOL } from '../e2ee-directory.js';
 import type { PersonProfileDecor } from '../profile-decor.js';
 import type { MessageSticker } from '../message-sticker.js';
 import type { LastMessageSystemEvent } from '../conversation-preview.js';
@@ -408,6 +409,10 @@ export interface MessageSendData {
   readonly encryptionMode?: EncryptionModeOnWire;
   readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
   readonly isEncrypted?: boolean;
+  /** Envoi libsignal par appareil (#3706) : `E2EE_SEND_SHAPE` (`../e2ee-directory.ts`). */
+  readonly encryptionProtocol?: typeof LIBSIGNAL_PROTOCOL;
+  readonly envelopes?: readonly E2EEEnvelope[];
+  readonly unapprovedOwnDevices?: readonly number[];
 }
 
 /**
@@ -467,6 +472,10 @@ export interface MessageSendWithAttachmentsData {
   readonly encryptionMode?: EncryptionModeOnWire;
   readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
   readonly isEncrypted?: boolean;
+  /** Envoi libsignal par appareil (#3706) : `E2EE_SEND_SHAPE` (`../e2ee-directory.ts`). */
+  readonly encryptionProtocol?: typeof LIBSIGNAL_PROTOCOL;
+  readonly envelopes?: readonly E2EEEnvelope[];
+  readonly unapprovedOwnDevices?: readonly number[];
 }
 
 /**
@@ -618,6 +627,12 @@ export interface SocketIOMessage {
   readonly encryptedContent?: string;
   readonly encryptionMetadata?: unknown;
   readonly encryptedPayload?: unknown;
+  /**
+   * Vrai pour un message chiffré de bout en bout (#3706) : un client sans
+   * libsignal ne peut pas le lire et invite à mettre à jour Meeshy au lieu de
+   * rendre une bulle vide (#9223).
+   */
+  readonly e2eeUpgradeRequired?: boolean;
 
   /** Servis par le seul transport REST/ZMQ (cf. `messageNewPayload.ts`). */
   readonly originalContent?: string;

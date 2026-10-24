@@ -1,0 +1,23 @@
+// GÉNÉRÉ — ne pas éditer à la main.
+//
+// Source : services/gateway/route-manifest.json, via la MÊME dérivation que le
+// catalogue TypeScript (packages/shared/api/build-catalog.ts). Régénérer après
+// tout changement de route :
+//
+//   cd packages/shared && npm run android-endpoints:generate
+//
+// Les chemins sont relatifs au préfixe d'API (/api/v1/) ; les emplacements {nom}
+// sont résolus par @Path. Les routes hors /api/v1 gardent leur chemin complet.
+
+package me.meeshy.sdk.net.routes
+
+public object ApiRoutesE2Ee {
+    public const val DEVICES: String = "e2ee/devices"
+    public const val DEVICES_BY_DEVICE_ID: String = "e2ee/devices/{deviceId}"
+    public const val DEVICES_BY_DEVICE_ID_KEYS: String = "e2ee/devices/{deviceId}/keys"
+    public const val DEVICES_SELF_PREKEY_COUNT: String = "e2ee/devices/self/prekey-count"
+    public const val ENVELOPES: String = "e2ee/envelopes"
+    public const val ENVELOPES_ACK: String = "e2ee/envelopes/ack"
+    public const val KEYS_BY_USER_ID: String = "e2ee/keys/{userId}"
+    public const val KEYS_BY_USER_ID_DEVICES: String = "e2ee/keys/{userId}/devices"
+}

@@ -123,7 +123,7 @@ export function AdminTrackingLinksPanel({ language, deps = apiDeps, now = defaul
         language={language}
         title={translateAdmin(language, 'admin.nav.trackingLinks')}
         subtitle={translateAdmin(language, 'admin.tracking.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.growth') }, { label: translateAdmin(language, 'admin.nav.trackingLinks') }]}
+        place={{ section: 'trackingLinks' }}
       />
       <AdminOfflineNotice language={language} />
       {creatorId === undefined ? null : (
