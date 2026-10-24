@@ -20,7 +20,7 @@ struct StoryCommentsOverlayView: View {
     /// le bouton « Voir plus de réponses » de chaque `StoryCommentThread`.
     var storyCommentRepliesHasMore: [String: Bool] = [:]
     let isLoadingComments: Bool
-    let userLang: String
+    let readerLanguages: [String]
     /// Vrai quand la story consultée est expirée. Affiche une bannière au-dessus
     /// de la liste pour que les commentaires/réactions restent visibles tout en
     /// indiquant que la story n'est plus accessible (spec 2026-06-23).
@@ -57,7 +57,7 @@ struct StoryCommentsOverlayView: View {
     /// transaction — même courbe, même durée que le composeur.
     let zone: StoryCommentsZone.Frame
 
-    let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
+    let makeStoryCommentRow: (FeedComment, [String]) -> StoryCommentRowView
     let toggleStoryCommentThread: @MainActor (String) async -> Void
 
     private var topLevelComments: [FeedComment] {
@@ -101,7 +101,7 @@ struct StoryCommentsOverlayView: View {
             Image(systemName: "clock.badge.xmark")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
         }
-        .foregroundColor(MeeshyColors.mediaChromeSecondary)
+        .foregroundStyle(MeeshyColors.mediaChromeSecondary)
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.xsPlus)
         .background(Capsule().fill(MeeshyColors.error.opacity(0.32)))
@@ -188,7 +188,7 @@ struct StoryCommentsOverlayView: View {
                             replies: storyCommentRepliesMap[comment.id] ?? [],
                             isExpanded: storyCommentExpandedThreads.contains(comment.id),
                             isLoadingReplies: storyCommentLoadingReplies.contains(comment.id),
-                            userLang: userLang,
+                            readerLanguages: readerLanguages,
                             makeRow: makeStoryCommentRow,
                             onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } },
                             hasMoreReplies: storyCommentExpandedThreads.contains(comment.id)
@@ -295,14 +295,14 @@ struct StoryCommentsOverlayView: View {
                 // figée + masqué de VoiceOver (les deux libellés ci-dessous portent
                 // le sens). Le texte, lui, scale avec le Dynamic Type.
                 .font(.system(size: MeeshyIconSize.xxxl))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                .foregroundStyle(MeeshyColors.mediaChromeSecondary)
             Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier à commenter !", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxxl)

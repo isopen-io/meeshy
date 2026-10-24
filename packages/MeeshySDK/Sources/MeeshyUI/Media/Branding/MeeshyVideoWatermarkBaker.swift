@@ -2,6 +2,7 @@ import AVFoundation
 import CoreGraphics
 import CoreImage
 import Foundation
+import MeeshySDK
 import UIKit
 
 /// Grave le filigrane Meeshy ANIMÉ — celui des exports de story — dans une
@@ -167,6 +168,17 @@ public enum MeeshyVideoWatermarkBaker {
 /// dessinés et copiés PAR FRAME, pour un bloc qui occupe moins de 4 % de la
 /// surface. La tuile est mémoïsée par intervalle d'animation, si bien qu'une
 /// vidéo à 30 fps ne déclenche que ~15 rendus par seconde.
+nonisolated struct WatermarkTileMemo {
+    var time: Double = .nan
+    var size: CGSize = .zero
+    var tile: CIImage?
+
+    func matches(time: Double, renderSize: CGSize) -> Bool {
+        self.time == time && size == renderSize
+    }
+}
+
+// unchecked: mémo sous `memo` (Locked) ; `CIImage` n'est pas Sendable.
 private final class WatermarkTilePainter: @unchecked Sendable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
@@ -188,10 +200,7 @@ private final class WatermarkTilePainter: @unchecked Sendable {
     /// hop (mirrors `StoryAVCompositor`'s pattern for the same AVFoundation
     /// callback-thread constraint) must be explicitly `nonisolated`.
     private nonisolated let watermark: StoryExportWatermark
-    private nonisolated let lock = NSLock()
-    private nonisolated(unsafe) var cachedTime: Double = .nan
-    private nonisolated(unsafe) var cachedSize: CGSize = .zero
-    private nonisolated(unsafe) var cachedTile: CIImage?
+    private nonisolated let memo = Locked(uncheckedState: WatermarkTileMemo())
 
     /// Boîte de transport : `MainActor.assumeIsolated` exige un retour
     /// `Sendable`, or `CIImage` ne l'est pas. La boîte naît et meurt dans le
@@ -228,21 +237,12 @@ private final class WatermarkTilePainter: @unchecked Sendable {
     }
 
     private nonisolated func tile(at time: Double, renderSize: CGSize) -> CIImage? {
-        lock.lock()
-        if time == cachedTime, cachedSize == renderSize {
-            let cached = cachedTile
-            lock.unlock()
-            return cached
-        }
-        lock.unlock()
+        let snapshot = memo.mutateUnchecked { $0 }
+        if snapshot.matches(time: time, renderSize: renderSize) { return snapshot.tile }
 
         let rendered = renderOnMain(at: time, renderSize: renderSize)
 
-        lock.lock()
-        cachedTime = time
-        cachedSize = renderSize
-        cachedTile = rendered
-        lock.unlock()
+        memo.mutateUnchecked { $0 = WatermarkTileMemo(time: time, size: renderSize, tile: rendered) }
         return rendered
     }
 

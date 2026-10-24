@@ -12,13 +12,23 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.QualifiedView
+import me.meeshy.sdk.model.ReelThreadOrder
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.toContentFetchFailure
+import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import java.util.concurrent.CancellationException
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.PostReactionPick
+import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
 import javax.inject.Inject
 
 data class ReelsUiState(
@@ -26,6 +36,10 @@ data class ReelsUiState(
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val errorMessage: String? = null,
+    /** Cause typee du dernier echec du premier chargement (null = aucun echec en cours). */
+    val loadFailure: ContentFetchFailure? = null,
+    /** Faux jusqu'a la fin du premier chargement : distingue froid / vide / echec. */
+    val hasLoadedOnce: Boolean = false,
 )
 
 @HiltViewModel
@@ -36,7 +50,14 @@ class ReelsViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val clock: CacheClock,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
+    private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
 ) : ViewModel() {
+
+    /** Les émojis de la palette : les mêmes, dans le même ordre que messages et stories (récents d'abord). */
+    val quickEmojis: StateFlow<List<String>> = emojiUsageStore.usage
+        .map { emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size))
+
 
     private val _state = MutableStateFlow(ReelsUiState())
     val state: StateFlow<ReelsUiState> = _state.asStateFlow()
@@ -105,11 +126,15 @@ class ReelsViewModel @Inject constructor(
         currentSeed = seed
 
         val cachedFeed = postRepository.feedCacheSnapshot
-            ?.let { ReelBuilder.build(it, config.socketUrl) }
+            ?.let { ReelBuilder.build(it, config.apiBaseUrl, sessionRepository.currentUser.value) }
             .orEmpty()
         val seedInCache = seed != null && cachedFeed.any { it.id == seed }
         val cached = ReelBuilder.withSeedFirst(cachedFeed, seed)
-        _state.update { it.copy(reels = cached, isLoading = cached.isEmpty(), errorMessage = null) }
+        _state.update {
+            // Une relecture garde ce que le lecteur affiche deja : l'ordre ne bouge que par refreshed.
+            val shown = if (cached.isEmpty()) it.reels else cached
+            it.copy(reels = shown, isLoading = shown.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = shown.isNotEmpty())
+        }
 
         if (seed != null && !seedInCache) loadSeedAndPrepend(seed)
 
@@ -120,26 +145,33 @@ class ReelsViewModel @Inject constructor(
                     hasLoadedFirstPage = true
                     nextCursor = page.nextCursor
                     hasMoreReels = page.hasMore
-                    val fresh = ReelBuilder.build(page.posts, config.socketUrl)
+                    val fresh = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
                     _state.update { current ->
-                        val existingIds = current.reels.mapTo(HashSet()) { it.id }
-                        val seedAlreadyPresent = seed != null && seed in existingIds
-                        val reels = if (seedAlreadyPresent) {
-                            current.reels + fresh.filter { it.id !in existingIds }
-                        } else {
-                            fresh
-                        }
-                        current.copy(reels = reels, isLoading = false)
+                        val seedAlreadyPresent = seed != null && current.reels.any { it.id == seed }
+                        // Le reel regarde et ceux qui le precedent ne bougent jamais ; sans reel
+                        // regarde, une graine presente garde tout le fil deja a l'ecran.
+                        val anchorId = currentReelId ?: current.reels.lastOrNull()?.id.takeIf { seedAlreadyPresent }
+                        val reels = ReelThreadOrder.refreshed(current.reels, anchorId, fresh) { it.id }
+                        current.copy(reels = reels, isLoading = false, loadFailure = null, hasLoadedOnce = true)
                     }
                 }
                 is NetworkResult.Failure -> _state.update {
                     // The cache-seeded reels (if any) are left in place rather than cleared —
                     // a network failure degrades to what the Feed already had, never to blank.
-                    it.copy(isLoading = false, errorMessage = if (cached.isEmpty()) result.error.message else it.errorMessage)
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = if (it.reels.isEmpty()) result.error.message else it.errorMessage,
+                        loadFailure = if (it.reels.isEmpty()) result.error.toContentFetchFailure() else it.loadFailure,
+                    )
                 }
             }
         }
     }
+
+    /**
+     * Rejoue le chargement du lecteur DEJA ouvert (meme graine), sans repasser par le detail.
+     */
+    fun retry() = load(currentSeed)
 
     /**
      * Fetches [seedId] by id and pins it at the front of the thread, for the cold-start case
@@ -153,7 +185,7 @@ class ReelsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = postRepository.getPost(seedId)
             if (result !is NetworkResult.Success) return@launch
-            val seedReel = ReelBuilder.build(listOf(result.data), config.socketUrl).firstOrNull() ?: return@launch
+            val seedReel = ReelBuilder.build(listOf(result.data), config.apiBaseUrl, sessionRepository.currentUser.value).firstOrNull() ?: return@launch
             _state.update { current ->
                 if (current.reels.any { it.id == seedReel.id }) return@update current
                 current.copy(reels = listOf(seedReel) + current.reels, isLoading = false)
@@ -179,10 +211,8 @@ class ReelsViewModel @Inject constructor(
                     val page = result.data
                     nextCursor = page.nextCursor
                     hasMoreReels = page.hasMore
-                    val existingIds = _state.value.reels.mapTo(HashSet()) { it.id }
-                    val appended = ReelBuilder.build(page.posts, config.socketUrl)
-                        .filter { it.id !in existingIds }
-                    _state.update { it.copy(reels = it.reels + appended, isLoadingMore = false) }
+                    val appended = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
+                    _state.update { it.copy(reels = ReelThreadOrder.appended(it.reels, appended) { reel -> reel.id }, isLoadingMore = false) }
                 }
                 is NetworkResult.Failure -> _state.update { it.copy(isLoadingMore = false) }
             }
@@ -277,6 +307,12 @@ class ReelsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            // Un reel supprime en direct quitte le pager (cote iOS : `post:deleted` retire la page).
+            socialSocket.postDeleted.collect { event ->
+                _state.update { state -> state.copy(reels = state.reels.filter { it.id != event.postId }) }
+            }
+        }
+        viewModelScope.launch {
             // `post:bookmarked` is a PERSONAL event — the gateway only ever broadcasts it to
             // the acting user's own room, so unlike likes there is no `mine` check: it always
             // reconciles [toggleBookmark]'s optimistic arithmetic to the gateway's ABSOLUTE
@@ -319,6 +355,20 @@ class ReelsViewModel @Inject constructor(
             val result = if (before.isLiked) postRepository.unlike(reelId) else postRepository.like(reelId)
             if (result is NetworkResult.Failure) {
                 updateReel(reelId) { it.copy(isLiked = before.isLiked, likeCount = before.likeCount) }
+            }
+        }
+    }
+
+    /**
+     * Le choix d'un émoji dans la palette du cœur d'un réel : le cœur garde son bascule optimiste
+     * ([toggleLike], `heartInFlight` côté iOS), tout autre émoji est additif et sans état local.
+     */
+    fun react(reelId: String, pick: PostReactionPick) {
+        when (pick) {
+            PostReactionPick.Heart -> toggleLike(reelId)
+            is PostReactionPick.Other -> viewModelScope.launch {
+                emojiUsageStore.record(pick.emoji)
+                postRepository.react(reelId, pick.emoji)
             }
         }
     }

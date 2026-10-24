@@ -47,7 +47,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddParticipantSheet(
+internal fun AddParticipantSheet(
     conversationId: String,
     existingMemberIds: Set<String>,
     accentColor: Color,
@@ -153,7 +153,7 @@ private fun AddParticipantRowView(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        MeeshyAvatar(name = row.name, size = 40.dp, containerColor = accentColor)
+        MeeshyAvatar(name = row.name, size = 40.dp, containerColor = accentColor, imageUrl = row.avatarUrl)
 
         Column(modifier = Modifier.weight(1f)) {
             Text(

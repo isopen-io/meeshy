@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import app.cash.turbine.test
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -38,6 +39,18 @@ class CreateShareLinkViewModelTest {
         var response: ApiResponse<CreateShareLinkResponse> = ApiResponse(success = false),
         val requests: MutableList<CreateShareLinkRequest> = mutableListOf(),
     ) : LinkApi {
+        var updateResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit)
+        var lastUpdate: Pair<String, kotlinx.serialization.json.JsonObject>? = null
+        var lastExpand: String? = null
+
+        override suspend fun update(
+            linkId: String,
+            body: kotlinx.serialization.json.JsonObject,
+        ): ApiResponse<Unit> {
+            lastUpdate = linkId to body
+            return updateResponse
+        }
+
         override suspend fun create(body: CreateShareLinkRequest): ApiResponse<CreateShareLinkResponse> {
             requests += body
             return response
@@ -46,6 +59,7 @@ class CreateShareLinkViewModelTest {
         override suspend fun listMyLinks(
             offset: Int,
             limit: Int,
+            expand: String?,
         ): ApiResponse<List<me.meeshy.sdk.model.MyShareLink>> = ApiResponse(success = true, data = emptyList())
 
         override suspend fun fetchMyStats(): ApiResponse<me.meeshy.sdk.model.MyShareLinkStats> =
@@ -76,11 +90,11 @@ class CreateShareLinkViewModelTest {
 
     private fun viewModel(
         api: FakeLinkApi,
-        conversationId: String = "conv-1",
+        conversationId: String? = "conv-1",
         config: MeeshyConfig = MeeshyConfig(),
     ): CreateShareLinkViewModel {
         val handle = SavedStateHandle(
-            mapOf(CreateShareLinkViewModel.CONVERSATION_ID_ARG to conversationId),
+            conversationId?.let { mapOf(CreateShareLinkViewModel.CONVERSATION_ID_ARG to it) } ?: emptyMap(),
         )
         return CreateShareLinkViewModel(ShareLinkRepository(api), handle, config)
             .apply { now = { this@CreateShareLinkViewModelTest.now.toEpochMilli() } }
@@ -218,5 +232,70 @@ class CreateShareLinkViewModelTest {
         advanceUntilIdle()
 
         assertThat(api.requests).hasSize(1)
+    }
+
+    @Test
+    fun withoutAConversationArg_theFormStartsEmptyAndCannotSubmit() {
+        val vm = viewModel(FakeLinkApi(), conversationId = null)
+
+        assertThat(vm.state.value.form.conversationId).isEmpty()
+        assertThat(vm.state.value.canSubmit).isFalse()
+    }
+
+    @Test
+    fun choosingAConversationFromTheInFormPicker_makesTheFormSubmittableAndTargetsIt() = runTest {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api, conversationId = null)
+
+        vm.onConversationSelected("conv-7")
+        vm.submit()
+        advanceUntilIdle()
+
+        assertThat(api.requests.single().conversationId).isEqualTo("conv-7")
+    }
+
+    @Test
+    fun submittingWithoutAConversation_sendsNothing() = runTest {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api, conversationId = null)
+
+        vm.submit()
+        advanceUntilIdle()
+
+        assertThat(api.requests).isEmpty()
+    }
+
+    @Test
+    fun theMaxUsesStepper_movesByTheMagnitudeStep() {
+        val vm = viewModel(FakeLinkApi())
+
+        vm.onMaxUsesIncrement()
+        assertThat(vm.state.value.form.maxUses).isEqualTo(110)
+        vm.onMaxUsesDecrement()
+        vm.onMaxUsesDecrement()
+        assertThat(vm.state.value.form.maxUses).isEqualTo(90)
+    }
+
+    @Test
+    fun submit_success_emitsASuccessHapticOnce() = runTest {
+        val vm = viewModel(FakeLinkApi(response = okResponse()))
+
+        vm.effects.test {
+            vm.submit()
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(CreateShareLinkEffect.SuccessHaptic)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun submit_failure_emitsNoHaptic() = runTest {
+        val vm = viewModel(FakeLinkApi(response = ApiResponse(success = false, error = "nope")))
+
+        vm.effects.test {
+            vm.submit()
+            advanceUntilIdle()
+            expectNoEvents()
+        }
     }
 }

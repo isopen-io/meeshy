@@ -33,7 +33,24 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     public static let shared = PushNotificationManager()
 
     @Published public var isAuthorized = false
-    @Published public var deviceToken: String?
+
+    /// Le jeton APNs, lu au trousseau au PREMIER accès (#11558) : le
+    /// gestionnaire est construit par `MeeshyApp` avant le premier écran, et
+    /// chaque lecture du trousseau y était un XPC synchrone du fil principal.
+    public var deviceToken: String? {
+        get {
+            if case .some(let token) = knownDeviceToken { return token }
+            let token = keychainStore.load(forKey: Self.persistedTokenKey, account: nil)
+            knownDeviceToken = .some(token)
+            return token
+        }
+        set {
+            objectWillChange.send()
+            knownDeviceToken = .some(newValue)
+        }
+    }
+    /// `.none` : le trousseau n'a pas encore été lu.
+    private var knownDeviceToken: String?? = .none
 
     /// Published notification payload when user taps a notification.
     /// The app layer observes this to perform navigation.
@@ -86,7 +103,6 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         self.keychainStore = keychainStore
         super.init()
         migrateDeviceTokenFromUserDefaultsIfNeeded()
-        deviceToken = keychainStore.load(forKey: Self.persistedTokenKey, account: nil)
     }
 
     private func migrateDeviceTokenFromUserDefaultsIfNeeded() {
@@ -165,15 +181,33 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
     /// Re-register the persisted device token with the backend after login.
     /// Call this when the user authenticates so the backend associates the token with their account.
+    ///
+    /// Appelé avant le premier rendu de la liste (#11558) : le jeton persisté se
+    /// lit au trousseau HORS du fil principal.
     public func reRegisterTokenIfNeeded() {
-        guard let token = deviceToken else {
-            logger.info("No persisted device token to re-register")
-            return
-        }
-        logger.info("Re-registering persisted device token with backend")
         Task {
+            guard let token = await deviceTokenReadOffMain() else {
+                logger.info("No persisted device token to re-register")
+                return
+            }
+            logger.info("Re-registering persisted device token with backend")
             await sendTokenToBackend(token: token)
         }
+    }
+
+    private func deviceTokenReadOffMain() async -> String? {
+        if case .some(let token) = knownDeviceToken { return token }
+        let token = await keychainLoadOffMain(Self.persistedTokenKey)
+        if case .some(let tokenSetMeanwhile) = knownDeviceToken { return tokenSetMeanwhile }
+        knownDeviceToken = .some(token)
+        return token
+    }
+
+    private func keychainLoadOffMain(_ key: String) async -> String? {
+        let store = keychainStore
+        return await Task.detached(priority: .userInitiated) {
+            store.load(forKey: key, account: nil)
+        }.value
     }
 
     /// Handle APNs registration failure.
@@ -257,30 +291,6 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         )
     }
 
-    // MARK: - Badge
-
-    /// Reset the app badge count to zero.
-    ///
-    /// - Warning: Direct badge writes bypass `NotificationCoordinator`, which owns
-    ///   the alignment between the app icon, widgets and the in-app bell. Prefer
-    ///   `NotificationCoordinator.shared.reset()` — this method only remains for
-    ///   legacy callers and will be removed.
-    @available(*, deprecated, message: "Use NotificationCoordinator.shared.reset() so the widget / in-app bell stay aligned.")
-    public func resetBadge() async {
-        try? await UNUserNotificationCenter.current().setBadgeCount(0)
-    }
-
-    /// Update the app badge count to reflect total unread conversations.
-    ///
-    /// - Warning: Direct badge writes bypass `NotificationCoordinator`, which owns
-    ///   the alignment between the app icon, widgets and the in-app bell. Prefer
-    ///   pushing conversation state through `NotificationCoordinator.shared`.
-    @available(*, deprecated, message: "Route through NotificationCoordinator.shared instead so widgets stay aligned.")
-    public func updateBadge(totalUnread: Int) async {
-        let count = max(totalUnread, 0)
-        try? await UNUserNotificationCenter.current().setBadgeCount(count)
-    }
-
     // MARK: - Private
 
     private func sendTokenToBackend(token: String) async {
@@ -295,7 +305,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         // (native callback firing right after) — both posted the same token
         // back-to-back, generating duplicate 10s+ POSTs in the slow-request log.
         let now = Date()
-        let lastToken = keychainStore.load(forKey: Self.lastRegisteredTokenKey, account: nil)
+        let lastToken = await keychainLoadOffMain(Self.lastRegisteredTokenKey)
         let lastAt = userDefaults.object(forKey: Self.lastRegisteredAtKey) as? Date
         if lastToken == token,
            let lastAt,

@@ -55,7 +55,19 @@ final class VoiceRecordingLiveActivityCoordinator {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.apply() }
             .store(in: &cancellables)
+        Timer.publish(every: 0.5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.meterOffScreen() }
+            .store(in: &cancellables)
         apply()
+    }
+
+    /// Le niveau suit l'écran par un lien d'affichage, qui ne tire pas app en
+    /// arrière-plan : l'îlot et l'écran verrouillé sont alors le seul écran, et
+    /// l'îlot relève le niveau à sa propre cadence (2 Hz, celle de `apply`).
+    private func meterOffScreen() {
+        guard UIApplication.shared.applicationState != .active else { return }
+        session?.recorder?.updateMetering()
     }
 
     /// Le bouton « Arrêter » de l'îlot : le geste stop du composeur.
@@ -75,7 +87,7 @@ final class VoiceRecordingLiveActivityCoordinator {
     private func makeHost() -> (any LiveActivityHostProviding<VoiceRecordingSnapshot>)? {
         #if canImport(ActivityKit)
         guard #available(iOS 16.1, *) else { return nil }
-        return LiveActivityHost<VoiceRecordingActivityAttributes> {
+        return LiveActivityHost<VoiceRecordingActivityAttributes, VoiceRecordingSnapshot> {
             VoiceRecordingActivityAttributes(labels: VoiceRecordingLabels(
                 stop: String(localized: "composer.recording.stopAndAttach", defaultValue: "Arrêter et ajouter aux pièces jointes", bundle: .main),
                 cancel: String(localized: "composer.recording.cancel", defaultValue: "Annuler l'enregistrement", bundle: .main)

@@ -308,7 +308,7 @@ struct NotificationCheckView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "bell.fill")
-                    .foregroundColor(MeeshyColors.info)
+                    .foregroundStyle(MeeshyColors.info)
                 Text(String(localized: "siri.notifications.unreadCount", defaultValue: "\(unreadCount) non lus", bundle: .main))
                     .font(.headline)
             }
@@ -320,7 +320,7 @@ struct NotificationCheckView: View {
                         HStack {
                             Image(systemName: "message.fill")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(Color.secondary)
                             Text(message)
                                 .font(.caption)
                                 .lineLimit(1)

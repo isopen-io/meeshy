@@ -119,6 +119,36 @@ final class ComposerSceneSoundHeaderTests: XCTestCase {
                        "le tracé vit dans la rangée partagée")
     }
 
+    /// **L'onde se dessine à l'échelle de ce qu'elle porte (#9886).** Le champ
+    /// `waveformSamples` est le champ PUBLIÉ : normalisé au pic, linéaire, comme
+    /// le serveur et le web le servent. L'échelle décibel est celle de la MESURE
+    /// (RMS absolu) ; la poser sur le champ publié écrasait les barres vers le
+    /// haut. La rangée lit donc le champ par `WaveformScale.publishedHeight`.
+    func test_laRangee_dessineLeChampPublieALEchelleDuChampPublie() {
+        XCTAssertEqual(ComposerSoundTraceRow.barHeight(sample: 0.5, in: 40), 20, accuracy: 0.001,
+                       "0,5 du champ publié fait la moitié de la rangée")
+        XCTAssertEqual(ComposerSoundTraceRow.barHeight(sample: 0.1, in: 40), 4, accuracy: 0.001,
+                       "en décibels, 0,1 ferait 27 pt sur 40 : les barres s'écrasaient vers le haut")
+        XCTAssertEqual(ComposerSoundTraceRow.barHeight(sample: 1, in: 40), 40, accuracy: 0.001)
+        XCTAssertEqual(ComposerSoundTraceRow.barHeight(sample: 0, in: 40), 3, accuracy: 0.001,
+                       "un silence garde un trait")
+    }
+
+    /// Les trois écritures du champ publié le normalisent au pic, depuis la
+    /// mesure absolue du cache : un seul contrat, tenu aux trois sites.
+    func test_leChampPublie_estEcritNormaliseAuPic_auxTroisSites() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        for chemin in ["packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+ContentMedia.swift",
+                       "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+PastedAudio.swift",
+                       "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+Media.swift"] {
+            let code = AppSourceGuard.stripComments(
+                try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8))
+            XCTAssertTrue(code.contains("WaveformScale.peakNormalized("), "\(chemin) écrit la mesure brute dans le champ publié")
+        }
+    }
+
     // MARK: - La règle de service, inchangée
 
     private func fond() -> StoryAudioPlayerObject {

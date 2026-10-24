@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 import QuartzCore
@@ -15,7 +16,8 @@ import MeeshySDK
 // corps SwiftUI n'est réévalué à chaque image.
 //
 // `FrameMotionHostView` porte ces couches et décide quand elles tournent : jamais sous
-// « Réduire les animations », en mode économie d'énergie, ou quand l'app l'interdit
+// « Réduire les animations », quand la politique média coupe le décor (économie
+// d'énergie, chaleur sérieuse — `MediaPolicy.animatesDecoration`, #9880), ou quand l'app l'interdit
 // (`animates`) — le cadre fixe reste ; en PAUSE hors écran, hors fenêtre et quand
 // l'application passe en arrière-plan.
 
@@ -185,6 +187,7 @@ final class FrameMotionHostView: UIView {
     private var content: FrameMotionContent = .empty
     private(set) var hasInstalledAnimations = false
     private(set) var isPaused = false
+    private var policyObservation: AnyCancellable?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -194,7 +197,10 @@ final class FrameMotionHostView: UIView {
         backgroundColor = .clear
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(motionPolicyChanged), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
-        center.addObserver(self, selector: #selector(motionPolicyChanged), name: .NSProcessInfoPowerStateDidChange, object: nil)
+        policyObservation = MediaPolicyMonitor.shared.$policy
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.syncMotion() }
         center.addObserver(self, selector: #selector(visibilityChanged), name: UIApplication.didEnterBackgroundNotification, object: nil)
         center.addObserver(self, selector: #selector(visibilityChanged), name: UIApplication.willEnterForegroundNotification, object: nil)
     }
@@ -205,7 +211,7 @@ final class FrameMotionHostView: UIView {
 
     /// Les animations ne se posent qu'ici : mouvement autorisé par l'app, par l'accessibilité et par l'énergie.
     var motionAllowed: Bool {
-        animates && !UIAccessibility.isReduceMotionEnabled && !ProcessInfo.processInfo.isLowPowerModeEnabled
+        animates && !UIAccessibility.isReduceMotionEnabled && MediaPolicyMonitor.shared.policy.animatesDecoration
     }
 
     func show(_ next: FrameMotionContent) {

@@ -1,6 +1,7 @@
 package me.meeshy.app.navigation
 
 import me.meeshy.sdk.model.call.WaitingCall
+import me.meeshy.sdk.model.link.EmailLinkSecret
 
 /**
  * The primitive launch inputs a notification tap / full-screen call intent carries.
@@ -70,19 +71,16 @@ object LaunchRouter {
             route(
                 LaunchExtras(
                     callId = offer.callId,
+                    conversationId = offer.conversationId,
                     callerName = offer.callerName,
                     isVideo = offer.isVideo,
                 ),
             )
         }
 
-    /** Seul prefixe menant a la validation d'un magic link : le lien du MAIL
-     *  (`https://meeshy.me/...`, App Link verifie). Le scheme `meeshy://` s'ouvre
-     *  depuis n'importe quelle page ou app — un jeton d'e-mail recu par lui
-     *  connecterait la victime au compte de l'attaquant (#10873). */
-    private val MAGIC_LINK_PREFIXES = listOf(
-        "https://meeshy.me/auth/magic-link",
-    )
+    /** Seule origine dont un lien d'e-mail ouvre une session : l'origine https du lien du MAIL (App Link verifie).
+     *  Le port par defaut est admis ; un hote qui ne fait que commencer comme `meeshy.me` ne l'est pas. */
+    private val MEESHY_ORIGIN = Regex("^https://meeshy\\.me(?::443)?(?=[/?#]|\\z)", RegexOption.IGNORE_CASE)
 
     /**
      * Traduit l'URI d'un intent VIEW en route interne, ou `null` si l'URI ne nous
@@ -91,19 +89,39 @@ object LaunchRouter {
      * demarrage — le magic link ne peut PAS l'etre, car sa destination doit etre
      * atteignable HORS authentification et sur un intent chaud (`onNewIntent`).
      *
+     * Un lien a jeton d'e-mail n'entre que par la FORME EXACTE qu'ecrit l'e-mail
+     * ([EmailLinkSecret.exactForm], #10875) et sur l'origine https de Meeshy : jamais
+     * par `meeshy://` (n'importe quelle page ou app ouvre ce scheme et y presenterait
+     * le jeton d'un TIERS, #10873), jamais par une variante (segment en plus, espace,
+     * `;`, encodage, invisible, casse, identifiants, port, http). Une variante part au
+     * navigateur. Le jeton voyage dans le fragment (`#token=`), que le navigateur
+     * n'envoie jamais au serveur ; la requete (`?token=`) reste lue pour les e-mails
+     * partis avant, et le jeton historique ecrit dans le chemin aussi.
+     *
+     * `verify-email` et `reset-password` sont reconnus par la loi mais n'ont pas encore
+     * de destination ici : ils ne donnent aucune route (l'e-mail s'ouvre au navigateur).
+     *
      * Le token reste ENCODE tel quel dans la route produite : l'argument de
      * navigation le decode une seule fois a l'arrivee — le decoder ici le ferait
      * decoder deux fois et casserait tout token contenant `%` ou `+`.
      */
     fun routeForDeepLink(dataUri: String?): String? {
-        if (dataUri == null) return null
-        val prefix = MAGIC_LINK_PREFIXES.firstOrNull { dataUri.startsWith(it) } ?: return null
-        val query = dataUri.removePrefix(prefix).removePrefix("?")
-        val token = query.split('&')
-            .firstOrNull { it.startsWith("token=") }
-            ?.removePrefix("token=")
-            ?.takeIf { it.isNotBlank() }
-            ?: return null
+        if (dataUri == null || !MEESHY_ORIGIN.containsMatchIn(dataUri)) return null
+        val form = EmailLinkSecret.exactForm(dataUri) as? EmailLinkSecret.Form.MagicLink ?: return null
+        val token = form.pathToken ?: linkSecret(name = "token", uri = dataUri) ?: return null
         return "auth/magic-link?token=$token"
     }
+
+    /** Le secret d'un lien d'e-mail : le fragment prime, la requete reste lue. Jamais decode ici. */
+    private fun linkSecret(name: String, uri: String): String? {
+        val fragment = uri.substringAfter('#', missingDelimiterValue = "")
+        val query = uri.substringBefore('#').substringAfter('?', missingDelimiterValue = "")
+        return listOf(fragment, query).firstNotNullOfOrNull { parameter(name, it) }
+    }
+
+    private fun parameter(name: String, encoded: String): String? =
+        encoded.split('&')
+            .firstOrNull { it.startsWith("$name=") }
+            ?.removePrefix("$name=")
+            ?.takeIf { it.isNotBlank() }
 }

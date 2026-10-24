@@ -18,7 +18,7 @@ struct ConversationOverlayMenu: View {
     let bubbleFrame: CGRect
     let threadLanguage: MessageOverlayMenu.ThreadLanguage
     let isDirect: Bool
-    let isAdminOrMod: Bool
+    let authority: ConversationMenuAuthority
     let mediaSaveCoordinator: MediaSaveCoordinator
     let actions: ConversationMessageActions
 
@@ -37,16 +37,16 @@ struct ConversationOverlayMenu: View {
             // entière, à 16 pt des bords.
             messageBubbleFrame: bubbleFrame,
             isPresented: $overlayState.showOverlayMenu,
-            canDelete: msg.isMe || isAdminOrMod || actions.canRemove(msg),
-            canEdit: msg.isMe || isAdminOrMod,
+            // #11214 — la fabrique unique : les verdicts de la loi partagée.
+            menuContext: MessageMenuContext.make(message: msg, viewModel: viewModel, authority: authority),
             onCopy: {
-                // Prisme: copy what's DISPLAYED (the preferred translation when
-                // one is showing), never the original — like the quick bar's Copier.
-                guard MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg) else { return }
+                // Prisme : copie ce que la bulle AFFICHE, drapeau basculé compris (#11233).
+                guard MessageExitTransport.copyDisplayed(msg, in: viewModel) else { return }
                 HapticFeedback.success()
             },
-            onEdit: { actions.edit(msg) },
-            isStarred: viewModel.isStarred(messageId: msg.id),
+            onEdit: { actions.beginEdit(msg) },
+            onReply: { actions.reply(msg) },
+            onRetry: { Task { await viewModel.retryMessage(messageId: msg.id) } },
             textTranslations: viewModel.messageTranslations[msg.id] ?? [],
             transcription: viewModel.messageTranscriptions[msg.id],
             translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],

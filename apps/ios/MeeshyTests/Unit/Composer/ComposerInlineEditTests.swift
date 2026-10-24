@@ -16,6 +16,7 @@ import MeeshyUI
 ///
 /// Le fond l'était déjà (#8847) : ses témoins sont repris ici, la même
 /// grammaire valant désormais pour toutes les familles.
+@MainActor
 final class ComposerInlineEditTests: XCTestCase {
 
     // MARK: - La famille d'un objet
@@ -105,24 +106,16 @@ final class ComposerInlineEditTests: XCTestCase {
                       "toucher une piste du plan désigne l'objet de n'importe quelle famille")
     }
 
-    func test_sections_retouchedBackgroundImage_opensOnCrop() {
-        let sections = ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false,
-                                                      retouching: true)
-        XCTAssertEqual(sections.first, .media(.crop), "Une image du fil se RECADRE d'abord (#9136)")
-    }
-
-    /// Le recadrage va à une IMAGE : posée (#9499), ou fond d'une retouche
-    /// (#9136). Jamais à un fond hors retouche (le lecteur ne le recadre pas),
-    /// jamais à une vidéo (#9153 : son player ne lit pas encore la borne).
-    func test_sections_cropIsServedToAPlacedImageAndARetouchedImageBackground() {
+    /// Le recadrage va à une IMAGE posée (#9499). Jamais à un fond (le lecteur
+    /// ne le recadre pas), jamais à une vidéo (#9153 : son player ne lit pas
+    /// encore la borne).
+    func test_sections_cropIsServedToAPlacedImageOnly() {
         XCTAssertTrue(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false)
             .contains(.media(.crop)))
-        XCTAssertTrue(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false, retouching: true)
-            .contains(.media(.crop)))
         XCTAssertFalse(ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false)
-            .contains(.media(.crop)), "Hors retouche, le lecteur ne recadre pas un fond : rien à offrir")
-        XCTAssertFalse(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true,
-                                                      retouching: true).contains(.media(.crop)))
+            .contains(.media(.crop)), "Le lecteur ne recadre pas un fond : rien à offrir")
+        XCTAssertFalse(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true)
+            .contains(.media(.crop)))
         XCTAssertFalse(ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true)
             .contains(.media(.crop)))
     }
@@ -136,9 +129,8 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertEqual(ComposerMediaCropPads.label(.landscape169), "16:9")
     }
 
-    func test_sections_retouchedBackgroundVideo_trimsAndMutes() {
-        let sections = ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true,
-                                                      retouching: true)
+    func test_sections_backgroundVideo_trimsAndMutes() {
+        let sections = ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true)
         XCTAssertTrue(sections.contains(.media(.trim)))
         XCTAssertTrue(sections.contains(.media(.actions)), "Le muet vit dans les actions du média")
     }

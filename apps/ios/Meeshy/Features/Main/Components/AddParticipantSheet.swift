@@ -76,7 +76,7 @@ struct AddParticipantSheet: View {
         HStack {
             Text(String(localized: "participants.add.title", defaultValue: "Ajouter un membre", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -89,15 +89,19 @@ struct AddParticipantSheet: View {
                 // figé (doctrine 82i/87i : le chrome ne suit pas Dynamic Type).
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
+                    .meeshyTapTarget()
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.top, MeeshySpacing.lg)
-        .padding(.bottom, MeeshySpacing.sm)
+        .padding(EdgeInsets(
+            top: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: 28),
+            leading: MeeshySpacing.xl,
+            bottom: MeeshySpacing.sm - MeeshyTapTarget.inset(forVisualSide: 28),
+            trailing: MeeshySpacing.xl - MeeshyTapTarget.inset(forVisualSide: 28)
+        ))
     }
 
     // MARK: - Search Field
@@ -106,12 +110,12 @@ struct AddParticipantSheet: View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
             TextField(String(localized: "participants.add.search-placeholder", defaultValue: "Rechercher un utilisateur…", bundle: .main), text: $searchQuery)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .focused($isSearchFocused)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -126,7 +130,7 @@ struct AddParticipantSheet: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.md))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
@@ -173,7 +177,7 @@ struct AddParticipantSheet: View {
             if let error = errorMessage {
                 Text(error)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.sm)
             }
@@ -188,14 +192,14 @@ struct AddParticipantSheet: View {
         let color = DynamicColorGenerator.colorForName(user.name)
 
         return HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: user.name,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: user.avatar,
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
                 ring: user.avatarRing
-            )
+            ) }
             // Presentational avatar — MeeshyAvatar carries its own .accessibilityLabel(name),
             // which the adjacent name/username block already reads. Hide it so VoiceOver
             // announces the name once, not twice (doctrine 143i). Safe: this avatar has no
@@ -210,7 +214,7 @@ struct AddParticipantSheet: View {
 
                 Text("@\(user.username)")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .lineLimit(1)
             }
             .accessibilityElement(children: .combine)
@@ -220,7 +224,7 @@ struct AddParticipantSheet: View {
             if isMember {
                 Text(String(localized: "participants.add.member", defaultValue: "Membre", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.subtle)))
@@ -234,7 +238,7 @@ struct AddParticipantSheet: View {
                 } label: {
                     Text(String(localized: "common.add", defaultValue: "Ajouter", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, MeeshySpacing.md)
                         .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(Capsule().fill(accent))

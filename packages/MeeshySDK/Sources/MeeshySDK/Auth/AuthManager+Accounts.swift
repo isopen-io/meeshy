@@ -129,7 +129,7 @@ extension AuthManager {
         // AUCUNE transition — les sockets ne se rouvraient pas et l'écran du
         // compte quitté restait monté. Une image à l'état « sorti » (écran
         // neutre, `isSwitchingAccount`) laisse chaque observateur la voir.
-        try? await Task.sleep(for: .milliseconds(150))
+        _ = await cancellableSleep(for: .milliseconds(150))
         guard !isAuthenticated else { return false }
         // #8674 — le cache du compte qui revient est rendu AVANT que la session
         // ne s'ouvre : le premier écran le lit, jamais un cache vide.
@@ -326,7 +326,7 @@ extension AuthManager {
 
         APIClient.shared.authToken = token
         // Le jeton de session suit le JWT (#4213).
-        APIClient.shared.registeredSessionToken = currentSessionToken
+        APIClient.shared.registeredSessionToken = sessionToken
         sessionOrigin = .restored
         // #8674 — sans effet quand le cache est déjà le sien (démarrage à
         // froid, changement de compte qui l'a déjà rendu).
@@ -336,7 +336,7 @@ extension AuthManager {
 
         // Proactive refresh, detached: a slow network must never hold the
         // splash hostage (APIClient's reactive 401-refresh covers the rest).
-        if isCurrentTokenExpired, sessionToken != nil, NetworkMonitor.shared.isOnline {
+        if Self.isTokenExpired(token, now: Date()), sessionToken != nil, NetworkMonitor.shared.isOnline {
             Task { [weak self] in
                 do {
                     _ = try await self?.refreshSession(force: false)
@@ -429,8 +429,11 @@ extension AuthManager {
         persistSavedAccounts()
     }
 
-    /// Update lastActiveAt without resetting the token saved-at date.
+    /// Update lastActiveAt without resetting the token saved-at date. Rien n'est réécrit quand le compte
+    /// est déjà le PLUS RÉCENT sous la même identité (#11558) — pas « en tête » : une mise à jour ne
+    /// retrie pas la liste en mémoire, et A → B → A laissait A derrière B.
     func updateSavedAccountActivity(from user: MeeshyUser) {
+        if savedAccounts.showsAsMostRecent(user) { return }
         upsertSavedAccount(from: user)
     }
 

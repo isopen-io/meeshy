@@ -2,6 +2,7 @@ package me.meeshy.app.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -23,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
@@ -164,17 +166,20 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     MeeshyAvatar(
-                        name = state.username ?: "?",
+                        name = state.profileTitle.ifEmpty { "?" },
+                        imageUrl = state.avatar,
                         modifier = Modifier.size(48.dp),
                     )
                     Spacer(Modifier.width(MeeshySpacing.md))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = state.username ?: "",
+                            text = state.profileTitle,
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        state.email?.let {
+                        state.profileHandle?.let {
                             Text(
                                 text = it,
                                 style = MaterialTheme.typography.bodySmall,
@@ -184,6 +189,11 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MeeshyTheme.tokens.textMuted,
+                    )
                 }
             }
 
@@ -226,10 +236,9 @@ fun SettingsScreen(
                 iconColor = MeeshyPalette.Warning,
             ) {
                 val notifications = state.notifications
-                NotificationToggleRow(
-                    label = stringResource(R.string.settings_push_notifications),
-                    checked = notifications.pushEnabled,
-                    onCheckedChange = viewModel::setPushEnabled,
+                PushNotificationToggle(
+                    pushEnabled = notifications.pushEnabled,
+                    onSetPushEnabled = viewModel::setPushEnabled,
                 )
                 NotificationToggleRow(
                     label = stringResource(R.string.settings_email_notifications),
@@ -379,8 +388,6 @@ fun SettingsScreen(
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_export_data), detail = null, onClick = onOpenDataExport)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_clear_media_cache), detail = null, onClick = onOpenMediaCache)
-                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_storage_used), detail = null, onClick = onOpenMediaCache)
             }
 
@@ -413,8 +420,18 @@ fun SettingsScreen(
                         .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
                     verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
                 ) {
+                    var confirmLogout by remember { mutableStateOf(false) }
+                    if (confirmLogout) {
+                        LogoutConfirmation(
+                            onConfirm = {
+                                confirmLogout = false
+                                onLogout()
+                            },
+                            onDismiss = { confirmLogout = false },
+                        )
+                    }
                     Button(
-                        onClick = onLogout,
+                        onClick = { confirmLogout = true },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MeeshyPalette.Error,
@@ -803,6 +820,8 @@ private fun notificationTypeLabelRes(type: NotificationType): Int = when (type) 
     NotificationType.COMMENT_REPLY -> R.string.settings_notif_type_comment_reply
     NotificationType.COMMENT_LIKE -> R.string.settings_notif_type_comment_like
     NotificationType.FRIEND_CONTENT -> R.string.settings_notif_type_friend_content
+    NotificationType.GAME -> R.string.settings_notif_type_game
+    NotificationType.CONTACT_ACTIVITY -> R.string.settings_notif_type_contact_activity
     NotificationType.CONTACT_REQUEST -> R.string.settings_notif_type_contact_request
     NotificationType.GROUP_INVITE -> R.string.settings_notif_type_group_invite
     NotificationType.MEMBER_JOINED -> R.string.settings_notif_type_member_joined
@@ -811,7 +830,7 @@ private fun notificationTypeLabelRes(type: NotificationType): Int = when (type) 
 }
 
 @Composable
-private fun NotificationToggleRow(
+internal fun NotificationToggleRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
@@ -820,6 +839,7 @@ private fun NotificationToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -836,7 +856,7 @@ private fun NotificationToggleRow(
         Switch(
             checked = checked,
             enabled = enabled,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
         )
     }
 }
@@ -926,4 +946,22 @@ private fun SettingsRow(
             )
         }
     }
+}
+
+/** iOS `SettingsView` : alerte « Déconnexion » avant de fermer la session, bouton destructif. */
+@Composable
+private fun LogoutConfirmation(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_logout_confirm_title)) },
+        text = { Text(stringResource(R.string.settings_logout_confirm_message)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.settings_log_out), color = MeeshyPalette.Error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
+        },
+    )
 }

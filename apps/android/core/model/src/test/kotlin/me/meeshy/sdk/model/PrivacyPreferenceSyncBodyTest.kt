@@ -4,13 +4,16 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Test
 
 /**
  * The wire body sent to `PATCH /me/preferences/privacy` is projected from the device-local
- * [PrivacyPreferences] block by [PrivacyPreferenceSyncBody.from]. It carries exactly the twelve
- * editable privacy booleans (the [PrivacyCatalog] set) and — because the gateway PATCH is a
- * partial merge and the encryption leg renders read-only on Android — it must **never** carry the
+ * [PrivacyPreferences] block by [PrivacyPreferenceSyncBody.from]. It carries the twelve editable
+ * privacy booleans (the [PrivacyCatalog] set) plus `notifyContactsOnReturn` (#8285), under the
+ * CANONICAL gateway keys — `acceptCallsFromNonContacts`, never the dead alias
+ * `allowCallsFromNonContacts` the gateway no longer reads (#8073). Because the gateway PATCH is a
+ * partial merge and the encryption leg renders read-only on Android, it must **never** carry the
  * encryption fields nor the local-only `extras` map, so a sync leaves the server's encryption
  * preferences untouched.
  */
@@ -18,13 +21,21 @@ class PrivacyPreferenceSyncBodyTest {
 
     private val json = Json { encodeDefaults = true }
 
-    /** The exact editable field set the gateway privacy schema accepts from Android (12 fields). */
+    /** The exact editable field set the gateway privacy schema accepts from Android (13 fields). */
     private val editableFields = setOf(
         "showOnlineStatus", "showLastSeen", "showReadReceipts", "showTypingIndicator",
-        "hideProfileFromSearch", "allowContactRequests", "allowGroupInvites",
-        "allowCallsFromNonContacts", "saveMediaToGallery", "allowAnalytics",
+        "hideProfileFromSearch", "notifyContactsOnReturn", "allowContactRequests", "allowGroupInvites",
+        "acceptCallsFromNonContacts", "saveMediaToGallery", "allowAnalytics",
         "shareUsageData", "blockScreenshots",
     )
+
+    /** The wire config of `MeeshyApi.json` (outbox payload and PATCH body): defaults NOT encoded. */
+    private val wire = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        explicitNulls = false
+        coerceInputValues = true
+    }
 
     @Test
     fun `from projects each editable toggle to its own field`() {
@@ -37,7 +48,8 @@ class PrivacyPreferenceSyncBodyTest {
             hideProfileFromSearch = true,
             allowContactRequests = false,
             allowGroupInvites = true,
-            allowCallsFromNonContacts = true,
+            acceptCallsFromNonContacts = false,
+            notifyContactsOnReturn = false,
             saveMediaToGallery = true,
             allowAnalytics = false,
             shareUsageData = true,
@@ -53,7 +65,8 @@ class PrivacyPreferenceSyncBodyTest {
         assertThat(body.hideProfileFromSearch).isTrue()
         assertThat(body.allowContactRequests).isFalse()
         assertThat(body.allowGroupInvites).isTrue()
-        assertThat(body.allowCallsFromNonContacts).isTrue()
+        assertThat(body.acceptCallsFromNonContacts).isFalse()
+        assertThat(body.notifyContactsOnReturn).isFalse()
         assertThat(body.saveMediaToGallery).isTrue()
         assertThat(body.allowAnalytics).isFalse()
         assertThat(body.shareUsageData).isTrue()
@@ -90,15 +103,97 @@ class PrivacyPreferenceSyncBodyTest {
         assertThat(body.showOnlineStatus).isTrue()
         assertThat(body.showLastSeen).isTrue()
         assertThat(body.allowContactRequests).isTrue()
+        // « Appels hors contacts » et « prévenir mes contacts » sont OPT-OUT : vrais par défaut.
+        assertThat(body.acceptCallsFromNonContacts).isTrue()
+        assertThat(body.notifyContactsOnReturn).isTrue()
         // Defaults that intentionally diverge to false survive the projection
         // #4578 — `allowAnalytics` a REJOINT ce groupe : gardée par un
         // consentement et sans lecteur d'usage, elle ne peut pas valoir `true`
         // par défaut sans que l'état initial du système contredise sa garde.
         assertThat(body.allowAnalytics).isFalse()
-        assertThat(body.allowCallsFromNonContacts).isFalse()
         assertThat(body.saveMediaToGallery).isFalse()
         assertThat(body.shareUsageData).isFalse()
         assertThat(body.blockScreenshots).isFalse()
         assertThat(body.hideProfileFromSearch).isFalse()
+    }
+
+    @Test
+    fun `the canonical calls key goes on the wire and the dead alias never does`() {
+        val closed = PrivacyPreferences(acceptCallsFromNonContacts = false)
+
+        val obj = wire.encodeToString(PrivacyPreferenceSyncBody.from(closed)).let {
+            Json.parseToJsonElement(it).jsonObject
+        }
+
+        assertThat(obj["acceptCallsFromNonContacts"]!!.jsonPrimitive.content).isEqualTo("false")
+        assertThat(obj.keys).doesNotContain("allowCallsFromNonContacts")
+    }
+
+    /**
+     * `MeeshyApi.json` has `encodeDefaults = false`, and an opt-OUT switch turned back ON is
+     * the value the body would be tempted to drop as a "default". Dropped, the PATCH would
+     * leave the server closed while the screen reads open: the canonical keys must ride the
+     * wire whatever their value.
+     */
+    @Test
+    fun `an open calls switch still rides the wire when defaults are not encoded`() {
+        val obj = wire.encodeToString(PrivacyPreferenceSyncBody.from(PrivacyPreferences())).let {
+            Json.parseToJsonElement(it).jsonObject
+        }
+
+        assertThat(obj.keys).isEqualTo(editableFields)
+        assertThat(obj["acceptCallsFromNonContacts"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(obj["notifyContactsOnReturn"]!!.jsonPrimitive.content).isEqualTo("true")
+    }
+
+    /**
+     * An outbox row queued BEFORE this lot carries the dead alias and not the canonical key.
+     * Replaying it must not invent a `true` over a value the user may have closed on iOS: the
+     * canonical keys it never carried stay off the wire.
+     */
+    @Test
+    fun `a row queued before the canonical keys replays without inventing them`() {
+        val legacyPayload = """
+            {"showOnlineStatus":false,"showLastSeen":true,"showReadReceipts":true,
+             "showTypingIndicator":true,"hideProfileFromSearch":false,"allowContactRequests":true,
+             "allowGroupInvites":true,"allowCallsFromNonContacts":false,"saveMediaToGallery":false,
+             "allowAnalytics":false,"shareUsageData":false,"blockScreenshots":false}
+        """.trimIndent()
+
+        val replayed = wire.decodeFromString<PrivacyPreferenceSyncBody>(legacyPayload)
+        val obj = wire.encodeToString(replayed).let { Json.parseToJsonElement(it).jsonObject }
+
+        assertThat(replayed.showOnlineStatus).isFalse()
+        assertThat(obj.keys).doesNotContain("acceptCallsFromNonContacts")
+        assertThat(obj.keys).doesNotContain("notifyContactsOnReturn")
+        assertThat(obj.keys).doesNotContain("allowCallsFromNonContacts")
+    }
+
+    @Test
+    fun `reading the projection back keeps the encryption leg and extras and carries all thirteen toggles`() {
+        val local = PrivacyPreferences(
+            encryptionPreference = EncryptionPreference.ALWAYS,
+            autoEncryptNewConversations = true,
+            showEncryptionStatus = false,
+            warnOnUnencrypted = true,
+            extras = mapOf("k" to kotlinx.serialization.json.JsonPrimitive(1)),
+        )
+        val remote = PrivacyPreferenceSyncBody.from(
+            PrivacyPreferences(notifyContactsOnReturn = false, blockScreenshots = true, showLastSeen = false),
+        )
+
+        val merged = remote.toPreferences(local)
+
+        assertThat(merged.notifyContactsOnReturn).isFalse()
+        assertThat(merged.blockScreenshots).isTrue()
+        assertThat(merged.showLastSeen).isFalse()
+        assertThat(merged.encryptionPreference).isEqualTo(EncryptionPreference.ALWAYS)
+        assertThat(merged.autoEncryptNewConversations).isTrue()
+        assertThat(merged.showEncryptionStatus).isFalse()
+        assertThat(merged.warnOnUnencrypted).isTrue()
+        assertThat(merged.extras).isEqualTo(local.extras)
+        assertThat(PrivacyPreferenceSyncBody.from(merged)).isEqualTo(
+            PrivacyPreferenceSyncBody.from(PrivacyPreferences(notifyContactsOnReturn = false, blockScreenshots = true, showLastSeen = false)),
+        )
     }
 }

@@ -3,8 +3,10 @@ package me.meeshy.app.feed
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
-import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MosaicLayoutMode
+import me.meeshy.sdk.model.PostMediaPresentation
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.resolvedLayout
@@ -58,6 +60,8 @@ data class FeedPostPresentation(
     val languageStrip: List<LanguageChip>,
     val moodEmoji: String?,
     val images: List<FeedPostImage>,
+    /** Tous les médias du post (image, vidéo, audio, document), plafonnés à `MAX_POST_MEDIA`. */
+    val media: List<FeedMediaItem> = emptyList(),
     val likeCount: Int,
     val isLiked: Boolean,
     val bookmarkCount: Int,
@@ -78,7 +82,11 @@ data class FeedPostPresentation(
     val distanceMeters: Double? = null,
     /** The author's layout (#6514), already resolved — the carousel when the post declares none. */
     val layout: MosaicLayoutMode = MosaicLayoutMode.FALLBACK,
-)
+) {
+    /** Carrousel pour un post, diaporama horizontal pour un reel (iOS `PostMediaPresentation.default`). */
+    val mediaPresentation: PostMediaPresentation
+        get() = PostMediaPresentation.defaultFor(if (isReel) PostType.REEL else PostType.POST)
+}
 
 object FeedPostBuilder {
 
@@ -100,20 +108,19 @@ object FeedPostBuilder {
         currentUserId: String? = null,
     ): FeedPostPresentation {
         val preferredLanguages = preferredContentLanguages(preferences)
-        val images = post.media
-            .orEmpty()
-            .filter { it.isImage && it.fileUrl != null }
-            .sortedBy { it.order ?: Int.MAX_VALUE }
-            .map { media ->
+        val media = FeedMediaMapper.map(post.media, preferredLanguages, mediaBaseUrl)
+        val images = media
+            .filter { it.type == FeedMediaType.IMAGE }
+            .map { item ->
                 FeedPostImage(
-                    id = media.id,
-                    url = resolveFeedMediaUrl(media.fileUrl!!, mediaBaseUrl),
-                    thumbnailUrl = media.thumbnailUrl?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
-                    width = media.width,
-                    height = media.height,
-                    thumbHash = media.thumbHash,
-                    caption = media.resolvedCaption(preferredLanguages),
-                    alt = media.alt,
+                    id = item.id,
+                    url = item.url,
+                    thumbnailUrl = item.thumbnailUrl,
+                    width = item.width,
+                    height = item.height,
+                    thumbHash = item.thumbHash,
+                    caption = item.caption,
+                    alt = item.alt,
                 )
             }
         val originalCode = post.originalLanguage.normalizedCode()
@@ -141,6 +148,7 @@ object FeedPostBuilder {
             ),
             moodEmoji = post.moodEmoji?.takeIf { it.isNotBlank() },
             images = images,
+            media = media,
             likeCount = post.likeCount ?: 0,
             isLiked = post.isLikedByMe == true,
             bookmarkCount = post.bookmarkCount ?: 0,
@@ -174,7 +182,7 @@ object FeedPostBuilder {
     ): String? {
         val originalCode = post.originalLanguage.normalizedCode()
         val preferredCode = LanguageResolver
-            .preferredTranslation(post.translations.toTranslationRows(), preferences)
+            .preferredTranslation(post.translations.toTranslationRows(), preferences, post.originalLanguage)
             ?.targetLanguage?.normalizedCode()
         val requested = override.normalizedCode()?.takeIf { it.hasContentIn(post, originalCode) }
         return requested ?: (preferredCode ?: originalCode)
@@ -201,7 +209,4 @@ object FeedPostBuilder {
 
     private fun String?.normalizedCode(): String? =
         this?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
-
-    private val ApiPostMedia.isImage: Boolean
-        get() = mimeType?.startsWith("image/") == true
 }

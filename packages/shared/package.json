@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/shared",
-  "version": "1.39.0",
+  "version": "1.42.0",
   "description": "Shared library for Meeshy - Types, Prisma Schema, Utilities",
   "private": true,
   "type": "module",
@@ -101,11 +101,16 @@
     "build:watch": "tsc --watch --project tsconfig.json",
     "api-endpoints:generate": "tsx scripts/generate-api-endpoints.ts",
     "ios-endpoints:generate": "tsx scripts/generate-ios-endpoints.ts",
+    "android-endpoints:generate": "tsx scripts/generate-android-endpoints.ts",
     "generate:call-frames": "bun scripts/generate-call-frames-swift.ts",
+    "generate:lens-format": "bun scripts/generate-lens-format-swift.ts",
     "import:glory-frames": "bun scripts/import-glory-frames.ts",
     "generate:glory-frames": "bun scripts/generate-glory-frames.ts",
+    "glory-frames:check-versions": "tsx scripts/glory-frame-version-ratchet.ts",
     "translator-languages:generate": "tsx scripts/generate-translator-languages.ts",
     "translator-languages:check": "tsx scripts/generate-translator-languages.ts --check",
+    "action-policy-vectors:generate": "bun scripts/generate-action-policy-vectors.ts",
+    "action-policy-vectors:check": "bun scripts/generate-action-policy-vectors.ts --check",
     "generate": "prisma generate --schema=./prisma/schema.prisma --generator client",
     "generate:all": "prisma generate --schema=./prisma/schema.prisma",
     "generate:python": "prisma generate --schema=./prisma/schema.prisma --generator client_py",
@@ -132,7 +137,7 @@
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
-    "@signalapp/libsignal-client": "^0.102.2"
+    "@signalapp/libsignal-client": "0.105.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

@@ -5,8 +5,9 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversationLastMessage
 
 /**
- * No in-app language preference configured — Prisme resolution falls through to
- * its device-locale/`"fr"` tail. Used only when [previewLines] is called before a
+ * No in-app language preference configured — the strict Prisme descent has no rank
+ * to walk, so the original content is shown (no `"fr"` fallback: that one serves
+ * COMPOSITION defaults only). Used only when [previewLines] is called before a
  * session has hydrated (mirrors the same-shaped fallback each feature module
  * already keeps locally, e.g. chat's/feed's own `EmptyContentPreferences`).
  */
@@ -18,9 +19,11 @@ private object NoLanguagePreferences : LanguageResolver.ContentLanguagePreferenc
 
 /**
  * Formats already-sliced [recent] messages (oldest first) into one preview line
- * each, for the hard-press preview card. Reuses [lastMessagePreview] verbatim —
- * same media-type labels, same sender-prefix rule — so the card's lines and the
- * row's own last-message line can never drift. Applies the Prisme Linguistique
+ * each, for the hard-press preview card. Reuses [messageSummaryLine] verbatim —
+ * same media-type labels, same sender-prefix rule, same protection kinds — so the
+ * card's lines and the row's own last-message line can never drift: an expired,
+ * blurred or view-once message reads as its kind label, never as its text (parity
+ * iOS `ConversationListPreviewLoader.sealedForPreview`). Applies the Prisme Linguistique
  * per message ([me.meeshy.sdk.model.ApiMessage.displayContent]): the viewer's
  * preferred translation when one matches, the original content otherwise —
  * never `translations.first()`.
@@ -31,11 +34,12 @@ fun previewLines(
     showSender: Boolean,
     prefs: LanguageResolver.ContentLanguagePreferences?,
     labels: LastMessagePreviewLabels,
+    nowMillis: Long = System.currentTimeMillis(),
 ): List<String> {
     val resolved = prefs ?: NoLanguagePreferences
     return recent.map { local ->
         val message = local.message
-        lastMessagePreview(
+        messageSummaryLine(
             message = ApiConversationLastMessage(
                 id = message.id,
                 content = message.displayContent(resolved),
@@ -44,10 +48,14 @@ fun previewLines(
                 messageType = message.messageType,
                 originalLanguage = message.originalLanguage,
                 createdAt = message.createdAt,
+                isBlurred = message.isBlurred == true,
+                isViewOnce = message.isViewOnce == true,
+                expiresAt = message.expiresAt,
             ),
             currentUserId = currentUserId,
             showSender = showSender,
             labels = labels,
-        )
+            nowMillis = nowMillis,
+        ).text
     }
 }

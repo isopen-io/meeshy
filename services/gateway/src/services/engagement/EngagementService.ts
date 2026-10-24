@@ -126,6 +126,8 @@ export { ENGAGEMENT_ROUTE };
 type CreditDay = {
   readonly today: Date;
   readonly timezone: string | null;
+  /** Un e-mail ou un téléphone vérifié, lu avec le jour — ce qui ouvre un palier de gros poids en entier (#10422). */
+  readonly verified: boolean;
   readonly postType?: EngagementStreakPostType;
   readonly conversationId?: string;
 };
@@ -167,7 +169,7 @@ export class EngagementService {
     this.conversationRecorder = new ConversationEngagementRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
     this.postRecorder = new PostPointsRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
     this.quotas = new EngagementQuotas(prisma);
-    this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, this.scale, {
+    this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, {
       onPointsTakenBack: (userId, points, creditedAt) => this.game.onPointsTakenBack(userId, points, creditedAt),
     });
     this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
@@ -352,6 +354,7 @@ export class EngagementService {
     await this.credit(scale, userId, operationKey, points, {
       today,
       timezone: inputs.timezone,
+      verified: inputs.verified,
       ...(options.postType !== undefined ? { postType: options.postType } : {}),
       ...(conversationId !== undefined ? { conversationId } : {}),
     }, options.actorId);
@@ -532,6 +535,7 @@ export class EngagementService {
       operationKey,
       today: civilDayKey(day.today),
       timezone: day.timezone,
+      verified: day.verified,
       ...(day.postType !== undefined ? { postType: day.postType } : {}),
       ...(day.conversationId !== undefined ? { conversationId: day.conversationId } : {}),
     });
@@ -593,18 +597,18 @@ export class EngagementService {
     }
     const visitNumber = await this.quotas.increment(creatorId, operationKey, `link:${linkKey}`);
     const points = linkVisitPoints(rules, visitNumber);
-    await this.credit(scale, creatorId, operationKey, points, { today, timezone: inputs.timezone });
+    await this.credit(scale, creatorId, operationKey, points, { today, timezone: inputs.timezone, verified: inputs.verified });
     return points;
   }
 
-  /** Un contenu lourd SUPPRIMÉ dans la fenêtre du barème (#8959) : ses points de publication sont repris. */
+  /** Un contenu lourd SUPPRIMÉ (#8959) : ses points de publication sont repris. */
   reclaimContent(userId: string, operationKey: EngagementOperationKey, targetId: string): Promise<number> {
     return this.receipts.reclaimPublication(userId, operationKey, targetId);
   }
 
   /** Un CONTENU retiré (#9584) : chaque crédit qu'il a produit est repris, une fois (`EngagementReceipts`). */
-  reclaimSource(userId: string, source: string, options: { readonly withinClawback?: boolean } = {}): Promise<number> {
-    return this.receipts.reclaim(userId, source, options);
+  reclaimSource(userId: string, source: string): Promise<number> {
+    return this.receipts.reclaim(userId, source);
   }
 
   /**

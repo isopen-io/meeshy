@@ -14,19 +14,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.chrome.unreadBadgeLabel
+import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
- * `true` quand l'avatar doit afficher la PHOTO plutot que les initiales — une URL
- * vide ou blanche n'est pas une photo. Pur, teste en JVM.
+ * The avatar's loadable address: the session stores a KEY (`avatars/user/<id>.jpg`), which
+ * Coil cannot load as is — the button showed an empty ring. Resolved like every other media
+ * against the API base; `null` when there is no photo. Pur, teste en JVM.
  */
-internal fun chromeAvatarUsesPhoto(avatarUrl: String?): Boolean = !avatarUrl.isNullOrBlank()
+internal fun chromeAvatarModel(avatar: String?, apiBaseUrl: String): String? =
+    resolveServedImageUrl(avatar, apiBaseUrl)
 
 /**
  * Couleurs de l'anneau du bouton droit au repos : parite iOS — indigo600->indigo300
@@ -47,8 +48,7 @@ internal fun chromeAvatarRingColors(menuExpanded: Boolean): List<Color> = if (me
  * qui expose photo/nom/id — `AuthUiState` n'expose que le nom d'utilisateur.
  */
 @Composable
-internal fun ChromeAvatarButton(user: MeeshyUser?, unreadCount: Int, menuExpanded: Boolean) {
-    val avatarUrl = user?.avatar
+internal fun ChromeAvatarButton(user: MeeshyUser?, avatarUrl: String?, unreadCount: Int, menuExpanded: Boolean) {
     val displayName = user?.effectiveDisplayName.orEmpty()
     Box(contentAlignment = Alignment.Center) {
         Box(
@@ -58,16 +58,8 @@ internal fun ChromeAvatarButton(user: MeeshyUser?, unreadCount: Int, menuExpande
                 .padding(3.dp),
             contentAlignment = Alignment.Center,
         ) {
-            if (chromeAvatarUsesPhoto(avatarUrl)) {
-                AsyncImage(
-                    model = avatarUrl,
-                    contentDescription = null,
-                    modifier = Modifier.size(44.dp).clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                MeeshyAvatar(name = displayName, size = 44.dp)
-            }
+            // One face: the photo once loaded, its initials standing in until then — never an empty ring.
+            MeeshyAvatar(name = displayName, size = 44.dp, imageUrl = avatarUrl)
         }
         if (!menuExpanded && unreadCount > 0) {
             Box(

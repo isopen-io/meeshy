@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_section_chats">Chat</string>
+    <string name="settings_section_privacy">Privacy e sicurezza</string>
+    <string name="settings_display_language">Lingua di visualizzazione</string>
+    <string name="settings_language_system">Predefinita di sistema</string>
+    <string name="settings_regional_language_search">Cerca lingue</string>
+    <string name="settings_regional_language_empty">Nessuna lingua corrisponde alla ricerca</string>
+    <string name="settings_notification_vibration">Vibrazione</string>
+    <string name="settings_notif_show_preview">Anteprima del messaggio</string>
+    <string name="settings_notif_badge_enabled">Badge sull\'icona dell\'app</string>
+    <string name="settings_dnd_start">Dalle</string>
+    <string name="settings_dnd_end">Fino alle</string>
+    <string name="settings_dnd_days">Ripeti il</string>
+    <string name="settings_dnd_every_day">Ogni giorno</string>
+    <string name="settings_dnd_active">Ore di silenzio attive ora</string>
+    <string name="settings_dnd_inactive">Disattivato al momento</string>
+    <string name="settings_dnd_day_mon">Lun</string>
+    <string name="settings_dnd_day_tue">Mar</string>
+    <string name="settings_dnd_day_wed">Mer</string>
+    <string name="settings_dnd_day_thu">Gio</string>
+    <string name="settings_dnd_day_fri">Ven</string>
+    <string name="settings_dnd_day_sat">Sab</string>
+    <string name="settings_dnd_time_picker_confirm">Imposta</string>
+    <string name="settings_notification_types_title">Tipi di notifica</string>
+    <string name="settings_notification_types_search">Cerca tipi di notifica</string>
+    <string name="settings_notification_types_empty">Nessun tipo di notifica corrisponde alla ricerca</string>
+    <string name="settings_notif_cat_groups">Gruppi e contatti</string>
+    <string name="settings_notif_type_conversation">Aggiornamenti delle conversazioni</string>
+    <string name="settings_notif_type_voicemail">Segreteria</string>
+    <string name="settings_notif_type_friend_content">Attività degli amici</string>
+    <string name="settings_notif_type_group_invite">Inviti ai gruppi</string>
+    <string name="settings_notif_type_system">Avvisi di sistema</string>
+    <string name="settings_two_factor">Autenticazione a due fattori</string>
+    <string name="settings_account_contact">E-mail e telefono</string>
+    <string name="settings_clear_media_cache">Svuota la cache dei contenuti multimediali</string>
+    <string name="settings_storage_used">Spazio utilizzato</string>
+    <string name="settings_version">Versione 1.0.0</string>
+    <!-- Two-factor authentication (§L) -->
+    <string name="twofactor_status_enabled">Attivata</string>
+    <string name="twofactor_enable_button">Configura l\'autenticazione a due fattori</string>
+    <string name="twofactor_regenerate_button">Rigenera i codici di backup</string>
+    <string name="twofactor_setup_title">Inquadra il codice QR</string>
+    <string name="twofactor_setup_instructions">Inquadra questo codice QR con la tua app di autenticazione oppure inserisci il codice manualmente.</string>
+    <string name="twofactor_setup_secret_label">Codice per l\'inserimento manuale</string>
+    <string name="twofactor_backup_codes_warning">Conserva questi codici in un luogo sicuro. Ogni codice può essere usato una sola volta.</string>
+    <string name="twofactor_backup_codes_done">Ho salvato i miei codici</string>
+    <string name="twofactor_regenerate_title">Rigenera i codici di backup</string>
+    <string name="twofactor_regenerate_confirm">Rigenera</string>
+    <string name="twofactor_error_status">Impossibile caricare lo stato della 2FA</string>
+    <string name="twofactor_error_setup">Impossibile avviare la configurazione della 2FA</string>
+    <string name="twofactor_error_disable">Impossibile disattivare la 2FA</string>
+    <string name="twofactor_error_backup_codes">Impossibile rigenerare i codici di backup</string>
+    <!-- Change password (§L) -->
+    <string name="change_password_hint_match">Le password coincidono</string>
+    <string name="change_password_hint_different">Diversa dalla password attuale</string>
+    <string name="change_password_error_current">La password attuale non è corretta</string>
+    <!-- Email / phone change (§K) -->
+    <string name="account_contact_title">E-mail e telefono</string>
+    <string name="account_contact_email_resend">Invia di nuovo l\'e-mail</string>
+    <string name="account_contact_email_resend_cooldown">Invia di nuovo (%1$ds)</string>
+    <string name="account_contact_error_email_change">Impossibile inviare l\'e-mail di verifica. Controlla l\'indirizzo e riprova.</string>
+    <string name="account_contact_error_email_resend">Impossibile inviare di nuovo l\'e-mail di verifica.</string>
+    <string name="account_contact_phone_new_label">Nuovo numero di telefono</string>
+    <string name="account_contact_phone_send_code">Invia il codice</string>
+    <string name="account_contact_error_phone_change">Impossibile inviare il codice di verifica. Controlla il numero e riprova.</string>
+    <!-- Privacy & visibility (§L) -->
+    <string name="settings_privacy">Privacy e visibilità</string>
+    <string name="privacy_title">Privacy e visibilità</string>
+    <!-- Account deletion (§L) -->
+    <string name="delete_account_warning_title">Questa azione non può essere annullata</string>
+    <string name="delete_account_warning_intro">L\'eliminazione dell\'account rimuove definitivamente:</string>
+    <string name="delete_account_warning_media">Tutti i contenuti multimediali condivisi</string>
+    <string name="delete_account_confirm_prompt">Digita %1$s per confermare</string>
+    <string name="delete_account_error_invalid_password">Password errata. Riprova.</string>
+    <string name="delete_account_error_pending">Una richiesta di eliminazione è già in corso. Controlla la posta in arrivo.</string>
+    <string name="delete_account_error_no_email">Aggiungi e verifica un indirizzo e-mail prima di poter eliminare l\'account.</string>
+    <string name="delete_account_email_title">Un\'e-mail di conferma sta arrivando</string>
+    <string name="delete_account_email_body">Controlla la posta in arrivo per confermare l\'eliminazione dell\'account.</string>
+
+    <!-- Data export (GDPR) -->
+    <string name="data_export_info_body">Ai sensi del GDPR puoi esportare tutti i tuoi dati personali.</string>
+    <string name="data_export_format_json">JSON</string>
+    <string name="data_export_format_csv">CSV</string>
+    <string name="data_export_content_profile">Profilo (sempre incluso)</string>
+    <string name="data_export_ready_title">Esportazione pronta</string>
+
+    <!-- Media cache management -->
+    <string name="media_cache_info_title">Contenuti multimediali in cache</string>
+    <string name="media_cache_info_body">La cache velocizza il caricamento dei contenuti e risparmia dati. Svuotarla è sicuro: i file vengono scaricati di nuovo quando servono.</string>
+    <string name="media_cache_total_label">Cache totale utilizzata</string>
+    <string name="media_cache_category_thumbnails">Miniature</string>
+    <string name="media_cache_clear_all">Svuota la cache</string>
+    <string name="media_cache_confirm_title">Svuota la cache</string>
+    <string name="media_cache_confirm_message">Verranno rimossi tutti i contenuti multimediali salvati in locale. Saranno scaricati di nuovo se necessario.</string>
+    <string name="media_cache_error_scan">Impossibile leggere la dimensione della cache. Trascina verso il basso per aggiornare.</string>
+    <string name="media_cache_error_clear">Impossibile svuotare la cache. Riprova.</string>
+
+    <!-- Crash diagnostics -->
+    <string name="settings_diagnostics">Diagnostica</string>
+    <string name="crash_reports_title">Diagnostica</string>
+    <string name="crash_reports_info_body">Se l\'app si chiude in modo imprevisto, qui viene salvato un rapporto da condividere con l\'assistenza. Nulla lascia il tuo dispositivo finché non lo condividi.</string>
+    <string name="crash_reports_empty">Nessun rapporto di arresto anomalo: l\'app funziona senza problemi.</string>
+    <string name="crash_reports_clear_all">Elimina i rapporti</string>
+    <string name="crash_reports_confirm_title">Elimina i rapporti</string>
+    <string name="crash_reports_confirm_message">Tutti i rapporti di arresto anomalo salvati su questo dispositivo verranno eliminati definitivamente.</string>
+    <string name="crash_reports_error_load">Impossibile leggere i rapporti di arresto anomalo.</string>
+    <string name="crash_reports_error_clear">Impossibile eliminare i rapporti di arresto anomalo. Riprova.</string>
+    <string name="crash_kind_anr">ANR</string>
+    <string name="about_version_label">Versione %1$s</string>
+    <string name="about_info_application_id">ID applicazione</string>
+    <string name="settings_help_support">Aiuto e assistenza</string>
+    <string name="licenses_intro">Meeshy è realizzata con le seguenti librerie open source.</string>
+    <string name="licenses_type_mit">MIT</string>
+    <string name="licenses_type_apache">Apache 2.0</string>
+    <string name="licenses_type_bsd">BSD</string>
+    <string name="support_title">Aiuto e assistenza</string>
+    <string name="support_link_email">Scrivi all\'assistenza</string>
+
+    <!-- Active sessions -->
+    <string name="sessions_revoke_others">Disconnetti tutti gli altri dispositivi</string>
+</resources>

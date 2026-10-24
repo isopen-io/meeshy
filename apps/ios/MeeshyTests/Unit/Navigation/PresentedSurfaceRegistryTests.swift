@@ -12,6 +12,10 @@ final class PresentedSurfaceRegistryTests: XCTestCase {
         var openings: [Bool] = []
     }
 
+    private final class Stance {
+        var answer: PresentedSurfaceYield = .retains
+    }
+
     private func declare(_ kind: PresentedSurfaceKind,
                          in registry: PresentedSurfaceRegistry,
                          journal: Journal,
@@ -164,10 +168,10 @@ final class PresentedSurfaceRegistryTests: XCTestCase {
     func test_clearForConversation_yieldIsReadAtRequestTime() {
         let registry = PresentedSurfaceRegistry()
         let journal = Journal()
-        var stance = PresentedSurfaceYield.retains
-        _ = registry.declare(.composer, answer: { stance }) { journal.closed.append(.composer) }
+        let stance = Stance()
+        _ = registry.declare(.composer, answer: { stance.answer }) { journal.closed.append(.composer) }
 
-        stance = .closes
+        stance.answer = .closes
         registry.clearForConversation { journal.openings.append($0) }
 
         XCTAssertEqual(journal.closed, [.composer])
@@ -194,17 +198,15 @@ final class PresentedSurfaceRegistryTests: XCTestCase {
 
     func test_atelierWritesItsDraft_mountedAndArmed_isTrue() {
         XCTAssertTrue(ComposerConversationYield.atelierWritesItsDraft(
-            mounted: .atelier, exitIsArmed: true, returnsToConversation: false))
+            mounted: .atelier, exitIsArmed: true))
     }
 
-    func test_atelierWritesItsDraft_unarmedOrOtherSurfaceOrRetouch_isFalse() {
+    func test_atelierWritesItsDraft_unarmedOrOtherSurface_isFalse() {
         XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
-            mounted: .atelier, exitIsArmed: false, returnsToConversation: false))
-        XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
-            mounted: .atelier, exitIsArmed: true, returnsToConversation: true))
+            mounted: .atelier, exitIsArmed: false))
         for mounted in ComposerMountedView.allCases where mounted != .atelier {
             XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
-                mounted: mounted, exitIsArmed: true, returnsToConversation: false), "\(mounted)")
+                mounted: mounted, exitIsArmed: true), "\(mounted)")
         }
     }
 

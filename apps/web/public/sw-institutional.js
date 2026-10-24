@@ -54,7 +54,7 @@
  * `src/institutional/help-faq.test.tsx` confronte désormais cette liste à la
  * source unique, comme celle de nginx.
  */
-const INSTITUTIONAL_ROUTES = ['about', 'contact', 'faq', 'help', 'partners', 'privacy', 'terms'];
+const INSTITUTIONAL_ROUTES = ['about', 'child-safety', 'contact', 'faq', 'help', 'partners', 'privacy', 'terms'];
 
 const TRAILING_SLASH = new RegExp(`^/(${INSTITUTIONAL_ROUTES.join('|')})/$`);
 

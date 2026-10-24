@@ -189,9 +189,25 @@ struct ComposerCaptureChrome: View {
         session.gestureContext(allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
     }
 
-    /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777).
-    private var chromeVeil: Double {
-        ComposerCaptureChromeLegibility.veilOpacity(framed: session.look.frame != ComposerPhotoFrame.none)
+    /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777),
+    /// réglé sur la luminance mesurée de la bande du cadre qu'il couvre.
+    @State private var chromeBands: ComposerCaptureChromeBands?
+
+    private var framed: Bool { session.look.frame != ComposerPhotoFrame.none }
+
+    private var chromeVeilTop: Double {
+        ComposerCaptureChromeLegibility.veilOpacity(framed: framed, bandLuminance: chromeBands?.measuring(session.look.frame)?.top)
+    }
+
+    private var chromeVeilBottom: Double {
+        ComposerCaptureChromeLegibility.veilOpacity(framed: framed, bandLuminance: chromeBands?.measuring(session.look.frame)?.bottom)
+    }
+
+    /// Le cadre de l'aperçu, à sa toile : la scène que la vue Metal peint déjà.
+    private var chromeBandKey: ComposerLookSceneKey? {
+        guard framed else { return nil }
+        return ComposerLookSceneKey(look: session.look, canvas: ComposerLookPainter.previewCanvas(aspect: session.canvasAspect),
+                                    date: session.lookDate, person: session.lookPerson)
     }
 
     /// « Terminé » rend : seule la croix répond encore.
@@ -239,35 +255,10 @@ struct ComposerCaptureChrome: View {
                     }
                     .allowsHitTesting(!finishing)
             }
-            if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
-                GeometryReader { proxy in
-                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
-                                                      framed: session.editFramesScene, playback: session.offersEditPlayback)
-                    ComposerCropBrackets(scene: ComposerEditScene.rect(aspect: aspect, in: zone), area: zone) { cadre in
-                        guard cadre.height > 0 else { return }
-                        session.setEditAspect(cadre.width / cadre.height)
-                    }
-                }
-                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
-                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
-                .transition(.opacity)
-            }
+            cropBrackets
             if !finishing, session.offersEditPlayback { editPlayback }
-            // **Les formats, PAR-DESSUS le cadre** (#10930), au bas de la scène.
-            if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
-                GeometryReader { proxy in
-                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
-                                                      framed: session.editFramesScene, playback: session.offersEditPlayback)
-                    let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
-                    }
-                    .frame(width: rangee.width, height: rangee.height)
-                    .position(x: rangee.midX, y: rangee.midY)
-                }
-                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
-                .transition(.opacity)
-            }
+            cropPresets
+            ComposerEditTextLayer(session: session, board: session.retouchTexts)
             VStack(spacing: 0) {
                 // Toujours montée, jamais retirée de l'arbre : une rangée insérée
                 // et retirée au gré des outils peut rester peinte le temps d'une
@@ -281,11 +272,11 @@ struct ComposerCaptureChrome: View {
                 if !session.phase.isEditing || session.editChromeShown {
                     ComposerCaptureBottomRow(session: session, context: context)
                         .allowsHitTesting(!finishing)
-                        .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeil))
+                        .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeilBottom))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: chromeVeil)
+            .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop, chromeVeilBottom], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
             if session.isRenderingLook {
                 ProgressView()
                     .progressViewStyle(.circular)
@@ -313,6 +304,43 @@ struct ComposerCaptureChrome: View {
                 if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }
             }
             Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) { ComposerCaptureDiscardFlow.keep(session) }
+        }
+    }
+
+    /// Les quatre crochets du recadrage, sur la scène.
+    @ViewBuilder
+    private var cropBrackets: some View {
+        if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
+            GeometryReader { proxy in
+                let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
+                                                  framed: session.editFramesScene, playback: session.offersEditPlayback)
+                ComposerCropBrackets(scene: ComposerEditScene.rect(aspect: aspect, in: zone), area: zone) { cadre in
+                    guard cadre.height > 0 else { return }
+                    session.setEditAspect(cadre.width / cadre.height)
+                }
+            }
+            .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
+            .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
+            .transition(.opacity)
+        }
+    }
+
+    /// **Les formats, PAR-DESSUS le cadre** (#10930), au bas de la scène.
+    @ViewBuilder
+    private var cropPresets: some View {
+        if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
+            GeometryReader { proxy in
+                let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
+                                                  framed: session.editFramesScene, playback: session.offersEditPlayback)
+                let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
+                }
+                .frame(width: rangee.width, height: rangee.height)
+                .position(x: rangee.midX, y: rangee.midY)
+            }
+            .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
+            .transition(.opacity)
         }
     }
 
@@ -345,7 +373,7 @@ struct ComposerCaptureChrome: View {
             onDone: { session.finishEditing() },
             saveState: session.takeSaveState,
             onSave: { session.saveTakeToPhotos() })
-        .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeil))
+        .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeilTop))
     }
 
     /// **Lecture et volume d'une vidéo, en haut à droite sous « Terminé »,
@@ -529,7 +557,7 @@ struct ComposerCaptureChrome: View {
             id: UUID(), location: CGPoint(x: location.x - origin.x, y: location.y - origin.y))
         focusMark = marque
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(ComposerCaptureFocus.markLifetime * 1_000_000_000))
+            _ = await cancellableSleep(for: .seconds(ComposerCaptureFocus.markLifetime))
             if focusMark == marque { focusMark = nil }
         }
     }

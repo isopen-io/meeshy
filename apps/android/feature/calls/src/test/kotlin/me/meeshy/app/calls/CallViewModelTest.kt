@@ -140,7 +140,9 @@ class CallViewModelTest {
     /** Records the exact sequence of telecom connection reports the VM makes. */
     private class RecordingTelecomReporter : TelecomCallReporter {
         val updates = mutableListOf<TelecomConnectionUpdate>()
+        val begun = mutableListOf<TelecomCallInfo>()
         var releaseCount = 0
+        override fun begin(call: TelecomCallInfo) { begun += call }
         override fun report(update: TelecomConnectionUpdate) { updates += update }
         override fun release() { releaseCount += 1 }
     }
@@ -170,10 +172,24 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** The extension points with nothing registered — the core call, as it was before they existed. */
+    private val extensions = CallExtensionPoints(
+        controllers = CallFeatureControllerRegistry(emptySet()),
+        overlays = CallOverlayRegistry(emptySet()),
+        actions = CallActionDispatcher(emptyMap()),
+        toasts = CallToastBus(clock),
+        videoHealth = NoopCallVideoHealth(),
+    )
+
     private fun vm() = CallViewModel(
-        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock, reconnectBudget,
-        connectingWatchdog,
+        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, appStatePresence,
+        CallPeerIndicatorsController(signalManager, qualityResetTimer, screenRecordingDetector),
+        CallWaitingController(signalManager, waitingTimer, mockk(relaxed = true)),
+        CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
+        CallAnalyticsController(signalManager, clock),
+        extensions,
+        mockk(relaxed = true),
+        CallPeerVisualSource { kotlinx.coroutines.flow.emptyFlow() },
     )
 
     @Test
@@ -1026,7 +1042,7 @@ class CallViewModelTest {
     fun `the timer reads 0 00 the instant the call connects`() {
         val vm = vm().connect()
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:00")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:00")
     }
 
     @Test
@@ -1035,20 +1051,20 @@ class CallViewModelTest {
 
         tick(3)
 
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:03")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:03")
     }
 
     @Test
     fun `the timer keeps counting through a reconnect`() = runTest {
         val vm = vm().connect()
         tick(2)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:02")
 
         vm.onSignal(CallEvent.ConnectionStalled)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
 
         tick(2)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:04")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:04")
     }
 
     @Test
@@ -1058,10 +1074,10 @@ class CallViewModelTest {
 
         vm.onSignal(CallEvent.RemoteHangUp)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:02")
 
         tick(5)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:02")
     }
 
     @Test
@@ -1083,7 +1099,7 @@ class CallViewModelTest {
         assertThat(first.state.value.status).isEqualTo(CallStatus.IDLE)
 
         first.connect()
-        assertThat(first.state.value.durationLabel).isEqualTo("0:00")
+        assertThat(first.state.value.durationLabel).isEqualTo("00:00")
     }
 
     // --- live connection-quality indicator ---------------------------------
@@ -1255,6 +1271,21 @@ class CallViewModelTest {
 
         assertThat(telecom.updates)
             .containsExactly(TelecomConnectionUpdate(TelecomConnectionState.Dialing))
+    }
+
+    @Test
+    fun `a call tells the system who is calling before its first report`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        assertThat(telecom.begun).containsExactly(
+            TelecomCallInfo(
+                peerId = incomingAudio.peerId,
+                peerName = incomingAudio.peerName,
+                isVideo = incomingAudio.isVideo,
+                isOutgoing = false,
+            ),
+        )
     }
 
     @Test
@@ -1439,6 +1470,16 @@ class CallViewModelTest {
         vm.accept()
 
         coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-77") }
+    }
+
+    @Test
+    fun `the re-presented waiting call keeps its conversation so minimising has a destination`() = runTest {
+        val vm = vm().connect()
+
+        incomingOffers.emit(offer(callId = "call-77").copy(conversationId = "conv-77"))
+        vm.acceptWaitingSwap()
+
+        assertThat(vm.activeConfig.conversationId).isEqualTo("conv-77")
     }
 
     @Test

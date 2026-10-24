@@ -130,7 +130,7 @@ struct ConversationMediaHubView: View {
     private var offlineNotice: some View {
         Label(ConversationMediaHubCopy.offline, systemImage: "wifi.slash")
             .font(.footnote.weight(.medium))
-            .foregroundColor(MeeshyColors.warning)
+            .foregroundStyle(MeeshyColors.warning)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.bottom, MeeshySpacing.sm)
@@ -203,11 +203,11 @@ struct ConversationMediaHubView: View {
     private func visualTile(_ item: ConversationMediaHubItem) -> some View {
         let isVideo = item.attachment?.type == .video
         let label = ConversationMediaHubCopy.tile(isVideo: isVideo, sender: senderName(item), date: dateLabel(item.sentAt))
-        return MediaHubVisualTile(item: item, accessibilityText: label)
-            .equatable()
-            .onTapGesture { open(item) }
-            .accessibilityAction { open(item) }
-            .modifier(GoToMessageAffordance(messageId: item.messageId, goToMessage: actions.goToMessage))
+        return Button { open(item) } label: {
+            MediaHubVisualTile(item: item, accessibilityText: label).equatable()
+        }
+        .buttonStyle(MeeshyPointerButtonStyle(shape: .rectangle))
+        .modifier(GoToMessageAffordance(messageId: item.messageId, goToMessage: actions.goToMessage))
     }
 
     @ViewBuilder

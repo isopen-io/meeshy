@@ -133,6 +133,24 @@ final class ContactCardViewModelTests: XCTestCase {
         XCTAssertEqual(resolver.resolveCallCount, 0)
     }
 
+    // MARK: - Un visage par personne sur la fiche (#12568)
+
+    private func makeSecondAccount() -> PublicContactAccount {
+        PublicContactAccount(userId: "u2", displayName: "Awa Pro", username: "awa.pro", avatarUrl: "https://x/awa-pro.jpg")
+    }
+
+    func test_sectionShowsFace_primaryAccount_leavesItsFaceToTheHeader() {
+        let (sut, _, _, _) = makeSUT(cachedCard: makeCard(), cachedAccounts: [makeAccount(), makeSecondAccount()])
+        XCTAssertFalse(sut.sectionShowsFace(for: makeAccount()),
+                       "L'en-tête montre déjà le visage du compte principal : sa section ne le répète pas.")
+    }
+
+    func test_sectionShowsFace_secondaryAccount_keepsItsOwnFace() {
+        let (sut, _, _, _) = makeSUT(cachedCard: makeCard(), cachedAccounts: [makeAccount(), makeSecondAccount()])
+        XCTAssertTrue(sut.sectionShowsFace(for: makeSecondAccount()),
+                      "Un compte secondaire est absent de l'en-tête : sa section garde son visage.")
+    }
+
     // MARK: - Actions
 
     func test_actions_requestReceived_isAStateNotAnAcceptButton() {

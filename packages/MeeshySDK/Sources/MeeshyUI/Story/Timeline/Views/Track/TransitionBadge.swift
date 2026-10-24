@@ -71,6 +71,8 @@ public struct TransitionBadge: View, Equatable {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
         .accessibilityHint(String(localized: "story.timeline.transition.delete", bundle: .module))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onTap() }
     }
 }
 

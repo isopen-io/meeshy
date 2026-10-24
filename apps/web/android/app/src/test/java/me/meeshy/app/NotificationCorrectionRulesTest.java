@@ -70,6 +70,25 @@ public class NotificationCorrectionRulesTest {
         assertTrue(NotificationCorrectionRules.shows(dataOnly, null));
     }
 
+    /** #12479 — D-11 point 4, jumeau de `sw-push.js` § banniereAffichee. */
+    @Test
+    public void aPushDeliveredTwiceAlertsOnceLikeTheWeb() {
+        Map<String, String> push = correction("Alice", "Bonjour");
+        push.remove("reproduced");
+        assertTrue(NotificationCorrectionRules.repeats(push, shown(NOTIFICATION, "Alice", "Bonjour")));
+        assertFalse(NotificationCorrectionRules.repeats(push, shown(OTHER, "Alice", "Tu viens ?")));
+        assertFalse(NotificationCorrectionRules.repeats(push, shown(null, "Alice", "Bonjour")));
+        assertFalse(NotificationCorrectionRules.repeats(push, null));
+        assertFalse(NotificationCorrectionRules.repeats(correction("Alice", "Bonjour !"), shown(NOTIFICATION, "Alice", "Bonjour")));
+        Map<String, String> dataOnly = new HashMap<>();
+        dataOnly.put("notificationId", NOTIFICATION);
+        assertFalse(NotificationCorrectionRules.repeats(dataOnly, shown(NOTIFICATION, "Alice", "Bonjour")));
+        Map<String, String> anonymous = correction("Alice", "Bonjour");
+        anonymous.remove("reproduced");
+        anonymous.remove("notificationId");
+        assertFalse(NotificationCorrectionRules.repeats(anonymous, shown("", "Alice", "Bonjour")));
+    }
+
     @Test
     public void theShortNotificationKeysAreReadToo() {
         Map<String, String> extras = new HashMap<>();

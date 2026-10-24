@@ -2,25 +2,35 @@ package me.meeshy.core.database
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.database.dao.BlockedUserDao
+import me.meeshy.core.database.dao.CacheEntryDao
 import me.meeshy.core.database.dao.CallHistoryDao
 import me.meeshy.core.database.dao.ConversationDao
+import me.meeshy.core.database.dao.DirectoryContactDao
+import me.meeshy.core.database.dao.EditRevisionDao
+import me.meeshy.core.database.dao.EphemeralReceiptDao
 import me.meeshy.core.database.dao.FriendDao
 import me.meeshy.core.database.dao.FriendRequestDao
+import me.meeshy.core.database.dao.KeyedJsonCacheDao
 import me.meeshy.core.database.dao.MediaBlobDao
+import me.meeshy.core.database.dao.MediaIndexDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
+import me.meeshy.core.database.dao.PendingIdDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
 import me.meeshy.core.database.dao.StatusBarCacheDao
 import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
+import me.meeshy.core.database.migration.MeeshyMigrations
+import me.meeshy.core.database.search.SearchIndexSchema
 import javax.inject.Singleton
 
 @Module
@@ -30,9 +40,14 @@ internal object DatabaseModule {
     @Provides
     @Singleton
     fun providesDatabase(@ApplicationContext context: Context): MeeshyDatabase =
-        Room.databaseBuilder(context, MeeshyDatabase::class.java, DATABASE_NAME)
-            .fallbackToDestructiveMigration()
-            .build()
+        meeshyDatabaseBuilder(context).build()
+
+    /** The production configuration, shared with the tests that open the database the way the app does. */
+    fun meeshyDatabaseBuilder(context: Context, name: String = DATABASE_NAME): RoomDatabase.Builder<MeeshyDatabase> =
+        Room.databaseBuilder(context, MeeshyDatabase::class.java, name)
+            .addMigrations(*MeeshyMigrations.all)
+            .addCallback(SearchIndexSchema.callback)
+            .fallbackToDestructiveMigrationFrom(*PRE_BASELINE_VERSIONS)
 
     @Provides
     fun providesConversationDao(database: MeeshyDatabase): ConversationDao =
@@ -90,5 +105,36 @@ internal object DatabaseModule {
     fun providesBlockedUserDao(database: MeeshyDatabase): BlockedUserDao =
         database.blockedUserDao()
 
+    @Provides
+    fun providesEphemeralReceiptDao(database: MeeshyDatabase): EphemeralReceiptDao =
+        database.ephemeralReceiptDao()
+
+    @Provides
+    fun providesEditRevisionDao(database: MeeshyDatabase): EditRevisionDao =
+        database.editRevisionDao()
+
+    @Provides
+    fun providesDirectoryContactDao(database: MeeshyDatabase): DirectoryContactDao =
+        database.directoryContactDao()
+
+    @Provides
+    fun providesMediaIndexDao(database: MeeshyDatabase): MediaIndexDao =
+        database.mediaIndexDao()
+
+    @Provides
+    fun providesCacheEntryDao(database: MeeshyDatabase): CacheEntryDao =
+        database.cacheEntryDao()
+
+    @Provides
+    fun providesKeyedJsonCacheDao(database: MeeshyDatabase): KeyedJsonCacheDao =
+        database.keyedJsonCacheDao()
+
+    @Provides
+    fun providesPendingIdDao(database: MeeshyDatabase): PendingIdDao =
+        database.pendingIdDao()
+
     private const val DATABASE_NAME = "meeshy.db"
+
+    /** Builds older than the exported v16 baseline predate the schema lock; they alone are wiped. */
+    private val PRE_BASELINE_VERSIONS: IntArray = IntArray(MeeshyMigrations.BASELINE_VERSION - 1) { it + 1 }
 }

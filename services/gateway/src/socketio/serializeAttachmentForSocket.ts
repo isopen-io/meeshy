@@ -1,3 +1,4 @@
+import { servedDescription } from '../services/attachments/mediaSideContent';
 import {
   attachmentProtectionOf,
   type AttachmentProtectionField,
@@ -75,6 +76,9 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
   readonly thumbnailUrl?: string | null;
   readonly thumbHash?: string | null;
   readonly imageVariants?: unknown;
+  readonly avifVariants?: unknown;
+  readonly renditions?: unknown;
+  readonly processingState?: string | null;
   readonly width?: number | null;
   readonly height?: number | null;
   readonly duration?: number | null;
@@ -82,6 +86,7 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
   readonly sampleRate?: number | null;
   readonly codec?: string | null;
   readonly channels?: number | null;
+  readonly loudnessLufs?: number | null;
   readonly fps?: number | null;
   readonly videoCodec?: string | null;
   readonly pageCount?: number | null;
@@ -103,6 +108,13 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
   readonly createdAt: Date | string;
   readonly transcription: unknown;
   readonly translations: unknown;
+  /**
+   * #12333 — la description (texte alternatif), sa langue et ses traductions,
+   * `null` sous protection de la pièce OU de son message (`servedDescription`).
+   */
+  readonly alt: string | null;
+  readonly altLanguage: string | null;
+  readonly altTranslations: unknown;
   /** BUG2 A' — réactions par-image agrégées (emoji→count). */
   readonly reactionSummary: Readonly<Record<string, number>>;
   /** BUG2 A' — emojis posés par le destinataire (vide si destinataire inconnu, ex broadcast). */
@@ -184,6 +196,9 @@ export function serializeAttachmentForSocket(
     thumbnailUrl: (raw.thumbnailUrl as string | null | undefined) ?? null,
     thumbHash: (raw.thumbHash as string | null | undefined) ?? null,
     imageVariants: raw.imageVariants ?? null,
+    avifVariants: raw.avifVariants ?? null,
+    renditions: raw.renditions ?? null,
+    processingState: (raw.processingState as string | null | undefined) ?? null,
     width: (raw.width as number | null | undefined) ?? null,
     height: (raw.height as number | null | undefined) ?? null,
     duration: (raw.duration as number | null | undefined) ?? null,
@@ -191,6 +206,7 @@ export function serializeAttachmentForSocket(
     sampleRate: (raw.sampleRate as number | null | undefined) ?? null,
     codec: (raw.codec as string | null | undefined) ?? null,
     channels: (raw.channels as number | null | undefined) ?? null,
+    loudnessLufs: (raw.loudnessLufs as number | null | undefined) ?? null,
     fps: (raw.fps as number | null | undefined) ?? null,
     videoCodec: (raw.videoCodec as string | null | undefined) ?? null,
     pageCount: (raw.pageCount as number | null | undefined) ?? null,
@@ -206,6 +222,7 @@ export function serializeAttachmentForSocket(
     // Prisme Linguistique — null = pas encore enrichi, présent = serialize tel quel
     transcription: raw.transcription ?? null,
     translations: raw.translations ?? null,
+    ...servedDescription(raw as Parameters<typeof servedDescription>[0]),
     reactionSummary,
     currentUserReactions,
     // #7070 — les défauts reflètent les colonnes `@default(...)` du schéma

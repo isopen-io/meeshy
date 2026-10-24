@@ -68,14 +68,14 @@ extension PostDetailView {
                 router.push(.postDetail(repost.id))
             } label: {
                 HStack(spacing: MeeshySpacing.sm) {
-                    MeeshyAvatar(
+                    LivePresence { MeeshyAvatar(
                         name: repost.author,
                         context: .postComment,
                         accentColor: repost.authorColor,
                         avatarURL: repost.authorAvatarURL,
                         presenceState: PresenceManager.shared.knownPresenceState(for: repost.authorId),
                         ring: repost.authorRing
-                    )
+                    ) }
                     .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(repost.author)
@@ -189,7 +189,7 @@ extension PostDetailView {
                 storyCanvasOrPlaceholder(renderedItem: renderedItem) {
                     StoryReaderRepresentable(
                         repost: repost,
-                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                        preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                         mute: isCanvasMuted,
                         isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,
                                                                     callActive: isCallActive,
@@ -298,8 +298,8 @@ extension PostDetailView {
     // MARK: - Repost Language Support
 
     private func repostEffectiveContent(_ repost: RepostContent) -> String {
-        let code = repostActiveDisplayLangCode ?? AuthManager.shared.currentUser?.preferredContentLanguages.first(where: { lang in
-            repost.translations?.keys.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) ?? false
+        let code = repostActiveDisplayLangCode ?? ReaderPrism.resolve(for: AuthManager.shared.currentUser).first(where: { lang in
+            lang.caseInsensitiveCompare(repost.originalLanguage ?? "") == .orderedSame || repost.translations?.keys.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) == true
         })?.lowercased() ?? repost.originalLanguage?.lowercased() ?? "fr"
         if code == repost.originalLanguage?.lowercased() { return repost.content }
         if let translation = repost.translations?[code] ?? repost.translations?.first(where: { $0.key.lowercased() == code })?.value {
@@ -321,7 +321,7 @@ extension PostDetailView {
         let flags: [String] = {
             var all: [String] = origLang.isEmpty ? [] : [origLang]
             var seen = Set(all)
-            for lang in user?.preferredContentLanguages ?? [] {
+            for lang in ReaderPrism.resolve(for: user) {
                 let l = lang.lowercased()
                 if !seen.contains(l), repost.translations?.keys.contains(where: { $0.lowercased() == l }) == true {
                     all.append(l); seen.insert(l)

@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 
 /// L'HORLOGE D'UNE CHORÉGRAPHIE (#9381) — rend à chaque image le temps écoulé
 /// depuis le dernier déclenchement, et le contenu s'en sert pour se dessiner
@@ -48,7 +49,7 @@ struct ChoreographyClock<Content: View>: View {
         running = true
         let wait = effectiveDuration + 0.05
         Task {
-            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            _ = await cancellableSleep(for: .seconds(wait))
             if token == generation { running = false }
         }
     }

@@ -1,7 +1,11 @@
 package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
+import me.meeshy.sdk.model.AccountDeletionStatus
+import me.meeshy.sdk.model.Achievement
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.BirthDateDeclaration
+import me.meeshy.sdk.model.BirthDateRequest
 import me.meeshy.sdk.model.ChangeEmailRequest
 import me.meeshy.sdk.model.ChangeEmailResponse
 import me.meeshy.sdk.model.ChangePasswordRequest
@@ -9,6 +13,9 @@ import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ProfileDecorWrite
+import me.meeshy.sdk.model.PublicProfile
+import me.meeshy.sdk.model.ServedProfileDecor
 import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UpdateProfileResponse
@@ -18,9 +25,11 @@ import me.meeshy.sdk.model.VerifyEmailChangeResponse
 import me.meeshy.sdk.model.VerifyPhoneChangeRequest
 import me.meeshy.sdk.model.VerifyPhoneChangeResponse
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -69,7 +78,33 @@ data class AccountDeletionOpenedResponse(
     val tokenExpiresAt: String? = null,
 )
 
+/** Un appareil enregistre pour les notifications (`GET users/me/devices`). */
+@Serializable
+data class RegisteredDevice(
+    val id: String,
+    val type: String? = null,
+    val platform: String? = null,
+    val deviceId: String? = null,
+    val deviceName: String? = null,
+    val appVersion: String? = null,
+    val isActive: Boolean = true,
+    val lastUsedAt: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+)
+
+@Serializable
+data class DeviceRevokedResponse(val message: String? = null)
+
 interface UserApi {
+    /** Les appareils de l'utilisateur. */
+    @GET("users/me/devices")
+    suspend fun listDevices(): ApiResponse<List<RegisteredDevice>>
+
+    /** Revoque un appareil par l'id de SA LIGNE (pas le `deviceId` materiel). */
+    @DELETE("users/me/devices/{id}")
+    suspend fun revokeDevice(@Path("id") id: String): ApiResponse<DeviceRevokedResponse>
+
     @GET("users/search")
     suspend fun search(
         @Query("q") query: String,
@@ -119,18 +154,17 @@ interface UserApi {
      *
      * ## Le decodage, champ par champ
      *
-     * Le modele Kotlin est plus STRICT que le fil — un champ inconnu ou un champ
-     * requis absent fait echouer le document ENTIER (kotlinx), la ou le decodeur
-     * Swift tolere. Trois proprietes du `Json` de [me.meeshy.sdk.net.MeeshyApi]
-     * tiennent ensemble ce contrat, et il n'en faut pas moins :
-     * `ignoreUnknownKeys` absorbe les quatre champs de voix que la route sert et
-     * que `MeeshyUser` ignore (`voicePublic`, `voiceSampleUrl`,
-     * `voiceSampleDurationMs`, `voiceQuality`) plus les trois blocs d'expansion
-     * (`stats`, `relation`, `isSelf`) ; les valeurs par defaut absorbent les
-     * dix-huit champs que le profil public ne sert plus depuis #4161 ;
-     * `explicitNulls = false` absorbe les nuls. Restent `id` et `username`, les
-     * deux SEULES proprietes sans defaut de `MeeshyUser` — donc les deux seules
-     * dont l'absence casserait tout, et la route les sert toujours.
+     * Le document est un [PublicProfile] : le profil et ses trois expansions
+     * (`stats`, `relation`, `isSelf`) sont freres sur le fil. Un bloc `stats`
+     * illisible devient `null`, une `relation` inconnue reste une chaine, un
+     * `isSelf` absent vaut `false` : aucun ne fait echouer le document. Les
+     * valeurs par defaut de `MeeshyUser` absorbent les champs que le profil
+     * public ne sert plus depuis #4161. Restent `id` et `username`, les deux
+     * SEULES proprietes sans defaut — la route les sert toujours.
+     *
+     * [expand] vaut `stats,presence` par defaut : les compteurs du profil
+     * voyagent dans le MEME aller-retour (plus d'appel `users/{id}/stats` pour
+     * un profil tiers). La relation se demande explicitement.
      *
      * [handle] accepte un ObjectId ou un pseudo : c'est la detection de
      * `/users/:id` (`isValidObjectId`), inchangee. Aucune resolution nouvelle
@@ -141,10 +175,10 @@ interface UserApi {
      * par simple oubli.
      */
     @GET("directory/people/{handle}")
-    suspend fun getPerson(
+    suspend fun getPublicProfile(
         @Path("handle") handle: String,
-        @Query("expand") expand: String = "presence",
-    ): ApiResponse<MeeshyUser>
+        @Query("expand") expand: String? = "stats,presence",
+    ): ApiResponse<PublicProfile>
 
     @GET("users/email/{email}")
     suspend fun getProfileByEmail(@Path("email") email: String): ApiResponse<MeeshyUser>
@@ -184,6 +218,25 @@ interface UserApi {
     suspend fun verifyPhoneChange(
         @Body body: VerifyPhoneChangeRequest,
     ): ApiResponse<VerifyPhoneChangeResponse>
+
+    /** Les statistiques de SOI — jamais `users/{monId}/stats`. */
+    @GET("users/me/stats")
+    suspend fun getMyStats(): ApiResponse<UserStats>
+
+    @GET("users/me/stats/achievements")
+    suspend fun getMyAchievements(): ApiResponse<List<Achievement>>
+
+    /** L'etat de la demande de suppression (lecture) ; l'ouverture reste [openAccountDeletion]. */
+    @GET("me/account/deletion")
+    suspend fun getAccountDeletionStatus(): ApiResponse<AccountDeletionStatus>
+
+    /** L'age declare, ecrit UNE fois (409 si deja pose). */
+    @PUT("me/birth-date")
+    suspend fun setBirthDate(@Body body: BirthDateRequest): ApiResponse<BirthDateDeclaration>
+
+    /** Equipe / retire un cote du decor de profil ; la reponse fait foi. */
+    @PUT("me/profile-decor")
+    suspend fun updateProfileDecor(@Body body: ProfileDecorWrite): ApiResponse<ServedProfileDecor>
 
     @GET("users/{userId}/stats")
     suspend fun getUserStats(@Path("userId") userId: String): ApiResponse<UserStats>

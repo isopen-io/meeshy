@@ -9,6 +9,8 @@ import { copiedAttachmentFields } from './copiedAttachmentFields';
 import { exitProtectedCopy } from './copyExitProtection';
 import type { ForwardImposition } from './forwardAdmission';
 import { declaredReplyProtection } from './replyProtectionContagion';
+import { assertPlaintextAdmitted, type EncryptionRegime } from './e2eePlaintextAdmission';
+import { admitSendUnderRegime } from './e2eeSendAdmission';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
@@ -165,7 +167,8 @@ export class MessageProcessor {
   async getEncryptionContext(
     conversationId: string,
     content: string,
-    messageType: string
+    messageType: string,
+    knownRegime?: EncryptionRegime | null
   ): Promise<MessageEncryptionContext> {
     // System messages are NEVER encrypted
     if (messageType === 'system') {
@@ -177,15 +180,7 @@ export class MessageProcessor {
       };
     }
 
-    // Check if conversation has encryption enabled
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: {
-        encryptionMode: true,
-        encryptionEnabledAt: true,
-        serverEncryptionKeyId: true
-      }
-    });
+    const conversation = knownRegime === undefined ? await this.readEncryptionRegime(conversationId) : knownRegime;
 
     // No encryption enabled
     if (!conversation?.encryptionEnabledAt || !conversation.encryptionMode) {
@@ -199,9 +194,9 @@ export class MessageProcessor {
 
     const mode = conversation.encryptionMode as EncryptionMode;
 
-    // E2EE mode: encryption happens client-side
+    // E2EE : l'appareil chiffre ; un texte en clair est REFUSÉ, jamais écrit (#9224, #11216).
     if (mode === 'e2ee') {
-      logger.warn('[MessageProcessor] E2EE message received as plaintext - client should encrypt');
+      assertPlaintextAdmitted({ encryptionMode: mode, plaintext: content });
       return {
         isEncrypted: false,
         mode: 'e2ee',
@@ -269,6 +264,13 @@ export class MessageProcessor {
     }
   }
 
+  private readEncryptionRegime(conversationId: string): Promise<EncryptionRegime | null> {
+    return this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { encryptionMode: true, encryptionEnabledAt: true, serverEncryptionKeyId: true }
+    });
+  }
+
   /**
    * Sauvegarde du message en base avec toutes les relations
    * Handles encryption based on conversation settings.
@@ -321,6 +323,9 @@ export class MessageProcessor {
     /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
     attachmentReplyTo?: unknown;
   }): Promise<Message> {
+    // #11216, #12518 — refusé AVANT tout le reste ; `endToEnd` éteint les pipelines serveur.
+    const { regime, carriesCiphertext, endToEnd } = await admitSendUnderRegime(this.prisma, request);
+
     const data = await exitProtectedCopy(this.prisma, await declaredReplyProtection(this.prisma, request));
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
@@ -341,7 +346,7 @@ export class MessageProcessor {
     //
     // Un expéditeur non inscrit (invité anonyme, participant introuvable) ne
     // voit aucune adresse suivie (#10286) : ni réécriture, ni carte.
-    const linkAuthor = this.containsLinks(data.content)
+    const linkAuthor = !endToEnd && this.containsLinks(data.content)
       ? await this.resolveLinkTrackingAuthor(data.senderId)
       : UNTRACKED_LINK_AUTHOR;
 
@@ -357,21 +362,26 @@ export class MessageProcessor {
     // ÉTAPE 2: Get encryption context for this message
     let encryptionContext: MessageEncryptionContext;
 
-    if (data.encryptedContent && data.encryptionMetadata) {
+    if (carriesCiphertext) {
       const metadata = data.encryptionMetadata as Record<string, unknown>;
       encryptionContext = {
         isEncrypted: true,
-        mode: (metadata.mode as EncryptionMode) || 'e2ee',
+        mode: endToEnd ? 'e2ee' : (metadata.mode as EncryptionMode) || 'e2ee',
         encryptedContent: data.encryptedContent,
         encryptionMetadata: data.encryptionMetadata
       };
+    } else if (endToEnd) {
+      // Le mode de la ligne est celui de la conversation, quel que soit le
+      // `messageType` déclaré : l'éventail et la traduction le lisent.
+      encryptionContext = { isEncrypted: false, mode: 'e2ee', encryptedContent: null, encryptionMetadata: null };
     } else {
       encryptionContext = await performanceLogger.withTiming(
         'messaging.encryptionContext',
         () => this.getEncryptionContext(
           data.conversationId,
           processedContent.trim(),
-          data.messageType || 'text'
+          data.messageType || 'text',
+          regime
         ),
         corr
       );
@@ -584,7 +594,7 @@ export class MessageProcessor {
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
     await performanceLogger.withTiming(
       'messaging.handleAttachments',
-      () => this.handleAttachments(data, message),
+      () => this.handleAttachments(data, message, { serverReads: !endToEnd }),
       corrWithMsg
     );
 
@@ -679,7 +689,8 @@ export class MessageProcessor {
       copyAttachmentsFromMessageId?: string;
       conversationId: string;
     },
-    message: Message
+    message: Message,
+    options: { readonly serverReads: boolean }
   ): Promise<void> {
     // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
     // des pièces jointes du message désigné. Volontairement HORS du
@@ -719,8 +730,8 @@ export class MessageProcessor {
       if (data.attachmentIds && data.attachmentIds.length > 0) {
         await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
 
-        // Déclencher le traitement audio si nécessaire
-        if (this.translationService) {
+        // Déclencher le traitement audio si nécessaire — jamais en e2ee (#12518).
+        if (this.translationService && options.serverReads) {
           this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId)
             .catch(err => logger.error('[MessageProcessor] Audio processing failed', err));
         }

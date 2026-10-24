@@ -1,7 +1,10 @@
 import CoreGraphics
+import CoreImage
 import CoreVideo
 import Foundation
 import ImageIO
+import MeeshySDK
+import os
 import UIKit
 import Vision
 
@@ -13,12 +16,15 @@ nonisolated struct CallFaceDetection: Equatable, Sendable {
     let rightEye: CGPoint?
     /// #9196 — centre des lèvres, normalisé à la boîte.
     let mouth: CGPoint?
+    /// #11299 — les 76 repères et l'orientation de la tête, pour les lens.
+    let lens: LensFaceFrame?
 
-    init(boundingBox: CGRect, leftEye: CGPoint?, rightEye: CGPoint?, mouth: CGPoint? = nil) {
+    init(boundingBox: CGRect, leftEye: CGPoint?, rightEye: CGPoint?, mouth: CGPoint? = nil, lens: LensFaceFrame? = nil) {
         self.boundingBox = boundingBox
         self.leftEye = leftEye
         self.rightEye = rightEye
         self.mouth = mouth
+        self.lens = lens
     }
 }
 
@@ -28,7 +34,13 @@ protocol CallFaceLandmarkDetecting: AnyObject {
 
 nonisolated final class VisionFaceLandmarkDetector: CallFaceLandmarkDetecting, @unchecked Sendable {
     private let handler = VNSequenceRequestHandler()
-    private let request = VNDetectFaceLandmarksRequest()
+    /// #11299 — la constellation de 76 repères (révision 3), pas celle de 65.
+    private let request: VNDetectFaceLandmarksRequest = {
+        let request = VNDetectFaceLandmarksRequest()
+        request.revision = VNDetectFaceLandmarksRequestRevision3
+        request.constellation = .constellation76Points
+        return request
+    }()
 
     func detect(in pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> CallFaceDetection? {
         guard (try? handler.perform([request], on: pixelBuffer, orientation: orientation)) != nil,
@@ -37,8 +49,22 @@ nonisolated final class VisionFaceLandmarkDetector: CallFaceLandmarkDetecting, @
             boundingBox: observation.boundingBox,
             leftEye: Self.center(of: observation.landmarks?.leftEye),
             rightEye: Self.center(of: observation.landmarks?.rightEye),
-            mouth: Self.center(of: observation.landmarks?.outerLips)
+            mouth: Self.center(of: observation.landmarks?.outerLips),
+            lens: Self.lens(of: observation)
         )
+    }
+
+    /// Les repères et l'orientation, tels que Vision les rend (lacet, roulis,
+    /// tangage en radians).
+    private static func lens(of observation: VNFaceObservation) -> LensFaceFrame? {
+        guard let landmarks = observation.landmarks else { return nil }
+        func points(_ region: VNFaceLandmarkRegion2D?) -> [CGPoint] { region?.normalizedPoints ?? [] }
+        return LensFaceFrame(boundingBox: observation.boundingBox, points: points(landmarks.allPoints),
+                             leftEye: points(landmarks.leftEye), rightEye: points(landmarks.rightEye),
+                             innerLips: points(landmarks.innerLips), outerLips: points(landmarks.outerLips),
+                             leftEyebrow: points(landmarks.leftEyebrow), rightEyebrow: points(landmarks.rightEyebrow),
+                             yaw: observation.yaw?.doubleValue, roll: observation.roll?.doubleValue,
+                             pitch: observation.pitch?.doubleValue)
     }
 
     private static func center(of region: VNFaceLandmarkRegion2D?) -> CGPoint? {
@@ -53,10 +79,16 @@ nonisolated final class VisionFaceLandmarkDetector: CallFaceLandmarkDetecting, @
 /// visage connu. Le visage est gardé en coordonnées unitaires, donc il suit une
 /// rotation du cadre sans attendre la détection suivante.
 nonisolated final class CallFaceTracker: @unchecked Sendable {
+    /// #11299 — la largeur de la sonde où le visage se cherche : Vision ne lit
+    /// jamais l'image entière de la caméra.
+    static let probeWidth: CGFloat = 320
+
     private let detector: any CallFaceLandmarkDetecting
     private let worker: CallVisionWorker
+    private let probe = CallVisionProbe(width: CallFaceTracker.probeWidth)
     private let lock = NSLock()
     private var unitFace: CallFaceLandmarks?
+    private var lens: LensFaceFrame?
     private var frameCounter = 0
     private var missedDetections = 0
     private var generation = 0
@@ -71,6 +103,7 @@ nonisolated final class CallFaceTracker: @unchecked Sendable {
         defer { lock.unlock() }
         generation += 1
         unitFace = nil
+        lens = nil
         frameCounter = 0
         missedDetections = 0
     }
@@ -93,10 +126,23 @@ nonisolated final class CallFaceTracker: @unchecked Sendable {
         return current?.scaled(to: canvas)
     }
 
+    /// Le dernier visage lu pour les lens : 76 repères et orientation (#11299).
+    var lensFrame: LensFaceFrame? {
+        lock.lock()
+        defer { lock.unlock() }
+        return lens
+    }
+
+    /// Ce que le dernier visage déclenche (bouche ouverte, yeux fermés, tête tournée, penchée).
+    var triggers: Set<LensFaceTrigger> {
+        lensFrame.map(LensFaceTriggers.evaluate) ?? []
+    }
+
     private func detect(_ frame: CallFrameHandoff, orientation: CGImagePropertyOrientation, generation token: Int) {
         let signposter = CallVideoSignposts.signposter
         let interval = signposter.beginInterval("faceLandmarks", id: signposter.makeSignpostID())
-        let detection = detector.detect(in: frame.pixelBuffer, orientation: orientation)
+        let sonde = probe.reduced(frame.pixelBuffer) ?? frame.pixelBuffer
+        let detection = detector.detect(in: sonde, orientation: orientation)
         signposter.endInterval("faceLandmarks", interval)
 
         lock.lock()
@@ -104,10 +150,14 @@ nonisolated final class CallFaceTracker: @unchecked Sendable {
         guard generation == token else { return }
         guard let detection else {
             missedDetections += 1
-            if missedDetections >= CallFaceEffectBudget.missesBeforeLosingFace { unitFace = nil }
+            if missedDetections >= CallFaceEffectBudget.missesBeforeLosingFace {
+                unitFace = nil
+                lens = nil
+            }
             return
         }
         missedDetections = 0
+        lens = detection.lens
         let detected = CallFaceLandmarks.fromNormalized(
             boundingBox: detection.boundingBox,
             leftEye: detection.leftEye,
@@ -116,6 +166,54 @@ nonisolated final class CallFaceTracker: @unchecked Sendable {
             imageSize: CGSize(width: 1, height: 1)
         )
         unitFace = unitFace?.smoothed(toward: detected, factor: CallFaceEffectBudget.landmarkSmoothing) ?? detected
+    }
+}
+
+/// **La sonde réduite où Vision cherche le visage** (#11299) : l'image de la
+/// caméra ramenée à `width` pixels de large, proportions gardées, sans
+/// réorientation (l'orientation passée à Vision reste juste). Une image déjà
+/// plus étroite passe telle quelle (`nil`).
+nonisolated final class CallVisionProbe: @unchecked Sendable {
+    private struct Pool {
+        var buffers: CVPixelBufferPool?
+        var size: CGSize = .zero
+    }
+
+    private let width: CGFloat
+    private let context = CIContext(options: [.cacheIntermediates: false])
+    private let pool = OSAllocatedUnfairLock(uncheckedState: Pool())
+
+    init(width: CGFloat) {
+        self.width = width
+    }
+
+    func reduced(_ buffer: CVPixelBuffer) -> CVPixelBuffer? {
+        let source = CGSize(width: CVPixelBufferGetWidth(buffer), height: CVPixelBufferGetHeight(buffer))
+        guard source.width > width, source.height > 0 else { return nil }
+        let hauteur = max(2, (source.height * width / source.width / 2).rounded(.down) * 2)
+        let taille = CGSize(width: width, height: hauteur)
+        guard let cible = pool.withLockUnchecked({ Self.makeBuffer(taille, in: &$0) }) else { return nil }
+        let echelle = CGAffineTransform(scaleX: width / source.width, y: hauteur / source.height)
+        context.render(CIImage(cvPixelBuffer: buffer).transformed(by: echelle), to: cible)
+        return cible
+    }
+
+    private static func makeBuffer(_ size: CGSize, in state: inout Pool) -> CVPixelBuffer? {
+        if state.buffers == nil || state.size != size {
+            let attributs: [String: Any] = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: Int(size.width),
+                kCVPixelBufferHeightKey as String: Int(size.height),
+                kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any](),
+            ]
+            var nouveau: CVPixelBufferPool?
+            CVPixelBufferPoolCreate(nil, nil, attributs as CFDictionary, &nouveau)
+            state = Pool(buffers: nouveau, size: size)
+        }
+        guard let buffers = state.buffers else { return nil }
+        var tampon: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, buffers, &tampon)
+        return tampon
     }
 }
 

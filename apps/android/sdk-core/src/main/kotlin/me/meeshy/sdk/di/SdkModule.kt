@@ -19,6 +19,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.category.DataStoreCategorySnapshotStore
+import me.meeshy.sdk.preferences.PreferenceSnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.DataStoreConversationDraftStore
 import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
@@ -36,6 +37,7 @@ import me.meeshy.sdk.media.AndroidNetworkConditionMonitor
 import me.meeshy.sdk.media.DataStoreMediaDownloadPreferencesStore
 import me.meeshy.sdk.media.MediaDownloadPreferencesStore
 import me.meeshy.sdk.media.NetworkConditionMonitor
+import me.meeshy.sdk.network.NetworkPathSource
 import me.meeshy.sdk.notification.DataStoreNotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationRepository
@@ -49,7 +51,12 @@ import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.lock.EncryptedConversationLockStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.DataStoreAnonymousSessionStore
+import me.meeshy.sdk.session.SecureAnonymousSessionStore
+import me.meeshy.core.datastore.ConversationLockVault
+import me.meeshy.core.datastore.SecretVault
+import me.meeshy.sdk.model.security.SecureStore
 import me.meeshy.sdk.session.DefaultSessionTeardown
+import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.theme.DataStoreThemeStore
 import me.meeshy.sdk.theme.ThemeStore
@@ -80,6 +87,11 @@ object SdkModule {
     @Singleton
     fun providesEmojiUsageStore(@ApplicationContext context: Context): EmojiUsageStore =
         SharedPrefsEmojiUsageStore(context)
+
+    @Provides
+    @Singleton
+    fun providesRecentEmojiStore(@ApplicationContext context: Context): me.meeshy.sdk.reaction.RecentEmojiStore =
+        me.meeshy.sdk.reaction.SharedPrefsRecentEmojiStore.shared(context)
 
     @Provides
     @Singleton
@@ -189,9 +201,9 @@ object SdkModule {
 
     @Provides
     @Singleton
-    fun providesNetworkConditionMonitor(@ApplicationContext context: Context): NetworkConditionMonitor {
+    fun providesNetworkConditionMonitor(source: NetworkPathSource): NetworkConditionMonitor {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        return AndroidNetworkConditionMonitor(context, scope)
+        return AndroidNetworkConditionMonitor(source, scope)
     }
 
     @Provides
@@ -247,19 +259,20 @@ object SdkModule {
     @Singleton
     fun providesAnonymousSessionStore(
         @ApplicationContext context: Context,
+        @SecretVault secureStore: SecureStore,
         json: Json,
     ): AnonymousSessionStore {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
             context.preferencesDataStoreFile("meeshy_anonymous_session")
         }
-        return DataStoreAnonymousSessionStore(dataStore, json)
+        return SecureAnonymousSessionStore(secureStore, DataStoreAnonymousSessionStore(dataStore, json), json)
     }
 
     @Provides
     @Singleton
-    fun providesConversationLockStore(@ApplicationContext context: Context): ConversationLockStore =
-        EncryptedConversationLockStore(context)
+    fun providesConversationLockStore(@ConversationLockVault store: SecureStore): ConversationLockStore =
+        EncryptedConversationLockStore(store)
 
     @Provides
     @Singleton
@@ -272,6 +285,8 @@ object SdkModule {
         friendshipCache: FriendshipCache,
         notificationRepository: NotificationRepository,
         blockCache: BlockCache,
+        preferenceSnapshotStore: PreferenceSnapshotStore,
+        perAccountCaches: Set<@JvmSuppressWildcards PerAccountCache>,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -282,6 +297,8 @@ object SdkModule {
             friendshipCache,
             notificationRepository,
             blockCache,
+            preferenceSnapshotStore,
+            perAccountCaches,
         )
 
     @Provides

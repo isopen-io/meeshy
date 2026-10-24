@@ -2,11 +2,13 @@ import * as z from 'zod/mini';
 
 import * as packsEndpoints from '@meeshy/shared/api/endpoints/packs';
 import * as stickerPacksEndpoints from '@meeshy/shared/api/endpoints/sticker-packs';
-import { PACK_DOMAINS, PACK_LANGUAGES, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
+import { PACK_DOMAINS, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
+import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
+import type { PackRequirementPreview } from '@meeshy/shared/types/pack-unlock';
 
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
-import { loadCatalogueOf, setInstalledOf, type PackDeps, type PackPort } from './packs';
+import { decodePackNames, loadCatalogueOf, setInstalledOf, type PackDeps, type PackPort } from './packs';
 
 /**
  * **LA VITRINE UNIQUE** (#10632, spec §§ 4.3–4.4) — un seul port pour acheter
@@ -36,6 +38,12 @@ export type ShopPack = {
   readonly removable: boolean;
   /** Pack de stickers intégré (Mee, Meo, Mee & Meo) : dessiné par le client, servi sans image. */
   readonly builtin?: true;
+  /**
+   * Ce qui reste à débloquer, et comment (S21, #11276) : servi pour un pack du
+   * registre NON possédé qui se gagne ou qui a une fenêtre. Absent d'un ancien
+   * serveur, d'un pack possédé ou libre.
+   */
+  readonly requirementPreview?: PackRequirementPreview;
 };
 
 export type ShopResult = { readonly packs: readonly ShopPack[]; readonly balance: number | null };
@@ -55,19 +63,28 @@ const WirePack = z.object({
   removable: z.optional(z.boolean()),
   builtin: z.optional(z.boolean()),
   names: z.optional(z.record(z.string(), z.unknown())),
+  requirementPreview: z.optional(z.unknown()),
 });
 
-const WireName = z.object({ name: z.string(), description: z.string() });
+const RANK_KEYS = GLORY_RANKS.map((rank) => rank.key) as [string, ...string[]];
 
-const isPackLanguage = (value: string): value is PackLanguage => (PACK_LANGUAGES as readonly string[]).includes(value);
+const WireRequirement = z.object({ current: z.number(), required: z.number(), missing: z.number(), met: z.boolean() });
 
-const namesOf = (raw: Readonly<Record<string, unknown>> | undefined): PackNames =>
-  Object.fromEntries(
-    Object.entries(raw ?? {}).flatMap(([language, value]) => {
-      const parsed = WireName.safeParse(value);
-      return isPackLanguage(language) && parsed.success ? [[language, parsed.data]] : [];
-    }),
-  );
+const WireReward = z.union([
+  z.object({ kind: z.literal('rank'), rank: z.enum(RANK_KEYS), currentRank: z.string(), requirement: WireRequirement }),
+  z.object({ kind: z.literal('trophy'), key: z.string(), met: z.boolean() }),
+  z.object({ kind: z.literal('season'), number: z.number(), met: z.boolean() }),
+]);
+
+const WireWindow = z.object({ state: z.enum(['upcoming', 'open', 'closed']), startsAt: z.optional(z.string()), endsAt: z.optional(z.string()) });
+
+const WireRequirementPreview = z.object({ met: z.boolean(), reward: z.nullable(WireReward), window: z.nullable(WireWindow) });
+
+/** Une forme inattendue est ignorée : la rangée retombe sur celle d'avant, jamais sur une erreur. */
+const decodeRequirementPreview = (raw: unknown): PackRequirementPreview | undefined => {
+  const parsed = WireRequirementPreview.safeParse(raw);
+  return parsed.success ? (parsed.data as PackRequirementPreview) : undefined;
+};
 
 /** La langue du lecteur, puis le français, puis le nom servi à plat. */
 export const shopPackText = (pack: ShopPack, language: PackLanguage): { readonly name: string; readonly description: string } =>
@@ -82,6 +99,7 @@ export const decodeShopPack = (domain: PackDomain) => (raw: unknown): ShopPack |
   if (!parsed.success) return null;
   const wire = parsed.data;
   const price = wire.price ?? null;
+  const requirementPreview = decodeRequirementPreview(wire.requirementPreview);
   return {
     slug: wire.slug,
     domain,
@@ -92,10 +110,11 @@ export const decodeShopPack = (domain: PackDomain) => (raw: unknown): ShopPack |
     itemCount: wire.itemCount ?? 0,
     installed: wire.installed,
     price,
-    owned: price === null ? true : (wire.owned ?? false),
-    names: namesOf(wire.names),
+    owned: price === null && requirementPreview === undefined ? true : (wire.owned ?? false),
+    names: decodePackNames(wire.names),
     removable: wire.removable ?? !(domain === 'sticker' && wire.builtin === true),
     ...(domain === 'sticker' && wire.builtin === true ? { builtin: true as const } : {}),
+    ...(requirementPreview !== undefined ? { requirementPreview } : {}),
   };
 };
 
@@ -138,6 +157,12 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
     bySlug: packsEndpoints.avatarRingBySlug,
     install: packsEndpoints.avatarRingBySlugInstall,
     purchase: packsEndpoints.avatarRingBySlugPurchase,
+  },
+  lens: {
+    catalogue: packsEndpoints.lens,
+    installed: packsEndpoints.lensInstalled,
+    bySlug: packsEndpoints.lensBySlug,
+    install: packsEndpoints.lensBySlugInstall,
   },
   banner: {
     catalogue: packsEndpoints.banner,

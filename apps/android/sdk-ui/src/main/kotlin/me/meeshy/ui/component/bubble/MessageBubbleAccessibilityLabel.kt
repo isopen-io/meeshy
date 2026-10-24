@@ -17,10 +17,17 @@ public data class BubbleAccessibilityStrings(
     val deleted: String,
     val replyToAuthor: String,
     val replyToExcerpt: String,
+    val replyToYou: String,
     val images: String,
+    val videos: String,
     val audios: String,
     val location: String,
     val file: String,
+    val contactCard: String,
+    val contactCardAccount: String,
+    val viewOnceSealed: String,
+    val viewOnce: String,
+    val blurred: String,
     val edited: String,
     val pinned: String,
     val ephemeral: String,
@@ -31,6 +38,7 @@ public data class BubbleAccessibilityStrings(
 /** The six spoken delivery phrasings, one per [DeliveryStatus] arm. */
 public data class BubbleDeliveryA11yStrings(
     val sending: String,
+    val slow: String,
     val queued: String,
     val sent: String,
     val delivered: String,
@@ -42,18 +50,15 @@ public data class BubbleDeliveryA11yStrings(
  * Composes a single spoken accessibility label for a message bubble — a faithful port of iOS
  * `MessageAccessibilityLabelComposer.compose`, adapted to the flat Android [BubbleContent] model.
  *
- * The reading order is frozen to match iOS: sender → reply → text → images → audios →
- * location/files → time → delivery → edited → pinned → ephemeral → reactions. Parts are joined
- * with `", "`. A deleted message short-circuits to the sender plus the "deleted" phrasing (the
- * bubble hides its body, attachments and reactions behind a tombstone — so does the label).
+ * The reading order is frozen to match iOS: sender → (view-once chip alone) → reply → text →
+ * images → videos → audios → location → contact cards → files → time → delivery → edited →
+ * pinned → protection chrome (ephemeral, view once, blurred) → reactions. Parts are joined with
+ * `", "`. A deleted message short-circuits to the sender plus the "deleted" phrasing; a sealed
+ * view-once message says only its chip, the time and the ephemeral countdown; a blurred message
+ * never reads its text.
  *
- * Assumed deviations from the iOS source, documented rather than corrected silently:
- * - Android's [BubbleContent] carries no image/video distinction, so a single "images" count
- *   covers every visual attachment (iOS splits image vs video counts).
- * - Android's reply target carries no "is me" flag, so the reply author is the quoted sender
- *   name (or the unknown-sender placeholder) — there is no dedicated "you" phrasing.
- * - Android's bubble shows no clock in its meta row, so [timeText] is supplied by the caller
- *   only where a time is actually presented; a blank/absent value drops the time arm.
+ * The clock is supplied by the caller only where a time is actually presented; a blank/absent
+ * value drops the time arm.
  */
 public object MessageBubbleAccessibilityLabel {
 
@@ -69,6 +74,13 @@ public object MessageBubbleAccessibilityLabel {
             parts += content.senderName?.takeIf { it.isNotBlank() } ?: strings.unknownSender
         }
 
+        if (!content.isDeleted && content.isSealedViewOnce) {
+            parts += strings.viewOnceSealed
+            timeText?.takeIf { it.isNotBlank() }?.let { parts += it }
+            if (content.expiresAtIso != null) parts += strings.ephemeral
+            return parts.joinToString(", ")
+        }
+
         replyLabel(content, strings)?.let { parts += it }
 
         if (content.isDeleted) {
@@ -76,29 +88,35 @@ public object MessageBubbleAccessibilityLabel {
             return parts.joinToString(", ")
         }
 
-        if (content.text.isNotBlank()) {
+        if (content.text.isNotBlank() && !content.isBlurred) {
             parts += content.text
         }
 
         if (content.images.isNotEmpty()) {
             parts += String.format(locale, strings.images, content.images.size)
         }
+        if (content.videoCount > 0) {
+            parts += String.format(locale, strings.videos, content.videoCount)
+        }
         if (content.audios.isNotEmpty()) {
             parts += String.format(locale, strings.audios, content.audios.size)
         }
         content.locations.forEach { _ -> parts += strings.location }
-        content.files.forEach { file ->
-            parts += String.format(locale, strings.file, file.name?.trim().orEmpty())
-        }
+        content.contactCards.forEach { card -> parts += contactCardLabel(card, strings, locale) }
+        content.files
+            .filterNot { it.isVideo || it.isContactCard }
+            .forEach { file -> parts += String.format(locale, strings.file, file.name?.trim().orEmpty()) }
 
         timeText?.takeIf { it.isNotBlank() }?.let { parts += it }
 
         if (content.isOutgoing) {
-            parts += deliveryLabel(content.deliveryStatus, strings.delivery)
+            parts += deliveryLabel(content.deliveryStatus, content.isSlowSend, strings.delivery)
         }
         if (content.isEdited) parts += strings.edited
         if (content.pinnedAtIso != null) parts += strings.pinned
         if (content.expiresAtIso != null) parts += strings.ephemeral
+        if (content.isViewOnce) parts += strings.viewOnce
+        if (content.isBlurred) parts += strings.blurred
 
         if (content.reactions.isNotEmpty()) {
             val summary = content.reactions.joinToString(", ") { "${it.emoji} ${it.count}" }
@@ -108,9 +126,25 @@ public object MessageBubbleAccessibilityLabel {
         return parts.joinToString(", ")
     }
 
+    private val BubbleContent.isSealedViewOnce: Boolean
+        get() = isViewOnce && !isViewOnceOpenedByMe
+
+    private fun contactCardLabel(
+        card: BubbleContactCard,
+        strings: BubbleAccessibilityStrings,
+        locale: Locale,
+    ): String {
+        val head = String.format(locale, strings.contactCard, card.name?.trim().orEmpty())
+        val account = card.accountUsername?.trim()?.takeIf { it.isNotEmpty() } ?: return head
+        return head + ", " + String.format(locale, strings.contactCardAccount, "@$account")
+    }
+
     private fun replyLabel(content: BubbleContent, strings: BubbleAccessibilityStrings): String? {
         if (content.replyToText == null && !content.replyToDeleted) return null
-        val author = content.replyToSenderName?.takeIf { it.isNotBlank() } ?: strings.unknownSender
+        val author = when {
+            content.replyToIsMe -> strings.replyToYou
+            else -> content.replyToSenderName?.takeIf { it.isNotBlank() } ?: strings.unknownSender
+        }
         val excerpt = content.replyToText?.trim()?.takeIf { it.isNotEmpty() }
         return if (excerpt != null) {
             String.format(strings.replyToExcerpt, author, excerpt)
@@ -121,9 +155,10 @@ public object MessageBubbleAccessibilityLabel {
 
     private fun deliveryLabel(
         status: DeliveryStatus,
+        isSlow: Boolean,
         strings: BubbleDeliveryA11yStrings,
     ): String = when (status) {
-        DeliveryStatus.Pending -> strings.sending
+        DeliveryStatus.Pending -> if (isSlow) strings.slow else strings.sending
         DeliveryStatus.QueuedOffline -> strings.queued
         DeliveryStatus.Sent -> strings.sent
         DeliveryStatus.Delivered -> strings.delivered

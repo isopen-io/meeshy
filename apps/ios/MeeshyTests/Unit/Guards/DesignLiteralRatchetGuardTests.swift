@@ -227,6 +227,10 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             globs: ["\(ui)/Game/GameReferralBannerView.swift"]
         ),
         Exemption(
+            reason: "jeu : la palette et les couches de la cérémonie de la frappe (une forge de nuit, apps/web/src/styles/game-ceremony.css), rejouées couleur pour couleur à l'identique du web — acier, bois, poussières et nuit du prisme ne sont pas des jetons d'interface",
+            globs: ["\(app)/Game/Choreography/MintCeremonyLayers.swift"]
+        ),
+        Exemption(
             reason: "code : thèmes de coloration syntaxique",
             globs: [
                 "\(ui)/Media/SyntaxHighlighter.swift",
@@ -295,8 +299,10 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
     private static let rgbCeiling = 3
 
     /// Rayons numériques hors cadre libre. **Ne doit que DESCENDRE.**
-    /// `… | xargs grep -Po 'cornerRadius(:|\()[ \t]*[0-9]' | wc -l` → 120.
-    private static let cornerRadiusCeiling = 120
+    /// `… | xargs grep -Po 'cornerRadius(:|\()[ \t]*[0-9]' | wc -l` → 120 au 2026-09-30 ;
+    /// 119 au 2026-10-21, quand les styles de survol pointeur passent sur `MeeshyRadius`
+    /// et `MeeshyPointerShape.rectangle`.
+    private static let cornerRadiusCeiling = 119
 
     /// Marges numériques hors cadre libre. **Ne doit que DESCENDRE.**
     /// `… | xargs grep -Po '\.padding\((\.[a-z]+,[ \t]*|\[[^\]\n]*\],[ \t]*)?[0-9]' | wc -l` → 190.

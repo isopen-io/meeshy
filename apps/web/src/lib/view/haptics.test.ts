@@ -204,3 +204,32 @@ describe('le moteur par défaut — la coque courante, sans qu’aucun appelant 
     expect(heard).toEqual(['medium']);
   });
 });
+
+describe('prefers-reduced-motion — l’utilisateur qui réduit le mouvement ne reçoit aucune vibration', () => {
+  const original = globalThis.matchMedia;
+  const reduce = (matches: boolean): void => {
+    globalThis.matchMedia = ((query: string) => ({ matches: matches && query.includes('reduce') })) as typeof globalThis.matchMedia;
+  };
+  afterEach(() => {
+    globalThis.matchMedia = original;
+  });
+
+  test('reduce : ni le navigateur ni le plugin ne jouent, et le retour est faux', () => {
+    reduce(true);
+    const { calls, coque } = recordingShell();
+    withCapacitor(coque);
+    const browser = recordingHost();
+    expect(impact('medium', browser.host)).toBe(false);
+    expect(success()).toBe(false);
+    expect(playPattern([10], browser.host)).toBe(false);
+    expect(calls).toEqual([]);
+    expect(browser.calls).toEqual([]);
+  });
+
+  test('sans préférence, le retour joue comme avant', () => {
+    reduce(false);
+    const browser = recordingHost();
+    expect(impact('light', browser.host)).toBe(true);
+    expect(browser.calls).toEqual([HAPTIC_CUES.light]);
+  });
+});

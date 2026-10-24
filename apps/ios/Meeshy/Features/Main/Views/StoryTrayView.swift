@@ -205,7 +205,7 @@ struct StoryTrayView: View {
     /// the grande trail and the pinned mini-trail render an identical cell,
     /// only differing by `context` size.
     private func storyRingCell(for group: StoryGroup) -> some View {
-        StoryRingCell(
+        LivePresence { StoryRingCell(
             group: group,
             onViewStory: {
                 ContentOpenReporter.shared.openStory(of: group)
@@ -215,7 +215,7 @@ struct StoryTrayView: View {
             moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
             onMoodTap: statusViewModel.moodTapHandler(for: group.id)
         )
-        .equatable()
+        .equatable() }
         // U1 — source de la transition zoom : la bulle « devient » le viewer
         // (id = userId du groupe, apparié au sourceID du cover RootView).
         .zoomTransitionSource(id: group.id, in: zoomNamespace)
@@ -396,7 +396,7 @@ private struct MyStoryButton: View {
                             // (cf. MeeshyAvatar.badgeSize .storyTray).
                             // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
                             Text("\u{1F4AD}")
-                                .font(.system(size: MeeshyFont.title3Size))
+                                .font(MeeshyFont.emoji(MeeshyFont.title3Size))
                                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
@@ -751,7 +751,7 @@ struct PinnedStoryTrailBand: View {
                     selfAvatarCell
                 }
                 ForEach(groups, id: \.id) { group in
-                    StoryRingCell(
+                    LivePresence { StoryRingCell(
                         group: group,
                         context: .storyTrayCompact,
                         showsUsername: false,
@@ -763,7 +763,7 @@ struct PinnedStoryTrailBand: View {
                         moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: group.id)
                     )
-                    .equatable()
+                    .equatable() }
                     // U1 inc.2 — la mini-trail épinglée zoome aussi.
                     .zoomTransitionSource(id: group.id, in: zoomNamespace)
                     .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false, presence: SharedImpressionBatchers.railPresence) {

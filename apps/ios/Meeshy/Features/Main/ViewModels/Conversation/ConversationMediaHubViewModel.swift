@@ -35,7 +35,7 @@ struct CachedConversationMediaHubStore: ConversationMediaHubIndexStoring {
         let key = kind.indexKey(conversationId: conversationId)
         let existing = await CacheCoordinator.shared.conversationMedia.load(for: key).snapshot() ?? []
         let merged = ConversationMediaHubViewModel.union(existing, carriers)
-        try? await CacheCoordinator.shared.conversationMedia.save(merged, for: key)
+        await bestEffort("conversationMediaHubViewModel.conversationMedia.save", category: .cache) { try await CacheCoordinator.shared.conversationMedia.save(merged, for: key) }
     }
 
     func isComplete(conversationId: String, kind: ConversationMediaKind) async -> Bool {
@@ -223,7 +223,7 @@ final class ConversationMediaHubViewModel: ObservableObject {
         }
         let delay = debounce
         searchTask = Task { [weak self] in
-            if delay > .zero { try? await Task.sleep(for: delay) }
+            if delay > .zero { _ = await cancellableSleep(for: delay) }
             guard !Task.isCancelled else { return }
             await self?.runSearch(trimmed)
         }

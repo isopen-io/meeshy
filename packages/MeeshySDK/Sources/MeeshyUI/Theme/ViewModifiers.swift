@@ -6,12 +6,12 @@ import MeeshySDK
 
 public struct GlassCard: ViewModifier {
     public var cornerRadius: CGFloat = 20
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     public func body(content: Content) -> some View {
         content
             .background(.ultraThinMaterial)
-            .cornerRadius(cornerRadius)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark), lineWidth: 1)
@@ -40,22 +40,6 @@ public extension View {
     /// pour rester lisible sur une surface glass dans les deux thèmes.
     func glassControlForeground() -> some View {
         modifier(GlassControlForeground())
-    }
-}
-
-// MARK: - Glowing Border
-
-public struct GlowingBorder: ViewModifier {
-    public let gradient: LinearGradient
-    public var cornerRadius: CGFloat = 20
-    public var lineWidth: CGFloat = 2
-
-    public func body(content: Content) -> some View {
-        content
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(gradient, lineWidth: lineWidth)
-            )
     }
 }
 
@@ -89,71 +73,51 @@ public struct ShimmerEffect: ViewModifier {
 
 // MARK: - Pulse Effect
 
+/// **La pulsation — une seule implémentation** (#9891). L'app en déclarait une
+/// homonyme pour l'effet `pulse` d'un message (1,02 en 1 s) ; elle s'écrit
+/// désormais `PulseEffect(intensity: 0.02, period: 1.0)`. Une intensité nulle
+/// ne démarre aucune boucle : un effet inactif ne coûte pas une animation
+/// infinie de 1 à 1.
 public struct PulseEffect: ViewModifier {
     public let intensity: CGFloat
+    public let period: Double
     @State private var isPulsing = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
     private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
 
-    public init(intensity: CGFloat = 0.04) {
+    public init(intensity: CGFloat = 0.04, period: Double = 1.8) {
         self.intensity = intensity
+        self.period = period
+    }
+
+    nonisolated static func pulses(intensity: CGFloat, reduceMotion: Bool) -> Bool {
+        intensity > 0 && !reduceMotion
     }
 
     public func body(content: Content) -> some View {
         content
             .scaleEffect(isPulsing ? 1 + intensity : 1)
             .animation(
-                .easeInOut(duration: 1.8).repeatForever(autoreverses: true),
+                .easeInOut(duration: period).repeatForever(autoreverses: true),
                 value: isPulsing
             )
-            .onAppear { guard !reduceMotion else { return }; isPulsing = true }
+            .onAppear {
+                guard Self.pulses(intensity: intensity, reduceMotion: reduceMotion) else { return }
+                isPulsing = true
+            }
             // Une amplitude nouvelle relance le pulse sur place, sans recréer
             // la vue qui le porte (#9065 : le mood change d'amplitude selon
             // ce que fait le pair, et ne doit pas rejouer son arrivée).
             .adaptiveOnChange(of: intensity) { _, _ in
                 guard !reduceMotion else { return }
                 withTransaction(Transaction(animation: nil)) { isPulsing = false }
+                guard Self.pulses(intensity: intensity, reduceMotion: reduceMotion) else { return }
                 DispatchQueue.main.async { isPulsing = true }
             }
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) {
                     isPulsing = false
-                }
-            }
-    }
-}
-
-// MARK: - Breathing Glow Effect
-
-public struct BreathingGlow: ViewModifier {
-    public let color: Color
-    public let intensity: Double
-    @State private var isGlowing = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
-
-    public init(color: Color, intensity: Double = 0.5) {
-        self.color = color
-        self.intensity = intensity
-    }
-
-    public func body(content: Content) -> some View {
-        content
-            .shadow(
-                color: color.opacity(isGlowing ? intensity : intensity * 0.3),
-                radius: isGlowing ? 12 : 6,
-                y: isGlowing ? 6 : 3
-            )
-            .animation(
-                .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
-                value: isGlowing
-            )
-            .onAppear { guard !reduceMotion else { return }; isGlowing = true }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) {
-                    isGlowing = false
                 }
             }
     }
@@ -314,10 +278,6 @@ extension View {
         modifier(GlassCard(cornerRadius: cornerRadius))
     }
 
-    public func glowingBorder(_ gradient: LinearGradient = MeeshyColors.brandGradient, cornerRadius: CGFloat = 20, lineWidth: CGFloat = 2) -> some View {
-        modifier(GlowingBorder(gradient: gradient, cornerRadius: cornerRadius, lineWidth: lineWidth))
-    }
-
     public func pressable() -> some View {
         modifier(PressableButton())
     }
@@ -326,12 +286,8 @@ extension View {
         modifier(ShimmerEffect())
     }
 
-    public func pulse(intensity: CGFloat = 0.04) -> some View {
-        modifier(PulseEffect(intensity: intensity))
-    }
-
-    public func breathingGlow(color: Color, intensity: Double = 0.5) -> some View {
-        modifier(BreathingGlow(color: color, intensity: intensity))
+    public func pulse(intensity: CGFloat = 0.04, period: Double = 1.8) -> some View {
+        modifier(PulseEffect(intensity: intensity, period: period))
     }
 
     public func staggeredAppear(index: Int, baseDelay: Double = 0.05) -> some View {

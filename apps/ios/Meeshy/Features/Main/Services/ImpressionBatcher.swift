@@ -172,8 +172,7 @@ final class ImpressionBatcher: ObservableObject {
         flushTask?.cancel()
         flushTask = Task { [weak self] in
             guard let self else { return }
-            try? await Task.sleep(nanoseconds: UInt64(self.flushDelay * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(self.flushDelay)), !Task.isCancelled else { return }
             await self.flush()
         }
     }

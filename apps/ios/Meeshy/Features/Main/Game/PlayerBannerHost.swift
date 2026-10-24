@@ -49,7 +49,7 @@ struct EngagementPlayerBannerSource: PlayerBannerSourcing {
     func fetch() async -> GameBlock? {
         guard let snapshot = try? await service.fetchProgress() else { return nil }
         let store = await CacheCoordinator.shared.engagementProgress
-        try? await store.save([snapshot], for: key)
+        await bestEffort("playerBannerHost.store.save", category: .cache) { try await store.save([snapshot], for: key) }
         return snapshot.game
     }
 }
@@ -291,7 +291,7 @@ struct PlayerBannerSlot: View {
         // nouvelle ouverture (retour après une vraie absence).
         .task(id: store.openingGeneration) { @MainActor in
             let remaining = store.openingRemaining
-            if remaining > 0 { try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000)) }
+            if remaining > 0 { _ = await cancellableSleep(for: .seconds(remaining)) }
             guard !Task.isCancelled else { return }
             store.closeOpeningIfDue()
         }
@@ -332,7 +332,7 @@ struct PlayerBannerSlot: View {
         sheen = 0
         withAnimation(.easeInOut(duration: 0.9)) { sheen = 1 }
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            _ = await cancellableSleep(for: .seconds(1))
             sheen = 0
         }
     }

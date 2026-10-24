@@ -34,6 +34,7 @@ struct FeedComposerSheet: View {
     private var isDark: Bool { colorScheme == .dark }
     @ObservedObject private var authManager = AuthManager.shared
     @State private var composerText = ""
+    @State private var delays = DelayedActions()
     @FocusState private var isFocused: Bool
     /// Une pièce en attente, ouverte dans la retouche de la caméra (#11170).
     @State private var pieceToRetouch: ComposerRetouchPiece?
@@ -434,7 +435,7 @@ struct FeedComposerSheet: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current)
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
@@ -442,10 +443,8 @@ struct FeedComposerSheet: View {
             // Le viseur du composeur, seul en plein écran (#9125).
             ComposerViewfinder { result in
                 switch result {
-                // Le fil du feed ré-encode déjà l'image : les octets d'origine
-                // ne lui servent pas, et il les jette explicitement.
-                case .photo(let image, _):
-                    handleCameraCapture(image)
+                case .photo(let image, let data):
+                    handleCameraCapture(image, data: data)
                 case .video(let url):
                     handleCameraVideo(url)
                 }
@@ -493,11 +492,9 @@ struct FeedComposerSheet: View {
         }
         .onAppear {
             composerText = initialText
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isFocused = true
-                openInitialPicker()
-            }
+            delays.run(after: .milliseconds(300)) { isFocused = true; openInitialPicker() }
         }
+        .onDisappear { delays.cancelAll() }
     }
 
     // MARK: - Open Initial Picker
@@ -532,9 +529,7 @@ struct FeedComposerSheet: View {
                 // puis mise en file ; « Terminé » la prépare comme une prise
                 // de la caméra (`handleCameraVideo`).
                 Task {
-                    if let movieData = try? await item.loadTransferable(type: Data.self) {
-                        let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent("video_raw_\(UUID().uuidString).mp4")
-                        try? movieData.write(to: rawURL)
+                    if let rawURL = try? await PickedMedia.loadVideoFile(item) {
                         let compressedURL: URL
                         do {
                             compressedURL = try await MediaCompressor.shared.compressVideo(rawURL, context: .feedPost)
@@ -597,9 +592,9 @@ struct FeedComposerSheet: View {
         pendingThumbnails.removeValue(forKey: id)
     }
 
-    private func handleCameraCapture(_ image: UIImage) {
-        let prep = AttachmentPreparationService.shared.prepareImage(
-            image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
+    private func handleCameraCapture(_ image: UIImage, data: Data? = nil) {
+        let prep = AttachmentPreparationService.shared.prepareCapture(
+            image, data: data, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
         )
         trackSheetPreparation(prep)
     }

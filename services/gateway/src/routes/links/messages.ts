@@ -31,6 +31,11 @@ import {
 } from './types';
 import type { SharedPlace } from '../../services/location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
+import {
+  E2EE_PLAINTEXT_REFUSAL_MESSAGE,
+  E2EE_PLAINTEXT_REFUSED,
+  plaintextRefusedIn,
+} from '../../services/messaging/e2eePlaintextAdmission';
 
 /**
  * La réponse à un refus d'admission, pour les DEUX chemins de lien.
@@ -269,7 +274,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
                   isActive: true,
                   closedAt: true,
                   isAnnouncementChannel: true,
-                  defaultWriteRole: true
+                  defaultWriteRole: true,
+                  // #11216 — ce transport contourne `saveMessage` : il lit
+                  // lui-même le régime pour ne jamais écrire de clair en e2ee.
+                  encryptionMode: true
                 }
               }
             }
@@ -340,6 +348,13 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // `participantConversationPayload` / `historyFloorFor`).
       if (!resolveParticipantRights(anonymousParticipant).canSendMessages) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à envoyer des messages');
+      }
+
+      if (plaintextRefusedIn({
+        encryptionMode: participantShareLink.conversation?.encryptionMode,
+        plaintext: body.content,
+      })) {
+        return sendBadRequest(reply, E2EE_PLAINTEXT_REFUSAL_MESSAGE, { code: E2EE_PLAINTEXT_REFUSED });
       }
 
 
@@ -450,7 +465,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           hasSticker: Boolean(stickerFromMetadata(message.metadata)),
           content: message.content,
           messageType: message.messageType,
-          replyToId: message.replyToId
+          replyToId: message.replyToId,
+          encryptionMode: participantShareLink.conversation?.encryptionMode ?? null
         },
         originalLanguage,
         onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)

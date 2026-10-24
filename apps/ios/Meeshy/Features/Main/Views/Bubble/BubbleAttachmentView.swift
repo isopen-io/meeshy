@@ -52,7 +52,6 @@ struct BubbleAttachmentView: View {
                     accentColor: accentHex,
                     frame: .bubble,
                     availability: availability,
-                    performance: .inline,
                     surfaceTapExpands: true,
                     onDownload: onDownload,
                     onExpand: { onOpenVideo?(attachment) }

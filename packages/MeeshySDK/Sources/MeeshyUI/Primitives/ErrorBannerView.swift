@@ -35,11 +35,11 @@ public struct ErrorBannerView: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: currentError.iconName)
                 .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
 
             Text(currentError.errorDescription ?? "")
-                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(Color.white)
                 .lineLimit(2)
 
             Spacer()

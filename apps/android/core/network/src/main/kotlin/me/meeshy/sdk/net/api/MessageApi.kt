@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MessagesApiResponse
+import me.meeshy.sdk.model.ReadStatusData
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.conditionalApiCall
@@ -107,6 +108,10 @@ interface MessageApi {
         @Path("cid") conversationId: String,
         @Path("mid") messageId: String,
     ): ApiResponse<Unit>
+
+    /** Fiche « Vu par » : `GET /messages/{id}/read-status` (reçu par, lu par, pas encore vu par). */
+    @GET("messages/{id}/read-status")
+    suspend fun readStatus(@Path("id") messageId: String): ApiResponse<ReadStatusData>
 
     @DELETE("conversations/{cid}/messages/{mid}/pin")
     suspend fun unpin(

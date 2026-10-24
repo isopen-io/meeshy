@@ -1,5 +1,6 @@
 import SwiftUI
 import ImageIO
+import AVFoundation
 import MeeshySDK
 import MeeshyUI
 
@@ -91,7 +92,7 @@ struct ShareIncomingStrip: View {
     }
 }
 
-/// La vignette d'une pièce copiée : réduite pour une image, un glyphe sinon.
+/// La vignette d'une pièce copiée : réduite pour une image ou une vidéo, un glyphe sinon.
 struct ShareIncomingThumbnail: View {
     let piece: ShareIncomingMedia
     let accentColor: String
@@ -110,8 +111,12 @@ struct ShareIncomingThumbnail: View {
             }
         }
         .task(id: piece.id) {
-            guard piece.kind == .image, let url = piece.fileURL else { return }
-            image = await Self.downsampled(url, maxPixel: 160)
+            guard let url = piece.fileURL else { return }
+            switch piece.kind {
+            case .image: image = await Self.downsampled(url, maxPixel: 160)
+            case .video: image = await Self.videoPoster(url, maxPixel: 160)
+            default: return
+            }
         }
     }
 
@@ -128,15 +133,17 @@ struct ShareIncomingThumbnail: View {
     /// plafond mémoire de l'extension.
     nonisolated static func downsampled(_ url: URL, maxPixel: Int) async -> UIImage? {
         await Task.detached(priority: .userInitiated) {
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-            ]
-            guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-            return UIImage(cgImage: thumbnail)
+            ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: CGFloat(maxPixel), decodeImmediately: true)
+                .map { UIImage(cgImage: $0) }
         }.value
+    }
+
+    /// Le décodeur sort l'image DÉJÀ réduite (`maximumSize`) depuis l'image clé
+    /// la plus proche : ni les octets du fichier ni une image pleine résolution
+    /// ne passent en mémoire. Un fichier non décodable rend `nil` et la tuile
+    /// garde son glyphe.
+    nonisolated static func videoPoster(_ url: URL, maxPixel: Int) async -> UIImage? {
+        await VideoThumbnailGenerator.shared.image(for: VideoThumbnailRequest(
+            url: url, instants: .start(atMost: 0.1), maximumSize: CGSize(width: maxPixel, height: maxPixel)))
     }
 }

@@ -1207,7 +1207,7 @@ final class StoryViewModelTests: XCTestCase {
     func test_deleteStory_source_goesThroughTheConcurrentBoundary() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.storyViewModelSource())
         let body = try XCTUnwrap(
-            source.range(of: "func deleteStory(storyId: String) async -> Bool").map { String(source[$0.lowerBound...].prefix(500)) },
+            source.range(of: "func deleteStory(storyId: String, reason: String? = nil) async -> Bool").map { String(source[$0.lowerBound...].prefix(500)) },
             "deleteStory a disparu de StoryViewModel"
         )
         XCTAssertTrue(body.contains("Self.deleteRemotely(storyId:"), "deleteStory doit appeler la frontière @concurrent")
@@ -2668,7 +2668,7 @@ final class StoryViewModelTests: XCTestCase {
             kind: .video, condition: .goodCellular, prefs: .defaults
         )
 
-        XCTAssertFalse(StoryViewModel.shouldPrefetchStoryMedia(
+        XCTAssertFalse(StoryTrayMediaPreloader.shouldPrefetchStoryMedia(
             kind: .video, allowImage: true, allowVideo: allowVideo, allowAudio: true
         ), "prefs.video vaut .wifiOnly par défaut : aucun octet vidéo en cellulaire")
     }
@@ -2678,7 +2678,7 @@ final class StoryViewModelTests: XCTestCase {
             kind: .video, condition: .wifi, prefs: .defaults
         )
 
-        XCTAssertTrue(StoryViewModel.shouldPrefetchStoryMedia(
+        XCTAssertTrue(StoryTrayMediaPreloader.shouldPrefetchStoryMedia(
             kind: .video, allowImage: false, allowVideo: allowVideo, allowAudio: false
         ), "en Wi-Fi, rien ne change : l'ouverture d'une story vidéo reste instantanée")
     }
@@ -2688,7 +2688,7 @@ final class StoryViewModelTests: XCTestCase {
             kind: .image, condition: .goodCellular, prefs: .defaults
         )
 
-        XCTAssertTrue(StoryViewModel.shouldPrefetchStoryMedia(
+        XCTAssertTrue(StoryTrayMediaPreloader.shouldPrefetchStoryMedia(
             kind: .image, allowImage: allowImage, allowVideo: false, allowAudio: false
         ), "prefs.image vaut .wifiAndGoodCellular par défaut : la vignette passe")
     }
@@ -2696,12 +2696,95 @@ final class StoryViewModelTests: XCTestCase {
     /// Axe propre à la story (la jumelle du carousel de bulle n'a que
     /// image/vidéo) : un vocal de story suit `prefs.audio`, jamais `prefs.image`.
     func test_shouldPrefetchStoryMedia_audio_gatedOnAllowAudio() {
-        XCTAssertTrue(StoryViewModel.shouldPrefetchStoryMedia(
+        XCTAssertTrue(StoryTrayMediaPreloader.shouldPrefetchStoryMedia(
             kind: .audio, allowImage: false, allowVideo: false, allowAudio: true
         ))
-        XCTAssertFalse(StoryViewModel.shouldPrefetchStoryMedia(
+        XCTAssertFalse(StoryTrayMediaPreloader.shouldPrefetchStoryMedia(
             kind: .audio, allowImage: true, allowVideo: true, allowAudio: false
         ))
+    }
+
+    // MARK: - #11868 — le préchargement du tray s'arrête hors du premier plan
+
+    /// Ce que le préchargeur a demandé de télécharger, passe après passe.
+    @MainActor
+    private final class TrayFetchRecorder {
+        private(set) var calls: [[String]] = []
+        func started(_ urls: [String]) { calls.append(urls) }
+    }
+
+    private func trayStory(_ id: String, urls: [String]) -> StoryItem {
+        StoryItem(
+            id: id,
+            media: urls.enumerated().map { FeedMedia(id: "\(id)-m\($0.offset)", type: .image, url: $0.element) },
+            storyEffects: nil,
+            createdAt: Date()
+        )
+    }
+
+    private func eventually(_ condition: @MainActor () -> Bool) async {
+        for _ in 0..<200 where !condition() {
+            _ = await cancellableSleep(for: .milliseconds(10))
+        }
+    }
+
+    /// Les URL sont RÉCLAMÉES avant d'être téléchargées : une passe que l'app
+    /// interrompt en quittant le premier plan doit les rendre, sinon le retour
+    /// les saute pour toute la session. Au retour, la passe repart et les
+    /// redemande.
+    func test_trayPreload_interruptedByLeavingTheForeground_returnsItsClaims_andReplaysOnReturn() async {
+        let gate = PreloadActivityGate(isActive: true)
+        let recorder = TrayFetchRecorder()
+        let preloader = StoryTrayMediaPreloader(activity: gate, fetch: { urls, _, _ in
+            await recorder.started(urls)
+            _ = await cancellableSleep(for: .seconds(30))
+            return []
+        })
+        let url = "https://cdn.example.invalid/tray-\(UUID().uuidString).jpg"
+        preloader.preload([makeStoryGroup(stories: [trayStory("s1", urls: [url])])])
+
+        await eventually { recorder.calls.count == 1 }
+        XCTAssertEqual(preloader.claimedURLs, [url])
+
+        gate.setActive(false)
+        await eventually { preloader.claimedURLs.isEmpty }
+        XCTAssertTrue(preloader.claimedURLs.isEmpty, "la passe interrompue rend ce qu'elle avait réclamé")
+
+        gate.setActive(true)
+        await eventually { recorder.calls.count == 2 }
+        XCTAssertEqual(recorder.calls.last, [url], "au retour, la passe redemande l'URL rendue")
+        preloader.cancel()
+    }
+
+    /// Une passe ACHEVÉE garde ce qu'elle a servi (dédup de session) et rend ce
+    /// que la politique d'auto-téléchargement a sauté.
+    func test_trayPreload_completedPass_keepsWhatItServed_andReturnsWhatThePolicySkipped() async {
+        let gate = PreloadActivityGate(isActive: true)
+        let served = "https://cdn.example.invalid/served-\(UUID().uuidString).jpg"
+        let skipped = "https://cdn.example.invalid/skipped-\(UUID().uuidString).jpg"
+        let preloader = StoryTrayMediaPreloader(activity: gate, fetch: { urls, _, _ in
+            urls.filter { $0 == skipped }
+        })
+        preloader.preload([makeStoryGroup(stories: [trayStory("s1", urls: [served, skipped])])])
+
+        await eventually { preloader.claimedURLs == [served] }
+        XCTAssertEqual(preloader.claimedURLs, [served])
+    }
+
+    /// Hors du premier plan, aucune passe ne commence.
+    func test_trayPreload_whileInactive_fetchesNothing() async {
+        let gate = PreloadActivityGate(isActive: false)
+        let recorder = TrayFetchRecorder()
+        let preloader = StoryTrayMediaPreloader(activity: gate, fetch: { urls, _, _ in
+            await recorder.started(urls)
+            return []
+        })
+        preloader.preload([makeStoryGroup(stories: [trayStory("s1", urls: ["https://cdn.example.invalid/idle.jpg"])])])
+
+        _ = await cancellableSleep(for: .milliseconds(200))
+        XCTAssertTrue(recorder.calls.isEmpty)
+        XCTAssertTrue(preloader.claimedURLs.isEmpty)
+        preloader.cancel()
     }
 
     // MARK: - Source guard — le prefetch consulte bien la politique (câblage, pas seulement la table de vérité)
@@ -2728,7 +2811,7 @@ final class StoryViewModelTests: XCTestCase {
 
         XCTAssertTrue(
             body.contains("shouldPrefetchStoryMedia("),
-            "prefetchStoryMediaURLs must consult StoryViewModel.shouldPrefetchStoryMedia(...) before touching a URL — " +
+            "prefetchStoryMediaURLs must consult StoryTrayMediaPreloader.shouldPrefetchStoryMedia(...) before touching a URL — " +
             "otherwise the truth-table tests above stay green while the download policy is silently bypassed."
         )
     }

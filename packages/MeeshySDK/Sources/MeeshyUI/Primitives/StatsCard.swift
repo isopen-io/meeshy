@@ -41,12 +41,12 @@ public struct StatsCard: View {
             // Label and value
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(label)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
 
                 Text(value)
-                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
             }
 
             Spacer()

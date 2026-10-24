@@ -167,8 +167,11 @@ export type SocialEventV2Action<T extends SocialEventV2Type> = (typeof SOCIAL_EV
 
 // ─── Énumérations de champs ──────────────────────────────────────────────────
 
-export const CLIENT_PLATFORMS = ['ios', 'web', 'android_shell', 'pwa'] as const;
+/** `android` = l'application Android NATIVE (additif, #11721) ; `android_shell` = la coque Capacitor. */
+export const CLIENT_PLATFORMS = ['ios', 'web', 'android_shell', 'pwa', 'android'] as const;
 export const DEVICE_CLASSES = ['phone', 'tablet', 'desktop'] as const;
+/** Le TIER de l'appareil qui lit (#11280), du moins au plus capable — porté par une session `playback`. */
+export const DEVICE_TIERS = ['low', 'mid', 'high'] as const;
 export const NETWORK_TYPES = ['wifi', 'cellular', 'ethernet', 'offline', 'unknown'] as const;
 export const NETWORK_SUBTYPES = ['2g', '3g', '4g', '5g'] as const;
 export const CONSENT_STATES = ['granted', 'denied', 'unknown'] as const;
@@ -203,6 +206,7 @@ export const SEARCH_RESULT_KINDS = ['post', 'profile', 'hashtag', 'sound', 'comm
 
 export type ClientPlatform = (typeof CLIENT_PLATFORMS)[number];
 export type DeviceClass = (typeof DEVICE_CLASSES)[number];
+export type DeviceTier = (typeof DEVICE_TIERS)[number];
 export type NetworkType = (typeof NETWORK_TYPES)[number];
 export type NetworkSubtype = (typeof NETWORK_SUBTYPES)[number];
 export type ConsentState = (typeof CONSENT_STATES)[number];

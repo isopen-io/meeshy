@@ -1,5 +1,6 @@
 package me.meeshy.app.contacts
 
+import androidx.compose.foundation.clickable
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -16,14 +17,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -45,9 +43,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
-import me.meeshy.sdk.model.friend.ConnectAction
+import me.meeshy.sdk.model.friend.ConnectionActionRender
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.ui.component.ConnectionActionChip
+import me.meeshy.ui.component.ConnectionFeedbackHost
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyTheme
@@ -61,13 +61,16 @@ import me.meeshy.ui.theme.MeeshyPalette
  */
 @Composable
 fun DiscoverTab(
+    onOpenProfile: (String) -> Unit = {},
     viewModel: DiscoverViewModel = hiltViewModel(),
+    connectionViewModel: ConnectionActionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // Cache-first suggestions paint on appear (iOS `.task { loadSuggestions() }`).
     LaunchedEffect(Unit) { viewModel.loadSuggestions() }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
         EmailInviteCard(
             emailText = state.emailText,
@@ -102,11 +105,15 @@ fun DiscoverTab(
                 header = stringResource(R.string.contacts_discover_suggestions_title)
                     .takeIf { state.isShowingSuggestions },
                 rows = state.rows,
-                pendingIds = state.pendingActionIds,
-                onConnect = viewModel::connect,
-                onAccept = viewModel::acceptReceived,
+                onAdd = connectionViewModel::add,
+                onAccept = connectionViewModel::accept,
+                onDecline = connectionViewModel::decline,
+                onCancel = connectionViewModel::cancel,
+                onOpenProfile = onOpenProfile,
             )
         }
+    }
+    ConnectionFeedbackHost(feedback = connectionViewModel.feedback)
     }
 }
 
@@ -237,9 +244,11 @@ private const val SMS_INVITE_MESSAGE = "Rejoins-moi sur Meeshy ! Telecharge l'ap
 private fun ResultList(
     header: String?,
     rows: List<DiscoverRow>,
-    pendingIds: Set<String>,
-    onConnect: (String) -> Unit,
+    onAdd: (String) -> Unit,
     onAccept: (String) -> Unit,
+    onDecline: (String) -> Unit,
+    onCancel: (String) -> Unit,
+    onOpenProfile: (String) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -258,9 +267,11 @@ private fun ResultList(
         items(rows, key = { it.user.id }) { row ->
             ResultRow(
                 row = row,
-                pending = row.user.id in pendingIds,
-                onConnect = { onConnect(row.user.id) },
+                onAdd = { onAdd(row.user.id) },
                 onAccept = { onAccept(row.user.id) },
+                onDecline = { onDecline(row.user.id) },
+                onCancel = { onCancel(row.user.id) },
+                onOpenProfile = { onOpenProfile(row.user.id) },
             )
         }
     }
@@ -269,15 +280,18 @@ private fun ResultList(
 @Composable
 private fun ResultRow(
     row: DiscoverRow,
-    pending: Boolean,
-    onConnect: () -> Unit,
+    onAdd: () -> Unit,
     onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    onCancel: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
     val user = row.user
     val name = user.displayName?.takeIf { it.isNotBlank() } ?: user.username.ifBlank { "?" }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = user.id.isNotBlank(), onClick = onOpenProfile)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -285,6 +299,7 @@ private fun ResultRow(
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(user.id.ifBlank { name })),
+            imageUrl = user.avatar,
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -305,49 +320,15 @@ private fun ResultRow(
             }
         }
         Spacer(Modifier.width(12.dp))
-        ConnectControl(action = row.connect, pending = pending, onConnect = onConnect, onAccept = onAccept)
-    }
-}
-
-@Composable
-private fun ConnectControl(
-    action: ConnectAction,
-    pending: Boolean,
-    onConnect: () -> Unit,
-    onAccept: () -> Unit,
-) {
-    when (action) {
-        is ConnectAction.Connect -> FilledTonalButton(onClick = onConnect, enabled = !pending) {
-            Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.width(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.contacts_discover_connect))
-        }
-        is ConnectAction.Accept -> FilledTonalButton(onClick = onAccept, enabled = !pending) {
-            Text(stringResource(R.string.contacts_request_accept))
-        }
-        is ConnectAction.Pending -> OutlinedButton(onClick = {}, enabled = false) {
-            Text(stringResource(R.string.contacts_discover_pending))
-        }
-        is ConnectAction.Contact -> Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Filled.Check,
-                contentDescription = null,
-                tint = MeeshyPalette.Indigo500,
-                modifier = Modifier.width(18.dp),
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = stringResource(R.string.contacts_discover_contact),
-                style = MaterialTheme.typography.labelLarge,
-                color = MeeshyPalette.Indigo500,
-            )
-        }
-        is ConnectAction.Blocked -> Text(
-            text = stringResource(R.string.contacts_discover_blocked),
-            style = MaterialTheme.typography.labelLarge,
-            color = MeeshyPalette.Error,
+        ConnectionActionChip(
+            render = ConnectionActionRender.from(row.connect),
+            userName = name,
+            accent = MeeshyPalette.Indigo500,
+            onAdd = onAdd,
+            onAccept = onAccept,
+            onDecline = onDecline,
+            onCancel = onCancel,
         )
-        is ConnectAction.Hidden -> Unit
     }
 }
 

@@ -4,7 +4,8 @@ import MeeshySDK
 
 public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
 
     public var onSelectCommunity: ((MeeshyCommunity) -> Void)?
@@ -94,12 +95,12 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: MeeshyIconSize.sm))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             TextField(String(localized: "community.list.search.placeholder", defaultValue: "Rechercher...", bundle: .module), text: $viewModel.searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: MeeshyFont.bodySize, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, design: .rounded))
+                .foregroundStyle(theme.textPrimary)
 
             if !viewModel.searchText.isEmpty {
                 Button {
@@ -107,7 +108,7 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: MeeshyIconSize.sm))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
         }
@@ -134,11 +135,11 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
 
             Text(String(localized: "community.list.empty.title", defaultValue: "Aucune communauté", bundle: .module))
                 .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou crée une communauté pour collaborer", bundle: .module))
                 .font(.system(size: MeeshyFont.labelSize, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             Button { onCreateCommunity?() } label: {
@@ -147,7 +148,7 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
                     Text(String(localized: "community.list.empty.createButton", defaultValue: "Créer une communauté", bundle: .module))
                 }
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(.horizontal, MeeshySpacing.xxl)
                 .padding(.vertical, MeeshySpacing.md)
                 .background(
@@ -247,7 +248,7 @@ private struct VibrantCommunityCard: View, Equatable {
             Image(systemName: community.isPrivate ? "lock.fill" : "globe")
                 .font(.system(size: 8, weight: .semibold))
     }
-    .foregroundColor(.white.opacity(0.85))
+    .foregroundStyle(Color.white.opacity(0.85))
     .padding(.horizontal, MeeshySpacing.xsPlus)
     .padding(.vertical, MeeshySpacing.xxs)
     .background(Color.black.opacity(0.25))
@@ -258,6 +259,19 @@ private struct VibrantCommunityCard: View, Equatable {
     }
 
     var body: some View {
+        Button {
+            withAnimation { isPressed = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation { isPressed = false }
+            }
+            onTap()
+        } label: {
+            cardContent
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .roundedRect(cornerRadius: MeeshyRadius.xl)))
+    }
+
+    private var cardContent: some View {
         ZStack(alignment: .bottomLeading) {
             // Banner image — full-bleed. Falls back to the community's
             // derived accent colour gradient when no banner is set.
@@ -279,15 +293,15 @@ private struct VibrantCommunityCard: View, Equatable {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(community.name)
-                    .font(.system(size: MeeshyFont.bodySize, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
 
                 if let desc = community.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.system(size: MeeshyFont.footnoteSize, design: .rounded))
-                        .foregroundColor(.white.opacity(0.8))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
+                        .foregroundStyle(Color.white.opacity(0.8))
                         .lineLimit(2)
                 }
 
@@ -306,7 +320,7 @@ private struct VibrantCommunityCard: View, Equatable {
                             .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                     }
                 }
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundStyle(Color.white.opacity(0.9))
             }
             .padding(MeeshySpacing.md)
         }
@@ -315,12 +329,5 @@ private struct VibrantCommunityCard: View, Equatable {
         .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 8, y: 4)
         .scaleEffect(isPressed ? 0.95 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isPressed)
-        .onTapGesture {
-            withAnimation { isPressed = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation { isPressed = false }
-            }
-            onTap()
-        }
     }
 }

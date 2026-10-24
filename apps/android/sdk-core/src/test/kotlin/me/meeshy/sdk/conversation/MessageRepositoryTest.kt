@@ -85,6 +85,7 @@ private class FakeMessageApi(
     override suspend fun edit(messageId: String, body: EditMessageRequest) =
         ApiResponse<ApiMessage>(success = false)
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
+    override suspend fun readStatus(messageId: String) = ApiResponse<me.meeshy.sdk.model.ReadStatusData>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
     override suspend fun pin(conversationId: String, messageId: String) =
@@ -140,6 +141,7 @@ private class EtagAwareMessageApi(
     override suspend fun edit(messageId: String, body: EditMessageRequest) =
         ApiResponse<ApiMessage>(success = false)
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
+    override suspend fun readStatus(messageId: String) = ApiResponse<me.meeshy.sdk.model.ReadStatusData>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
     override suspend fun pin(conversationId: String, messageId: String) =
@@ -215,6 +217,7 @@ private class GapAwareMessageApi(
     override suspend fun edit(messageId: String, body: EditMessageRequest) =
         ApiResponse<ApiMessage>(success = false)
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
+    override suspend fun readStatus(messageId: String) = ApiResponse<me.meeshy.sdk.model.ReadStatusData>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
     override suspend fun pin(conversationId: String, messageId: String) =

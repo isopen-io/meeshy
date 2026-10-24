@@ -22,7 +22,7 @@ extension CallView {
             // Name
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
                 .padding(.bottom, MeeshySpacing.sm)
 
@@ -35,11 +35,11 @@ extension CallView {
                     ? String(localized: "call.outgoing.waiting", defaultValue: "En attente du correspondant…", bundle: .main)
                     : String(localized: "call.outgoing.ringing", defaultValue: "Appel en cours...", bundle: .main))
                     .font(.callout.weight(.medium))
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 if sdpOfferSlow {
                     Text(String(localized: "call.outgoing.waiting.hint", defaultValue: "Le correspondant n'a pas encore répondu.", bundle: .main))
                         .font(.caption2)
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundStyle(Color.white.opacity(0.6))
                         .multilineTextAlignment(.center)
                         .transition(.opacity)
                 }
@@ -74,8 +74,7 @@ extension CallView {
         }
         .task {
             sdpOfferSlow = false
-            try? await Task.sleep(nanoseconds: sdpOfferSlowSeconds * 1_000_000_000)
-            if !Task.isCancelled {
+            if await cancellableSleep(for: .seconds(sdpOfferSlowSeconds)), !Task.isCancelled {
                 withAnimation(.easeInOut(duration: 0.3)) { sdpOfferSlow = true }
                 UIAccessibility.post(
                     notification: .announcement,
@@ -103,7 +102,7 @@ extension CallView {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
                 .padding(.bottom, MeeshySpacing.sm)
 
@@ -113,7 +112,7 @@ extension CallView {
                     .accessibilityHidden(true)
                 Text(String(localized: "call.connecting", defaultValue: "Connexion...", bundle: .main))
                     .font(.callout.weight(.medium))
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
             .accessibilityElement(children: .combine)
             .padding(.bottom, 60)
@@ -145,11 +144,11 @@ extension CallView {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title3, design: .rounded).weight(.semibold))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
 
             Text(endReasonText(reason))
                 .font(.callout.weight(.medium))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
 
             if callManager.callDuration > 0 {
                 Text(callManager.formattedDuration)
@@ -171,7 +170,7 @@ extension CallView {
                         systemImage: "arrow.clockwise"
                     )
                     .font(.callout.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xxl)
                     .padding(.vertical, MeeshySpacing.md)
                     .frame(minHeight: 44)
@@ -224,40 +223,16 @@ extension CallView {
     }
 
     func avatarCircle(size: CGFloat) -> some View {
-        let name = callManager.remoteUsername ?? "?"
-        let initial = String(name.prefix(1)).uppercased()
-
-        return ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size, height: size)
-
-            Text(initial)
-                // Doctrine 86i : initiale d'avatar proportionnelle au cercle fixe `size` → figée.
-                .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-
-            // Vraie photo de profil par-dessus le fallback initiale (le
-            // dégradé + initiale restent visibles pendant le chargement).
-            if let avatar = remoteProfile?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: size, height: size),
-                    thumbHash: remoteProfile?.avatarThumbHash
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(Circle())
-            }
-        }
+        // Un seul visage : la photo, sinon les initiales d'un avatar sans photo
+        // (jamais les initiales sous la photo).
+        CachedAvatarImage(
+            urlString: remoteProfile?.avatar,
+            thumbHash: remoteProfile?.avatarThumbHash,
+            name: callManager.remoteUsername ?? "?",
+            size: size,
+            accentColor: MeeshyColors.brandPrimaryHex
+        )
+        .avatarRingWithin(ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing), footprint: size)
         .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
     }
 
@@ -275,36 +250,14 @@ extension CallView {
 
     private func localAvatarBadge(size: CGFloat) -> some View {
         let user = AuthManager.shared.currentUser
-        let name = user?.displayName ?? user?.username ?? "?"
-        let initial = String(name.prefix(1)).uppercased()
 
-        return ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [MeeshyColors.indigo600, MeeshyColors.indigo800],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            Text(initial)
-                .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-
-            if let avatar = user?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: size, height: size),
-                    thumbHash: user?.avatarThumbHash
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(Circle())
-            }
-        }
+        return CachedAvatarImage(
+            urlString: user?.avatar,
+            thumbHash: user?.avatarThumbHash,
+            name: user?.displayName ?? user?.username ?? "?",
+            size: size,
+            accentColor: MeeshyColors.brandPrimaryHex
+        )
         .frame(width: size, height: size)
         // Liseré au ton du fond : détache la pastille du grand cercle.
         .overlay(Circle().stroke(MeeshyColors.surfaceDarkDeep, lineWidth: 3))

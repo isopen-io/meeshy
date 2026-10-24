@@ -29,6 +29,7 @@
  */
 
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { prefixRange } from '../../utils/prefix-range';
 
 export const GENRES_DE_MEDIA = ['visual', 'audio', 'document', 'link', 'contact', 'conversation', 'location'] as const;
 
@@ -66,29 +67,52 @@ const contient = (fragment: string): Prisma.MessageWhereInput => ({
   content: { contains: fragment, mode: 'insensitive' },
 });
 
-const pieceDontLeTypeCommencePar = (prefixes: readonly string[]): Prisma.MessageWhereInput => ({
+/** Les quatre genres qu'une PIÈCE peut avoir — disjoints, par son seul type MIME. */
+export const GENRES_DE_PIECE = ['visual', 'audio', 'document', 'contact'] as const;
+
+export type GenreDePiece = (typeof GENRES_DE_PIECE)[number];
+
+const typeCommencePar = (prefixes: readonly string[]): Prisma.MessageAttachmentWhereInput => ({
+  OR: prefixes.map((prefixe) => ({ mimeType: prefixRange(prefixe) })),
+});
+
+/**
+ * La clause de TYPE d'un genre de pièce, sur `MessageAttachment` — la partition
+ * UNIQUE que l'index de membre (ci-dessous) et la lecture souveraine des pièces
+ * (`routes/admin/conversation-attachments-sovereign.ts`, #11510) partagent :
+ * `attachmentKindOf` (web, `lib/view/media-hub.ts`) range chaque pièce servie
+ * par la même règle, et une partition qui divergerait ferait servir une pièce
+ * qu'aucun segment n'afficherait. Elle ne dit RIEN de la vue unique : c'est
+ * l'appelant qui décide si une pièce à vue unique entre (listée sous son voile
+ * en administration) ou sort (l'index de membre).
+ */
+export function clauseDeTypeDuGenre(genre: GenreDePiece): Prisma.MessageAttachmentWhereInput {
+  switch (genre) {
+    case 'visual':
+      return typeCommencePar(MIMES_VISUELS);
+    case 'audio':
+      return typeCommencePar(MIMES_AUDIO);
+    case 'contact':
+      return typeCommencePar(MIMES_CONTACT);
+    case 'document':
+      return { NOT: typeCommencePar([...MIMES_VISUELS, ...MIMES_AUDIO, ...MIMES_CONTACT]) };
+  }
+}
+
+const pieceDuGenre = (genre: GenreDePiece): Prisma.MessageWhereInput => ({
   attachments: {
-    some: { ...NON_VUE_UNIQUE, OR: prefixes.map((prefixe) => ({ mimeType: { startsWith: prefixe } })) },
+    some: { ...NON_VUE_UNIQUE, ...clauseDeTypeDuGenre(genre) },
   },
 });
 
 const CLAUSES: Readonly<Record<GenreDeMedia, Prisma.MessageWhereInput>> = {
-  visual: pieceDontLeTypeCommencePar(MIMES_VISUELS),
-  audio: pieceDontLeTypeCommencePar(MIMES_AUDIO),
-  contact: pieceDontLeTypeCommencePar(MIMES_CONTACT),
+  visual: pieceDuGenre('visual'),
+  audio: pieceDuGenre('audio'),
+  contact: pieceDuGenre('contact'),
   document: {
     attachments: {
       some: {
-        AND: [
-          NON_VUE_UNIQUE,
-          {
-            NOT: {
-              OR: [...MIMES_VISUELS, ...MIMES_AUDIO, ...MIMES_CONTACT].map((prefixe) => ({
-                mimeType: { startsWith: prefixe },
-              })),
-            },
-          },
-        ],
+        AND: [NON_VUE_UNIQUE, clauseDeTypeDuGenre('document')],
       },
     },
   },

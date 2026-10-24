@@ -63,6 +63,8 @@ private abstract class StubConversationApi : ConversationApi {
         body: me.meeshy.sdk.model.HistoryGrantUpdate,
     ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
 
+    override suspend fun directWith(type: String, withUserId: String, limit: Int) =
+        ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) =
         ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun listConditional(
@@ -79,6 +81,8 @@ private abstract class StubConversationApi : ConversationApi {
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun markReceived(id: String) =
+        ApiResponse<me.meeshy.sdk.model.MarkedCountResult>(success = false)
     override suspend fun markUnread(id: String) = ApiResponse<Unit>(success = false)
     override suspend fun updatePreferences(id: String, body: ConversationPreferencesUpdate) =
         ApiResponse<Unit>(success = false)
@@ -445,6 +449,8 @@ private class CountingConversationDao(private val delegate: ConversationDao) : C
 
     override fun observeById(id: String): Flow<ConversationEntity?> = delegate.observeById(id)
     override suspend fun find(id: String): ConversationEntity? = delegate.find(id)
+    override suspend fun payloadsContaining(needle: String): List<ConversationEntity> =
+        delegate.payloadsContaining(needle)
     override suspend fun upsertAll(rows: List<ConversationEntity>) = delegate.upsertAll(rows)
     override suspend fun deleteNotIn(ids: List<String>) = delegate.deleteNotIn(ids)
     override suspend fun allIds(): List<String> = delegate.allIds()

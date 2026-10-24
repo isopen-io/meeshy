@@ -17,6 +17,8 @@ import MeeshyUI
 
 extension ConversationMediaGalleryView {
 
+    nonisolated static func stageEntryVibrates(_ door: StageEntry) -> Bool { door != .tap }
+
     /// **La seule écriture de l'état d'immersion.**
     ///
     /// Un geste dit par quelle PORTE il passe ; la loi dit ce qu'elle produit.
@@ -38,11 +40,6 @@ extension ConversationMediaGalleryView {
     ///   posée plus haut, elle installerait une transaction animée sur tout
     ///   l'arbre, pager compris.
     func onEnterStage(_ door: StageEntry) {
-        // **Le toucher qui RAMÈNE le bouton pause garde AUSSI sa porte** (#9577,
-        // décision porteur 2026-10-08, alignée sur le web) : il réarme la
-        // seconde du bouton central PUIS bascule le plein cadre, en un seul
-        // geste. Aucun retour anticipé ici — le toucher ne s'arrête jamais au
-        // bouton.
         if door == .tap {
             withAnimation(playPauseFadeAnimation) { playPauseFade = playPauseFade.tappingMedia() }
         }
@@ -79,7 +76,7 @@ extension ConversationMediaGalleryView {
         }
 
         if next.isFull, reactionBarOpen { reactionBarOpen = false }
-        HapticFeedback.light()
+        if Self.stageEntryVibrates(door) { HapticFeedback.light() }
 
         withAnimation(.easeInOut(duration: 0.25)) { stagePresentation = next }
     }
@@ -196,7 +193,7 @@ struct MediaStagePausedBadge: View {
                         bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
         }
-        .foregroundColor(MeeshyColors.mediaChromeForeground)
+        .foregroundStyle(MeeshyColors.mediaChromeForeground)
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.smPlus)
         .adaptiveGlass(in: Capsule())

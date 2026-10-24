@@ -14,10 +14,10 @@ final class GameBadgeGuideTests: XCTestCase {
 
     private var ecran: RenderedScreen?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private static let october = "2026-10-03T09:00:00.000Z"

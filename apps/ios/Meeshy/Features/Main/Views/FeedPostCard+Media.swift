@@ -87,7 +87,7 @@ extension FeedPostCard {
             if model.count > 1 {
                 Text("+\(model.count - 1)")
                     .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xsPlus)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
@@ -275,22 +275,22 @@ extension FeedPostCard {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: MeeshySpacing.sm) {
                     if let size = media.fileSize {
                         Text(size)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
 
                     if let pages = media.pageCount {
                         Text("\u{2022}")
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                         Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))")
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                 }
             }
@@ -343,7 +343,6 @@ private struct FeedVideoMediaCell: View {
                 accentColor: accentColor,
                 frame: .card,
                 availability: availability,
-                performance: .inline,
                 onDownload: onDownload,
                 onExpand: onExpand
             )

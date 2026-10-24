@@ -4,8 +4,8 @@
  * catalogue `catalog-en.ts`, qu'il RÉPAND.
  */
 const enEngagement = {
-  'engagement.pill.streak.one': '{count}-day Flame',
-  'engagement.pill.streak.other': '{count}-day Flame',
+  'engagement.pill.streak.one': '{count} day',
+  'engagement.pill.streak.other': '{count} days',
   'engagement.pill.points.one': '{total} spark, {today} today',
   'engagement.pill.points.other': '{total} sparks, {today} today',
   'engagement.pill.total.one': '{total} spark earned in this conversation',

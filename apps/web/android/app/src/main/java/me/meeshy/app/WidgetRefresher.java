@@ -30,7 +30,14 @@ final class WidgetRefresher {
             context.sendBroadcast(new Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
                 .setClass(context, provider)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids));
-            if (provider == RecentConversationsWidget.class) manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list);
+            if (provider == RecentConversationsWidget.class) reloadRows(manager, ids);
         }
+    }
+
+    // Le pendant de RecentConversationsWidget#bindRows : la liste est servie par
+    // RecentConversationsService, que seul cet appel fait relire.
+    @SuppressWarnings("deprecation")
+    private static void reloadRows(AppWidgetManager manager, int[] ids) {
+        manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list);
     }
 }

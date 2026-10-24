@@ -101,11 +101,11 @@ struct DataExportView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos données, votre contrôle", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 Text(String(localized: "settings.data.export.info.body", defaultValue: "Conformément au RGPD, vous pouvez exporter toutes vos données personnelles.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
         .padding(MeeshySpacing.mdPlus)
@@ -191,7 +191,7 @@ struct DataExportView: View {
 
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
@@ -208,11 +208,11 @@ struct DataExportView: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .accessibilityHidden(true)
             Text(message)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
         }
         .padding(MeeshySpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -245,7 +245,7 @@ struct DataExportView: View {
                     : String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes données", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
             }
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.mdPlus)
             .background(

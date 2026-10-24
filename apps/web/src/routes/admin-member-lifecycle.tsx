@@ -15,6 +15,7 @@ import { useOnline } from '@/lib/net/online';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 import { GLASS_CARD_CLASS, GLASS_CARD_EDGE } from './admin-member-parts';
+import { GESTURE_ROW } from './admin-member-quick-edit';
 
 /**
  * **SUPPRIMER OU RESTAURER UN COMPTE** (audit 2026-10-04) — la passerelle servait
@@ -96,7 +97,7 @@ export function AdminMemberLifecycle({
     <section
       aria-label={translateAdmin(language, 'admin.people.lifecycle.title')}
       data-admin-lifecycle={deleted ? 'deleted' : 'alive'}
-      className={embedded ? 'flex flex-wrap items-center gap-2' : `${GLASS_CARD_CLASS} flex flex-wrap items-center gap-2 p-4`}
+      className={embedded ? GESTURE_ROW : `${GLASS_CARD_CLASS} flex flex-wrap items-center gap-2 p-4`}
       {...(embedded ? {} : { style: GLASS_CARD_EDGE })}
     >
       {deleted ? (

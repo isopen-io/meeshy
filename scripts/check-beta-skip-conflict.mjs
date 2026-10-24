@@ -73,7 +73,7 @@ const explain = (message) =>
   [
     'Ce message porte À LA FOIS un marqueur (beta) et un marqueur de saut CI.',
     'GitHub supprime TOUS les workflows du push qui porte ce message — y compris',
-    '« iOS (beta) → Xcode Cloud » — donc le build TestFlight voulu ne démarrera',
+    '« iOS · bêta Xcode Cloud » — donc le build TestFlight voulu ne démarrera',
     'jamais, sans qu\'aucune CI ne le signale (issue #6351).',
     '',
     'Retirer le marqueur de saut du message (le citer sans les crochets/deux-points',

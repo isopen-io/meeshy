@@ -21,7 +21,7 @@ public struct MeeshyAudioEditorView: View {
 
     @StateObject private var controller: AudioEditorController
     @StateObject private var waveform = AudioWaveformAnalyzer()
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     private let accentColor: String
     private let onConfirm: (URL, [StoryVoiceTranscription], TimeInterval, TimeInterval) -> Void
@@ -254,7 +254,7 @@ public struct MeeshyAudioEditorView: View {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon).font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
-                Text(label).font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                Text(label).font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xsPlus)
@@ -293,11 +293,11 @@ public struct MeeshyAudioEditorView: View {
 
             HStack {
                 Text(formatTime(displayTime))
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                     .foregroundColor(accent)
                 Spacer()
                 Text(formatTime(controller.activeDuration))
-                    .font(.system(size: MeeshyFont.footnoteSize, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -432,7 +432,7 @@ public struct MeeshyAudioEditorView: View {
                 Image(systemName: version.operation.displayIcon)
                     .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 Text(version.operation.displayLabel)
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .lineLimit(1)
             }
             .foregroundColor(isActive ? .white : theme.textSecondary)
@@ -481,7 +481,7 @@ public struct MeeshyAudioEditorView: View {
                 .font(.system(size: MeeshyIconSize.xs))
                 .foregroundColor(MeeshyColors.error)
             Text(message)
-                .font(.system(size: MeeshyFont.smallSize))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize))
                 .foregroundColor(theme.textSecondary)
             Spacer(minLength: 0)
             Button {

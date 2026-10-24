@@ -1,8 +1,10 @@
+import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { flattenFriendRequests, friendRequestsQueryOptions } from '@/lib/api/friend-requests';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -13,6 +15,7 @@ import type { DecodedPerson } from '@/lib/calls/call-decode';
 import { invitableFriends, personOf } from '@/lib/calls/call-people';
 import type { CallMember } from '@/lib/calls/call-store';
 import { friendsOf } from '@/lib/conversation-new/candidates';
+import { initialsOf } from '@/lib/view/conversation';
 import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -43,18 +46,22 @@ type SheetProps = {
   readonly back?: PanelBack | undefined;
 };
 
-const initials = (name: string): string =>
-  name
-    .split(/\s+/)
-    .filter((part) => part.length > 0)
-    .slice(0, 2)
-    .map((part) => part[0]?.toLocaleUpperCase() ?? '')
-    .join('');
-
-function Face({ name, avatar, ringing = false }: { readonly name: string; readonly avatar: string | null; readonly ringing?: boolean }) {
+/**
+ * **UN SEUL VISAGE** (#12571) — le composant central d'avatar, jamais une
+ * `<img>` écrite ici : il résout la clé de stockage, rend les initiales si la
+ * photo échoue, et ne monte pas deux visages pour une même personne.
+ */
+function Face({ id, name, avatar, ringing = false }: { readonly id: string | undefined; readonly name: string; readonly avatar: string | null; readonly ringing?: boolean }) {
   return (
-    <span aria-hidden className={`relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-full text-mini font-semibold ${ringing ? 'animate-pulse motion-reduce:animate-none' : ''}`} style={{ background: 'var(--color-media-fill)' }}>
-      {avatar === null ? initials(name) : <img src={avatar} alt="" className="size-full object-cover" />}
+    <span aria-hidden className={`shrink-0 ${ringing ? 'animate-pulse motion-reduce:animate-none' : ''}`}>
+      <PeerAvatar
+        presenceKey={id}
+        ringRef={null}
+        initials={initialsOf(name)}
+        color={colorForName(name)}
+        size={40}
+        {...(avatar === null || avatar === '' ? {} : { src: avatar })}
+      />
     </span>
   );
 }
@@ -76,6 +83,8 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
   const [query, setQuery] = useState('');
   const panel = useRef<HTMLDivElement>(null);
   const { loading, all, shown } = useInvitable(query, members);
+  const session = useStore(sessionStore, (state) => state.session);
+  const me = resolveViewer({ source: apiDeps.source, session });
   const empty = loading ? t(language, 'callControls.people.loading') : all.length === 0 ? t(language, 'callControls.people.empty') : t(language, 'callControls.people.none');
 
   return (
@@ -87,14 +96,14 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
           </h3>
           <ul className="flex flex-col" data-call-people-in="">
             <li className={ROW}>
-              <Face name={t(language, 'callControls.people.you')} avatar={null} />
+              <Face id={undefined} name={me.displayName} avatar={me.avatar ?? null} />
               <span className="text-body font-semibold">{t(language, 'callControls.people.you')}</span>
             </li>
             {members.map((member) => {
               const ringing = member.link === 'ringing';
               return (
                 <li key={member.userId} className={ROW} data-call-person={member.userId} {...(ringing ? { 'data-call-person-ringing': '' } : {})}>
-                  <Face name={member.name} avatar={member.avatar} ringing={ringing} />
+                  <Face id={member.userId} name={member.name} avatar={member.avatar} ringing={ringing} />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-body font-semibold">{member.name}</span>
                     {ringing ? <span className="text-mini" style={{ color: 'var(--color-on-media-3)' }}>{t(language, 'callControls.ringing')}</span> : null}
@@ -130,7 +139,7 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
                 const person = personOf(friend);
                 return (
                   <li key={friend.id} className={ROW} data-call-invitable={friend.id}>
-                    <Face name={person.name} avatar={person.avatar} />
+                    <Face id={friend.id} name={person.name} avatar={person.avatar} />
                     <span className="min-w-0 flex-1 truncate text-body font-semibold">{person.name}</span>
                     <button
                       type="button"

@@ -17,15 +17,11 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
     private func makeSUT(
         cache: CacheResult<[Message]> = .empty,
         cachedTranslations: [String: [MessageTranslation]] = [:],
-        prism: [String] = ["fr"],
-        decryptedOnDevice: Set<String> = []
+        prism: [String] = ["fr"]
     ) -> (sut: ConversationListPreviewLoader, service: MockMessageService, cache: MockConversationPreviewCache) {
         let service = MockMessageService()
         let cacheMock = MockConversationPreviewCache(messages: cache, translations: cachedTranslations)
-        let sut = ConversationListPreviewLoader(
-            messageService: service, cache: cacheMock, readerPrism: { prism },
-            isDecryptedOnDevice: { decryptedOnDevice.contains($0) }
-        )
+        let sut = ConversationListPreviewLoader(messageService: service, cache: cacheMock, readerPrism: { prism })
         return (sut, service, cacheMock)
     }
 
@@ -37,18 +33,27 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         content: String = "Salut",
         originalLanguage: String = "fr",
         isEncrypted: Bool = false,
+        decryptedOnDevice: Bool = false,
         updatedAt: Date = Date(timeIntervalSince1970: 1_000)
     ) -> Message {
-        Message(
+        var message = Message(
             id: id ?? messageId,
             conversationId: conversationId,
             senderId: "u-other",
-            content: content,
+            content: decryptedOnDevice ? ciphertext : content,
             originalLanguage: originalLanguage,
             isEncrypted: isEncrypted,
             createdAt: Date(timeIntervalSince1970: 1_000),
             updatedAt: updatedAt
         )
+        if decryptedOnDevice { message.adoptDecryptedContent(content) }
+        return message
+    }
+
+    /// Le cache tel que le relit un démarrage à froid : le message traverse
+    /// l'encodage du magasin GRDB, sa provenance avec lui.
+    private func persisted(_ message: Message) throws -> Message {
+        try JSONDecoder().decode(Message.self, from: JSONEncoder().encode(message))
     }
 
     private func makeTranslation(target: String, text: String, messageId: String? = nil) -> MessageTranslation {
@@ -243,7 +248,7 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         service.listResult = .success(page(content: "réseau"))
         let cache = MockConversationPreviewCache(messages: .stale([makeMessage(content: "en cache")], age: 4_000))
         cache.holdsNextRead = true
-        let sut = ConversationListPreviewLoader(messageService: service, cache: cache, readerPrism: { ["fr"] }, isDecryptedOnDevice: { _ in false })
+        let sut = ConversationListPreviewLoader(messageService: service, cache: cache, readerPrism: { ["fr"] })
         let id = conversationId
 
         let prefetch = Task { await sut.load(for: id, intent: .prefetch) }
@@ -405,6 +410,26 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         XCTAssertNotEqual(ConversationPreviewFingerprint(state: .unavailable), ConversationPreviewFingerprint(state: .empty))
     }
 
+    // MARK: - Flamme après lecture
+
+    func test_snapshot_receivedAfterReadFlame_neverCarriesItsTextToTheList() {
+        var burning = makeMessage(id: "burn", content: "secret qui brûle")
+        burning.effects = MessageEffects(flags: [.ephemeral, .ephemeralAfterRead])
+        let ordinary = makeMessage(id: "plain", content: "Salut")
+
+        let snapshot = ConversationListPreviewLoader.snapshot(
+            messages: [burning, ordinary],
+            translations: ["burn": [makeTranslation(target: "en", text: "secret", messageId: "burn")]],
+            prism: ["en"]
+        )
+
+        XCTAssertEqual(snapshot.messages.first { $0.id == "burn" }?.content, "",
+                       "l'aperçu n'est pas une lecture : il ne livre pas ce que l'ouverture consomme")
+        XCTAssertNil(snapshot.translations["burn"])
+        XCTAssertEqual(snapshot.messages.first { $0.id == "plain" }?.content, "Salut", "témoin : un message ordinaire se lit")
+        XCTAssertTrue(ConversationPreviewRenderer.isSealed(snapshot.messages.first { $0.id == "burn" }!))
+    }
+
     // MARK: - E2EE
 
     func test_encryptedRest_neverExposesCiphertextAsText() async {
@@ -438,12 +463,11 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         XCTAssertNil(snapshot?.servedTranslation(for: messageId))
     }
 
-    /// Une DM chiffrée lue sur l'appareil : le cache porte le clair, et le
-    /// registre des déchiffrements le prouve — l'aperçu le sert.
+    /// Une DM chiffrée lue sur l'appareil : le cache porte le clair, et sa
+    /// provenance prouve que c'est l'appareil qui l'a déchiffré — l'aperçu le sert.
     func test_encryptedCache_decryptedOnDevice_servesPlaintext() async {
         let (sut, _, _) = makeSUT(
-            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true)], age: 10),
-            decryptedOnDevice: [messageId]
+            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true)], age: 10)
         )
 
         await sut.load(for: conversationId, intent: .prefetch)
@@ -451,11 +475,50 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         XCTAssertEqual(sut.state(for: conversationId).messages.map(\.content), ["Salut en clair"])
     }
 
-    func test_encryptedCache_provenButStillCiphertext_staysSealed() async {
+    /// Le registre des déchiffrements vivait en mémoire : après un démarrage à
+    /// froid, tous les messages E2EE de l'aperçu étaient scellés. La provenance
+    /// voyage dans le cache (#11382).
+    func test_encryptedCache_coldStart_servesWhatTheDeviceDecrypted() async throws {
+        let cached = try persisted(makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true))
+        let (sut, _, _) = makeSUT(cache: .stale([cached], age: 4_000))
+
+        await sut.load(for: conversationId, intent: .prefetch)
+
+        XCTAssertEqual(sut.state(for: conversationId).messages.map(\.content), ["Salut en clair"])
+    }
+
+    /// Le faux positif de l'heuristique base64 : un clair réel qui est du
+    /// base64 valide, déchiffré sur l'appareil, se sert comme un clair.
+    func test_encryptedCache_base64LookingPlaintextDecryptedOnDevice_servesIt() async {
+        let base64Clear = Data(repeating: 0x78, count: 40).base64EncodedString()
         let (sut, _, _) = makeSUT(
-            cache: .fresh([makeMessage(content: ciphertext, isEncrypted: true)], age: 10),
-            decryptedOnDevice: [messageId]
+            cache: .fresh([makeMessage(content: base64Clear, isEncrypted: true, decryptedOnDevice: true)], age: 10)
         )
+
+        await sut.load(for: conversationId, intent: .prefetch)
+
+        XCTAssertEqual(sut.state(for: conversationId).messages.map(\.content), [base64Clear])
+    }
+
+    /// Le faux négatif : un texte que le serveur forge dans une conversation
+    /// chiffrée n'a pas la forme d'un cryptogramme, mais rien ne le dit
+    /// déchiffré sur l'appareil — scellé.
+    func test_encryptedCache_forgedClearTextWithoutProvenance_staysSealed() async {
+        let (sut, _, _) = makeSUT(
+            cache: .fresh([makeMessage(content: "Texte forgé par le serveur", isEncrypted: true)], age: 10)
+        )
+
+        await sut.load(for: conversationId, intent: .prefetch)
+
+        XCTAssertEqual(sut.state(for: conversationId).messages.first?.content, "")
+    }
+
+    /// Le moteur de synchronisation réécrit `content` depuis le REST après le
+    /// déchiffrement : la provenance ne couvre plus le texte, scellé.
+    func test_encryptedCache_contentRewrittenAfterDecryption_staysSealed() async {
+        var rewritten = makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true)
+        rewritten.content = ciphertext
+        let (sut, _, _) = makeSUT(cache: .fresh([rewritten], age: 10))
 
         await sut.load(for: conversationId, intent: .prefetch)
 
@@ -464,8 +527,7 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
 
     func test_encryptedRest_revalidation_keepsThePlaintextDecryptedOnDevice() async {
         let (sut, service, _) = makeSUT(
-            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true, updatedAt: restVersion)], age: 10),
-            decryptedOnDevice: [messageId]
+            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true, updatedAt: restVersion)], age: 10)
         )
         service.listResult = .success(page(content: ciphertext, isEncrypted: true))
 
@@ -475,12 +537,29 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         XCTAssertEqual(service.listCallCount, 1)
     }
 
+    /// Le clair recouvre le cryptogramme REST AVEC sa provenance : la
+    /// revalidation suivante le reconnaît encore, sans repasser par le cache.
+    func test_encryptedRest_reopenedTwice_keepsThePlaintextAndItsProvenance() async {
+        let (sut, service, cache) = makeSUT(
+            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true, updatedAt: restVersion)], age: 10)
+        )
+        service.listResult = .success(page(content: ciphertext, isEncrypted: true))
+        await sut.load(for: conversationId, intent: .open)
+        cache.messagesResult = .empty
+
+        await sut.load(for: conversationId, intent: .open)
+
+        let message = sut.state(for: conversationId).messages.first
+        XCTAssertEqual(message?.content, "Salut en clair")
+        XCTAssertEqual(message?.isContentDecryptedOnDevice, true)
+        XCTAssertEqual(service.listCallCount, 2)
+    }
+
     /// Le clair connu est celui d'une VERSION : un message modifié porte un
     /// nouveau cryptogramme, et l'ancien clair ne le recouvre jamais.
     func test_encryptedRest_editedAfterDecryption_neverResurrectsTheOldPlaintext() async {
         let (sut, service, _) = makeSUT(
-            cache: .fresh([makeMessage(content: "Ancien clair", isEncrypted: true, updatedAt: restVersion)], age: 10),
-            decryptedOnDevice: [messageId]
+            cache: .fresh([makeMessage(content: "Ancien clair", isEncrypted: true, decryptedOnDevice: true, updatedAt: restVersion)], age: 10)
         )
         service.listResult = .success(page(
             content: ciphertext, isEncrypted: true,
@@ -499,8 +578,7 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
     /// `editedAt`, et c'est elle qui change la version du texte.
     func test_encryptedRest_reactionBumpsUpdatedAt_keepsThePlaintext() async {
         let (sut, service, _) = makeSUT(
-            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true, updatedAt: restVersion)], age: 10),
-            decryptedOnDevice: [messageId]
+            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true, updatedAt: restVersion)], age: 10)
         )
         service.listResult = .success(page(content: ciphertext, isEncrypted: true, updatedAt: "2026-10-19T08:00:00.000Z"))
 
@@ -511,8 +589,7 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
 
     func test_encryptedRest_deletedAfterDecryption_staysSealed() async {
         let (sut, service, _) = makeSUT(
-            cache: .fresh([makeMessage(content: "Ancien clair", isEncrypted: true, updatedAt: restVersion)], age: 10),
-            decryptedOnDevice: [messageId]
+            cache: .fresh([makeMessage(content: "Ancien clair", isEncrypted: true, decryptedOnDevice: true, updatedAt: restVersion)], age: 10)
         )
         service.listResult = .success(page(
             content: ciphertext, isEncrypted: true, deletedAt: "2026-10-18T09:00:00.000Z"
@@ -525,8 +602,7 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
 
     func test_encryptedRest_editedThenReopened_keepsServingTheSameVersion() async {
         let (sut, service, _) = makeSUT(
-            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true, updatedAt: restVersion)], age: 10),
-            decryptedOnDevice: [messageId]
+            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true, updatedAt: restVersion)], age: 10)
         )
         service.listResult = .success(page(content: ciphertext, isEncrypted: true, editedAt: "2026-10-18T08:00:00.000Z"))
         await sut.load(for: conversationId, intent: .open)
@@ -541,10 +617,9 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
     /// en cache : le serveur ne voit pas le clair, donc rien ne le traduit.
     func test_encryptedCache_decryptedOnDevice_neverServesACachedTranslation() async {
         let (sut, _, _) = makeSUT(
-            cache: .fresh([makeMessage(content: "Hello in clear", originalLanguage: "en", isEncrypted: true)], age: 10),
+            cache: .fresh([makeMessage(content: "Hello in clear", originalLanguage: "en", isEncrypted: true, decryptedOnDevice: true)], age: 10),
             cachedTranslations: [messageId: [makeTranslation(target: "fr", text: "Bonjour")]],
-            prism: ["fr", "en"],
-            decryptedOnDevice: [messageId]
+            prism: ["fr", "en"]
         )
 
         await sut.load(for: conversationId, intent: .prefetch)
@@ -554,19 +629,8 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         XCTAssertNil(snapshot?.servedTranslation(for: messageId))
     }
 
-    /// La limite de l'heuristique : une enveloppe AES-GCM fait au moins
-    /// 28 octets (nonce 12 + étiquette 16) ; 27 octets décodés n'en sont pas une.
-    func test_looksLikeCiphertext_boundaryIsTwentyEightDecodedBytes() {
-        let below = Data(repeating: 0x78, count: 27).base64EncodedString()
-        let atLimit = Data(repeating: 0x78, count: 28).base64EncodedString()
-
-        XCTAssertFalse(ConversationListPreviewLoader.looksLikeCiphertext(below))
-        XCTAssertTrue(ConversationListPreviewLoader.looksLikeCiphertext(atLimit))
-        XCTAssertFalse(ConversationListPreviewLoader.looksLikeCiphertext("Salut en clair"))
-    }
-
-    func test_encryptedRest_withoutProof_staysSealed() async {
-        let (sut, service, _) = makeSUT(cache: .empty, decryptedOnDevice: [])
+    func test_encryptedRest_withoutProvenance_staysSealed() async {
+        let (sut, service, _) = makeSUT(cache: .empty)
         service.listResult = .success(page(content: ciphertext, isEncrypted: true))
 
         await sut.load(for: conversationId, intent: .open)

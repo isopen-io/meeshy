@@ -12,7 +12,7 @@
  * sont interceptées et répondues ; TOUTE autre requête sortante est
  * abandonnée — aucun octet ne part vers une passerelle réelle.
  *
- * AUCUNE ROUTE HTTP N'EST INVENTÉE : les huit adresses servies plus bas
+ * AUCUNE ROUTE HTTP N'EST INVENTÉE : les dix adresses servies plus bas
  * existent toutes dans `services/gateway/src/routes/{me,admin}` et sont déjà
  * les seules que `lib/api/admin*.ts` appelle.
  *
@@ -40,7 +40,9 @@ import {
   AGENT_STATS,
   CONVERSATIONS_DU_MEMBRE,
   CONVERSATION_ID,
+  CONVERSATION_LONGUE,
   DASHBOARD_SERVI,
+  FIL_LONG_TAILLE,
   MEDIAS_DU_MEMBRE,
   MEMBRE,
   MEMBRE_ID,
@@ -50,6 +52,8 @@ import {
   SESSION,
   TEXTES,
   identiteServie,
+  pageDuFilLong,
+  piecesServies,
 } from './lib/admin-souverain-corpus.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
@@ -130,6 +134,26 @@ function repondre(pathname, search, avecAgent) {
   // cette identité n'a pas : ils ne sont ni rendus ni demandés.
   if (pathname === '/api/v1/admin/dashboard') return enveloppe(DASHBOARD_SERVI);
   if (pathname === '/api/v1/admin/users') return enveloppe(MEMBRES_RECENTS);
+
+  if (pathname === `/api/v1/admin/conversations/${CONVERSATION_LONGUE}/messages`) {
+    const query = new URLSearchParams(search);
+    if ((query.get('reason') ?? '').trim().length < 10) return null;
+    const { data, pagination } = pageDuFilLong(Number(query.get('offset') ?? '0'), Number(query.get('limit') ?? '30'));
+    return enveloppe(data, pagination);
+  }
+
+  // LA PELLICULE (#11510) : les pièces d'une conversation, sous le même motif,
+  // par leur propre route — l'onglet Médias ne parcourt plus les pages du fil.
+  if (pathname === `/api/v1/admin/conversations/${CONVERSATION_ID}/attachments`) {
+    if ((new URLSearchParams(search).get('reason') ?? '').trim().length < 10) return null;
+    const { data, pagination } = piecesServies(MESSAGES_SERVIS);
+    return enveloppe(data, pagination);
+  }
+  if (pathname === `/api/v1/admin/conversations/${CONVERSATION_LONGUE}/attachments`) {
+    if ((new URLSearchParams(search).get('reason') ?? '').trim().length < 10) return null;
+    const { data, pagination } = piecesServies(pageDuFilLong(0, FIL_LONG_TAILLE).data);
+    return enveloppe(data, pagination);
+  }
 
   return null;
 }
@@ -620,6 +644,112 @@ async function main() {
       });
 
       await cliche(page, `medias-souverains-${schema}`, { fullPage: true });
+      await ctx.close();
+    }
+
+    // ------------------------ 7. le fil se remonte en continu (#11457)
+    console.log('\n7. LE FIL SE REMONTE D’UN GESTE — LE PLUS RÉCENT EN BAS, LE PLUS ANCIEN EN HAUT (#11457)');
+    {
+      const ctx = await openContext(browser, { base, avecAgent: true });
+      const { page, appels } = ctx;
+      const lectures = () => appels.filter((a) => a.includes(`/admin/conversations/${CONVERSATION_LONGUE}/messages`));
+      const fil = '[data-admin-reading] section';
+
+      /** La géométrie du défileur et la rangée visible la plus haute — ce qu'un saut déplacerait. */
+      const geometrie = () =>
+        page.evaluate((s) => {
+          const el = document.querySelector(s);
+          if (el === null) return null;
+          const haut = el.getBoundingClientRect().top;
+          const rangees = [...el.querySelectorAll('[data-row]')]
+            .map((r) => ({ id: r.getAttribute('data-row'), top: r.getBoundingClientRect().top - haut }))
+            .filter((r) => r.top >= 0)
+            .sort((x, y) => x.top - y.top);
+          return { reste: el.scrollHeight - el.scrollTop - el.clientHeight, haute: rangees[0] ?? null, texte: el.textContent ?? '' };
+        }, fil);
+      /* Remonter comme un lecteur : un geste de molette (il relâche l'ancrage en bas de
+         l'ouverture, `useThreadOpenScroll`), puis le haut du fil. */
+      const remonter = () =>
+        page.evaluate((s) => {
+          const el = document.querySelector(s);
+          if (el === null) return;
+          el.dispatchEvent(new WheelEvent('wheel', { deltaY: -400, bubbles: true }));
+          el.scrollTop = 0;
+        }, fil);
+      /** La rangée `id` est-elle dans la vue du défileur ? */
+      const dansLaVue = (id) =>
+        page.evaluate(
+          ({ s, id: cible }) => {
+            const el = document.querySelector(s);
+            const rangee = el?.querySelector(`[data-row="${cible}"]`);
+            if (el === null || el === undefined || rangee === null || rangee === undefined) return { visible: false, top: null };
+            const top = rangee.getBoundingClientRect().top - el.getBoundingClientRect().top;
+            return { visible: top >= -1 && top < el.clientHeight, top: Math.round(top) };
+          },
+          { s: fil, id },
+        );
+
+      await page.goto(`${base}/adm/conversations/${CONVERSATION_LONGUE}?open=reading`, { waitUntil: 'load' });
+      await attendre(() => present(page, '[data-admin-reading-gate]'));
+      await page.fill('[data-admin-reason]', 'Signalement #9142 — lecture du fil long');
+      await page.click('[data-admin-reason-submit]');
+      check(await attendreLeFil(page), 'le fil long se peint après le motif');
+
+      check(await attendre(async () => ((await geometrie())?.reste ?? Infinity) <= 4), 'la lecture s’ouvre EN BAS du fil');
+      check((await geometrie())?.texte.includes(`Message n°${FIL_LONG_TAILLE}`) === true, 'le message le plus RÉCENT est à l’écran à l’ouverture');
+      check(lectures().length === 1, `une seule page lue à l’ouverture (${lectures().length})`);
+      check(!(await present(page, '[data-admin-messages-prev]')) && !(await present(page, '[data-admin-messages-next]')), 'plus aucun bouton Précédent / Suivant');
+      await cliche(page, 'fil-long-ouverture', { fullPage: true });
+
+      /* Remonter : la rangée la plus haute AVANT le chargement doit rester à l'écran quand
+         la page plus ancienne arrive au-dessus — c'est l'ancre du virtualiseur. */
+      /* L'ancre : le plus ANCIEN message de la première page, en haut de la vue une fois
+         remonté. Sans l'ancre du virtualiseur, la page qui arrive au-dessus le pousse
+         trente rangées plus bas, hors de la vue. */
+      const ancre = `m-long-${String(FIL_LONG_TAILLE - 29).padStart(3, '0')}`;
+      await remonter();
+      check(await attendre(() => lectures().length >= 2), 'remonter en haut demande la page plus ANCIENNE');
+      check(lectures()[1]?.includes('offset=30') === true && lectures()[1]?.includes('reason=') === true, 'la page suivante part à l’offset 30, sous le même motif');
+      check(await attendre(async () => (await texteDe(page, fil)).includes('Message n°45')), 'les messages plus anciens arrivent');
+      const apres = await dansLaVue(ancre);
+      check(apres.visible, `la rangée lue avant le chargement reste à l’écran (${ancre} à ${apres.top ?? '?'} px) — aucun saut`);
+      await cliche(page, 'fil-long-remonte');
+
+      for (let tour = 0; tour < 4 && lectures().length < 3; tour += 1) {
+        const avant = lectures().length;
+        await remonter();
+        await attendre(() => lectures().length > avant, 1_500);
+      }
+      check(lectures().length === 3, `trois pages font le tour du fil (${lectures().length})`);
+      check(
+        await attendre(async () => {
+          await remonter();
+          return (await texteDe(page, '[data-admin-reading-start]')).includes('Début de la conversation');
+        }),
+        'remonté jusqu’au bout, le fil dit qu’il commence là',
+      );
+      check((await texteDe(page, fil)).includes('Message n°1'), 'le premier message de la conversation est atteint');
+      check(lectures().length === 3, 'épuisé, le fil ne demande plus rien');
+      await cliche(page, 'fil-long-debut');
+
+      await page.click('[data-admin-reading-tab="media"]');
+      check(await attendre(() => present(page, '[data-admin-reading-media]')), 'l’onglet Médias s’ouvre');
+      const pellicule = () => appels.filter((a) => a.includes(`/admin/conversations/${CONVERSATION_LONGUE}/attachments`));
+      check(await attendre(() => pellicule().length === 1), 'la pellicule lit SA route, une fois (#11510)');
+      check(pellicule()[0]?.includes('reason=') === true, '… sous le même motif');
+      check(lectures().length === 3, '… sans demander une page de messages de plus');
+      check(
+        await attendre(async () => (await page.locator('[data-media-hub-tile]').count()) === Math.floor(FIL_LONG_TAILLE / 10)),
+        `les ${Math.floor(FIL_LONG_TAILLE / 10)} photos transmises sont dans la pellicule`,
+      );
+      await cliche(page, 'fil-long-medias', { fullPage: true });
+      await page.click('[data-media-hub-tile="m-long-040:a-long-40"]');
+      check(
+        await attendre(async () => (await page.getAttribute('[data-admin-reading-tab="thread"]', 'aria-selected')) === 'true'),
+        'toucher une photo ramène au fil',
+      );
+      check(await attendre(async () => (await dansLaVue('m-long-040')).visible), '… sur le message qui la porte');
+      await cliche(page, 'fil-long-retour-au-message');
       await ctx.close();
     }
   } finally {

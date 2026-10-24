@@ -1,0 +1,62 @@
+[
+  {
+    "file": "succes-common.jpg",
+    "rank": "Haut fait",
+    "division": null,
+    "option": "commun",
+    "name": "La Première Marche",
+    "story": "Un cuir chaud aux confettis de cuivre, une médaille de cuivre étoilée sous son ruban rouge, et deux branches de laurier qui s'ouvrent : la marche la plus commune, celle que tout le monde franchit un jour, et qu'on fête quand même.",
+    "layout": "perchés (Mee bravo, Meo salut)",
+    "message": "Ça commence !"
+  },
+  {
+    "file": "succes-rare.jpg",
+    "rank": "Haut fait",
+    "division": null,
+    "option": "rare",
+    "name": "L'Étoile d'argent",
+    "story": "Une nuit bleue semée d'étoiles autour d'une arche, une médaille d'argent sous un ruban bleu roi, et le laurier d'argent qui l'entoure : le haut fait que peu accomplissent, et que la nuit salue d'une étoile.",
+    "layout": "perchés (Mee sourire, Meo cool)",
+    "message": "Bien joué"
+  },
+  {
+    "file": "succes-epic.jpg",
+    "rank": "Haut fait",
+    "division": null,
+    "option": "épique",
+    "name": "L'Orage violet",
+    "story": "Un ciel d'améthyste traversé d'éclairs, une fenêtre taillée à pans coupés, une médaille violette rayonnante tenue par Mee et Meo : l'orage qu'on a traversé, et qu'on raconte.",
+    "layout": "ruban (Mee wow, Meo feu d'artifice)",
+    "message": null
+  },
+  {
+    "file": "succes-legendary.jpg",
+    "rank": "Haut fait",
+    "division": null,
+    "option": "légendaire",
+    "name": "Le Soleil d'or",
+    "story": "Un soleil d'or dont les rayons emplissent le cadre, une couronne de laurier à dix feuilles, une médaille d'or sous son ruban pourpre, des confettis d'or : le haut fait qu'on ne croise qu'une fois, et qu'on raconte encore.",
+    "layout": "ruban (Mee fête, Meo trophée)",
+    "message": "Une légende !"
+  },
+  {
+    "file": "succes-mythic.jpg",
+    "rank": "Haut fait",
+    "division": null,
+    "option": "mythique",
+    "name": "Le Prisme",
+    "story": "Un cosmos aux nébuleuses rose, cyan, menthe et violette, une fenêtre ovale cerclée d'un prisme, une médaille de lumière à trente-deux rayons et une étoile à huit branches : le haut fait de presque personne, à la couleur de toutes les lumières.",
+    "layout": "ruban (Mee jackpot, Meo champagne)",
+    "message": null
+  },
+  {
+    "file": "succes-neutre.jpg",
+    "rank": "Haut fait",
+    "division": null,
+    "option": "neutre · sans rareté",
+    "name": "Le Ruban",
+    "story": "Un papier de lin crème sous un cadre de bois clair, un ruban de soie noué en haut, aucune médaille, aucune marque de rareté : le cadre d'un haut fait dont on ne dit pas la rareté — il est accompli, c'est tout ce que le cadre affirme.",
+    "layout": "perchés (Mee coucou, Meo bravo)",
+    "message": "Fait !"
+  }
+]

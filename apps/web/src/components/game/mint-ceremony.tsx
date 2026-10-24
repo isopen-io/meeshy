@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
-import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
+import { meeshDisplayEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { mintCeremonyPlan, mintRefusalReason, MINT_CEREMONY_STRIKE_READY_MS, type MintCeremonyPlan, type MintRefusalReason } from '@meeshy/shared/utils/game/mint-ceremony';
 
+import { browserDeviceHost, deviceTierOf, tierRank, type DeviceNavigator } from '@/lib/device/capability-tier';
 import type { GameBirdKey } from '@/lib/game/birds';
 import {
   DEFAULT_TARGET,
@@ -45,6 +46,11 @@ import '@/styles/game-ceremony.css';
  * l'Héritage (le compte se met à jour à son arrivée), ou dès qu'on la passe. Toucher (ou Échap, Entrée, Espace)
  * passe la scène ; « réduire les animations » la réduit à un fondu, une seule vibration.
  *
+ * LA LOI ET LE DESSIN (#11483) : la nuit du prisme, les coups, les aïeux et la fête suivent la LOI de la pièce
+ * (`edition`) ; sa matière, l'oiseau du revers et les poussières suivent son DESSIN (`meeshDisplayEdition`, lu sur son
+ * numéro) — le n° 247 se frappe d'un seul coup, en or. Le toucher qui passe la scène avale le clic qui le suit : il
+ * ne retombe pas sur le bouton de frappe resté dessous.
+ *
  * DÉCORATIVE (`aria-hidden`) : l'écran qui frappe dit « Meesh n° … frappée, … ».
  */
 
@@ -61,6 +67,7 @@ const browserClock: CeremonyClock = {
 };
 
 export type MintCeremonyProps = {
+  /** La LOI de la pièce (`meeshEdition`) : la nuit, les coups, les aïeux, la fête. Le DESSIN (matière, revers, poussières) se lit sur son numéro (#11483). */
   readonly edition: MeeshEdition;
   /** Le numéro de la pièce en train d'être frappée (l'aperçu) ; la confirmation de la passerelle le remplace. */
   readonly number: number;
@@ -74,9 +81,8 @@ export type MintCeremonyProps = {
   readonly haptic?: (name: HapticName) => void;
 };
 
-/** Un appareil modeste : quatre cœurs ou moins. Moitié moins de particules (épopée § 7). */
-export const isModestDevice = (host: { readonly hardwareConcurrency?: number } | undefined = typeof navigator === 'undefined' ? undefined : navigator): boolean =>
-  host?.hardwareConcurrency !== undefined && host.hardwareConcurrency > 0 && host.hardwareConcurrency <= 4;
+/** Un appareil modeste : un tier de capacité bas ou moyen (W10, `device/capability-tier.ts`). Moitié moins de particules (épopée § 7). */
+export const isModestDevice = (host: DeviceNavigator | undefined = browserDeviceHost().navigator): boolean => tierRank(deviceTierOf({ navigator: host })) <= tierRank('mid');
 
 const PARTY: Readonly<Record<MeeshEdition, readonly [GameBirdKey, GameBirdKey]>> = {
   silver: ['meeJoy', 'meoOpen'],
@@ -154,9 +160,26 @@ type Live = {
 };
 
 /** Le plan de l'instant : tant que la passerelle n'a pas répondu, les coups restent devant (le marteau reste levé). */
-const planOf = (edition: MeeshEdition, live: Live, nowMs: number, modest: boolean): MintCeremonyPlan => {
+const planOf = (edition: MeeshEdition, look: MeeshEdition, live: Live, nowMs: number, modest: boolean): MintCeremonyPlan => {
   const pending = Math.max(nowMs + 1000, live.mode === 'reduced' ? 0 : MINT_CEREMONY_STRIKE_READY_MS + 1000);
-  return mintCeremonyPlan({ edition, mode: live.mode, answeredAtMs: live.answeredAt ?? pending, modest });
+  return mintCeremonyPlan({ edition, look, mode: live.mode, answeredAtMs: live.answeredAt ?? pending, modest });
+};
+
+/** Le toucher qui passe la scène la referme aussitôt : le clic qui le suit ne doit pas tomber sur ce qui était dessous (le bouton de frappe). */
+const SWALLOW_CLICK_MS = 600;
+
+const swallowNextClick = (): void => {
+  const swallow = (event: MouseEvent): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    stop();
+  };
+  const timer = setTimeout(() => stop(), SWALLOW_CLICK_MS);
+  const stop = (): void => {
+    clearTimeout(timer);
+    window.removeEventListener('click', swallow, true);
+  };
+  window.addEventListener('click', swallow, true);
 };
 
 export function MintCeremony({ edition, number: shownNumber, gate, target, onDone, reducedMotion, modest: modestProp, clock = browserClock, haptic = (name) => void vibrate(name) }: MintCeremonyProps) {
@@ -176,6 +199,7 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
   const targetRef = useRef(target);
   targetRef.current = target;
   const firstNumber = useRef(shownNumber).current;
+  const look = meeshDisplayEdition(number);
   const year = useRef(new Date().getFullYear()).current;
 
   useEffect(() => {
@@ -194,7 +218,8 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
     if (root === null) return undefined;
     const t0 = clock.now();
     const live: Live = { mode: reduced ? 'reduced' : 'normal', answeredAt: null, done: false };
-    const particles = buildCeremonyParticles(mintCeremonyPlan({ edition, mode: live.mode, modest }), firstNumber);
+    const firstLook = meeshDisplayEdition(firstNumber);
+    const particles = buildCeremonyParticles(mintCeremonyPlan({ edition, look: firstLook, mode: live.mode, modest }), firstNumber);
     const palette = readPalette(root);
     const canvas = parts.current.canvas instanceof HTMLCanvasElement ? parts.current.canvas : null;
     const ctx = canvas === null ? null : (canvas.getContext('2d') as CeremonyCanvas | null);
@@ -282,7 +307,7 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
       slow = nowMs - lastTick > SLOW_FRAME_MS ? slow + 1 : Math.max(0, slow - 1);
       lastTick = nowMs;
       if (slow >= SLOW_FRAMES) stride = 2;
-      const plan = planOf(edition, live, nowMs, modest);
+      const plan = planOf(edition, firstLook, live, nowMs, modest);
       const t = nowMs / 1000;
       if (ctx !== null && plan.mode !== 'reduced') drawCeremonyParticles(ctx, plan, particles, palette, t, view.k * dpr, stride);
       apply(ceremonyFrame(plan, t, view.target));
@@ -323,7 +348,11 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
       event.preventDefault();
       finish();
     };
-    const onTap = (): void => finish();
+    const onTap = (): void => {
+      if (live.done) return;
+      swallowNextClick();
+      finish();
+    };
     layout();
     root.addEventListener('pointerdown', onTap);
     window.addEventListener('keydown', onKey);
@@ -349,7 +378,7 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
   const say = text(() => (refusal !== null ? translateGame(language, REFUSAL_KEY[refusal]) : translateGame(language, SAY_KEY[edition], { number: formatGameNumber(language, number) })));
 
   const scene = (
-    <div ref={rootRef} data-game-ceremony="" data-edition={edition} data-mode={refusal !== null ? 'refused' : reduced ? 'reduced' : 'normal'} aria-hidden="true">
+    <div ref={rootRef} data-game-ceremony="" data-edition={edition} data-look={look} data-mode={refusal !== null ? 'refused' : reduced ? 'reduced' : 'normal'} aria-hidden="true">
       <div ref={bind('backdrop')} data-ceremony-backdrop="" style={{ opacity: 0 }} />
       <div ref={bind('scene')} data-ceremony-scene="">
         <div ref={bind('fade')} data-ceremony-layer="" style={{ opacity: 0 }}>
@@ -407,13 +436,13 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
         <div ref={bind('coin')} data-ceremony-coin="">
           <div ref={bind('coin3d')} data-ceremony-coin-3d="">
             <div ref={bind('blank')} data-ceremony-face="blank">
-              <MeeshCoin side="obverse" blank size={SCENE_MARKS.coinBox} edition={edition} />
+              <MeeshCoin side="obverse" blank size={SCENE_MARKS.coinBox} edition={look} />
             </div>
             <div ref={bind('obverse')} data-ceremony-face="obverse" style={{ opacity: 0 }}>
-              <MeeshCoin side="obverse" size={SCENE_MARKS.coinBox} edition={edition} />
+              <MeeshCoin side="obverse" size={SCENE_MARKS.coinBox} edition={look} />
             </div>
             <div data-ceremony-face="reverse">
-              <MeeshCoin side="reverse" size={SCENE_MARKS.coinBox} edition={edition} number={number} year={year} />
+              <MeeshCoin side="reverse" size={SCENE_MARKS.coinBox} edition={look} number={number} year={year} />
             </div>
           </div>
         </div>

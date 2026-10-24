@@ -16,6 +16,10 @@ import Foundation
 /// `CallPermission.canStartCall` ; le badge suit
 /// `MessageActionPolicy.Conversation.isEndToEnd`, la loi qui retire les
 /// services aux messages.
+///
+/// Comme la passerelle (#11215) : le rang de la ligne se lit casse pliée ;
+/// Inviter suit `mayMintShareLink`, où tout membre inscrit d'une conversation
+/// `public` fabrique un lien ; Quitter exige un compte (`POST /leave`).
 public enum ConversationActionPolicy {
 
     public typealias Conversation = MessageActionPolicy.Conversation
@@ -65,14 +69,18 @@ public enum ConversationActionPolicy {
                 viewerIsGuest: !registered
             )
         )
-        let invites = global ? viewer.isActiveMember && viewer.administersPlatform : authority && moderates
+        let invites: Bool = {
+            if global { return viewer.isActiveMember && viewer.administersPlatform }
+            if conversation.type == "public" { return viewer.isActiveMember && registered }
+            return authority && moderates
+        }()
         return Actions(
             rename: open && authority && moderates,
             invite: open && invites,
-            leave: open && authority && viewer.isActiveMember,
+            leave: open && authority && viewer.isActiveMember && registered,
             deleteForAll: open && authority && rank >= MemberRole.admin.level,
-            hide: registered,
-            report: registered,
+            hide: registered && viewer.isActiveMember,
+            report: registered && viewer.isActiveMember,
             manageMembers: open && managedTypes.contains(conversation.type) && moderates,
             adminOpen: viewer.administersPlatform,
             call: callable,

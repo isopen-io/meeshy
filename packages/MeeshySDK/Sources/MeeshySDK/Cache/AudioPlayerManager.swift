@@ -61,7 +61,7 @@ public class AudioPlayerManager: ObservableObject {
         RecordingPlaybackDucker.shared.register(self)
     }
 
-    deinit {
+    nonisolated deinit {
         teardown.update(PlaybackResources.invalidateTimer)
         teardown.read { $0.loadTask }?.cancel()
         // Player non-nil ⟺ mort sans `stop()` (stop pose nil partout) : on

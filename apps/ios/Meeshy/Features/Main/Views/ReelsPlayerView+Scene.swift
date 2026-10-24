@@ -91,7 +91,7 @@ struct ReelSceneView: View {
     var body: some View {
         // Le Prisme du lecteur, UNE fois : la slide jouée et sa durée en
         // dépendent toutes deux (un texte long allonge le tour).
-        let languages = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let languages = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         // La durée du tour que le player JOUE (#10555), pas une seconde
         // dérivation depuis d'autres effets et sans les langues du lecteur.
         let duration = MeeshyScenePlayer.playedDuration(document: document,

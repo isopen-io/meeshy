@@ -1,12 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
-import { uploadAttachments } from '@/lib/api/attachments';
+import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
 import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { offerLastMessage } from '@/lib/api/list-preview';
-import type { ApiFailure } from '@/lib/api/http';
 import { findCachedThreadMessage, messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
 import { attachmentReplyOf } from './attachment-reply';
 import type { Message, Participant } from '@/lib/api/types';
@@ -241,21 +240,15 @@ async function uploadPhase(params: {
   if (upload.attachmentIds !== undefined) return upload.attachmentIds;
   if (upload.files.length === 0) return [];
 
-  const result = await uploadAttachments({
-    source: deps.source,
-    transport: deps.transport,
-    pending: await (deps.prepare ?? browserImagePreparer).prepareUploads(upload.files),
-  });
+  const pending = await (deps.prepare ?? browserImagePreparer).prepareUploads(upload.files);
+  const result = await uploadAttachments({ source: deps.source, transport: deps.transport, pending });
 
-  if (!result.ok) {
-    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, result);
-    return null;
-  }
-  if (result.data.attachments.length < upload.files.length) {
-    const failure: ApiFailure = { ok: false, status: 200, error: 'Lot de pièces jointes incomplet', code: 'UPLOAD_PARTIAL' };
+  const failure = uploadShortfall(pending.map((piece) => piece.file), result);
+  if (failure !== null) {
     deps.outbox.getState().markFailed(conversationId, message.clientMessageId, failure);
     return null;
   }
+  if (!result.ok) return null;
 
   const attachmentIds = result.data.attachments.map((a) => a.id);
   deps.outbox.getState().markUploaded(conversationId, message.clientMessageId, attachmentIds);

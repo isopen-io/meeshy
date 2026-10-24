@@ -14,17 +14,23 @@ import okhttp3.Response
  * l'utilisateur qu'il devait se reconnecter : il ne lui restait qu'a reessayer
  * indefiniment.
  *
+ * Seule la requête PROPRIÉTAIRE de la session active signale l'expiration ([signalsExpiry]) :
+ * le 401 tardif d'un compte quitté ou d'un jeton déjà renouvelé ne déconnecte pas le compte
+ * du moment.
+ *
  * Le traitement vit ICI et non dans chaque ecran : les trois routes echouent
  * independamment, et un traitement par ecran laisserait le prochain appelant
  * reproduire le defaut a l'identique.
  */
 public class AuthExpiryInterceptor(
+    private val signalsExpiry: (okhttp3.Request) -> Boolean = { true },
     private val onSessionExpired: () -> Unit,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
-        if (response.code in EXPIRY_CODES && !chain.request().url.encodedPath.isAuthEntryPoint()) {
+        val request = chain.request()
+        if (response.code in EXPIRY_CODES && !request.url.encodedPath.isAuthEntryPoint() && signalsExpiry(request)) {
             onSessionExpired()
         }
         // La reponse ressort INTACTE : l'appelant a toujours besoin de son code
@@ -55,10 +61,28 @@ public class AuthExpiryInterceptor(
          * `/me/account/deletion` y figure au meme titre : un mot de passe refuse
          * sur la suppression de compte rend 401 INVALID_PASSWORD, qui n'est pas
          * non plus une session expiree.
+         *
+         * Idem pour la seconde etape de connexion et l'attente d'une preuve : un
+         * code de second facteur faux (`/auth/2fa/verify`, `/auth/2fa/cancel`) ou un
+         * jeton d'attente inconnu (`/auth/verification/status`) rend 401 — un refus,
+         * jamais la mort de la session deja ouverte. Et la fermeture d'une session
+         * quittee (`/auth/logout`, jeton expire) comme la session d'un invite
+         * (`/anonymous/refresh`) : ni l'une ni l'autre n'est « la session du compte
+         * actif a expire ».
          */
         // api-path: l'intercepteur RECONNAÎT les portes d'entrée pour ne pas
         // déconnecter sur un 401 qui n'est qu'un identifiant refusé. Il ne les
         // appelle pas ; une interface Retrofit ne saurait pas exprimer ça.
-        private val AUTH_ENTRY_POINTS = listOf("/auth/login", "/auth/register", "/me/account/deletion")
+        private val AUTH_ENTRY_POINTS = listOf(
+            "/auth/login",
+            "/auth/register",
+            "/me/account/deletion",
+            // api-path: idem — portes RECONNUES (second facteur, attente d'une preuve), jamais appelees.
+            "/auth/2fa/verify",
+            "/auth/2fa/cancel",
+            "/auth/verification/status",
+            "/auth/logout",
+            "/anonymous/refresh",
+        )
     }
 }

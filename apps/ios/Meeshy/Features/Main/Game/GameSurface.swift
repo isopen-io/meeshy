@@ -20,7 +20,7 @@ struct GameCard<Content: View>: View {
                 if let title {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                 }
                 content()
@@ -58,7 +58,7 @@ struct GameChip: View {
     var body: some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundColor(ThemeManager.shared.textPrimary)
+            .foregroundStyle(ThemeManager.shared.textPrimary)
             .lineLimit(1)
             .minimumScaleFactor(GameChip.minimumScale)
             .truncationMode(.tail)
@@ -75,6 +75,9 @@ struct GameChip: View {
 struct GameActionButton: View {
     let title: String
     var busyTitle: String?
+    /// Ce que le geste rapporte, en petit SOUS le titre, dans le bouton (« +1 000 de gloire », #11180) : la récompense
+    /// se lit sur l'action qui la donne, jamais à côté.
+    var detail: String?
     var busy = false
     var disabled = false
     var tint: Color = MeeshyColors.warning
@@ -94,8 +97,16 @@ struct GameActionButton: View {
                 if busy {
                     ProgressView().tint(Self.ink)
                 }
-                Text(busy ? (busyTitle ?? title) : title)
-                    .multilineTextAlignment(.center)
+                VStack(spacing: 0) {
+                    Text(busy ? (busyTitle ?? title) : title)
+                        .multilineTextAlignment(.center)
+                    if let detail {
+                        Text(detail)
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                            .opacity(0.8)
+                            .multilineTextAlignment(.center)
+                    }
+                }
             }
             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
             .foregroundColor(Self.ink)
@@ -123,7 +134,7 @@ struct GameErrorLine: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-            .foregroundColor(MeeshyColors.error)
+            .foregroundStyle(MeeshyColors.error)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier(identifier)
         }
@@ -172,8 +183,9 @@ enum GameSpendRows {
         GameFactChipItem(label: sentence, value: amount, detail: detail, short: true, sentence: sentence)
     }
 
-    /// En poche · Coûte · Restera — ou, le solde ne suffisant pas, En poche · Coûte, puis CE QU'IL MANQUE en une
-    /// phrase. `missing` est OBLIGATOIRE (#10540) : il reçoit le manque dans son unité et rend la phrase entière,
+    /// Ce que tu as · Il faut — ou, le solde ne suffisant pas, la même paire puis CE QU'IL MANQUE en une phrase. Jamais
+    /// ce qui RESTERA après le geste : aucun calcul sur une fiche (épopée § 3.3, #11180), la soustraction vit dans les
+    /// règles. `missing` est OBLIGATOIRE (#10540) : il reçoit le manque dans son unité et rend la phrase entière,
     /// cible comprise — aucun geste ne dit « Il manque » sans dire pour quoi. `between` : une donnée de plus entre
     /// le solde et le prix (les points à convertir d'une frappe, la part du solde qui paie).
     static func spend(
@@ -191,9 +203,7 @@ enum GameSpendRows {
         } else {
             amount = format(spend.missing)
         }
-        let last = spend.affordable
-            ? GameFactChipItem(label: ConceptText.factAfter, value: format(spend.after), detail: .spendAfter)
-            : missingItem(sentence: missing(amount), amount: amount, detail: missingFact)
+        let last = spend.affordable ? nil : missingItem(sentence: missing(amount), amount: amount, detail: missingFact)
         let head = GameFactChipItem(label: ConceptText.factBalance, value: format(spend.held), detail: heldFact)
         let cost = GameFactChipItem(label: ConceptText.factCost, value: format(spend.cost), detail: .spendCost)
         return [head, between, cost, last].compactMap { $0 }
@@ -228,16 +238,16 @@ struct GameFactChipRow: View {
                         // Le manque est une phrase : elle se lit en entier, sur autant de lignes qu'il faut.
                         Text(sentence)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text(item.label)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                         Text(item.value)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(GameChip.minimumScale)
                     }

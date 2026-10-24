@@ -33,7 +33,7 @@ extension MeeshyComposerHost {
             } label: {
                 Image(systemName: "plus")
                     .font(.footnote.weight(.bold))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                     .frame(width: ComposerControlMetrics.visualDiameter,
                            height: ComposerControlMetrics.visualDiameter)
                     .contentShape(Circle())
@@ -50,7 +50,7 @@ extension MeeshyComposerHost {
     // MARK: - Le rail gauche : l'éclair puis le Cadre, après le lieu (#8713)
 
     var sceneToggleEntries: [ComposerSceneToggleEntry] {
-        ComposerLeadingSceneToggles.served(animated: !returnsToConversation,
+        ComposerLeadingSceneToggles.served(animated: true,
                                            frame: sceneHasBackgroundMedia)
             .map { bouton in
                 switch bouton {
@@ -225,9 +225,9 @@ extension MeeshyComposerHost {
             // deux autres surfaces qui portent un son.
             editSceneSound(id)
         case .media, .sticker, .place:
-            // **L'édition EN PLACE** (#9138) : ses sous-outils à droite, leurs
-            // options depuis le haut — jamais l'ancien écran plein.
-            beginInlineEdit(id)
+            // **Une image ou une vidéo s'ouvre dans LA retouche** (#12590) ; le reste, et un média
+            // sans source locale, gardent l'édition EN PLACE (#9138).
+            if kind != .media || !requestSceneMediaRetouch(id) { beginInlineEdit(id) }
             HapticFeedback.medium()
         }
     }

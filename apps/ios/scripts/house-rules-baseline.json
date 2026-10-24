@@ -1,17 +1,29 @@
 {
   "rules": {
-    "anyview": 97,
-    "available-floor": 3,
-    "fixed-font": 945,
+    "anyview": 96,
+    "async-after": 76,
+    "autocapitalization": 0,
+    "available-floor": 0,
+    "corner-radius-modifier": 0,
+    "disable-autocorrection": 0,
+    "environment-router": 12,
+    "fixed-font": 754,
+    "foreground-color": 2401,
     "idiom": 0,
-    "logger-subsystem": 5,
-    "nonisolated-unsafe": 152,
-    "nslock": 48,
+    "logger-subsystem": 0,
+    "narrative-comment": 2478,
+    "nonisolated-unsafe": 110,
+    "nslock": 39,
     "nslog": 0,
+    "observed-theme-singleton": 0,
+    "onchange-single": 0,
     "plural-s": 0,
-    "try-sleep": 220,
+    "sleep-nanoseconds": 21,
+    "status-bar-hidden": 0,
+    "try-sleep": 50,
     "uiscreen-main": 1,
-    "unchecked-sendable": 132
+    "unchecked-sendable": 126,
+    "viewmodel-shared": 584
   },
   "version": 1
 }

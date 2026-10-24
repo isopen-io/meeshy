@@ -1099,11 +1099,9 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // which already has the generation check.
         let source = try p2pClientSource()
 
-        guard let fnRange = source.range(of: "private func restartCapturerIfStopped()") else {
+        guard let fnBody = DeclarationBodyScanner.body(containing: "private func restartCapturerIfStopped()", in: source) else {
             XCTFail("restartCapturerIfStopped not found in P2PWebRTCClient.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1200, limitedBy: source.endIndex) ?? source.endIndex
-        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
             fnBody.contains("let generation = sessionGeneration"),
@@ -2920,8 +2918,17 @@ final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
             XCTFail("Could not bound emitCallJoinWithAckDetailed body"); return
         }
         let funcBody = String(source[funcRange.upperBound..<funcEndRange.lowerBound])
-        XCTAssertTrue(funcBody.contains("error?[\"code\"] as? String"))
-        XCTAssertTrue(funcBody.contains("error?[\"endReason\"] as? String"))
+        // 8a46c7c9b2 : l'accusé se lit par `SocketAck` — UNE lecture du fil pour
+        // tous les accusés. Le détail d'un refus y est lu, puis remis tel quel.
+        XCTAssertTrue(funcBody.contains("return Self.callJoinResult(from: ack)"))
+        XCTAssertTrue(funcBody.contains(
+            "return CallJoinAckResult(joined: false, errorCode: refusal.errorCode, endReason: refusal.endReason)"))
+        let ack = try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketAck.swift"), encoding: .utf8)
+        XCTAssertTrue(ack.contains("errorCode = error?[\"code\"] as? String"))
+        XCTAssertTrue(ack.contains("endReason = error?[\"endReason\"] as? String"))
     }
 
     /// `emitCallJoinWithAck` must delegate to the detailed variant instead of
@@ -3038,16 +3045,32 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
     /// The SDK must register a socket.on listener for call:screen-capture-alert
     /// and publish received events via callScreenCaptureAlert.
     func test_messageSocketManager_listensForScreenCaptureAlert() throws {
-        let source = try socketManagerSource()
+        let events = try sdkSocketSource("SocketEvent.swift")
+        let routes = try sdkSocketSource("MessageSocketRoutes+Calls.swift")
         XCTAssertTrue(
-            source.contains("\"call:screen-capture-alert\""),
-            "MessageSocketManager must register a socket.on(\"call:screen-capture-alert\") " +
-            "listener — the gateway relays this event to the remote participant but " +
-            "without a listener the iOS client never sees it")
+            events.contains("case callScreenCaptureAlert = \"call:screen-capture-alert\""),
+            "SocketEvent must keep the wire name call:screen-capture-alert — the gateway " +
+            "relays this event to the remote participant")
         XCTAssertTrue(
-            source.contains("callScreenCaptureAlert.send"),
-            "MessageSocketManager must forward decoded call:screen-capture-alert events " +
-            "via callScreenCaptureAlert.send() so CallManager's Combine sink fires")
+            routes.contains("m.route(.callScreenCaptureAlert, CallScreenCaptureAlertData.self)"),
+            "The inbound route table must register call:screen-capture-alert — without a " +
+            "route the iOS client never sees it")
+        XCTAssertTrue(
+            routes.contains("callScreenCaptureAlert.send"),
+            "The route must forward decoded call:screen-capture-alert events via " +
+            "callScreenCaptureAlert.send() so CallManager's Combine sink fires")
+    }
+
+    private func sdkSocketSource(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets")
+        return try String(contentsOf: url.appendingPathComponent(name), encoding: .utf8)
     }
 
     /// CallView must check isRemoteScreenCapturing to display a recording indicator.

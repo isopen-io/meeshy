@@ -297,7 +297,7 @@ struct TranslationsBadge: View {
     private var glyph: some View {
         Image(systemName: "translate")
             .font(metrics.flagFont(isActive: false).weight(.medium))
-            .foregroundColor(MeeshyColors.indigo400)
+            .foregroundStyle(MeeshyColors.indigo400)
     }
 }
 

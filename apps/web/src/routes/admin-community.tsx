@@ -22,7 +22,6 @@ import {
 } from '@/lib/admin/community-summaries';
 import { communityStateOf, communityVisibilityOf } from '@/lib/admin/community-state';
 import { interpretConversationType, interpretParticipantRole } from '@/lib/admin/interpret/enums';
-import { personInitials } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { communityRef, conversationRef, personRef } from '@/lib/admin/post-entities';
@@ -35,7 +34,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { navigate, useParams } from '@/lib/router';
-import { participantAvatarOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { AdminAnnouncement } from '@/components/admin/announcement';
@@ -359,7 +358,7 @@ export function AdminCommunityPanel({
               language={language}
               title={ref.label}
               {...(ref.secondary === null || ref.secondary === undefined ? {} : { secondary: ref.secondary })}
-              avatar={{ initials: personInitials(ref.label), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) }}
+              avatar={{ initials: initialsOf(ref.label), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) }}
               badges={
                 <>
                   <AdminInterpretedBadge value={communityVisibilityOf(fiche.isPrivate, language)} />

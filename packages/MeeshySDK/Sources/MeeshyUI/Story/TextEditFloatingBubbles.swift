@@ -20,6 +20,7 @@ struct TextEditFloatingBubbles: View {
     @Binding var textObject: StoryTextObject
     let expandedTool: TextEditTool?
     let onOpenPanel: (TextEditTool) -> Void
+    var profile: StoryTextEditProfile = .composer
 
     var body: some View {
         // Huit bulles tiennent sur l'écran le plus étroit supporté (337 pt
@@ -30,7 +31,7 @@ struct TextEditFloatingBubbles: View {
         // séparation en deux rangées.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: TextEditToolbarMetrics.spacing) {
-                ForEach(TextEditTool.all, id: \.self) { tool in
+                ForEach(profile.tools, id: \.self) { tool in
                     bubble(tool)
                 }
             }
@@ -44,10 +45,7 @@ struct TextEditFloatingBubbles: View {
                    height: TextEditToolbarMetrics.bubbleSize)
             .modifier(BubbleGlass(isActive: isActive))
             .contentShape(Circle())
-            .onTapGesture {
-                StoryTextAttributeCycle.advance(tool, on: &textObject)
-                HapticFeedback.light()
-            }
+            .onTapGesture { cycle(tool) }
             .onLongPressGesture(minimumDuration: 0.4) {
                 HapticFeedback.medium()
                 onOpenPanel(tool)
@@ -55,7 +53,13 @@ struct TextEditFloatingBubbles: View {
             .modifier(CycleButtonAccessibility(
                 label: tool.accessibilityLabel,
                 value: StoryTextEditTopBar.spokenValue(tool, of: textObject),
+                onActivate: { cycle(tool) },
                 onOpenPanel: { onOpenPanel(tool) }))
+    }
+
+    private func cycle(_ tool: TextEditTool) {
+        StoryTextAttributeCycle.advance(tool, on: &textObject, backgrounds: profile.backgrounds)
+        HapticFeedback.light()
     }
 
     @ViewBuilder

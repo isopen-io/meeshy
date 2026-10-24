@@ -29,7 +29,7 @@ extension StoryViewerView {
             storyCommentLoadingReplies: storyCommentLoadingReplies,
             storyCommentRepliesHasMore: storyCommentRepliesHasMore,
             isLoadingComments: isLoadingComments,
-            userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
+            readerLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isStoryExpired: currentStory?.isExpired() ?? false,
             targetCommentId: targetCommentId,
             targetParentCommentId: targetParentCommentId,
@@ -132,7 +132,7 @@ extension StoryViewerView {
     }
 
     private func mapStoryReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
     }
 
@@ -436,7 +436,7 @@ extension StoryViewerView {
     }
 
     private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         do {
             let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
             // Stale-write guard: drop ONLY if user has clearly swiped to a
@@ -449,7 +449,7 @@ extension StoryViewerView {
             storyCommentLikedIds = Self.computeLikedIds(from: response.data)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
-            try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+            await bestEffort("storyViewerViewContentComments.comments.save", category: .cache) { try await CacheCoordinator.shared.comments.save(comments, for: cacheKey) }
 
             let topLevel = topAll.filter { $0.replies > 0 }
             Task {
@@ -471,7 +471,7 @@ extension StoryViewerView {
     /// reste le seul à réinitialiser la liste).
     func loadNextStoryCommentsPage() async {
         guard storyCommentsHasMore, let story = currentStory else { return }
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         do {
             let response = try await PostService.shared.getComments(
                 postId: story.id, cursor: storyCommentsNextCursor, limit: 50
@@ -562,7 +562,7 @@ extension StoryViewerView {
             // stale-id guard mean only stories the viewer actually pauses on
             // trigger a single lightweight reconciliation.
             guard storyCommentCount == 0 else { return }
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            _ = await cancellableSleep(for: .milliseconds(400))
             if let now = currentStory?.id, now != story.id { return }
             guard let response = try? await PostService.shared.getComments(
                 postId: story.id, cursor: nil, limit: 50

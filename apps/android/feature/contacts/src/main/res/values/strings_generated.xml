@@ -1,0 +1,47 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="contacts_back">Back</string>
+    <string name="contacts_blocked_empty">No blocked users</string>
+    <string name="contacts_blocked_unblock">Unblock</string>
+    <string name="contacts_blocked_unblock_a11y">Unblock %s</string>
+    <string name="contacts_blocked_unblock_cancel">Cancel</string>
+    <string name="contacts_blocked_unblock_confirm">Unblock</string>
+    <string name="contacts_blocked_unblock_error">Unable to unblock</string>
+    <string name="contacts_blocked_unblock_message">Unblock %s?</string>
+    <string name="contacts_blocked_unblock_success">User unblocked</string>
+    <string name="contacts_blocked_unblock_title">Unblock?</string>
+    <string name="contacts_discover_blocked">Blocked</string>
+    <string name="contacts_discover_email_error">Unable to send the invitation</string>
+    <string name="contacts_discover_email_placeholder">Email address</string>
+    <string name="contacts_discover_email_send">Send</string>
+    <string name="contacts_discover_email_send_a11y">Send invitation by email</string>
+    <string name="contacts_discover_email_title">Invite by email</string>
+    <string name="contacts_discover_no_results">No user found</string>
+    <string name="contacts_discover_pending">Pending</string>
+    <string name="contacts_discover_search_hint">Search for a Meeshy user</string>
+    <string name="contacts_discover_sms_placeholder">Phone number</string>
+    <string name="contacts_discover_sms_send">Send</string>
+    <string name="contacts_discover_sms_send_a11y">Send invitation by SMS</string>
+    <string name="contacts_discover_sms_title">Invite by SMS</string>
+    <string name="contacts_filter_all">All</string>
+    <string name="contacts_filter_offline">Offline</string>
+    <string name="contacts_filter_online">Online</string>
+    <string name="contacts_list_empty">No contacts</string>
+    <string name="contacts_list_filtered_empty">No results</string>
+    <string name="contacts_list_retry">Retry</string>
+    <string name="contacts_request_accept">Accept</string>
+    <string name="contacts_request_cancel">Cancel</string>
+    <string name="contacts_request_decline">Decline</string>
+    <string name="contacts_requests_accept_a11y">Accept request from %s</string>
+    <string name="contacts_requests_cancel_a11y">Cancel request sent to %s</string>
+    <string name="contacts_requests_received">Received</string>
+    <string name="contacts_requests_received_intent">Wants to connect with you</string>
+    <string name="contacts_requests_reject_a11y">Decline request from %s</string>
+    <string name="contacts_requests_sent">Sent</string>
+    <string name="contacts_search_hint">Search for a contact</string>
+    <string name="contacts_tab_blocked">Blocked</string>
+    <string name="contacts_tab_contacts">Contacts</string>
+    <string name="contacts_tab_discover">Discover</string>
+    <string name="contacts_tab_requests">Requests</string>
+    <string name="contacts_title">Contacts</string>
+</resources>

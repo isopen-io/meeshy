@@ -111,6 +111,25 @@ public enum PrismTranslationResolver {
         return nil
     }
 
+    /// Projection ÉLÉMENT de la descente générique : l'appelant garde SON type
+    /// de traduction (une ligne de message, une entrée de carte) et rend l'élément
+    /// élu tel quel — `nil` ⇒ servir l'original. Aucune boucle de plus : la
+    /// descente reste celle de `resolve(originalLanguage:candidates:…isServable:)`.
+    public static func resolveElement<Element>(
+        originalLanguage: String?,
+        elements: [Element],
+        languageOf: (Element) -> String,
+        isServable: (Element) -> Bool,
+        preferredLanguages: [String]
+    ) -> Element? {
+        resolve(
+            originalLanguage: originalLanguage,
+            candidates: elements.map { PrismCandidate(language: languageOf($0), value: $0) },
+            preferredLanguages: preferredLanguages,
+            isServable: isServable
+        )?.value
+    }
+
     /// Projection TEXTE de la descente générique : « servable » y veut dire
     /// non blanc (règle 3), et la paire rendue est nommée `{language, text}`.
     public static func resolve(

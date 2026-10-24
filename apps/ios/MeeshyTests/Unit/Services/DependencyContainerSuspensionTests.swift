@@ -22,20 +22,20 @@ final class DependencyContainerSuspensionTests: XCTestCase {
 
     private var dossier: URL!
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() async throws {
+        try await super.setUp()
         dossier = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("meeshy-7160-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dossier, withIntermediateDirectories: true)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         // La suspension est un état de PROCESSUS : la laisser posée
         // contaminerait toutes les suites qui tournent après celle-ci.
         DatabaseSuspension.resume()
         try? FileManager.default.removeItem(at: dossier)
         dossier = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func poolDesMessages(_ nom: String = "messages.sqlite") throws -> DatabasePool {

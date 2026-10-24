@@ -4,12 +4,12 @@ import Combine
 import MeeshySDK
 
 /// **La machine d'état de capture du viseur du composeur — UNE pour ses deux
-/// montages** (#9134).
+/// montages**.
 ///
 /// Le viseur en scène (`MeeshyComposerHost+Viewfinder`) et le viseur servi seul
-/// en plein écran (`ComposerViewfinder`, #9125) câblaient chacun, sur leurs
+/// en plein écran (`ComposerViewfinder`) câbleraient chacun, sur leurs
 /// propres états, la tenue, le cadenas, le zoom au glissé, le flash d'écran,
-/// les segments et le `✓` : deux écritures des mêmes lois, qui divergent au
+/// les segments et le `✓` : deux écritures des mêmes lois, qui divergeraient au
 /// premier réglage. Les lois restent pures et vivent à leur place
 /// (`ComposerCaptureHold`, `ComposerShutterGesture`, `ComposerCaptureSegments`,
 /// `ComposerFrontFlash`, `ComposerCaptureZoom`) ; leur CÂBLAGE vit ici, une
@@ -25,67 +25,69 @@ final class ComposerCaptureSession: ObservableObject {
     /// Le modèle est construit MUET : `CameraModel` n'ouvre sa session qu'à la
     /// demande.
     let camera: CameraModel
-    /// Les COMMANDES de l'objectif (#9464) — `camera` en temps normal, une
+    /// Les COMMANDES de l'objectif — `camera` en temps normal, une
     /// doublure dans les témoins ; les vues lisent `camera`.
     let controls: any ComposerCaptureCameraProviding
-    /// Le pont toucher → capteur de l'aperçu partagé (#9295) : l'aperçu s'y
+    /// Le pont toucher → capteur de l'aperçu partagé : l'aperçu s'y
     /// accroche, le toucher du chrome le lit.
     let focusPoints = CameraPreviewFocusPoints()
 
     /// L'étape du viseur — la loi est dans `ComposerSceneCamera`. Le guet des
-    /// trames la suit : la bande peint dès le viseur armé (#9351).
+    /// trames la suit : la bande peint dès le viseur armé.
     @Published var stage: ComposerSceneCameraStage {
         didSet { refreshFeed() }
     }
     /// La pastille annoncée ; `nil` tant que rien n'est armé.
     @Published var mode: ComposerSceneCameraMode?
     @Published var flash: AVCaptureDevice.FlashMode = .off
-    /// L'intensité du flash, mémorisée d'un viseur à l'autre (#8671).
+    /// L'intensité du flash, mémorisée d'un viseur à l'autre.
     @Published private(set) var flashIntensity: Double
-    /// Les segments de la prise en cours (#4099) — chacun un FICHIER déjà écrit.
+    /// Les segments de la prise en cours — chacun un FICHIER déjà écrit.
     @Published var segments: [ComposerCaptureSegment] = []
     /// L'instant où le doigt s'est posé, `nil` sans appui long en cours. Sa
     /// présence est aussi le témoin qui rend la levée sûre.
     @Published var holdStartedAt: Date?
-    /// Le cadenas (#8671) : `.locked` dès que le glissé l'atteint, jusqu'au stop.
+    /// Le cadenas : `.locked` dès que le glissé l'atteint, jusqu'au stop.
     @Published var holdPhase: ComposerCaptureHold.Phase?
     @Published var lockProgress: Double = 0
     /// La course du glissement qui range le viseur, pendant que le doigt est posé.
     @Published var dismissDrag: CGFloat = 0
-    /// **Le look choisi EN DIRECT** (#9329) — un filtre et un cadre de l'appel.
+    /// **Le look choisi EN DIRECT** — un filtre et un cadre de l'appel.
     /// Le guet des trames ne s'arme qu'avec lui : sans look, aucune trame retenue.
     @Published var look = ComposerPhotoLook() {
         didSet { refreshFeed() }
     }
     /// La famille dont la bande est ouverte ; `nil` ⇒ la bande se replie sur la
-    /// seule miniature choisie, qui sert de déclencheur (#9351).
+    /// seule miniature choisie, qui sert de déclencheur.
     @Published var openFamily: ComposerLookFamily? {
         didSet { refreshFeed() }
     }
-    /// Les proportions de ce que le viseur montre (#9557) : l'aperçu les mesure,
+    /// Les proportions de ce que le viseur montre : l'aperçu les mesure,
     /// tout ce qui part les garde. Une carte 9:16 tant que rien n'est monté.
     var canvasAspect = ComposerLookPainter.designAspect
-    /// Le cadrage de la prise ; la retouche le règle (#9352).
+    /// Le texte de la retouche (#12591) : une planche d'objets, peinte au-dessus du cadre.
+    let retouchTexts = ComposerRetouchTextBoard()
+    /// Le cadrage de la prise ; la retouche le règle.
     @Published var framing = ComposerFraming.identity
-    /// On vise, ou on retouche (#9352).
+    /// On vise, ou on retouche.
     @Published var phase = ComposerCapturePhase.capturing
     @Published var discardPrompt = ComposerCaptureDiscardPrompt()
-    /// Les proportions de la scène de retouche (#9567) — ce qui partira ;
+    /// Les proportions de la scène de retouche — ce qui partira ;
     /// `nil` hors retouche.
     @Published var editAspect: CGFloat?
-    /// Les outils de retouche actifs — Crop, Trim, Son, ensemble (#9754) ;
+    /// Les outils de retouche actifs — Crop, Trim, Son, ensemble ;
     /// vide hors retouche.
     @Published var activeEditTools: Set<ComposerEditTool> = []
-    /// **Le chrome de la retouche, par-dessus la prise** (#10930) : montré à
+    /// **Le chrome de la retouche, par-dessus la prise** : montré à
     /// l'entrée ; glissé vers le bas ou haut, ou toucher sur la prise, le bascule.
     @Published var editChromeShown = false
-    /// Le son de la prise en retouche : gain et muet (#9754).
+    /// Le son de la prise en retouche : gain et muet.
     @Published var takeSound = ComposerTakeSound()
-    /// La vidéo en retouche est mise en pause par l'auteur (#10356) : elle
+    /// La vidéo en retouche est mise en pause par l'auteur : elle
     /// reste arrêtée à sa position, à travers rognages et glissés de la tête.
     @Published var editPaused = false
     /// Un glissé de la règle montre la frame sous elle : la boucle est suspendue
-    /// et doit repartir à la fin du geste, même sur une plage inchangée (#9754).
+    /// et doit repartir à la fin du geste, même sur une plage inchangée.
     var trimScrubbing = false
     /// La photo figée de l'édition, debout.
     var editPhoto: CGImage?
@@ -93,9 +95,9 @@ final class ComposerCaptureSession: ObservableObject {
     var editPhotoData: Data?
     /// Ce que le peintre lit en édition : la photo figée, ou la vidéo en boucle.
     var editSource: (any ComposerFrameSourcing)?
-    /// La vidéo en boucle de l'édition (#9352).
+    /// La vidéo en boucle de l'édition.
     var loopPlayer: (any ComposerLoopPlayerProviding)?
-    /// La plage gardée de la vidéo éditée (#9353).
+    /// La plage gardée de la vidéo éditée.
     @Published var trim: ClosedRange<TimeInterval>?
     /// La plage que la boucle JOUE : celle du dernier geste fini.
     var loopedTrim: ClosedRange<TimeInterval>?
@@ -105,27 +107,27 @@ final class ComposerCaptureSession: ObservableObject {
     /// attend, et le dit.
     @Published var isRenderingLook = false
     /// Les cadres avec lesquels la prise en retouche est (ou part) dans Photos —
-    /// l'état de la loi partagée (#10284) ; `takeSaveState` en est la projection.
+    /// l'état de la loi partagée ; `takeSaveState` en est la projection.
     @Published var takeSave = ComposerCaptureSession.noTakeSave
     /// La dernière écriture vers Photos en cours (elles s'enchaînent) : détenue
-    /// ici, jamais par la vue, elle survit à ✕ et à la fermeture du viseur
-    /// (#9684). `nil` : rendu impossible, `false` : Photos a refusé (et l'a dit),
+    /// ici, jamais par la vue, elle survit à ✕ et à la fermeture du viseur :
+    /// `nil` : rendu impossible, `false` : Photos a refusé (et l'a dit),
     /// `true` : enregistrée.
     @Published var takeWrite: Task<Bool?, Never>?
     /// L'écriture du BRUT de la prise en retouche vers Photos par la caméra —
-    /// quand Réglages › Médias demande l'original (#9684), quelle que soit la zone
-    /// (#10284) ; `nil` : le brut n'y est pas (réglage par défaut, assemblage).
+    /// quand Réglages › Médias demande l'original, quelle que soit la zone ;
+    /// `nil` : le brut n'y est pas (réglage par défaut, assemblage).
     var editRawSave: Task<Bool, Never>?
     /// Ce que la capture écrit dans Photos — lu à chaque décision, jamais figé.
     let savePolicy: @MainActor () -> CaptureSavePolicy
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
     /// la MÊME dans leur cadre.
     let lookDate = Date()
-    /// La température de l'appareil (#9349), guettée tant que le viseur vit.
+    /// La température de l'appareil, guettée tant que le viseur vit.
     let thermal: any ThermalStateMonitorProviding
     /// Ce que l'aperçu et la bande ont le droit de coûter maintenant.
     @Published private(set) var thermalBudget = ComposerThermalBudget.budget(for: .nominal)
-    /// Où part la prochaine vidéo DEMANDÉE (#9351) : la scène mène à l'édition,
+    /// Où part la prochaine vidéo DEMANDÉE : la scène mène à l'édition,
     /// la miniature choisie à la galerie. Une photo porte la sienne en paramètre.
     var filmIntent = ComposerTakeIntent.edit
     /// L'intention de la photo EN VOL, figée quand l'obturateur part.
@@ -133,7 +135,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// La rampe du flash avant (0,25 s) : l'obturateur est parti, `isTakingPhoto`
     /// pas encore — une seconde demande y est refusée.
     var photoIsRamping = false
-    /// L'écran éclaire une photo, de la rampe à la fin de la prise (#9566).
+    /// L'écran éclaire une photo, de la rampe à la fin de la prise.
     @Published var screenFlashBurst = false
     /// La tenue attend la livraison de la prise précédente : ni haptique, ni
     /// cadenas, ni lumière tant qu'elle ne filme pas.
@@ -160,7 +162,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// repart à zéro au démarrage suivant, et le fichier n'arrive qu'après.
     private(set) var pendingSegmentDuration: TimeInterval = 0
     var zoomAnchor: ComposerCaptureZoomAnchor?
-    /// Le facteur au premier écart des doigts, `nil` hors pincement (#9295).
+    /// Le facteur au premier écart des doigts, `nil` hors pincement.
     var pinchAnchor: CGFloat?
     /// Deux doigts sont posés : ni le rangement, ni l'appui long, ni un
     /// toucher ne partent.
@@ -173,7 +175,7 @@ final class ComposerCaptureSession: ObservableObject {
     private var dismissDragActive = false
     private var dismissDragSpoiled = false
     private var holdTask: Task<Void, Never>?
-    /// L'armement, et le dernier toucher du viseur (#9464) : un double ne
+    /// L'armement, et le dernier toucher du viseur : un double ne
     /// s'ouvre jamais sur le toucher qui a armé.
     var armedAt: Date?
     var lastViewfinderTap: ComposerCaptureLastTap?
@@ -214,9 +216,9 @@ final class ComposerCaptureSession: ObservableObject {
 
     // MARK: - Ce que la barre lit
 
-    /// L'écran est-il le flash ? Objectif avant, flash actif (#8653). Le
+    /// L'écran est-il le flash ? Objectif avant, flash actif. Le
     /// montage en fait un sol blanc autour de la scène, ou un éclair à la prise
-    /// en plein écran (`ComposerCapturePlacement`, #9566).
+    /// en plein écran (`ComposerCapturePlacement`).
     var screenIsTheFlash: Bool {
         ComposerFrontFlash.lightsFloor(flash: flash, position: controls.currentPosition, stage: stage)
     }
@@ -244,7 +246,7 @@ final class ComposerCaptureSession: ObservableObject {
     func arm(mode: ComposerSceneCameraMode) {
         resetIntents()
         self.mode = mode
-        // **Les cadres d'emblée, « Aucun » choisi** (#10307, porteur 2026-10-12) :
+        // **Les cadres d'emblée, « Aucun » choisi** :
         // la bande s'ouvre sur la famille des cadres, sans en imposer un.
         look = ComposerCaptureSession.openingLook
         openFamily = ComposerCaptureSession.openingFamily
@@ -254,11 +256,11 @@ final class ComposerCaptureSession: ObservableObject {
         camera.configure()
     }
 
-    /// La bande ouverte à l'armement, et le look qu'elle montre choisi (#10307).
+    /// La bande ouverte à l'armement, et le look qu'elle montre choisi.
     static let openingFamily: ComposerLookFamily? = .frames
     static let openingLook = ComposerPhotoLook()
 
-    /// **Préparer la session avant de la montrer** (#10307) : l'hôte qui peut
+    /// **Préparer la session avant de la montrer** : l'hôte qui peut
     /// filmer l'appelle à son ouverture ; l'armement n'aura plus qu'à lancer.
     func prewarm() {
         guard stage == .off else { return }
@@ -324,8 +326,8 @@ final class ComposerCaptureSession: ObservableObject {
     // MARK: - La prise
 
     /// **Un appui bref PREND une photo.** Objectif avant, flash actif : l'ÉCRAN
-    /// est le flash (#8653) — la luminosité monte, l'image part sous elle,
-    /// sans le flash de l'objectif : jamais deux éclairs (#9464).
+    /// est le flash — la luminosité monte, l'image part sous elle,
+    /// sans le flash de l'objectif : jamais deux éclairs.
     func takePhoto(intent: ComposerTakeIntent = .edit) {
         guard stage == .armed, !camera.isTakingPhoto, !photoIsRamping, !controls.isSwitchingCamera else { return }
         photoInFlightIntent = intent
@@ -352,8 +354,8 @@ final class ComposerCaptureSession: ObservableObject {
     }
 
     /// **La prise commence.** Un cadenas atteint pendant l'ouverture de la
-    /// caméra (#8671) la fait partir DÉJÀ verrouillée ; la vidéo s'éclaire
-    /// aussi (#8653), à l'intensité du curseur.
+    /// caméra la fait partir DÉJÀ verrouillée ; la vidéo s'éclaire
+    /// aussi, à l'intensité du curseur.
     func startFilming() {
         guard stage == .armed, !controls.isSwitchingCamera else { return }
         mode = ComposerShutterGesture.mode(locked: holdPhase == .locked)
@@ -389,7 +391,7 @@ final class ComposerCaptureSession: ObservableObject {
         HapticFeedback.medium()
     }
 
-    /// **Une vidéo s'ACCUMULE** (#4099) : `✓` concatène.
+    /// **Une vidéo s'ACCUMULE** : `✓` concatène.
     func collectSegment(_ url: URL) {
         segments.append(ComposerCaptureSegment(url: url, duration: pendingSegmentDuration, rawSave: camera.librarySave))
         pendingSegmentDuration = 0
@@ -406,7 +408,7 @@ final class ComposerCaptureSession: ObservableObject {
         HapticFeedback.light()
     }
 
-    /// **`✓` assemble les segments et ouvre la retouche** (#9352, spec § 3.2) :
+    /// **`✓` assemble les segments et ouvre la retouche** (spec § 3.2) :
     /// rien ne part avant « Terminé ». Un segment unique EST le fichier — et son
     /// brut, si la caméra l'a écrit (réglage activé), est déjà dans Photos ; un
     /// assemblage qui échoue retombe sur le dernier segment plutôt que de perdre
@@ -433,7 +435,7 @@ final class ComposerCaptureSession: ObservableObject {
 
     /// **Le toucher prend la photo** dès que la session peut écrire — un
     /// toucher arrivé trop tôt attend plutôt que de se perdre. La demande part
-    /// où son intention la mène (#9351) — portée par l'appel : une attente
+    /// où son intention la mène — portée par l'appel : une attente
     /// annulée ou vaine ne lègue rien.
     func photographWhenReady(intent: ComposerTakeIntent = .edit) {
         holdTask?.cancel()
@@ -467,7 +469,7 @@ final class ComposerCaptureSession: ObservableObject {
     }
 
     /// **Le doigt glisse pendant la tenue** : à DROITE il verrouille, à la
-    /// verticale il zoome (#8671). Le verrou est idempotent.
+    /// verticale il zoome. Le verrou est idempotent.
     func holdChanged(_ translation: CGPoint) {
         guard holdStartedAt != nil else { return }
         if stage == .recording { dragZoom(translationY: translation.y) }
@@ -538,7 +540,7 @@ final class ComposerCaptureSession: ObservableObject {
         zoomAnchor = nil
     }
 
-    /// **Le pincement zoome l'objectif** (#9295) — écarter grandit, rapprocher
+    /// **Le pincement zoome l'objectif** — écarter grandit, rapprocher
     /// rétrécit, ancré sur le facteur du premier écart. Un appui long qui
     /// attendait la caméra s'annule : deux doigts posés demandent un cadrage,
     /// pas une vidéo. Une prise DÉJÀ partie continue, et se zoome.
@@ -586,7 +588,7 @@ final class ComposerCaptureSession: ObservableObject {
     // MARK: - Le rangement au glissé
 
     /// **Le glissé vers le bas range le viseur, PROGRESSIF et ANNULABLE**
-    /// (directive 2026-08-30) — sauf un glissé qui a croisé un pincement :
+    /// — sauf un glissé qui a croisé un pincement :
     /// celui-là reste gâté jusqu'à sa levée, il ne saute pas à sa course
     /// entière une fois le délai passé.
     func followDismissDrag(translationY: CGFloat) {
@@ -611,7 +613,7 @@ final class ComposerCaptureSession: ObservableObject {
             && ComposerSceneCameraFrame.dismisses(translationY: translationY)
     }
 
-    // MARK: - La mise au point (#9295)
+    // MARK: - La mise au point
 
     /// **Le toucher vise ce point du repère global.** `false` ⇒ rien n'a été
     /// visé (pas d'image, toucher hors de l'aperçu) : l'anneau ne paraît pas
@@ -649,7 +651,7 @@ final class ComposerCaptureSession: ObservableObject {
     }
 }
 
-// MARK: - Le look en direct (#9329)
+// MARK: - Le look en direct
 
 extension ComposerCaptureSession {
 

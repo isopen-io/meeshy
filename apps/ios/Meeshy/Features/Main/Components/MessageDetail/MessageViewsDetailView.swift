@@ -207,23 +207,23 @@ struct MessageViewsDetailView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             // Author card with avatar
             HStack(spacing: MeeshySpacing.md) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: message.senderName ?? "?",
                     context: .userListItem,
                     accentColor: message.senderColor ?? contactColor,
                     avatarURL: message.senderAvatarURL,
                     presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
                     ring: message.senderRing
-                )
+                ) }
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.callout.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Text(formatDateFR(message.createdAt))
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Spacer()
@@ -491,18 +491,18 @@ struct MessageViewsDetailView: View {
 
     private func userStatusRow(participantId: String, username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: username,
                 context: .userListItem,
                 accentColor: contactColor,
                 avatarURL: avatar,
                 presenceState: memberPresence(participantId),
                 ring: membersByParticipant[participantId]?.avatarRing
-            )
+            ) }
 
             Text(username)
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
@@ -513,11 +513,11 @@ struct MessageViewsDetailView: View {
             if let date {
                 Text(relativeDate(date))
                     .font(.caption2)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             } else {
                 Image(systemName: "clock")
                     .font(.caption2)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
         .padding(.vertical, MeeshySpacing.sm)
@@ -540,21 +540,21 @@ struct MessageViewsDetailView: View {
                 // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
                 // it with Dynamic Type so icon and caption grow in proportion.
                 .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
+                .foregroundStyle(theme.textMuted.opacity(0.4))
                 // Decorative — the error caption + Retry button carry the meaning.
                 // Not combined into one element: the button must stay independently
                 // focusable for VoiceOver.
                 .accessibilityHidden(true)
             Text(readStatusError.map { MessageViewsLabels.loadFailure($0) } ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les données", bundle: .main))
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Button {
                 readStatusData = nil
                 Task { await loadReadStatus() }
             } label: {
                 Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(Capsule().fill(accent))

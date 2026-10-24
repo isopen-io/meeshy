@@ -5,6 +5,8 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
+import me.meeshy.core.datastore.TokenVault
+import me.meeshy.sdk.model.security.SecureStore
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.network.BuildConfig
 import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
@@ -29,6 +31,7 @@ import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.UserApi
+import retrofit2.Retrofit
 import javax.inject.Singleton
 
 /**
@@ -69,8 +72,8 @@ internal object NetworkModule {
 
     @Provides
     @Singleton
-    fun providesTokenStore(@ApplicationContext context: Context): TokenStore =
-        EncryptedTokenStore(context)
+    fun providesTokenStore(@TokenVault store: SecureStore): TokenStore =
+        EncryptedTokenStore(store)
 
     @Provides
     @Singleton
@@ -78,12 +81,7 @@ internal object NetworkModule {
 
     @Provides
     @Singleton
-    fun providesMeeshyApi(
-        config: MeeshyConfig,
-        tokenStore: TokenStore,
-        sessionExpiry: SessionExpiryNotifier,
-    ): MeeshyApi =
-        MeeshyApi.create(config, tokenStore, onSessionExpired = sessionExpiry::notifyExpired)
+    fun providesMeeshyApi(retrofit: Retrofit): MeeshyApi = MeeshyApi.from(retrofit)
 
     @Provides
     fun providesAuthApi(api: MeeshyApi): AuthApi = api.auth

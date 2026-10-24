@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Répondre à un commentaire le GARDE en vue (#8644)
 //
@@ -35,15 +36,17 @@ private struct KeepsReplyTargetInView: ViewModifier {
     let replyingToId: String?
     let proxy: ScrollViewProxy
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var delays = DelayedActions()
 
     func body(content: Content) -> some View {
         content.adaptiveOnChange(of: replyingToId) { _, id in
             guard let target = CommentReplyFocus.scrollTarget(replyingToId: id) else { return }
             let animation: Animation? = reduceMotion ? nil : .easeInOut(duration: 0.3)
-            DispatchQueue.main.asyncAfter(deadline: .now() + CommentReplyFocus.keyboardSettleDelay) {
+            delays.run(after: .seconds(CommentReplyFocus.keyboardSettleDelay)) {
                 withAnimation(animation) { proxy.scrollTo(target, anchor: CommentReplyFocus.anchor) }
             }
         }
+        .onDisappear { delays.cancelAll() }
         #if DEBUG
         // La vitrine (#9810) : le commentaire envoyé est ramené dans la vue, comme le doigt le ferait.
         .onAppear {

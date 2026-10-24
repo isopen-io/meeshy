@@ -12,7 +12,7 @@ struct WidgetPreviewView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
 
     var onNewConversation: (() -> Void)?
 
@@ -30,7 +30,7 @@ struct WidgetPreviewView: View {
     /// B1 (Prisme Linguistique) — prisme du lecteur, même autorité que
     /// `ConversationListView` et que `WidgetDataManager`.
     private var preferredContentLanguages: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        ReaderPrism.resolve(for: AuthManager.shared.currentUser)
     }
 
     private var recentConversations: [Conversation] {
@@ -326,7 +326,7 @@ struct WidgetPreviewView: View {
                         // `openFeedComposer` n'avait AUCUN observateur : cette
                         // action ne faisait rien. `RootView` montre le flux,
                         // `ThemedFeedOverlay` ouvre son composeur.
-                        router.pendingOpenFeedComposer = true
+                        router.requestFeedComposer()
                     }
                 }
 

@@ -21,7 +21,7 @@ import {
   REEL_PORTRAIT,
   pageOfFeed,
 } from './fixtures-feed';
-import { VIEWER_ID } from './fixtures-base';
+import { FIXTURES_LOADED_AT, VIEWER_ID } from './fixtures-base';
 import { carrierMediaIdentity } from '@/lib/canvas/carrier';
 import { parseCanvasDocument } from '@/lib/canvas/document';
 import { feedMediaKindOf } from '@/lib/feed/layout';
@@ -237,7 +237,7 @@ describe('le corpus du fil porte des scènes (§ 3.4)', () => {
     for (const id of ['post-scene-text', 'post-scenes-mixed', 'post-scenes-wave', 'post-scene-clip-a', 'post-scene-clip-b']) {
       const post = FEED_POSTS.find((p) => p.id === id);
       expect(post).toBeDefined();
-      expect(Date.now() - new Date(post!.createdAt).getTime()).toBeLessThan(70 * 60_000);
+      expect(FIXTURES_LOADED_AT.getTime() - new Date(post!.createdAt).getTime()).toBeLessThan(70 * 60_000);
     }
   });
 });

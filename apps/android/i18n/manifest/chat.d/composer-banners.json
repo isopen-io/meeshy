@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "bubble.reply.you",
+          "androidName": "chat_composer_reply_you",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.view.composer.reply_to",
+          "androidName": "chat_composer_reply_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.bubble.replyTo.unknown",
+          "androidName": "chat_composer_reply_unknown",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.view.composer.edit_message",
+          "androidName": "chat_composer_edit_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.photo",
+          "androidName": "chat_composer_reply_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.video",
+          "androidName": "chat_composer_reply_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.voice",
+          "androidName": "chat_composer_reply_voice",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.file",
+          "androidName": "chat_composer_reply_file",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.location",
+          "androidName": "chat_composer_reply_location",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

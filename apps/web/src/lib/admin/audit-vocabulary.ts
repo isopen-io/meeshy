@@ -37,6 +37,7 @@ export const AUDIT_FAMILIES = [
   'reports',
   'communities',
   'settings',
+  'packs',
 ] as const;
 
 export type AuditFamily = (typeof AUDIT_FAMILIES)[number];
@@ -93,6 +94,7 @@ export const AUDIT_ACTIONS = {
   // ── Échanges ───────────────────────────────────────────────────────────────
   ADMIN_INVITATION_STATUS_SET: entry('accounts', 'handshake', 'warning'),
   ADMIN_CONVERSATION_MESSAGES_VIEWED: entry('conversations', 'eye', 'info', true),
+  ADMIN_CONVERSATION_ATTACHMENTS_VIEWED: entry('conversations', 'eye', 'info', true),
   ADMIN_CONVERSATION_UPDATED: entry('conversations', 'pencilSimple', 'neutral'),
   ADMIN_CONVERSATION_MEMBER_ROLE_CHANGED: entry('conversations', 'shieldCheck', 'brand'),
   ADMIN_CONVERSATION_MEMBER_REMOVED: entry('conversations', 'userMinus', 'danger'),
@@ -133,10 +135,12 @@ export const AUDIT_ACTIONS = {
   ADMIN_REPORT_UPDATED: entry('reports', 'flag', 'neutral'),
   ADMIN_REPORT_DELETED: entry('reports', 'trash', 'danger'),
   ADMIN_REPORT_ASSIGNED: entry('reports', 'user', 'info'),
+  ADMIN_REPORT_SELF_MODERATION_REFUSED: entry('reports', 'prohibit', 'danger'),
   // ── Réglages de la plateforme ──────────────────────────────────────────────
   UPDATE_ENGAGEMENT_SCALE: entry('settings', 'flame', 'warning'),
   // ── Les opérations du serveur (#10396) : sauvegarde, purge des images ─────
   TRIGGER_SERVER_OPERATION: entry('settings', 'database', 'warning'),
+  SERVER_OPERATION_REFUSED: entry('settings', 'prohibit', 'danger'),
   // ── Le calendrier des saisons du Jeu (#10232, #10233) ──────────────────────
   GAME_SEASON_UPDATE: entry('settings', 'calendarBlank', 'warning'),
   GAME_SEASON_PROPOSAL_REQUEST: entry('settings', 'robot', 'info'),
@@ -144,6 +148,23 @@ export const AUDIT_ACTIONS = {
   GAME_SEASON_PROPOSAL_DISCARDED: entry('settings', 'prohibit', 'warning'),
   GAME_SEASON_PROPOSAL_APPROVE: entry('settings', 'checkCircle', 'success'),
   GAME_SEASON_PROPOSAL_REJECT: entry('settings', 'prohibit', 'neutral'),
+  // ── Registre des packs (#11275) et modération des lens (#11271) ─────────────
+  PACK_REGISTRY_UPDATE: entry('packs', 'pencilSimple', 'warning'),
+  PACK_REGISTRY_UPDATE_REFUSED: entry('packs', 'prohibit', 'neutral'),
+  PACK_REGISTRY_UPDATE_FAILED: entry('packs', 'warningCircle', 'danger'),
+  PACK_REGISTRY_RESET: entry('packs', 'arrowClockwise', 'warning'),
+  PACK_REGISTRY_RESET_REFUSED: entry('packs', 'prohibit', 'neutral'),
+  PACK_REGISTRY_RESET_FAILED: entry('packs', 'warningCircle', 'danger'),
+  LENS_PACK_APPROVE: entry('packs', 'checkCircle', 'success'),
+  LENS_PACK_APPROVE_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
+  LENS_PACK_REJECT: entry('packs', 'prohibit', 'warning'),
+  LENS_PACK_REJECT_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
+  LENS_PACK_REJECTION_REPLACED: entry('packs', 'pencilSimple', 'neutral'),
+  LENS_PACK_WITHDRAW: entry('packs', 'trash', 'danger'),
+  LENS_PACK_WITHDRAW_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
+  LENS_PACK_RESTORE: entry('packs', 'arrowClockwise', 'success'),
+  LENS_PACK_RESTORE_APPLIED: entry('packs', 'checkCircle', 'success'),
+  LENS_PACK_RESTORE_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
 } as const satisfies Readonly<Record<string, ActionEntry>>;
 
 export type AuditActionCode = keyof typeof AUDIT_ACTIONS;

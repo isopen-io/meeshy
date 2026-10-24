@@ -182,6 +182,18 @@ describe('un jeton illisible rend `null`, jamais une position à moitié lue', (
     expect(decodePageCursor(token, ANTICHRONOLOGIQUE)).toBeNull();
   });
 
+  it("refuse, sur une clé `objectId`, un identifiant qui n'en est pas un — avant que Prisma ne rende un 500", () => {
+    const ordre: CursorSort = [
+      { field: 'createdAt', direction: 'desc', kind: 'date' },
+      { field: 'id', direction: 'desc', kind: 'objectId' },
+    ];
+    const forge = (id: string) =>
+      Buffer.from(JSON.stringify({ v: 1, o: sortSignature(ordre), k: { createdAt: '2026-01-01T00:00:00.000Z', id } }), 'utf8').toString('base64url');
+    expect(decodePageCursor(forge('zz'), ordre)).toBeNull();
+    expect(decodePageCursor(forge('507f1f77bcf86cd799439011'), ordre)).toEqual({ createdAt: '2026-01-01T00:00:00.000Z', id: '507f1f77bcf86cd799439011' });
+    expect(encodePageCursor(ordre, { createdAt: new Date('2026-01-01T00:00:00.000Z'), id: '507f1f77bcf86cd799439011' })).toBe(forge('507f1f77bcf86cd799439011'));
+  });
+
   it('refuse une version de jeton inconnue', () => {
     const token = Buffer.from(
       JSON.stringify({ v: 99, o: sortSignature(ANTICHRONOLOGIQUE), k: { createdAt: at(10).toISOString(), id: 'n1' } }),

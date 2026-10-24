@@ -21,12 +21,22 @@ extension iPadRootView {
         // survive until ConversationView consumes it. ConversationView clears it
         // in .onAppear (see rightColumn).
         // Story, réel ou plein écran en cours : le routeur les referme d'abord
-        // (#10539) — le site unique, partagé avec l'iPhone.
+        // (#10539) — le site unique, partagé avec l'iPhone. Puis la porte du
+        // verrou PIN (#11386) : la colonne de détail ne reçoit une conversation
+        // verrouillée qu'après le PIN, quel que soit le chemin qui l'ouvre.
         router.clearPresentedSurfaces { _ in
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                activeConversation = conversation
-                rightPanelRoute = nil
+            router.admitConversation(conversation, alreadyShowing: activeConversation?.id == conversation.id) {
+                placeConversation(conversation)
             }
+        }
+    }
+
+    /// Pose la conversation dans la colonne de détail, SANS repasser la porte :
+    /// réservé à ce que le routeur a déjà admis (`onRouteRequested`).
+    func placeConversation(_ conversation: Conversation) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            activeConversation = conversation
+            rightPanelRoute = nil
         }
     }
 
@@ -493,7 +503,7 @@ extension iPadRootView {
     /// instead of opening it fully. Resolves cache-first (in-memory → GRDB →
     /// network), falling back to normal handling when it can't be resolved.
     func openNotificationPreview(for event: SocketNotificationEvent) {
-        guard let conversationId = event.conversationId, !conversationId.isEmpty else {
+        guard let conversationId = event.conversationId, !conversationId.isEmpty, ConversationOpenRoute.mayPreview(conversationId) else {
             handleSocketNotificationTap(event)
             return
         }

@@ -104,6 +104,35 @@ export type RetakeChoice = 'same-photo' | 'selfie' | 'card';
 export const retakeChoices = (entry: NotebookEntry): readonly RetakeChoice[] =>
   entry.source === undefined ? ['selfie', 'card'] : ['same-photo', 'selfie', 'card'];
 
+/**
+ * LA SESSION DE REPRISE (§ 5.13, #10166) : ce que le carnet remet au déroulé
+ * pour reprendre une photo gardée — autre cadre, autre pose, même photo ou
+ * nouveau selfie. Le déroulé repart de la recette, la plaque garde la date de
+ * l'étape (sinon celle de la première garde), et « Garder » remplace l'entrée.
+ */
+export type RetakeSession = {
+  readonly choices: readonly RetakeChoice[];
+  /** La photo d'origine ; `null` : l'entrée n'en a pas (ancienne, ou carte seule). */
+  readonly source: Blob | null;
+  readonly mode: NotebookMode;
+  readonly recipe: NotebookRecipe;
+  /** La date de la plaque. */
+  readonly at: Date;
+};
+
+const RECIPE_KEYS = ['frameId', 'pose', 'message', 'crop', 'mirror', 'showFlame', 'showLink', 'momentAt'] as const satisfies readonly (keyof NotebookRecipe)[];
+
+const recipeOf = (entry: NotebookEntry): NotebookRecipe =>
+  Object.fromEntries(RECIPE_KEYS.flatMap((key) => (entry[key] === undefined ? [] : [[key, entry[key]]])));
+
+export const retakeSessionOf = (entry: NotebookEntry): RetakeSession => ({
+  choices: retakeChoices(entry),
+  source: entry.source ?? null,
+  mode: entry.mode ?? (entry.source === undefined ? 'card' : 'gallery'),
+  recipe: recipeOf(entry),
+  at: new Date(entry.momentAt ?? entry.createdAt),
+});
+
 /** « En attente » : les moments NON déductibles ; une étape de piste ne paraît que dans « À rattraper ». */
 export const pendingOf = (entries: readonly NotebookEntry[]): readonly NotebookEntry[] =>
   entries.filter((entry) => entry.status === 'pending' && photoTrackOf(entry.momentId) === null);
@@ -199,6 +228,8 @@ export function createNotebook(params: {
       if (backend === null) return 'unavailable';
       askPersistence();
       try {
+        /* Une reprise REMPLACE la photo gardée du même moment et garde sa date (§ 5.13) ; une attente qui se photographie prend celle du jour. */
+        const previous = await backend.get(moment.id).catch(() => undefined);
         await backend.put({
           ...photo.recipe,
           id: moment.id,
@@ -207,7 +238,7 @@ export function createNotebook(params: {
           kicker: moment.kicker,
           title: moment.title,
           status: 'kept',
-          createdAt: now().toISOString(),
+          createdAt: previous?.status === 'kept' ? previous.createdAt : now().toISOString(),
           mode: photo.mode,
           story: photo.story,
           ...(photo.source == null ? {} : { source: photo.source }),

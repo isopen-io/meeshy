@@ -79,8 +79,19 @@ final class StoryAudioActivationPolicyTests: XCTestCase {
     func test_laDemandeDeSession_consulteLaPolitique() throws {
         let corps = try corps(de: "func requestPlaybackSessionIfNeeded()", dans: canvasAudio)
         let politique = try XCTUnwrap(corps.range(of: "StoryAudioActivationPolicy.shouldActivate("))
-        let demande = try XCTUnwrap(corps.range(of: "MediaSessionCoordinator.shared.request("))
+        let demande = try XCTUnwrap(corps.range(of: "MediaSessionCoordinator.shared.requestPlaybackInOrder("))
         XCTAssertLessThan(politique.lowerBound, demande.lowerBound)
+    }
+
+    func test_laRequeteEtLaLiberationDeSession_passentParLaFileOrdonneeDuCoordinateur() throws {
+        let code = try canvasAudio
+        let canvas = try source("Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift")
+        XCTAssertFalse(code.contains("MediaSessionCoordinator.shared.request("),
+                       "une Task par appel ne garantit aucun ordre : release puis request pouvaient se croiser")
+        XCTAssertFalse(code.contains("MediaSessionCoordinator.shared.release()"))
+        XCTAssertFalse(canvas.contains("MediaSessionCoordinator.shared.release()"))
+        let liberation = try corps(de: "func releasePlaybackSessionIfNeeded()", dans: code)
+        XCTAssertTrue(liberation.contains("MediaSessionCoordinator.shared.releasePlaybackInOrder()"))
     }
 
     func test_laPreparation_consulteLaPolitique_avantToutTelechargement() throws {
@@ -99,7 +110,7 @@ final class StoryAudioActivationPolicyTests: XCTestCase {
         let mixer = try source("Sources/MeeshyUI/Story/ReaderAudioMixer.swift")
         let corps = try corps(de: "public func play(originHost: UInt64, slideKey: String", dans: mixer)
         let politique = try XCTUnwrap(corps.range(of: "StoryAudioActivationPolicy.shouldHoldEngine("))
-        let demarrage = try XCTUnwrap(corps.range(of: "try engine.start()"))
+        let demarrage = try XCTUnwrap(corps.range(of: "try engineHost.startEngine()"))
         XCTAssertLessThan(politique.lowerBound, demarrage.lowerBound)
     }
 }
@@ -229,7 +240,8 @@ final class StoryCanvasAudioActivationTests: XCTestCase {
                        "la timeline d'une carte ne s'arrête pas pour un son qu'elle ne jouera pas")
         XCTAssertEqual(vue._readerAudioMixerForTesting.activeClipCount
                        + vue._readerAudioMixerForTesting.backgroundClipCount, 0)
-        XCTAssertFalse(vue._readerAudioMixerForTesting.engine.isRunning)
+        XCTAssertFalse(vue._readerAudioMixerForTesting.claimsRunningEngine,
+                       "le moteur des canevas est PARTAGÉ (#9878) : la carte ne le réclame pas")
         XCTAssertFalse(vue.didRequestPlaybackSession)
     }
 

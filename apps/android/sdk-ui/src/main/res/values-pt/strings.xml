@@ -37,8 +37,6 @@
     <string name="bubble_file_size_bytes">%1$s B</string>
     <string name="bubble_file_size_kb">%1$s KB</string>
     <string name="bubble_file_size_mb">%1$s MB</string>
-    <string name="image_viewer_close">Fechar</string>
-    <string name="image_viewer_save">Guardar na galeria</string>
     <string name="bubble_blur_tap_to_reveal">Toque para revelar</string>
     <string name="bubble_blur_view_once">Ver uma vez</string>
     <string name="bubble_blur_reveal_action">Revelar mensagem oculta</string>
@@ -48,12 +46,6 @@
     <string name="emoji_picker_title">Reações</string>
     <string name="emoji_picker_expand">Mais emojis</string>
     <string name="emoji_react_with">Reagir com %1$s</string>
-    <string name="emoji_category_reactions">Reações</string>
-    <string name="emoji_category_faces">Rostos</string>
-    <string name="emoji_category_gestures">Gestos</string>
-    <string name="emoji_category_hearts">Corações</string>
-    <string name="emoji_category_animals">Animais</string>
-    <string name="emoji_category_objects">Objetos</string>
     <string name="language_strip_select">Ler em %1$s</string>
     <string name="time_relative_now">agora</string>
     <string name="time_relative_seconds">%1$d s</string>

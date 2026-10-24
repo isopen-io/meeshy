@@ -83,4 +83,13 @@ struct ConversationActionPolicyVectorTests {
             }
         }
     }
+
+    @Test func aViewerWhoLeftCanNeitherHideNorReportTheConversation() throws {
+        let departed = try vectors().filter { !$0.input.viewer.isActiveMember }
+        #expect(!departed.isEmpty)
+        for vector in departed {
+            #expect(vector.expected.hide == false && vector.expected.report == false, "\(vector.label)")
+        }
+        #expect(departed.contains { $0.label == "groupe-non-membre-ne-masque-ni-ne-signale" })
+    }
 }

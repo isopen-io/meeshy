@@ -2525,7 +2525,7 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
             XCTFail("endCurrentAndAnswerPending not found"); return
         }
         XCTAssertTrue(
-            body.contains("Task.sleep"),
+            body.contains("cancellableSleep(") || body.contains("Task.sleep"),
             "endCurrentAndAnswerPending must sleep before routing the pending call to allow the previous call's " +
             "socket/WebRTC teardown to complete (avoids endCallInternal racing with handleIncomingCallNotification)"
         )
@@ -3272,29 +3272,34 @@ final class DTLSSRTPEnforcementTests: XCTestCase {
         )
     }
 
+    #if canImport(WebRTC)
     /// The bundle policy must be `.maxBundle` to minimize the number of transport
     /// sockets and DTLS handshakes. With fewer transports, there is less surface
     /// for downgrade attacks and the DTLS connection is established faster.
-    func test_peerConnection_useMaxBundlePolicy() throws {
-        let source = try p2pClientSource()
-        XCTAssertTrue(
-            source.contains("bundlePolicy = .maxBundle"),
-            "P2PWebRTCClient must set bundlePolicy = .maxBundle to multiplex all tracks " +
-            "onto a single DTLS transport — fewer handshakes, smaller attack surface."
-        )
+    /// Every call connection is configured by `WebRTCPeerConfiguration` (#11296).
+    func test_peerConnection_useMaxBundlePolicy() {
+        for transport in [CallIceTransport.all, .relayOnly] {
+            XCTAssertEqual(
+                WebRTCPeerConfiguration.make(iceServers: [], transport: transport).bundlePolicy, .maxBundle,
+                "Every call connection must set bundlePolicy = .maxBundle to multiplex all tracks " +
+                "onto a single DTLS transport — fewer handshakes, smaller attack surface."
+            )
+        }
     }
 
     /// RTCP must be multiplexed onto the RTP port (rtcpMuxPolicy = .require).
     /// Without mux, a separate DTLS transport is opened for RTCP — doubling the
     /// number of ports that need to be traversed and firewalled.
-    func test_peerConnection_requiresRTCPMux() throws {
-        let source = try p2pClientSource()
-        XCTAssertTrue(
-            source.contains("rtcpMuxPolicy = .require"),
-            "P2PWebRTCClient must set rtcpMuxPolicy = .require to avoid opening a separate " +
-            "RTCP transport — extra ports increase NAT traversal complexity and attack surface."
-        )
+    func test_peerConnection_requiresRTCPMux() {
+        for transport in [CallIceTransport.all, .relayOnly] {
+            XCTAssertEqual(
+                WebRTCPeerConfiguration.make(iceServers: [], transport: transport).rtcpMuxPolicy, .require,
+                "Every call connection must set rtcpMuxPolicy = .require to avoid opening a separate " +
+                "RTCP transport — extra ports increase NAT traversal complexity and attack surface."
+            )
+        }
     }
+    #endif
 }
 
 // MARK: - Settle-token race guard
@@ -5085,7 +5090,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
-            body.contains("analyticsCallInitiatedDate = Date()"),
+            body.contains("analytics.callInitiatedDate = Date()"),
             "startCall must stamp analyticsCallInitiatedDate so setupTimeMs measures " +
             "the interval from initiation to first connected state."
         )
@@ -5102,7 +5107,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
-            body.contains("analyticsCallInitiatedDate = Date()"),
+            body.contains("analytics.callInitiatedDate = Date()"),
             "handleIncomingCallNotification must stamp analyticsCallInitiatedDate so setupTimeMs " +
             "measures the interval from incoming ring to first connected state."
         )
@@ -5137,7 +5142,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("analyticsCallInitiatedDate"),
+            source.contains("initiatedAt: callInitiatedDate"),
             "setupTimeMs must use analyticsCallInitiatedDate (set at call initiation) — " +
             "using callStartDate would always produce 0 because it is set at the same " +
             "instant as analyticsConnectedDate (both in transitionToConnected)."
@@ -5181,26 +5186,15 @@ final class CallManagerAnalyticsTests: XCTestCase {
         guard let body = emitAnalyticsBody(in: source) else {
             XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
         }
-        let accumulators = [
-            "analyticsCallInitiatedDate = nil",
-            "analyticsConnectedDate = nil",
-            "analyticsNetworkTransitions = 0",
-            "analyticsQualitySeconds = [:]",
-            "analyticsLastQualityDate = nil",
-            "analyticsCurrentLevel = nil",
-            "analyticsRttSum = 0",
-            "analyticsSampleCount = 0",
-            "analyticsMaxPacketLoss = 0",
-            "analyticsPacketLossSum = 0",
-            "analyticsEffectsUsed = []",
-        ]
-        for accumulator in accumulators {
-            XCTAssertTrue(
-                body.contains(accumulator),
-                "emitCallAnalyticsIfNeeded must reset \(accumulator) — " +
-                "otherwise the next call inherits stale telemetry from the previous one."
-            )
-        }
+        XCTAssertTrue(
+            body.contains("analytics.resetAccumulators()"),
+            "emitCallAnalyticsIfNeeded must reset the recorder after emission — " +
+            "otherwise the next call inherits stale telemetry from the previous one."
+        )
+        XCTAssertTrue(
+            source.contains("self = CallAnalyticsRecorder()"),
+            "The recorder reset must restore the initial value, accumulator by accumulator."
+        )
     }
 
     /// The analytics `ANALYTICS` event key must be defined in `CALL_EVENTS` in the
@@ -5251,7 +5245,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("attemptReconnection not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("analyticsTotalReconnects += 1"),
+            body.contains("analytics.totalReconnects += 1"),
             "attemptReconnection must increment analyticsTotalReconnects alongside " +
             "reconnectAttempt, so the cumulative count survives across reconnect cycles."
         )
@@ -5272,7 +5266,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             "transitionToConnected must still reset the live reconnectAttempt budget."
         )
         XCTAssertFalse(
-            body.contains("analyticsTotalReconnects"),
+            body.contains("analytics.totalReconnects"),
             "transitionToConnected must NOT reset analyticsTotalReconnects — it accumulates " +
             "across the whole call and is only cleared in endCallInternal."
         )
@@ -5286,7 +5280,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("endCallInternal not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("analyticsTotalReconnects = 0"),
+            body.contains("analytics.totalReconnects = 0"),
             "endCallInternal must reset analyticsTotalReconnects so the next call starts clean."
         )
     }
@@ -5299,12 +5293,8 @@ final class CallManagerAnalyticsTests: XCTestCase {
     /// `emitCallAnalyticsIfNeeded` itself.
     func test_emitCallAnalyticsSnapshot_usesTotalReconnectsForReconnectionCount() throws {
         let source = try callManagerSource()
-        guard let snapshotRange = source.range(of: "private func emitCallAnalyticsSnapshot(") else {
-            XCTFail("emitCallAnalyticsSnapshot not found in CallManager.swift"); return
-        }
-        let snapshotBody = String(source[snapshotRange.lowerBound...].prefix(2600))
         XCTAssertTrue(
-            snapshotBody.contains("\"reconnectionCount\":   analyticsTotalReconnects"),
+            source.contains("\"reconnectionCount\":   totalReconnects"),
             "The analytics payload must report analyticsTotalReconnects (cumulative), not " +
             "reconnectAttempt (the live, per-cycle FSM retry budget zeroed on every reconnect)."
         )
@@ -5334,17 +5324,17 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("didCollectStats not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains(#"analyticsEffectsUsed.insert("backgroundBlur")"#),
+            source.contains(#"effectsUsed.insert("backgroundBlur")"#) && body.contains("backgroundBlur: filterConfig.backgroundBlurEnabled"),
             "didCollectStats must insert \"backgroundBlur\" into analyticsEffectsUsed when " +
             "filterConfig.backgroundBlurEnabled is set — otherwise the field stays empty forever."
         )
         XCTAssertTrue(
-            body.contains(#"analyticsEffectsUsed.insert("skinSmoothing")"#),
+            source.contains(#"effectsUsed.insert("skinSmoothing")"#) && body.contains("skinSmoothing: filterConfig.skinSmoothingEnabled"),
             "didCollectStats must insert \"skinSmoothing\" into analyticsEffectsUsed when " +
             "filterConfig.skinSmoothingEnabled is set."
         )
         XCTAssertTrue(
-            body.contains(#"analyticsEffectsUsed.insert("colorFilter")"#),
+            source.contains(#"effectsUsed.insert("colorFilter")"#) && body.contains("colorFilter: filterConfig.isEnabled"),
             "didCollectStats must insert \"colorFilter\" into analyticsEffectsUsed when a " +
             "color-grading preset (filterConfig.isEnabled) is active."
         )
@@ -6116,11 +6106,6 @@ final class CallCancellationPolicyTests: XCTestCase {
     // same, or a cancel for the WAITING call (not the primary ring) leaves
     // the banner offering "Answer/Reject" for an already-cancelled call.
     func test_endRingingFromCancellation_clearsPendingIncomingCallBanner() throws {
-        let base = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
         let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         guard let fnRange = manager.range(of: "func endRingingFromCancellation(") else {
             XCTFail("CallManager.endRingingFromCancellation not found"); return
@@ -6185,11 +6170,6 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
     // endRingingFromCancellation's equivalent test — the socket path
     // (call:already-answered) clears the waiting banner first.
     func test_endRingingAnsweredElsewhere_clearsPendingIncomingCallBanner() throws {
-        let base = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
         let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         guard let fnRange = manager.range(of: "func endRingingAnsweredElsewhere(") else {
             XCTFail("CallManager.endRingingAnsweredElsewhere not found"); return
@@ -6272,13 +6252,13 @@ final class CallSetupMetricsTests: XCTestCase {
             source.contains("callSetupMetrics"),
             "emitCallAnalyticsIfNeeded must compute metrics via the pure CallReliabilityPolicy.callSetupMetrics"
         )
-        let anchorCount = source.components(separatedBy: "analyticsNegotiationStartDate = Date()").count - 1
+        let anchorCount = source.components(separatedBy: "analytics.negotiationStartDate = Date()").count - 1
         XCTAssertGreaterThanOrEqual(
             anchorCount, 2,
             "The negotiation anchor must be stamped on BOTH sides: answerCall (callee) and participant-joined (caller)"
         )
         XCTAssertTrue(
-            source.contains("analyticsNegotiationStartDate = nil"),
+            source.contains("analytics.resetAccumulators()"),
             "The negotiation anchor must be reset per call"
         )
     }
@@ -6354,9 +6334,15 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
         }
         let body = String(source[fnRange.lowerBound...].prefix(900))
         XCTAssertFalse(
-            body.contains("analyticsQualitySeconds[prevLevel, default: 0] +="),
+            body.contains("qualitySeconds[previousLevel, default: 0] +="),
             "The final emit must not mutate the quality accumulators — the open window is folded in PURELY by CallReliabilityPolicy.qualityDistribution"
         )
+        let recorder = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+AnalyticsRecorder.swift")
+        XCTAssertTrue(
+            recorder.contains("    func payload(now: Date, context: CallAnalyticsContext)"),
+            "The analytics payload is built by a NON-mutating CallAnalyticsRecorder.payload — the compiler then forbids folding the open window into the accumulators"
+        )
+        XCTAssertFalse(recorder.contains("mutating func payload("), "payload must stay non-mutating")
     }
 }
 
@@ -6460,14 +6446,9 @@ final class CallManagerBubblePositionTests: XCTestCase {
     /// unconditionally, not only in the conditional settle-window path.
     func test_endCallInternal_resetsBubblePositionUnconditionally() throws {
         let source = try callManagerSource()
-        guard let range = source.range(of: "func endCallInternal(reason: CallEndReason) {") else {
-            XCTFail("endCallInternal not found in CallManager.swift"); return
+        guard let body = DeclarationBodyScanner.body(containing: "func endCallInternal(reason: CallEndReason", in: source) else {
+            XCTFail("endCallInternal not found in the CallManager unit"); return
         }
-        let bodyEnd = source.range(
-            of: "\n    // MARK: - Audio Session",
-            range: range.upperBound..<source.endIndex
-        )?.lowerBound ?? source.endIndex
-        let body = String(source[range.lowerBound..<bodyEnd])
         XCTAssertTrue(
             body.contains("bubbleEdge = .trailing"),
             "endCallInternal must unconditionally reset bubbleEdge to .trailing — otherwise a call started " +

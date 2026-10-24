@@ -1,77 +1,58 @@
 package me.meeshy.sdk.conversation
 
-import androidx.room.withTransaction
-import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.SyncMetaDao
-import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
-import me.meeshy.sdk.cache.cacheFirstFlow
-import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
-import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
-import me.meeshy.sdk.model.MessageEffectsEncoder
-import me.meeshy.sdk.model.AttachmentAudioTranslationMerge
-import me.meeshy.sdk.model.AttachmentTranscriptionMerge
-import me.meeshy.sdk.model.MessageTranslationMerge
-import me.meeshy.sdk.model.SendMessageRequest
-import me.meeshy.sdk.net.MeeshyApi
-import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
-import me.meeshy.sdk.net.api.TranslateRequest
 import me.meeshy.sdk.net.api.TranslationApi
-import me.meeshy.sdk.net.apiCall
-import me.meeshy.sdk.net.rawApiCall
-import me.meeshy.sdk.outbox.OutboxIds
-import me.meeshy.sdk.outbox.OutboxKind
-import me.meeshy.sdk.outbox.OutboxLanes
-import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
-import me.meeshy.sdk.outbox.PinPayload
-import me.meeshy.sdk.outbox.ReactionPayload
-import me.meeshy.sdk.util.isoToEpochMillis
-import java.time.Instant
-import javax.inject.Inject
-import javax.inject.Singleton
 
+/**
+ * The messages of a conversation, offline-first (ARCHITECTURE.md §4, §5): Room is the single
+ * source, every mutation is optimistic and rides the outbox.
+ *
+ * A facade — every member delegates to the one collaborator that owns its domain, so the
+ * offline work evolves one domain at a time:
+ *  - [MessageHistoryReader] — the cache-first stream, refresh, peek and backwards pagination;
+ *  - [MessageSendCoordinator] — the optimistic send, its ACK reconciliation, failure and retry;
+ *  - [MessageMutationWriter] — optimistic reactions, edit, delete and pin;
+ *  - [MessageEnrichmentWriter] — translations, transcriptions and audio translations;
+ *  - [MessageReceiptWriter] — delivery and read receipts.
+ */
 @Singleton
-class MessageRepository @Inject constructor(
-    private val messageApi: MessageApi,
-    private val translationApi: TranslationApi,
-    private val database: MeeshyDatabase,
-    private val messageDao: MessageDao,
-    private val syncMetaDao: SyncMetaDao,
-    private val outboxRepository: OutboxRepository,
-    private val clock: CacheClock,
+class MessageRepository internal constructor(
+    private val history: MessageHistoryReader,
+    private val sends: MessageSendCoordinator,
+    private val mutations: MessageMutationWriter,
+    private val enrichment: MessageEnrichmentWriter,
+    private val receipts: MessageReceiptWriter,
 ) {
-    /**
-     * #5189 — the nominal-flow observe window, per conversation: how many of
-     * the newest rows [MessageCacheSource.observe] is bounded to. Starts at
-     * [INITIAL_HISTORY_WINDOW] (bigger than the server's own default
-     * recent-window fetch — `limitStr = '20'`, `services/gateway/src/routes/
-     * conversations/messages-list.ts:189` — so a fresh sync never overflows
-     * it) and grows by exactly as many rows as [loadOlder] actually pages
-     * in, so a row that becomes cached stays observable — scroll-back is
-     * never truncated by the bound. Held HERE rather than on a
-     * [MessageCacheSource] instance: [cacheSource] builds a fresh one on
-     * every call (see [messagesStream], [refresh]), and [loadOlder] never
-     * touches a cache source at all — a per-instance field would reset on
-     * every call and never see [loadOlder]'s growth.
-     */
-    private val historyWindowSizes = ConcurrentHashMap<String, MutableStateFlow<Int>>()
-
-    private fun historyWindow(conversationId: String): MutableStateFlow<Int> =
-        historyWindowSizes.getOrPut(conversationId) { MutableStateFlow(INITIAL_HISTORY_WINDOW) }
+    @Inject
+    constructor(
+        messageApi: MessageApi,
+        translationApi: TranslationApi,
+        database: MeeshyDatabase,
+        messageDao: MessageDao,
+        syncMetaDao: SyncMetaDao,
+        outboxRepository: OutboxRepository,
+        clock: CacheClock,
+    ) : this(
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock),
+        mutations = MessageMutationWriter(CachedMessageUpdater(database, messageDao), outboxRepository, clock),
+        enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao), translationApi),
+        receipts = MessageReceiptWriter(database, messageDao),
+    )
 
     /**
      * Cache-first message list for a conversation (ARCHITECTURE.md §4): the
@@ -82,78 +63,33 @@ class MessageRepository @Inject constructor(
         conversationId: String,
         policy: CachePolicy = CachePolicy.Default,
         onSyncError: (Throwable) -> Unit = {},
-    ): Flow<CacheResult<List<LocalMessage>>> =
-        cacheFirstFlow(policy, cacheSource(conversationId), onRevalidateError = onSyncError)
+    ): Flow<CacheResult<List<LocalMessage>>> = history.messagesStream(conversationId, policy, onSyncError)
 
     /** Explicit refresh of a conversation's messages (pull / retry). Throws on failure. */
-    suspend fun refresh(conversationId: String) {
-        cacheSource(conversationId).revalidate()
-    }
+    suspend fun refresh(conversationId: String) = history.refresh(conversationId)
 
     /**
-     * Cache-only read of a conversation's [limit] most recent messages, oldest
-     * first — a "peek" surface (hard-press preview card) that must render
-     * instantly without a network round-trip. Deliberately skips the
-     * background-revalidate half of [messagesStream]'s stale-while-revalidate
-     * contract: a preview the user may dismiss within a second should never
-     * trigger unbounded background sync work. Empty on a never-synced
-     * conversation (mirrors [messagesStream]'s cold-cache [CacheResult.Empty]).
+     * Cache-only read of a conversation's [limit] most recent messages, oldest first — a "peek"
+     * surface that renders instantly, without a network round-trip or a background revalidate.
      */
-    suspend fun recentMessages(conversationId: String, limit: Int = PREVIEW_LIMIT): List<LocalMessage> =
-        messageDao.recentForConversation(conversationId, limit)
-            .asReversed()
-            .map { it.toLocalMessage() }
+    suspend fun recentMessages(
+        conversationId: String,
+        limit: Int = MessageHistoryReader.PREVIEW_LIMIT,
+    ): List<LocalMessage> = history.recentMessages(conversationId, limit)
 
     /**
-     * Backwards pagination: fetches the page of messages older than the oldest
-     * cached server row (`before` cursor) and appends it to the Room cache.
-     * The freshness watermark is untouched — history pages do not make the
-     * newest page fresher. Returns whether more history remains.
+     * Backwards pagination: appends the page of messages older than the oldest cached server row
+     * to the Room cache. Returns whether more history remains.
      */
-    suspend fun loadOlder(conversationId: String, pageSize: Int = OLDER_PAGE_SIZE): Boolean {
-        val cursor = messageDao.oldestSynced(conversationId) ?: return true
-        val response = when (
-            val result = rawApiCall { messageApi.list(conversationId, limit = pageSize, before = cursor.id) }
-        ) {
-            is NetworkResult.Success -> result.data
-            is NetworkResult.Failure -> throw MessageSyncException(result.error.message)
-        }
-        val page = response.data
-        if (!response.success || page == null) {
-            throw MessageSyncException(response.error ?: response.message ?: "Unknown error")
-        }
-        val now = clock.nowMillis()
-        database.withTransaction {
-            messageDao.upsertAll(page.map { it.toCachedEntity(now) })
-        }
-        // #5189 — grow the observe window by exactly what was just paged in,
-        // so these older rows (now cached) are not immediately hidden again
-        // by messagesStream's bound.
-        if (page.isNotEmpty()) {
-            val window = historyWindow(conversationId)
-            window.value += page.size
-        }
-        return response.pagination?.hasMore ?: (page.size >= pageSize)
-    }
+    suspend fun loadOlder(
+        conversationId: String,
+        pageSize: Int = MessageHistoryReader.OLDER_PAGE_SIZE,
+    ): Boolean = history.loadOlder(conversationId, pageSize)
 
     /**
-     * Optimistic send (ARCHITECTURE.md §5): the message appears instantly as a
-     * `SENDING` bubble backed by Room, and a `SEND_MESSAGE` mutation is queued
-     * on the conversation's FIFO outbox lane. Returns the bubble's id.
-     *
-     * **Cet identifiant est un `cid_`, jamais un `cmid_`** (#4624). Il porte
-     * QUATRE roles, et ils ne sont pas separables : id de la ligne Room, corps
-     * `clientMessageId` envoye au gateway, cle de la ligne d'outbox (que
-     * `reconcileSent` reinjecte dans `deleteByIds`) et — le role qui les scelle
-     * — identifiant LOCAL par lequel `MessageCacheSource.persist` purge la
-     * bulle optimiste, en lisant le `clientMessageId` que le SERVEUR renvoie.
-     * Les quatre partagent donc une valeur, et le serveur impose son format :
-     * `^cid_<uuid v4 minuscule>` aux trois portes (REST, socket, lien
-     * anonyme). `OutboxIds.cmid()` produisait un prefixe que les trois
-     * rejetaient en 400 — aucun message ne partait d'Android.
-     *
-     * Le `cmid` reste la cle des mutations qui ne sont PAS des messages (amis,
-     * preferences, televersements de media) : il ne voyage pas sur ce fil-ci.
+     * Optimistic send: the message appears instantly as a `SENDING` bubble and a `SEND_MESSAGE`
+     * mutation is queued on the conversation's FIFO outbox lane. Returns the bubble's `cid_`
+     * id (never a `cmid_`, #4624 — see [MessageSendCoordinator.sendOptimistic]).
      */
     suspend fun sendOptimistic(
         conversationId: String,
@@ -168,184 +104,59 @@ class MessageRepository @Inject constructor(
         messageType: String = "text",
         attachmentUploadCmids: List<String> = emptyList(),
         attachments: List<ApiMessageAttachment> = emptyList(),
-    ): String {
-        val cid = OutboxIds.cid()
-        val now = clock.nowMillis()
-        val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
-        // A queued send references each prerequisite upload by its cmid until the
-        // drainer grafts the real gateway id in (MessageMediaWriteBack); an empty
-        // list keeps a text-only send exactly as before (null attachmentIds).
-        val placeholderIds = attachmentUploadCmids.filter { it.isNotBlank() }.distinct()
-        val optimistic = ApiMessage(
-            id = cid,
-            conversationId = conversationId,
-            senderId = sender.id,
-            content = content,
-            messageType = messageType,
-            originalLanguage = originalLanguage,
-            replyToId = replyToId,
-            storyReplyToId = storyReplyToId,
-            createdAt = Instant.ofEpochMilli(now).toString(),
-            sender = ApiMessageSender(
-                userId = sender.id,
-                displayName = sender.displayName,
-                username = sender.username,
-                avatar = sender.avatar,
-            ),
-            clientMessageId = cid,
-            attachments = attachments,
-            forwardedFromId = forwardedFromId,
-            forwardedFromConversationId = forwardedFromConversationId,
-            effectFlags = wire.effectFlags,
-            isBlurred = wire.isBlurred,
-            isViewOnce = wire.isViewOnce,
-            expiresAt = wire.expiresAt,
-        )
-        val request = SendMessageRequest(
-            content = content,
-            originalLanguage = originalLanguage,
-            messageType = messageType,
-            replyToId = replyToId,
-            storyReplyToId = storyReplyToId,
-            clientMessageId = cid,
-            attachmentIds = placeholderIds.ifEmpty { null },
-            forwardedFromId = forwardedFromId,
-            forwardedFromConversationId = forwardedFromConversationId,
-            effectFlags = wire.effectFlags,
-            isBlurred = wire.isBlurred,
-            isViewOnce = wire.isViewOnce,
-            ephemeralDuration = wire.ephemeralDuration,
-            expiresAt = wire.expiresAt,
-            maxViewOnceCount = wire.maxViewOnceCount,
-        )
-        database.withTransaction {
-            messageDao.upsertAll(listOf(optimistic.toLocalEntity(now, LocalSendState.SENDING)))
-        }
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = OutboxKind.SEND_MESSAGE,
-                lane = OutboxLanes.forMessage(conversationId),
-                targetId = conversationId,
-                payload = MeeshyApi.json.encodeToString(request),
-                dependsOn = placeholderIds.toSet(),
-                cmid = cid,
-            ),
-        )
-        return cid
-    }
+    ): String = sends.sendOptimistic(
+        conversationId = conversationId,
+        content = content,
+        originalLanguage = originalLanguage,
+        sender = sender,
+        replyToId = replyToId,
+        storyReplyToId = storyReplyToId,
+        forwardedFromId = forwardedFromId,
+        forwardedFromConversationId = forwardedFromConversationId,
+        effects = effects,
+        messageType = messageType,
+        attachmentUploadCmids = attachmentUploadCmids,
+        attachments = attachments,
+    )
 
     /**
      * Server ACK for an optimistic send: atomically replaces the local `cmid`
      * row with the authoritative server message — no flicker, no duplicate.
      */
-    suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) {
-        val now = clock.nowMillis()
-        database.withTransaction {
-            messageDao.deleteByIds(listOf(cmid))
-            messageDao.upsertAll(
-                listOf(
-                    MessageEntity(
-                        id = serverMessage.id,
-                        conversationId = serverMessage.conversationId,
-                        seq = null,
-                        payload = MeeshyApi.json.encodeToString(serverMessage),
-                        createdAt = isoToEpochMillis(serverMessage.createdAt),
-                        cachedAt = now,
-                    ),
-                ),
-            )
-        }
-    }
+    suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) =
+        sends.reconcileSent(cmid, serverMessage)
 
     /** The outbox exhausted its retries — surface the bubble as retryable. */
-    suspend fun markSendFailed(cmid: String) {
-        messageDao.updateSendState(cmid, LocalSendState.FAILED.name)
-    }
+    suspend fun markSendFailed(cmid: String) = sends.markSendFailed(cmid)
+
+    /** User-initiated retry of a failed bubble: back to `SENDING`, its outbox row revived. */
+    suspend fun retrySend(cmid: String) = sends.retrySend(cmid)
 
     /**
-     * User-initiated retry of a failed bubble: flips it back to `SENDING` and
-     * revives its outbox row (or re-enqueues from the cached payload when the
-     * row is gone).
+     * Optimistic reaction toggle on a server-acked message: the cached `reactionSummary` moves
+     * instantly and an `ADD_REACTION`/`REMOVE_REACTION` mutation is queued. Returns whether the
+     * toggle was applied.
      */
-    suspend fun retrySend(cmid: String) {
-        val row = messageDao.find(cmid) ?: return
-        messageDao.updateSendState(cmid, LocalSendState.SENDING.name)
-        if (outboxRepository.retry(cmid)) return
-        val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = OutboxKind.SEND_MESSAGE,
-                lane = OutboxLanes.forMessage(message.conversationId),
-                targetId = message.conversationId,
-                payload = MeeshyApi.json.encodeToString(
-                    SendMessageRequest(
-                        content = message.content,
-                        originalLanguage = message.originalLanguage
-                            ?: LanguageResolver.FALLBACK_LANGUAGE,
-                        replyToId = message.replyToId,
-                        storyReplyToId = message.storyReplyToId,
-                        clientMessageId = cmid,
-                        forwardedFromId = message.forwardedFromId,
-                        forwardedFromConversationId = message.forwardedFromConversationId,
-                        effectFlags = message.effectFlags,
-                        isBlurred = message.isBlurred,
-                        isViewOnce = message.isViewOnce,
-                        expiresAt = message.expiresAt,
-                    ),
-                ),
-                cmid = cmid,
-            ),
-        )
-    }
+    suspend fun toggleReactionOptimistic(messageId: String, emoji: String, isAdding: Boolean): Boolean =
+        mutations.toggleReactionOptimistic(messageId, emoji, isAdding)
 
-    /**
-     * Optimistic reaction toggle: the cached `reactionSummary` moves instantly
-     * and an `ADD_REACTION`/`REMOVE_REACTION` mutation is queued on the shared
-     * reaction lane (a quick add+remove annihilates in the coalescer). Only
-     * server-acked messages can be reacted to — the gateway does not know an
-     * optimistic `cmid` yet. Returns whether the toggle was applied.
-     */
-    suspend fun toggleReactionOptimistic(messageId: String, emoji: String, isAdding: Boolean): Boolean {
-        updateCachedMessage(messageId, requireSynced = true) { message ->
-            message.copy(reactionSummary = message.reactionSummary.shifted(emoji, if (isAdding) 1 else -1))
-        } ?: return false
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = if (isAdding) OutboxKind.ADD_REACTION else OutboxKind.REMOVE_REACTION,
-                lane = OutboxLanes.REACTION,
-                targetId = messageId,
-                payload = MeeshyApi.json.encodeToString(ReactionPayload(emoji)),
-            ),
-        )
-        return true
-    }
+    /** Applies a `message:edited` frame (the full server message) to the cached row. */
+    suspend fun applyServerEdit(message: ApiMessage): Boolean = mutations.applyServerEdit(message)
 
     /** Applies a socket-driven reaction delta to the cache — no outbox involved. */
-    suspend fun applyReactionDelta(messageId: String, emoji: String, delta: Int) {
-        updateCachedMessage(messageId, requireSynced = false) { message ->
-            message.copy(reactionSummary = message.reactionSummary.shifted(emoji, delta))
-        }
-    }
+    suspend fun applyReactionDelta(messageId: String, emoji: String, delta: Int) =
+        mutations.applyReactionDelta(messageId, emoji, delta)
 
     /**
-     * Applies a `message:translation` socket update to the
-     * cache — the translated content is upserted into the message's translations so
-     * the Prisme renders it live (progressive translation). No outbox: this is
-     * inbound server truth, never a local mutation. A no-op merge (blank, duplicate,
-     * or deleted target) leaves the cached row untouched.
+     * Applies a `message:translation` socket update to the cache so the Prisme renders it live.
+     * A no-op merge leaves the cached row untouched.
      */
-    suspend fun applyTranslation(messageId: String, targetLanguage: String, translatedContent: String) {
-        updateCachedMessage(messageId, requireSynced = false) { message ->
-            MessageTranslationMerge.mergeTranslation(message, targetLanguage, translatedContent) ?: message
-        }
-    }
+    suspend fun applyTranslation(messageId: String, targetLanguage: String, translatedContent: String) =
+        enrichment.applyTranslation(messageId, targetLanguage, translatedContent)
 
     /**
-     * Applies a `transcription:ready` socket update to the cache — the transcription
-     * is upserted onto the matching audio attachment so the Prisme renders it live
-     * (progressive transcription). No outbox: this is inbound server truth, never a
-     * local mutation. A no-op merge (blank, duplicate, no target, or deleted) leaves
-     * the cached row untouched.
+     * Applies a `transcription:ready` socket update to the matching audio attachment of the
+     * cached message. A no-op merge leaves the cached row untouched.
      */
     suspend fun applyTranscription(
         messageId: String,
@@ -354,25 +165,11 @@ class MessageRepository @Inject constructor(
         language: String?,
         confidence: Double?,
         durationMs: Long?,
-    ) {
-        updateCachedMessage(messageId, requireSynced = false) { message ->
-            AttachmentTranscriptionMerge.mergeTranscription(
-                message,
-                attachmentId,
-                text,
-                language,
-                confidence,
-                durationMs,
-            ) ?: message
-        }
-    }
+    ) = enrichment.applyTranscription(messageId, attachmentId, text, language, confidence, durationMs)
 
     /**
-     * Applies an `audio:translation-ready` socket update to the cache — the cloned-voice
-     * translation is upserted onto the matching audio attachment so the open bubble can
-     * play the viewer's-language voice live (progressive voice translation). No outbox:
-     * this is inbound server truth, never a local mutation. A no-op merge (blank url,
-     * blank language, duplicate, no target, or deleted) leaves the cached row untouched.
+     * Applies an `audio:translation-ready` socket update (the cloned-voice translation) to the
+     * matching audio attachment of the cached message. A no-op merge leaves the row untouched.
      */
     suspend fun applyAudioTranslation(
         messageId: String,
@@ -386,154 +183,52 @@ class MessageRepository @Inject constructor(
         quality: Double?,
         voiceModelId: String?,
         ttsModel: String?,
-    ) {
-        updateCachedMessage(messageId, requireSynced = false) { message ->
-            AttachmentAudioTranslationMerge.mergeAudioTranslation(
-                message,
-                attachmentId,
-                language,
-                url,
-                transcription,
-                durationMs,
-                format,
-                cloned,
-                quality,
-                voiceModelId,
-                ttsModel,
-            ) ?: message
-        }
-    }
+    ) = enrichment.applyAudioTranslation(
+        messageId,
+        attachmentId,
+        language,
+        url,
+        transcription,
+        durationMs,
+        format,
+        cloned,
+        quality,
+        voiceModelId,
+        ttsModel,
+    )
 
     /**
-     * On-demand translation (Prisme, pull side): the viewer tapped a configured
-     * language the message has no content for yet. Blocking-translates the
-     * message's original text into [targetLanguage] and upserts the result into
-     * the cache via [MessageTranslationMerge] so the open bubble can switch to it
-     * — the same live re-render path as an inbound `message:translation`. No outbox:
-     * a translation is derived server truth, never a local mutation to replay.
-     *
-     * Returns `true` only when a non-blank translation was actually stored. Inert
-     * (`false`, nothing stored) when the message is unknown, deleted, has no source
-     * text, the target is blank, the network call fails, the translator returns a
-     * blank string, or the translation already matches what is cached (idempotent).
+     * On-demand translation (Prisme, pull side): translates the message's original text into
+     * [targetLanguage] and stores it in the cache. Returns `true` only when a non-blank
+     * translation was actually stored; inert (`false`) on any unknown, deleted, blank or failing
+     * case, and idempotent.
      */
-    suspend fun requestTranslation(messageId: String, targetLanguage: String): Boolean {
-        val target = targetLanguage.trim()
-        if (target.isEmpty()) return false
-        val message = cachedMessage(messageId) ?: return false
-        if (message.deletedAt != null) return false
-        val source = message.content
-        if (source.isBlank()) return false
-
-        val translated = when (
-            val result = apiCall {
-                translationApi.translate(
-                    TranslateRequest(
-                        text = source,
-                        sourceLanguage = message.originalLanguage?.trim().orEmpty(),
-                        targetLanguage = target,
-                    ),
-                )
-            }
-        ) {
-            is NetworkResult.Success -> result.data.translatedText
-            is NetworkResult.Failure -> return false
-        }
-        if (translated.isBlank()) return false
-
-        var stored = false
-        updateCachedMessage(messageId, requireSynced = false) { current ->
-            val merged = MessageTranslationMerge.mergeTranslation(current, target, translated)
-            if (merged != null) {
-                stored = true
-                merged
-            } else {
-                current
-            }
-        }
-        return stored
-    }
-
-    private suspend fun cachedMessage(messageId: String): ApiMessage? {
-        val row = messageDao.find(messageId) ?: return null
-        return MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
-    }
+    suspend fun requestTranslation(messageId: String, targetLanguage: String): Boolean =
+        enrichment.requestTranslation(messageId, targetLanguage)
 
     /**
-     * Optimistic edit of a server-acked message: the cached content flips
-     * instantly, stale translations are purged (the Prisme must never show a
-     * translation of the old text — the retranslation arrives over the socket),
-     * and an `EDIT_MESSAGE` mutation joins the conversation's FIFO lane.
+     * Optimistic edit of a server-acked message: the cached content flips instantly, stale
+     * translations are purged, and an `EDIT_MESSAGE` mutation joins the conversation's FIFO lane.
      */
-    suspend fun editOptimistic(messageId: String, content: String): Boolean {
-        val updated = updateCachedMessage(messageId, requireSynced = true) { message ->
-            message.copy(content = content, isEdited = true, translations = emptyList())
-        } ?: return false
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = OutboxKind.EDIT_MESSAGE,
-                lane = OutboxLanes.forMessage(updated.conversationId),
-                targetId = messageId,
-                payload = MeeshyApi.json.encodeToString(EditMessageRequest(content)),
-            ),
-        )
-        return true
-    }
+    suspend fun editOptimistic(messageId: String, content: String): Boolean =
+        mutations.editOptimistic(messageId, content)
 
     /**
-     * Optimistic delete: the cached message becomes a tombstone (content and
-     * translations wiped — retention is a security invariant, ARCHITECTURE.md
-     * §18) and a `DELETE_MESSAGE` mutation joins the conversation's FIFO lane.
+     * Optimistic delete: the cached message becomes a tombstone (content and translations wiped)
+     * and a `DELETE_MESSAGE` mutation joins the conversation's FIFO lane.
      */
-    suspend fun deleteOptimistic(messageId: String): Boolean {
-        val updated = updateCachedMessage(messageId, requireSynced = true) { message ->
-            message.copy(
-                content = "",
-                translations = emptyList(),
-                deletedAt = Instant.ofEpochMilli(clock.nowMillis()).toString(),
-            )
-        } ?: return false
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = OutboxKind.DELETE_MESSAGE,
-                lane = OutboxLanes.forMessage(updated.conversationId),
-                targetId = messageId,
-                payload = "{}",
-            ),
-        )
-        return true
-    }
+    suspend fun deleteOptimistic(messageId: String): Boolean = mutations.deleteOptimistic(messageId)
 
     /**
-     * Optimistic pin/unpin of a server-acked message: the cached `pinnedAt` flips
-     * instantly (set to now on pin, cleared on unpin — the pinned-banner reads it
-     * live) and a `PIN_MESSAGE`/`UNPIN_MESSAGE` mutation is queued on the shared
-     * pin lane (a quick pin+unpin of the same message annihilates in the
-     * coalescer). Only server-acked messages can be pinned — the gateway does not
-     * know an optimistic `cmid` yet — so an unsent bubble is refused (returns
-     * false). `pinnedBy` is left untouched optimistically; the authoritative
-     * `pinnedBy` arrives with the `message:pinned` socket refresh.
+     * Optimistic pin/unpin of a server-acked message: the cached `pinnedAt` flips instantly and a
+     * `PIN_MESSAGE`/`UNPIN_MESSAGE` mutation is queued on the shared pin lane.
      */
-    suspend fun setPinnedOptimistic(messageId: String, pin: Boolean): Boolean {
-        val updated = updateCachedMessage(messageId, requireSynced = true) { message ->
-            message.copy(pinnedAt = if (pin) Instant.ofEpochMilli(clock.nowMillis()).toString() else null)
-        } ?: return false
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = if (pin) OutboxKind.PIN_MESSAGE else OutboxKind.UNPIN_MESSAGE,
-                lane = OutboxLanes.PIN,
-                targetId = messageId,
-                payload = MeeshyApi.json.encodeToString(PinPayload(updated.conversationId)),
-            ),
-        )
-        return true
-    }
+    suspend fun setPinnedOptimistic(messageId: String, pin: Boolean): Boolean =
+        mutations.setPinnedOptimistic(messageId, pin)
 
     /**
-     * Applies a `read-status:updated` receipt to the conversation's cached
-     * messages. Mirrors iOS ConversationSyncEngine.applyReadReceipt: only own,
-     * server-acked messages at or before the frontier move, and only upward —
-     * the gateway summary is an authoritative recount, never a downgrade.
+     * Applies a `read-status:updated` receipt to the conversation's cached messages: only own,
+     * server-acked messages at or before the frontier move, and only upward.
      */
     suspend fun applyReadReceipt(
         conversationId: String,
@@ -541,94 +236,5 @@ class MessageRepository @Inject constructor(
         deliveredCount: Int,
         readCount: Int,
         frontierIso: String?,
-    ) {
-        val incomingRank = deliveryRank(deliveredCount, readCount, readByAllAt = null)
-        if (incomingRank == RANK_SENT) return
-        val frontier = frontierIso?.let(::isoToEpochMillis) ?: Long.MAX_VALUE
-        database.withTransaction {
-            val upgraded = messageDao.listForConversation(conversationId).mapNotNull { row ->
-                if (row.sendState != null || row.createdAt > frontier) return@mapNotNull null
-                val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
-                if (message.senderId != ownSenderId) return@mapNotNull null
-                if (deliveryRank(message.deliveredCount, message.readCount, message.readByAllAt) >= incomingRank) {
-                    return@mapNotNull null
-                }
-                row.copy(
-                    payload = MeeshyApi.json.encodeToString(
-                        message.copy(deliveredCount = deliveredCount, readCount = readCount),
-                    ),
-                )
-            }
-            if (upgraded.isNotEmpty()) messageDao.upsertAll(upgraded)
-        }
-    }
-
-    private fun deliveryRank(deliveredCount: Int, readCount: Int, readByAllAt: String?): Int = when {
-        readByAllAt != null || readCount > 0 -> RANK_READ
-        deliveredCount > 0 -> RANK_DELIVERED
-        else -> RANK_SENT
-    }
-
-    private suspend fun updateCachedMessage(
-        messageId: String,
-        requireSynced: Boolean,
-        transform: (ApiMessage) -> ApiMessage,
-    ): ApiMessage? = database.withTransaction {
-        val row = messageDao.find(messageId) ?: return@withTransaction null
-        if (requireSynced && row.sendState != null) return@withTransaction null
-        val current = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
-        val updated = transform(current)
-        // A transform that returns its input unchanged (an inert socket update, e.g.
-        // a duplicate translation) skips the redundant Room write + re-encode.
-        if (updated !== current) {
-            messageDao.upsertAll(listOf(row.copy(payload = MeeshyApi.json.encodeToString(updated))))
-        }
-        updated
-    }
-
-    private fun Map<String, Int>?.shifted(emoji: String, delta: Int): Map<String, Int>? {
-        val next = (this ?: emptyMap()) + (emoji to ((this?.get(emoji) ?: 0) + delta))
-        return next.filterValues { it > 0 }.ifEmpty { null }
-    }
-
-    private fun ApiMessage.toLocalEntity(now: Long, state: LocalSendState): MessageEntity =
-        toCachedEntity(now).copy(sendState = state.name)
-
-    private fun ApiMessage.toCachedEntity(now: Long): MessageEntity =
-        MessageEntity(
-            id = id,
-            conversationId = conversationId,
-            seq = null,
-            payload = MeeshyApi.json.encodeToString(this),
-            createdAt = isoToEpochMillis(createdAt),
-            cachedAt = now,
-        )
-
-    private companion object {
-        const val OLDER_PAGE_SIZE = 30
-
-        /**
-         * #5189 — the nominal observe window's starting size (see
-         * [historyWindowSizes]'s doc-comment): comfortably above the
-         * server's own default recent-window fetch (20 rows) so a fresh
-         * sync is never trimmed on first render, and matches
-         * [OLDER_PAGE_SIZE] — the one "screen's worth" size this client
-         * already reasons in.
-         */
-        const val INITIAL_HISTORY_WINDOW = OLDER_PAGE_SIZE
-        const val PREVIEW_LIMIT = 5
-        const val RANK_SENT = 0
-        const val RANK_DELIVERED = 1
-        const val RANK_READ = 2
-    }
-
-    private fun cacheSource(conversationId: String) = MessageCacheSource(
-        conversationId = conversationId,
-        database = database,
-        messageDao = messageDao,
-        syncMetaDao = syncMetaDao,
-        messageApi = messageApi,
-        clock = clock,
-        historyWindow = historyWindow(conversationId),
-    )
+    ) = receipts.applyReadReceipt(conversationId, ownSenderId, deliveredCount, readCount, frontierIso)
 }

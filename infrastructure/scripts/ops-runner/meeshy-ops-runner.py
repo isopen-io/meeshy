@@ -6,19 +6,28 @@ operation depuis l'administration fait DEPOSER par la passerelle un fichier
 <uuid>.json (moins d'1 Ko) dans /opt/meeshy/<env>/ops/requests. Une unite
 systemd .path reveille ce runner, qui :
 
-  - n'accepte qu'un fichier ORDINAIRE (lstat : aucun lien suivi), de 1024 octets
-    au plus, en JSON strict, a la forme exacte du contrat (v = 1, uuid, action de
-    la liste blanche, environnement = celui de l'unite) ;
+  - n'accepte qu'un fichier ORDINAIRE (lstat, puis open en O_NONBLOCK|O_NOFOLLOW et
+    fstat : une FIFO glissee entre les deux ne bloque jamais le runner, #10459), de
+    1024 octets au plus, en JSON strict, a la forme exacte du contrat (v = 1, uuid,
+    action de la liste blanche, environnement = celui de l'unite), datee de moins de
+    2 h et jamais du futur (un runner reveille tard n'execute pas un geste que
+    personne ne tient plus) ;
   - deplace la demande vers done/ ou rejected/ AVANT toute execution, et ne
     recopie jamais le contenu d'une demande refusee ;
   - applique les delais (sauvegarde 6 h, purge 1 h), memorises dans l'etat ;
-  - n'execute que deux gestes fixes : la sauvegarde de l'environnement (son
-    unite systemd) et la purge des images Docker inutilisees (jamais un volume,
+  - n'execute que deux gestes fixes : la sauvegarde de l'environnement (l'instance
+    @on-demand de son unite systemd, qui a sa propre rotation et ne fait jamais
+    sortir une sauvegarde nocturne, #11450) et la purge des images Docker inutilisees (jamais un volume,
     jamais `system prune`) ; la purge vaut pour tout l'hote, production comprise :
     elle prend le verrou de la promotion de la production, pour ne jamais
     effacer l'image qu'une promotion vient de tirer et n'a pas encore demarree ;
-  - publie l'etat dans state/ops.json et l'usage Docker dans state/docker.json,
-    seuls fichiers montes (en lecture seule) dans la passerelle.
+  - publie l'etat dans state/ops.json, l'usage Docker dans state/docker.json et
+    l'etat des conteneurs de SON environnement dans state/containers.json (#11441),
+    seuls fichiers montes (en lecture seule) dans la passerelle. Les conteneurs sont
+    ceux du projet compose dont le dossier est /opt/meeshy/<env> : staging ne voit
+    jamais la production. Rien n'en est publie hors du contrat (nom, service,
+    image et sa date, etat, sante, demarrage, consommation, reseaux, ports) : ni
+    variable d'environnement, ni label, ni commande, ni montage.
 
 Execute par `python3 -I` (aucun module du dossier courant n'est importe).
 
@@ -35,6 +44,7 @@ import re
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 ACTIONS = ("backup", "image-prune")
@@ -44,6 +54,12 @@ MAX_REQUEST_BYTES = 1024
 IN_PROGRESS_HORIZON_SECONDS = 2 * 3600
 STALE_TEMP_SECONDS = 60
 KEEP_ARCHIVED_SECONDS = 30 * 24 * 3600
+# Une demande valide mais datee hors de cette fenetre est refusee et nommee (#10459) :
+# la passerelle n'a aucun moyen de revérifier le rang d'un demandeur a l'execution,
+# donc le runner borne le DELAI entre le geste et son execution. Le meme horizon que
+# la passerelle (IN_PROGRESS_HORIZON) : au-dela, elle tient deja la demande pour abandonnee.
+REQUEST_MAX_AGE_SECONDS = IN_PROGRESS_HORIZON_SECONDS
+REQUEST_MAX_FUTURE_SECONDS = 5 * 60
 REQUEST_KEYS = {"v", "id", "action", "environment", "requestedBy", "requestedAt"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$")
@@ -52,6 +68,12 @@ UNITS = {"B": 1, "kB": 1000, "KB": 1000, "MB": 1000**2, "GB": 1000**3, "TB": 100
          "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
 
 # Les seuls gestes que le runner sait faire. Rien d'autre ne s'execute.
+# Jamais `container prune`, `system prune`, `rm` ni `rmi` ici (#11452) : sur
+# l'hote partage, l'epingle de retour arriere de la production EST un conteneur
+# ARRETE (`meeshy-rollback-pin-<service>`, pose par meeshy-promote-production.sh)
+# qui retient l'image N-1 hors de `image prune -a`. Un nettoyage lance par un
+# ADMIN de staging ne doit jamais pouvoir toucher cette epingle. Le temoin
+# `meeshy-ops-runner.test.mjs` tient cette liste.
 PRUNE_COMMANDS = (
     ("docker", "image", "prune", "-f"),
     ("docker", "image", "prune", "-af", "--filter", "until=168h"),
@@ -89,19 +111,30 @@ class Paths:
         self.rejected = os.path.join(base, "rejected")
         self.ops_file = os.path.join(self.state, "ops.json")
         self.docker_file = os.path.join(self.state, "docker.json")
-        self.backup_unit = os.environ.get("OPS_BACKUP_UNIT") or "meeshy-%s-backup.service" % env
+        self.containers_file = os.path.join(self.state, "containers.json")
+        self.compose_dir = os.environ.get("OPS_COMPOSE_DIR") or "/opt/meeshy/%s" % env
+        self.backup_unit = os.environ.get("OPS_BACKUP_UNIT") or "meeshy-%s-backup@on-demand.service" % env
         self.backup_status = os.environ.get("OPS_BACKUP_STATUS_FILE") or "/opt/meeshy/%s/backup-status/etat.json" % env
 
 
 def write_json_atomic(path, payload):
     directory = os.path.dirname(path)
     os.makedirs(directory, mode=0o755, exist_ok=True)
-    temporary = os.path.join(directory, ".%s.tmp" % os.path.basename(path))
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, separators=(",", ":"))
-        handle.write("\n")
-    os.chmod(temporary, 0o644)
-    os.replace(temporary, path)
+    # Un temporaire UNIQUE : deux passages concurrents (timer et demande) n'ecrivent
+    # jamais dans le meme fichier, et un echec ne laisse pas de demi-publication.
+    descriptor, temporary = tempfile.mkstemp(prefix=".%s." % os.path.basename(path), suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
+            handle.write("\n")
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
 
 
 def empty_state():
@@ -183,6 +216,50 @@ def validate(raw, env, name):
     return request, None
 
 
+def timeliness(request, moment):
+    """Rend None, ou le code fixe d'une demande hors fenetre (trop vieille, ou du futur)."""
+    try:
+        age = (moment - parse_iso(request["requestedAt"])).total_seconds()
+    except ValueError:
+        return "invalid-date"
+    if age > REQUEST_MAX_AGE_SECONDS:
+        return "stale-request"
+    if age < -REQUEST_MAX_FUTURE_SECONDS:
+        return "future-request"
+    return None
+
+
+def read_request(path):
+    """Lit une demande sans jamais bloquer : rend (octets, None) ou (None, code).
+
+    `lstat` a deja dit « fichier ordinaire », mais un processus qui ecrit dans le
+    dossier (la passerelle, uid 1001) peut l'avoir remplace par une FIFO entre ce
+    lstat et l'ouverture : un open bloquant y attendrait un ecrivain jusqu'au
+    TimeoutStartSec de l'unite (#10459 point 2). O_NONBLOCK ouvre une FIFO sans
+    attendre, O_NOFOLLOW refuse un lien, O_NOCTTY un terminal ; et c'est le fstat du
+    descripteur OUVERT — pas le lstat du chemin — qui decide.
+    """
+    flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NOCTTY", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return None, "unreadable"
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            return None, "not-regular-file"
+        if info.st_size > MAX_REQUEST_BYTES:
+            return None, "too-large"
+        raw = os.read(descriptor, MAX_REQUEST_BYTES + 1)
+    except OSError:
+        return None, "unreadable"
+    finally:
+        os.close(descriptor)
+    if len(raw) > MAX_REQUEST_BYTES:
+        return None, "too-large"
+    return raw, None
+
+
 def parse_size(text):
     match = SIZE_RE.match(text or "")
     if not match:
@@ -239,13 +316,205 @@ def docker_usage():
     }
 
 
+# Les conteneurs de l'environnement (#11441). Le contrat est celui de
+# packages/shared/types/admin-ops-containers.ts : chaque champ est NORMALISE ici,
+# car la passerelle rejette le fichier entier au premier champ hors schema.
+CONTAINERS_MAX = 64
+# Sous le plafond de lecture de la passerelle (256 Ko, OPS_CONTAINERS_FILE_MAX_BYTES).
+CONTAINERS_FILE_BUDGET = 240 * 1024
+COMPOSE_WORKING_DIR = "com.docker.compose.project.working_dir"
+CONTAINER_STATES = ("created", "running", "paused", "restarting", "removing", "exited", "dead")
+CONTAINER_HEALTHS = ("healthy", "unhealthy", "starting")
+DOCKER_INSTANT_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
+HEX_RE = re.compile(r"^[0-9a-f]{12,}$")
+PORT_RE = re.compile(r"^(\d{1,5})/(tcp|udp|sctp)$")
+
+
+def docker_instant(text):
+    if not isinstance(text, str) or text.startswith("0001-"):
+        return None
+    match = DOCKER_INSTANT_RE.match(text)
+    if not match:
+        return None
+    millis = int(((match.group(2) or ".0")[1:] + "000")[:3])
+    offset = "+00:00" if match.group(3) == "Z" else match.group(3)
+    moment = datetime.datetime.fromisoformat(match.group(1) + offset)
+    return iso(moment.replace(microsecond=millis * 1000))
+
+
+def short_id(digest):
+    if not isinstance(digest, str):
+        return None
+    hexa = digest.split(":", 1)[-1]
+    return hexa[:12] if HEX_RE.match(hexa) else None
+
+
+def bounded(text, limit):
+    return text[:limit] if isinstance(text, str) else ""
+
+
+def whole(value):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, number)
+
+
+def pair(text):
+    left, _, right = (text or "").partition("/")
+    return parse_size(left.strip()), parse_size(right.strip())
+
+
+def container_stats(row, memory_limit):
+    try:
+        cpu = max(0.0, float(str(row.get("CPUPerc", "0")).strip().rstrip("%") or 0))
+    except ValueError:
+        cpu = 0.0
+    used, _ = pair(row.get("MemUsage"))
+    rx, tx = pair(row.get("NetIO"))
+    read, write = pair(row.get("BlockIO"))
+    return {
+        "cpuPercent": round(cpu, 2),
+        "memoryUsedBytes": used,
+        "memoryLimitBytes": memory_limit,
+        "netRxBytes": rx,
+        "netTxBytes": tx,
+        "blockReadBytes": read,
+        "blockWriteBytes": write,
+        "pids": whole(row.get("PIDs")),
+    }
+
+
+def container_ports(raw):
+    ports = []
+    seen = set()
+    for key in sorted((raw or {}).keys()):
+        match = PORT_RE.match(key or "")
+        if not match or not 1 <= int(match.group(1)) <= 65535:
+            continue
+        port, protocol = int(match.group(1)), match.group(2)
+        bindings = raw.get(key) or [None]
+        for binding in bindings:
+            host_port = whole((binding or {}).get("HostPort")) or None
+            if host_port is not None and host_port > 65535:
+                host_port = None
+            identity = (port, protocol, host_port)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            host_ip = bounded((binding or {}).get("HostIp"), 64) or None
+            ports.append({"containerPort": port, "protocol": protocol, "hostIp": host_ip if host_port else None, "hostPort": host_port})
+    ports.sort(key=lambda entry: (entry["hostPort"] is not None, entry["containerPort"]))
+    return ports[:32]
+
+
+def container_of(detail, image_dates, stats_by_id):
+    state = detail.get("State") or {}
+    config = detail.get("Config") or {}
+    labels = config.get("Labels") or {}
+    status = state.get("Status")
+    health = (state.get("Health") or {}).get("Status")
+    memory = whole((detail.get("HostConfig") or {}).get("Memory"))
+    running = status == "running"
+    networks = detail.get("NetworkSettings") or {}
+    name = bounded((detail.get("Name") or "").lstrip("/"), 128) or short_id(detail.get("Id")) or "?"
+    exit_code = state.get("ExitCode")
+    stats = stats_by_id.get(detail.get("Id")) if running else None
+    return {
+        "name": name,
+        "service": bounded(labels.get("com.docker.compose.service"), 128) or None,
+        "image": bounded(config.get("Image"), 256) or short_id(detail.get("Image")) or "?",
+        "imageId": short_id(detail.get("Image")),
+        "imageCreatedAt": image_dates.get(detail.get("Image")),
+        "state": status if status in CONTAINER_STATES else "dead",
+        "health": health if health in CONTAINER_HEALTHS else "none",
+        "startedAt": docker_instant(state.get("StartedAt")),
+        "finishedAt": None if running else docker_instant(state.get("FinishedAt")),
+        "restartCount": whole(detail.get("RestartCount")),
+        "exitCode": exit_code if isinstance(exit_code, int) and not isinstance(exit_code, bool) else None,
+        "stats": container_stats(stats, memory or None) if stats is not None else None,
+        "networks": [
+            {"name": bounded(network, 128), "ipAddress": bounded((settings or {}).get("IPAddress"), 64)}
+            for network, settings in sorted((networks.get("Networks") or {}).items())
+            if bounded(network, 128)
+        ][:16],
+        "ports": container_ports(networks.get("Ports")),
+    }
+
+
+def docker_json(args, check=True):
+    result = subprocess.run(["docker"] + args, capture_output=True, text=True, timeout=120, check=check)
+    return result.stdout
+
+
+def stats_rows(output):
+    rows = {}
+    for line in output.splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict) and isinstance(row.get("ID"), str):
+            rows[row["ID"]] = row
+    return rows
+
+
+def within_budget(containers):
+    # Un fichier hors plafond serait rejete EN ENTIER par la passerelle : on retire
+    # plutot les derniers conteneurs, et on le dit.
+    kept = list(containers)
+    while kept and len(json.dumps({"measuredAt": "", "containers": kept}, separators=(",", ":"))) > CONTAINERS_FILE_BUDGET:
+        kept.pop()
+    if len(kept) < len(containers):
+        log("containers: %d conteneur(s) hors budget, non publies" % (len(containers) - len(kept)))
+    return kept
+
+
+def containers_usage(paths):
+    ids = [line.strip() for line in docker_json(
+        ["ps", "-a", "-q", "--no-trunc", "--filter", "label=%s=%s" % (COMPOSE_WORKING_DIR, paths.compose_dir)],
+    ).splitlines() if line.strip()][:CONTAINERS_MAX]
+    if not ids:
+        return {"measuredAt": iso(now_utc()), "containers": []}
+    # Un conteneur retire entre `ps` et `inspect` fait sortir inspect en erreur, mais il imprime les autres.
+    result = subprocess.run(["docker", "inspect"] + ids, capture_output=True, text=True, timeout=120)
+    if result.returncode != 0 and not result.stdout.strip():
+        # Rien d'inspecte : une collecte ratee, pas une liste vide — la derniere publication reste.
+        raise subprocess.SubprocessError("inspect")
+    inspected = json.loads(result.stdout or "[]")
+    # Le filtre de `ps` est revérifié sur CHAQUE conteneur : rien d'un autre environnement ne se publie.
+    details = [
+        d for d in inspected
+        if isinstance(d, dict) and ((d.get("Config") or {}).get("Labels") or {}).get(COMPOSE_WORKING_DIR) == paths.compose_dir
+    ]
+    image_ids = sorted({d.get("Image") for d in details if isinstance(d.get("Image"), str)})
+    # Une image retiree fait sortir `image inspect` en erreur, mais il imprime les autres.
+    images = json.loads(docker_json(["image", "inspect"] + image_ids, check=False) or "[]") if image_ids else []
+    image_dates = {image.get("Id"): docker_instant(image.get("Created")) for image in images if isinstance(image, dict)}
+    running = [d.get("Id") for d in details if (d.get("State") or {}).get("Status") == "running"]
+    stats_by_id = stats_rows(docker_json(["stats", "--no-stream", "--no-trunc", "--format", "{{json .}}"] + running, check=False)) if running else {}
+    containers = [container_of(detail, image_dates, stats_by_id) for detail in details]
+    containers.sort(key=lambda c: (c["service"] or c["name"], c["name"]))
+    return {"measuredAt": iso(now_utc()), "containers": within_budget(containers)}
+
+
 def publish_docker_usage(paths):
+    status = 0
+    # Les deux publications sont independantes : un echec de l'une ne retient pas
+    # l'autre, et une collecte ratee garde la derniere publication (rien n'est ecrit).
+    # Les conteneurs d'abord : `system df` peut durer, leur mesure reste fraiche.
+    try:
+        write_json_atomic(paths.containers_file, containers_usage(paths))
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        log("containers: echec (%s)" % type(error).__name__)
+        status = 1
     try:
         write_json_atomic(paths.docker_file, docker_usage())
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         log("docker-df: echec (%s)" % type(error).__name__)
-        return 1
-    return 0
+        status = 1
+    return status
 
 
 def run_backup(paths, started):
@@ -359,16 +628,15 @@ def handle_request(paths, env, name, state):
         archive(path, paths.rejected, rejected_name)
         log("demande refusee : too-large")
         return
-    try:
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-        with os.fdopen(descriptor, "rb") as handle:
-            raw = handle.read(MAX_REQUEST_BYTES + 1)
-    except OSError:
+    raw, refusal = read_request(path)
+    if refusal:
         archive(path, paths.rejected, rejected_name)
-        log("demande refusee : unreadable")
+        log("demande refusee : %s" % refusal)
         return
 
     request, refusal = validate(raw, env, name)
+    if refusal is None:
+        refusal = timeliness(request, now_utc())
     if refusal:
         archive(path, paths.rejected, rejected_name)
         log("demande refusee : %s" % refusal)

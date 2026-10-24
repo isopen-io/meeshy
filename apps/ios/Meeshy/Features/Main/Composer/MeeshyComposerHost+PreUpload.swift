@@ -23,9 +23,6 @@ extension MeeshyComposerHost {
     /// connaît déjà, et le balayage ne voit plus un objet dont l'adoption a
     /// remplacé l'URL locale par celle du serveur.
     func startPendingPreUploads() {
-        // Une pièce de MESSAGE retouchée ne monte pas comme média de post — et
-        // l'adoption de l'URL distante se lirait comme une retouche (#9131).
-        guard !returnsToConversation else { return }
         // Un format publié par le document re-téléverse lui-même : rien ne part tôt pour lui.
         guard ComposerPreUploadPolicy.pays(for: selectedFormat) else { return }
         preUploads.configure(makePreUploader())
@@ -115,7 +112,7 @@ extension MeeshyComposerHost {
               let jeton = APIClient.shared.authToken else {
             return ComposerInertPreUploader()
         }
-        return ComposerTusPreUploader(baseURL: base, token: jeton)
+        return ComposerCompressingPreUploader.story(baseURL: base, token: jeton)
     }
 }
 

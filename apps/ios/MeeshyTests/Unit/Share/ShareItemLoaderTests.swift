@@ -1,4 +1,5 @@
 import XCTest
+@testable import Meeshy
 import UniformTypeIdentifiers
 
 /// Le chargement RÉEL, à travers de vrais `NSItemProvider` : ce que reçoit
@@ -30,11 +31,15 @@ final class ShareItemLoaderTests: XCTestCase {
         return provider
     }
 
-    private func load(_ providers: [NSItemProvider], into root: URL) async -> ShareGathered {
+    private func load(
+        _ providers: [NSItemProvider],
+        into root: URL,
+        budget: ShareByteBudget = ShareByteBudget(limit: .max)
+    ) async -> ShareGathered {
         await ShareItemLoader.start(providers, shareId: "share-1", prepareMediaRoot: { shareId in
             try? FileManager.default.createDirectory(at: root.appendingPathComponent(shareId), withIntermediateDirectories: true)
             return root
-        }).gather()
+        }, budget: budget).gather()
     }
 
     func test_gather_googlePhotosPhotoAndVideo_copiesBothMediaAndSendsNoPath() async throws {
@@ -59,6 +64,27 @@ final class ShareItemLoaderTests: XCTestCase {
         )
     }
 
+    // MARK: - Plafond d'octets cumulé (#11429)
+
+    /// Trois photos de 4 Kio sous un plafond de 10 Kio : deux sont copiées,
+    /// la troisième ne l'est pas, et l'écran le dit.
+    func test_gather_beyondTheCumulativeBudget_copiesWhatFits_andTheScreenSaysWhatWasLeft() async throws {
+        let source = try makeDirectory()
+        let root = try makeDirectory()
+        let providers = try (0..<3).map { index in
+            googlePhotosProvider(file: try makeFile(named: "IMG_\(index).jpg", bytes: 4096, in: source), typeIdentifier: UTType.jpeg.identifier)
+        }
+
+        let gathered = await load(providers, into: root, budget: ShareByteBudget(limit: 10 * 1024))
+
+        XCTAssertEqual(gathered.media.count, 2)
+        XCTAssertEqual(gathered.failures.count, 1)
+        XCTAssertTrue(gathered.failures.allSatisfy(\.isOverBudget))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("share-1").path).count, 2)
+        let incoming = ShareExtensionIncoming.make(text: nil, media: gathered.media, mediaRoot: root, failures: gathered.failures)
+        XCTAssertEqual(incoming.shortfalls, [.overBudget(uncopied: 1)])
+    }
+
     // MARK: - Député abusé (revue de sécurité #11134)
 
     /// Une app hôte peut annoncer une URL de fichier qui pointe DANS le
@@ -78,6 +104,32 @@ final class ShareItemLoaderTests: XCTestCase {
         XCTAssertEqual(gathered.media, [])
         XCTAssertEqual(gathered.failure, .refusedSource)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [])
+        let incoming = ShareExtensionIncoming.make(text: gathered.content, media: gathered.media, mediaRoot: root, failures: gathered.failures)
+        XCTAssertEqual(incoming.shortfalls, [.refusedSource], "l'écran dit pourquoi rien ne part (#11430)")
+    }
+
+    // MARK: - Le lien avant sa vignette (#11430)
+
+    /// La forme que remet Safari : le lien de la page et, dans le MÊME
+    /// fournisseur, sa vignette. C'est le lien qui part ; la vignette n'est
+    /// ni copiée ni jointe.
+    func test_gather_aWebLinkWithItsThumbnail_sendsTheLink_andCopiesNothing() async throws {
+        let source = try makeDirectory()
+        let root = try makeDirectory()
+        let thumbnail = try makeFile(named: "apercu.png", bytes: 512, in: source)
+        let provider = NSItemProvider()
+        provider.registerObject(try XCTUnwrap(URL(string: "https://meeshy.me/article")) as NSURL, visibility: .all)
+        provider.registerFileRepresentation(forTypeIdentifier: UTType.png.identifier, fileOptions: [], visibility: .all) { completion in
+            completion(thumbnail, false, nil)
+            return nil
+        }
+
+        let gathered = await load([provider], into: root)
+
+        XCTAssertEqual(gathered.content, "https://meeshy.me/article")
+        XCTAssertEqual(gathered.media, [])
+        XCTAssertEqual(gathered.failures, [])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [], "la vignette n'est pas copiée")
     }
 
     func test_gather_aLinkCarryingAFileURL_isRefused() async throws {
@@ -103,7 +155,7 @@ final class ShareItemLoaderTests: XCTestCase {
         let link = elsewhere.appendingPathComponent("photo.jpg")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: secret)
         let traversal = elsewhere.appendingPathComponent("../\(sealed.lastPathComponent)/session.json")
-        let policy = ShareSourcePolicy(sealed: [sealed], privateRoots: [], exemptions: [])
+        let policy = ShareSourcePolicy(sealed: [sealed], privateRoots: [], systemCopyRoots: [])
 
         XCTAssertFalse(policy.admits(secret))
         XCTAssertFalse(policy.admits(link), "un lien symbolique se juge sur sa cible")
@@ -111,19 +163,50 @@ final class ShareItemLoaderTests: XCTestCase {
         XCTAssertTrue(policy.admits(try makeFile(named: "ok.jpg", bytes: 8, in: elsewhere)))
     }
 
-    func test_policy_refusesThePrivateArea_exceptItsExemptions_butNeverASealedRoot() throws {
+    func test_policy_refusesThePrivateArea_exceptTheSystemCopy_butNeverASealedRoot() throws {
         let home = try makeDirectory()
         let tmp = home.appendingPathComponent("tmp", isDirectory: true)
+        let systemCopy = tmp.appendingPathComponent("TemporaryItems/.com.apple.Foundation.NSItemProvider.a1b2c3", isDirectory: true)
         let preferences = home.appendingPathComponent("Library/Preferences", isDirectory: true)
-        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: systemCopy, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: preferences, withIntermediateDirectories: true)
         let sealedInsideTmp = tmp.appendingPathComponent("group", isDirectory: true)
         try FileManager.default.createDirectory(at: sealedInsideTmp, withIntermediateDirectories: true)
-        let policy = ShareSourcePolicy(sealed: [sealedInsideTmp], privateRoots: [home], exemptions: [tmp])
+        let policy = ShareSourcePolicy(sealed: [sealedInsideTmp], privateRoots: [home], systemCopyRoots: [tmp])
 
-        XCTAssertTrue(policy.admits(try makeFile(named: "copie.jpg", bytes: 8, in: tmp)))
+        XCTAssertTrue(policy.admits(try makeFile(named: "copie.jpg", bytes: 8, in: systemCopy)))
         XCTAssertFalse(policy.admits(try makeFile(named: "me.meeshy.plist", bytes: 8, in: preferences)))
         XCTAssertFalse(policy.admits(try makeFile(named: "x.jpg", bytes: 8, in: sealedInsideTmp)))
+    }
+
+    // MARK: - Seule la copie du système passe (#11428)
+
+    /// Le faux App Group vit HORS de l'exemption : dans `tmp` mais pas dans un
+    /// dossier de copie du système, et dans `Library/Caches`. Les deux
+    /// passaient tant que tout `tmp` et tout `Library/Caches` étaient exemptés.
+    func test_policy_aFakeAppGroupInTmpOrInTheCaches_isRefused_onlyTheSystemFolderPasses() throws {
+        let home = try makeDirectory()
+        let tmp = home.appendingPathComponent("tmp", isDirectory: true)
+        let fakeGroupInTmp = tmp.appendingPathComponent("group.me.meeshy.apps", isDirectory: true)
+        let fakeGroupInCaches = home.appendingPathComponent("Library/Caches/group.me.meeshy.apps", isDirectory: true)
+        let lookalike = tmp.appendingPathComponent("com.apple.Foundation.NSItemProvider.x", isDirectory: true)
+        let bareSystemFolder = tmp.appendingPathComponent(".com.apple.Foundation.NSItemProvider.", isDirectory: true)
+        let directSystemCopy = tmp.appendingPathComponent(".com.apple.Foundation.NSItemProvider.fXwu7y", isDirectory: true)
+        try [fakeGroupInTmp, fakeGroupInCaches, lookalike, bareSystemFolder, directSystemCopy].forEach {
+            try FileManager.default.createDirectory(at: $0, withIntermediateDirectories: true)
+        }
+        let policy = ShareSourcePolicy(sealed: [], privateRoots: [home], systemCopyRoots: [tmp])
+
+        XCTAssertFalse(policy.admits(try makeFile(named: "share_directory.json", bytes: 8, in: fakeGroupInTmp)))
+        XCTAssertFalse(policy.admits(try makeFile(named: "session.json", bytes: 8, in: fakeGroupInCaches)))
+        XCTAssertFalse(policy.admits(try makeFile(named: "a.jpg", bytes: 8, in: lookalike)), "le point initial fait partie du nom")
+        XCTAssertFalse(policy.admits(try makeFile(named: "a.jpg", bytes: 8, in: bareSystemFolder)), "un dossier sans suffixe n'est pas une copie")
+        XCTAssertFalse(policy.admits(directSystemCopy), "le dossier lui-même n'est pas un fichier remis")
+        XCTAssertTrue(policy.admits(try makeFile(named: "IMG.jpg", bytes: 8, in: directSystemCopy)))
+        XCTAssertFalse(
+            policy.admits(directSystemCopy.appendingPathComponent("../../Library/Caches/group.me.meeshy.apps/session.json")),
+            "un `..` ne sort pas du dossier de copie"
+        )
     }
 
     func test_livePolicy_sealsTheAppGroupAndTheAppBundle() {
@@ -132,7 +215,37 @@ final class ShareItemLoaderTests: XCTestCase {
             XCTAssertFalse(live.admits(group.appendingPathComponent("share_directory.json")))
         }
         XCTAssertFalse(live.admits(Bundle.main.bundleURL.appendingPathComponent("Info.plist")))
-        XCTAssertTrue(live.admits(URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("copie.jpg")))
+    }
+
+    func test_livePolicy_admitsOnlyTheSystemCopy_neverTheRestOfTmpNorTheCaches() {
+        let live = ShareSourcePolicy.live
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        let home = URL(fileURLWithPath: NSHomeDirectory())
+
+        XCTAssertFalse(live.admits(tmp.appendingPathComponent("fake-group/share_directory.json")))
+        XCTAssertFalse(live.admits(home.appendingPathComponent("Library/Caches/fake-group/session.json")))
+        XCTAssertTrue(live.admits(tmp.appendingPathComponent("TemporaryItems/.com.apple.Foundation.NSItemProvider.i7znue/IMG.jpg")))
+    }
+
+    /// La MESURE dont dépend la politique : ce que `loadFileRepresentation`
+    /// remet est une copie dans le dossier du système, admise, alors que la
+    /// source (ici un faux App Group sous `tmp`) ne l'est pas. Si iOS change
+    /// l'emplacement de ses copies, ce témoin rougit avant que les partages
+    /// ne soient tous refusés.
+    func test_loadFileRepresentation_handsACopyInTheSystemFolder_admittedWhereItsSourceIsNot() async throws {
+        let fakeGroup = try makeDirectory()
+        let photo = try makeFile(named: "IMG.jpg", bytes: 64, in: fakeGroup)
+        let provider = googlePhotosProvider(file: photo, typeIdentifier: UTType.jpeg.identifier)
+        let live = ShareSourcePolicy.live
+
+        let verdict: (path: String, admitted: Bool) = await withCheckedContinuation { continuation in
+            _ = provider.loadFileRepresentation(forTypeIdentifier: UTType.jpeg.identifier) { url, _ in
+                continuation.resume(returning: (url?.path ?? "aucune URL", url.map(live.admits) ?? false))
+            }
+        }
+
+        XCTAssertFalse(live.admits(photo), "la source n'est pas une copie du système")
+        XCTAssertTrue(verdict.admitted, "copie remise hors du dossier attendu : \(verdict.path)")
     }
 
     func test_gather_aWebLinkAndText_composeTheContentWithoutAnyFile() async throws {
@@ -148,3 +261,111 @@ final class ShareItemLoaderTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [], "aucun dossier pour un partage sans fichier")
     }
 }
+
+/// Le nom d'ORIGINE d'un fichier partagé (#11531) : il voyage en métadonnée,
+/// assaini, et n'entre jamais dans un chemin (#11134).
+final class ShareOriginalNameTests: XCTestCase {
+
+    private func name(_ candidates: [String?], ext: String = "jpeg") -> String? {
+        ShareMediaStaging.sanitizedOriginalName(candidates: candidates, fallbackExt: ext)
+    }
+
+    func test_stage_systemCopyNamedLikeThePhoto_keepsTheNameAndTheFlatPath() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-name-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = dir.appendingPathComponent("IMG_0111.jpeg")
+        try Data(repeating: 7, count: 64).write(to: source)
+        let root = dir.appendingPathComponent("root", isDirectory: true)
+
+        let staged = try ShareMediaStaging.stage(
+            source: source, into: root, shareId: "share-1", index: 0,
+            mime: "image/jpeg", freeBytes: .max / 2)
+
+        XCTAssertEqual(staged.originalName, "IMG_0111.jpeg")
+        XCTAssertEqual(staged.relPath, "share-1/0.jpeg", "le chemin disque ne change pas")
+        XCTAssertEqual(staged.uploadFileName, "IMG_0111.jpeg")
+    }
+
+    func test_stage_aSourceWithoutUsableName_fallsBackOnTheSuggestedName() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-name-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = dir.appendingPathComponent("\u{202E}")
+        try Data(repeating: 7, count: 8).write(to: source)
+
+        let staged = try ShareMediaStaging.stage(
+            source: source, into: dir.appendingPathComponent("root", isDirectory: true), shareId: "share-1",
+            index: 2, mime: "image/jpeg", freeBytes: .max / 2, suggestedName: "Vacances")
+
+        XCTAssertEqual(staged.originalName, "Vacances.jpeg")
+        XCTAssertEqual(staged.relPath, "share-1/2.jpeg")
+    }
+
+    func test_gather_theLoaderCarriesTheSystemCopyName() async throws {
+        let source = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-name-src-\(UUID().uuidString)", isDirectory: true)
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-name-root-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: source); try? FileManager.default.removeItem(at: root) }
+        let photo = source.appendingPathComponent("IMG_0111.jpg")
+        try Data(repeating: 3, count: 128).write(to: photo)
+        let provider = NSItemProvider()
+        provider.registerFileRepresentation(forTypeIdentifier: UTType.jpeg.identifier, fileOptions: [], visibility: .all) { completion in
+            completion(photo, false, nil)
+            return nil
+        }
+
+        let gathered = await ShareItemLoader.start([provider], shareId: "share-1", prepareMediaRoot: { shareId in
+            try? FileManager.default.createDirectory(at: root.appendingPathComponent(shareId), withIntermediateDirectories: true)
+            return root
+        }).gather()
+
+        XCTAssertEqual(gathered.media.map(\.originalName), ["IMG_0111.jpg"])
+        XCTAssertEqual(gathered.media.map(\.relPath), ["share-1/0.jpg"])
+    }
+
+    func test_sanitized_aPathTraversal_keepsOnlyTheLastComponent_andGetsASafeExtension() {
+        XCTAssertEqual(name(["../../etc/passwd"]), "passwd.jpeg")
+        XCTAssertEqual(name(["..\\..\\boot.ini"], ext: "bin"), "boot.ini")
+    }
+
+    func test_sanitized_bidiAndControlCharacters_areStripped() {
+        XCTAssertEqual(name(["photo\u{202E}gpj.exe"]), "photogpj.exe")
+        XCTAssertEqual(name(["a\u{0000}b\u{0007}\u{200F}c.jpg"]), "abc.jpg")
+        XCTAssertEqual(name(["12:30 réunion.png"]), "12_30 réunion.png")
+    }
+
+    func test_sanitized_leadingDotsAndSpaces_areTrimmed() {
+        XCTAssertEqual(name(["  ..cache.jpg  "]), "cache.jpg")
+    }
+
+    /// Un point final ne laisse pas un double point devant l'extension :
+    /// `photo.` devient `photo.jpeg`, jamais `photo..jpeg`.
+    func test_sanitized_trailingDots_doNotDoubleTheExtensionDot() {
+        XCTAssertEqual(name(["photo."]), "photo.jpeg")
+        XCTAssertEqual(name(["notes . "], ext: "txt"), "notes.txt")
+        XCTAssertNil(name(["...", " . "]))
+    }
+
+    func test_sanitized_aLongName_isCappedAndKeepsItsExtension() throws {
+        let result = try XCTUnwrap(name([String(repeating: "é", count: 300) + ".MOV"], ext: "mov"))
+
+        XCTAssertLessThanOrEqual(result.utf8.count, ShareMediaStaging.maxOriginalNameBytes)
+        XCTAssertTrue(result.hasSuffix(".MOV"))
+    }
+
+    func test_sanitized_aMissingOrUnsafeExtension_getsTheMimeExtension() {
+        XCTAssertEqual(name(["Document"], ext: "pdf"), "Document.pdf")
+        XCTAssertEqual(name(["clip.m$v"], ext: "mp4"), "clip.m$v.mp4")
+    }
+
+    func test_sanitized_nothingUsable_isNil_andTheNextCandidateWins() {
+        XCTAssertNil(name([nil, "", "   ", "\u{202E}", "..", "/"]))
+        XCTAssertEqual(name(["", "IMG_2.heic"]), "IMG_2.heic")
+    }
+}
+

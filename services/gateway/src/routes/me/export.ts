@@ -23,6 +23,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
 import { exportGame } from './export-game';
 import { exportReadingActivity } from './export-reading';
+import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
@@ -42,11 +43,12 @@ type ExportType =
   | 'securityEvents'
   | 'game'
   | 'packs'
-  | 'readingActivity';
+  | 'readingActivity'
+  | 'calls';
 
 const VALID_TYPES: ExportType[] = [
   'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
-  'readingActivity',
+  'readingActivity', 'calls',
 ];
 
 type ExportFormat = 'json' | 'csv';
@@ -140,6 +142,7 @@ const gameExportSchema = {
           detectedAt: { type: 'string', nullable: true },
           presentedAt: { type: 'string', nullable: true },
           notifiedAt: { type: 'string', nullable: true },
+          keptAt: { type: 'string', nullable: true },
         },
       },
     },
@@ -242,7 +245,20 @@ const packsExportSchema = {
         },
       },
     },
-    // #10632 — les packs ACHETÉS en Meeshes : domaine, slug, prix payé, date.
+    // #11271 — les lens PROPOSÉES par le compte : métadonnées et document servi.
+    lensSubmissions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' }, name: { type: 'string' }, author: { type: 'string' }, status: { type: 'string' },
+          reviewNote: { type: 'string', nullable: true }, reviewedAt: { type: 'string', nullable: true }, installCount: { type: 'integer' },
+          cost: { type: 'string' }, surfaces: { type: 'array', items: { type: 'string' } }, startsAt: { type: 'string' }, endsAt: { type: 'string' },
+          communities: { type: 'array', items: { type: 'string' } }, createdAt: { type: 'string' }, documentJson: { type: 'string' },
+        },
+      },
+    },
+    // #10632, #11272 — les packs POSSÉDÉS : domaine, slug, voie (purchase|game|grant|event), raison, prix payé (0 hors achat), date.
     ownerships: {
       type: 'array',
       items: {
@@ -250,6 +266,8 @@ const packsExportSchema = {
         properties: {
           domain: { type: 'string', nullable: true },
           slug: { type: 'string' },
+          source: { type: 'string' },
+          reference: { type: 'string', nullable: true },
           priceMeeshes: { type: 'integer' },
           acquiredAt: { type: 'string' },
         },
@@ -257,12 +275,25 @@ const packsExportSchema = {
     },
     counts: {
       type: 'object',
-      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' }, ownerships: { type: 'integer' }, appearanceSubmissions: { type: 'integer' } },
+      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' }, ownerships: { type: 'integer' }, appearanceSubmissions: { type: 'integer' }, lensSubmissions: { type: 'integer' } },
     },
     hasMore: {
       type: 'object',
-      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' }, ownerships: { type: 'boolean' }, appearanceSubmissions: { type: 'boolean' } },
+      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' }, ownerships: { type: 'boolean' }, appearanceSubmissions: { type: 'boolean' }, lensSubmissions: { type: 'boolean' } },
     },
+  },
+} as const;
+
+/** La télémétrie et la note de chacun de MES appels (#11277) : objets libres, déclarés comme tels. */
+const callExportItemSchema = {
+  type: 'object',
+  properties: {
+    callId: { type: 'string' },
+    role: { type: 'string' },
+    joinedAt: { type: 'string' },
+    leftAt: { type: 'string', nullable: true },
+    analytics: { type: 'object', additionalProperties: true, nullable: true },
+    feedback: { type: 'object', additionalProperties: true, nullable: true },
   },
 } as const;
 
@@ -410,14 +441,14 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             types: {
               type: 'string',
               description:
-                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity. ' +
+                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity,calls. ' +
                 'Defaults to all eleven.',
             },
             limit: {
               type: 'string',
               description:
                 'Max rows per list-type section for THIS request (default 500, capped at 2000). ' +
-                'Applies uniformly to posts/stories/comments/reactions/media/sessions/securityEvents — profile and voiceProfile are single rows and ignore it.',
+                'Applies uniformly to posts/stories/comments/reactions/media/sessions/securityEvents/calls — profile and voiceProfile are single rows and ignore it.',
             },
             offset: {
               type: 'string',
@@ -526,6 +557,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                   game: gameExportSchema,
                   packs: packsExportSchema,
                   readingActivity: readingActivityExportSchema,
+                  calls: { type: 'array', items: callExportItemSchema, nullable: true },
+                  callsCount: { type: 'integer', nullable: true },
+                  callsHasMore: { type: 'boolean', nullable: true },
                   csv: {
                     type: 'object',
                     additionalProperties: { type: 'string' },
@@ -765,6 +799,13 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           exportData.game = await exportGame(fastify.prisma, userId, page);
         }
 
+        if (requestedTypes.includes('calls')) {
+          const section = await exportCallTelemetry(fastify.prisma, userId, page);
+          exportData.calls = section.items;
+          exportData.callsCount = section.total;
+          exportData.callsHasMore = section.hasMore;
+        }
+
         if (requestedTypes.includes('readingActivity')) {
           exportData.readingActivity = await exportReadingActivity(fastify.prisma, userId, page);
         }
@@ -777,8 +818,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             submissions: sections.submissions.items,
             ownerships: sections.ownerships.items,
             appearanceSubmissions: sections.appearanceSubmissions.items,
-            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total, ownerships: sections.ownerships.total, appearanceSubmissions: sections.appearanceSubmissions.total },
-            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore, ownerships: sections.ownerships.hasMore, appearanceSubmissions: sections.appearanceSubmissions.hasMore },
+            lensSubmissions: sections.lensSubmissions.items,
+            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total, ownerships: sections.ownerships.total, appearanceSubmissions: sections.appearanceSubmissions.total, lensSubmissions: sections.lensSubmissions.total },
+            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore, ownerships: sections.ownerships.hasMore, appearanceSubmissions: sections.appearanceSubmissions.hasMore, lensSubmissions: sections.lensSubmissions.hasMore },
           };
         }
 
@@ -850,10 +892,17 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
 
           // Les packs : une table par liste ; les éléments d'une proposition voyagent en JSON dans leur cellule.
           const packs = exportData.packs as Record<string, unknown> | undefined;
-          for (const childKey of ['choices', 'library', 'submissions', 'ownerships', 'appearanceSubmissions'] as const) {
+          for (const childKey of ['choices', 'library', 'submissions', 'ownerships', 'appearanceSubmissions', 'lensSubmissions'] as const) {
             const rows = (packs?.[childKey] ?? []) as Record<string, unknown>[];
-            const flat = rows.map((row) => ('items' in row ? { ...row, items: JSON.stringify(row.items) } : row));
+            const flat = rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Array.isArray(value) ? JSON.stringify(value) : value])));
             if (flat.length > 0) csvSections[`packs.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
+          }
+
+          // Les appels (#11277) : la télémétrie et la note voyagent en JSON dans leur cellule.
+          const calls = (exportData.calls ?? []) as Record<string, unknown>[];
+          if (calls.length > 0) {
+            const flat = calls.map((row) => ({ ...row, analytics: JSON.stringify(row.analytics ?? null), feedback: JSON.stringify(row.feedback ?? null) }));
+            csvSections.calls = toCsv(Object.keys(flat[0]), flat);
           }
 
           exportData.csv = csvSections;

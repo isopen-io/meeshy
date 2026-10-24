@@ -12,7 +12,7 @@ import XCTest
 /// à faire dans un libellé. Ce qui explique le fonctionnement reste disponible,
 /// mais REPLIÉ derrière le même (i) que les notes de l'inscription.
 ///
-/// Le vocabulaire est IMPOSÉ et identique sur les trois clients : web-v2 et
+/// Le vocabulaire est IMPOSÉ et identique sur les trois clients : le web et
 /// Android portent les mêmes phrases. Le témoin l'épingle en `fr` et en `en`
 /// pour que la dérive d'un client se voie sans avoir à ouvrir les deux autres.
 final class EmailSignInWordingTests: XCTestCase {

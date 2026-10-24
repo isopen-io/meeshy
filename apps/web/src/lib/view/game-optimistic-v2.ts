@@ -21,7 +21,7 @@ import { recordOf, servedSparksOf, shownLevel, stepFactsOf, treasuryAt, withMint
  * pose à la RÉPONSE (`withConsentResult`, `withDuoId`) ou à la relecture qui suit.
  */
 
-const onGame = (view: EngagementWithGame, update: (game: GameBlock) => GameBlock): EngagementWithGame =>
+export const onGame = (view: EngagementWithGame, update: (game: GameBlock) => GameBlock): EngagementWithGame =>
   view.game === undefined ? view : { ...view, game: update(view.game) };
 
 const onLeague = (view: EngagementWithGame, update: (league: GameLeagueBlock) => GameLeagueBlock | null): EngagementWithGame => {

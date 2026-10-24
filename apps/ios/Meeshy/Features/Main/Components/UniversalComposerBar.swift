@@ -349,6 +349,11 @@ struct UniversalComposerBar: View {
     /// Le défilement de la rangée des emojis rapides : posé, et en cours (#10842).
     @State var quickEmojiScroll: CGFloat = 0
     @State var quickEmojiDrag: CGFloat = 0
+    /// L'élargissement que la bande garde après le relâcher, jusqu'au texte
+    /// touché ou à l'émoji choisi (#12440).
+    @State var quickEmojiHeld: CGFloat = 0
+    /// La largeur du champ quand la bande est au repos : celle qu'il peut lui céder.
+    @State var quickEmojiFieldWidth: CGFloat = 0
 
     @FocusState var isFocused: Bool
     @State var sendBounce = false
@@ -364,19 +369,15 @@ struct UniversalComposerBar: View {
     @State var isExpandingToLibrary = false
     @State var currentLanguage: String = "fr"
 
-    // Attachments
     @State var attachments: [ComposerAttachment] = []
 
-    // Minimized / expanded state
     @State var isMinimized: Bool = false
     @State var dragOffsetY: CGFloat = 0
     @State var clipboardContent: ClipboardContent? = nil
 
-    // Ephemeral picker
     @State var showEphemeralPicker = false
     /// Le petit panneau des effets du message, ouvert par la baguette (#7967).
     @State var showEffectsPanel = false
-    // Permanent effects inline picker (for comments)
     @State var showPermanentEffectsPicker = false
 
     // Text analysis (sentiment + language detection from MessageComposer)
@@ -420,10 +421,10 @@ struct UniversalComposerBar: View {
     /// never shorter than the panel's own content, and never so tall that the
     /// composer leaves the screen (`ComposerPanelHeightLaw`, #8869).
     /// La hauteur de la fenêtre qui porte la barre (Stage Manager, Split View, fenêtre détachée) — la fenêtre clé en repli.
-    private var hostWindowHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
+    var hostWindowHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
 
     /// Les marges de la fenêtre qui porte la barre, la fenêtre clé en repli.
-    private var hostInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
+    var hostInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
 
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(ownKeyboard.lastKnownHeight(host: hostKeyboard), 260)

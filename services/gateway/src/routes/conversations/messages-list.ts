@@ -61,13 +61,12 @@ import { MESSAGES_LIST_PAGINATION, messagesListQuerystringSchema } from './messa
 import {
   buildAfterWatermarkClause,
   buildMessageListSelect,
-  loadCurrentUserConsumptionMap,
-  loadMessageReadStatusMap,
   mapMessageRowForList,
   enrichForwardedMessagesForList,
   enrichPostReplyMessagesForList,
   parseLanguageFilterParam
 } from './messages-list-query';
+import { loadCurrentUserConsumptionMap, loadMessageReadStatusMap } from './messages-list-reader-state';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import type { RawMessageRow } from './messages-list-query-types';
 import { loadReaderReactionsByMessage } from './messages-reader-reactions';

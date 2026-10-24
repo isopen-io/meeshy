@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.auth
 
+import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.PasswordEntry
 
 /**
@@ -9,6 +10,7 @@ import me.meeshy.sdk.model.PasswordEntry
  * `MeeshyForgotPasswordView.phoneLookup`). Masking happens server-side; this type
  * carries the already-masked strings verbatim.
  */
+@Serializable
 data class MaskedUserInfo(
     val displayName: String,
     val username: String,
@@ -104,9 +106,9 @@ data class PhoneRecoveryState(
  */
 object PhoneRecoveryInput {
 
-    /** The phone entry carries enough digits to look up (iOS `digits.count >= 8`). */
+    /** The phone entry is present and plausible ([PhonePlausibility], the SSOT shared with signup). */
     fun canLookup(phoneNumber: String): Boolean =
-        SignupFieldValidation.isPhoneValidLocally(phoneNumber)
+        PhonePlausibility.isSubmittable(phoneNumber)
 
     /**
      * The identity challenge is answerable: a non-blank full username and a

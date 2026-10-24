@@ -10,7 +10,8 @@ import MeeshyUI
 
 /// Bulle « X écrit… » rendue comme dernière cellule du flux de messages
 /// (bas visuel de la liste inversée). Alignée côté expéditeur ; les points
-/// s'animent en autonomie via `@State` (pas de timer externe).
+/// sont `MeeshyTypingDots`, l'unique indicateur de frappe du SDK (#9891) —
+/// mêmes timings que les rangées de liste, Reduce Motion système ET in-app.
 ///
 /// **`internal`, pas `private` (2026-08-25, constat L2b/2b-7).** La Rivière
 /// monte la MÊME vue en tenue plate (la peau de `Riviere/View/`) : `private` étant à
@@ -30,8 +31,6 @@ struct TypingIndicatorBubble: View {
     /// y sont actifs (#9061), lus UNE fois par l'hôte : la pastille du
     /// frappeur porte alors le point primaire, qui pulse s'il est actif.
     var here = ConversationHereRoster()
-
-    @State private var animating = false
 
     private var names: [String] { participants.displayNames }
 
@@ -54,7 +53,7 @@ struct TypingIndicatorBubble: View {
     @ViewBuilder
     private func leadAvatar(size: CGFloat) -> some View {
         if let lead {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: lead.displayName,
                 context: .custom(size),
                 accentColor: accentHex,
@@ -63,32 +62,7 @@ struct TypingIndicatorBubble: View {
                 isHere: here[lead.id],
                 ring: lead.ring,
                 isDark: isDark
-            )
-        }
-    }
-
-    /// Les trois points pulsants — mêmes timings dans les deux tenues.
-    private func pulsingDots(accent: Color) -> some View {
-        HStack(spacing: 3) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(accent)
-                    .frame(width: 5, height: 5)
-                    .scaleEffect(animating ? 1.0 : 0.5)
-                    .opacity(animating ? 1.0 : 0.4)
-                    // Ici le repos EST la cible (`animating == true` : pleine
-                    // taille, pleine opacité) — l'inverse du point d'appel juste
-                    // à côté. En tenue plate il n'y a aucun libellé : ce qui dit
-                    // « quelqu'un écrit » est la PRÉSENCE des trois points, pas
-                    // leur mouvement. Les rendre à demi-taille et à 40 %
-                    // d'opacité les ferait passer pour une décoration éteinte.
-                    .meeshyAnimation(
-                        .easeInOut(duration: 0.5)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.18),
-                        value: animating
-                    )
-            }
+            ) }
         }
     }
 
@@ -98,7 +72,7 @@ struct TypingIndicatorBubble: View {
             if isFlat {
                 HStack(spacing: 7) {
                     leadAvatar(size: 22)
-                    pulsingDots(accent: accent)
+                    MeeshyTypingDots(color: accent, spacing: 3)
                 }
                 // Aligné sur la colonne d'identité de FocalRow (retrait
                 // horizontal de rangée) — aucune capsule, aucun bord.
@@ -120,7 +94,7 @@ struct TypingIndicatorBubble: View {
                             .foregroundColor(isDark ? accent.opacity(MeeshyOpacity.intense) : accent.opacity(MeeshyOpacity.heavy))
                             .lineLimit(1)
                     }
-                    pulsingDots(accent: accent)
+                    MeeshyTypingDots(color: accent, spacing: 3)
                 }
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.sm)
@@ -131,7 +105,6 @@ struct TypingIndicatorBubble: View {
         }
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, MeeshySpacing.xs)
-        .onAppear { animating = true }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(label)
     }

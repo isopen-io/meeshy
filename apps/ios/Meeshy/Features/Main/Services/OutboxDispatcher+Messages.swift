@@ -247,7 +247,7 @@ extension OutboxDispatcher {
                 var uploadedPaths: [String] = []
                 var firstUploadErrorMedia: Error?
 
-                for stored in pendingMediaPaths {
+                for (index, stored) in pendingMediaPaths.enumerated() {
                     let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
                     guard FileManager.default.fileExists(atPath: absolutePath) else {
                         logger.error("Media file missing on dispatch, path=\(stored, privacy: .public)")
@@ -259,7 +259,7 @@ extension OutboxDispatcher {
                         let tusResult = try await uploader.uploadFile(
                             fileURL: URL(fileURLWithPath: absolutePath),
                             mimeType: mime,
-                            credential: credential
+                            credential: credential, fileName: item.originalMediaName(at: index)
                         )
                         uploadedIds.append(tusResult.id)
                         uploadedPaths.append(absolutePath)

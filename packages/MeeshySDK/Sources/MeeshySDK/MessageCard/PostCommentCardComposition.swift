@@ -77,6 +77,18 @@ public struct PostCommentCardSource: Sendable {
     public func read(_ raw: String) -> String {
         readable[raw] ?? raw
     }
+
+    /// La même source, sur un autre post.
+    func replacing(post: FeedPost) -> PostCommentCardSource {
+        PostCommentCardSource(post: post, target: target, thread: thread, viewer: viewer, showOriginal: showOriginal,
+                              readable: readable, story: story, now: now)
+    }
+
+    /// La même source, sur une autre story.
+    func replacing(story: PostCommentCardStory) -> PostCommentCardSource {
+        PostCommentCardSource(post: post, target: target, thread: thread, viewer: viewer, showOriginal: showOriginal,
+                              readable: readable, story: story, now: now)
+    }
 }
 
 /// **LA COMPOSITION D'UNE CARTE « COMMENTAIRE DE POST »** (#9686) — une
@@ -136,6 +148,36 @@ public enum PostCommentCardComposition {
         postHead(of: source) != nil
     }
 
+    /// **Les médias que la tête peut montrer** (#11783), dans l'ordre du support : chaque
+    /// photo, vidéo et son d'un post ou d'un réel ; le seul visuel qui représente une story.
+    /// Vide quand le support ne se met pas en tête.
+    public static func headMedia(of source: PostCommentCardSource, audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
+        guard postHead(of: source) != nil else { return [] }
+        return support(of: source, audioLanguages: audioLanguages)?.media ?? []
+    }
+
+    /// Le média de tête par défaut : le premier visuel, à défaut le premier média (un son).
+    public static func defaultHeadMediaID(of source: PostCommentCardSource) -> String? {
+        let candidates = headMedia(of: source)
+        return (candidates.first { $0.media.kind.isVisual } ?? candidates.first)?.media.id
+    }
+
+    /// **Le support existe mais son AUDIENCE le retient** (#11783) : la carte part hors de
+    /// Meeshy, seul le commentaire y figure — la feuille le DIT au lieu de taire le média.
+    /// Vrai seulement quand le même support, public, serait en tête (une story échue ou
+    /// un post vide ne sont pas retenus par leur audience).
+    public static func withheldByAudience(_ source: PostCommentCardSource) -> Bool {
+        guard postHead(of: source) == nil else { return false }
+        if let post = source.post {
+            guard !isPublicAudience(post.visibility) else { return false }
+            var opened = post
+            opened.visibility = "PUBLIC"
+            return postHead(of: source.replacing(post: opened)) != nil
+        }
+        guard let story = source.story, !isPublicAudience(story.visibility) else { return false }
+        return postHead(of: source.replacing(story: story.withVisibility("PUBLIC"))) != nil
+    }
+
     /// Les commentaires qu'on peut cocher sous « Choisir les réponses » — la
     /// racine et ses réponses peignables, sans la réponse visée, dans l'ordre.
     public static func choosable(of source: PostCommentCardSource) -> [FeedComment] {
@@ -181,6 +223,8 @@ public enum PostCommentCardComposition {
     /// discussion, « Auteur : texte », sous `title` ; le pli dit `foldedLabel`.
     /// - Parameter audioLanguages: la piste SERVIE de chaque son, par identifiant de pièce.
     /// - Parameter heroSupport: le visuel du support en HERO (défaut) ; `false` : la vignette d'avant #10915.
+    /// - Parameter headMediaID: le média du support choisi pour la tête (`headMedia(of:)`) ;
+    ///   `nil` ou inconnu : `defaultHeadMediaID(of:)`, le premier visuel (#11783).
     ///
     /// **HERO** (#10915) : avec `heroSupport`, le premier visuel du support (post,
     /// réel, story) n'est plus une vignette posée entre la citation et la réponse
@@ -194,14 +238,15 @@ public enum PostCommentCardComposition {
     /// 1 (au plus `MessageCardThread.maxLevel`), mesuré depuis le premier commentaire montré.
     public static func subject(of source: PostCommentCardSource, mode: PostCommentCardMode, showsPost: Bool,
                                chosen: Set<String> = [], title: String, foldedLabel: (Int) -> String,
-                               audioLanguages: [String: String] = [:], heroSupport: Bool = true) -> MessageCardSubject? {
+                               audioLanguages: [String: String] = [:], heroSupport: Bool = true,
+                               headMediaID: String? = nil) -> MessageCardSubject? {
         let composed = Self.blocks(of: source, mode: mode, showsPost: showsPost, chosen: chosen)
         guard let first = composed.first, let last = composed.last else { return nil }
-        let media = Self.media(of: composed, source: source, audioLanguages: audioLanguages, heroSupport: heroSupport)
-        let heroID = heroSupport ? media.hero?.media.id : nil
+        let media = Self.media(of: composed, source: source, audioLanguages: audioLanguages, heroSupport: heroSupport, headMediaID: headMediaID)
+        let heroID = heroSupport ? media.head.flatMap { $0.media.kind.isVisual ? $0.media.id : nil } : nil
         var quoted = composed.count > 1 ? part(of: first) : nil
-        if heroID != nil, case .post(let head) = first, composed.count > 1 {
-            quoted = heroLine(head, media: media.hero)
+        if heroSupport, media.head != nil, case .post(let head) = first, composed.count > 1 {
+            quoted = heroLine(head, media: media.head)
         }
         let rest = composed.count > 1 ? Array(composed.dropFirst()) : composed
         let reply: MessageCardPart
@@ -336,16 +381,30 @@ public enum PostCommentCardComposition {
         (visibility ?? "").uppercased() == "PUBLIC"
     }
 
-    static func support(of source: PostCommentCardSource) -> Support? {
+    /// Un post qui DISPARAÎT (story, statut — « Mes stories » l'ouvre par son `FeedPost`)
+    /// n'est support que comme une story et PAR SON VISUEL, sous les gardes de la story :
+    /// sans visuel, jamais en tête (#11477, jumelle de `composingPostOf`, web).
+    static func support(of source: PostCommentCardSource, audioLanguages: [String: String] = [:]) -> Support? {
         if let post = source.post {
-            guard isPublicAudience(post.visibility), !disappears(post) else { return nil }
+            guard !disappears(post) else {
+                let story = PostCommentCardStory(feedPost: post)
+                return story.heroMedia(now: source.now) == nil ? nil : storySupport(story, source: source)
+            }
+            guard isPublicAudience(post.visibility) else { return nil }
+            let media = postMedia(of: post, audioLanguages: audioLanguages)
+            // Une scène sans aucun média ne se lit pas en tête (jumelle de `postHead`, shared).
+            guard post.storyEffects == nil || !media.isEmpty else { return nil }
             return Support(
                 author: post.author, authorId: post.authorId, username: post.authorUsername,
                 text: MessageCardText.nonBlank(source.read(post.displayContent)).map { excerpt($0) },
-                timestamp: post.timestamp, media: postMedia(of: post)
+                timestamp: post.timestamp, media: media
             )
         }
-        guard let story = source.story, isPublicAudience(story.visibility),
+        return source.story.flatMap { storySupport($0, source: source) }
+    }
+
+    private static func storySupport(_ story: PostCommentCardStory, source: PostCommentCardSource) -> Support? {
+        guard isPublicAudience(story.visibility),
               !StoryItem.isExpired(createdAt: story.timestamp, expiresAt: story.expiresAt, at: source.now) else { return nil }
         // Une story à canvas sans vignette ne s'image pas : le garde d'avant #10915 tient.
         if story.hasCanvas, story.heroMedia(now: source.now) == nil { return nil }
@@ -376,10 +435,12 @@ public enum PostCommentCardComposition {
         return MessageCardPart(author: head.author, text: text, handle: head.handle)
     }
 
-    /// Une story ou un statut disparaît : il ne se fige pas en tête d'une image.
+    /// Une story ou un statut disparaît : il ne se fige pas en tête d'une image. Un post ou un
+    /// réel composé avec la SCÈNE porte `storyEffects` sans disparaître pour autant — le
+    /// compter ici le faisait échoir 20 h après sa publication, comme une story (#11783).
     private static func disappears(_ post: FeedPost) -> Bool {
         let type = (post.type ?? "").uppercased()
-        return type == "STORY" || type == "STATUS" || post.storyEffects != nil
+        return type == "STORY" || type == "STATUS"
     }
 
     /// Le texte du post, lisible : `maxPostLines` lignes, `maxPostCharacters` caractères, coupé à un mot.
@@ -432,16 +493,24 @@ public enum PostCommentCardComposition {
 
     // MARK: - Les médias
 
-    /// Le visuel du post : sa première photo ou vidéo.
-    private static func postMedia(of post: FeedPost) -> [MessageCardSubjectMedia] {
-        Array(MessageCardSubject.paintableMedia(of: post.media).filter { $0.media.kind.isVisual }.prefix(1))
+    /// Les médias du post qui peuvent être en tête : chaque photo, vidéo et son, dans leur ordre (#11783).
+    private static func postMedia(of post: FeedPost, audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
+        MessageCardSubject.paintableMedia(of: post.media, audioLanguages: audioLanguages)
     }
 
-    /// Le visuel du support en tête, puis les médias des commentaires peints — les plus récents.
-    /// Le visuel du support devient le HERO de la carte quand `heroSupport` : il compte dans le
-    /// plafond `maxMedia`, mais ne porte pas d'auteur (c'est le support).
-    private static func media(of blocks: [PostCommentCardBlock], source: PostCommentCardSource,
-                              audioLanguages: [String: String], heroSupport: Bool) -> (items: [MessageCardSubjectMedia], hero: MessageCardSubjectMedia?) {
+    /// Le média choisi pour la tête parmi `candidates` — à défaut, le premier visuel, puis le premier.
+    private static func chosen(_ candidates: [MessageCardSubjectMedia], id: String?) -> MessageCardSubjectMedia? {
+        id.flatMap { id in candidates.first { $0.media.id == id } }
+            ?? candidates.first { $0.media.kind.isVisual }
+            ?? candidates.first
+    }
+
+    /// Le média CHOISI du support en tête (#11783), puis les médias des commentaires peints —
+    /// les plus récents. Avec `heroSupport`, il ne porte pas d'auteur (c'est le support) : un
+    /// visuel devient le HERO de la carte, un son se peint comme le son de la carte. Il compte
+    /// dans le plafond `maxMedia`.
+    private static func media(of blocks: [PostCommentCardBlock], source: PostCommentCardSource, audioLanguages: [String: String],
+                              heroSupport: Bool, headMediaID: String?) -> (items: [MessageCardSubjectMedia], head: MessageCardSubjectMedia?) {
         let known = byId(source.thread + [source.target])
         let quotes = blocks.count > 1
         let painted = blocks.enumerated().map { (index, block) -> [MessageCardSubjectMedia] in
@@ -449,7 +518,8 @@ public enum PostCommentCardComposition {
             switch block {
             case .post(let part):
                 let author = MessageCardMediaAuthor(name: part.author, handle: part.handle, isQuoted: isQuoted)
-                return (support(of: source)?.media ?? []).map { $0.by(author) }
+                let pick = chosen(support(of: source, audioLanguages: audioLanguages)?.media ?? [], id: headMediaID)
+                return pick.map { [heroSupport ? $0.by(nil) : $0.by(author)] } ?? []
             case .comment(let id, let part):
                 guard let comment = known[id] else { return [] }
                 let author = MessageCardMediaAuthor(name: part.author, handle: part.handle, isQuoted: isQuoted)
@@ -458,15 +528,13 @@ public enum PostCommentCardComposition {
                 return []
             }
         }
-        let head = blocks.first.map { first -> [MessageCardSubjectMedia] in
-            guard case .post = first else { return [] }
-            return painted[0]
-        } ?? []
-        let rest = Array(painted.dropFirst(head.isEmpty ? 0 : 1).joined())
-        guard heroSupport, let hero = head.first(where: { $0.media.kind.isVisual })?.by(nil) else {
-            return (head + rest.suffix(max(0, maxMedia - head.count)), nil)
+        let head: MessageCardSubjectMedia? = blocks.first.flatMap { first in
+            guard case .post = first else { return nil }
+            return painted[0].first
         }
-        return ([hero] + rest.suffix(max(0, maxMedia - 1)), hero)
+        let rest = Array(painted.dropFirst(head == nil ? 0 : 1).joined())
+        let headItems = head.map { [$0] } ?? []
+        return (headItems + rest.suffix(max(0, maxMedia - headItems.count)), heroSupport ? head : nil)
     }
 
     // MARK: - L'imbrication

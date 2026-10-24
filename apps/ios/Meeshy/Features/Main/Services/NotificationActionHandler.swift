@@ -149,6 +149,7 @@ final class NotificationActionHandler: NotificationActionHandling {
             AuthManager.shared.currentUser?.id ?? AuthManager.shared.persistedActiveUserId
         },
         preferredLanguage: @escaping @MainActor () -> String? = {
+            // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             AuthManager.shared.currentUser?.preferredContentLanguages.first
         },
         isRegisteredUser: @escaping @MainActor () -> Bool = {
@@ -845,7 +846,7 @@ final class NotificationActionHandler: NotificationActionHandling {
                     logger.error("Retrait de bannières non confirmé avant expiration du délai (\(identifiers.count, privacy: .public) id(s))")
                     break
                 }
-                try? await Task.sleep(for: removalConfirmationPollInterval)
+                _ = await cancellableSleep(for: removalConfirmationPollInterval)
             }
             completion?()
         }

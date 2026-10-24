@@ -172,7 +172,7 @@ extension ComposerCaptureSession {
                                      argument: ComposerSceneCameraCopy.previousTakeStillSaving)
                 return false
             }
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            _ = await cancellableSleep(for: .milliseconds(20))
         }
         return !Task.isCancelled
     }
@@ -264,10 +264,10 @@ extension ComposerCaptureSession {
     nonisolated static func renderedPhotoBytes(_ data: Data?, fallback: UIImage?, look: ComposerPhotoLook,
                                                aspect: CGFloat, person: CallFramePerson, date: Date,
                                                scenes: any ComposerLookSceneProviding) async -> Data? {
-        guard let debout = data.flatMap(uprightImage) ?? fallback.flatMap(ComposerPhotoLookSource.upright),
-              let rendu = await ComposerLookPainter.renderPhoto(debout, look: look, framing: .identity, aspect: aspect,
-                                                                person: person, date: date, scenes: scenes)
-        else { return nil }
+        guard let debout = data.flatMap(uprightImage) ?? fallback.flatMap(ComposerPhotoLookSource.upright) else { return nil }
+        if let prise = ComposerPhotoEncoding.untouchedTake(data, of: debout, paints: ComposerLiveLookRule.rendersLive(look), aspect: aspect) { return prise }
+        guard let rendu = await ComposerLookPainter.renderPhoto(debout, look: look, framing: .identity, aspect: aspect,
+                                                                person: person, date: date, scenes: scenes) else { return nil }
         return await ComposerPhotoEncoding.encode(rendu, like: data)
     }
 
@@ -277,11 +277,8 @@ extension ComposerCaptureSession {
               let proprietes = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let largeur = proprietes[kCGImagePropertyPixelWidth] as? Int,
               let hauteur = proprietes[kCGImagePropertyPixelHeight] as? Int else { return nil }
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(largeur, hauteur),
-        ] as CFDictionary)
+        return ImageDownsampler.thumbnail(source: source, maxPixelSize: CGFloat(max(largeur, hauteur)),
+                                          decodeImmediately: false)
     }
 
     /// Le RENDU de la vidéo part en galerie. **Sans effet, UN seul fichier**
@@ -308,9 +305,9 @@ extension ComposerCaptureSession {
             let rendue = await ComposerLookVideoExporter.export(url, look: regard, aspect: proportions,
                                                                  person: auteur, date: date,
                                                                  declaredSpaceName: espace)
-            guard let rendue else { return }
-            let enregistree = await ComposerCaptureSession.writeVideo(rendue, original: url, originalInLibrary: brut != nil,
-                                                                      gallery: galerie)
+            guard let rendue = rendue?.gallery else { return }
+            let enregistree = await ComposerVideoGalleryCopy.write(rendue, original: url, originalInLibrary: brut != nil,
+                                                                   gallery: galerie)
             if rendue != url {
                 FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré en galerie",
                                                       logger: .media)
@@ -318,18 +315,6 @@ extension ComposerCaptureSession {
             guard enregistree else { return }
             FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
         }
-    }
-
-    /// **Le chemin UNIQUE d'une vidéo vers Photos** (#9684) — miniature, flèche
-    /// ⬇︎ et « Terminé ». Un rendu distinct s'écrit ; un rendu identique à
-    /// l'original ne s'écrit que si l'original n'y est pas déjà — un FAIT de la
-    /// prise (son brut écrit par la caméra, `editRawSave`), jamais une lecture du
-    /// réglage : un segment assemblé à d'autres n'est pas le brut écrit, et une
-    /// écriture refusée n'a rien mis dans Photos. `true` : la prise est dans Photos.
-    static func writeVideo(_ rendue: URL, original: URL, originalInLibrary: Bool,
-                           gallery: any ComposerGalleryProviding) async -> Bool {
-        guard rendue != original || !originalInLibrary else { return true }
-        return await gallery.saveVideo(at: rendue)
     }
 
     /// Le fichier temporaire part — une fois le brut lu par la galerie.

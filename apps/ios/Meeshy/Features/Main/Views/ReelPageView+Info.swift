@@ -24,7 +24,7 @@ extension ReelPageView {
             if let username = reel.authorUsername, !username.isEmpty {
                 Text("@\(username)")
                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                     .lineLimit(1)
                     .layoutPriority(1)
             }
@@ -73,7 +73,7 @@ extension ReelPageView {
     }
 
     var metaDot: some View {
-        MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(.white.opacity(0.55))
+        MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundStyle(Color.white.opacity(0.55))
     }
 
     func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
@@ -96,14 +96,14 @@ extension ReelPageView {
             HStack(spacing: MeeshySpacing.smPlus) {
                 // Avatar tap → author's story (if active) else profile.
                 Button(action: onTapAvatar) {
-                    MeeshyAvatar(
+                    LivePresence { MeeshyAvatar(
                         name: reel.author,
                         context: .postAuthor,
                         accentColor: accentColor,
                         avatarURL: reel.authorAvatarURL,
                         presenceState: PresenceManager.shared.knownPresenceState(for: reel.authorId),
                         ring: reel.authorRing
-                    )
+                    ) }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "reels.author.avatar", defaultValue: "Story de l'auteur", bundle: .main))
@@ -113,7 +113,7 @@ extension ReelPageView {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(reel.author)
                             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                            .foregroundColor(MeeshyColors.mediaChromeForeground)
+                            .foregroundStyle(MeeshyColors.mediaChromeForeground)
                         authorMetaLine
                     }
                     // #6693 — sur un réel clair, le nom blanc passait sans voile sur les

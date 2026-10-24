@@ -19,34 +19,33 @@ struct ConversationInfoMemberRow: View {
 
     var body: some View {
         let color = DynamicColorGenerator.colorForName(participant.name)
-        let presence = presenceManager.resolvedState(userId: participant.userId, isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt)
 
         return HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: participant.name,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: participant.avatar,
                 moodEmoji: participant.userId.flatMap { moodEmojiResolver?($0) },
-                presenceState: presence,
+                presenceState: presenceManager.resolvedState(userId: participant.userId, isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt),
                 isHere: presenceManager.here(userId: participant.viewingKey, conversationId: conversationId),
                 // LE CONTOUR DU MEMBRE (#10713) — l'avatar le pose dans son empreinte (#10946).
                 ring: participant.avatarRing,
                 onMoodTap: participant.userId.flatMap { moodTapResolver?($0) }
-            )
+            ) }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(participant.name)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     if let role = participant.conversationRole,
                        role.lowercased() != "member" {
                         Text(roleBadgeLabel(role))
                             .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .padding(.horizontal, MeeshySpacing.xs)
                             .padding(.vertical, 1)
                             .background(
@@ -58,7 +57,7 @@ struct ConversationInfoMemberRow: View {
                 if let username = participant.username {
                     Text("@\(username)")
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                 }
             }
@@ -69,10 +68,10 @@ struct ConversationInfoMemberRow: View {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(String(localized: "conversation.info.member.since", defaultValue: "Depuis", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                     Text(shortDate(joinedAt))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
         }

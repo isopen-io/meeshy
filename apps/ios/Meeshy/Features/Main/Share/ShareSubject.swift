@@ -52,8 +52,8 @@ enum ShareSubject {
 nonisolated struct ShareIncoming: Equatable, Sendable {
     var media: [ShareIncomingMedia]
     var text: String?
-    /// Une pièce au moins n'a pas pu être copiée (iCloud non téléchargé, disque plein).
-    var preparationFailed = false
+    /// Ce que la feuille n'a pas pu copier, et pourquoi : l'écran le DIT (V9).
+    var shortfalls: [ShareShortfall] = []
     /// Un partage RELAYÉ par l'extension (`ShareRelayHandoff`) rouvre l'écran
     /// sur les conversations que l'auteur y avait déjà choisies.
     var preselectedConversationIds: [String] = []
@@ -66,12 +66,27 @@ nonisolated struct ShareIncoming: Equatable, Sendable {
     }
 }
 
+/// Pourquoi des pièces remises par une autre app ne partent pas.
+nonisolated enum ShareShortfall: Hashable, Sendable {
+    /// iCloud non téléchargé, disque plein, copie échouée.
+    case unprepared
+    /// Ces pièces n'ont pas été copiées : elles dépassaient les 500 Mo d'un
+    /// partage (D10, #11429).
+    case overBudget(uncopied: Int)
+    /// L'app n'a remis qu'un chemin de fichier, que Meeshy n'ouvre pas : seul
+    /// le fichier lui-même se partage (#11134, #11430).
+    case refusedSource
+}
+
 /// Une pièce venue d'une autre app — son fichier local sert l'aperçu.
 nonisolated struct ShareIncomingMedia: Identifiable, Equatable, Sendable {
     let id: String
     let mimeType: String
     let bytes: Int
     let fileURL: URL?
+    /// Le nom que le fichier portait chez l'app hôte (#11531) : ce que le
+    /// serveur garde, quand `fileURL` porte un nom technique (`0.jpeg`).
+    var originalName: String? = nil
 
     var kind: AttachmentKind { AttachmentKind(mimeType: mimeType) }
 }

@@ -15,13 +15,25 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.keepingParticipantsOf
+import me.meeshy.sdk.model.namesTwoPeople
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.listConditionalResult
+import me.meeshy.sdk.net.PagedResult
 import me.meeshy.sdk.net.pagedApiCall
+import me.meeshy.sdk.model.sync.PageFetchPlan
+import me.meeshy.sdk.model.sync.SyncOwnership
+import me.meeshy.sdk.sync.SyncAccountProvider
+import me.meeshy.sdk.sync.SyncCheckpointStore
+import me.meeshy.sdk.sync.fetchPageWithRetry
+import me.meeshy.sdk.sync.fetchPagesInParallel
+import kotlinx.coroutines.CancellationException
+import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a conversation revalidation fails; carries the API error message. */
@@ -38,6 +50,10 @@ internal class ConversationCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val conversationApi: ConversationApi,
     private val clock: CacheClock,
+    private val searchIndex: LocalSearchIndex,
+    private val accountProvider: SyncAccountProvider = SyncAccountProvider.None,
+    private val checkpoints: SyncCheckpointStore = SyncCheckpointStore(syncMetaDao),
+    private val ownership: SyncOwnership<Unit> = SyncOwnership(),
 ) : SwrCacheSource<List<ApiConversation>> {
 
     override fun observe(): Flow<List<ApiConversation>?> =
@@ -73,7 +89,7 @@ internal class ConversationCacheSource(
     )
 
     /**
-     * Pages through `GET /conversations` up to [MAX_PAGES] (`× [CONVERSATIONS_
+     * Pages through `GET /conversations` up to [PageFetchPlan.MAX_PAGES] (`× [PageFetchPlan.
      * PAGE_SIZE]` = 10 000, the same hard ceiling as iOS's full-sync —
      * `ConversationSyncEngine+Chargement.swift` — though Android walks more,
      * smaller pages to get there: `validatePagination` (gateway) caps `limit`
@@ -121,69 +137,101 @@ internal class ConversationCacheSource(
      * success" (no body was ever decoded).
      */
     private suspend fun sweepPages(updatedSince: String?, ifNoneMatch: String?): SweepOutcome {
-        val collected = mutableListOf<ApiConversation>()
-        var offset = 0
-        var isComplete = false
-        var capturedEtag: String? = null
-
-        for (page in 0 until MAX_PAGES) {
-            if (page == 0) {
-                when (
-                    val result = conversationApi.listConditionalResult(
-                        offset = offset,
-                        limit = CONVERSATIONS_PAGE_SIZE,
-                        updatedSince = updatedSince,
-                        ifNoneMatch = ifNoneMatch,
+        val first = when (
+            val result = conversationApi.listConditionalResult(
+                offset = 0,
+                limit = PageFetchPlan.PAGE_SIZE,
+                updatedSince = updatedSince,
+                ifNoneMatch = ifNoneMatch,
+            )
+        ) {
+            is ConditionalResult.NotModified -> {
+                if (ifNoneMatch == null) {
+                    throw ConversationSyncException(
+                        "Unexpected 304 for conversations without If-None-Match sent",
                     )
-                ) {
-                    is ConditionalResult.NotModified -> {
-                        if (ifNoneMatch == null) {
-                            throw ConversationSyncException(
-                                "Unexpected 304 for conversations without If-None-Match sent",
-                            )
-                        }
-                        return SweepOutcome(notModified = true)
-                    }
-                    is ConditionalResult.Fresh -> {
-                        val rows = result.data
-                        collected += rows
-                        val pagination = result.pagination
-                            ?: break // Unknown completeness — never infer "done" from a missing block.
-                        if (!pagination.hasMore) {
-                            isComplete = true
-                            capturedEtag = result.etag
-                            break
-                        }
-                        offset += rows.size
-                    }
-                    is ConditionalResult.Failure -> throw ConversationSyncException(result.error.message)
                 }
-            } else {
-                when (
-                    val result = pagedApiCall {
-                        conversationApi.list(
-                            offset = offset,
-                            limit = CONVERSATIONS_PAGE_SIZE,
-                            updatedSince = updatedSince,
-                        )
-                    }
-                ) {
-                    is NetworkResult.Success -> {
-                        val rows = result.data.data
-                        collected += rows
-                        val pagination = result.data.pagination ?: break
-                        if (!pagination.hasMore) {
-                            isComplete = true
-                            break
-                        }
-                        offset += rows.size
-                    }
-                    is NetworkResult.Failure -> throw ConversationSyncException(result.error.message)
-                }
+                return SweepOutcome(notModified = true)
             }
+            is ConditionalResult.Fresh -> result
+            is ConditionalResult.Failure -> throw ConversationSyncException(result.error.message)
+        }
+        // Unknown completeness — never infer "done" from a missing block.
+        val pagination = first.pagination ?: return SweepOutcome(first.data)
+        if (!pagination.hasMore) return SweepOutcome(first.data, isComplete = true, capturedEtag = first.etag)
+        val rest = loadRemainingPages(first.data, pagination.total, updatedSince)
+        return SweepOutcome(first.data + rest.rows, rest.isComplete)
+    }
+
+    private class RemainingPages(val rows: List<ApiConversation>, val isComplete: Boolean)
+
+    private suspend fun fetchPage(offset: Int, updatedSince: String?): PagedResult<List<ApiConversation>> =
+        when (
+            val result = pagedApiCall {
+                conversationApi.list(offset = offset, limit = PageFetchPlan.PAGE_SIZE, updatedSince = updatedSince)
+            }
+        ) {
+            is NetworkResult.Success -> result.data
+            is NetworkResult.Failure -> throw ConversationSyncException(result.error.message)
         }
 
-        return SweepOutcome(collected, isComplete, capturedEtag = capturedEtag)
+    /**
+     * Pages 2+ : en parallèle (4 au plus, réessai par page, pages perdues récupérées) quand le
+     * serveur annonce son total ; sinon, ou si la voie parallèle échoue, la boucle séquentielle
+     * d'origine, bornée à [PageFetchPlan.MAX_TAIL_ITERATIONS] itérations.
+     */
+    private suspend fun loadRemainingPages(
+        firstPage: List<ApiConversation>,
+        total: Int?,
+        updatedSince: String?,
+    ): RemainingPages {
+        val planned = PageFetchPlan.remainingPageIndices(total, firstPage.size)
+        if (planned.isNotEmpty()) {
+            val parallel = try {
+                loadInParallel(firstPage.size, planned, updatedSince)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            if (parallel != null) return parallel
+        }
+        return loadSequentially(firstPage, updatedSince)
+    }
+
+    private suspend fun loadInParallel(firstCount: Int, planned: List<Int>, updatedSince: String?): RemainingPages {
+        val stride = PageFetchPlan.stride(firstCount)
+        val fetch: suspend (Int) -> PagedResult<List<ApiConversation>> =
+            { index -> fetchPage(PageFetchPlan.offsetOf(index, stride), updatedSince) }
+        val pages = fetchPagesInParallel(planned, fetch = fetch).toMutableMap()
+        for (lost in PageFetchPlan.droppedPages(planned, pages.keys)) {
+            pages[lost] = fetchPageWithRetry { fetch(lost) }.getOrNull() ?: break
+        }
+        val rows = planned.mapNotNull { pages[it] }.flatMap { it.data }
+        if (pages.keys.size < planned.size) return RemainingPages(rows, isComplete = false)
+        val last = pages.getValue(planned.last()).pagination ?: return RemainingPages(rows, isComplete = false)
+        if (!last.hasMore) return RemainingPages(rows, isComplete = true)
+        val more = loadSequentially(emptyList(), updatedSince, startOffset = firstCount + rows.size)
+        return RemainingPages(rows + more.rows, more.isComplete)
+    }
+
+    private suspend fun loadSequentially(
+        firstPage: List<ApiConversation>,
+        updatedSince: String?,
+        startOffset: Int = firstPage.size,
+    ): RemainingPages {
+        val seen = firstPage.mapTo(HashSet()) { it.id }
+        val rows = mutableListOf<ApiConversation>()
+        var tail = PageFetchPlan.Tail(offset = startOffset, hasMore = true)
+        while (tail.canContinue) {
+            val page = fetchPage(tail.offset, updatedSince)
+            val pagination = page.pagination ?: return RemainingPages(rows, isComplete = false)
+            val fresh = page.data.count { seen.add(it.id) }
+            rows += page.data
+            if (!pagination.hasMore) return RemainingPages(rows, isComplete = true)
+            tail = PageFetchPlan.advance(tail, returned = page.data.size, newItems = fresh, backendHasMore = true)
+        }
+        return RemainingPages(rows, isComplete = false)
     }
 
     /**
@@ -229,6 +277,16 @@ internal class ConversationCacheSource(
      * "exhaustively confirmed current".
      */
     override suspend fun revalidate() {
+        val account = accountProvider.activeAccountId()
+        if (account != null) ownership.claim(account)
+        try {
+            revalidateOwned(account)
+        } finally {
+            if (account != null) ownership.release(account)
+        }
+    }
+
+    private suspend fun revalidateOwned(account: String?) {
         val watermark = syncMetaDao.watermark(RESOURCE_KEY)
         val currentEtag = syncMetaDao.etag(RESOURCE_KEY)
         val currentEtagScope = syncMetaDao.etagRequestKey(RESOURCE_KEY)
@@ -240,10 +298,14 @@ internal class ConversationCacheSource(
 
         val outcome = sweepPages(updatedSince, ifNoneMatch)
 
+        // The account left during the sweep: its pages must not land in the next account's cache.
+        if (!ownership.owns(account)) return
+
         if (outcome.notModified) {
             // Confirmed unchanged: zero body decoded, zero Room writes beyond
             // freshness — watermark, etag and its scope all carry over as-is.
             syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermark, currentEtag, currentEtagScope))
+            recordCheckpoint(account, now, pruned = false, fullReconcile = false)
             return
         }
 
@@ -257,6 +319,13 @@ internal class ConversationCacheSource(
             etag = outcome.capturedEtag ?: currentEtag,
             etagScope = if (outcome.capturedEtag != null) requestScope else currentEtagScope,
         )
+        val prunedNow = !useDelta && outcome.isComplete
+        recordCheckpoint(account, now, pruned = prunedNow, fullReconcile = prunedNow)
+    }
+
+    private suspend fun recordCheckpoint(account: String?, now: Long, pruned: Boolean, fullReconcile: Boolean) {
+        if (account == null || !ownership.owns(account)) return
+        checkpoints.write(account, checkpoints.read(account).advanced(now, pruned, fullReconcile))
     }
 
     /**
@@ -265,8 +334,8 @@ internal class ConversationCacheSource(
      *
      * SQLite caps bound variables per statement at `SQLITE_MAX_VARIABLE_NUMBER`
      * — 999 on Android API 26-29 (raised on later releases, but `minSdk = 26`
-     * makes 999 the floor this app must hold under). [MAX_PAGES] ×
-     * [CONVERSATIONS_PAGE_SIZE] deliberately allows sweeping up to 10 000
+     * makes 999 the floor this app must hold under). [PageFetchPlan.MAX_PAGES] ×
+     * [PageFetchPlan.PAGE_SIZE] deliberately allows sweeping up to 10 000
      * conversations — i.e. the very `keptIds` list a `NOT IN` clause would bind
      * one variable per id for — so the fix this method exists to prevent
      * ("too many SQL variables" thrown mid-transaction, ON DEVICE, for exactly
@@ -302,21 +371,8 @@ internal class ConversationCacheSource(
         etagScope: String?,
     ) {
         val now = clock.nowMillis()
-        val rows = conversations.map { conversation ->
-            ConversationEntity(
-                id = conversation.id,
-                payload = MeeshyApi.json.encodeToString(conversation),
-                updatedAt = isoToEpochMillis(
-                    conversation.updatedAt
-                        ?: conversation.lastMessage?.createdAt
-                        ?: conversation.createdAt,
-                ),
-                cachedAt = now,
-                unreadCount = conversation.unreadCount,
-            )
-        }
-        // The watermark's own value — NEVER the fallback-adjusted one above —
-        // see the doc-comment on [revalidate] for why the two must not merge.
+        // The watermark's own value — NEVER the fallback-adjusted one in [entityOf] — see the
+        // doc-comment on [revalidate] for why the two must not merge.
         val receivedMax = if (advanceWatermark) {
             conversations.mapNotNull { isoToEpochMillisOrNull(it.updatedAt) }.maxOrNull()
         } else {
@@ -324,16 +380,56 @@ internal class ConversationCacheSource(
         }
         val watermarkToStore = receivedMax ?: currentWatermark
         database.withTransaction {
+            val carried = conversations.map { carryingKnownPeers(it) }
+            val rows = carried.map { entityOf(it, now) }
             conversationDao.upsertAll(rows)
+            carried.forEach(searchIndex::indexConversation)
             if (prune) pruneMissing(rows.map { it.id })
             syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermarkToStore, etag, etagScope))
         }
     }
 
+    /**
+     * Stores one conversation the app has just been handed outside a list sweep (a direct found
+     * or created for a story/mood reply or a profile's Message button), so the chat screen — which
+     * reads the Room row — has it before the next sweep serves it. Same carry rule as a sweep.
+     */
+    suspend fun remember(conversation: ApiConversation) {
+        val now = clock.nowMillis()
+        database.withTransaction {
+            val carried = carryingKnownPeers(conversation)
+            conversationDao.upsertAll(listOf(entityOf(carried, now)))
+            searchIndex.indexConversation(carried)
+        }
+    }
+
+    /**
+     * A served direct row that names fewer than two people has not elected an interlocutor
+     * (`GET /sync`-shaped rows carry no roster, #11615): it takes the roster the cache knows
+     * instead of overwriting it, so the row never falls back to the generic name on a sync that
+     * simply did not serve its participants. Must run inside the write transaction.
+     */
+    private suspend fun carryingKnownPeers(served: ApiConversation): ApiConversation {
+        if (!served.isDirect || served.namesTwoPeople) return served
+        val known = conversationDao.find(served.id)
+            ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
+        return served.keepingParticipantsOf(known)
+    }
+
+    private fun entityOf(conversation: ApiConversation, cachedAtMillis: Long) = ConversationEntity(
+        id = conversation.id,
+        payload = MeeshyApi.json.encodeToString(conversation),
+        updatedAt = isoToEpochMillis(
+            conversation.updatedAt
+                ?: conversation.lastMessage?.createdAt
+                ?: conversation.createdAt,
+        ),
+        cachedAt = cachedAtMillis,
+        unreadCount = conversation.unreadCount,
+    )
+
     internal companion object {
         const val RESOURCE_KEY: String = "conversations"
-        private const val CONVERSATIONS_PAGE_SIZE = 100
-        private const val MAX_PAGES = 100
 
         /**
          * Bound-variable budget per [ConversationDao.deleteByIds] call — under

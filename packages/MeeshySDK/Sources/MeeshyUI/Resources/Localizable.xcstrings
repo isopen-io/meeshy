@@ -632,6 +632,53 @@
     "Avancer de 10 secondes": {},
     "Boucle": {},
     "Choisir ou créer une catégorie...": {},
+    "community.settings.color.swatch.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اللون %1$lld من %2$lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farbe %1$lld von %2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color %1$lld of %2$lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color %1$lld de %2$lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couleur %1$lld sur %2$lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colore %1$lld di %2$lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cor %1$lld de %2$lld"
+          }
+        }
+      }
+    },
     "Couleur": {},
     "Couleur du trait": {},
     "Couper le son": {},
@@ -670,6 +717,53 @@
     "Lire la vidéo %@": {},
     "Location: %@": {},
     "Lu": {},
+    "media.image.open.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح الصورة بملء الشاشة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild im Vollbild öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open image full screen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir la imagen a pantalla completa"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir l'image en plein écran"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri l'immagine a schermo intero"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir a imagem em tela cheia"
+          }
+        }
+      }
+    },
     "Muet": {},
     "Nederlands": {},
     "Nom de la catégorie": {},
@@ -749,6 +843,53 @@
     "Si un compte existe avec %@, un lien de reinitialisation a ete envoye.": {},
     "Son": {},
     "Sticker %@": {},
+    "story.timeline.transition.select.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحديد الانتقال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übergang auswählen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select transition"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar la transición"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sélectionner la transition"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleziona la transizione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecionar a transição"
+          }
+        }
+      }
+    },
     "Supprimer": {},
     "Supprimer le trait": {},
     "Sélectionner la catégorie %@": {},
@@ -761,6 +902,53 @@
     "Transcription: %@": {},
     "Turkce": {},
     "Une session d'édition non terminée a été retrouvée pour cette vidéo.": {},
+    "userIdentity.language.show.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض بـ%@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf %@ anzeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar en %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher en %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra in %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar em %@"
+          }
+        }
+      }
+    },
     "Vidéo": {},
     "Vitesse": {},
     "Volume": {},
@@ -27497,43 +27685,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سيبدأ التشغيل بعد التنزيل"
+            "value": "جارٍ تحضير التشغيل…"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Wiedergabe startet nach dem Download"
+            "value": "Wiedergabe wird vorbereitet…"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Playback will start after the download"
+            "value": "Preparing playback…"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La reproducción empezará tras la descarga"
+            "value": "Preparando la reproducción…"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "La lecture démarrera après le téléchargement"
+            "value": "Préparation de la lecture…"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La riproduzione inizierà dopo il download"
+            "value": "Preparazione della riproduzione…"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A reprodução começará após o download"
+            "value": "Preparando a reprodução…"
           }
         }
       }
@@ -33975,7 +34163,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Connectes"
+            "value": "Connectés"
           }
         },
         "it": {

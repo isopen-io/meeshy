@@ -137,7 +137,7 @@ public struct PackShopView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.name)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 if !row.author.isEmpty {
                     Text(String(format: String(localized: "sticker.sheet.pack.by", defaultValue: "par %@",
                                                bundle: .module), row.author))
@@ -146,7 +146,7 @@ public struct PackShopView: View {
                 }
                 if let usage = row.usageText {
                     Label(usage, systemImage: "checkmark.seal")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundStyle(MeeshyColors.indigo500)
                 }
                 if Self.showsOwned(row) {
@@ -158,7 +158,7 @@ public struct PackShopView: View {
                 }
                 if !row.description.isEmpty {
                     Text(row.description)
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -211,7 +211,7 @@ public struct PackShopView: View {
             onToggle(row.slug)
         } label: {
             Text(label)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                 .foregroundStyle(row.installed ? Color.primary : Color.white)
                 .padding(.horizontal, 14)
                 .frame(minHeight: 32)
@@ -300,15 +300,12 @@ public struct StoredPackImage: View {
     }
 }
 
+/// Les vignettes de la boutique passent par le sous-échantillonneur unique
+/// (#11923) : mêmes règles que tout le reste, orientation EXIF comprise.
 nonisolated enum PackImageDecoder {
     @concurrent
     static func thumbnail(_ data: Data, maxPixelSize: Int) async -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                  kCGImageSourceCreateThumbnailFromImageAlways: true,
-                  kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-                  kCGImageSourceShouldCacheImmediately: true,
-              ] as CFDictionary) else { return nil }
-        return UIImage(cgImage: image)
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: CGFloat(maxPixelSize), decodeImmediately: true)
+            .map { UIImage(cgImage: $0) }
     }
 }

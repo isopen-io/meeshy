@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import CoreVideo
 import MeeshySDK
 
 /// Decodes still frames from foreground overlay videos for the MP4 exporter.
@@ -18,6 +19,7 @@ import MeeshySDK
 /// Thread-safety: `StoryAVCompositor` calls `frame(for:at:)` from its bridged
 /// main-actor `renderFrame`, but the generator map is lock-guarded so the type
 /// stays `Sendable` for storage on the (nonisolated) compositor instance.
+// unchecked: générateurs sous `generators` (Locked) ; `AVAssetImageGenerator` n'est pas Sendable.
 public final class StoryForegroundVideoFrameSource: @unchecked Sendable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
@@ -25,8 +27,7 @@ public final class StoryForegroundVideoFrameSource: @unchecked Sendable {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    private nonisolated let lock = NSLock()
-    private nonisolated(unsafe) var generators: [String: AVAssetImageGenerator] = [:]
+    private nonisolated let generators = Locked(uncheckedState: [String: AVAssetImageGenerator]())
 
     public nonisolated init() {}
 
@@ -39,11 +40,24 @@ public final class StoryForegroundVideoFrameSource: @unchecked Sendable {
     /// while the compositor holds `main.sync` deadlocks against AVFoundation's
     /// own callbacks (observed: the export hangs indefinitely).
     public nonisolated func decodeOverlayFrames(slide: StorySlide, at time: CMTime) -> [String: CGImage] {
+        decodeOverlayFrames(slide: slide, at: time, trackFrames: [:], tracks: [:])
+    }
+
+    /// Une vidéo qui a sa piste dans la composition (#9877) est servie par la
+    /// trame que celle-ci a décodée, en séquence — et par rien d'autre : sans
+    /// trame, elle est hors de sa fenêtre. Seule une vidéo sans piste (illisible
+    /// à la composition) retombe sur le générateur.
+    public nonisolated func decodeOverlayFrames(slide: StorySlide, at time: CMTime,
+                                                trackFrames: [String: CVPixelBuffer],
+                                                tracks: [String: StoryOverlayTrack]) -> [String: CGImage] {
         var frames: [String: CGImage] = [:]
         for media in slide.effects.mediaObjects ?? []
         where media.kind == .video && !media.isBackground {
-            if let frame = frame(for: media, at: time) {
-                frames[media.id] = frame
+            let decoded = tracks[media.id].map { track in
+                trackFrames[media.id].flatMap { StoryOverlayVideoTracks.frame(from: $0, track: track, media: media) }
+            } ?? frame(for: media, at: time)
+            if let decoded {
+                frames[media.id] = decoded
             }
         }
         return frames
@@ -71,15 +85,15 @@ public final class StoryForegroundVideoFrameSource: @unchecked Sendable {
             .map { StoryVideoAdjustmentsProcessor.apply(media, to: $0) }
     }
 
-    private nonisolated func generator(for id: String, url: URL) -> AVAssetImageGenerator {
-        lock.lock()
-        defer { lock.unlock() }
-        if let existing = generators[id] { return existing }
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-        generator.appliesPreferredTrackTransform = true
-        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.05, preferredTimescale: 600)
-        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
-        generators[id] = generator
-        return generator
+    nonisolated func generator(for id: String, url: URL) -> AVAssetImageGenerator {
+        generators.mutateUnchecked { generators in
+            if let existing = generators[id] { return existing }
+            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+            generator.appliesPreferredTrackTransform = true
+            generator.requestedTimeToleranceBefore = CMTime(seconds: 0.05, preferredTimescale: 600)
+            generator.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
+            generators[id] = generator
+            return generator
+        }
     }
 }

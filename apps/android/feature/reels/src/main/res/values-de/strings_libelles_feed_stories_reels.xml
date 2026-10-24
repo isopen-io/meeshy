@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reels_bookmark">Merken</string>
+    <string name="reels_unbookmark">Gemerkt entfernen</string>
+    <string name="reels_comments_loading">Kommentare werden geladen …</string>
+    <string name="reels_comments_error">Kommentare konnten nicht geladen werden</string>
+    <string name="reels_comments_input_hint">Kommentar hinzufügen …</string>
+    <string name="reels_comments_failed">Fehlgeschlagen – tippen zum Wiederholen</string>
+    <string name="reels_comments_view_post">Beitrag ansehen</string>
+</resources>

@@ -89,6 +89,12 @@ class OutboxLaneMapTest {
     }
 
     @Test
+    fun `answering a friend request drains on the friend lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.RESPOND_FRIEND_REQUEST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.FRIEND))
+    }
+
+    @Test
     fun `every kind maps to a non-blank assignment`() {
         OutboxKind.entries.forEach { kind ->
             when (val assignment = OutboxLaneMap.assignmentFor(kind)) {

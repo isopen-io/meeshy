@@ -107,7 +107,8 @@ nonisolated enum ComposerPhotoLookSource {
     /// La légende d'un classique du Montage pour une prise faite à `date`.
     static func caption(at date: Date) -> CallMontageCaption {
         CallMontageCaption(title: CallCaptureController.brand,
-                           subtitle: date.formatted(date: .abbreviated, time: .shortened))
+                           subtitle: date.formatted(date: .abbreviated, time: .shortened),
+                           clock: date.formatted(date: .omitted, time: .shortened))
     }
 
     /// Les pixels debout : le traitement de la prise (#8695) les rend déjà

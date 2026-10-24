@@ -67,6 +67,9 @@ public struct MeeshyVideoThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
+        .accessibilityAddTraits(onTap == nil ? [] : .isButton)
+        .accessibilityAction { onTap?() }
+        .accessibilityLabel(onTap == nil ? "" : String(localized: "media.video.play", bundle: .module))
         .task(id: videoUrlString) { await extractThumbnailIfNeeded() }
     }
 
@@ -145,7 +148,7 @@ public struct MeeshyVideoThumbnail: View {
             .overlay(
                 Image(systemName: "video.fill")
                     .font(.system(size: 32))
-                    .foregroundColor(.white.opacity(0.2))
+                    .foregroundStyle(Color.white.opacity(0.2))
             )
     }
 
@@ -157,7 +160,7 @@ public struct MeeshyVideoThumbnail: View {
             Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             Image(systemName: "play.fill")
                 .font(.system(size: MeeshyIconSize.md, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .offset(x: 1.5)
         }
         .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
@@ -172,7 +175,7 @@ public struct MeeshyVideoThumbnail: View {
             HStack {
                 Text(formatted)
                     .font(.system(size: MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xs)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
@@ -260,14 +263,12 @@ public struct MeeshyVideoThumbnail: View {
         try data.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
-        let asset = AVURLAsset(url: tempURL)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxDimension, height: maxDimension)
-
-        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
-        let (cgImage, _) = try await generator.image(at: time)
-        return UIImage(cgImage: cgImage)
+        guard let image = await VideoThumbnailGenerator.shared.image(for: VideoThumbnailRequest(
+            url: tempURL, instants: .start(atMost: 0.1),
+            maximumSize: CGSize(width: maxDimension, height: maxDimension), cachesResult: false)) else {
+            throw VideoThumbnailError.undecodable
+        }
+        return image
     }
 
     // MARK: - Duration formatting

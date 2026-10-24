@@ -349,7 +349,6 @@ struct MainWindowGate<Content: View>: View {
 /// Une seconde fenêtre principale ouverte par le système : elle renvoie vers la première, et passe ses liens.
 struct SecondaryMainWindowView: View {
     let scene: UIWindowScene
-    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         VStack(spacing: MeeshySpacing.md) {
@@ -378,7 +377,7 @@ struct SecondaryMainWindowView: View {
         }
         .padding(MeeshySpacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(RootThemedBackground(theme: theme))
+        .background(RootThemedBackground(theme: ThemeManager.shared))
         // Un lien arrivé ici rejoint la file que la fenêtre principale consomme.
         .onOpenURL { url in _ = DeepLinkRouter.shared.handle(url: url) }
     }
@@ -399,7 +398,6 @@ struct DetachedWindowView: View {
     /// Même barrière que les racines : un 426 ou un plancher de version bloque
     /// AUSSI la fenêtre détachée.
     @StateObject private var upgradeGate = UpgradeGateController()
-    @ObservedObject private var theme = ThemeManager.shared
     @State private var scene: UIWindowScene?
     @State private var conversation: Conversation?
     @State private var conversationUnavailable = false
@@ -415,7 +413,7 @@ struct DetachedWindowView: View {
 
     var body: some View {
         ZStack {
-            RootThemedBackground(theme: theme)
+            RootThemedBackground(theme: ThemeManager.shared)
             if !authManager.isAuthenticated {
                 note(String(localized: "window.detached.signed_out", defaultValue: "Connectez-vous dans la fenêtre principale de Meeshy.", bundle: .main))
             } else if !DetachedWindowOwnership.shows(owner: ownerUserId, current: authManager.currentUser?.id) {
@@ -462,7 +460,7 @@ struct DetachedWindowView: View {
         // Les liens vont à la fenêtre principale ; seule une conversation glissée au bord vient ici.
         .handlesExternalEvents(preferring: [DetachedWindowOpener.activityIdentifier],
                                allowing: [DetachedWindowOpener.activityIdentifier])
-        .environmentObject(router)
+        .modifier(MeeshyRouterInjection(router: router))
         .modifier(PublishesSceneNavigation(router: router, role: .detached))
         .modifier(PublishesSceneAction(keyPath: \.meeshyCloseWindow, perform: closeWindow))
         .modifier(PublishesSceneAction(keyPath: \.meeshySearch, perform: { router.pendingOpenSearch = true }))
@@ -478,7 +476,7 @@ struct DetachedWindowView: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) }
             )
-            .environmentObject(router)
+            .modifier(MeeshyRouterInjection(router: router))
             .environmentObject(statusViewModel)
             .meeshyConversationList(conversationVMOwner.viewModel)
         }

@@ -126,7 +126,7 @@ extension StoryCanvasUIView {
         guard !didRequestPlaybackSession else { return }
         didRequestPlaybackSession = true
         MediaSessionCoordinator.shared.activateContentPlayback(.audible)
-        Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
+        MediaSessionCoordinator.shared.requestPlaybackInOrder()
     }
 
     var slideHasSoundingVideo: Bool {
@@ -138,7 +138,7 @@ extension StoryCanvasUIView {
     func releasePlaybackSessionIfNeeded() {
         guard didRequestPlaybackSession else { return }
         didRequestPlaybackSession = false
-        Task { await MediaSessionCoordinator.shared.release() }
+        MediaSessionCoordinator.shared.releasePlaybackInOrder()
     }
 
     /// Subscribes to `MediaSessionCoordinator` interruption / route-change
@@ -276,8 +276,8 @@ extension StoryCanvasUIView {
             guard self.slide.id == slideId else { return }
 
             do {
-                try self.audioMixer.configure(audios: foreground, urls: fgURLs,
-                                              loopsEveryClip: isEditPreview)
+                try await self.audioMixer.loadAndConfigure(audios: foreground, urls: fgURLs,
+                                                           loopsEveryClip: isEditPreview) { self.slide.id == slideId }
             } catch {
                 os.Logger.storyAudio.error(
                     "ReaderAudioMixer.configure failed: \(error.localizedDescription, privacy: .public)"
@@ -313,14 +313,14 @@ extension StoryCanvasUIView {
                         "BG audio cached audioId=\(background.id, privacy: .public) localFile=\(localURL.lastPathComponent, privacy: .public)"
                     )
                     do {
-                        try self.audioMixer.configureBackground(
+                        try await self.audioMixer.loadAndConfigureBackground(
                             audio: background,
                             url: localURL,
                             looping: ReaderAudioLoopPolicy.loops(declared: background.loop,
                                                                  isBackground: true,
                                                                  isEditPreview: isEditPreview),
                             loopsEveryClip: isEditPreview
-                        )
+                        ) { self.slide.id == slideId }
                     } catch {
                         os.Logger.storyAudio.error(
                             "ReaderAudioMixer.configureBackground failed audioId=\(background.id, privacy: .public): \(error.localizedDescription, privacy: .public)"

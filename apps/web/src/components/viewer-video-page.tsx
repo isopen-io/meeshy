@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -7,6 +7,8 @@ import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useMediaLoadFailure } from '@/lib/media/media-failure';
+import { useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
+import { useServedVideoSrc } from '@/lib/media/served-video';
 import { showsPausedBadge, type StagePresentation } from '@/lib/view/media-stage';
 import { infoDuration, lateralSeek } from '@/lib/view/media-transport';
 import { useEffacingControl } from '@/lib/view/use-effacing-control';
@@ -154,8 +156,17 @@ export default function ViewerVideoPage({
 
   const posterUrl = attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== '' ? attachmentSrc(attachment.thumbnailUrl) : undefined;
   const paused = showsPausedBadge(presentation, true, playing);
-  const videoSrc = attachmentSrc(attachment.fileUrl);
+  const videoSrc = useServedVideoSrc(attachment);
   const failure = useMediaLoadFailure(videoSrc);
+  const [element, setElement] = useState<HTMLMediaElement | null>(null);
+  const bindElement = useCallback(
+    (bound: HTMLMediaElement | null) => {
+      bind(bound);
+      setElement(bound);
+    },
+    [bind],
+  );
+  useRememberSeenAttachment({ element, attachmentId: attachment.id, src: attachment.fileUrl === '' ? '' : videoSrc, active: isActive });
 
   /* Une vidéo introuvable (#8141) dessine le MÊME état qu'une image : ni
      lecteur noir muet, ni chargement sans fin. */
@@ -195,8 +206,8 @@ export default function ViewerVideoPage({
       {...(isActive ? { onPointerDown: reveal, onPointerMove } : {})}
     >
       <video
-        key={`${attachment.fileUrl}:${failure.attempt}`}
-        ref={bind}
+        key={`${videoSrc}:${failure.attempt}`}
+        ref={bindElement}
         playsInline
         preload="auto"
         {...(posterUrl !== undefined ? { poster: posterUrl } : {})}

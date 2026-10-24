@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "ui", "iosKey": "settings.info.button.label", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "common.close", "status": "adopted"}
+      ]
+    }
+  }
+}

@@ -45,7 +45,7 @@ struct ShareDurationRow: View, Equatable {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Label(title, systemImage: "flame")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .accessibilityAddTraits(.isHeader)
 
                 // Défilement horizontal : aux tailles Dynamic Type accessibles,
@@ -65,7 +65,7 @@ struct ShareDurationRow: View, Equatable {
                     bundle: .meeshyShare
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)

@@ -110,18 +110,14 @@ final class SettingsReplayEnvelopeTests: XCTestCase {
      On mesure donc ce qu'on peut mesurer — qu'il ne redemande pas l'utilisateur.
      */
     func test_leRejeuDeMeeshyApp_neDecodePlusLUtilisateur() throws {
-        let source = try String(
-            contentsOf: URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent() // Services
-                .deletingLastPathComponent() // Unit
-                .deletingLastPathComponent() // MeeshyTests
-                .deletingLastPathComponent() // apps/ios
-                .appendingPathComponent("Meeshy/MeeshyApp.swift"),
-            encoding: .utf8
-        )
-        guard let debut = source.range(of: "await SettingsActionQueue.shared.setFlushHandler"),
-              let fin = source.range(of: "\n                    }\n", range: debut.upperBound..<source.endIndex) else {
-            return XCTFail("Corps de setFlushHandler introuvable dans MeeshyApp.swift")
+        let source = try AppSourceGuard.unit("Meeshy/MeeshyApp.swift")
+        guard let debut = source.range(of: "await SettingsActionQueue.shared.setFlushHandler") else {
+            return XCTFail("Corps de setFlushHandler introuvable dans l'unité MeeshyApp")
+        }
+        let debutDeLigne = source[..<debut.lowerBound].lastIndex(of: "\n").map { source.index(after: $0) } ?? source.startIndex
+        let indentation = String(source[debutDeLigne...].prefix { $0 == " " })
+        guard let fin = source.range(of: "\n\(indentation)}\n", range: debut.upperBound..<source.endIndex) else {
+            return XCTFail("Fin de setFlushHandler introuvable dans l'unité MeeshyApp")
         }
         // Les COMMENTAIRES sont retirés avant la mesure : celui qui explique ce
         // correctif NOMME la forme fautive, et un test qui lit le fichier brut

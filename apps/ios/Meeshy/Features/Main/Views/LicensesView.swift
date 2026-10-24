@@ -12,7 +12,6 @@ struct LicensesView: View {
     private let licenses: [OpenSourceLicense] = [
         OpenSourceLicense(name: "Socket.IO Client Swift", author: "Socket.IO", licenseType: "MIT", url: "https://github.com/socketio/socket.io-client-swift"),
         OpenSourceLicense(name: "Firebase iOS SDK", author: "Google", licenseType: "Apache 2.0", url: "https://github.com/firebase/firebase-ios-sdk"),
-        OpenSourceLicense(name: "Kingfisher", author: "onevcat", licenseType: "MIT", url: "https://github.com/onevcat/Kingfisher"),
         OpenSourceLicense(name: "WebRTC", author: "Google", licenseType: "BSD", url: "https://webrtc.org"),
         OpenSourceLicense(name: "Starscream", author: "Dalton Cherry", licenseType: "Apache 2.0", url: "https://github.com/daltoniam/Starscream")
     ]
@@ -40,7 +39,7 @@ struct LicensesView: View {
 
             Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliothèques open source suivantes.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, MeeshySpacing.xs)
                 .textSelection(.enabled)
@@ -65,18 +64,18 @@ struct LicensesView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(license.name)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Text(license.author)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Spacer()
 
                 Text(license.licenseType)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(

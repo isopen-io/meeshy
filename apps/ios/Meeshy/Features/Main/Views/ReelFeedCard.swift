@@ -34,7 +34,7 @@ struct ReelFeedCardContainer: View {
     /// masquée du menu (même convention de gating que `FeedPostCard`).
     var onEdit: ((FeedPost) -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
-    var onRemove: ((String) -> Void)? = nil
+    var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
 
@@ -110,7 +110,7 @@ struct ReelFeedCard: View, Equatable {
     /// Menu « … » (parité avec `FeedPostCard`) — `nil` = action indisponible.
     var onEdit: ((FeedPost) -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
-    var onRemove: ((String) -> Void)? = nil
+    var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
 
@@ -300,7 +300,7 @@ struct ReelFeedCard: View, Equatable {
                     document: document,
                     isActive: isActive,
                     accentColor: accentHex,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                    preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                 )
                 .equatable()
                 .frame(width: width, height: height)
@@ -459,18 +459,18 @@ struct ReelFeedCard: View, Equatable {
     private var authorRow: some View {
         Button { onTapAuthor(repostedReel?.authorId ?? post.authorId) } label: {
             HStack(spacing: MeeshySpacing.sm) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: displayAuthor,
                     context: .custom(34),
                     accentColor: displayAuthorColor,
                     avatarURL: displayAvatarURL,
                     presenceState: PresenceManager.shared.knownPresenceState(for: repostedReel?.authorId ?? post.authorId),
                     ring: repostedReel == nil ? post.authorRing : repostedReel?.authorRing
-                )
+                ) }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(displayAuthor)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                     authorMetaLine
                 }
                 // Une ombre pour le BLOC, pas une par texte et par icône (#9702) :
@@ -651,7 +651,7 @@ struct ReelFeedCard: View, Equatable {
                 if displayLikeCount > 0 {
                     Text("\(displayLikeCount)")
                         .font(.footnote.weight(.medium))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
                 }
             }
@@ -678,7 +678,7 @@ struct ReelFeedCard: View, Equatable {
                 actionGlyph(outline: outline, filled: filled, tint: tint, participated: participated)
                 if count > 0 {
                     Text("\(count)").font(.footnote.weight(.medium))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
                 }
             }

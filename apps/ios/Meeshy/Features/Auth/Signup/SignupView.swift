@@ -30,7 +30,7 @@ struct SignupView: View {
     // par `SignupRegistering`, ce qui est précisément ce qui rend sa suite
     // exécutable.
     @StateObject var viewModel = SignupViewModel()
-    @StateObject var theme = ThemeManager.shared
+    @ResolvedThemePalette var theme
     @Environment(\.dismiss) var dismiss
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion

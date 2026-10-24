@@ -207,7 +207,8 @@ final class LiveShareDispatcher: ShareDispatching {
                     sourceMediaURLs: files, kinds: incoming.media.map { Self.attachmentKind(for: $0.mimeType) },
                     conversationId: conversationId, content: content, clientMessageId: clientMessageId,
                     originalLanguage: nil, replyToId: nil, forwardedFromId: nil, forwardedFromConversationId: nil,
-                    copyAttachmentsFromClientMessageId: nil, deletesSourceFiles: false, createdAt: Date()
+                    copyAttachmentsFromClientMessageId: nil, sticker: nil, deletesSourceFiles: false, createdAt: Date(),
+                    protection: .none, originalNames: incoming.media.map(\.originalName)
                 )
                 incomingOriginClientMessageId = clientMessageId
             }

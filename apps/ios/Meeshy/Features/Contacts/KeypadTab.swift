@@ -12,7 +12,7 @@ struct KeypadTab: View {
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     private static let keys: [[KeypadKey]] = [
         [.init("1", ""), .init("2", "ABC"), .init("3", "DEF")],
@@ -86,7 +86,7 @@ struct KeypadTab: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.matches) { user in
-                        resultRow(user)
+                        liveResultRow(user)
                     }
                 }
                 .padding(.top, MeeshySpacing.xsPlus)
@@ -130,6 +130,10 @@ struct KeypadTab: View {
                 .padding(.horizontal, 40)
         }
         .padding(.top, MeeshySpacing.xxl)
+    }
+
+    private func liveResultRow(_ user: UserSearchResult) -> some View {
+        LivePresence { resultRow(user) }
     }
 
     private func resultRow(_ user: UserSearchResult) -> some View {
@@ -190,7 +194,7 @@ struct KeypadTab: View {
     }
 
     private func openProfile(_ user: UserSearchResult) {
-        router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
+        router.openProfileSheet(ProfileSheetUser(username: user.username))
         HapticFeedback.light()
     }
 

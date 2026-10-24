@@ -15,5 +15,5 @@ export declare function waitForValueSettled(
   page: EvaluatablePage,
   evaluateFn: unknown,
   arg?: unknown,
-  options?: { attempts?: number; stepMs?: number },
+  options?: { attempts?: number; stepMs?: number; network?: () => string | undefined },
 ): Promise<unknown>;

@@ -29,6 +29,10 @@ public interface SyncMetaDao {
     @Query("SELECT etagRequestKey FROM sync_meta WHERE resourceKey = :key")
     public suspend fun etagRequestKey(key: String): String?
 
+    /** One-shot read of [SyncMetaEntity.lastSyncedAt]; `null` when the key was never written. */
+    @Query("SELECT lastSyncedAt FROM sync_meta WHERE resourceKey = :key")
+    public suspend fun lastSyncedAt(key: String): Long?
+
     @Upsert
     public suspend fun upsert(meta: SyncMetaEntity)
 

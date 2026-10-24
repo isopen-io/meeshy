@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Source unique des libellés de média (lot media-vocabulaire-partage). -->
+    <string name="media_label_photo">Photo</string>
+    <string name="media_label_video">Vidéo</string>
+    <string name="media_label_audio">Audio</string>
+    <string name="media_label_file">Fichier</string>
+    <string name="media_label_location">Position</string>
+    <string name="media_summary_photo">📷 Photo</string>
+    <string name="media_summary_video">🎥 Vidéo</string>
+    <string name="media_summary_voice">🎙️ Message vocal</string>
+    <string name="media_summary_file">📎 Fichier</string>
+    <string name="media_summary_location">📍 Position</string>
+    <string name="media_voice_message">Message vocal</string>
+    <string name="media_voice_recording">Message vocal (%1$s)</string>
+    <plurals name="media_duration_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="many">%1$d minutes</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <plurals name="media_duration_seconds">
+        <item quantity="one">%1$d seconde</item>
+        <item quantity="many">%1$d secondes</item>
+        <item quantity="other">%1$d secondes</item>
+    </plurals>
+    <string name="media_composer_placeholder_message">Message...</string>
+    <string name="media_composer_placeholder_post">Quoi de neuf ?</string>
+    <string name="media_composer_placeholder_status">Votre statut...</string>
+    <string name="media_composer_placeholder_story">Répondre...</string>
+    <string name="media_composer_placeholder_comment">Commenter...</string>
+    <string name="media_composer_placeholder_caption">Ajouter une légende...</string>
+</resources>

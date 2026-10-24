@@ -76,10 +76,10 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     private var player: AVAudioPlayer?
     private var timer: Timer? {
-        didSet { cleanupHandle.timer = timer }
+        didSet { teardown.update { $0.timer = timer } }
     }
     private var loadTask: Task<Void, Never>? {
-        didSet { cleanupHandle.loadTask = loadTask }
+        didSet { teardown.update { $0.loadTask = loadTask } }
     }
     public private(set) var currentUrl: String?
     private var listenStartTime: Date?
@@ -124,30 +124,19 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// `stop()` libère. ⚠️ Unifie le ducking : ce moteur posait `options: []`
     /// (PAS de duck) → désormais `[.duckOthers]` comme tous les autres players.
     private var sessionRequested = false {
-        didSet { cleanupHandle.sessionRequested = sessionRequested }
+        didSet { teardown.update { $0.sessionRequested = sessionRequested } }
     }
 
-    /// Holds thread-safe-to-cancel handles (`Timer.invalidate()` /
-    /// `Task.cancel()`) so `deinit` — which may run off the main thread — can
-    /// release them WITHOUT `MainActor.assumeIsolated` (a precondition crash
-    /// off-main, see lesson feedback_swift6_concurrency_pitfalls). Kept in
-    /// sync with the @MainActor stored props via their `didSet`. Marked
-    /// `nonisolated(unsafe)` because the contained operations are themselves
-    /// thread-safe and we only ever cancel/invalidate from deinit.
-    private final class CleanupHandle {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-        nonisolated(unsafe) var timer: Timer?
-        nonisolated(unsafe) var loadTask: Task<Void, Never>?
-        nonisolated(unsafe) var sessionRequested = false
-        /// Block-based `willResignActive` observer token. Removed in `deinit`
-        /// (thread-safe) so the lifecycle hook never outlives the engine.
-        nonisolated(unsafe) var lifecycleObserver: NSObjectProtocol?
+    /// Ressources libérées par `deinit`, qui peut tourner hors du fil principal :
+    /// `Timer.invalidate()` et `Task.cancel()` y sont sûrs, sans
+    /// `MainActor.assumeIsolated`. Tenues à jour par les `didSet` des propriétés.
+    private nonisolated struct PlaybackTeardownResources {
+        var timer: Timer?
+        var loadTask: Task<Void, Never>?
+        var sessionRequested = false
+        var lifecycleObserver: NSObjectProtocol?
     }
-    private let cleanupHandle = CleanupHandle()
+    private let teardown = TeardownBox(PlaybackTeardownResources())
 
     public override init() {
         super.init()
@@ -178,13 +167,14 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// on their own paths. No-op for engines without a loaded `attachmentId`
     /// (preview/owned dummies).
     private func observeAppLifecycle() {
-        cleanupHandle.lifecycleObserver = NotificationCenter.default.addObserver(
+        let token = NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.persistPosition() }
         }
+        teardown.update { $0.lifecycleObserver = token }
     }
 
     // MARK: - Audio session (routed through the single MediaSessionCoordinator)
@@ -645,18 +635,20 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     // call them directly. `MainActor.assumeIsolated` from a non-main thread is
     // a precondition crash (see lesson feedback_swift6_concurrency_pitfalls:
     // @MainActor deinit pitfall) and the last release can happen off-main.
-    deinit {
-        cleanupHandle.timer?.invalidate()
-        cleanupHandle.loadTask?.cancel()
-        if let observer = cleanupHandle.lifecycleObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        // Dealloc avec session encore tenue (chemin sans `stop()` — vue
-        // détruite sans onDisappear) : sans cette libération le refcount du
-        // MediaSessionCoordinator ne retombait jamais à 0 → session audio
-        // active (ducking) pour tout le process et release() sous-compté.
-        if cleanupHandle.sessionRequested {
-            Task { await MediaSessionCoordinator.shared.release() }
+    nonisolated deinit {
+        teardown.releaseNow { resources in
+            resources.timer?.invalidate()
+            resources.loadTask?.cancel()
+            if let observer = resources.lifecycleObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            // Dealloc avec session encore tenue (chemin sans `stop()` — vue
+            // détruite sans onDisappear) : sans cette libération le refcount du
+            // MediaSessionCoordinator ne retombait jamais à 0 → session audio
+            // active (ducking) pour tout le process et release() sous-compté.
+            if resources.sessionRequested {
+                Task { await MediaSessionCoordinator.shared.release() }
+            }
         }
     }
 

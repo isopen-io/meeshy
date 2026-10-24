@@ -1,154 +1,60 @@
 package me.meeshy.app.stories
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Login
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AddPhotoAlternate
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.BorderColor
-import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.EmojiEmotions
-import androidx.compose.material.icons.filled.FormatAlignCenter
-import androidx.compose.material.icons.filled.FormatAlignLeft
-import androidx.compose.material.icons.filled.FormatAlignRight
-import androidx.compose.material.icons.filled.FormatColorReset
-import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material.icons.filled.Loop
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Timelapse
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.VerticalAlignBottom
-import androidx.compose.material.icons.filled.VerticalAlignTop
-import androidx.compose.material.icons.filled.Wallpaper
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
-import kotlin.math.abs
-import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.flowWithLifecycle
-import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.model.StoryBackgroundPalette
-import me.meeshy.sdk.model.StoryBackgroundValue
-import me.meeshy.sdk.model.StoryDrawingStroke
-import me.meeshy.sdk.model.StoryDrawingStrokePoint
-import me.meeshy.sdk.model.StoryFilter
-import me.meeshy.sdk.model.UploadedMedia
-import me.meeshy.ui.theme.hexColor
+import me.meeshy.sdk.model.composer.StoryCanvasFraming
 
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
@@ -173,6 +79,7 @@ fun StoryComposerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     LaunchedEffect(viewModel, lifecycleOwner) {
         viewModel.published
@@ -235,6 +142,12 @@ fun StoryComposerScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = viewModel::onUndo, enabled = state.canUndo) {
+                        Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.story_composer_undo))
+                    }
+                    IconButton(onClick = viewModel::onRedo, enabled = state.canRedo) {
+                        Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.story_composer_redo))
+                    }
                     TextButton(onClick = viewModel::publish, enabled = state.canPublish) {
                         Text(stringResource(R.string.stories_composer_publish))
                     }
@@ -250,7 +163,7 @@ fun StoryComposerScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SlideStrip(
+            if (!state.band.isChromeHidden) SlideStrip(
                 deck = state.deck,
                 onSelect = viewModel::onSelectSlide,
                 onAdd = viewModel::onAddSlide,
@@ -259,1746 +172,173 @@ fun StoryComposerScreen(
                 onMove = viewModel::onMoveSlide,
             )
 
-            StoryCanvasSurface(
-                transform = state.selectedSlideTransform,
-                backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
-                    ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
-                colorMatrix = state.selectedSlideFilterMatrix,
-                textElements = state.selectedSlideTextElements,
-                selectedElement = state.selectedTextElement,
-                elementMenu = state.elementContextMenu,
-                stickers = state.selectedSlideStickers,
-                selectedStickerId = state.selectedStickerId,
-                strokes = state.selectedSlideStrokes,
-                isDrawingActive = state.isDrawingActive,
-                drawColorHex = state.drawColorHex,
-                drawWidthDesign = state.drawWidthDesign,
-                onStrokeCaptured = viewModel::onStrokeCaptured,
-                onTransform = viewModel::onCanvasTransform,
-                onElementTap = viewModel::onSelectTextElement,
-                onElementLongPress = viewModel::onOpenElementMenu,
-                onElementMenuAction = viewModel::onElementMenuAction,
-                onElementMenuDismiss = viewModel::onDismissElementMenu,
-                onElementDrag = viewModel::onTextElementMoved,
-                onElementDragEnd = viewModel::onTextElementDragEnd,
-                onElementTransform = viewModel::onTextElementTransform,
-                onElementRemove = viewModel::onRemoveTextElement,
-                onStickerTap = viewModel::onSelectSticker,
-                onStickerDrag = viewModel::onStickerMoved,
-                onStickerTransform = viewModel::onStickerTransform,
-                onStickerRemove = viewModel::onRemoveSticker,
-                onBackgroundTap = {
-                    viewModel.onDeselectTextElement()
-                    viewModel.onDeselectSticker()
+            ComposerStage(
+                carded = StoryCanvasFraming.shouldCard(
+                    panelOpen = state.band.isPanelOpen &&
+                        ComposerBandTools.showsPanel(state.isDrawingActive, state.isEditingTextElement),
+                    keyboardVisible = keyboardVisible,
+                    drawingActive = state.isDrawingActive,
+                ),
+                scene = { sceneModifier ->
+                    StoryCanvasSurface(
+                        transform = state.selectedSlideTransform,
+                        backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
+                            ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
+                        sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
+                            StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
+                        },
+                        colorMatrix = state.selectedSlideFilterMatrix,
+                        textElements = state.selectedSlideTextElements,
+                        selectedElement = state.selectedTextElement,
+                        elementMenu = state.elementContextMenu,
+                        stickers = state.selectedSlideStickers,
+                        selectedStickerId = state.selectedStickerId,
+                        strokes = state.selectedSlideStrokes,
+                        isDrawingActive = state.isDrawingActive,
+                        drawColorHex = state.drawColorHex,
+                        drawWidthDesign = state.drawWidthDesign,
+                        onStrokeCaptured = viewModel::onStrokeCaptured,
+                        onTransform = viewModel::onCanvasTransform,
+                        onElementTap = viewModel::onSelectTextElement,
+                        onElementLongPress = viewModel::onOpenElementMenu,
+                        onElementMenuAction = viewModel::onElementMenuAction,
+                        onElementMenuDismiss = viewModel::onDismissElementMenu,
+                        onElementDrag = viewModel::onTextElementMoved,
+                        onElementDragEnd = viewModel::onTextElementDragEnd,
+                        onElementTransform = viewModel::onTextElementTransform,
+                        onElementRemove = viewModel::onRemoveTextElement,
+                        onElementTextChange = viewModel::onTextChange,
+                        onStickerTap = viewModel::onSelectSticker,
+                        onStickerDrag = viewModel::onStickerMoved,
+                        onStickerTransform = viewModel::onStickerTransform,
+                        onStickerRemove = viewModel::onRemoveSticker,
+                        onBackgroundTap = {
+                            viewModel.onDeselectTextElement()
+                            viewModel.onDeselectSticker()
+                        },
+                        snapFeedback = state.snapFeedback,
+                        modifier = sceneModifier,
+                    )
                 },
-                snapFeedback = state.snapFeedback,
+                footer = {
+                    val editedText = state.selectedTextElement
+                    if (state.isDrawingActive) {
+                        StoryDrawingToolbar(
+                            activeColorHex = state.drawColorHex,
+                            activeWidthDesign = state.drawWidthDesign,
+                            canUndo = state.drawingBoard.canUndo,
+                            onColorSelected = viewModel::onDrawColorSelected,
+                            onWidthSelected = viewModel::onDrawWidthSelected,
+                            onUndo = viewModel::onDrawUndo,
+                            onDone = viewModel::onExitDrawingMode,
+                        )
+                    } else if (editedText != null) {
+                        TextStyleToolbar(
+                            element = editedText,
+                            onStyle = { style -> viewModel.onTextElementStyle(editedText.id, style) },
+                            onColor = { color -> viewModel.onTextElementColor(editedText.id, color) },
+                            onAlign = { align -> viewModel.onTextElementAlign(editedText.id, align) },
+                            onBackground = { bg -> viewModel.onTextElementBackground(editedText.id, bg) },
+                            onCycleSize = { viewModel.onTextElementCycleSize(editedText.id) },
+                            onCycleOutline = { viewModel.onTextElementCycleOutline(editedText.id) },
+                            onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(editedText.id) },
+                            onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(editedText.id) },
+                            onCycleStart = { viewModel.onTextElementCycleStart(editedText.id) },
+                            onCycleDuration = { viewModel.onTextElementCycleDuration(editedText.id) },
+                            onDuplicate = { viewModel.onDuplicateTextElement(editedText.id) },
+                            onReorder = { op -> viewModel.onReorderTextElement(editedText.id, op) },
+                            onDone = viewModel::onDeselectTextElement,
+                        )
+                    } else {
+                        // The slide CAPTION only: a text object is written on the scene itself
+                        // (ComposerInlineTextField), so this field never silently changes role.
+                        OutlinedTextField(
+                            value = state.editorText,
+                            onValueChange = viewModel::onTextChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(stringResource(R.string.stories_composer_text_caption)) },
+                            placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
+                            isError = !state.draft.isWithinLimit,
+                            supportingText = {
+                                Text(
+                                    text = state.errorMessage
+                                        ?: stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.End,
+                                )
+                            },
+                        )
+                    }
+
+                    if (!state.isDrawingActive && (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty())) {
+                        MediaPreviewRow(
+                            attachments = state.selectedSlideAttachments,
+                            pending = state.selectedSlidePending,
+                            backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
+                            backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
+                            backgroundLoop = state.selectedSlideBackgroundLoop,
+                            onRemove = viewModel::onRemoveMedia,
+                            onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
+                            onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
+                        )
+                    }
+                },
+                panel = {
+                    if (ComposerBandTools.showsPanel(state.isDrawingActive, state.isEditingTextElement)) {
+                        ComposerToolPanel(
+                            band = state.band,
+                            visibility = state.draft.visibility,
+                            selectedFilter = state.selectedSlideFilter,
+                            filterIntensity = state.selectedSlideFilterIntensity,
+                            slideDurationSeconds = state.selectedSlideDurationSeconds,
+                            selectedBackground = state.selectedSlideBackground,
+                            canAddText = state.deck.selectedCanAddTextElement,
+                            canAddSticker = state.deck.selectedCanAddSticker,
+                            isUploadingMedia = state.isUploadingMedia,
+                            isMediaFull = state.draft.isMediaFull,
+                            mediaCount = state.draft.mediaIds.size,
+                            hasMedia = state.draft.hasMedia,
+                            onDismiss = viewModel::onBandDismiss,
+                            onAddText = viewModel::onAddTextElement,
+                            onAddSticker = { showStickerPicker = true },
+                            onPickMedia = {
+                                when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
+                                    StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
+                                    StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
+                                    StoryMediaPickMode.None -> Unit
+                                }
+                            },
+                            onEnterDrawing = viewModel::onEnterDrawingMode,
+                            onSelectVisibility = viewModel::onVisibilityChange,
+                            onSelectFilter = viewModel::onSelectFilter,
+                            onFilterIntensityChange = viewModel::onFilterIntensityChange,
+                            onSlideDurationChange = viewModel::onSlideDurationChange,
+                            onSelectBackground = viewModel::onSlideBackgroundChange,
+                        )
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                floatingToolbar = {
-                    state.selectedTextElement?.let { element ->
-                        TextStyleToolbar(
-                            element = element,
-                            onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
-                            onColor = { color -> viewModel.onTextElementColor(element.id, color) },
-                            onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
-                            onBackground = { bg -> viewModel.onTextElementBackground(element.id, bg) },
-                            onCycleSize = { viewModel.onTextElementCycleSize(element.id) },
-                            onCycleOutline = { viewModel.onTextElementCycleOutline(element.id) },
-                            onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(element.id) },
-                            onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(element.id) },
-                            onCycleStart = { viewModel.onTextElementCycleStart(element.id) },
-                            onCycleDuration = { viewModel.onTextElementCycleDuration(element.id) },
-                            onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
-                            onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
-                        )
-                    }
-                },
             )
-
-            if (state.isDrawingActive) {
-                StoryDrawingToolbar(
-                    activeColorHex = state.drawColorHex,
-                    activeWidthDesign = state.drawWidthDesign,
-                    canUndo = state.drawingBoard.canUndo,
-                    onColorSelected = viewModel::onDrawColorSelected,
-                    onWidthSelected = viewModel::onDrawWidthSelected,
-                    onUndo = viewModel::onDrawUndo,
-                    onDone = viewModel::onExitDrawingMode,
-                )
-            } else {
-                OutlinedTextField(
-                    value = state.editorText,
-                    onValueChange = viewModel::onTextChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = if (state.isEditingTextElement) {
-                        { Text(stringResource(R.string.stories_composer_add_text)) }
-                    } else {
-                        { Text(stringResource(R.string.stories_composer_text_caption)) }
-                    },
-                    placeholder = {
-                        Text(
-                            stringResource(
-                                if (state.isEditingTextElement) {
-                                    R.string.stories_composer_text_placeholder
-                                } else {
-                                    R.string.stories_composer_placeholder
-                                },
-                            ),
-                        )
-                    },
-                    isError = !state.draft.isWithinLimit,
-                    supportingText = {
-                        Text(
-                            text = state.errorMessage
-                                ?: stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining),
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.End,
-                        )
-                    },
-                )
-            }
-
-            if (!state.isDrawingActive && (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty())) {
-                MediaPreviewRow(
-                    attachments = state.selectedSlideAttachments,
-                    pending = state.selectedSlidePending,
-                    backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
-                    backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
-                    backgroundLoop = state.selectedSlideBackgroundLoop,
-                    onRemove = viewModel::onRemoveMedia,
-                    onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
-                    onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
-                )
-            }
 
             if (!state.isDrawingActive) {
-                ComposerControlsLayer(
+                ComposerToolBand(
                     band = state.band,
-                    visibility = state.draft.visibility,
-                    selectedFilter = state.selectedSlideFilter,
-                    filterIntensity = state.selectedSlideFilterIntensity,
-                    slideDurationSeconds = state.selectedSlideDurationSeconds,
-                    selectedBackground = state.selectedSlideBackground,
-                    canAddText = state.deck.selectedCanAddTextElement,
-                    canAddSticker = state.deck.selectedCanAddSticker,
-                    isUploadingMedia = state.isUploadingMedia,
-                    isMediaFull = state.draft.isMediaFull,
-                    mediaCount = state.draft.mediaIds.size,
-                    hasMedia = state.draft.hasMedia,
-                    onFabTap = viewModel::onBandFabTap,
-                    onDismiss = viewModel::onBandDismiss,
-                    onSwapCategory = viewModel::onBandSwapCategory,
-                    onAddText = viewModel::onAddTextElement,
-                    onAddSticker = { showStickerPicker = true },
-                    onPickMedia = {
-                        when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
-                            StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
-                            StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
-                            StoryMediaPickMode.None -> Unit
-                        }
-                    },
-                    onEnterDrawing = viewModel::onEnterDrawingMode,
-                    onSelectVisibility = viewModel::onVisibilityChange,
-                    onSelectFilter = viewModel::onSelectFilter,
-                    onFilterIntensityChange = viewModel::onFilterIntensityChange,
-                    onSlideDurationChange = viewModel::onSlideDurationChange,
-                    onSelectBackground = viewModel::onSlideBackgroundChange,
-                )
-            }
-        }
-    }
-}
-
-/**
- * The bottom-band tools toolbar — parity with iOS's composer FAB column + bottom band
- * (`Contenu` / `Effets`). Two FABs toggle a tools drawer that animates in above them;
- * the drawer shows the active [BandCategory]'s tools — Contenu's add-text / add-media
- * tiles, or Effets' visibility chips. Which category is showing, and whether the drawer
- * is open at all, is decided by the pure, unit-tested [ComposerBandState]; this
- * Composable only renders that state and forwards intents. The drawer is dismissable by
- * a downward swipe and swaps category on a horizontal swipe — natural gestures routed
- * through [onDismiss] / [onSwapCategory].
- */
-@Composable
-private fun ComposerControlsLayer(
-    band: ComposerBandState,
-    visibility: StoryVisibility,
-    selectedFilter: StoryFilter?,
-    filterIntensity: Float,
-    slideDurationSeconds: Double,
-    selectedBackground: StoryBackgroundValue?,
-    canAddText: Boolean,
-    canAddSticker: Boolean,
-    isUploadingMedia: Boolean,
-    isMediaFull: Boolean,
-    mediaCount: Int,
-    hasMedia: Boolean,
-    onFabTap: (BandCategory) -> Unit,
-    onDismiss: () -> Unit,
-    onSwapCategory: () -> Unit,
-    onAddText: () -> Unit,
-    onAddSticker: () -> Unit,
-    onPickMedia: () -> Unit,
-    onEnterDrawing: () -> Unit,
-    onSelectVisibility: (StoryVisibility) -> Unit,
-    onSelectFilter: (StoryFilter?) -> Unit,
-    onFilterIntensityChange: (Float) -> Unit,
-    onSlideDurationChange: (Double) -> Unit,
-    onSelectBackground: (StoryBackgroundValue?) -> Unit,
-) {
-    val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        AnimatedVisibility(visible = band.isVisible) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        var total = 0f
-                        detectVerticalDragGestures(
-                            onDragStart = { total = 0f },
-                            onDragEnd = { if (total > swipeThresholdPx) onDismiss() },
-                        ) { change, dy -> change.consume(); total += dy }
-                    }
-                    .pointerInput(Unit) {
-                        var total = 0f
-                        detectHorizontalDragGestures(
-                            onDragStart = { total = 0f },
-                            onDragEnd = { if (abs(total) > swipeThresholdPx) onSwapCategory() },
-                        ) { change, dx -> change.consume(); total += dx }
-                    },
-            ) {
-                when (band.activeCategory) {
-                    BandCategory.CONTENU -> ContentTilesRow(
-                        canAddText = canAddText,
-                        canAddSticker = canAddSticker,
-                        isUploadingMedia = isUploadingMedia,
-                        isMediaFull = isMediaFull,
-                        mediaCount = mediaCount,
-                        hasMedia = hasMedia,
-                        onAddText = onAddText,
-                        onAddSticker = onAddSticker,
-                        onPickMedia = onPickMedia,
-                        onEnterDrawing = onEnterDrawing,
-                    )
-                    BandCategory.EFFETS -> Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        BackgroundRow(
-                            selected = selectedBackground,
-                            onSelect = onSelectBackground,
-                        )
-                        FilterRow(
-                            selected = selectedFilter,
-                            intensity = filterIntensity,
-                            onSelect = onSelectFilter,
-                            onIntensityChange = onFilterIntensityChange,
-                        )
-                        DurationRow(
-                            seconds = slideDurationSeconds,
-                            onSecondsChange = onSlideDurationChange,
-                        )
-                        VisibilityRow(
-                            selected = visibility,
-                            onSelect = onSelectVisibility,
-                        )
-                    }
-                    null -> Unit
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BandFab(
-                icon = Icons.Filled.Add,
-                label = stringResource(R.string.stories_composer_band_contenu),
-                active = band.activeCategory == BandCategory.CONTENU,
-                onClick = { onFabTap(BandCategory.CONTENU) },
-            )
-            BandFab(
-                icon = Icons.Filled.Tune,
-                label = stringResource(R.string.stories_composer_band_effets),
-                active = band.activeCategory == BandCategory.EFFETS,
-                onClick = { onFabTap(BandCategory.EFFETS) },
-            )
-        }
-    }
-}
-
-/** One bottom-band FAB. Brand-coloured when its category's drawer is open. */
-@Composable
-private fun BandFab(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    active: Boolean,
-    onClick: () -> Unit,
-) {
-    val container = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
-    val content = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
-    ExtendedFloatingActionButton(
-        onClick = onClick,
-        containerColor = container,
-        contentColor = content,
-        icon = { Icon(icon, contentDescription = null) },
-        text = { Text(label) },
-    )
-}
-
-/** The Contenu drawer's tiles — add-text and pick-media — rendered in [ComposerBand.contentTiles] order. */
-@Composable
-private fun ContentTilesRow(
-    canAddText: Boolean,
-    canAddSticker: Boolean,
-    isUploadingMedia: Boolean,
-    isMediaFull: Boolean,
-    mediaCount: Int,
-    hasMedia: Boolean,
-    onAddText: () -> Unit,
-    onAddSticker: () -> Unit,
-    onPickMedia: () -> Unit,
-    onEnterDrawing: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        ComposerBand.contentTiles.forEach { tile ->
-            when (tile) {
-                ComposerContentTile.TEXT -> BandTile(
-                    icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
-                    label = stringResource(R.string.stories_composer_add_text),
-                    enabled = canAddText,
-                    onClick = onAddText,
-                    modifier = Modifier.weight(1f),
-                )
-                ComposerContentTile.MEDIA -> BandTile(
-                    icon = {
-                        if (isUploadingMedia) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
-                        }
-                    },
-                    label = if (hasMedia) {
-                        stringResource(R.string.stories_composer_add_media_count, mediaCount, StoryComposerDraft.MAX_MEDIA)
-                    } else {
-                        stringResource(R.string.stories_composer_add_media)
-                    },
-                    enabled = !isUploadingMedia && !isMediaFull,
-                    onClick = onPickMedia,
-                    modifier = Modifier.weight(1f),
-                )
-                ComposerContentTile.STICKER -> BandTile(
-                    icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
-                    label = stringResource(R.string.stories_composer_add_sticker),
-                    enabled = canAddSticker,
-                    onClick = onAddSticker,
-                    modifier = Modifier.weight(1f),
-                )
-                ComposerContentTile.DRAW -> BandTile(
-                    icon = { Icon(Icons.Filled.Brush, contentDescription = null) },
-                    label = stringResource(R.string.stories_composer_draw),
-                    enabled = true,
-                    onClick = onEnterDrawing,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-}
-
-/** A single content-drawer tile: an icon over a label, forwarding [onClick]. Glue. */
-@Composable
-private fun BandTile(
-    icon: @Composable () -> Unit,
-    label: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
-        icon()
-        Text(label, modifier = Modifier.padding(start = 8.dp))
-    }
-}
-
-/**
- * The 9:16 story canvas for the **selected** slide. Renders that slide's first
- * media as the background, the slide's on-canvas [textElements] on top, and lets the
- * user pinch-zoom + drag-pan the background and drag / tap / remove each element. All
- * transform and clamp math lives in the pure, unit-tested [StoryCanvasTransform] /
- * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
- * the measured canvas size into normalised fractions), so this Composable stays
- * declarative glue. A tap on the empty canvas deselects ([onBackgroundTap]).
- *
- * While a text element is being edited the [floatingToolbar] floats in-place just
- * clear of that element — above or below it, clamped inside the canvas — at the
- * vertical anchor decided by the pure, unit-tested [StoryToolbarPlacement] (fed the
- * element's measured centre/half-height, the toolbar's measured height, and the
- * keyboard-shrunk canvas height). The composer applies `imePadding`, so the canvas
- * already excludes the soft keyboard and the toolbar always lands in view.
- */
-@Composable
-private fun StoryCanvasSurface(
-    transform: StoryCanvasTransform,
-    backgroundModel: Any?,
-    colorMatrix: StoryColorMatrix,
-    textElements: List<StoryTextElement>,
-    selectedElement: StoryTextElement?,
-    elementMenu: StoryElementContextMenu?,
-    stickers: List<StoryStickerElement>,
-    selectedStickerId: String?,
-    strokes: List<StoryDrawingStroke>,
-    isDrawingActive: Boolean,
-    drawColorHex: String,
-    drawWidthDesign: Double,
-    onStrokeCaptured: (List<StoryDrawingStrokePoint>) -> Unit,
-    onTransform: (Float, Float, Float, Float, Float) -> Unit,
-    onElementTap: (String) -> Unit,
-    onElementLongPress: (String) -> Unit,
-    onElementMenuAction: (StoryElementAction) -> Unit,
-    onElementMenuDismiss: () -> Unit,
-    onElementDrag: (String, Float, Float) -> Unit,
-    onElementDragEnd: () -> Unit,
-    onElementTransform: (String, Float, Float) -> Unit,
-    onElementRemove: (String) -> Unit,
-    onStickerTap: (String) -> Unit,
-    onStickerDrag: (String, Float, Float) -> Unit,
-    onStickerTransform: (String, Float, Float) -> Unit,
-    onStickerRemove: (String) -> Unit,
-    onBackgroundTap: () -> Unit,
-    snapFeedback: SnapFeedback?,
-    modifier: Modifier = Modifier,
-    floatingToolbar: @Composable () -> Unit = {},
-) {
-    val canvasLabel = stringResource(R.string.stories_composer_canvas)
-    val guideColor = MaterialTheme.colorScheme.primary
-    val warnBorder = if (snapFeedback?.withinSafeZone == false) {
-        BorderStroke(2.dp, MaterialTheme.colorScheme.error)
-    } else {
-        null
-    }
-    var canvasWidthPx by remember { mutableFloatStateOf(0f) }
-    var canvasHeightPx by remember { mutableFloatStateOf(0f) }
-    var selectedHalfHeightPx by remember { mutableFloatStateOf(0f) }
-    var toolbarHeightPx by remember { mutableFloatStateOf(0f) }
-    val gapPx = with(LocalDensity.current) { 8.dp.toPx() }
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .aspectRatio(9f / 16f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .then(
-                    if (warnBorder != null) {
-                        Modifier.border(warnBorder, RoundedCornerShape(16.dp))
-                    } else {
-                        Modifier
-                    },
-                )
-                .onSizeChanged {
-                    canvasWidthPx = it.width.toFloat()
-                    canvasHeightPx = it.height.toFloat()
-                }
-                .semantics { contentDescription = canvasLabel }
-                .then(
-                    // While the drawing tool is capturing, the canvas' own tap-to-deselect and
-                    // pinch/pan gestures step aside entirely — StoryDrawingLayer below owns every
-                    // touch, so a stroke never fights the background transform for the same drag.
-                    if (isDrawingActive) {
-                        Modifier
-                    } else {
-                        Modifier
-                            .pointerInput(Unit) { detectTapGestures { onBackgroundTap() } }
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    onTransform(pan.x, pan.y, zoom, canvasWidthPx, canvasHeightPx)
-                                }
-                            }
-                    },
-                ),
-        ) {
-            if (backgroundModel != null) {
-                AsyncImage(
-                    model = backgroundModel,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    colorFilter = ColorFilter.colorMatrix(ColorMatrix(colorMatrix.values.toFloatArray())),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = transform.scale
-                            scaleY = transform.scale
-                            translationX = transform.offsetX
-                            translationY = transform.offsetY
-                        },
-                )
-            }
-            if (snapFeedback != null) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
-                    // element is being dragged, draw the viewer-chrome safe rectangle and the
-                    // rule-of-thirds grid so the author frames content clear of the viewer's
-                    // top/bottom chrome. Geometry from the pure, unit-tested StorySafeZoneGrid.
-                    val grid = StorySafeZoneGrid.geometry(size.width, size.height)
-                    if (!grid.isEmpty) {
-                        val gridColor = guideColor.copy(alpha = 0.35f)
-                        val dash = PathEffect.dashPathEffect(floatArrayOf(12f, 12f))
-                        grid.verticalThirds.forEach { gx ->
-                            drawLine(
-                                color = gridColor,
-                                start = Offset(gx, 0f),
-                                end = Offset(gx, size.height),
-                                strokeWidth = 1f,
-                                pathEffect = dash,
-                            )
-                        }
-                        grid.horizontalThirds.forEach { gy ->
-                            drawLine(
-                                color = gridColor,
-                                start = Offset(0f, gy),
-                                end = Offset(size.width, gy),
-                                strokeWidth = 1f,
-                                pathEffect = dash,
-                            )
-                        }
-                        drawRect(
-                            color = gridColor,
-                            topLeft = Offset(grid.safeLeft, grid.safeTop),
-                            size = Size(grid.safeRight - grid.safeLeft, grid.safeBottom - grid.safeTop),
-                            style = Stroke(width = 1.5f, pathEffect = dash),
-                        )
-                    }
-                    snapFeedback.verticalGuide?.let { gx ->
-                        drawLine(
-                            color = guideColor,
-                            start = Offset(gx * size.width, 0f),
-                            end = Offset(gx * size.width, size.height),
-                            strokeWidth = 2f,
-                        )
-                    }
-                    snapFeedback.horizontalGuide?.let { gy ->
-                        drawLine(
-                            color = guideColor,
-                            start = Offset(0f, gy * size.height),
-                            end = Offset(size.width, gy * size.height),
-                            strokeWidth = 2f,
-                        )
-                    }
-                }
-            }
-            textElements.forEach { element ->
-                TextElementLayer(
-                    element = element,
-                    selected = element.id == selectedElement?.id,
-                    menu = elementMenu?.takeIf { it.elementId == element.id },
-                    canvasWidthPx = canvasWidthPx,
-                    canvasHeightPx = canvasHeightPx,
-                    onTap = { onElementTap(element.id) },
-                    onLongPress = { onElementLongPress(element.id) },
-                    onMenuAction = onElementMenuAction,
-                    onMenuDismiss = onElementMenuDismiss,
-                    onDrag = { dxPx, dyPx ->
-                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                            onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
-                        }
-                    },
-                    onDragEnd = onElementDragEnd,
-                    onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
-                    onRemove = { onElementRemove(element.id) },
-                    onMeasured = { size ->
-                        if (element.id == selectedElement?.id) selectedHalfHeightPx = size.height / 2f
-                    },
-                )
-            }
-            stickers.forEach { sticker ->
-                StickerLayer(
-                    sticker = sticker,
-                    selected = sticker.id == selectedStickerId,
-                    canvasWidthPx = canvasWidthPx,
-                    canvasHeightPx = canvasHeightPx,
-                    onTap = { onStickerTap(sticker.id) },
-                    onDrag = { dxPx, dyPx ->
-                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                            onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
-                        }
-                    },
-                    onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
-                    onRemove = { onStickerRemove(sticker.id) },
-                )
-            }
-            // Topmost: paints every committed stroke, and — only while isDrawingActive —
-            // also captures the drag that draws the next one, blocking the pan/zoom/tap
-            // gestures underneath so a stroke never fights the background transform.
-            StoryDrawingLayer(
-                strokes = strokes,
-                isCapturing = isDrawingActive,
-                activeColorHex = drawColorHex,
-                activeWidthDesign = drawWidthDesign,
-                onStrokeCaptured = onStrokeCaptured,
-                modifier = Modifier.fillMaxSize(),
-            )
-            if (selectedElement != null) {
-                val placement = StoryToolbarPlacement.resolve(
-                    elementCenterYpx = selectedElement.y * canvasHeightPx,
-                    elementHalfHeightPx = selectedHalfHeightPx,
-                    toolbarHeightPx = toolbarHeightPx,
-                    canvasHeightPx = canvasHeightPx,
-                    gapPx = gapPx,
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .offset { IntOffset(0, placement.topPx.roundToInt()) }
-                        .padding(horizontal = 8.dp)
-                        .onSizeChanged { toolbarHeightPx = it.height.toFloat() }
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                            shape = RoundedCornerShape(12.dp),
-                        )
-                        .padding(8.dp),
-                ) {
-                    floatingToolbar()
-                }
-            }
-        }
-    }
-}
-
-/**
- * One on-canvas text element: positioned at its normalised ([StoryTextElement.x],
- * [StoryTextElement.y]) of the measured canvas (centred on that point), draggable,
- * tappable to edit, and — when selected — carrying a small remove affordance. The
- * normalised→pixel placement and the pixel→normalised drag delta are the only
- * arithmetic here; the clamp lives in [StoryTextElement.nudged]. Pure glue.
- */
-@Composable
-private fun TextElementLayer(
-    element: StoryTextElement,
-    selected: Boolean,
-    menu: StoryElementContextMenu?,
-    canvasWidthPx: Float,
-    canvasHeightPx: Float,
-    onTap: () -> Unit,
-    onLongPress: () -> Unit,
-    onMenuAction: (StoryElementAction) -> Unit,
-    onMenuDismiss: () -> Unit,
-    onDrag: (Float, Float) -> Unit,
-    onDragEnd: () -> Unit,
-    onTransform: (Float, Float) -> Unit,
-    onRemove: () -> Unit,
-    onMeasured: (IntSize) -> Unit = {},
-) {
-    var sizePx by remember { mutableStateOf(IntSize.Zero) }
-    Box(
-        modifier = Modifier
-            .offset {
-                IntOffset(
-                    x = (element.x * canvasWidthPx - sizePx.width / 2f).roundToInt(),
-                    y = (element.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
-                )
-            }
-            .graphicsLayer {
-                scaleX = element.scale
-                scaleY = element.scale
-                rotationZ = element.rotationDeg
-            }
-            .onSizeChanged {
-                sizePx = it
-                onMeasured(it)
-            }
-            .pointerInput(element.id) {
-                detectTapGestures(onLongPress = { onLongPress() }, onTap = { onTap() })
-            }
-            .pointerInput(element.id) {
-                detectTransformGestures { _, pan, zoom, rotation ->
-                    onDrag(pan.x, pan.y)
-                    onTransform(zoom, rotation)
-                }
-            }
-            .pointerInput(element.id) {
-                // Observes the Final pass without consuming, so it fires the moment
-                // the drag/pinch lifts (every pointer up) — clearing the snap guides —
-                // while the transform detector above still owns the gesture deltas.
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Final)
-                    } while (event.changes.any { it.pressed })
-                    onDragEnd()
-                }
-            }
-            .background(
-                color = if (selected) Color.Black.copy(alpha = 0.35f) else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
-            )
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        val typography = element.style.typography()
-        val textColor = parseHexColor(element.color)
-        // The pure model carries the base size in wire "design units" (1080-referential,
-        // iOS parity); the on-canvas preview shows it scaled to sp, and the element's own
-        // graphicsLayer `scale` above multiplies on top — mirroring iOS `fontSize × scale`.
-        val canvasFontSize = (element.size.designSize * STORY_TEXT_CANVAS_FONT_FACTOR).sp
-        val displayText = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) }
-        // Base writing direction is derived from the caption (iOS-parity render-time
-        // derivation via the pure StoryTextBidi), so an Arabic/Hebrew caption lays its
-        // paragraph out right-to-left. Applied to both the stroked underlay and the fill.
-        val textDirection = when (element.baseDirection) {
-            StoryTextDirection.LTR -> TextDirection.Ltr
-            StoryTextDirection.RTL -> TextDirection.Rtl
-        }
-        // The EFFECT of the preset (#4870) — the same table as the viewer and the two
-        // other clients, projected at the canvas font size. The "neon" preset of this
-        // composer carries the glow until it gets its own effect control; it is also
-        // what `toTextObject` publishes, so what the author sees is what leaves.
-        val canvasFontSizePx = with(LocalDensity.current) { canvasFontSize.toPx() }
-        val baseStyle = LocalTextStyle.current.copy(
-            shadow = element.style.presetEffect().composeShadow(canvasFontSizePx, textColor),
-            textDirection = textDirection,
-        )
-        Box(
-            modifier = Modifier
-                .storyTextBacking(element.background)
-                .padding(horizontal = 6.dp, vertical = 2.dp),
-        ) {
-            val outline = element.outline
-            if (outline.isVisible) {
-                // Stroked underlay: the same glyphs painted as an outline beneath the fill,
-                // so the border hugs the letterforms rather than boxing the element.
-                Text(
-                    text = displayText,
-                    color = parseHexColor(outline.color!!),
-                    fontSize = canvasFontSize,
-                    fontWeight = FontWeight(typography.fontWeight),
-                    fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                    fontFamily = typography.family.toFontFamily(),
-                    letterSpacing = typography.letterSpacingEm.em,
-                    textAlign = element.align.toTextAlign(),
-                    style = baseStyle.copy(drawStyle = Stroke(width = outline.width)),
-                )
-            }
-            Text(
-                text = displayText,
-                color = textColor,
-                fontSize = canvasFontSize,
-                fontWeight = FontWeight(typography.fontWeight),
-                fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                fontFamily = typography.family.toFontFamily(),
-                letterSpacing = typography.letterSpacingEm.em,
-                textAlign = element.align.toTextAlign(),
-                style = baseStyle,
-            )
-        }
-        if (selected) {
-            Surface(
-                onClick = onRemove,
-                shape = RoundedCornerShape(50),
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(20.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.stories_composer_remove_text),
-                    tint = Color.White,
-                    modifier = Modifier.padding(2.dp),
-                )
-            }
-        }
-        // Unified long-press context menu, anchored to the element it targets. Each row's
-        // availability comes from the pure StoryElementMenu.resolve, so a greyed row can
-        // never dispatch an inert reducer; picking one routes through onMenuAction, which
-        // also closes the menu.
-        DropdownMenu(expanded = menu != null, onDismissRequest = onMenuDismiss) {
-            menu?.items?.forEach { item ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(item.action.labelRes())) },
-                    enabled = item.enabled,
-                    leadingIcon = { Icon(item.action.menuIcon(), contentDescription = null) },
-                    onClick = { onMenuAction(item.action) },
-                )
-            }
-        }
-    }
-}
-
-/** The localised label for a context-menu [StoryElementAction] row. */
-private fun StoryElementAction.labelRes(): Int = when (this) {
-    StoryElementAction.EDIT -> R.string.stories_composer_edit_element
-    StoryElementAction.DUPLICATE -> R.string.stories_composer_duplicate_element
-    StoryElementAction.SEND_TO_BACK -> R.string.stories_composer_zorder_to_back
-    StoryElementAction.MOVE_BACKWARD -> R.string.stories_composer_zorder_backward
-    StoryElementAction.MOVE_FORWARD -> R.string.stories_composer_zorder_forward
-    StoryElementAction.BRING_TO_FRONT -> R.string.stories_composer_zorder_to_front
-    StoryElementAction.DELETE -> R.string.stories_composer_remove_text
-}
-
-/** The leading icon for a context-menu [StoryElementAction] row. */
-private fun StoryElementAction.menuIcon(): ImageVector = when (this) {
-    StoryElementAction.EDIT -> Icons.Filled.Edit
-    StoryElementAction.DUPLICATE -> Icons.Filled.ContentCopy
-    StoryElementAction.SEND_TO_BACK -> Icons.Filled.VerticalAlignBottom
-    StoryElementAction.MOVE_BACKWARD -> Icons.Filled.ArrowDownward
-    StoryElementAction.MOVE_FORWARD -> Icons.Filled.ArrowUpward
-    StoryElementAction.BRING_TO_FRONT -> Icons.Filled.VerticalAlignTop
-    StoryElementAction.DELETE -> Icons.Filled.Delete
-}
-
-/**
- * One on-canvas emoji sticker: placed at its normalised ([StoryStickerElement.x],
- * [StoryStickerElement.y]) of the measured canvas (centred on that point), draggable,
- * pinch/rotate-able with one gesture, tappable to select, and — when selected —
- * carrying a small remove affordance. The normalised→pixel placement and the
- * pixel→normalised drag delta are the only arithmetic here; the clamp lives in the
- * pure [StoryStickerElement]. Mirrors [TextElementLayer]; pure glue.
- */
-@Composable
-private fun StickerLayer(
-    sticker: StoryStickerElement,
-    selected: Boolean,
-    canvasWidthPx: Float,
-    canvasHeightPx: Float,
-    onTap: () -> Unit,
-    onDrag: (Float, Float) -> Unit,
-    onTransform: (Float, Float) -> Unit,
-    onRemove: () -> Unit,
-) {
-    var sizePx by remember { mutableStateOf(IntSize.Zero) }
-    Box(
-        modifier = Modifier
-            .offset {
-                IntOffset(
-                    x = (sticker.x * canvasWidthPx - sizePx.width / 2f).roundToInt(),
-                    y = (sticker.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
-                )
-            }
-            .graphicsLayer {
-                scaleX = sticker.scale
-                scaleY = sticker.scale
-                rotationZ = sticker.rotationDeg
-            }
-            .onSizeChanged { sizePx = it }
-            .pointerInput(sticker.id) { detectTapGestures { onTap() } }
-            .pointerInput(sticker.id) {
-                detectTransformGestures { _, pan, zoom, rotation ->
-                    onDrag(pan.x, pan.y)
-                    onTransform(zoom, rotation)
-                }
-            }
-            .background(
-                color = if (selected) Color.Black.copy(alpha = 0.25f) else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
-            )
-            .padding(4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = sticker.emoji, fontSize = STICKER_BASE_FONT_SIZE)
-        if (selected) {
-            Surface(
-                onClick = onRemove,
-                shape = RoundedCornerShape(50),
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(20.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.stories_composer_remove_sticker),
-                    tint = Color.White,
-                    modifier = Modifier.padding(2.dp),
-                )
-            }
-        }
-    }
-}
-
-/**
- * The emoji sticker picker — category tabs ([StickerCategory]) plus a live search field,
- * both driven by the pure [StickerPickerState] so the "what is visible" decision is
- * unit-tested in one place (a non-blank query searches across every category and the tab
- * row is hidden). Tapping an emoji forwards it to [onPick] (which adds it to the canvas
- * and closes the dialog). Pure glue.
- */
-@Composable
-private fun StickerPickerDialog(
-    onPick: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var picker by remember { mutableStateOf(StickerPickerState()) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.stories_composer_cancel))
-            }
-        },
-        title = { Text(stringResource(R.string.stories_composer_add_sticker)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = picker.query,
-                    onValueChange = { picker = picker.withQuery(it) },
-                    singleLine = true,
-                    placeholder = { Text(stringResource(R.string.stories_composer_sticker_search)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (!picker.isSearching) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(StickerCategory.values().toList()) { category ->
-                            FilterChip(
-                                selected = picker.category == category,
-                                onClick = { picker = picker.withCategory(category) },
-                                label = { Text(category.label()) },
-                            )
-                        }
-                    }
-                }
-                val visible = picker.visibleEmojis
-                if (visible.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.stories_composer_sticker_no_results),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(vertical = 16.dp),
-                    )
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(STICKER_PICKER_COLUMNS),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        gridItems(visible) { emoji ->
-                            Text(
-                                text = emoji,
-                                fontSize = STICKER_PICKER_FONT_SIZE,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { onPick(emoji) }
-                                    .padding(8.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        },
-    )
-}
-
-@Composable
-private fun StickerCategory.label(): String = stringResource(
-    when (this) {
-        StickerCategory.SMILEYS -> R.string.stories_composer_sticker_cat_smileys
-        StickerCategory.ANIMALS -> R.string.stories_composer_sticker_cat_animals
-        StickerCategory.FOOD -> R.string.stories_composer_sticker_cat_food
-        StickerCategory.ACTIVITIES -> R.string.stories_composer_sticker_cat_activities
-        StickerCategory.TRAVEL -> R.string.stories_composer_sticker_cat_travel
-        StickerCategory.OBJECTS -> R.string.stories_composer_sticker_cat_objects
-        StickerCategory.SYMBOLS -> R.string.stories_composer_sticker_cat_symbols
-        StickerCategory.FLAGS -> R.string.stories_composer_sticker_cat_flags
-    },
-)
-
-private const val STICKER_PICKER_COLUMNS = 6
-private val STICKER_PICKER_FONT_SIZE = 28.sp
-
-private fun StoryTextAlign.toTextAlign(): TextAlign = when (this) {
-    StoryTextAlign.LEFT -> TextAlign.Start
-    StoryTextAlign.CENTER -> TextAlign.Center
-    StoryTextAlign.RIGHT -> TextAlign.End
-}
-
-private fun StoryTextFontFamily.toFontFamily(): FontFamily = when (this) {
-    StoryTextFontFamily.SANS -> FontFamily.SansSerif
-    StoryTextFontFamily.SERIF -> FontFamily.Serif
-    StoryTextFontFamily.MONOSPACE -> FontFamily.Monospace
-    StoryTextFontFamily.CURSIVE -> FontFamily.Cursive
-}
-
-/** The intrinsic on-canvas emoji size before per-sticker [StoryStickerElement.scale]. */
-private val STICKER_BASE_FONT_SIZE = 48.sp
-
-/**
- * Maps a text element's wire "design-unit" size ([StoryTextSize.designSize], 1080-referential)
- * to the on-canvas preview size in sp. The medium default (96 design units) previews at 18 sp;
- * the element's own `scale` multiplies on top. Preview-only — the wire carries the design units.
- */
-private const val STORY_TEXT_CANVAS_FONT_FACTOR = 0.1875f
-
-/** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
-private val STORY_TEXT_COLORS = listOf(
-    StoryTextElement.DEFAULT_COLOR,
-    "000000",
-    "FF3B30",
-    "FF9500",
-    "FFCC00",
-    "34C759",
-    "007AFF",
-    "AF52DE",
-    "FF2D55",
-)
-
-private fun StoryTextStyle.labelRes(): Int = when (this) {
-    StoryTextStyle.BOLD -> R.string.stories_composer_style_bold
-    StoryTextStyle.NEON -> R.string.stories_composer_style_neon
-    StoryTextStyle.TYPEWRITER -> R.string.stories_composer_style_typewriter
-    StoryTextStyle.HANDWRITING -> R.string.stories_composer_style_handwriting
-    StoryTextStyle.CLASSIC -> R.string.stories_composer_style_classic
-}
-
-/**
- * Styling controls for the [element] currently being edited — the iOS-parity style
- * picker (five faces), the alignment toggle, and the colour swatches. Pure glue: each
- * affordance forwards its choice to a ViewModel intent ([onStyle]/[onColor]/[onAlign])
- * whose logic is unit-tested; selection highlighting reads straight off the element.
- */
-@Composable
-private fun TextStyleToolbar(
-    element: StoryTextElement,
-    onStyle: (StoryTextStyle) -> Unit,
-    onColor: (String) -> Unit,
-    onAlign: (StoryTextAlign) -> Unit,
-    onBackground: (StoryTextBackground) -> Unit,
-    onCycleSize: () -> Unit,
-    onCycleOutline: () -> Unit,
-    onCycleFadeIn: () -> Unit,
-    onCycleFadeOut: () -> Unit,
-    onCycleStart: () -> Unit,
-    onCycleDuration: () -> Unit,
-    onDuplicate: () -> Unit,
-    onReorder: (StoryZOrder) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(StoryTextStyle.entries) { style ->
-                FilterChip(
-                    selected = element.style == style,
-                    onClick = { onStyle(style) },
-                    label = { Text(stringResource(style.labelRes())) },
-                )
-            }
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-        ) {
-            AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
-            AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
-            AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
-            IconButton(onClick = onCycleSize) {
-                Icon(
-                    Icons.Filled.FormatSize,
-                    contentDescription = stringResource(R.string.stories_composer_size),
-                    tint = if (element.size != StoryTextSize.DEFAULT) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onCycleOutline) {
-                Icon(
-                    Icons.Filled.BorderColor,
-                    contentDescription = stringResource(R.string.stories_composer_outline),
-                    tint = if (element.outline.isVisible) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onCycleFadeIn) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Login,
-                    contentDescription = stringResource(R.string.stories_composer_fade_in),
-                    tint = if (element.fade.hasFadeIn) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onCycleFadeOut) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = stringResource(R.string.stories_composer_fade_out),
-                    tint = if (element.fade.hasFadeOut) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onCycleStart) {
-                Icon(
-                    Icons.Filled.Schedule,
-                    contentDescription = stringResource(R.string.stories_composer_timing_start),
-                    tint = if (element.timing.hasStart) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onCycleDuration) {
-                Icon(
-                    Icons.Filled.Timelapse,
-                    contentDescription = stringResource(R.string.stories_composer_timing_duration),
-                    tint = if (element.timing.isTimed) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = onDuplicate) {
-                Icon(
-                    Icons.Filled.ContentCopy,
-                    contentDescription = stringResource(R.string.stories_composer_duplicate_element),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ZOrderButton(Icons.Filled.VerticalAlignBottom, R.string.stories_composer_zorder_to_back) {
-                onReorder(StoryZOrder.TO_BACK)
-            }
-            ZOrderButton(Icons.Filled.ArrowDownward, R.string.stories_composer_zorder_backward) {
-                onReorder(StoryZOrder.BACKWARD)
-            }
-            ZOrderButton(Icons.Filled.ArrowUpward, R.string.stories_composer_zorder_forward) {
-                onReorder(StoryZOrder.FORWARD)
-            }
-            ZOrderButton(Icons.Filled.VerticalAlignTop, R.string.stories_composer_zorder_to_front) {
-                onReorder(StoryZOrder.TO_FRONT)
-            }
-        }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(STORY_TEXT_COLORS) { hex ->
-                ColorSwatch(
-                    hex = hex,
-                    selected = element.color.equals(hex, ignoreCase = true),
-                    onClick = { onColor(hex) },
-                )
-            }
-        }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(StoryTextBackgroundPresets.all) { preset ->
-                BackgroundSwatch(
-                    background = preset,
-                    selected = element.background == preset,
-                    onClick = { onBackground(preset) },
-                )
-            }
-        }
-    }
-}
-
-/**
- * One text-backing choice in the toolbar: a rounded swatch previewing the backing
- * (a slash for None, the frosted scrim for Glass, the fill for Solid), ringed when it
- * is the element's current backing. Tap forwards the pure [StoryTextBackground] preset
- * to [onClick]; the decision logic lives in the unit-tested model.
- */
-@Composable
-private fun BackgroundSwatch(
-    background: StoryTextBackground,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val ring = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-    val fill = when (background) {
-        StoryTextBackground.None -> Color.Transparent
-        is StoryTextBackground.Solid -> parseBackingColor(background.hex)
-        is StoryTextBackground.Glass -> Color.White.copy(alpha = 0.18f)
-    }
-    val label = when (background) {
-        StoryTextBackground.None -> stringResource(R.string.stories_composer_bg_none)
-        is StoryTextBackground.Solid -> "#${background.hex}"
-        is StoryTextBackground.Glass -> stringResource(R.string.stories_composer_bg_glass)
-    }
-    Box(
-        modifier = Modifier
-            .size(28.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(fill)
-            .border(BorderStroke(if (selected) 2.dp else 1.dp, ring), RoundedCornerShape(8.dp))
-            .pointerInput(background) { detectTapGestures { onClick() } }
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (background is StoryTextBackground.None) {
-            Icon(
-                Icons.Filled.FormatColorReset,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun AlignToggle(
-    align: StoryTextAlign,
-    current: StoryTextAlign,
-    onAlign: (StoryTextAlign) -> Unit,
-) {
-    val (icon, label) = when (align) {
-        StoryTextAlign.LEFT -> Icons.Filled.FormatAlignLeft to R.string.stories_composer_align_left
-        StoryTextAlign.CENTER -> Icons.Filled.FormatAlignCenter to R.string.stories_composer_align_center
-        StoryTextAlign.RIGHT -> Icons.Filled.FormatAlignRight to R.string.stories_composer_align_right
-    }
-    val selected = align == current
-    IconButton(onClick = { onAlign(align) }) {
-        Icon(
-            icon,
-            contentDescription = stringResource(label),
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun ZOrderButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    labelRes: Int,
-    onClick: () -> Unit,
-) {
-    IconButton(onClick = onClick) {
-        Icon(
-            icon,
-            contentDescription = stringResource(labelRes),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun ColorSwatch(hex: String, selected: Boolean, onClick: () -> Unit) {
-    val ring = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-    Box(
-        modifier = Modifier
-            .size(28.dp)
-            .clip(RoundedCornerShape(50))
-            .background(parseHexColor(hex))
-            .border(BorderStroke(if (selected) 2.dp else 1.dp, ring), RoundedCornerShape(50))
-            .pointerInput(hex) { detectTapGestures { onClick() } }
-            .semantics { contentDescription = "#$hex" },
-    )
-}
-
-/** Parses a `RRGGBB` (or `#RRGGBB`) hex colour, falling back to white on anything unexpected. */
-private fun parseHexColor(hex: String): Color =
-    runCatching { Color(("ff" + hex.removePrefix("#")).toLong(16)) }.getOrDefault(Color.White)
-
-/**
- * Parses a `RRGGBB` **or** `RRGGBBAA` (optionally `#`-prefixed) hex into a Compose [Color],
- * reordering the trailing alpha of the 8-digit form into Compose's `AARRGGBB`. Falls back to
- * transparent on anything unexpected so a malformed preset never crashes the canvas.
- */
-private fun parseBackingColor(hex: String): Color = runCatching {
-    val h = hex.removePrefix("#")
-    val argb = when (h.length) {
-        8 -> h.substring(6, 8) + h.substring(0, 6)
-        6 -> "ff$h"
-        else -> return Color.Transparent
-    }
-    Color(argb.toLong(16))
-}.getOrDefault(Color.Transparent)
-
-/**
- * Paints the element's text backing behind the glyphs (glue): a rounded solid fill for
- * [StoryTextBackground.Solid], a translucent frosted scrim approximating the iOS blur for
- * [StoryTextBackground.Glass], and nothing for [StoryTextBackground.None]. The *choice* of
- * backing is the unit-tested [StoryTextBackground]; this only renders it.
- */
-private fun Modifier.storyTextBacking(background: StoryTextBackground): Modifier = when (background) {
-    StoryTextBackground.None -> this
-    is StoryTextBackground.Solid ->
-        this.background(parseBackingColor(background.hex), RoundedCornerShape(10.dp))
-    is StoryTextBackground.Glass ->
-        this.background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
-}
-
-/**
- * Mini-preview strip of the multi-slide deck — the structural surface of the
- * upcoming canvas. Each slide is a numbered, selectable chip (tap to switch); the
- * selected chip carries Duplicate / Remove actions (Remove hidden on the last
- * remaining slide). A trailing "+" chip appends a slide, disabled at the ≤10 cap.
- * A horizontal drag on a chip reorders it: the accumulated pixels and the measured
- * slot width feed the pure, unit-tested [SlideReorderResolver], which yields the
- * clamped target index handed to [onMove] on drag end.
- * Pure glue: every decision (cap, can-remove, selection, reorder target) is read
- * off the already unit-tested [StorySlideDeck]/[SlideReorderResolver]; this only
- * renders the deck and forwards intents.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SlideStrip(
-    deck: StorySlideDeck,
-    onSelect: (String) -> Unit,
-    onAdd: () -> Unit,
-    onDuplicate: () -> Unit,
-    onRemove: (String) -> Unit,
-    onMove: (String, Int) -> Unit,
-) {
-    val spacingPx = with(LocalDensity.current) { 8.dp.toPx() }
-    var chipWidthPx by remember { mutableFloatStateOf(0f) }
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        itemsIndexed(deck.slides, key = { _, slide -> slide.id }) { index, slide ->
-            val selected = slide.id == deck.selectedId
-            FilterChip(
-                selected = selected,
-                onClick = { onSelect(slide.id) },
-                modifier = Modifier
-                    .onSizeChanged { chipWidthPx = it.width.toFloat() }
-                    .pointerInput(slide.id, index, deck.size) {
-                        var totalDrag = 0f
-                        detectHorizontalDragGestures(
-                            onDragStart = { totalDrag = 0f },
-                            onDragEnd = {
-                                onMove(
-                                    slide.id,
-                                    SlideReorderResolver.targetIndex(
-                                        fromIndex = index,
-                                        dragPx = totalDrag,
-                                        slotWidthPx = chipWidthPx + spacingPx,
-                                        slideCount = deck.size,
-                                    ),
-                                )
-                            },
-                        ) { change, dragAmount ->
-                            change.consume()
-                            totalDrag += dragAmount
-                        }
-                    },
-                label = { Text(stringResource(R.string.stories_composer_slide_label, index + 1)) },
-                trailingIcon = if (selected && deck.canRemoveSlide) {
-                    {
-                        IconButton(onClick = { onRemove(slide.id) }, modifier = Modifier.size(18.dp)) {
-                            Icon(
-                                Icons.Filled.Close,
-                                contentDescription = stringResource(R.string.stories_composer_remove_slide),
-                            )
-                        }
-                    }
-                } else {
-                    null
-                },
-            )
-        }
-        item {
-            IconButton(onClick = onDuplicate, enabled = deck.canAddSlide) {
-                Icon(
-                    Icons.Filled.ContentCopy,
-                    contentDescription = stringResource(R.string.stories_composer_duplicate_slide),
-                )
-            }
-        }
-        item {
-            AssistChip(
-                onClick = onAdd,
-                enabled = deck.canAddSlide,
-                label = { Text(stringResource(R.string.stories_composer_add_slide)) },
-                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MediaPreviewRow(
-    attachments: List<UploadedMedia>,
-    pending: List<PendingMediaUpload>,
-    backgroundMediaId: String?,
-    backgroundIsVideo: Boolean,
-    backgroundLoop: Boolean,
-    onRemove: (String) -> Unit,
-    onToggleBackground: (String) -> Unit,
-    onToggleBackgroundLoop: () -> Unit,
-) {
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(attachments, key = { it.id }) { media ->
-            val isBackground = media.id == backgroundMediaId
-            MediaThumbnail(
-                model = media.thumbnailUrl ?: media.url,
-                isPending = false,
-                isBackground = isBackground,
-                onRemove = { onRemove(media.id) },
-                onToggleBackground = { onToggleBackground(media.id) },
-                // The loop toggle appears only on the designated background VIDEO — the
-                // one media whose looping is authorable — so the control is never a no-op.
-                backgroundLoop = if (isBackground && backgroundIsVideo) backgroundLoop else null,
-                onToggleBackgroundLoop = onToggleBackgroundLoop,
-            )
-        }
-        items(pending, key = { it.cmid }) { upload ->
-            MediaThumbnail(
-                model = upload.item.bytes,
-                isPending = true,
-                onRemove = { onRemove(upload.cmid) },
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MediaThumbnail(
-    model: Any?,
-    isPending: Boolean,
-    onRemove: () -> Unit,
-    isBackground: Boolean = false,
-    onToggleBackground: (() -> Unit)? = null,
-    backgroundLoop: Boolean? = null,
-    onToggleBackgroundLoop: (() -> Unit)? = null,
-) {
-    Box {
-        AsyncImage(
-            model = model,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(72.dp)
-                .clip(RoundedCornerShape(8.dp)),
-        )
-        if (onToggleBackground != null) {
-            Surface(
-                onClick = onToggleBackground,
-                shape = RoundedCornerShape(50),
-                color = if (isBackground) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    Color.Black.copy(alpha = 0.55f)
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(2.dp)
-                    .size(22.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Wallpaper,
-                    contentDescription = stringResource(
-                        if (isBackground) {
-                            R.string.stories_composer_background_media_clear
-                        } else {
-                            R.string.stories_composer_background_media_set
-                        },
+                    badges = ComposerBandTools.badges(
+                        mediaCount = state.draft.mediaIds.size,
+                        textCount = state.selectedSlideTextElements.size,
+                        strokeCount = state.selectedSlideStrokes.size,
+                        hasBackground = state.selectedSlideBackground != null,
                     ),
-                    tint = if (isBackground) MaterialTheme.colorScheme.onPrimary else Color.White,
-                    modifier = Modifier.padding(3.dp),
-                )
-            }
-        }
-        if (backgroundLoop != null && onToggleBackgroundLoop != null) {
-            Surface(
-                onClick = onToggleBackgroundLoop,
-                shape = RoundedCornerShape(50),
-                color = if (backgroundLoop) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    Color.Black.copy(alpha = 0.55f)
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(2.dp)
-                    .size(22.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Loop,
-                    contentDescription = stringResource(
-                        if (backgroundLoop) {
-                            R.string.stories_composer_background_loop_on
-                        } else {
-                            R.string.stories_composer_background_loop_off
-                        },
-                    ),
-                    tint = if (backgroundLoop) MaterialTheme.colorScheme.onPrimary else Color.White,
-                    modifier = Modifier.padding(3.dp),
-                )
-            }
-        }
-        if (isPending) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth(),
-            ) {
-                Text(
-                    text = stringResource(R.string.stories_composer_media_pending),
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                )
-            }
-        }
-        Surface(
-            onClick = onRemove,
-            shape = RoundedCornerShape(50),
-            color = Color.Black.copy(alpha = 0.55f),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(2.dp)
-                .size(22.dp),
-        ) {
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = stringResource(R.string.stories_composer_remove_media),
-                tint = Color.White,
-                modifier = Modifier.padding(3.dp),
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun VisibilityRow(
-    selected: StoryVisibility,
-    onSelect: (StoryVisibility) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LazyRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        items(StoryVisibility.entries) { visibility ->
-            FilterChip(
-                selected = visibility == selected,
-                onClick = { onSelect(visibility) },
-                label = { Text(stringResource(visibility.labelRes())) },
-            )
-        }
-    }
-}
-
-private fun StoryVisibility.labelRes(): Int = when (this) {
-    StoryVisibility.PUBLIC -> R.string.stories_visibility_public
-    StoryVisibility.FRIENDS -> R.string.stories_visibility_friends
-    StoryVisibility.COMMUNITY -> R.string.stories_visibility_community
-    StoryVisibility.PRIVATE -> R.string.stories_visibility_private
-}
-
-/**
- * The Effets drawer's background picker: a "None" chip (clears the backdrop), one
- * tappable swatch per [StoryBackgroundPalette] preset (solids and gradients), and a
- * "random pastel" swatch. Selecting hands the chosen [StoryBackgroundValue] straight
- * to the deck, which serialises it to `effects.background`; the reader paints it over
- * its accent→black fallback. Per-slide; the palette + parse rules live in the model,
- * so this stays glue. The random pastel is minted here (UI-side randomness) via the
- * pure [StoryBackgroundPalette.randomPastel].
- */
-@Composable
-private fun BackgroundRow(
-    selected: StoryBackgroundValue?,
-    onSelect: (StoryBackgroundValue?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val label = stringResource(R.string.stories_composer_background)
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelMedium)
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            item {
-                FilterChip(
-                    selected = selected == null,
-                    onClick = { onSelect(null) },
-                    label = { Text(stringResource(R.string.stories_composer_background_none)) },
-                )
-            }
-            items(StoryBackgroundPalette.presets()) { preset ->
-                BackgroundSwatch(
-                    brush = backgroundSwatchBrush(preset),
-                    isSelected = preset == selected,
-                    onClick = { onSelect(preset) },
-                )
-            }
-            item {
-                val randomLabel = stringResource(R.string.stories_composer_background_random)
-                FilterChip(
-                    selected = false,
-                    onClick = { onSelect(StoryBackgroundPalette.randomPastel()) },
-                    label = { Text(randomLabel) },
+                    onToolTap = viewModel::onBandToolTap,
+                    onToolSwipeUp = viewModel::onBandToolSwipeUp,
+                    onHideChrome = viewModel::onBandSwipeDown,
+                    onShowChrome = viewModel::onBandShowChrome,
                 )
             }
         }
     }
-}
-
-/** One tappable background swatch — a rounded chip painted with [brush], ringed when [isSelected]. */
-@Composable
-private fun BackgroundSwatch(
-    brush: Brush,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val ring = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-    Box(
-        modifier = modifier
-            .size(32.dp)
-            .clip(CircleShape)
-            .background(brush)
-            .border(BorderStroke(if (isSelected) 2.dp else 1.dp, ring), CircleShape)
-            .clickable(onClick = onClick),
-    )
-}
-
-/**
- * The paint for a preview swatch — a solid fill or a two-colour gradient — reusing the
- * same `hexColor` SSOT the reader paints with, so the swatch matches what publishes.
- */
-private fun backgroundSwatchBrush(value: StoryBackgroundValue): Brush = when (value) {
-    is StoryBackgroundValue.Hex -> SolidColor(hexColor(value.hex))
-    is StoryBackgroundValue.Gradient -> Brush.linearGradient(
-        listOf(hexColor(value.start), hexColor(value.end)),
-    )
-}
-
-/**
- * The Effets drawer's photo-filter picker: a "None" chip plus one chip per
- * [StoryFilter] preset (selecting toggles the slide's filter), and — only while a
- * filter is active — a strength slider. All per-slide; the deck holds the state and
- * the colour math lives in [StoryFilterMatrix], so this stays glue.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FilterRow(
-    selected: StoryFilter?,
-    intensity: Float,
-    onSelect: (StoryFilter?) -> Unit,
-    onIntensityChange: (Float) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            item {
-                FilterChip(
-                    selected = selected == null,
-                    onClick = { onSelect(null) },
-                    label = { Text(stringResource(R.string.stories_composer_filter_none)) },
-                )
-            }
-            items(StoryFilter.entries) { filter ->
-                FilterChip(
-                    selected = filter == selected,
-                    onClick = { onSelect(filter) },
-                    label = { Text(stringResource(filter.labelRes())) },
-                )
-            }
-        }
-        if (selected != null) {
-            val intensityLabel = stringResource(R.string.stories_composer_filter_intensity)
-            Slider(
-                value = intensity,
-                onValueChange = onIntensityChange,
-                valueRange = 0f..1f,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics { contentDescription = intensityLabel },
-            )
-        }
-    }
-}
-
-/**
- * The per-slide duration control in the Effets band — a labelled slider that pins how
- * long the selected slide stays on screen (parity with iOS's timeline "pin duration").
- * The slider spans the practical [DURATION_SLIDER_MIN_SECONDS]..[DURATION_SLIDER_MAX_SECONDS]
- * range; the value it emits is bounded to the iOS `[2, 600]`s range by the pure
- * `StoryDurationPin` in the ViewModel, and rides to the reader as `effects.timelineDuration`.
- * Rounded to whole seconds so the pin is a clean value and the label reads simply.
- */
-@Composable
-private fun DurationRow(
-    seconds: Double,
-    onSecondsChange: (Double) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val whole = seconds.roundToInt()
-    val label = stringResource(R.string.stories_composer_slide_duration)
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, style = MaterialTheme.typography.labelMedium)
-            Text(
-                stringResource(R.string.stories_composer_slide_duration_value, whole),
-                style = MaterialTheme.typography.labelMedium,
-            )
-        }
-        Slider(
-            value = whole.toFloat().coerceIn(DURATION_SLIDER_MIN_SECONDS, DURATION_SLIDER_MAX_SECONDS),
-            onValueChange = { onSecondsChange(it.roundToInt().toDouble()) },
-            valueRange = DURATION_SLIDER_MIN_SECONDS..DURATION_SLIDER_MAX_SECONDS,
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { contentDescription = label },
-        )
-    }
-}
-
-/** Practical lower bound of the duration slider (matches the model's `StoryDurationPin.MIN_SECONDS`). */
-private const val DURATION_SLIDER_MIN_SECONDS: Float = 2f
-
-/** Practical upper bound of the duration slider — most story slides live well under a minute. */
-private const val DURATION_SLIDER_MAX_SECONDS: Float = 60f
-
-private fun StoryFilter.labelRes(): Int = when (this) {
-    StoryFilter.VINTAGE -> R.string.stories_composer_filter_vintage
-    StoryFilter.BW -> R.string.stories_composer_filter_bw
-    StoryFilter.WARM -> R.string.stories_composer_filter_warm
-    StoryFilter.COOL -> R.string.stories_composer_filter_cool
-    StoryFilter.DRAMATIC -> R.string.stories_composer_filter_dramatic
-    StoryFilter.VIVID -> R.string.stories_composer_filter_vivid
-    StoryFilter.FADE -> R.string.stories_composer_filter_fade
-    StoryFilter.CHROME -> R.string.stories_composer_filter_chrome
 }
 
 /**
@@ -2006,14 +346,14 @@ private fun StoryFilter.labelRes(): Int = when (this) {
  * MIME). Returns null when the stream can't be opened. Pure-IO glue — the
  * filename/MIME defaulting lives in `MediaUpload`, so this stays a thin reader.
  */
-private fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
+internal fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
     val bytes = runCatching { openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: return null
     val mimeType = getType(uri).orEmpty()
     val fileName = displayName(uri).orEmpty()
     return MediaUploadItem(bytes = bytes, fileName = fileName, mimeType = mimeType)
 }
 
-private fun ContentResolver.displayName(uri: Uri): String? =
+internal fun ContentResolver.displayName(uri: Uri): String? =
     runCatching {
         query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)

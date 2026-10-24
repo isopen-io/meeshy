@@ -24,12 +24,10 @@ extension UniversalComposerBar {
 
     var topToolbar: some View {
         ComposerToolbarStrip {
-            // Ephemeral mode toggle (hidden for comments)
             if !resolvedHideEphemeral {
                 ephemeralToggleButton
             }
 
-            // Blur mode toggle
             if !hideBlur {
                 blurToggleButton
             }
@@ -46,7 +44,6 @@ extension UniversalComposerBar {
                 effectsToggleButton
             }
 
-            // Permanent effects inline toggle (comments only)
             if resolvedShowPermanentEffects {
                 permanentEffectsToggleButton
             }
@@ -68,7 +65,6 @@ extension UniversalComposerBar {
             // sous les portes de droite dès que la rangée débordait.
             languageSelectorPill
         } trailing: {
-            // Character counter
             if let maxLen = maxLength {
                 let count = text.count
                 if count > Int(Double(maxLen) * 0.8) {
@@ -132,7 +128,7 @@ extension UniversalComposerBar {
                 .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
-                .frame(width: 44, height: 44)
+                .frame(width: ComposerBottomClearance.doorDiameter, height: ComposerBottomClearance.doorDiameter)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -153,7 +149,7 @@ extension UniversalComposerBar {
                 .font(.callout.weight(ComposerGlassDoors.glyphWeight))
                 .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
-                .frame(width: 44, height: 44)
+                .frame(width: ComposerBottomClearance.doorDiameter, height: ComposerBottomClearance.doorDiameter)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

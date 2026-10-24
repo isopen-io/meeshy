@@ -174,6 +174,7 @@ struct RootStatusBubbleLayer: ViewModifier {
                     accountDisplayName: AuthManager.shared.currentUser?.displayName
                         ?? AuthManager.shared.currentUser?.username
                         ?? "",
+                    accountAvatarURL: AuthManager.shared.currentUser?.avatar,
                     onContinueWithAccount: { onContinueWithAccount(choice.identifier) },
                     // La session invitée est portée par `MeeshyApp`, au-dessus de
                     // cette vue : on lui passe l'intention plutôt que d'essayer de
@@ -237,6 +238,9 @@ struct RootIntentRoutingLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // La porte du verrou PIN (#11386) : toute ouverture retenue par le
+            // routeur se présente ici, sur les deux racines.
+            .modifier(ConversationLockGateLayer(router: router))
             .onAppear {
                 navigationHandoff?.rootAppeared(rootToken)
                 reopenTornDownComposer()

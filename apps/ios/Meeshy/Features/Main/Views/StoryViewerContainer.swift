@@ -350,7 +350,7 @@ struct StoryViewerContainer: View {
         if viewModel.groupIndex(forUserId: uid) != nil { return }
 
         // Give the view a moment for published updates to settle, then give up.
-        try? await Task.sleep(nanoseconds: 2_500_000_000) // 2.5s
+        _ = await cancellableSleep(for: .milliseconds(2500)) // 2.5s
         if !Task.isCancelled, viewModel.groupIndex(forUserId: uid) == nil {
             Logger.messages.error("[StoryViewerContainer] Group still missing after reload uid=\(uid, privacy: .public) availableIds=\(viewModel.storyGroups.map(\.id).joined(separator: ","), privacy: .public)")
             timedOut = true
@@ -427,7 +427,7 @@ struct StoryReaderCover: ViewModifier {
         // Un `fullScreenCover` n'hérite pas des EnvironmentObject : le trio que
         // `StoryViewerView` déclare (feuille de partage interne) est remis ici,
         // une fois pour tous les points d'appel.
-        .environmentObject(router)
+        .modifier(MeeshyRouterInjection(router: router))
         .environmentObject(statusViewModel)
         .conversationListObject(conversationList)
         .environment(\.meeshyConversationList, conversationList)
@@ -475,7 +475,7 @@ struct StoryPreviewReader: View {
         )
         // Les objets d'environnement ne traversent pas un `fullScreenCover` :
         // sans eux, l'aperçu planterait à la première lecture de l'un d'eux.
-        .environmentObject(router)
+        .modifier(MeeshyRouterInjection(router: router))
         .conversationListObject(conversationList)
         .environmentObject(statusViewModel)
     }

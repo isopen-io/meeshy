@@ -20,7 +20,7 @@ import { apiConfig } from '@/lib/api/config';
 import { sessionStore } from '@/lib/api/session';
 import { callsAvailable } from '@/lib/calls/calls-availability';
 import { avatarOf, initialsOf, peerOf, presenceKeyOf } from '@/lib/view/conversation';
-import { usePresences } from '@/lib/view/use-presence';
+import { usePresencesOf } from '@/lib/view/use-presence';
 import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import type { ActiveMember } from '@/lib/view/top-active-members';
@@ -45,6 +45,8 @@ import { ThreadSearchPanel } from './thread-search-panel';
 import { apiDeps } from '@/lib/api/deps';
 import { useThreadSearch } from '@/lib/view/use-thread-search';
 import { searchLandingMode } from '@/lib/view/thread-search';
+import { useThreadSearchDoor } from '@/lib/view/thread-search-door';
+import { useOptionalRoute } from '@/lib/router';
 
 /**
  * L'EN-TÊTE DU FIL — extrait de `routes/thread.tsx` (revue #5814, défaut
@@ -173,10 +175,15 @@ export function ThreadHeader({
      l'indigo « ici » primant (`ActiveMembersStack`). */
   const memberIds = (activeMembers ?? []).map((member) => member.id);
   /* VIVANTES (#10571) : le pair et les plus actifs suivent `user:status` et la
-     loi 1/3/5, l'en-tête ne se repeignant que si l'une de LEURS pastilles change. */
-  const [peerPresence = 'offline', ...memberPresences] = usePresences([
-    peer,
-    ...memberIds.map((memberId) => conversation.participants.find((p) => presenceKeyOf(p) === memberId)),
+     loi 1/3/5, l'en-tête ne se repeignant que si l'une de LEURS pastilles change.
+     Un plus actif hors des participants servis (la passerelle en tronque la
+     liste) se lit par son identifiant dans la carte vivante (#11412). */
+  const [peerPresence = 'offline', ...memberPresences] = usePresencesOf([
+    { userId: undefined, participant: peer },
+    ...memberIds.map((memberId) => ({
+      userId: memberId,
+      participant: conversation.participants.find((p) => presenceKeyOf(p) === memberId),
+    })),
   ]);
   const memberPresence = (memberId: string) => memberPresences[memberIds.indexOf(memberId)] ?? 'offline';
   /* L'INVITÉ SANS COMPTE LIT SON FIL EN FOCUS (#10100) : aucun retour vers une
@@ -236,6 +243,8 @@ export function ThreadHeader({
      vit ICI parce que la loupe et le panneau sont tous deux dans cette bande ;
      le fil n'en reçoit que le saut final. */
   const search = useThreadSearch({ conversationId: conversation.id, deps: apiDeps });
+  const route = useOptionalRoute();
+  useThreadSearchDoor({ search: route?.search, openSearch: search.openSearch });
   const pickSearchHit = (messageId: string) => {
     search.close();
     const landing = searchLandingMode(readingMenuRows.find((row) => row.isCurrent)?.mode);

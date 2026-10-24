@@ -103,7 +103,7 @@ final class CallsViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
     }
 
-    deinit {
+    nonisolated deinit {
         revalidationTask?.cancel()
     }
 
@@ -264,7 +264,7 @@ final class CallsViewModel: ObservableObject {
             let store = await CacheCoordinator.shared.callHistory
             await store.invalidateAll()
             for key in Self.baseCacheKeys {
-                try? await store.save([], for: key)
+                await bestEffort("callsViewModel.store.save", category: .cache) { try await store.save([], for: key) }
             }
         } catch {
             calls = snapshot

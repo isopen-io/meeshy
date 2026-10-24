@@ -1,0 +1,28 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_recording_accept">Aceptar</string>
+    <string name="call_recording_active">Grabación en curso</string>
+    <string name="call_recording_ask">%s quiere grabar la llamada</string>
+    <string name="call_recording_askDetail">La grabación solo empieza si todos aceptan, y luego se añade a la conversación.</string>
+    <string name="call_recording_askDetail_video">La pantalla de la llamada y todo su sonido solo se graban si todos aceptan, y luego se añaden a la conversación.</string>
+    <string name="call_recording_ask_video">%s quiere grabar la llamada en vídeo</string>
+    <string name="call_recording_cancel">Cancelar</string>
+    <string name="call_recording_caption">Grabar</string>
+    <string name="call_recording_close">Cerrar</string>
+    <string name="call_recording_hint">Pide el consentimiento de cada participante antes de grabar</string>
+    <string name="call_recording_kind_audio">Solo audio</string>
+    <string name="call_recording_kind_hint">Elige qué se grabará; después, cada participante debe aceptar</string>
+    <string name="call_recording_kind_video">Audio y vídeo</string>
+    <string name="call_recording_refuse">Rechazar</string>
+    <string name="call_recording_saveFailed">No se pudo añadir la grabación</string>
+    <string name="call_recording_saved">La grabación se añadió a la conversación</string>
+    <string name="call_recording_someone">Un participante</string>
+    <string name="call_recording_start">Grabar la llamada</string>
+    <string name="call_recording_stop">Detener la grabación</string>
+    <string name="call_recording_stopped_joined">Alguien se unió a la llamada: grabación detenida</string>
+    <string name="call_recording_stopped_other">Grabación detenida</string>
+    <string name="call_recording_stopped_refused">Grabación rechazada</string>
+    <string name="call_recording_stopped_timeout">No todos respondieron: no hay grabación</string>
+    <string name="call_recording_unavailable">La grabación no está disponible ahora</string>
+    <string name="call_recording_waiting">Esperando el consentimiento de todos…</string>
+</resources>

@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react';
 
-import { Avatar } from '@/components/avatar';
+import { Avatar, avatarPhotoEvents } from '@/components/avatar';
+import '@/styles/avatar.css';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { COMMUNITIES_GLYPHS, type CommunitiesGlyphName } from '@/components/glyphs-communities';
 import { GroupedSection, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import type { CommunityConversation, CommunityDraft, CommunitySummary } from '@/lib/api/communities';
 import { attachmentSrc } from '@/lib/api/media-url';
-import { communityAccent, compactCount, conversationTitleOf, initialsOf } from '@/lib/communities/view';
+import { communityAccent, compactCount, conversationTitleOf } from '@/lib/communities/view';
+import { initialsOf } from '@/lib/view/conversation';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
@@ -303,33 +305,39 @@ export function CommunitiesOfflineNotice({ language }: { readonly language: Inte
   );
 }
 
+/**
+ * **UN SEUL VISAGE** (#12571) — la photo de la communauté REMPLACE ses
+ * initiales, elle ne les recouvre pas : l'`<img>` précède le nœud d'initiales et
+ * porte les événements d'`Avatar` (`avatarPhotoEvents`), donc la règle de frère
+ * d'`avatar.css` masque le placeholder (et son fond d'accent) dès qu'elle
+ * charge. `key` : une nouvelle adresse repart d'une `<img>` neuve, jamais du
+ * `display:none` d'un échec précédent.
+ */
 function EntityAvatar({ name, avatar, accent }: { readonly name: string; readonly avatar: string | null; readonly accent: string }) {
+  const src = avatar === null ? undefined : attachmentSrc(avatar);
   return (
     <span
       aria-hidden="true"
-      className="relative grid shrink-0 place-items-center overflow-hidden font-bold"
-      style={{
-        width: 72,
-        height: 72,
-        borderRadius: 18,
-        background: bannerBackground(accent),
-        color: 'var(--color-on-media)',
-        fontSize: 27,
-        boxShadow: '0 0 0 3px var(--color-ios-card)',
-      }}
+      className="relative block shrink-0 overflow-hidden font-bold"
+      style={{ width: 72, height: 72, borderRadius: 18, boxShadow: '0 0 0 3px var(--color-ios-card)' }}
     >
-      {initialsOf(name)}
-      {avatar === null ? null : (
+      {src === undefined ? null : (
         <img
+          key={src}
           /* Idem la bannière : la clé (ou l'adresse héritée) passe par la route de flux (#6388). */
-          src={attachmentSrc(avatar)}
+          src={src}
           alt=""
           className="absolute inset-0 size-full object-cover"
-          onError={(event) => {
-            event.currentTarget.style.display = 'none';
-          }}
+          {...avatarPhotoEvents}
         />
       )}
+      <span
+        data-avatar-initials=""
+        className="grid size-full place-items-center"
+        style={{ background: bannerBackground(accent), color: 'var(--color-on-media)', fontSize: 27 }}
+      >
+        {initialsOf(name)}
+      </span>
     </span>
   );
 }

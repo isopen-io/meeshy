@@ -34,6 +34,23 @@ data class CommentRepliesState(
 
     fun repliesFor(id: String): List<ApiPostComment> = repliesByParent[id] ?: emptyList()
 
+    /**
+     * Profondeur de [id] dans le fil : 0 pour un commentaire de premier niveau (ou inconnu), +1 par
+     * parent traversé dans [repliesByParent]. Le garde de cycle borne la remontée.
+     */
+    fun depthOf(id: String, topLevelIds: Set<String>): Int {
+        var current = id
+        var depth = 0
+        val seen = HashSet<String>()
+        while (current !in topLevelIds && seen.add(current)) {
+            val parent = repliesByParent.entries.firstOrNull { (_, rows) -> rows.any { it.id == current } }?.key
+                ?: break
+            current = parent
+            depth++
+        }
+        return depth
+    }
+
     /** Open the thread [id]; inert if already open. */
     fun expanded(id: String): CommentRepliesState =
         if (id in expandedIds) this else copy(expandedIds = expandedIds + id)
@@ -102,9 +119,12 @@ data class CommentRepliesState(
     /** Swap the optimistic [tempId] reply under [parentId] for the server row; inert if not pending. */
     fun confirmedReply(parentId: String, tempId: String, confirmed: ApiPostComment): CommentRepliesState {
         if (tempId !in pendingReplyIds) return this
+        val current = repliesFor(parentId)
+        val echoed = current.any { it.id == confirmed.id }
         return copy(
-            repliesByParent = repliesByParent +
-                (parentId to repliesFor(parentId).map { if (it.id == tempId) confirmed else it }),
+            repliesByParent = repliesByParent + (
+                parentId to if (echoed) current.filterNot { it.id == tempId } else current.map { if (it.id == tempId) confirmed else it }
+            ),
             pendingReplyIds = pendingReplyIds - tempId,
         )
     }

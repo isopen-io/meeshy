@@ -67,6 +67,43 @@ describe('waitForValueSettled', () => {
     expect(waited).toEqual([7]);
   });
 
+  test('une lecture prise pendant que le réseau travaille ne compte pas (#12600)', async () => {
+    const { page, callCount } = fakePage(['a', 'a', 'a', 'a']);
+    const etats = [undefined, undefined, 'calme:3', 'calme:3'];
+    let i = 0;
+
+    const result = await waitForValueSettled(page as never, () => undefined, undefined, {
+      network: () => etats[Math.min(i++, etats.length - 1)],
+    });
+
+    expect(result).toBe('a');
+    expect(callCount()).toBe(4);
+  });
+
+  test('une requête partie entre deux lectures identiques empêche de conclure (#12600)', async () => {
+    const { page, callCount } = fakePage(['a', 'a', 'a', 'a']);
+    const etats = ['calme:3', 'calme:4', 'calme:4'];
+    let i = 0;
+
+    const result = await waitForValueSettled(page as never, () => undefined, undefined, {
+      network: () => etats[Math.min(i++, etats.length - 1)],
+    });
+
+    expect(result).toBe('a');
+    expect(callCount()).toBe(3);
+  });
+
+  test('un réseau qui ne se calme jamais rend undefined dans le budget (#12600)', async () => {
+    const { page } = fakePage(['a']);
+
+    const result = await waitForValueSettled(page as never, () => undefined, undefined, {
+      attempts: 5,
+      network: () => undefined,
+    });
+
+    expect(result).toBeUndefined();
+  });
+
   test('les constantes par défaut sont nommées, une fois', () => {
     expect(SETTLE_STEP_MS).toBe(50);
     expect(SETTLE_ATTEMPTS).toBe(100);

@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import os
+import MeeshySDK
 
 // MARK: - WebRTC Service Delegate
 
@@ -59,6 +60,11 @@ final class WebRTCService {
     /// la négociation est déjà stable, et l'échec qui en résultait faisait
     /// raccrocher un appel qui fonctionnait (2026-09-30).
     private var appliedRemoteAnswerSDP: String?
+    /// L'offre distante à laquelle on a déjà répondu, et la réponse donnée
+    /// (#11468). La passerelle REJOUE l'offre à chaque (re)jonction, et
+    /// l'appelant la renvoie quand notre réponse tarde : un rejeu exact reçoit
+    /// la MÊME réponse, sans renégocier.
+    private var answeredRemoteOffer = AnsweredRemoteOffer()
     private(set) var connectionState: PeerConnectionState = .new
     // Tracks the in-flight flush task so it can be cancelled when the
     // connection is closed — prevents post-teardown addIceCandidate calls
@@ -85,6 +91,10 @@ final class WebRTCService {
     /// would thaw without anyone deciding it. `applyVideoQuality` therefore reads
     /// this flag FIRST and substitutes the floor for the computed tier.
     private(set) var survivalFloorActive = false
+    /// #11292 — dans un appel de groupe, le plafond que le maillage pose au principal.
+    private(set) var groupVideoCeiling: CallVideoBudget?
+    /// #11293 — le format de capture que la caméra a reçu en dernier.
+    private var captureCeiling = CallCaptureCeiling.hd
     /// #8697 — how much data the call may spend, from the OS path (Wi-Fi,
     /// cellular, Low Data Mode) and the RTT/loss heuristic. Caps both the
     /// ladder's audio and video targets and shapes the Opus fmtp of the next
@@ -130,7 +140,7 @@ final class WebRTCService {
         Logger.webrtc.info("WebRTCService initialized")
     }
 
-    deinit {
+    nonisolated deinit {
         // Belt-and-suspenders: cancel all in-flight tasks so they stop
         // referencing self as soon as the object is deallocated, rather than
         // waiting for the next [weak self] guard to fire. Task.cancel() is
@@ -202,8 +212,13 @@ final class WebRTCService {
     }
 
     func createAnswer(from offer: SessionDescription) async -> SessionDescription? {
+        if let given = answeredRemoteOffer.answer(replaying: offer) {
+            Logger.webrtc.info("Remote offer replayed — resending the answer already given")
+            return given
+        }
         do {
             let answer = try await client.createAnswer(for: offer)
+            answeredRemoteOffer = AnsweredRemoteOffer(offerSDP: offer.sdp, answer: answer)
             hasRemoteDescription = true
             flushBufferedCandidates()
             applyEncoderCeilings()
@@ -400,8 +415,7 @@ final class WebRTCService {
         // correctly skips the tick without exiting the loop.
         qualityMonitorTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(interval))
-                if Task.isCancelled { break }
+                guard await cancellableSleep(for: .seconds(interval)), !Task.isCancelled else { break }
                 guard let self else { return }
                 guard let stats = await self.client.getStats() else { continue }
                 let previous = self.lastStats
@@ -561,12 +575,33 @@ final class WebRTCService {
             scaleResolutionDownBy: thermal.scaleDownBy,
             degradationPreference: .maintainFramerate
         ))
+        let encoding = groupVideoCeiling?.capping(capped) ?? capped
         client.applyVideoEncoding(
-            maxBitrateBps: capped.maxBitrateBps,
-            maxFramerate: capped.maxFramerate,
-            scaleResolutionDownBy: capped.scaleResolutionDownBy,
-            degradationPreference: capped.degradationPreference
+            maxBitrateBps: encoding.maxBitrateBps,
+            maxFramerate: encoding.maxFramerate,
+            scaleResolutionDownBy: encoding.scaleResolutionDownBy,
+            degradationPreference: encoding.degradationPreference
         )
+        followCaptureCeiling(scaleDownBy: encoding.scaleResolutionDownBy)
+    }
+
+    /// **La caméra descend avec le palier et l'état thermique** (#11293) : quand le
+    /// format de capture change, la caméra en cours se rechoisit par le chemin
+    /// sérialisé du changement de caméra — même arrêt et redémarrage, même garde
+    /// de session, jamais en concurrence avec un basculement.
+    private func followCaptureCeiling(scaleDownBy: Double) {
+        let ceiling = CallCaptureCeiling.following(scaleDownBy: scaleDownBy, thermal: ProcessInfo.processInfo.thermalState)
+        guard ceiling != captureCeiling else { return }
+        captureCeiling = ceiling
+        guard let camera = client.liveCameraUniqueID else { return }
+        switchToCamera(uniqueID: camera)
+    }
+
+    /// #11292 — un quatrième plafond, celui du maillage ; `nil` le retire.
+    func setGroupVideoCeiling(_ ceiling: CallVideoBudget?) {
+        guard groupVideoCeiling != ceiling else { return }
+        groupVideoCeiling = ceiling
+        applyVideoQuality(currentQualityLevel)
     }
 
     /// L6-1/L6-6 — the survival floor: the encoder is pinned to the lowest rung
@@ -632,6 +667,7 @@ final class WebRTCService {
         Logger.webrtc.info("Performing ICE restart")
         hasRemoteDescription = false
         appliedRemoteAnswerSDP = nil
+        answeredRemoteOffer = AnsweredRemoteOffer()
         iceCandidateBuffer.removeAll()
         // P0-4 — signal the peer connection to embed new ICE credentials in the
         // next offer (IceRestart:true constraint → full ICE re-gather, new ufrag/pwd).
@@ -688,6 +724,7 @@ final class WebRTCService {
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
         appliedRemoteAnswerSDP = nil
+        answeredRemoteOffer = AnsweredRemoteOffer()
         connectionState = .closed
         Logger.webrtc.info("WebRTC connection closed")
     }
@@ -809,8 +846,7 @@ extension WebRTCService: WebRTCClientDelegate {
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: .seconds(QualityThresholds.disconnectDebounceSeconds))
-            if Task.isCancelled { return }
+            guard await cancellableSleep(for: .seconds(QualityThresholds.disconnectDebounceSeconds)), !Task.isCancelled else { return }
             guard self.connectionState == .disconnected else { return }
             Logger.webrtc.info("disconnect debounce elapsed — escalating to reconnect")
             self.delegate?.webRTCServiceDidDisconnect(self)
@@ -868,5 +904,24 @@ extension WebRTCService: ScreenShareVideoRouting {
         #else
         return false
         #endif
+    }
+}
+
+/// Une offre distante et la réponse qu'on lui a donnée. Une offre identique à
+/// l'octet près est un REJEU (la passerelle à la jonction, l'appelant dont
+/// l'accusé tarde) : une nouvelle négociation porte toujours une nouvelle
+/// version de session (`o=`), donc un autre texte.
+struct AnsweredRemoteOffer {
+    private let offerSDP: String?
+    private let answer: SessionDescription?
+
+    init(offerSDP: String? = nil, answer: SessionDescription? = nil) {
+        self.offerSDP = offerSDP
+        self.answer = answer
+    }
+
+    func answer(replaying offer: SessionDescription) -> SessionDescription? {
+        guard let offerSDP, offer.sdp == offerSDP else { return nil }
+        return answer
     }
 }

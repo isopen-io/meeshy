@@ -316,7 +316,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // par les events socket (2026-06-01). On sauve la version triée pour
             // que les chemins .fresh/.stale servent déjà le bon ordre.
             sortStoryGroupsInPlace()
-            try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
+            await bestEffort("storyViewModel.stories.save", category: .cache) { try await CacheCoordinator.shared.stories.save(storyGroups, for: StoryViewModel.storiesCacheKey) }
             prefetchAllStoryMedia(storyGroups)
             renderMissingReceiverCovers()
             if loadFailure != nil { loadFailure = nil }
@@ -330,17 +330,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     // MARK: - Background Prefetch (triggered on story load)
 
-    /// URLs média déjà préchargées dans cette session — garde de déduplication.
-    ///
-    /// `prefetchAllStoryMedia` est rappelé à CHAQUE `loadStories` (y compris sur
-    /// cache hit `.fresh`/`.stale`) ET à chaque refetch SWR. Sans ce garde, ouvrir
-    /// le tray relance des dizaines de tâches `data(for:)` qui re-sondent le disque
-    /// pour des médias déjà en cache à chaque ouverture — du travail redondant qui
-    /// alimente le lag ressenti à l'ouverture des stories. Une fois une URL servie
-    /// depuis le cache, on ne la re-prefetch plus de la session (les URLs média sont
-    /// content-addressed donc immuables ; le viewer garde son chemin de charge à la
-    /// demande si jamais le disque a évincé l'asset entre-temps).
-    var prefetchedMediaURLs: Set<String> = []
+    /// Le préchargement du tray (#11868) : sa déduplication de session et sa
+    /// garde de premier plan vivent chez lui.
+    let trayPreloader = StoryTrayMediaPreloader()
 
     /// Stories dont le rendu de cover récepteur a déjà été tenté cette session —
     /// évite de re-tenter en boucle les compositions non rendables (fond vidéo,

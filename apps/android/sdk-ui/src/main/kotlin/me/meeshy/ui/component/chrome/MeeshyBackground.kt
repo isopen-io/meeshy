@@ -8,6 +8,14 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.toIntSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
@@ -16,12 +24,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.theme.MeeshyGradients
-import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.ThemePalette
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * The root background of every top-level screen — the Meeshy gradient plus a few
- * soft ambient orbs, the port of iOS `RootView` (parity plan §4.1). Wrap a screen's
+ * four soft ambient orbs (300/350/250/200 dp, iOS `ThemePalette.ambientOrbs`), the port of iOS `RootView` (parity plan §4.1). Wrap a screen's
  * content in this and make the `Scaffold` container transparent so the gradient
  * shows through.
  *
@@ -34,34 +42,39 @@ fun MeeshyBackground(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val dark = MeeshyTheme.isDark
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(MeeshyGradients.mainBackground(dark)),
-    ) {
-        AmbientOrbs(dark)
-        content()
+    val layer = rememberGraphicsLayer()
+    val backdrop = remember(layer) { GlassBackdrop(layer) }
+    CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
+        Box(
+            modifier
+                .fillMaxSize()
+                .onGloballyPositioned { backdrop.origin = it.positionInWindow() },
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .drawWithContent {
+                        layer.record(this, layoutDirection, size.toIntSize()) { this@drawWithContent.drawContent() }
+                        drawLayer(layer)
+                    }
+                    .background(MeeshyGradients.mainBackground(dark)),
+            ) {
+                AmbientOrbs(dark)
+            }
+            content()
+        }
     }
 }
 
 @Composable
 private fun BoxScope.AmbientOrbs(dark: Boolean) {
-    val scale = if (dark) 1f else 0.6f
-    Orb(
-        color = MeeshyPalette.Indigo500.copy(alpha = 0.14f * scale),
-        size = 260.dp,
-        modifier = Modifier.align(Alignment.TopEnd).offset(x = 90.dp, y = (-70).dp),
-    )
-    Orb(
-        color = MeeshyPalette.Indigo700.copy(alpha = 0.12f * scale),
-        size = 320.dp,
-        modifier = Modifier.align(Alignment.BottomStart).offset(x = (-100).dp, y = 80.dp),
-    )
-    Orb(
-        color = MeeshyPalette.Indigo400.copy(alpha = 0.08f * scale),
-        size = 200.dp,
-        modifier = Modifier.align(Alignment.Center).offset(y = (-30).dp),
-    )
+    ThemePalette.ambientOrbsFor(dark).forEach { orb ->
+        Orb(
+            color = orb.color,
+            size = orb.sizeDp.dp,
+            modifier = Modifier.align(Alignment.Center).offset(x = orb.offsetXDp.dp, y = orb.offsetYDp.dp),
+        )
+    }
 }
 
 @Composable
@@ -69,7 +82,7 @@ private fun Orb(color: Color, size: Dp, modifier: Modifier) {
     Box(
         modifier
             .size(size)
-            .blur(70.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+            .blur(size * 0.25f, edgeTreatment = BlurredEdgeTreatment.Unbounded)
             .background(color, CircleShape),
     )
 }

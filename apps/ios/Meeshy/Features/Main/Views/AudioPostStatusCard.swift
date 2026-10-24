@@ -86,19 +86,19 @@ struct AudioPostStatusCard: View {
                      ? borrowedSound.title
                      : String(localized: "media.sound.original", defaultValue: "Son original"))
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                 Text(borrowedSound.authorLabel.map { "@\($0)" } ?? "")
                     .font(.caption)
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                 Text(formattedDuration)
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         } else if phase == .preview {
             Text(formattedDuration)
                 .font(.system(.largeTitle, design: .monospaced).weight(.light))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 // A bare monospaced "0:34" reads to VoiceOver as a context-less
                 // number. Name what the timer measures via the label and expose
                 // the running time as the value.
@@ -108,10 +108,10 @@ struct AudioPostStatusCard: View {
             VStack(spacing: MeeshySpacing.xs) {
                 Text(String(localized: "composer.audio.transcription.running", defaultValue: "Transcription en cours…"))
                     .font(.subheadline.weight(.medium))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                 Text(formattedDuration)
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
     }

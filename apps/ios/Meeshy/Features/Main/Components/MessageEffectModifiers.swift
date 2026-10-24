@@ -49,7 +49,7 @@ private struct AppearancePhaseDriver: ViewModifier {
             guard active else { return }
             phase = 0
             Task { @MainActor in
-                try? await Task.sleep(for: appearanceFrameDelay)
+                _ = await cancellableSleep(for: appearanceFrameDelay)
                 withAnimation(animation) { phase = 1 }
             }
         }
@@ -192,7 +192,7 @@ struct ConfettiOverlay: View {
         progress = 0
         opacity = 1
         Task { @MainActor in
-            try? await Task.sleep(for: appearanceFrameDelay)
+            _ = await cancellableSleep(for: appearanceFrameDelay)
             withAnimation(.easeIn(duration: 1.5)) { progress = 1 }
             withAnimation(.easeIn(duration: 0.5).delay(1.2)) { opacity = 0 }
         }
@@ -246,7 +246,7 @@ struct FireworksOverlay: View {
         progress = 0
         opacity = 1
         Task { @MainActor in
-            try? await Task.sleep(for: appearanceFrameDelay)
+            _ = await cancellableSleep(for: appearanceFrameDelay)
             withAnimation(.easeOut(duration: 0.8)) { progress = 1 }
             withAnimation(.easeIn(duration: 0.4).delay(0.6)) { opacity = 0 }
         }
@@ -273,7 +273,7 @@ struct ExplodeOverlay: View {
         scale = 0.3
         opacity = 1
         Task { @MainActor in
-            try? await Task.sleep(for: appearanceFrameDelay)
+            _ = await cancellableSleep(for: appearanceFrameDelay)
             withAnimation(.easeOut(duration: 0.5)) { scale = 2.5 }
             withAnimation(.easeIn(duration: 0.3).delay(0.3)) { opacity = 0 }
         }
@@ -301,7 +301,7 @@ struct WaooOverlay: View {
         scale = 0.5
         opacity = 1
         Task { @MainActor in
-            try? await Task.sleep(for: appearanceFrameDelay)
+            _ = await cancellableSleep(for: appearanceFrameDelay)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) { scale = 1.5 }
             withAnimation(.easeOut(duration: 0.3).delay(0.5)) {
                 scale = 0
@@ -342,20 +342,47 @@ struct WaooOverlay: View {
 /// faux, l'effet est POSÉ et non animé, et il n'y a alors aucune boucle à
 /// couper (règle 6 du § Effets de message).
 
+/// **Le halo de lueur : un flou posé UNE fois, seule l'opacité respire** (#9883).
+///
+/// La lueur animait le RAYON d'une `.shadow` : le moteur de rendu refaisait un
+/// flou gaussien à chaque image pour chaque bulle à l'écran. Le halo est
+/// désormais un aplat flouté à rayon CONSTANT — le flou ne dépend d'aucun état
+/// animé, il est mis en cache — et la respiration ne touche que son opacité.
+nonisolated enum GlowHalo {
+    /// Rayon du flou, constant.
+    static let blurRadius: CGFloat = 12
+    /// Part de l'intensité qui reste au bas de la respiration.
+    static let restFactor: Double = 0.3
+
+    static func opacity(active: Bool, glowing: Bool, intensity: Double) -> Double {
+        guard active else { return 0 }
+        return glowing ? intensity : intensity * restFactor
+    }
+}
+
 /// `animated: false` (Réduire les animations) rend l'effet FIXE au lieu de le
 /// supprimer : le message garde son halo, il perd sa respiration.
 struct GlowEffect: ViewModifier {
     let active: Bool
     let intensity: Double
     let animated: Bool
+    /// Rayon de la forme éclairée : par défaut celui de la bulle, comme le
+    /// liseré arc-en-ciel — une seule source.
+    var cornerRadius: CGFloat = BubbleStandardLayout.bubbleCornerRadius
     @State private var glowing = false
 
     func body(content: Content) -> some View {
         content
-            .shadow(
-                color: MeeshyColors.indigo500.opacity(active ? (glowing ? intensity : intensity * 0.3) : 0),
-                radius: active ? (glowing ? 12 : 4) : 0
-            )
+            .background {
+                if active {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(MeeshyColors.indigo500)
+                        .blur(radius: GlowHalo.blurRadius)
+                        .opacity(GlowHalo.opacity(active: active, glowing: glowing, intensity: intensity))
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
             .onAppear {
                 guard active else { return }
                 guard animated else {
@@ -368,25 +395,6 @@ struct GlowEffect: ViewModifier {
             }
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) { glowing = false }
-            }
-    }
-}
-
-struct PulseEffect: ViewModifier {
-    let active: Bool
-    @State private var pulsing = false
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(active ? (pulsing ? 1.02 : 1.0) : 1.0)
-            .onAppear {
-                guard active else { return }
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                    pulsing = true
-                }
-            }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) { pulsing = false }
             }
     }
 }
@@ -499,7 +507,7 @@ struct RainbowEffect: ViewModifier {
                 // SwiftUI ne voit qu'un état net inchangé, sans frame de
                 // départ à interpoler.
                 Task { @MainActor in
-                    try? await Task.sleep(for: appearanceFrameDelay)
+                    _ = await cancellableSleep(for: appearanceFrameDelay)
                     withAnimation(.linear(duration: RainbowSweep.cycle).repeatForever(autoreverses: false)) {
                         cometPhase = 1
                     }
@@ -540,12 +548,16 @@ private struct RainbowCometLayer: View, Animatable {
         set { phase = newValue }
     }
 
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-    }
-
     private var gradient: AngularGradient {
         AngularGradient(colors: spectrum, center: .center)
+    }
+
+    /// La forme élargie de la marge de flou : le contour garde ses proportions
+    /// (`inset(by:)` ramène le rectangle à la taille de la bulle) et le rayon
+    /// reste celui de la bulle.
+    private var paddedShape: some InsettableShape {
+        RoundedRectangle(cornerRadius: cornerRadius + RainbowCometBleed.margin, style: .continuous)
+            .inset(by: RainbowCometBleed.margin)
     }
 
     var body: some View {
@@ -553,17 +565,31 @@ private struct RainbowCometLayer: View, Animatable {
 
         ZStack {
             ForEach(Array(sweep.segments.enumerated()), id: \.offset) { _, segment in
-                let arc = shape.trim(from: segment.lowerBound, to: segment.upperBound)
+                let arc = paddedShape.trim(from: segment.lowerBound, to: segment.upperBound)
 
-                arc.stroke(gradient, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    .blur(radius: 4)
+                arc.stroke(gradient, style: StrokeStyle(lineWidth: RainbowCometBleed.glowStroke, lineCap: .round))
+                    .blur(radius: RainbowCometBleed.glowBlur)
                 arc.stroke(.white, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .blur(radius: 0.5)
                     .opacity(0.9)
             }
         }
+        // UNE passe hors écran pour les flous empilés : sans `drawingGroup`, chaque
+        // segment recompose deux filtres de flou à chaque image. Le groupe est
+        // plus grand que la bulle de la marge de flou (`padding` négatif ensuite),
+        // faute de quoi `drawingGroup` couperait le halo aux bornes de la vue.
+        .drawingGroup()
+        .padding(-RainbowCometBleed.margin)
         .opacity(sweep.opacity)
     }
+}
+
+/// La marge que le groupe de la comète garde autour de la bulle pour que son
+/// flou ne soit pas coupé : demi-trait + trois écarts-types du flou.
+nonisolated enum RainbowCometBleed {
+    static let glowStroke: CGFloat = 6
+    static let glowBlur: CGFloat = 4
+    static let margin: CGFloat = glowStroke / 2 + 3 * glowBlur
 }
 
 struct SparkleEffect: ViewModifier {
@@ -638,7 +664,8 @@ struct MessageEffectsModifier: ViewModifier {
                 .modifier(GlowEffect(active: plan.persistent.contains(.glow),
                                      intensity: effects.glowIntensity ?? 0.5,
                                      animated: plan.animatesPersistent))
-                .modifier(PulseEffect(active: plan.persistent.contains(.pulse)))
+                .modifier(PulseEffect(intensity: plan.persistent.contains(.pulse) ? MessagePulse.intensity : 0,
+                                      period: MessagePulse.period))
                 .modifier(RainbowEffect(active: plan.persistent.contains(.rainbow),
                                         animated: plan.animatesPersistent,
                                         colors: effects.rainbowColors))
@@ -661,4 +688,11 @@ extension View {
     func messageEffects(_ effects: MessageEffects) -> some View {
         modifier(MessageEffectsModifier(effects: effects))
     }
+}
+
+/// L'effet `pulse` d'un message : une respiration de 2 % en une seconde, portée
+/// par l'unique `PulseEffect` du SDK (#9891).
+enum MessagePulse {
+    static let intensity: CGFloat = 0.02
+    static let period: Double = 1.0
 }

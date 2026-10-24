@@ -102,6 +102,27 @@ final class LiveShareDispatcherTests: XCTestCase {
         return message
     }
 
+    // MARK: - Un fichier venu d'une autre app garde son nom (#11531)
+
+    /// Le partage relayé par l'extension rouvre l'écran sur des copies nommées
+    /// `0.jpg` : la file reçoit le nom d'origine, aligné sur chaque fichier.
+    func test_incomingMedia_queuesTheOriginalNamesAlignedWithTheFiles() async {
+        let sut = makeSUT()
+        let incoming = ShareIncoming(media: [
+            ShareIncomingMedia(id: "s/0.jpg", mimeType: "image/jpeg", bytes: 4,
+                               fileURL: URL(fileURLWithPath: "/tmp/s/0.jpg"), originalName: "IMG_0111.jpg"),
+            ShareIncomingMedia(id: "s/1.mp4", mimeType: "video/mp4", bytes: 4,
+                               fileURL: URL(fileURLWithPath: "/tmp/s/1.mp4")),
+        ])
+        let request = ShareSendRequest(subject: .incoming(incoming), keptMessageIds: [], caption: "", captionPlacement: nil,
+                                       grouping: .together, chosenDurationSeconds: nil, copyOnDevice: false)
+
+        _ = await sut.dispatcher.deliver(request, to: conversation("c1"))
+
+        let calls = await sut.queue.enqueuedMediaCalls
+        XCTAssertEqual(calls.first?.originalNames, ["IMG_0111.jpg", nil])
+    }
+
     // MARK: - La conversation RENDUE décide du chiffrement
 
     func test_aPersonWhoseDirectComesBackEncrypted_receivesNoPlaintext() async {

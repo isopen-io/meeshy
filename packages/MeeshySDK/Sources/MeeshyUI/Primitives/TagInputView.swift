@@ -30,14 +30,14 @@ public struct TagInputView: View {
                 .fill(colorForTag(tag))
                 .frame(width: 8, height: 8)
             Text(tag)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(13, weight: .medium))
+                .foregroundStyle(theme.textPrimary)
             Button {
                 removeTag(tag)
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
         .padding(.horizontal, 10)
@@ -50,8 +50,8 @@ public struct TagInputView: View {
 
     private var inputField: some View {
         TextField(String(localized: "tag.placeholder", defaultValue: "Ajouter un tag…", bundle: .module), text: $inputText)
-            .font(.system(size: 13))
-            .foregroundColor(theme.textPrimary)
+            .font(MeeshyFont.relative(13))
+            .foregroundStyle(theme.textPrimary)
             .frame(minWidth: 100)
             .onSubmit {
                 addTag(inputText)

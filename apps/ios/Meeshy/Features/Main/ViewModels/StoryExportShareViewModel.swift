@@ -98,6 +98,7 @@ final class StoryExportShareViewModel: ObservableObject {
         availableLanguages = langs
         selectedLanguage = StoryExportLanguageResolver.defaultLanguage(
             available: langs,
+            // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             preferred: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         )
     }

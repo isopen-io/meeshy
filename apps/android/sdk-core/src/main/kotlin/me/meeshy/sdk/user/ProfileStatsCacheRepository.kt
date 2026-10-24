@@ -55,6 +55,11 @@ class ProfileStatsCacheRepository @Inject constructor(
         )
     }
 
+    /** Forget [userId]'s stats (a profile that is no longer served leaves nothing behind). */
+    suspend fun purgeStats(userId: String) {
+        dao.deleteByKey(statsKey(userId))
+    }
+
     /**
      * Last-persisted own-user timeline, or `null` when never cached / undecodable.
      * A synced-empty window reads back as `emptyList()`, distinct from the cold `null`.

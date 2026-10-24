@@ -224,8 +224,9 @@ final class MessagePieceTargetTests: XCTestCase {
         XCTAssertTrue(host.contains("MessageExitTransport.save(message, piece: piece.id, through: mediaSaveCoordinator)"))
         XCTAssertTrue(host.contains("deleteMedia(targeted: piece.id, of: message)"), "supprimer vise la pièce")
         let send = try source("Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift")
-        XCTAssertEqual(send.components(separatedBy: "replyAnchor").count - 1, 2,
+        XCTAssertEqual(send.components(separatedBy: "outgoingAttachmentAnchor").count - 1, 1,
                        "l'ancre est lue une fois et entre dans la relation unique du tap, que portent les trois envois en ligne qui citent")
+        XCTAssertTrue(send.contains("ComposerSendRelation.of(route, citing: outgoingAttachmentAnchor)"))
     }
 
     // MARK: - #9910 — on réagit sur chaque pièce partout

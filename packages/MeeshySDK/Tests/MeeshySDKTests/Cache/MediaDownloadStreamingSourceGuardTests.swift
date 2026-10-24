@@ -86,17 +86,22 @@ final class MediaDownloadStreamingSourceGuardTests: XCTestCase {
         }
     }
 
+    /// Le funnel réseau vit dans `DiskCacheStore+NetworkFunnel.swift` depuis f2787951be
+    /// (#11283) : la garde suit le code déplacé, sans rien lâcher de sa propriété.
     func test_diskCacheStoreFunnel_branchesToTheFileTransferBeforeAnyInMemoryFetch() throws {
-        let store = try source(named: "DiskCacheStore.swift", in: productionSources())
-        XCTAssertEqual(store.components(separatedBy: "urlSession.data(for:").count - 1, 1)
-        let streamed = try XCTUnwrap(store.range(of: "if transfer == .streamedToFile {"))
-        let inMemory = try XCTUnwrap(store.range(of: "urlSession.data(for:"))
+        let sources = try productionSources()
+        let store = try source(named: "DiskCacheStore.swift", in: sources)
+        let funnel = try source(named: "DiskCacheStore+NetworkFunnel.swift", in: sources)
+        XCTAssertEqual(store.components(separatedBy: "urlSession.data(for:").count - 1, 0, "le store délègue son réseau au funnel")
+        XCTAssertEqual(funnel.components(separatedBy: "urlSession.data(for:").count - 1, 1)
+        let streamed = try XCTUnwrap(funnel.range(of: "if fetch.transfer == .streamedToFile {"))
+        let inMemory = try XCTUnwrap(funnel.range(of: "return try await inMemoryNetworkData("))
         XCTAssertLessThan(streamed.lowerBound, inMemory.lowerBound)
     }
 
     func test_attachmentDownloadCenter_goesThroughTheStreamedFunnel() throws {
         let center = try source(named: "AttachmentDownloadCenter.swift", in: productionSources())
-        XCTAssertTrue(center.contains("store.data(for: resolvedKey, progress:"))
+        XCTAssertTrue(center.contains("store.data(for: resolvedKey, profile: profile, progress:"))
         XCTAssertFalse(center.contains("store.store("), "le centre n'écrit plus d'octets accumulés dans le cache")
     }
 }

@@ -19,6 +19,9 @@ import Foundation
 /// - **La contrainte plafonne** : données économisées, 2G, batterie faible —
 ///   et, propre à iOS, un appareil qui chauffe (`.serious` ou pire) — rendent
 ///   le plancher ; 3G ou peu de mémoire (≤ 2 Go) plafonnent à quatre.
+/// - **Le tier de l'appareil plafonne en dernier** (#11281, `DeviceMediaTier`) :
+///   bas ⇒ quatre, moyen ⇒ six, haut et pro ⇒ dix. Il ne relève jamais une
+///   contrainte ci-dessus.
 ///
 /// Les PALIERS (`tier(offset:in:)`) suivent la rareté de la ressource : un
 /// décodeur matériel est cher et borné (N±1 seulement le tient), un élément
@@ -26,9 +29,10 @@ import Foundation
 ///
 /// Ce que iOS ajoute à la jumelle, sans rien en retrancher : `thermalState`
 /// dans le contexte (le web ne le lit pas), `Network(snapshot:)` (le web lit
-/// `navigator.connection`, iOS le chemin `NWPath`), `gigabytes(physicalMemory:)`
-/// et `plan(count:activeIndex:window:)`, qui énumère les paliers dans l'ordre
-/// de `primeTargets` en y gardant le palier « décode ».
+/// `navigator.connection`, iOS le chemin `NWPath`), `gigabytes(physicalMemory:)`,
+/// `plan(count:activeIndex:window:)`, qui énumère les paliers dans l'ordre
+/// de `primeTargets` en y gardant le palier « décode », et `headBytes`
+/// (`ReelPreloadWindow+Head.swift`, #11288), la tête bornée par le tier.
 public enum ReelPreloadWindow {
 
     public static let minRadius = 2
@@ -38,6 +42,9 @@ public enum ReelPreloadWindow {
     /// Un réel traversé d'un trait par le défilement n'a pas été « regardé ».
     static let traversalMs = 150
     static let constrainedRadius = 4
+    /// Le rayon d'un appareil de tier moyen (#11281) : entre le plafond contraint
+    /// et le maximum, parce que chaque réel préparé tient un lecteur et des octets.
+    static let midTierRadius = 6
     static let lowMemoryGb: Double = 2
 
     // MARK: - Types
@@ -87,19 +94,25 @@ public enum ReelPreloadWindow {
         public let deviceMemoryGb: Double?
         public let lowPower: Bool
         public let thermalState: ProcessInfo.ThermalState
+        /// Le tier média de l'appareil (#11281) ; `nil` = non classé, aucun plafond.
+        /// REQUIS, sans défaut : un site qui construit le contexte doit dire le
+        /// tier (ou dire explicitement `nil`), jamais l'oublier en silence.
+        public let tier: DeviceMediaTier?
 
         public init(
             visits: [Visit],
             network: Network,
             deviceMemoryGb: Double? = nil,
             lowPower: Bool = false,
-            thermalState: ProcessInfo.ThermalState = .nominal
+            thermalState: ProcessInfo.ThermalState = .nominal,
+            tier: DeviceMediaTier?
         ) {
             self.visits = visits
             self.network = network
             self.deviceMemoryGb = deviceMemoryGb
             self.lowPower = lowPower
             self.thermalState = thermalState
+            self.tier = tier
         }
     }
 
@@ -175,10 +188,9 @@ public enum ReelPreloadWindow {
     static let nearPrimeBytes = 768 * 1_024
     static let farPrimeBytes = 256 * 1_024
 
-    /// Les octets de TÊTE à amorcer (jumelle de `primeBytesOf`). iOS télécharge
-    /// aujourd'hui le fichier entier par le registre partagé ; la fonction est
-    /// tenue ici pour que la loi reste UNE, et pour l'amorce par plage le jour
-    /// où le registre la saura servir.
+    /// Les octets de TÊTE à amorcer (jumelle de `primeBytesOf`). iOS en tire la
+    /// tête du palier « amorcé », bornée par le tier de l'appareil
+    /// (`headBytes`, #11288) ; le palier monté prend le fichier entier.
     public static func primeBytes(tier: Tier, distance: Int, network: Network) -> Int {
         guard tier == .mount || tier == .prime else { return 0 }
         let base = tier == .mount ? mountPrimeBytes : (distance <= 3 ? nearPrimeBytes : farPrimeBytes)
@@ -255,10 +267,20 @@ public enum ReelPreloadWindow {
     private static func constraintCap(_ context: Context) -> Int {
         let network = context.network
         if context.lowPower || network.saveData { return minRadius }
-        if context.thermalState == .serious || context.thermalState == .critical { return minRadius }
+        if DeviceMediaInputs.Thermal(context.thermalState).isUnderPressure { return minRadius }
         if network.effectiveType == .slow2G || network.effectiveType == .twoG { return minRadius }
         if network.effectiveType == .threeG { return constrainedRadius }
         if let memory = context.deviceMemoryGb, memory <= lowMemoryGb { return constrainedRadius }
-        return maxRadius
+        return radius(for: context.tier)
+    }
+
+    /// Le plafond propre à l'appareil : il ne fait que BAISSER (bas et moyen) ;
+    /// `high`, `pro` et l'appareil non classé gardent le maximum historique.
+    private static func radius(for tier: DeviceMediaTier?) -> Int {
+        switch tier {
+        case .low: return constrainedRadius
+        case .mid: return midTierRadius
+        case .high, .pro, nil: return maxRadius
+        }
     }
 }

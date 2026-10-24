@@ -276,7 +276,10 @@ final class ImagineWorkshopTests: XCTestCase {
                     // #9686 — les compositions d'un commentaire de post.
                     "export.compose.postAndComment", "export.compose.commentAlone", "export.compose.threadToHere",
                     "export.compose.postRootAndReply", "export.compose.chosenReplies", "export.compose.post",
-                    "export.compose.thread", "export.compose.folded"]
+                    "export.compose.thread", "export.compose.folded",
+                    // #11783 — le média de tête choisi, l'audience qui retient le support.
+                    "export.compose.withheld", "export.compose.head", "export.compose.head.image",
+                    "export.compose.head.video", "export.compose.head.audio"]
         keys += MessageCardClipLength.allCases.map { "export.card.clip.\($0.rawValue)" }
         keys += MessageCardAspect.allCases.map { "export.card.aspect.\($0.rawValue)" }
         keys += MessageCardHeaderOrientation.allCases.map { "export.card.header.\($0.rawValue)" }
@@ -292,6 +295,31 @@ final class ImagineWorkshopTests: XCTestCase {
                 XCTAssertFalse((value ?? "").trimmingCharacters(in: .whitespaces).isEmpty, "\(key) [\(language)]")
             }
         }
+    }
+
+    // MARK: - « Post en tête » se VOIT sans défiler (#11477, recette 2026-10-21)
+
+    /// Pour une réponse, les trois modes remplissaient la rangée et la bascule
+    /// « Post en tête » finissait coupée au bord (« ✓ Pos… ») : le choix
+    /// d'afficher le post existait sans se voir. Elle se pose hors du défilement
+    /// des modes, à leur suite ; les modes, eux, défilent.
+    func test_compositionBar_aReplyPinsThePostToggle_besideTheScrollingModes() {
+        let modes: [PostCommentCardMode] = [.threadToHere, .postRootAndReply, .chosenReplies]
+        let layout = MessageCardCompositionBar.layout(modes: modes, offersPostToggle: true)
+        XCTAssertEqual(layout.scrollingModes, modes)
+        XCTAssertTrue(layout.pinsPostToggle)
+    }
+
+    func test_compositionBar_aFirstLevelComment_showsItsTwoModes_withoutAPinnedToggle() {
+        let layout = MessageCardCompositionBar.layout(modes: [.postAndComment, .commentAlone], offersPostToggle: false)
+        XCTAssertEqual(layout.scrollingModes, [.postAndComment, .commentAlone])
+        XCTAssertFalse(layout.pinsPostToggle)
+    }
+
+    func test_compositionBar_aSingleMode_offersNoModeChip_onlyTheToggle() {
+        let layout = MessageCardCompositionBar.layout(modes: [.threadToHere], offersPostToggle: true)
+        XCTAssertEqual(layout.scrollingModes, [])
+        XCTAssertTrue(layout.pinsPostToggle)
     }
 
     // MARK: - Les puces de composition se LISENT (#9686, recette 2026-10-08)

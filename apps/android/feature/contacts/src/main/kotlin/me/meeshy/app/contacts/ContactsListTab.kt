@@ -1,6 +1,9 @@
 package me.meeshy.app.contacts
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,9 +45,13 @@ import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.presenceState
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.sdk.model.friend.ConnectionActionRender
+import me.meeshy.ui.component.ConnectionActionChip
+import me.meeshy.ui.component.ConnectionFeedbackHost
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
@@ -54,10 +61,13 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @Composable
 fun ContactsListTab(
+    onOpenProfile: (String) -> Unit = {},
     viewModel: ContactsListViewModel = hiltViewModel(),
+    connectionViewModel: ConnectionActionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
         OutlinedTextField(
             value = state.query,
@@ -76,8 +86,10 @@ fun ContactsListTab(
             state.errorMessage != null -> ErrorState(onRetry = viewModel::load)
             state.isEmpty -> EmptyMessage(stringResource(R.string.contacts_list_empty))
             state.isFilteredEmpty -> EmptyMessage(stringResource(R.string.contacts_list_filtered_empty))
-            else -> FriendList(state.visibleFriends, moodEmojiFor = state::moodEmojiFor)
+            else -> FriendList(state.visibleFriends, moodEmojiFor = state::moodEmojiFor, onOpenProfile = onOpenProfile)
         }
+    }
+    ConnectionFeedbackHost(feedback = connectionViewModel.feedback)
     }
 }
 
@@ -106,21 +118,29 @@ private fun FilterRow(
 }
 
 @Composable
-private fun FriendList(friends: List<FriendRequestUser>, moodEmojiFor: (String) -> String?) {
+private fun FriendList(
+    friends: List<FriendRequestUser>,
+    moodEmojiFor: (String) -> String?,
+    onOpenProfile: (String) -> Unit,
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
-        items(friends, key = { it.id }) { friend -> FriendRow(friend, moodEmoji = moodEmojiFor(friend.id)) }
+        items(friends, key = { it.id }) { friend ->
+            FriendRow(friend, moodEmoji = moodEmojiFor(friend.id), onClick = { onOpenProfile(friend.id) })
+        }
     }
 }
 
+/** A contact row — iOS `ContactRow`: the whole row opens the profile, presence sits ON the avatar. */
 @Composable
-private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?) {
+private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?, onClick: () -> Unit) {
     val name = friend.resolvedName.ifBlank { friend.username.ifBlank { "?" } }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = friend.id.isNotBlank(), role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -128,7 +148,9 @@ private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?) {
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(friend.id.ifBlank { name })),
+            presence = friend.presenceState(System.currentTimeMillis()),
             moodEmoji = moodEmoji,
+            imageUrl = friend.avatar,
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -148,15 +170,11 @@ private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?) {
                 )
             }
         }
-        meeshyPresenceDotColor(friend.presenceState(System.currentTimeMillis()))?.let { dot ->
-            Surface(
-                color = dot,
-                shape = CircleShape,
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape),
-            ) {}
-        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+        )
     }
 }
 

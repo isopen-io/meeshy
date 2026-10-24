@@ -1,4 +1,6 @@
+import SwiftUI
 import XCTest
+import MeeshyUI
 
 /// **Une doctrine tenue à la main est tenue jusqu'au jour où elle ne l'est plus.**
 ///
@@ -90,14 +92,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
                 return Site(line: index + 1, receiver: receiver(of: sameLineHead))
             }
 
-            var above = index - 1
-            while above >= 0 {
-                let trimmed = lines[above].trimmingCharacters(in: .whitespaces)
-                guard trimmed.isEmpty || trimmed.hasPrefix(".") || trimmed.hasPrefix(")") else { break }
-                above -= 1
-            }
+            let above = chainHeadIndex(lines: lines, index: index)
             return Site(line: index + 1,
-                        receiver: receiver(of: above >= 0 ? lines[above] : ""))
+                        receiver: receiver(of: above.map { lines[$0] } ?? ""))
         }
     }
 
@@ -140,7 +137,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/MessageDetail/MessageDetailChrome.swift",
         "Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",
         "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
-        "Features/Main/Components/MessageDetailSentimentTab.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
         "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
@@ -166,7 +162,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         //
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
-        "Features/Main/Components/UniversalComposerBar+Send.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
@@ -193,8 +188,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/CallDeviceControls.swift",
         "Features/Main/Views/CallView+Controls.swift",
         "Features/Main/Views/CallView+Header.swift",
-        "Features/Main/Views/CallView+SelfView.swift",
-        "Features/Main/Views/CallView+States.swift",
+        // #12568 : `CallView+SelfView` et `CallView+States` sortent — leurs
+        // initiales figées sous la photo laissent la place à `CachedAvatarImage`.
         "Features/Main/Views/ChangePasswordView.swift",
         "Features/Main/Views/CommunityLinkDetailView.swift",
         // RELOCALISATION pure : le bandeau « en réponse à » quitte
@@ -306,7 +301,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/ShareLinksView.swift",
         "Features/Main/Views/StoryExportShareSheet.swift",
         "Features/Main/Views/StoryLanguageQuickBar.swift",
-        "Features/Main/Views/StoryReactionFlightView.swift",
         "Features/Main/Views/StoryTrayView.swift",
         "Features/Main/Views/StoryViewerContainer.swift",
         // #8878 — `StoryViewerView+ActionButton.swift` sort de la liste (règle 4) :
@@ -319,11 +313,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // — ni `totalCeiling` ni `textCeiling` — seul le NOM change ; le canvas
         // n'en porte plus aucun, il sort de la liste et n'y revient jamais.
         "Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
-        // #8582 — RELOCALISATION pure : `StoryCommentRowView` quitte
-        // `StoryViewerView+Content.swift` et emporte son site figé — le
-        // monogramme de 13 pt d'un avatar fixe de 32×32, doctrine 82i. La
-        // POPULATION ne bouge pas ; l'hôte en garde un autre et reste dans la liste.
-        "Features/Main/Views/StoryCommentRowView.swift",
+        // #12568 : `StoryCommentRowView` sort — son monogramme de 13 pt laisse la
+        // place à `CachedAvatarImage`, photo sinon initiales.
         // Cohésion de `StoryViewerView` — RELOCALISATION pure, même forme : la liste des
         // commentaires de story (`StoryCommentsOverlayView`) a QUITTÉ
         // `StoryViewerView+Content.swift` pour son propre fichier et emporte son site
@@ -354,7 +345,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// descend pas quand la population descend cesse d'être un cliquet.
     // 35 → 34 (#8878) : le libellé de 10 pt du rail de la story part avec son fichier.
     // 34 → 33 (#10366) : le code pays figé de la puce de langue repasse en `.caption2`.
-    private static let textCeiling = 33
+    // 33 → 26 (S7c, #11494) : sept emoji passent par `MeeshyFont.emoji`.
+    // 26 → 21 (#12568) : cinq initiales d'avatar figées (appel ×4, commentaire
+    // de story) laissent la place à `CachedAvatarImage`.
+    private static let textCeiling = 21
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -465,7 +459,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // rangée de fichier reconstruite part avec son glyphe figé.
     // `MessageOverlayMenu.swift` sort de `bearingFiles` (règle 4) ; le texte
     // figé ne bouge pas.
-    private static let totalCeiling = 185
+    // 185 → 178 (S7c, #11494) : les mêmes sept emoji.
+    // 178 → 173 (#12568) : les mêmes cinq initiales d'avatar.
+    private static let totalCeiling = 173
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
@@ -536,6 +532,134 @@ final class FixedFontSizeGuardTests: XCTestCase {
         }
     }
 
+    // MARK: - Règle 5 — un texte de taille exacte est une exception nommée
+
+    struct ExactSizeTextSite: Hashable {
+        let file: String
+        let head: String
+    }
+
+    private static let exactSizes: Set<CGFloat> = [11, 12, 13, 15, 16, 17, 20, 22, 28, 34]
+
+    private static let tokenSizes: [String: CGFloat] = [
+        "microSize": MeeshyFont.microSize,
+        "captionSize": MeeshyFont.captionSize,
+        "footnoteSize": MeeshyFont.footnoteSize,
+        "smallSize": MeeshyFont.smallSize,
+        "subheadSize": MeeshyFont.subheadSize,
+        "labelSize": MeeshyFont.labelSize,
+        "bodySize": MeeshyFont.bodySize,
+        "calloutSize": MeeshyFont.calloutSize,
+        "headlineSize": MeeshyFont.headlineSize,
+        "subtitleSize": MeeshyFont.subtitleSize,
+        "title3Size": MeeshyFont.title3Size,
+        "titleSize": MeeshyFont.titleSize,
+        "displaySize": MeeshyFont.displaySize,
+        "largeTitleSize": MeeshyFont.largeTitleSize
+    ]
+
+    private static let exactSizeTextExceptions: Set<ExactSizeTextSite> = [
+        ExactSizeTextSite(file: "Features/Main/Views/StoryTrayView.swift",
+                          head: #"Text("\(Int(displayedProgress * 100))%")"#),
+        ExactSizeTextSite(file: "Features/Main/Views/ConversationHelperViews.swift",
+                          head: "Text(Self.displayedUnread(unreadCount))"),
+        ExactSizeTextSite(file: "Features/Main/Views/GlobalSearchView.swift",
+                          head: #"Text("\(result.unreadCount)")"#),
+        ExactSizeTextSite(file: "Features/Main/Components/ConversationDashboardView.swift",
+                          head: #"Text("\(score)")"#)
+    ]
+
+    static func fontSize(of token: String) -> CGFloat? {
+        let trimmed = token.trimmingCharacters(in: .whitespaces)
+        let prefix = "MeeshyFont."
+        guard trimmed.hasPrefix(prefix) else { return Double(trimmed).map { CGFloat($0) } }
+        return tokenSizes[String(trimmed.dropFirst(prefix.count))]
+    }
+
+    static func exactSizeTextHeads(in source: String) -> [String] {
+        let raw = source.components(separatedBy: "\n")
+        let masked = DeclarationBodyScanner.mask(source).components(separatedBy: "\n")
+        guard let marker = try? NSRegularExpression(
+            pattern: #"\.font\(\s*\.system\(\s*size:\s*([^,)]+)"#
+        ) else { return [] }
+
+        return masked.enumerated().compactMap { index, line -> String? in
+            let ns = line as NSString
+            guard let hit = marker.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)),
+                  let size = fontSize(of: ns.substring(with: hit.range(at: 1))),
+                  exactSizes.contains(size),
+                  let head = chainHead(raw: raw, masked: masked, index: index, column: hit.range.location),
+                  textHeads.contains(where: { head.contains($0) })
+            else { return nil }
+            return head
+        }
+    }
+
+    private static func chainHead(raw: [String], masked: [String], index: Int, column: Int) -> String? {
+        let prefix = (masked[index] as NSString).substring(to: column)
+        let trimmedPrefix = prefix.trimmingCharacters(in: .whitespaces)
+        if !trimmedPrefix.isEmpty && !trimmedPrefix.hasPrefix(".") {
+            return String(raw[index].prefix(prefix.count)).trimmingCharacters(in: .whitespaces)
+        }
+        guard let above = chainHeadIndex(lines: masked, index: index) else { return nil }
+        return raw[above].trimmingCharacters(in: .whitespaces)
+    }
+
+    static func chainHeadIndex(lines: [String], index: Int) -> Int? {
+        (0..<index).reversed().first { candidate in
+            let trimmed = lines[candidate].trimmingCharacters(in: .whitespaces)
+            return !(trimmed.isEmpty || trimmed.hasPrefix(".") || trimmed.hasPrefix(")"))
+        }
+    }
+
+    private func exactSizeTextSites() throws -> Set<ExactSizeTextSite> {
+        let found = try sources().flatMap { url in
+            Self.exactSizeTextHeads(in: text(of: url))
+                .map { ExactSizeTextSite(file: relativePath(url), head: $0) }
+        }
+        return Set(found)
+    }
+
+    func test_unTexteDeTailleExacteSeLitEnTeteDeChaine() {
+        let sameLine = "Text(value).font(.system(size: 15, weight: .bold))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: sameLine), ["Text(value)"])
+
+        let chained = """
+        Text(label)
+            .foregroundColor(.white)
+            .font(.system(size: MeeshyFont.bodySize, design: .rounded))
+        """
+        XCTAssertEqual(Self.exactSizeTextHeads(in: chained), ["Text(label)"])
+
+        let glyph = "Image(systemName: x).font(.system(size: 15))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: glyph), [])
+
+        let inexact = "Text(x).font(.system(size: 10))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: inexact), [])
+
+        let dynamic = "Text(x).font(.system(size: size * k))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: dynamic), [])
+
+        let commented = "// Text(x).font(.system(size: 15))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: commented), [])
+
+        let inexactToken = """
+        Text("a")
+            .font(.system(size: MeeshyFont.labelSize))
+        """
+        XCTAssertEqual(Self.exactSizeTextHeads(in: inexactToken), [])
+    }
+
+    func test_unTexteDeTailleExacteNExisteQueCommeExceptionNommee() throws {
+        let found = try exactSizeTextSites()
+        let introduced = found.subtracting(Self.exactSizeTextExceptions)
+        let departed = Self.exactSizeTextExceptions.subtracting(found)
+        XCTAssertTrue(introduced.isEmpty,
+                      "texte de taille exacte hors liste — utiliser MeeshyFont.relative : \(introduced.sorted { ($0.file, $0.head) < ($1.file, $1.head) })")
+        XCTAssertTrue(departed.isEmpty,
+                      "exceptions sans site — élaguer la liste : \(departed.sorted { ($0.file, $0.head) < ($1.file, $1.head) })")
+    }
+
     // MARK: - Bornes
 
     /// Sans elle, les trois cliquets passeraient au vert en ne regardant rien —
@@ -594,6 +718,65 @@ final class FixedFontSizeGuardTests: XCTestCase {
         Text(x).font(.system(size: 11))
         """
         XCTAssertEqual(Self.frozenSites(in: commented).count, 1)
+    }
+
+    // MARK: - Règle 6 — un emoji seul porte la police emoji du design system
+
+    struct EmojiSite {
+        let file: String
+        let head: String
+        let marker: String
+    }
+
+    private static let emojiSites: [EmojiSite] = [
+        EmojiSite(file: "Features/Main/Components/MessageDetailSentimentTab.swift",
+                  head: "Text(Self.sentimentEmoji(score))",
+                  marker: ".font(MeeshyFont.emoji(56))"),
+        EmojiSite(file: "Features/Stories/Notifications/StoryExpiredContent.swift",
+                  head: "Text(emoji)",
+                  marker: ".font(MeeshyFont.emoji(64))"),
+        EmojiSite(file: "Features/Main/Views/StoryReactionFlightView.swift",
+                  head: "Text(flight.emoji)",
+                  marker: ".font(MeeshyFont.emoji(MeeshyFont.displaySize))"),
+        EmojiSite(file: "Features/Main/Components/UniversalComposerBar+Send.swift",
+                  head: "Text(emoji)",
+                  marker: ".font(MeeshyFont.emoji(QuickEmojiGrid.emojiSize))"),
+        EmojiSite(file: "Features/Main/Views/ConversationAnimatedBackground.swift",
+                  head: "Text(flags[i])",
+                  marker: ".font(MeeshyFont.emoji(24))"),
+        EmojiSite(file: "Features/Main/Views/StoryLanguageQuickBar.swift",
+                  head: "Text(language.flag)",
+                  marker: ".font(MeeshyFont.emoji(MeeshyFont.titleSize))"),
+        EmojiSite(file: "Features/Main/Views/StoryTrayView.swift",
+                  head: #"Text("\u{1F4AD}")"#,
+                  marker: ".font(MeeshyFont.emoji(MeeshyFont.title3Size))")
+    ]
+
+    private static func headIsFollowedByMarker(_ site: EmojiSite, in source: String) -> Bool {
+        var searchRange = source.startIndex..<source.endIndex
+        while let found = source.range(of: site.head, range: searchRange) {
+            let window = source[found.upperBound...].prefix(160)
+            if window.contains(site.marker) { return true }
+            searchRange = found.upperBound..<source.endIndex
+        }
+        return false
+    }
+
+    func test_unEmojiSeulPorteLaPoliceEmojiDuDesignSysteme() {
+        let unmarked = Self.emojiSites.filter { site in
+            let url = appRoot.appendingPathComponent(site.file)
+            return !Self.headIsFollowedByMarker(site, in: text(of: url))
+        }
+        XCTAssertTrue(
+            unmarked.isEmpty,
+            "un emoji seul doit passer par `MeeshyFont.emoji(_:)` : \(unmarked.map(\.file))"
+        )
+    }
+
+    func test_laPoliceEmojiRendLaTailleFigeeAuPointPres() {
+        XCTAssertEqual(MeeshyFont.emoji(56), Font.system(size: 56))
+        XCTAssertEqual(MeeshyFont.emoji(MeeshyFont.displaySize), Font.system(size: MeeshyFont.displaySize))
+        XCTAssertEqual(MeeshyFont.emoji(MeeshyFont.title3Size), Font.system(size: MeeshyFont.title3Size))
     }
 
     // MARK: - Balayage

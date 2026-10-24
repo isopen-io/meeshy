@@ -49,7 +49,7 @@ final class ConversationSearchHandler {
             // Persist the matched messages so the in-situ filtered-conversation
             // view can render them as real bubbles — including matches that fall
             // outside the currently-loaded window.
-            try? await persistence.upsertFromAPIMessages(response.data, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            await bestEffort("conversationSearchHandler.messages.upsertFromAPIMessages", category: .grdb) { try await persistence.upsertFromAPIMessages(response.data, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)) }
             state.searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
             nextCursor = response.cursorPagination?.nextCursor
             state.searchHasMore = response.cursorPagination?.hasMore ?? false
@@ -74,7 +74,7 @@ final class ConversationSearchHandler {
                 query: trimmed,
                 cursor: cursor
             )
-            try? await persistence.upsertFromAPIMessages(response.data, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            await bestEffort("conversationSearchHandler.messages.upsertFromAPIMessages.2", category: .grdb) { try await persistence.upsertFromAPIMessages(response.data, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)) }
             state.searchResults.append(contentsOf: response.data.map { buildSearchResult($0, query: trimmed) })
             nextCursor = response.cursorPagination?.nextCursor
             state.searchHasMore = response.cursorPagination?.hasMore ?? false

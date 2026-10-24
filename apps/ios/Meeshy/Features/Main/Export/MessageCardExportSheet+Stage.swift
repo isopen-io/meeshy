@@ -202,12 +202,13 @@ extension MessageCardExportSheet {
     /// sous « Choisir les réponses ». Rien quand il n'y a rien à choisir.
     @ViewBuilder
     var compositionBar: some View {
-        if let composition = request.composition, composition.offersChoice {
+        if let composition = request.composition, composition.showsBar {
             MessageCardCompositionBar(
                 composition: composition,
                 mode: $compositionMode,
                 showsPost: $showsPost,
-                chosen: $chosenReplies
+                chosen: $chosenReplies,
+                headMediaID: $headMediaID
             )
         }
     }
@@ -219,24 +220,62 @@ struct MessageCardCompositionBar: View {
     @Binding var mode: PostCommentCardMode?
     @Binding var showsPost: Bool
     @Binding var chosen: Set<String>
+    @Binding var headMediaID: String?
+
+    /// Ce que la rangée montre : les modes, qui DÉFILENT, et « Post en tête », ÉPINGLÉE à
+    /// leur suite hors du défilement — avec les trois modes d'une réponse, elle finissait
+    /// coupée au bord de l'écran, un choix qui existait sans se voir (#11477).
+    struct Layout: Equatable {
+        let scrollingModes: [PostCommentCardMode]
+        let pinsPostToggle: Bool
+    }
+
+    static func layout(modes: [PostCommentCardMode], offersPostToggle: Bool) -> Layout {
+        Layout(scrollingModes: modes.count > 1 ? modes : [], pinsPostToggle: offersPostToggle)
+    }
+
+    /// Le choix du média de tête (#11783) ne se montre que si le support EST en tête et en a plusieurs.
+    static func showsHeadPicker(offersHeadChoice: Bool, showsPost: Bool) -> Bool {
+        offersHeadChoice && showsPost
+    }
 
     var body: some View {
+        let layout = Self.layout(modes: composition.modes, offersPostToggle: composition.offersPostToggle)
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    if composition.modes.count > 1 {
-                        ForEach(composition.modes, id: \.self) { item in
-                            chip(MessageCardCommentComposition.label(of: item), systemImage: nil, selected: mode == item) {
-                                select(item)
+            HStack(spacing: MeeshySpacing.sm) {
+                if !layout.scrollingModes.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: MeeshySpacing.sm) {
+                            ForEach(layout.scrollingModes, id: \.self) { item in
+                                chip(MessageCardCommentComposition.label(of: item), systemImage: nil, selected: mode == item) {
+                                    select(item)
+                                }
                             }
                         }
                     }
-                    if composition.offersPostToggle {
-                        chip(MessageCardCommentComposition.postToggleLabel, systemImage: showsPost ? "checkmark" : "plus", selected: showsPost) {
-                            showsPost.toggle()
-                        }
-                    }
                 }
+                if layout.pinsPostToggle {
+                    chip(MessageCardCommentComposition.postToggleLabel, systemImage: showsPost ? "checkmark" : "plus", selected: showsPost) {
+                        showsPost.toggle()
+                    }
+                    .fixedSize()
+                }
+            }
+            if Self.showsHeadPicker(offersHeadChoice: composition.offersHeadChoice, showsPost: showsPost) {
+                MessageCardHeadMediaPicker(
+                    media: composition.headMedia,
+                    selected: headMediaID ?? composition.defaultHeadMediaID,
+                    choose: { headMediaID = $0 }
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            if composition.withheldByAudience {
+                Label(MessageCardCommentComposition.withheldNotice, systemImage: "lock")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("export.compose.withheld")
             }
             if mode == .chosenReplies {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -254,6 +293,7 @@ struct MessageCardCompositionBar: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: mode)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showsPost)
     }
 
     private func select(_ next: PostCommentCardMode) {
@@ -296,5 +336,86 @@ struct MessageCardCompositionBar: View {
     private static func excerpt(_ text: String) -> String {
         let flat = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         return flat.count > 24 ? String(flat.prefix(24)) + "…" : flat
+    }
+}
+
+/// **Le média du support en tête, choisi** (#11783) — une vignette par photo, par vidéo
+/// (sa première image) et par son (son onde), dans l'ordre du post ; un toucher repeint
+/// la carte avec celui-là en tête.
+struct MessageCardHeadMediaPicker: View {
+    let media: [MessageCardSubjectMedia]
+    let selected: String?
+    let choose: (String) -> Void
+
+    private static let side: CGFloat = 56
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: MeeshySpacing.sm) {
+                ForEach(Array(media.enumerated()), id: \.element.media.id) { index, item in
+                    let isSelected = item.media.id == selected
+                    Button {
+                        HapticFeedback.light()
+                        choose(item.media.id)
+                    } label: {
+                        tile(item)
+                            .frame(width: Self.side, height: Self.side)
+                            .clipped()
+                            .contentShape(Rectangle())
+                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                                    .strokeBorder(Color(uiColor: .label), lineWidth: isSelected ? 3 : 0)
+                            )
+                            .opacity(isSelected ? 1 : 0.72)
+                    }
+                    .buttonStyle(MessageCardPressStyle())
+                    .accessibilityLabel(MessageCardCommentComposition.headLabel(of: item.media.kind, position: index + 1))
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    .accessibilityIdentifier("export.compose.head.\(index + 1)")
+                }
+            }
+        }
+        .accessibilityLabel(MessageCardCommentComposition.headPickerTitle)
+    }
+
+    @ViewBuilder
+    private func tile(_ item: MessageCardSubjectMedia) -> some View {
+        switch item.media.kind {
+        case .image:
+            picture(item.posterURL ?? item.fileURL, glyph: "photo")
+        case .video:
+            ZStack {
+                if let poster = item.posterURL {
+                    picture(poster, glyph: "film")
+                } else {
+                    glyph("film")
+                }
+                Image(systemName: "play.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .shadow(radius: 2)
+                    .accessibilityHidden(true)
+            }
+        case .audio:
+            glyph("waveform")
+        }
+    }
+
+    private func picture(_ url: String, glyph name: String) -> some View {
+        CachedAsyncImage(url: url, targetSize: CGSize(width: Self.side, height: Self.side), showsStatusOverlays: false, autoLoad: true) {
+            glyph(name)
+        }
+        .scaledToFill()
+    }
+
+    private func glyph(_ name: String) -> some View {
+        ZStack {
+            Color(uiColor: UIColor.label.withAlphaComponent(0.07))
+            Image(systemName: name)
+                .font(.title3)
+                .foregroundStyle(Color(uiColor: .label))
+                .accessibilityHidden(true)
+        }
     }
 }

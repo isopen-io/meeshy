@@ -214,7 +214,7 @@ final class DeviceTranslationCoordinator: ObservableObject {
 
     private func drainPasses(generation: Int) async {
         while passRequested, isCurrent(generation) {
-            try? await Task.sleep(for: DeviceTranslationPolicy.settleDelay)
+            _ = await cancellableSleep(for: DeviceTranslationPolicy.settleDelay)
             guard isCurrent(generation) else { break }
             passRequested = false
             await runPass(generation: generation)

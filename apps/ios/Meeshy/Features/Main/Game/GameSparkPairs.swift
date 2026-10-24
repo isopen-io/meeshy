@@ -2,11 +2,11 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Les deux PAIRES des étincelles (#10846, #10860) — les CONVERTIBLES (la poche, ce que la frappe dépense, la seule
-/// valeur réelle, et la base du niveau, #10892) et, en petit, le RECORD D'ÉTINCELLES, indicatif ; le niveau actuel et
-/// le RECORD DE NIVEAU, qui survit au prestige (vocabulaire porteur 2026-10-17, #10899). TOUJOURS montrées, même quand
-/// le record égale le niveau (décision porteur 2026-10-16) : une paire qui disparaît quand ses deux nombres se
-/// rejoignent laisse croire que l'un d'eux n'existe pas.
+/// Les deux PAIRES des étincelles (#10846, #10860) — TA LUMIÈRE (la poche, ce que la frappe fige, la seule valeur
+/// réelle, et la base du niveau, #10892) en grand et, en petit, ce qui a été reçu depuis toujours ; le niveau actuel et
+/// TA PLUS HAUTE LUMIÈRE, qui survit à la renaissance (épopée § 4). Ce qu'on possède passe avant ce qu'on a cumulé
+/// (§ 3.3). TOUJOURS montrées, même quand la plus haute lumière égale le niveau (décision porteur 2026-10-16) : une
+/// paire qui disparaît quand ses deux nombres se rejoignent laisse croire que l'un d'eux n'existe pas.
 struct GameSparkPairs: Equatable {
     let pocket: Int
     let cycle: Int
@@ -23,10 +23,10 @@ struct GameSparkPairs: Equatable {
         levelMax = block.shownLevelMaxLifetime
     }
 
-    /// « Record d’étincelles : 12 000 » — ou « 4 200 cumulées · record 12 000 » après un Prestige.
+    /// « 12 000 reçues depuis toujours » — ou « 4 200 cet Âge · 12 000 en tout » après une renaissance.
     var cumulLine: String { GameSparksCopy.cumulLine(cycle: cycle, lifetime: lifetime) }
 
-    /// Les quatre faits, dans l'ordre : convertibles, record d'étincelles, niveau, record de niveau.
+    /// Les quatre faits, dans l'ordre : ta lumière, reçues depuis toujours, niveau, ta plus haute lumière.
     var facts: [ProgressionConceptFact] {
         [
             ProgressionConceptFact(label: GameSparksCopy.pocketLabel, value: GameCopy.points(pocket)),
@@ -38,7 +38,7 @@ struct GameSparkPairs: Equatable {
     }
 }
 
-/// Les deux paires sous le niveau du héro : le grand nombre en haut, son record en petit dessous.
+/// Les deux paires sous le niveau du héros : ce qu'on possède en grand en haut, le « depuis toujours » en petit dessous.
 struct GameSparkPairsRow: View {
     let pairs: GameSparkPairs
 
@@ -59,15 +59,15 @@ struct GameSparkPairsRow: View {
             Text(bigLabel)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .textCase(.uppercase)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Text(big)
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(small)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }

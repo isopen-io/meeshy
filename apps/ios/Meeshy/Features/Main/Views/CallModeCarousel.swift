@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreGraphics
 import MeeshyUI
+import MeeshySDK
 
 enum CallModeCopy {
     static var quit: String {
@@ -416,8 +417,7 @@ private struct CallModeScrollRest<Item: Equatable>: ViewModifier {
             }
         } else {
             content.task(id: centred) {
-                try? await Task.sleep(nanoseconds: CallModeCarouselRule.restDelayNanoseconds)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .nanoseconds(CallModeCarouselRule.restDelayNanoseconds)), !Task.isCancelled else { return }
                 onUserScrolling(false)
                 onRest()
             }

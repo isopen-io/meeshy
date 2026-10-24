@@ -116,8 +116,7 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
     private func scheduleRefresh() {
         refreshTask?.cancel()
         refreshTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(0.5))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(0.5)), !Task.isCancelled else { return }
             await self?.refreshFromAPI()
         }
     }

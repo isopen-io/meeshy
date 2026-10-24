@@ -25,8 +25,7 @@ final class FeedMediaPrefetcher {
         lastPrefetchIndex = index
         prefetchDebounceTask?.cancel()
         prefetchDebounceTask = Task {
-            try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(150)), !Task.isCancelled else { return }
             prefetchMedia(around: index)
         }
     }
@@ -138,7 +137,7 @@ final class FeedMediaPrefetcher {
             // it cools down. `allowVideo` : le preroll charge le MP4 lui-même,
             // c'est la branche la plus coûteuse de tout le prefetch.
             if allowVideo,
-               MediaThermalPolicy.shouldPrefetchVideo(thermalState: ProcessInfo.processInfo.thermalState),
+               MediaPolicyMonitor.shared.policy.prefetchesVideo,
                let firstVideo = slice.flatMap(\.media).first(where: { $0.type == .video }),
                let url = firstVideo.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
                 Task(priority: .utility) {

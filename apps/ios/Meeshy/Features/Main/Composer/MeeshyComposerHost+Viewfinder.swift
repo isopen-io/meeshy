@@ -4,42 +4,18 @@ import MeeshySDK
 
 // **Le VISEUR EN SCÈNE — son geste, ses prises, et son montage** (#4080).
 //
-// Extrait de `MeeshyComposerHost.swift` le 2026-09-04, qui passait 1200 lignes.
-// La coupe suit une responsabilité, pas une tranche : tout ce qui vit ici
-// répond à « la scène est une caméra » — le geste qui l'arme, les prises
-// qu'elle rend, les segments qu'elle accumule, et la vue qui la peint.
-//
-// **Le montage est ICI et non dans la surface**, et c'est la directive porteur
-// du 2026-09-04 qui l'impose :
-//
-// > « ça doit aller fluidement agrandir pour le plein écran sans la rangée en
-// > bas d'audience et publier, et avoir ainsi les icônes de réduction,
-// > fermeture accessibles et non au niveau de la barre système »
-//
-// Le socle — audience · aperçu · publier — est le FRÈRE de la surface dans la
-// `VStack` du meuble. Aucun overlay posé sur la surface ne peut couvrir son
-// frère : c'est une propriété de la composition, pas un réglage de z-index, et
-// c'est pourquoi la rangée survivait au plein écran quelle que soit la couche.
+// Le montage vit ICI : le socle (audience · aperçu · publier) est le FRÈRE de la surface dans
+// la `VStack` du meuble, donc aucun overlay posé sur la surface ne peut couvrir son frère et
+// la rangée du bas ne survit pas au plein écran (directive porteur 2026-09-04).
 @MainActor
 extension MeeshyComposerHost {
 
     /// L'étape du viseur, lue par la surface et le meuble.
     var sceneCameraStage: ComposerSceneCameraStage { sceneCapture.stage }
 
-    /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, #4851 —
-    /// porteur 2026-09-03 ; planche `2b`).
-    ///
-    /// C'est ce geste qui tient désormais la promesse de la porte, à la place
-    /// du viseur présenté au montage. Trois choses vivent ailleurs, exprès :
-    ///
-    /// - **si** le geste est offert — `ComposerSceneCaptureGesture.offersCapture`,
-    ///   qui lit la clause « scène vide ou à fond vide » de la directive ;
-    /// - **quel** viseur — la même règle, où le FORMAT prime la porte ;
-    /// - **comment** il s'ouvre — `presentCamera(mode:)`, le site unique.
-    ///
-    /// **L'appui long OUVRE ET FILME** (#8653, directive porteur 2026-09-29 :
-    /// « longpress ouvre et lance la vidéo ») : la tenue de la machine part dès
-    /// que la session peut écrire, et dure tant que le doigt reste.
+    /// **L'appui long sur une scène VIDE ouvre la caméra ET filme** (#4036, #4851, #8653) : si le
+    /// geste est offert (`ComposerSceneCaptureGesture`), quel viseur (le FORMAT prime la porte), et
+    /// comment il s'ouvre (`armSceneCamera`) vivent ailleurs ; la tenue part dès que la session écrit.
     func handleSceneCaptureLongPress() {
         guard ComposerSceneCaptureGesture.offersCapture(
             backgroundIsEmpty: !viewModel.currentSlide.effects.hasVisualBackgroundMedia,
@@ -129,24 +105,15 @@ extension MeeshyComposerHost {
         sceneCapture.endHold()
     }
 
-    /// **Le viseur s'ARME dans la scène — il ne se PRÉSENTE plus** (#4080).
-    ///
-    /// > « La caméra est une entrée, pas un mode. » — planche `2b`
-    ///
-    /// Le mode d'ouverture vient de `ComposerSceneCamera`, jamais d'un littéral :
-    /// c'est le premier SERVI par le format, donc jamais une pastille que la
-    /// rangée ne montrerait pas.
+    /// **Le viseur s'ARME dans la scène — il ne se PRÉSENTE plus** (#4080, planche `2b` : « une
+    /// entrée, pas un mode »). Le mode d'ouverture vient de `ComposerSceneCamera`, jamais d'un littéral.
     func armSceneCamera() {
         guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
         sceneCameraSize = .card
-        // **Ce que le viseur prend appartient à la SCÈNE** (#4080, planche
-        // `2b`). Le marquage se fait à l'ARMEMENT et non à la pose :
-        // `ingestIntoDocument` consomme le drapeau AVANT d'écrire (#4879), et
-        // l'observateur qui lit `railPosedMediaURLs` tourne sur l'écriture.
+        // **Ce que le viseur prend appartient à la SCÈNE** : le marquage se fait à l'ARMEMENT, car
+        // `ingestIntoDocument` consomme le drapeau AVANT d'écrire (#4879).
         railPosesNextMedia = true
-        // **La prise se POSE par le chemin de la feuille** (#4080) : la session
-        // remet la photo regardée (#9329) à `poseSceneCapture`, jusqu'à la
-        // pose ou au désarmement, qui la lui retirent.
+        // La session remet la photo regardée (#9329) à `poseSceneCapture`.
         sceneCapture.onDeliver = { poseSceneCapture($0) }
         sceneCapture.arm(mode: mode)
     }

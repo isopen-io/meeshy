@@ -37,7 +37,7 @@ struct ActiveUploadRow: View {
                 if !isFailed, !isWaiting {
                     Text("\(Int(progress.fraction(for: upload.id) * 100))%")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
 
@@ -92,7 +92,7 @@ struct FailedStoryRow: View {
             ZStack {
                 Circle().fill(MeeshyColors.error.opacity(0.15))
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
             }
             .frame(width: 44, height: 44)
 
@@ -102,12 +102,12 @@ struct FailedStoryRow: View {
                 if let lastError = item.lastError {
                     Text(lastError)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                         .lineLimit(2)
                 }
                 Text(relativeTime)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color.secondary)
             }
 
             Spacer()

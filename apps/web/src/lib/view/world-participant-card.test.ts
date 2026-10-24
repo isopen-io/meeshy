@@ -68,6 +68,7 @@ const guestCard = (overrides: Partial<WorldParticipantCard> = {}): WorldParticip
   participantId: '66f0a1b2c3d4e5f6a7b8c9d0',
   participantType: 'anonymous',
   displayName: 'Awa',
+  avatar: null,
   username: null,
   conversationRole: 'member',
   accountRole: null,
@@ -106,7 +107,7 @@ const rowIds = (view: WorldParticipantCardView) => view.sections.flatMap((sectio
 describe('worldParticipantCardView — ce que la fiche montre d’un INVITÉ', () => {
   test('l’en-tête dit « Anonyme », jamais un pseudo inventé', () => {
     const view = viewOf(guestCard());
-    expect(view.header).toEqual({ name: 'Awa', handle: null, kind: 'anonymous', kindLabel: 'Anonyme', initials: 'AW' });
+    expect(view.header).toEqual({ name: 'Awa', handle: null, kind: 'anonymous', kindLabel: 'Anonyme', initials: 'AW', avatar: null });
   });
 
   test('pays avec son drapeau, nommé dans la langue d’interface', () => {
@@ -151,7 +152,7 @@ describe('worldParticipantCardView — ce que la fiche montre d’un INVITÉ', (
 
 describe('worldParticipantCardView — ce que la fiche montre d’un COMPTE', () => {
   test('l’en-tête porte le pseudo et « Compte Meeshy »', () => {
-    expect(viewOf(accountCard()).header).toEqual({ name: 'Nour Haddad', handle: '@nour', kind: 'account', kindLabel: 'Compte Meeshy', initials: 'NH' });
+    expect(viewOf(accountCard()).header).toEqual({ name: 'Nour Haddad', handle: '@nour', kind: 'account', kindLabel: 'Compte Meeshy', initials: 'NH', avatar: null });
   });
 
   test('le rôle du compte, les rangs du Prisme renseignés, l’application déclarée', () => {
@@ -193,5 +194,15 @@ describe('worldParticipantCardView — ce que la fiche montre d’un COMPTE', ()
     const view = viewOf(accountCard({ conversationRole: 'curator', accountRole: 'GUARDIAN' }));
     expect(row(view, 'conversationRole')?.value).toBe('curator');
     expect(row(view, 'accountRole')?.value).toBe('GUARDIAN');
+  });
+});
+
+describe('worldParticipantCardView — le visage de l’en-tête (#12571)', () => {
+  test('la photo servie est portée par l’en-tête', () => {
+    expect(viewOf(guestCard({ avatar: '2026/09/awa/photo.png' })).header.avatar).toBe('2026/09/awa/photo.png');
+  });
+
+  test('sans photo, l’en-tête n’en porte aucune : les initiales servent', () => {
+    expect(viewOf(guestCard()).header.avatar).toBeNull();
   });
 });

@@ -1,4 +1,9 @@
 import XCTest
+import AVFoundation
+import ImageIO
+import UniformTypeIdentifiers
+@testable import Meeshy
+import os
 
 /// `loadFileRepresentation` SUPPRIME l'URL fournie au retour de sa closure :
 /// la copie doit être faite DANS la closure, de façon synchrone, par flux.
@@ -90,6 +95,44 @@ final class ShareMediaStagingTests: XCTestCase {
             atPath: mediaRoot.appendingPathComponent(staged.relPath).path))
     }
 
+    /// Une photo partagée depuis Photos porte son lieu : il ne quitte pas
+    /// l'appareil par défaut (#11847, défaut validé de #11247), et ses pixels
+    /// ne sont pas ré-encodés pour autant.
+    func test_stage_aPhotoWithLocation_isStagedWithoutIt() throws {
+        let dir = try makeDirectory()
+        let source = try makeGeotaggedJPEG(in: dir)
+        let mediaRoot = try makeDirectory()
+
+        let staged = try ShareMediaStaging.stage(
+            source: source, into: mediaRoot, shareId: "cid_gps",
+            index: 0, mime: "image/jpeg", freeBytes: 1_000_000_000
+        )
+
+        let copy = try Data(contentsOf: mediaRoot.appendingPathComponent(staged.relPath))
+        let image = try XCTUnwrap(CGImageSourceCreateWithData(copy as CFData, nil))
+        let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(image, 0, nil) as? [CFString: Any])
+        XCTAssertNil(properties[kCGImagePropertyGPSDictionary], "le lieu de la photo ne doit pas partir")
+        XCTAssertEqual(staged.bytes, copy.count, "la fiche annonce les octets réellement copiés")
+    }
+
+    private func makeGeotaggedJPEG(in directory: URL) throws -> URL {
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let context = try XCTUnwrap(CGContext(data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 0,
+                                              space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        context.setFillColor(CGColor(srgbRed: 0.2, green: 0.5, blue: 0.8, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 64, height: 48))
+        let image = try XCTUnwrap(context.makeImage())
+        let url = directory.appendingPathComponent("IMG_0001.jpeg")
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
+        let gps: [CFString: Any] = [
+            kCGImagePropertyGPSLatitude: 48.8566, kCGImagePropertyGPSLatitudeRef: "N",
+            kCGImagePropertyGPSLongitude: 2.3522, kCGImagePropertyGPSLongitudeRef: "E",
+        ]
+        CGImageDestinationAddImage(destination, image, [kCGImagePropertyGPSDictionary: gps] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return url
+    }
+
     func test_stage_withoutExtension_fallsBackToBin() throws {
         let dir = try makeDirectory()
         let source = dir.appendingPathComponent("sans-extension")
@@ -167,6 +210,115 @@ final class ShareMediaStagingTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: mediaRoot.appendingPathComponent("cid_abc/0.mp4").path),
             "aucun octet ne doit être écrit quand la place manque")
+    }
+
+    // MARK: - Une copie interrompue ne laisse rien (#11429)
+
+    /// Un dossier s'ouvre mais ne se lit pas : la destination est déjà créée
+    /// quand la lecture échoue. Rien ne doit en rester dans l'App Group.
+    func test_stage_aCopyThatFailsMidway_leavesNoPartialFile() throws {
+        let unreadable = try makeDirectory()
+        let mediaRoot = try makeDirectory()
+
+        XCTAssertThrowsError(try ShareMediaStaging.stage(
+            source: unreadable, into: mediaRoot, shareId: "cid_abc",
+            index: 0, mime: "image/jpeg", freeBytes: .max
+        ))
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: mediaRoot.appendingPathComponent("cid_abc").path), [],
+            "la copie partielle doit être supprimée"
+        )
+    }
+
+    func test_streamCopy_whenAdmitRefusesTheNextChunk_stopsBeforeWritingIt() throws {
+        let dir = try makeDirectory()
+        let source = try makeFile(bytes: 1000, ext: "bin", in: dir)
+        let destination = dir.appendingPathComponent("copy.bin")
+        struct Refused: Error {}
+
+        XCTAssertThrowsError(try ShareMediaStaging.streamCopy(from: source, to: destination, bufferSize: 400) { total in
+            if total > 400 { throw Refused() }
+        })
+        XCTAssertEqual(try Data(contentsOf: destination).count, 400, "la tranche refusée n'est jamais écrite")
+    }
+
+    // MARK: - Budget cumulé (#11429)
+
+    func test_byteBudget_reservesAtomically_underConcurrentDemands() {
+        let budget = ShareByteBudget(limit: 1_000)
+        let granted = OSAllocatedUnfairLockCounter()
+
+        DispatchQueue.concurrentPerform(iterations: 200) { _ in
+            if budget.reserve(7) { granted.increment() }
+        }
+
+        XCTAssertEqual(granted.value, 142, "1000 / 7 = 142 réservations, jamais une de plus")
+        XCTAssertEqual(budget.reservedBytes, 994)
+    }
+
+    /// Huit copies concurrentes de 100 Kio sous un plafond de 300 Kio : trois
+    /// passent, les cinq autres sont refusées sans laisser un octet.
+    func test_stage_concurrentCopies_neverExceedTheCumulativeBudget() throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeDirectory()
+        let size = 100 * 1024
+        let sources = try (0..<8).map { _ in try makeFile(bytes: size, ext: "jpg", in: dir) }
+        let budget = ShareByteBudget(limit: 3 * size)
+        let outcomes = OutcomeBox()
+
+        DispatchQueue.concurrentPerform(iterations: sources.count) { index in
+            do {
+                let staged = try ShareMediaStaging.stage(
+                    source: sources[index], into: mediaRoot, shareId: "cid_abc",
+                    index: index, mime: "image/jpeg", freeBytes: .max, budget: budget
+                )
+                outcomes.append(.success(staged))
+            } catch let error as ShareMediaStagingError {
+                outcomes.append(.failure(error))
+            } catch {
+                outcomes.append(.failure(.copyFailed(error.localizedDescription)))
+            }
+        }
+
+        let results = outcomes.values
+        let copied = results.compactMap { try? $0.get() }
+        let refused = results.compactMap { result -> ShareMediaStagingError? in
+            guard case .failure(let error) = result else { return nil }
+            return error
+        }
+        XCTAssertEqual(copied.count, 3)
+        XCTAssertEqual(refused.count, 5)
+        XCTAssertTrue(refused.allSatisfy(\.isOverBudget), "\(refused)")
+        let onDisk = try FileManager.default.contentsOfDirectory(atPath: mediaRoot.appendingPathComponent("cid_abc").path)
+        XCTAssertEqual(onDisk.count, 3, "aucune copie refusée ne laisse de fichier")
+        XCTAssertEqual(budget.reservedBytes, 3 * size)
+    }
+
+    func test_stage_aFailedCopy_givesItsReservationBack() throws {
+        let unreadable = try makeDirectory()
+        let mediaRoot = try makeDirectory()
+        let budget = ShareByteBudget(limit: 1_000)
+
+        XCTAssertThrowsError(try ShareMediaStaging.stage(
+            source: unreadable, into: mediaRoot, shareId: "cid_abc",
+            index: 0, mime: "image/jpeg", freeBytes: .max, budget: budget
+        ))
+        XCTAssertEqual(budget.reservedBytes, 0)
+    }
+
+    func test_shortfalls_sayHowManyFilesTheBudgetLeftBehind_andThatOthersFailed() {
+        XCTAssertEqual(
+            ShareExtensionIncoming.shortfalls(from: [
+                .byteBudgetExceeded(total: 2, limit: 1), .copyFailed("x"), .byteBudgetExceeded(total: 3, limit: 1),
+            ]),
+            [.overBudget(uncopied: 2), .unprepared]
+        )
+        XCTAssertEqual(
+            ShareExtensionIncoming.shortfalls(from: [.refusedSource, .refusedSource]),
+            [.refusedSource],
+            "un chemin refusé se dit pour ce qu'il est, pas comme un fichier à télécharger"
+        )
+        XCTAssertEqual(ShareExtensionIncoming.shortfalls(from: []), [])
     }
 
     func test_requiredFreeBytes_addsTheSafetyMargin() {
@@ -303,5 +455,88 @@ final class ShareMediaStagingTests: XCTestCase {
             shareId: "cid_this_one", in: mediaRoot, pendingSendsDirectory: pendingSendsDirectory)
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: shareDir.path))
+    }
+}
+
+private final class OSAllocatedUnfairLockCounter: Sendable {
+    private let count = OSAllocatedUnfairLock(initialState: 0)
+    var value: Int { count.withLock { $0 } }
+    func increment() { count.withLock { $0 += 1 } }
+}
+
+private final class OutcomeBox: Sendable {
+    private let results = OSAllocatedUnfairLock(initialState: [Result<ShareStagedMedia, ShareMediaStagingError>]())
+    var values: [Result<ShareStagedMedia, ShareMediaStagingError>] { results.withLock { $0 } }
+    func append(_ result: Result<ShareStagedMedia, ShareMediaStagingError>) { results.withLock { $0.append(result) } }
+}
+
+/// La vignette d'une VIDÉO copiée (#11528) : une image tirée du fichier,
+/// réduite par le décodeur lui-même — jamais une image pleine résolution sous
+/// le plafond mémoire de l'extension. Un fichier illisible rend `nil`, et la
+/// tuile garde son glyphe.
+final class ShareIncomingVideoPosterTests: XCTestCase {
+
+    private func makeMovie(width: Int, height: Int) async throws -> URL {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-poster-\(UUID().uuidString).mov")
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+        ])
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height,
+        ])
+        writer.add(input)
+        XCTAssertTrue(writer.startWriting())
+        writer.startSession(atSourceTime: .zero)
+        for frame in 0..<2 {
+            while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 1_000_000) }
+            let buffer = try XCTUnwrap(Self.solidBuffer(pool: adaptor.pixelBufferPool, value: frame == 0 ? 0x40 : 0xC0))
+            XCTAssertTrue(adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 10)))
+        }
+        input.markAsFinished()
+        await writer.finishWriting()
+        XCTAssertEqual(writer.status, .completed)
+        return url
+    }
+
+    private static func solidBuffer(pool: CVPixelBufferPool?, value: UInt8) -> CVPixelBuffer? {
+        guard let pool else { return nil }
+        var buffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
+        guard let buffer else { return nil }
+        CVPixelBufferLockBaseAddress(buffer, [])
+        if let base = CVPixelBufferGetBaseAddress(buffer) {
+            memset(base, Int32(value), CVPixelBufferGetDataSize(buffer))
+        }
+        CVPixelBufferUnlockBaseAddress(buffer, [])
+        return buffer
+    }
+
+    func test_videoPoster_movie_returnsAnImageNoLargerThanTheRequestedSide() async throws {
+        let movie = try await makeMovie(width: 640, height: 360)
+        defer { try? FileManager.default.removeItem(at: movie) }
+
+        let poster = await ShareIncomingThumbnail.videoPoster(movie, maxPixel: 160)
+
+        let image = try XCTUnwrap(poster, "une vidéo lisible doit rendre une image, pas le glyphe")
+        let pixels = image.size.applying(CGAffineTransform(scaleX: image.scale, y: image.scale))
+        XCTAssertGreaterThan(pixels.width, 0)
+        XCTAssertLessThanOrEqual(max(pixels.width, pixels.height), 160)
+    }
+
+    func test_videoPoster_fileThatIsNotAMovie_returnsNilSoTheGlyphStays() async throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-poster-\(UUID().uuidString).mov")
+        try Data("pas une vidéo".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let poster = await ShareIncomingThumbnail.videoPoster(url, maxPixel: 160)
+
+        XCTAssertNil(poster)
     }
 }

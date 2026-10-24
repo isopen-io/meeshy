@@ -146,8 +146,7 @@ extension ConversationMediaGalleryView {
     /// sur l'état : un réarmement (toucher, reprise) la relance d'elle-même.
     func fadePlayPauseAfterDelay() async {
         guard let delay = playPauseFade.fadeDelay else { return }
-        try? await Task.sleep(for: .seconds(delay))
-        guard !Task.isCancelled else { return }
+        guard await cancellableSleep(for: .seconds(delay)), !Task.isCancelled else { return }
         withAnimation(playPauseFadeAnimation) { playPauseFade = playPauseFade.fading() }
     }
 
@@ -162,7 +161,7 @@ extension ConversationMediaGalleryView {
     private func transportDurationLabel(_ texte: String) -> some View {
         Text(texte)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
-            .foregroundColor(MeeshyColors.mediaChromeTertiary)
+            .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             .lineLimit(1)
             .fixedSize()
             .padding(.trailing, MediaGalleryStage.gutter)

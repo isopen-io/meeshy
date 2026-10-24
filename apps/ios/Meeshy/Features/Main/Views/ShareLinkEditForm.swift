@@ -57,7 +57,7 @@ struct ShareLinkEditForm: View {
                 if !draft.isValid {
                     Text(ShareLinkDetailCopy.invalidLimits)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.errorStrong)
+                        .foregroundStyle(MeeshyColors.errorStrong)
                 }
             }
 
@@ -212,7 +212,7 @@ struct ShareLinkEditForm: View {
                     if isSaving { ProgressView().tint(.white) }
                 }
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .heavy))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity, minHeight: 54)
                 .background(
                     LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.purple600], startPoint: .topLeading, endPoint: .bottomTrailing)

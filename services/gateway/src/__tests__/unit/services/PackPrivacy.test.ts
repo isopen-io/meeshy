@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
+import { createHash } from 'node:crypto';
 import {
   DELETED_ACCOUNT_PACK_AUTHOR,
   exportPackData,
@@ -75,6 +76,8 @@ function seed() {
   const userPackOwnership: Row[] = [
     { id: 'o1', userId: PARTI, packKey: 'wallpaper.echantillon', priceMeeshes: 40, requestId: 'achat-0001', acquiredAt: LATER },
     { id: 'o2', userId: VOISIN, packKey: 'banner.echantillon', priceMeeshes: 25, requestId: 'achat-0002', acquiredAt: AT },
+    { id: 'o3', userId: PARTI, packKey: 'banner.coupe', source: 'game', reference: 'trophy:season-cup:3', acquiredAt: AT },
+    { id: 'o4', userId: VOISIN, packKey: 'banner.fete', source: 'event', reference: 'fete-2026', acquiredAt: AT },
   ];
   const db = fakePackDb({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership });
   return { db, files };
@@ -144,8 +147,17 @@ describe('exportPackData — ce que le compte a fait des packs (#10151)', () => 
 
     const data = await exportPackData(db as never, PARTI, PAGE);
 
-    expect(data.ownerships.total).toBe(1);
-    expect(data.ownerships.items).toEqual([{ domain: 'wallpaper', slug: 'echantillon', priceMeeshes: 40, acquiredAt: LATER }]);
+    expect(data.ownerships.total).toBe(2);
+    expect(data.ownerships.items[0]).toEqual({ domain: 'wallpaper', slug: 'echantillon', source: 'purchase', reference: null, priceMeeshes: 40, acquiredAt: LATER });
+  });
+
+  it('exporte aussi ses packs GAGNÉS, OCTROYÉS ou d’ÉVÉNEMENT (#11272) : la voie et la raison, aucun prix payé', async () => {
+    const { db } = seed();
+
+    const data = await exportPackData(db as never, PARTI, PAGE);
+
+    expect(data.ownerships.items[1]).toEqual({ domain: 'banner', slug: 'coupe', source: 'game', reference: 'trophy:season-cup:3', priceMeeshes: 0, acquiredAt: AT });
+    expect(data.ownerships.items.map((item) => item.slug)).not.toContain('fete');
   });
 
   it('ne sort rien du voisin', async () => {
@@ -170,7 +182,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
     expect(db.tables.userSticker.rows.map((row) => row.id)).toEqual(['s2']);
     expect(db.tables.stickerPack.rows.map((row) => row.id).sort()).toEqual(['p3', 'p4']);
     expect(db.tables.stickerPackItem.rows.map((row) => row.id).sort()).toEqual(['i3', 'i4']);
-    expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2']);
+    expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2', 'o4']);
     expect([...files.files].sort()).toEqual([
       'sticker-packs/p3-dir/trois.webp',
       'sticker-packs/p4-dir/quatre.webp',
@@ -182,7 +194,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
       submissionsDeleted: 2,
       publishedAnonymized: 1,
       filesDeleted: 4,
-      ownershipsDeleted: 1,
+      ownershipsDeleted: 2,
     });
   });
 
@@ -213,7 +225,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
 
     const measured = await measurePackData(db as never, PARTI, { files: files.store });
 
-    expect(measured).toEqual({ choicesDeleted: 3, libraryDeleted: 1, submissionsDeleted: 2, publishedAnonymized: 1, filesDeleted: 4, ownershipsDeleted: 1 });
+    expect(measured).toEqual({ choicesDeleted: 3, libraryDeleted: 1, submissionsDeleted: 2, publishedAnonymized: 1, filesDeleted: 4, ownershipsDeleted: 2 });
     expect(JSON.stringify(db.tables)).toBe(before);
     expect(db.writes).toEqual([]);
     expect(files.removed).toEqual([]);
@@ -262,5 +274,60 @@ describe('les propositions d’apparence d’un tiers suivent le compte (#10709)
     const measured = await measurePackData(db as never, PARTI, { files: fakeFileStore([]).store });
     expect(measured).toMatchObject({ submissionsDeleted: 2, publishedAnonymized: 1 });
     expect(db.tables.communityAppearancePack.rows).toHaveLength(4);
+  });
+});
+
+describe('les lens proposées suivent le compte (#11271)', () => {
+  const lens = (id: string, submitterId: string, status: string, author = 'Studio Nord'): Row => ({
+    id, slug: `lens-${id}`, name: 'Aurore', author, submitterId, status, reviewNote: null, reviewedAt: null, installCount: 2, cost: 'standard', createdAt: AT, documentJson: '{"schema":1}',
+  });
+  const publishedDocument = JSON.stringify({ schema: 1, id: 'lens-l3', credits: { author: 'Studio Nord', createdAt: '2026-10-01' } });
+  const packs = (): Row[] => [
+    lens('l1', PARTI, 'pending'),
+    lens('l2', PARTI, 'rejected'),
+    { ...lens('l3', PARTI, 'approved'), documentJson: publishedDocument, documentSha256: 'old', documentSrc: 'old0000000000000.json' },
+    lens('l4', VOISIN, 'pending', 'Voisin'),
+  ];
+  const assets = (): Row[] => ['l1', 'l2', 'l3', 'l4'].map((packId) => ({ id: `f-${packId}`, packId, src: `${packId.padEnd(16, '0')}.png` }));
+
+  it('les exporte, document compris, sans rien du voisin', async () => {
+    const db = fakePackDb({ lensPack: packs(), lensPackAsset: assets() });
+    const data = await exportPackData(db as never, PARTI, PAGE);
+    expect(data.lensSubmissions.total).toBe(3);
+    expect(data.lensSubmissions.items.map((row) => row.slug).sort()).toEqual(['lens-l1', 'lens-l2', 'lens-l3']);
+    expect(data.lensSubmissions.items[0]).toHaveProperty('documentJson');
+    expect(JSON.stringify(data)).not.toContain('Voisin');
+  });
+
+  it('efface les non publiées et leurs fichiers, anonymise la publiée, laisse le voisin', async () => {
+    const db = fakePackDb({ lensPack: packs(), lensPackAsset: assets() });
+    const summary = await purgePackData(db as never, PARTI, { files: fakeFileStore([]).store });
+    expect(db.tables.lensPack.rows.map((row) => [row.id, row.author])).toEqual([
+      ['l3', DELETED_ACCOUNT_PACK_AUTHOR],
+      ['l4', 'Voisin'],
+    ]);
+    expect(db.tables.lensPackAsset.rows.map((row) => row.packId).sort()).toEqual(['l3', 'l4']);
+    expect(summary).toMatchObject({ submissionsDeleted: 2, publishedAnonymized: 1 });
+    expect(await measurePackData(db as never, PARTI, { files: fakeFileStore([]).store })).toMatchObject({ submissionsDeleted: 0, publishedAnonymized: 0 });
+  });
+
+  it('réécrit le document publié sans le nom de l’auteur, ré-adressé par sa nouvelle empreinte', async () => {
+    const db = fakePackDb({ lensPack: packs(), lensPackAsset: assets() });
+    await purgePackData(db as never, PARTI, { files: fakeFileStore([]).store });
+
+    const published = db.tables.lensPack.rows.find((row) => row.id === 'l3')!;
+    const json = String(published.documentJson);
+    const sha = createHash('sha256').update(json, 'utf8').digest('hex');
+    expect(json).not.toContain('Studio Nord');
+    expect(JSON.parse(json).credits).toEqual({ author: DELETED_ACCOUNT_PACK_AUTHOR, createdAt: '2026-10-01' });
+    expect(published).toMatchObject({ documentSha256: sha, documentSrc: `${sha.slice(0, 16)}.json`, documentBytes: Buffer.byteLength(json, 'utf8') });
+  });
+
+  it('une lens retirée par la modération part avec le compte, fichiers compris', async () => {
+    const db = fakePackDb({ lensPack: [lens('l5', PARTI, 'withdrawn')], lensPackAsset: [{ id: 'f-l5', packId: 'l5', src: 'l500000000000000.png' }] });
+    const summary = await purgePackData(db as never, PARTI, { files: fakeFileStore([]).store });
+    expect(db.tables.lensPack.rows).toEqual([]);
+    expect(db.tables.lensPackAsset.rows).toEqual([]);
+    expect(summary).toMatchObject({ submissionsDeleted: 1 });
   });
 });

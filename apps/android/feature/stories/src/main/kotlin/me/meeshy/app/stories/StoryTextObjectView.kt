@@ -1,10 +1,16 @@
 package me.meeshy.app.stories
 
 import androidx.compose.runtime.Immutable
-import me.meeshy.sdk.lang.LanguageCodeNormalizer
+import me.meeshy.sdk.lang.PrismTranslationResolver
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
+import me.meeshy.sdk.model.scene.StoryElementVisibility
+import me.meeshy.sdk.model.scene.StoryKeyframeResolver
+import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
+import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextOutline
 
 /**
  * A text overlay on a slide, projected for the viewer canvas. Pure data.
@@ -40,7 +46,17 @@ data class StoryTextObjectView(
     val background: StoryTextBackground = StoryTextBackground.None,
     /** The EFFECT axis (#4870) — glow / shadow / relief — the canvas paints over the glyphs. */
     val effect: StoryTextEffect = StoryTextEffect.NONE,
+    /** The published font style ([StoryTextStyle.fromWire]) — the reader renders its typography like the composer. */
+    val style: StoryTextStyle = StoryTextStyle.BOLD,
+    /** The published glyph outline ([StoryTextObject.borderWidth] / [StoryTextObject.borderColor]), design px. */
+    val outline: StoryTextOutline = StoryTextOutline(),
 ) {
+    /** The outline stroke in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
+    fun outlinePx(canvasWidthPx: Float): Float = StoryTextMetrics.designPx(outline.width.toDouble(), scale, canvasWidthPx)
+
+    /** The glyph size in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
+    fun fontPx(canvasWidthPx: Float): Float = StoryTextMetrics.fontPx(fontSize, scale, canvasWidthPx)
+
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
      * unchanged when nothing animates — no keyframes that key a channel AND no
@@ -102,11 +118,11 @@ object StoryTextObjectProjection {
 
     /**
      * The displayable text for [textObject] under the reader's [preferredLanguages]
-     * (ordered, highest priority first). Each language tries an exact key, then a
-     * normalised (case/region-insensitive) match, BEFORE moving to the next — so
-     * chain priority is preserved and an exact key wins over a normalised sibling.
-     * Falls back to the object's original [StoryTextObject.text] when no translation
-     * matches (Prisme rule 1: absent target ⇒ show the original).
+     * (ordered, highest priority first), delegated to the single Prisme descent
+     * [PrismTranslationResolver] like iOS `StoryTextObject.resolvedText`: the object's
+     * [StoryTextObject.sourceLanguage] competes at ITS rank (rule 3 — a text already
+     * written in a higher-ranked language is served as written), a blank translation is
+     * skipped, and the original is the fallback (rule 1).
      *
      * [overrideLanguage] is the ephemeral "Exploration" pick from the language bar
      * (iOS `sessionLanguageOverride` parity, mirroring [StoryContentResolver]): it is
@@ -120,18 +136,17 @@ object StoryTextObjectProjection {
         overrideLanguage: String? = null,
     ): String {
         val translations = textObject.translations
+        if (translations.isNullOrEmpty()) return textObject.text
         val languages = if (overrideLanguage.isNullOrBlank()) {
             preferredLanguages
         } else {
             listOf(overrideLanguage) + preferredLanguages
         }
-        if (translations.isNullOrEmpty() || languages.isEmpty()) return textObject.text
-        for (lang in languages) {
-            translations[lang]?.let { return it }
-            val target = base(lang)
-            translations.entries.firstOrNull { base(it.key) == target }?.let { return it.value }
-        }
-        return textObject.text
+        return PrismTranslationResolver.resolve(
+            originalLanguage = textObject.sourceLanguage,
+            translations = translations,
+            preferredLanguages = languages,
+        )?.text ?: textObject.text
     }
 
     /**
@@ -166,16 +181,10 @@ object StoryTextObjectProjection {
             keyframes = textObject.keyframes.orEmpty(),
             background = StoryTextBackground.resolve(textObject.backgroundStyle, textObject.textBg),
             effect = StoryTextEffect.fromWire(textObject.textEffect),
+            style = StoryTextStyle.fromWire(textObject.textStyle),
+            outline = StoryTextOutline(
+                width = textObject.borderWidth?.toFloat()?.takeIf { it > StoryTextOutline.NONE_WIDTH } ?: StoryTextOutline.NONE_WIDTH,
+                color = textObject.borderColor,
+            ),
         )
-
-    /**
-     * The Prisme match key for a language code: the canonical Meeshy code when the
-     * normaliser recognises it, else a lowercased region-stripped split (mirror of
-     * iOS `StoryPrismeMatch.base`). Applied to BOTH the preferred code and the
-     * translation key so `"fr-FR"`, `"FR"`, `"fra"` all collapse onto `"fr"`.
-     */
-    private fun base(code: String): String =
-        LanguageCodeNormalizer.normalize(code)
-            ?: code.split('-', '_').firstOrNull()?.lowercase()
-            ?: code.lowercase()
 }

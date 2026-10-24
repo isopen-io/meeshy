@@ -4,8 +4,12 @@ import { RingedAvatar } from '@/components/peer-avatar';
 import { AuthorRingsContext } from '@/lib/profile-decor/author-ring';
 import type { FaceRampEntry } from '@/lib/summary/types';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { usePresenceOf } from '@/lib/view/use-presence';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { faceTargetOf } from '@/lib/view/summary-exits';
+
+import { entryPressAttributes, type SummaryEntryPress } from './summary-entry-press';
 
 /**
  * « ILS T'ATTENDENT » — miroir `FaceRampView.swift` (#5695, étape 8). Rail
@@ -17,13 +21,18 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * « 1 messages t'attendent » au singulier. Le web accorde le nom ET le verbe :
  * un lecteur d'écran est la seule voix de ce libellé, une faute d'accord s'y
  * entend.
+ *
+ * `press` (#11225) : l'appui long, le clic droit et `Maj+F10` ouvrent le menu
+ * de l'entrée (Aller au message · Répondre) — étalés par l'hôte, jamais tenus ici.
  */
 export function FaceRamp({
   entries,
   onTap,
+  press,
 }: {
   readonly entries: readonly FaceRampEntry[];
   readonly onTap: (entry: FaceRampEntry) => void;
+  readonly press?: SummaryEntryPress;
 }) {
   if (entries.length === 0) return null;
   return (
@@ -47,6 +56,7 @@ export function FaceRamp({
               data-face
               data-user={entry.id}
               onClick={() => onTap(entry)}
+              {...entryPressAttributes({ press, target: faceTargetOf(entry), label: entry.displayName })}
               aria-label={
                 entry.awaitingCount === 1
                   ? translate(currentInterfaceLanguage(), 'summary.face.one', { name: entry.displayName })
@@ -88,10 +98,13 @@ export default FaceRamp;
 /**
  * LE VISAGE ET SON CONTOUR ÉQUIPÉ (#10946) — celui que la conversation sert avec
  * ses participants (`AuthorRingsContext`). Un composant à part : la rampe reste
- * sans hook, donc dépliable par ses témoins.
+ * sans hook, donc dépliable par ses témoins. Sa pastille est VIVANTE (#11412) :
+ * la carte vivante par son identifiant, la charge REST sinon, à l'horloge de
+ * toutes les pastilles — jamais le statut figé au montage du résumé.
  */
 function FaceAvatar({ entry, photo }: { readonly entry: FaceRampEntry; readonly photo: string | undefined }) {
   const rings = useContext(AuthorRingsContext);
+  const presence = usePresenceOf({ userId: entry.id, participant: entry.participant });
   return (
     <RingedAvatar
       ringRef={rings.get(entry.id)}
@@ -99,7 +112,7 @@ function FaceAvatar({ entry, photo }: { readonly entry: FaceRampEntry; readonly 
       color={entry.colorHex}
       size={44}
       {...(photo === undefined ? {} : { src: photo })}
-      presence={entry.presence}
+      presence={presence}
     />
   );
 }

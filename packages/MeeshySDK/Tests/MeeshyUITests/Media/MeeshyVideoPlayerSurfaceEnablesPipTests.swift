@@ -14,7 +14,7 @@ final class MeeshyVideoPlayerSurfaceEnablesPipTests: XCTestCase {
     }
 
     func test_fullscreenSurface_doesNotEnablePip_whenControlsExcludePip() {
-        XCTAssertFalse(MeeshyVideoPlayer.surfaceEnablesPip(style: .fullscreen, controls: .miniDefault))
+        XCTAssertFalse(MeeshyVideoPlayer.surfaceEnablesPip(style: .fullscreen, controls: [.duration]))
     }
 
     func test_bubbleInlineMinimal_neverArmsAutomaticPip() {

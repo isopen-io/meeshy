@@ -240,7 +240,7 @@ public enum MessageTextRenderer {
         case displayNameMention(username: String)
     }
 
-    private static let meeshyLinkRegex = try! NSRegularExpression(
+    private static let meeshyLinkRegex = LiteralRegex.compile(
         pattern: #"(?<![a-zA-Z0-9])m\+([a-zA-Z0-9]+)"#
     )
 
@@ -249,7 +249,7 @@ public enum MessageTextRenderer {
     // caractères de la validation username (`/^[a-zA-Z0-9_-]+$/`). Sans le
     // tiret, `@marie-claire` matchait seulement `@marie` : le lien pointait
     // vers quelqu'un d'autre.
-    private static let mentionRegex = try! NSRegularExpression(
+    private static let mentionRegex = LiteralRegex.compile(
         pattern: #"(?<![a-zA-Z0-9])@([a-zA-Z0-9_-]{1,30})"#
     )
 
@@ -259,7 +259,7 @@ public enum MessageTextRenderer {
     // classe de caractères que le service gateway (HashtagService.ts) —
     // SSOT dupliquée consciemment, comme MENTION_HANDLE_CHARS l'est déjà
     // entre mention-parser.ts et son miroir Swift.
-    private static let hashtagRegex = try! NSRegularExpression(
+    private static let hashtagRegex = LiteralRegex.compile(
         pattern: #"(?<![\p{L}\p{N}_/])#([\p{L}\p{N}_]{1,50})"#
     )
 
@@ -268,16 +268,16 @@ public enum MessageTextRenderer {
     private static let rules: [(regex: NSRegularExpression, kind: RuleKind)] = [
         // Code and markdown links first: at the same position they win, and
         // their content is never re-read as emphasis (#7849).
-        (try! NSRegularExpression(pattern: #"`([^`\n]+)`"#), .code),
+        (LiteralRegex.compile(pattern: #"`([^`\n]+)`"#), .code),
         (verbatimLinkRegex, .verbatimLink),
         (markdownLinkRegex, .markdownLink),
         // `***mot***` — bold whose content is exactly an italic. Without it the
         // bold rule stops at the second closing star and leaves one orphan.
-        (try! NSRegularExpression(pattern: #"\*\*\*(?![\s*])([^*]+?)(?<![\s*])\*\*\*"#), .boldItalic),
-        (try! NSRegularExpression(pattern: #"\*\*(.+?)\*\*"#, options: .dotMatchesLineSeparators), .bold),
-        (try! NSRegularExpression(pattern: #"~~(.+?)~~"#), .strikethrough),
-        (try! NSRegularExpression(pattern: #"__(.+?)__"#), .underline),
-        (try! NSRegularExpression(pattern: #"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"#), .italic),
+        (LiteralRegex.compile(pattern: #"\*\*\*(?![\s*])([^*]+?)(?<![\s*])\*\*\*"#), .boldItalic),
+        (LiteralRegex.compile(pattern: #"\*\*(.+?)\*\*"#, options: .dotMatchesLineSeparators), .bold),
+        (LiteralRegex.compile(pattern: #"~~(.+?)~~"#), .strikethrough),
+        (LiteralRegex.compile(pattern: #"__(.+?)__"#), .underline),
+        (LiteralRegex.compile(pattern: #"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"#), .italic),
         (meeshyLinkRegex, .meeshyLink),
         (mentionRegex, .mention),
         (hashtagRegex, .hashtag),
@@ -287,7 +287,7 @@ public enum MessageTextRenderer {
 
     /// `[[url]]` (#9093) — an address the author wants shown AS IS and opened
     /// directly, never tracked. Anchored on `https?://` like `urlRegex`.
-    private static let verbatimLinkRegex = try! NSRegularExpression(
+    private static let verbatimLinkRegex = LiteralRegex.compile(
         pattern: #"\[\[(https?://[^\s\[\]]+)\]\]"#
     )
 
@@ -295,18 +295,18 @@ public enum MessageTextRenderer {
     /// like `urlRegex`: `[x](javascript:…)` never matches and stays text. One
     /// balanced pair of parentheses is allowed (`…/Prisme_(optique)`).
     /// Mirror of `MARKDOWN_LINK_REGEX` (`packages/shared/utils/text-segments.ts`).
-    private static let markdownLinkRegex = try! NSRegularExpression(
+    private static let markdownLinkRegex = LiteralRegex.compile(
         pattern: #"\[([^\[\]\n]+)\]\(((?:https?://|mailto:)[^\s()]+(?:\([^\s()]*\)[^\s()]*)*)\)"#
     )
 
     /// `www.` + at least one dotted domain; the followed link is `https://` +
     /// what one reads. Mirror of `WWW_REGEX`.
-    private static let wwwRegex = try! NSRegularExpression(
+    private static let wwwRegex = LiteralRegex.compile(
         pattern: #"(?<![\p{L}\p{N}_./@-])www\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+(?:[/?#][\w\-._~:/?#\[\]@!$&'()*+,;=%]*)?"#
     )
 
     /// An e-mail address → `mailto:`. Mirror of `EMAIL_REGEX`.
-    private static let emailRegex = try! NSRegularExpression(
+    private static let emailRegex = LiteralRegex.compile(
         pattern: #"(?<![\p{L}\p{N}_.+-])[\p{L}\p{N}_.+-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+"#
     )
 
@@ -330,7 +330,7 @@ public enum MessageTextRenderer {
     /// of URL-legal characters per RFC 3986. The `(?<![@\\w])` lookbehind
     /// prevents matching inside an email or word boundary that would otherwise
     /// produce a misleading link (e.g. `xxxhttp://` shouldn't match).
-    private static let urlRegex = try! NSRegularExpression(
+    private static let urlRegex = LiteralRegex.compile(
         pattern: #"(?<![@\w])https?://[\w\-._~:/?#\[\]@!$&'()*+,;=%]+"#,
         options: []
     )

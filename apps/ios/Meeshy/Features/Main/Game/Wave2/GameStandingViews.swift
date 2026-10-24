@@ -46,14 +46,14 @@ struct GameStandingView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(GameText.profileLevel(level: GameCopy.formatCount(standing.shownLevel), tier: GameCopy.tierName(standing.shownTier)))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(GameCopy.rankLabel(standing))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     if let tier = content.treasuryTier {
                         Text(GameText.visitorTreasury(tier: GameCopy.treasuryName(tier)))
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
@@ -65,7 +65,7 @@ struct GameStandingView: View {
             } else if let tier = content.treasuryTier {
                 Text(GameText.visitorTreasury(tier: GameCopy.treasuryName(tier)))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer(minLength: 0)
             }
         }

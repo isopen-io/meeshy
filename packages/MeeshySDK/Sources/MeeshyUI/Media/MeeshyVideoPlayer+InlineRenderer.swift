@@ -256,28 +256,28 @@ internal struct _InlineRenderer: View {
         case .ready:
             Image(systemName: "play.fill")
                 .font(.system(size: 22 * playButtonScale, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .offset(x: 2 * playButtonScale)
         case .needsDownload:
             VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: 22 * playButtonScale, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                 if player.attachment.fileSize > 0 {
                     Text(formatSize(Int64(player.attachment.fileSize)))
                         .font(.system(size: 9 * playButtonScale, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundStyle(Color.white.opacity(0.9))
                 }
             }
         case .downloading(let progress):
             VStack(spacing: MeeshySpacing.xxs) {
-                Image(systemName: "arrow.down.to.line")
+                Image(systemName: playsWhileDownloading ? "play.fill" : "arrow.down.to.line")
                     .font(.system(size: 16 * playButtonScale, weight: .bold))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundStyle(Color.white.opacity(0.6))
                 if progress > 0 {
                     Text("\(Int(progress * 100))%")
                         .font(.system(size: 10 * playButtonScale, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 } else {
                     ProgressView().tint(.white).scaleEffect(0.6 * playButtonScale)
                 }
@@ -306,8 +306,24 @@ internal struct _InlineRenderer: View {
         switch player.availability {
         case .ready:         return String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module)
         case .needsDownload: return String(localized: "media.video.download", defaultValue: "Télécharger la vidéo", bundle: .module)
+        case .downloading where playsWhileDownloading:
+            return String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module)
         case .downloading:   return String(localized: "media.video.downloading", defaultValue: "Téléchargement en cours", bundle: .module)
         }
+    }
+
+    private var playsWhileDownloading: Bool {
+        Self.playsWhileDownloading(fileUrl: player.attachment.fileUrl)
+    }
+
+    /// Une vidéo en cours de téléchargement se joue dès la tête quand ce
+    /// téléchargement est lisible (#9881) : la bulle n'attend plus la fin du
+    /// fichier. Sans transfert lisible, le geste attend comme avant.
+    static func playsWhileDownloading(
+        fileUrl: String,
+        hasReadableTransfer: (String) -> Bool = { CacheCoordinator.videoHasReadableTransfer(for: $0) }
+    ) -> Bool {
+        VideoAvailability.playsWhileDownloading(fileUrl: fileUrl, hasReadableTransfer: hasReadableTransfer)
     }
 
     private func formatSize(_ bytes: Int64) -> String {
@@ -325,7 +341,7 @@ internal struct _InlineRenderer: View {
             player.onDownload?()
             HapticFeedback.light()
         case .downloading:
-            break
+            if playsWhileDownloading { startPlayback() }
         }
     }
 
@@ -336,10 +352,14 @@ internal struct _InlineRenderer: View {
         // `nil` before the new value could apply. Passing it as a parameter
         // (applied AFTER `cleanup()`) is what keeps `reportWatchProgress`
         // firing. See `SharedAVPlayerManagerAttachmentTrackingTests`.
-        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
-        // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la pièce
-        // jointe qu'elle qualifie : ce moteur est partagé (#7212).
-        manager.setServedConsumption(player.attachment.currentUserConsumption, for: player.attachment.id)
+        if player.reportsConsumption {
+            manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la pièce
+            // jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            manager.setServedConsumption(player.attachment.currentUserConsumption, for: player.attachment.id)
+        } else {
+            manager.load(urlString: player.attachment.fileUrl)
+        }
         manager.play()
         scheduleControlsHide()
     }

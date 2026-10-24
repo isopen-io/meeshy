@@ -72,7 +72,7 @@
  * modale ne rend ces accusés. Un champ calculé que personne n'affiche est le
  * défaut « une LOI qui calcule une valeur que personne ne lit » ; le jour où
  * une surface les demande, l'ajout est d'une ligne (`loadMessageReadStatusMap`,
- * exporté par `messages-list-query.ts`) — et il devra venir avec son lecteur.
+ * exporté par `messages-list-reader-state.ts`) — et il devra venir avec son lecteur.
  */
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
@@ -99,7 +99,7 @@ import {
  * raison de les charger (§ « Toute porte qui sort un profil de TIERS filtre sa
  * présence » : ce qu'on ne charge pas n'a pas besoin d'être gardé).
  */
-const sovereignSenderSelect = {
+export const sovereignSenderSelect = {
   id: true,
   userId: true,
   type: true,
@@ -157,6 +157,9 @@ export const sovereignAttachmentSelect = {
   thumbnailUrl: true,
   thumbHash: true,
   imageVariants: true,
+  avifVariants: true,
+  renditions: true,
+  processingState: true,
   width: true,
   height: true,
   duration: true,
@@ -164,6 +167,7 @@ export const sovereignAttachmentSelect = {
   sampleRate: true,
   codec: true,
   channels: true,
+  loudnessLufs: true,
   fps: true,
   videoCodec: true,
   pageCount: true,
@@ -249,7 +253,7 @@ export type SovereignMessageRow = Prisma.MessageGetPayload<{
 }>;
 
 type SovereignReplyToRow = NonNullable<SovereignMessageRow['replyTo']>;
-type SovereignAttachmentRow = SovereignMessageRow['attachments'][number];
+export type SovereignAttachmentRow = SovereignMessageRow['attachments'][number];
 
 // ---------------------------------------------------------------------------
 // LA PROJECTION
@@ -385,7 +389,7 @@ function servedReplyTo(replyTo: SovereignReplyToRow, hostConversationId: string)
  * URL, toutes), la transcription, les pistes traduites (`translations[lang].url`
  * porte le TTS), et `metadata` qui peut porter une timeline d'effets.
  */
-function servedAttachment(piece: SovereignAttachmentRow, messageProtege: boolean) {
+export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: boolean) {
   const protegee = messageProtege || mediaAttachmentIsProtected(piece);
   return {
     id: piece.id,
@@ -400,6 +404,7 @@ function servedAttachment(piece: SovereignAttachmentRow, messageProtege: boolean
     sampleRate: piece.sampleRate,
     codec: piece.codec,
     channels: piece.channels,
+    loudnessLufs: piece.loudnessLufs,
     fps: piece.fps,
     videoCodec: piece.videoCodec,
     pageCount: piece.pageCount,
@@ -420,6 +425,9 @@ function servedAttachment(piece: SovereignAttachmentRow, messageProtege: boolean
     thumbnailUrl: protegee ? null : piece.thumbnailUrl,
     thumbHash: protegee ? null : piece.thumbHash,
     imageVariants: protegee ? [] : piece.imageVariants,
+    avifVariants: protegee ? [] : piece.avifVariants,
+    renditions: protegee ? [] : piece.renditions,
+    processingState: piece.processingState,
     // ABSENTS plutôt que `null` : ces trois-là sont OPTIONNELS au contrat des
     // clients — leur absence dit « rien à restituer », là où le tableau vide
     // des traductions de MESSAGE dit « résolu, rien à servir » sur un champ que
@@ -502,7 +510,7 @@ export function mapSovereignMessageRow(message: SovereignMessageRow) {
  */
 const objetLibre = { type: 'object', additionalProperties: true, nullable: true } as const;
 
-const senderSchema = {
+export const sovereignSenderSchema = {
   type: 'object',
   nullable: true,
   properties: {
@@ -542,7 +550,7 @@ const translationsSchema = {
   },
 } as const;
 
-const attachmentSchema = {
+export const sovereignAttachmentSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
@@ -557,6 +565,7 @@ const attachmentSchema = {
     sampleRate: { type: 'number', nullable: true },
     codec: { type: 'string', nullable: true },
     channels: { type: 'number', nullable: true },
+    loudnessLufs: { type: 'number', nullable: true },
     fps: { type: 'number', nullable: true },
     videoCodec: { type: 'string', nullable: true },
     pageCount: { type: 'number', nullable: true },
@@ -576,6 +585,9 @@ const attachmentSchema = {
     // sans `properties` efface. Les variantes ont deux producteurs dont les
     // formes divergent : ne rien déclarer est plus honnête que d'en choisir un.
     imageVariants: { type: 'array' },
+    avifVariants: { type: 'array' },
+    renditions: { type: 'array' },
+    processingState: { type: 'string', nullable: true },
     transcription: objetLibre,
     translations: objetLibre,
     metadata: objetLibre,
@@ -593,7 +605,7 @@ const replyToSchema = {
     createdAt: { type: 'string', format: 'date-time', nullable: true },
     senderId: { type: 'string', nullable: true },
     senderParticipantId: { type: 'string', nullable: true },
-    sender: senderSchema,
+    sender: sovereignSenderSchema,
     isProtected: { type: 'boolean' },
     isViewOnce: { type: 'boolean', nullable: true },
     isBlurred: { type: 'boolean', nullable: true },
@@ -651,8 +663,8 @@ export const sovereignMessageSchema = {
     metadata: objetLibre,
     validatedMentions: { type: 'array', items: { type: 'string' } },
     translations: translationsSchema,
-    sender: senderSchema,
+    sender: sovereignSenderSchema,
     replyTo: replyToSchema,
-    attachments: { type: 'array', items: attachmentSchema },
+    attachments: { type: 'array', items: sovereignAttachmentSchema },
   },
 } as const;

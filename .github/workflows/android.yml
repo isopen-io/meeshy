@@ -24,7 +24,7 @@
 # would block slices on pre-existing debt the routine never agreed to fix.
 # =============================================================================
 
-name: Android
+name: Android natif
 
 on:
   push:
@@ -32,16 +32,44 @@ on:
     paths:
       - 'apps/android/**'
       - '.github/workflows/android.yml'
+      - 'apps/ios/Meeshy/Localizable.xcstrings'
+      - 'apps/ios/Meeshy/InfoPlist.xcstrings'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings'
+      - 'apps/ios/MeeshyWidgets/Localizable.xcstrings'
+      - 'apps/ios/MeeshyNotificationExtension/Localizable.xcstrings'
+      - 'apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings'
+      - 'services/gateway/route-manifest.json'
+      - 'packages/shared/api/**'
+      - 'packages/shared/scripts/generate-android-endpoints.ts'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
+      - 'packages/design-tokens/**'
   pull_request:
     branches: [main, dev]
     paths:
       - 'apps/android/**'
       - '.github/workflows/android.yml'
+      - 'apps/ios/Meeshy/Localizable.xcstrings'
+      - 'apps/ios/Meeshy/InfoPlist.xcstrings'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings'
+      - 'apps/ios/MeeshyWidgets/Localizable.xcstrings'
+      - 'apps/ios/MeeshyNotificationExtension/Localizable.xcstrings'
+      - 'apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings'
+      - 'services/gateway/route-manifest.json'
+      - 'packages/shared/api/**'
+      - 'packages/shared/scripts/generate-android-endpoints.ts'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
+      - 'packages/design-tokens/**'
   workflow_dispatch:
 
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: true
+  # Même règle que ci.yml (#4395) : sur `dev` et `main`, le run EN COURS va au bout et seul le
+  # run en attente est remplacé. Sinon une rafale de poussées n'obtenait presque jamais de
+  # conclusion (mesuré le 2026-10-23 sur 9 à 61 poussées de `dev` : 1 conclusion pour le SDK,
+  # 11 pour Android, 5 pour iOS), donc aucun verdict de ces chaînes sur le commit promu.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
 
 env:
   # Mandatory, not cosmetic: with LANG/LC_ALL unset the JVM boots with
@@ -53,8 +81,97 @@ env:
   LC_ALL: C.utf8
 
 jobs:
+  # Chaînes : les catalogues iOS (.xcstrings) sont la source des chaînes Android adoptées
+  # (apps/android/i18n/manifest). Le contrôle de génération échoue quand un strings_generated.xml
+  # n'est plus celui que les catalogues produiraient. Bloquant pour une PR qui touche apps/android,
+  # consultatif pour une PR iOS seule (qui ne peut pas connaître le manifeste Android).
+  i18n:
+    name: Chaînes Android générées à jour
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      android_touched: ${{ steps.scope.outputs.android_touched }}
+    defaults:
+      run:
+        working-directory: apps/android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Does this change touch apps/android?
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR_NUMBER" ]; then
+            echo "android_touched=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" --paginate -q '.[].filename')"
+          if printf '%s\n' "$files" | grep -qE '^(apps/android/|\.github/workflows/android\.yml$)'; then
+            echo "android_touched=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "android_touched=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR iOS seule : le contrôle des chaînes est consultatif"
+          fi
+
+      - name: i18n script tests
+        continue-on-error: ${{ steps.scope.outputs.android_touched != 'true' }}
+        run: python3 -m unittest discover -s scripts/i18n/tests
+
+      - name: Generated strings are up to date (xcstrings_to_android.py --check)
+        continue-on-error: ${{ steps.scope.outputs.android_touched != 'true' }}
+        run: python3 apps/android/scripts/i18n/xcstrings_to_android.py --check
+        working-directory: .
+
+  # Routes : les constantes Kotlin de core/network/.../net/routes sont GÉNÉRÉES depuis
+  # services/gateway/route-manifest.json (packages/shared/api/build-kotlin-endpoints.ts).
+  # Le contrôle échoue quand un fichier a divergé du manifeste ou qu'un orphelin subsiste.
+  routes:
+    name: Routes Android générées à jour
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Generated Kotlin routes are up to date (generate-android-endpoints.ts --check)
+        working-directory: packages/shared
+        run: npx --yes tsx@4.20.6 scripts/generate-android-endpoints.ts --check
+
+  # Jetons : MeeshyPaletteGenerated.kt (Android) et ios.css (web) sont GÉNÉRÉS depuis
+  # MeeshyColors.swift par le même parseur strict. Une couleur modifiée côté Swift sans
+  # régénération fait échouer ce contrôle.
+  tokens:
+    name: Jetons de design générés à jour
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: ios.css is up to date (generate-from-ios.mjs --check)
+        run: node packages/design-tokens/scripts/generate-from-ios.mjs --check
+
+      - name: MeeshyPaletteGenerated.kt is up to date (generate-android-from-ios.mjs --check)
+        run: node packages/design-tokens/scripts/generate-android-from-ios.mjs --check
+
   android:
     name: Android (assemble + unit tests)
+    needs: i18n
+    if: needs.i18n.outputs.android_touched == 'true'
     runs-on: ubuntu-latest
     # Measured on the first green runs (2026-08-12): ~8-10 min wall clock for
     # the whole job on a cold Gradle cache — of which assembleDebug is the bulk
@@ -139,11 +256,18 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # Verrou de schéma Room : version, schéma JSON et migration doivent évoluer ensemble.
+      - name: Room schema lock (scripts/check-room-schema.sh)
+        run: ./scripts/check-room-schema.sh
+
       # Split from the test step on purpose: a failure here is a compile break,
       # a failure below is a behavioural regression, and the routine's run log
       # needs to tell them apart without reading the raw log.
       - name: Assemble debug (./apps/android/meeshy.sh build)
         run: ./gradlew assembleDebug --no-daemon
+
+      - name: Room schema export matches the committed JSON
+        run: ./scripts/check-room-schema.sh --built
 
       - name: Unit tests (./apps/android/meeshy.sh test)
         run: ./gradlew testDebugUnitTest --no-daemon

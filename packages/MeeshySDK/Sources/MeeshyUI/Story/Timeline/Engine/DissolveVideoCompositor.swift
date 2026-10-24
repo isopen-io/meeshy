@@ -15,11 +15,11 @@ import Metal
 /// Thread-safety: `startRequest` is invoked concurrently from AVFoundation's internal decode/render
 /// pipeline. `CIContext` is immutable once built and documented thread-safe by Apple ("CIContext and
 /// CIImage objects are immutable, which means each can be shared safely among threads"), so ONE
-/// Metal-backed context is built per compositor and shared by every frame. Building a context per
-/// frame (the previous design) re-created its command queue, caches and pipeline 30–60 times a
-/// second — the cost Apple's Core Image guidance tells callers to pay once. The historical crash
-/// came from a `lazy var` context, whose first access is itself a data race; a `let` initialised
-/// in `init` is not.
+/// Metal-backed context — the domain's, `StoryRenderingContext.shared` — serves every frame.
+/// Building a context per frame (the previous design) re-created its command queue, caches and
+/// pipeline 30–60 times a second — the cost Apple's Core Image guidance tells callers to pay once.
+/// The historical crash came from a `lazy var` context, whose first access is itself a data race;
+/// a `static let`, initialised once under Swift's own lock, is not.
 public final class DissolveVideoCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
@@ -43,14 +43,10 @@ public final class DissolveVideoCompositor: NSObject, AVVideoCompositing, @unche
 
     // MARK: - Private
 
-    /// One Metal-backed `CIContext` shared by every frame (see the thread-safety note above). Falls
-    /// back to a software `CIContext()` on Metal-less hosts (e.g. some CI runners).
-    private nonisolated let ciContext: CIContext = {
-        if let device = MTLCreateSystemDefaultDevice() {
-            return CIContext(mtlDevice: device)
-        }
-        return CIContext()
-    }()
+    /// The domain's single Metal-backed `CIContext` (#9873), shared by every frame of every
+    /// compositor (see the thread-safety note above) — the same one the export compositor renders
+    /// through, software-rendered on Metal-less hosts.
+    private nonisolated var ciContext: CIContext { StoryRenderingContext.shared.ciContext }
 
     // MARK: - AVVideoCompositing
 

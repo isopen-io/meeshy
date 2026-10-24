@@ -42,7 +42,20 @@ class AuthViewModelTest {
     private val dispatcher = StandardTestDispatcher()
 
     private class FakeAuthApi(var response: ApiResponse<AuthSession>) : AuthApi {
-        override suspend fun login(body: LoginRequest) = response
+        override suspend fun login(body: LoginRequest) = ApiResponse(
+            success = response.success,
+            data = response.data?.let {
+                me.meeshy.sdk.model.auth.LoginResponse(
+                    user = it.user,
+                    token = it.token,
+                    sessionToken = it.sessionToken,
+                    expiresIn = it.expiresIn,
+                )
+            },
+            error = response.error,
+            message = response.message,
+            code = response.code,
+        )
         override suspend fun register(body: RegisterRequest) = ApiResponse<RegisterResponse>(success = false)
         override suspend fun refresh(body: RefreshTokenRequest) = response
         override suspend fun me() = ApiResponse<MeEnvelope>(success = false)
@@ -57,7 +70,7 @@ class AuthViewModelTest {
         override suspend fun revokeOtherSessions() =
             me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
         override suspend fun validateMagicLink(body: me.meeshy.sdk.net.api.MagicLinkValidateRequest) =
-            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.AuthSession>(success = false)
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
         override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?) =
             ApiResponse<me.meeshy.sdk.model.AvailabilityResult>(success = false)
         override suspend fun getTwoFactorStatus() =
@@ -70,6 +83,37 @@ class AuthViewModelTest {
             me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
         override suspend fun regenerateTwoFactorBackupCodes(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
             me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
+        override suspend fun completeLoginWith2FA(body: me.meeshy.sdk.model.auth.TwoFactorLoginRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
+        override suspend fun verifyEmail(body: me.meeshy.sdk.model.auth.EmailVerificationRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
+        override suspend fun resendVerification(body: me.meeshy.sdk.model.auth.ResendVerificationRequest) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun verificationStatus(body: me.meeshy.sdk.model.auth.VerificationStatusRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.VerificationStatusData>(success = false)
+        override suspend fun verifyResetToken(body: me.meeshy.sdk.model.auth.ResetTokenVerificationRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.ResetTokenVerification>(success = false)
+        override suspend fun resetPassword(body: me.meeshy.sdk.model.auth.ResetPasswordRequest) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun phoneRecoveryLookup(body: me.meeshy.sdk.model.auth.PhoneRecoveryLookupRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.PhoneRecoveryLookupData>(success = false)
+        override suspend fun phoneRecoveryVerifyIdentity(body: me.meeshy.sdk.model.auth.PhoneRecoveryIdentityRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.PhoneRecoveryIdentityData>(success = false)
+        override suspend fun phoneRecoveryVerifyCode(body: me.meeshy.sdk.model.auth.PhoneRecoveryCodeRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.PhoneRecoveryCodeData>(success = false)
+        override suspend fun phoneRecoveryResend(body: me.meeshy.sdk.model.auth.PhoneRecoveryResendRequest) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun sendPhoneCode(body: me.meeshy.sdk.model.auth.SendPhoneCodeRequest) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun verifyPhone(body: me.meeshy.sdk.model.auth.VerifyPhoneRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.VerifyPhoneData>(success = false)
+        override suspend fun logout(authorization: String?, sessionToken: String?) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun verifyTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.TwoFactorVerifyResult>(success = false)
+        override suspend fun cancelTwoFactorSetup() = ApiResponse<Unit>(success = true)
+        override suspend fun meSecurity(fields: String, expand: String) =
+            ApiResponse<me.meeshy.sdk.model.auth.MeSecurityEnvelope>(success = false)
     }
 
     private class FixedCacheClock(private val millis: Long) : CacheClock {
@@ -373,6 +417,37 @@ class AuthViewModelTest {
 
         assertThat(vm.state.value.selectedEnvironment).isEqualTo(ServerEnvironment.STAGING)
         assertThat(environmentStore.selectedEnvironment).isEqualTo(ServerEnvironment.STAGING)
+    }
+
+    @Test
+    fun selectEnvironment_otherThanTheRunningServer_asksForARestart() {
+        val vm = viewModel(ApiResponse(success = false), environmentStore = InMemoryServerEnvironmentStore())
+
+        vm.selectEnvironment(ServerEnvironment.STAGING)
+
+        // Le client réseau est construit une fois par processus : sans redémarrage, la connexion
+        // partirait vers le serveur EN COURS (production) sous l'étiquette « staging ».
+        assertThat(vm.state.value.restartToApplyEnvironment).isTrue()
+    }
+
+    @Test
+    fun selectEnvironment_theRunningServer_needsNoRestart() {
+        val vm = viewModel(ApiResponse(success = false), environmentStore = InMemoryServerEnvironmentStore())
+
+        vm.selectEnvironment(ServerEnvironment.STAGING)
+        vm.selectEnvironment(ServerEnvironment.PRODUCTION)
+
+        assertThat(vm.state.value.restartToApplyEnvironment).isFalse()
+    }
+
+    @Test
+    fun applyCustomHost_asksForARestart() {
+        val vm = viewModel(ApiResponse(success = false), environmentStore = InMemoryServerEnvironmentStore())
+
+        vm.onCustomHostChange("gate.example.com")
+        vm.applyCustomHost()
+
+        assertThat(vm.state.value.restartToApplyEnvironment).isTrue()
     }
 
     @Test

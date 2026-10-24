@@ -1,7 +1,8 @@
+import { UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 import type { ApiFailure } from '@/lib/api/http';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { GLOBAL_ADULTS_ONLY } from '@/lib/write-restriction';
+import { E2EE_PLAINTEXT_REFUSED, GLOBAL_ADULTS_ONLY } from '@/lib/write-restriction';
 
 import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kind-rules';
 import { guestMaxSizeLabel } from './guest-attachment-policy';
@@ -46,6 +47,7 @@ export function sendFailureReason(
    * Distinct de tout statut HTTP réel : c'est ce module-ci, et lui seul, qui
    * doit reconnaître ce code AVANT de tomber dans les branches par statut.
    */
+  if (failure.code === UPLOAD_FORMAT_REFUSED) return translate(language, 'send.failure.formatRefused');
   if (failure.code === 'UPLOAD_PARTIAL') return translate(language, 'send.failure.uploadPartial');
   /**
    * PAS DE BRANCHE `ATTACHMENT_RIGHT_NOT_PERMITTED` ICI, ET C'EST MESURÉ
@@ -72,6 +74,8 @@ export function sendFailureReason(
   /* #9928 — Meeshy Global est fermée en écriture aux 13-17 ans : la cause dit
      quand elle s'ouvrira (le composeur bascule dans le même état). */
   if (failure.code === GLOBAL_ADULTS_ONLY) return translate(language, 'composer.writeRestriction.minorGlobal');
+  /* #11216 — un clair refusé dans une conversation chiffrée de bout en bout. */
+  if (failure.code === E2EE_PLAINTEXT_REFUSED) return translate(language, 'composer.writeRestriction.endToEnd');
   /* #10001, #10003 — la passerelle a jugé le CONTENU réel d'une pièce jointe
      d'invité (REST 403/413, socket) : la cause se dit, jamais « envoi refusé ». */
   if (failure.code === GUEST_ATTACHMENT_REFUSAL_CODES.KIND_NOT_ALLOWED) return translate(language, 'send.failure.guestKind');

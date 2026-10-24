@@ -63,6 +63,7 @@ class PostDetailViewModelTest {
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
+    private val workManager: androidx.work.WorkManager = mockk(relaxed = true)
     private var clockNow: Long = 0L
     private val clock = object : CacheClock {
         override fun nowMillis(): Long = clockNow
@@ -120,7 +121,7 @@ class PostDetailViewModelTest {
         val privacyStore = InMemoryPrivacyPreferencesStore(
             PrivacyPreferences(allowAnalytics = allowAnalytics),
         )
-        return PostDetailViewModel(repository, session, socialSocket, config, clock, privacyStore, handle)
+        return PostDetailViewModel(repository, session, socialSocket, config, clock, privacyStore, workManager, handle)
     }
 
     @Test
@@ -146,6 +147,18 @@ class PostDetailViewModelTest {
         viewModel(postId = "p42")
 
         coVerify(exactly = 1) { repository.getPost("p42") }
+    }
+
+    @Test
+    fun `a 404 is typed NOT_FOUND so no retry is offered, a 500 is SERVER and an IO failure NETWORK`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Failure(ApiError("gone", "HTTP_404", 404))
+        viewModel().state.test { assertThat(awaitItem().loadFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NOT_FOUND) }
+
+        coEvery { repository.getPost("p1") } returns NetworkResult.Failure(ApiError("boom", "HTTP_500", 500))
+        viewModel().state.test { assertThat(awaitItem().loadFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.SERVER) }
+
+        coEvery { repository.getPost("p1") } returns NetworkResult.Failure(ApiError("down", "NETWORK"))
+        viewModel().state.test { assertThat(awaitItem().loadFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NETWORK) }
     }
 
     @Test
@@ -920,5 +933,73 @@ class PostDetailViewModelTest {
         assertThat(vm.state.value.isReposted).isFalse()
         assertThat(vm.state.value.errorMessage).isEqualTo("quote boom")
         assertThat(vm.state.value.quoteComposer).isNull()
+    }
+
+    // --- Like and bookmark from the detail (iOS PostDetailView+Heart): optimistic flip, durable
+    //     outbox send that works even when the post is absent from the feed cache. ---
+
+    @Test
+    fun `toggleLike flips the heart and the count instantly and enqueues a durable like`() = runTest {
+        val vm = loadedVm(loaded = post(likeCount = 2, isLikedByMe = false))
+
+        vm.toggleLike()
+
+        assertThat(vm.state.value.post?.isLiked).isTrue()
+        assertThat(vm.state.value.post?.likeCount).isEqualTo(3)
+        coVerify(exactly = 1) { repository.setLiked("p1", liked = true) }
+        io.mockk.verify(exactly = 1) { workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `toggleLike on a liked post unlikes it`() = runTest {
+        val vm = loadedVm(loaded = post(likeCount = 5, isLikedByMe = true))
+
+        vm.toggleLike()
+
+        assertThat(vm.state.value.post?.isLiked).isFalse()
+        assertThat(vm.state.value.post?.likeCount).isEqualTo(4)
+        coVerify(exactly = 1) { repository.setLiked("p1", liked = false) }
+    }
+
+    @Test
+    fun `toggleLike before the post has loaded is inert`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<ApiPost>>()
+        coEvery { repository.getPost("p1") } coAnswers { gate.await() }
+        val vm = viewModel()
+
+        vm.toggleLike()
+
+        coVerify(exactly = 0) { repository.setLiked(any(), any()) }
+        gate.complete(NetworkResult.Success(post()))
+    }
+
+    @Test
+    fun `toggleBookmark flips the bookmark and its count instantly and enqueues it`() = runTest {
+        val vm = loadedVm(loaded = post().copy(bookmarkCount = 0, isBookmarkedByMe = false))
+
+        vm.toggleBookmark()
+
+        assertThat(vm.state.value.post?.isBookmarked).isTrue()
+        assertThat(vm.state.value.post?.bookmarkCount).isEqualTo(1)
+        coVerify(exactly = 1) { repository.setBookmarked("p1", bookmarked = true) }
+    }
+
+    @Test
+    fun `a failed enqueue reverts the optimistic like`() = runTest {
+        val vm = loadedVm(loaded = post(likeCount = 2, isLikedByMe = false))
+        coEvery { repository.setLiked(any(), any()) } throws IllegalStateException("db")
+
+        vm.toggleLike()
+
+        assertThat(vm.state.value.post?.isLiked).isFalse()
+        assertThat(vm.state.value.post?.likeCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `the author's avatar stored as a key loads from the API attachment route`() = runTest {
+        val vm = loadedVm(loaded = post().copy(author = ApiAuthor(id = "u1", username = "amina", avatar = "avatars/user/u1.jpg")))
+
+        assertThat(vm.state.value.post?.authorAvatarUrl)
+            .isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/avatars/user/u1.jpg")
     }
 }

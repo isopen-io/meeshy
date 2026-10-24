@@ -10,6 +10,11 @@ final class MeeshyPointerShapeTests: XCTestCase {
         XCTAssertTrue(path.contains(CGPoint(x: 0.5, y: 0.5)))
     }
 
+    func test_rectangle_isTheUnroundedRow_andContainsTheCorner() {
+        XCTAssertEqual(MeeshyPointerShape.rectangle, .roundedRect(cornerRadius: 0))
+        XCTAssertTrue(MeeshyPointerShape.rectangle.path(in: rect).contains(CGPoint(x: 0.5, y: 0.5)))
+    }
+
     func test_roundedRect_negativeRadius_behavesLikeZero() {
         let path = MeeshyPointerShape.roundedRect(cornerRadius: -8).path(in: rect)
         XCTAssertTrue(path.contains(CGPoint(x: 0.5, y: 0.5)))

@@ -665,7 +665,7 @@ struct InviteFriendsSheet: View {
             showCopiedFeedback = true
         }
         Task {
-            try? await Task.sleep(for: .seconds(1.5))
+            _ = await cancellableSleep(for: .seconds(1.5))
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 showCopiedFeedback = false
             }

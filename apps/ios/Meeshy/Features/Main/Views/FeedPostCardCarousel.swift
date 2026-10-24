@@ -193,7 +193,7 @@ struct FeedPostCardCarousel: View {
             // s'il scalait (doctrine 86i). La cible tactile reste à 44.
             Image(systemName: systemName)
                 .font(.system(size: MeeshyIconSize.sm, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(.black.opacity(0.45)))
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
@@ -206,7 +206,7 @@ struct FeedPostCardCarousel: View {
     private var counter: some View {
         Text("\(index + 1) / \(media.count)")
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(.black.opacity(0.5)))
@@ -324,7 +324,7 @@ struct FeedMediaTile: View {
                             .frame(width: 30, height: 30)
                         Image(systemName: "play.fill")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.black.opacity(0.7))
+                            .foregroundStyle(Color.black.opacity(0.7))
                             .offset(x: 1)
                     }
                     if let duration = media.durationFormatted {
@@ -336,7 +336,7 @@ struct FeedMediaTile: View {
                 VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "waveform")
                         .font(MeeshyFont.relative(MeeshyIconSize.xl))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                     if let duration = media.durationFormatted {
                         durationPill(duration)
                     }
@@ -350,7 +350,7 @@ struct FeedMediaTile: View {
     private func durationPill(_ duration: String) -> some View {
         Text(duration)
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.xsPlus)
             .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(Color.black.opacity(0.6)))

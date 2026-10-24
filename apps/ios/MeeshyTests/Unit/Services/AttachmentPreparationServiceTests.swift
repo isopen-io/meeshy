@@ -97,6 +97,75 @@ final class AttachmentPreparationServiceTests: XCTestCase {
         XCTAssertNil(AttachmentPreparationService.downsampledPreview(from: garbage))
     }
 
+    // MARK: - Image bytes — les octets d'origine partent (#9885)
+
+    func test_prepareImageData_jpegWithinBudget_writesTheOriginalBytes() async throws {
+        let service = AttachmentPreparationService()
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 480), format: format).image { ctx in
+            UIColor.systemTeal.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 640, height: 480))
+        }
+        let data = try XCTUnwrap(image.jpegData(compressionQuality: 0.9))
+
+        let prep = service.prepareImageData(data, context: .message, accentColor: "4ECDC4")
+        let result = await prep.awaitCompletion()
+
+        guard case .success(let prepared) = result else {
+            return XCTFail("Expected successful preparation")
+        }
+        XCTAssertEqual(try Data(contentsOf: prepared.fileURL), data, "aucune génération d'encodage de plus")
+        XCTAssertEqual(prepared.attachment.mimeType, "image/jpeg")
+        XCTAssertEqual(prepared.attachment.width, 640)
+        XCTAssertEqual(prepared.attachment.height, 480)
+        XCTAssertNotNil(prepared.thumbHash)
+        try? FileManager.default.removeItem(at: prepared.fileURL)
+    }
+
+    // MARK: - Une prise du viseur part par ses octets, partout (#11847)
+
+    func test_prepareCapture_withTheShotBytes_writesThemWithoutAnotherGeneration() async throws {
+        let service = AttachmentPreparationService()
+        let image = Self.makeTestImage(size: CGSize(width: 320, height: 240))
+        let data = try XCTUnwrap(image.jpegData(compressionQuality: 0.85))
+
+        let prep = service.prepareCapture(image, data: data, context: .feedPost, accentColor: "4ECDC4")
+        let result = await prep.awaitCompletion()
+
+        guard case .success(let prepared) = result else {
+            return XCTFail("Expected successful preparation")
+        }
+        XCTAssertEqual(try Data(contentsOf: prepared.fileURL), data, "la prise garde sa seule génération")
+        try? FileManager.default.removeItem(at: prepared.fileURL)
+    }
+
+    func test_prepareCapture_withoutBytes_stillPreparesTheImage() async {
+        let service = AttachmentPreparationService()
+        let image = Self.makeTestImage(size: CGSize(width: 64, height: 64))
+
+        let prep = service.prepareCapture(image, data: nil, context: .feedPost, accentColor: "4ECDC4")
+        let result = await prep.awaitCompletion()
+
+        guard case .success(let prepared) = result else {
+            return XCTFail("Expected successful preparation")
+        }
+        XCTAssertTrue(prepared.attachment.mimeType.hasPrefix("image/"))
+        try? FileManager.default.removeItem(at: prepared.fileURL)
+    }
+
+    /// Le fil jetait les octets de la prise et ré-encodait sa `UIImage`.
+    func test_feedComposerCamera_handsTheShotBytesToTheSameRouterAsTheConversation() throws {
+        let feed = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/FeedComposerSheet.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(feed.contains("case.photo(letimage,letdata):handleCameraCapture(image,data:data)"))
+        XCTAssertTrue(feed.contains("prepareCapture(image,data:data,context:.feedPost"))
+        XCTAssertFalse(feed.contains("prepareImage(image,context:.feedPost"))
+        let conversation = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(conversation.contains("prepareCapture(image,data:data,context:.message"))
+    }
+
     // MARK: - PreparingAttachment contract
 
     func test_awaitCompletion_resumesAfterFailure() async {

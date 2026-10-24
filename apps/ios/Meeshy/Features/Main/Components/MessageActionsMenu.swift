@@ -43,18 +43,19 @@ struct MessageActionsMenu: View {
     }
 
     private func row(_ action: PrimaryAction) -> some View {
-        // Le destructif en rouge, isolé du reste de la liste (#9908).
-        let tint = action == .deletePiece ? MeeshyColors.error : accent
+        // Le destructif en rouge, isolé du reste de la liste (#9908) : la pièce
+        // comme le message (`PrimaryAction.isDestructive`).
+        let tint = action.isDestructive ? MeeshyColors.error : accent
         return Button {
             HapticFeedback.light()
             onSelect(action)
         } label: {
             HStack(spacing: MeeshySpacing.mdPlus) {
-                Image(systemName: symbol(action))
+                Image(systemName: action.verb.symbol)
                     .font(MeeshyFont.relative(17, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: iconColumnWidth)
-                Text(label(action))
+                Text(action.verb.label)
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize))
                 Spacer(minLength: 0)
                 if action == .more {
@@ -71,7 +72,7 @@ struct MessageActionsMenu: View {
         // Parité menus système : highlight de la ligne pressée (UIMenu /
         // Liquid Glass iOS 26). Style interne partagé avec le menu conversation.
         .buttonStyle(MenuRowHighlightButtonStyle())
-        .accessibilityLabel(label(action))
+        .accessibilityLabel(action.verb.label)
         .accessibilityAddTraits(.isButton)
     }
 
@@ -88,49 +89,5 @@ struct MessageActionsMenu: View {
         let scaledRow = UIFontMetrics.default.scaledValue(for: rowHeight)
         // +20 : padding vertical (6+6) + marge des séparateurs/divider delete.
         return CGSize(width: menuWidth, height: CGFloat(count) * scaledRow + 20)
-    }
-
-    private func symbol(_ a: PrimaryAction) -> String {
-        switch a {
-        case .edit: return "pencil"
-        case .translate: return "globe"
-        case .copy: return "doc.on.doc"
-        case .saveMedia: return "arrow.down.to.line"
-        case .compose: return "wand.and.stars"
-        case .more: return "ellipsis"
-        case .callDetail: return "info.circle"
-        case .select: return "checkmark.circle"
-        case .exportImage: return MessageCardExportMenu.imageSymbol
-        case .exportQuick: return MessageCardExportMenu.quickSymbol
-        case .wholeMessage: return "text.bubble"
-        case .replyToPiece: return "arrowshape.turn.up.left"
-        case .deletePiece: return "trash"
-        case .forwardPiece: return "arrowshape.turn.up.right"
-        case .addSticker: return "plus.rectangle.on.rectangle"
-        case .favoriteSticker: return "star"
-        case .unfavoriteSticker: return "star.slash"
-        }
-    }
-
-    private func label(_ a: PrimaryAction) -> String {
-        switch a {
-        case .edit: return String(localized: "action.edit", defaultValue: "Modifier", bundle: .main)
-        case .translate: return String(localized: "action.translate", defaultValue: "Traduire", bundle: .main)
-        case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
-        case .saveMedia: return String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)
-        case .compose: return String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
-        case .more: return String(localized: "action.more", defaultValue: "Plus…", bundle: .main)
-        case .callDetail: return String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main)
-        case .select: return String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main)
-        case .exportImage: return MessageCardExportMenu.imageLabel
-        case .exportQuick: return MessageCardExportMenu.quickLabel
-        case .wholeMessage: return String(localized: "message.piece.wholeMessage", defaultValue: "Tout le message", bundle: .main)
-        case .replyToPiece: return String(localized: "action.reply", defaultValue: "Répondre", bundle: .main)
-        case .deletePiece: return String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main)
-        case .forwardPiece: return String(localized: "forward.title", defaultValue: "Transférer", bundle: .main)
-        case .addSticker: return String(localized: "message.sticker.add", defaultValue: "Ajouter à mes stickers", bundle: .main)
-        case .favoriteSticker: return StickerFavoriteCopy.add
-        case .unfavoriteSticker: return StickerFavoriteCopy.remove
-        }
     }
 }

@@ -30,7 +30,16 @@ data class CommentPresentation(
     val isReply: Boolean,
     val isPending: Boolean,
     val isOwn: Boolean,
-)
+    val depth: Int = 0,
+) {
+    /**
+     * Libellé TalkBack d'une ligne — iso `ReplyCell.accessibilityLabel` : « <nom>, réponse. <contenu>.
+     * <heure> ». [format] est le gabarit localisé à trois arguments positionnels ; [unknownAuthor]
+     * remplace un nom absent.
+     */
+    fun accessibilityLabel(format: String, time: String, unknownAuthor: String): String =
+        String.format(format, authorName ?: unknownAuthor, content, time)
+}
 
 object CommentProjection {
 
@@ -57,6 +66,7 @@ object CommentProjection {
         likeState: CommentLikeState = CommentLikeState(),
         activeLanguageCode: String? = null,
         currentUserId: String? = null,
+        depth: Int = 0,
     ): CommentPresentation {
         val originalCode = comment.originalLanguage.normalizedCode()
         val isTranslated = comment.isTranslated(preferences)
@@ -87,6 +97,7 @@ object CommentProjection {
             isReply = !comment.parentId.isNullOrBlank(),
             isPending = isPending,
             isOwn = currentUserId != null && comment.author?.id == currentUserId,
+            depth = depth,
         )
     }
 
@@ -104,7 +115,7 @@ object CommentProjection {
     ): String? {
         val originalCode = comment.originalLanguage.normalizedCode()
         val preferredCode = LanguageResolver
-            .preferredTranslation(comment.translations.toTranslationRows(), preferences)
+            .preferredTranslation(comment.translations.toTranslationRows(), preferences, comment.originalLanguage)
             ?.targetLanguage?.normalizedCode()
         val requested = override.normalizedCode()?.takeIf { it.hasContentIn(comment, originalCode) }
         return requested ?: (preferredCode ?: originalCode)

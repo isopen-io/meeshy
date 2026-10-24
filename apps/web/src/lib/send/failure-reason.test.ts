@@ -64,6 +64,11 @@ describe('sendFailureReason', () => {
 
   /* #9928 — un mineur qui écrit dans Global (état périmé) : la cause dit
      quand Global s'ouvrira, jamais un refus générique. */
+  test('E2EE_PLAINTEXT_REFUSED dit que la conversation est chiffrée, jamais « envoi refusé »', () => {
+    expect(sendFailureReason(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }))).toBe('Conversation chiffrée de bout en bout : le web ne peut pas encore y écrire');
+    expect(sendFailureReasonIn(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }), 'en')).toBe('End-to-end encrypted conversation: the web app can’t write here yet');
+  });
+
   test('GLOBAL_ADULTS_ONLY dit que Global s’ouvre à l’écriture à 18 ans', () => {
     expect(sendFailureReason(failure(403, { code: 'GLOBAL_ADULTS_ONLY' }))).toBe('Global s’ouvre à l’écriture à tes 18 ans');
     expect(sendFailureReasonIn(failure(403, { code: 'GLOBAL_ADULTS_ONLY' }), 'en')).toBe('Global opens for writing when you turn 18');
@@ -128,6 +133,27 @@ describe('sendFailureReason — une pièce jointe d’invité refusée sur son c
     expect(sendFailureReason(failure(413, { code: 'GUEST_ATTACHMENT_TOO_LARGE' }))).toContain('25');
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       expect(sendFailureReasonIn(failure(413, { code: 'GUEST_ATTACHMENT_TOO_LARGE' }), language)).not.toContain('{');
+    }
+  });
+});
+
+/**
+ * W9 (#11315) — un HEIC que la passerelle n'a pas su convertir : la cause dit
+ * le FORMAT, dans les sept langues, et pas « une pièce n'a pas pu être
+ * téléversée » qui laisserait croire à un incident réseau.
+ */
+describe('sendFailureReason — le format refusé (W9)', () => {
+  test('UPLOAD_FORMAT_REFUSED a sa cause, distincte du lot incomplet', () => {
+    const reason = sendFailureReason(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }));
+    expect(reason).toBe('ce format de photo (HEIC) n’est pas encore accepté');
+  });
+
+  test('la cause existe dans les sept langues, et aucune ne retombe sur le français', () => {
+    const french = sendFailureReasonIn(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }), 'fr');
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES.filter((code) => code !== 'fr')) {
+      const reason = sendFailureReasonIn(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }), language);
+      expect(reason).toContain('HEIC');
+      expect(reason).not.toBe(french);
     }
   });
 });

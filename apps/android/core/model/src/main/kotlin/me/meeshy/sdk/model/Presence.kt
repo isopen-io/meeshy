@@ -16,6 +16,7 @@ enum class PresenceState {
 }
 
 /** A user's presence — port of UserPresence (PresenceModels.swift). */
+@kotlinx.serialization.Serializable
 data class UserPresence(
     val isOnline: Boolean = false,
     val lastActiveAt: String? = null,

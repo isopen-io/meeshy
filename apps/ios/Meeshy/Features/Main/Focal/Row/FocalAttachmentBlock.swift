@@ -295,12 +295,14 @@ struct FocalGridCell: View {
         .onTapGesture(perform: handleTap)
         .task(id: isRevealed) { await reblurAfterVisibility() }
         .overlay { protectionOverlay }
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: downloadPlacement.alignment) {
             if case .none = protectionState {
                 DownloadBadgeView(
                     attachment: attachment,
                     accentColor: accentHex,
-                    messageDeliveryStatus: messageDeliveryStatus
+                    messageDeliveryStatus: messageDeliveryStatus,
+                    form: downloadPlacement.form,
+                    tileHostsVideoPlayer: videoPresentation.hostsPlayer
                 )
             }
         }
@@ -335,8 +337,7 @@ struct FocalGridCell: View {
     /// toucher, le flou revient après la durée de visibilité.
     private func reblurAfterVisibility() async {
         guard isRevealed, attachment.isBlurred, !attachment.isViewOnce else { return }
-        try? await Task.sleep(for: .seconds(BubbleBlurRevealLifecycle.defaultRevealDuration))
-        guard !Task.isCancelled else { return }
+        guard await cancellableSleep(for: .seconds(BubbleBlurRevealLifecycle.defaultRevealDuration)), !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.blurApply.duration)) { isRevealed = false }
     }
 
@@ -365,17 +366,27 @@ struct FocalGridCell: View {
         case .image:
             let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
             let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl,
-                targetSize: CGSize(width: slot.width, height: slot.height)
-            ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
+            OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: fullUrl,
+                    targetSize: CGSize(width: slot.width, height: slot.height),
+                    reloadToken: originalLanded
+                ) {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                .clipped()
             }
-            .aspectRatio(contentMode: .fill)
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-            .clipped()
+
+        case .video where !videoPresentation.hostsPlayer:
+            // #11586 — la case « +N » ouvre la galerie : une image fixe, sans
+            // lecteur ni bouton lecture sous le libellé.
+            ConversationVideoPoster(attachment: attachment,
+                                    accentHex: accentHex,
+                                    showsPlaybackCue: videoPresentation.showsPlaybackCue)
 
         case .video:
             // #8231 — lecture inline à trois contrôles (son, lecture/pause,
@@ -389,7 +400,6 @@ struct FocalGridCell: View {
                     accentColor: accentHex,
                     frame: .bubble,
                     availability: availability,
-                    performance: .inline,
                     playButtonDiameter: 44,
                     surfaceTapExpands: true,
                     onDownload: onDownload,
@@ -405,11 +415,21 @@ struct FocalGridCell: View {
     @ViewBuilder
     private var overflowOverlay: some View {
         if slot.overflowCount > 0 {
-            Color.black.opacity(0.5)
-            Text("+\(slot.overflowCount)")
-                .font(MeeshyFont.relative(24, weight: .bold))
-                .foregroundColor(.white)
+            MediaTileOverflowLabel(count: slot.overflowCount)
         }
+    }
+
+    /// #11586 — la MÊME loi que la tuile de bulle : la case « +N » ne monte
+    /// pas de lecteur. Une pièce protégée n'a pas de `mediaLayer` du tout.
+    private var videoPresentation: MediaTileVideoPresentation {
+        MediaTileVideoPresentation.resolve(overflowCount: slot.overflowCount,
+                                           isHiddenByProtection: protectionState != .none)
+    }
+
+    /// #11569 — la MÊME loi que la tuile de bulle : sur la case « +N », le
+    /// badge prend le coin en forme compacte et laisse le centre au libellé.
+    private var downloadPlacement: MediaTileDownloadPlacement {
+        MediaTileDownloadPlacement.resolve(surface: .focalGrid, overflowCount: slot.overflowCount)
     }
 
     /// Recouvrement flou/masqué — natif (voir doc de tête). Rendu SEUL

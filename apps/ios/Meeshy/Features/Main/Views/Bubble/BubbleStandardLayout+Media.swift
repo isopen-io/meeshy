@@ -335,15 +335,21 @@ fileprivate struct BubbleGridCell: View {
     /// Une vidéo lisible a son corps à elle : un lecteur inline à trois
     /// contrôles (#8231). La tuile de débordement (« +N », dont le toucher
     /// ouvre le carrousel) et la pièce protégée gardent le corps commun, où la
-    /// vidéo n'est qu'un poster.
+    /// vidéo n'est qu'un poster — sans bouton lecture sur le « +N » (#11586).
     var body: some View {
         Group {
-            if attachment.type == .video, overflowCount == 0, !attachmentIsProtected || isRevealed {
+            if attachment.type == .video, videoPresentation.hostsPlayer {
                 videoBody
             } else {
                 standardBody
             }
         }
+    }
+
+    /// #11586 — la MÊME loi que la case du Fil.
+    private var videoPresentation: MediaTileVideoPresentation {
+        MediaTileVideoPresentation.resolve(overflowCount: overflowCount,
+                                           isHiddenByProtection: attachmentIsProtected && !isRevealed)
     }
 
     /// Image, poster vidéo (débordement, pièce protégée) : toucher = plein
@@ -375,7 +381,7 @@ fileprivate struct BubbleGridCell: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
         })
         .onTapGesture(perform: handleTap)
-        .overlay { downloadBadgeOverlay }
+        .overlay(alignment: downloadPlacement.alignment) { downloadBadgeOverlay }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
         // #9907 — l'appui long n'ouvre plus le sélecteur : il ouvre l'aperçu
         // de CETTE pièce, dont le menu porte la réaction. Le double tap
@@ -435,7 +441,6 @@ fileprivate struct BubbleGridCell: View {
                     accentColor: contactColor,
                     frame: .bubble,
                     availability: availability,
-                    performance: .inline,
                     playButtonDiameter: solo ? 64 : 44,
                     surfaceTapExpands: true,
                     onDownload: onDownload,
@@ -474,16 +479,27 @@ fileprivate struct BubbleGridCell: View {
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
 
+    /// #12333 — ce que VoiceOver dit de la pièce : la description de l'auteur
+    /// ou, à défaut, la transcription, dans la langue du lecteur (Prisme, rang
+    /// par rang). `nil` sous protection : la loi du SDK ne décrit pas une pièce
+    /// à vue unique, floutée ou chiffrée, et la passerelle ne la sert pas.
+    private var spokenDescription: String? {
+        attachment.servedDescription(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))?.text
+    }
+
     @ViewBuilder
     private var mediaLayer: some View {
         switch attachment.type {
         case .image:
             BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth,
                                 onFullImageLoaded: { displayedImageLanded = true })
+                .modifier(MediaDescriptionLabel(text: spokenDescription))
         case .video:
             ConversationVideoPoster(attachment: attachment,
                                     accentHex: contactColor,
-                                    playButtonDiameter: solo ? 64 : 44)
+                                    playButtonDiameter: solo ? 64 : 44,
+                                    showsPlaybackCue: videoPresentation.showsPlaybackCue)
+                .modifier(MediaDescriptionLabel(text: spokenDescription))
         default:
             EmptyView()
         }
@@ -492,11 +508,14 @@ fileprivate struct BubbleGridCell: View {
     @ViewBuilder
     private var overflowOverlay: some View {
         if overflowCount > 0 {
-            MeeshyColors.mediaScrim
-            Text("+\(overflowCount)")
-                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(.white)
+            MediaTileOverflowLabel(count: overflowCount)
         }
+    }
+
+    /// #11569 — la case « +N » pose son badge au coin, en forme compacte,
+    /// comme la case du Fil ; les autres cases le gardent au centre.
+    private var downloadPlacement: MediaTileDownloadPlacement {
+        MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: overflowCount)
     }
 
     @ViewBuilder
@@ -547,7 +566,9 @@ fileprivate struct BubbleGridCell: View {
                 displayedURL: BubbleGridImageView.displayedURL(for: attachment,
                                                                cellPointWidth: cellPointWidth,
                                                                displayScale: displayScale),
-                displayedImageLanded: displayedImageLanded
+                displayedImageLanded: displayedImageLanded,
+                form: downloadPlacement.form,
+                tileHostsVideoPlayer: videoPresentation.hostsPlayer
             )
         }
     }
@@ -613,22 +634,33 @@ fileprivate struct BubbleGridImageView: View {
 
     @Environment(\.displayScale) private var displayScale: CGFloat
 
-    /// 5.2 — l'URL que la case AFFICHE : la plus petite variante
-    /// `>= largeur d'affichage en px` (atome pur SDK), ou l'original sans
-    /// variante (image chiffrée). Site unique : le badge y lit la MÊME URL
-    /// que celle que la case télécharge (#10370).
+    /// 5.2 — l'URL que la case AFFICHE (`BubbleImageSourceLaw`) : une forme
+    /// déjà sur l'appareil d'abord, sinon la plus petite variante
+    /// `>= largeur d'affichage en px`, ou l'original sans variante (image
+    /// chiffrée). Site unique : le badge y lit la MÊME URL que celle que la
+    /// case charge (#10370).
     static func displayedURL(for attachment: MessageAttachment, cellPointWidth: CGFloat,
-                             displayScale: CGFloat) -> String? {
-        guard !attachment.fileUrl.isEmpty else { return nil }
-        return ImageVariantSelector.bestImageURL(
+                             displayScale: CGFloat,
+                             isOnDevice: (String) -> Bool = BubbleImageSourceLaw.isOnDevice) -> String? {
+        BubbleImageSourceLaw.displayedURL(
             variants: attachment.imageVariants ?? [],
             originalURL: attachment.fileUrl,
             originalWidth: attachment.width,
-            targetWidthPx: Int((cellPointWidth * displayScale).rounded())
+            targetWidthPx: Int((cellPointWidth * displayScale).rounded()),
+            isOnDevice: isOnDevice
         )
     }
 
+    /// L'original posé sur l'appareil par le bouton de la bulle relit la
+    /// source affichée et relance le chargement retenu par la politique.
     var body: some View {
+        OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
+            image(originalLanded: originalLanded)
+        }
+    }
+
+    @ViewBuilder
+    private func image(originalLanded: Bool) -> some View {
         let originalFull = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
         let selectedFull = Self.displayedURL(for: attachment, cellPointWidth: cellPointWidth,
@@ -646,7 +678,8 @@ fileprivate struct BubbleGridImageView: View {
                 thumbnailUrl: effectiveThumb,
                 fullUrl: selectedFull,
                 targetSize: CGSize(width: cellPointWidth, height: cellPointWidth),
-                onFullImageLoaded: onFullImageLoaded
+                onFullImageLoaded: onFullImageLoaded,
+                reloadToken: originalLanded
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }
@@ -692,5 +725,23 @@ private struct AttachmentBlurOverlayView: View {
         .accessibilityHint(hint ?? "")
         .accessibilityAddTraits(.isButton)
         .onTapGesture { onReveal() }
+    }
+}
+
+/// #12333 — le libellé VoiceOver d'une pièce visuelle, quand elle a une
+/// description servie ; sinon la pièce garde le libellé qu'elle avait.
+private struct MediaDescriptionLabel: ViewModifier {
+    let text: String?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let text, !text.isEmpty {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(text))
+                .accessibilityAddTraits(.isImage)
+        } else {
+            content
+        }
     }
 }

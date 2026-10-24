@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.notification.observeNotificationSync
 import me.meeshy.sdk.session.SessionRepository
@@ -41,14 +41,18 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ChromeViewModel @Inject constructor(
-    sessionRepository: SessionRepository,
+    private val sessionRepository: SessionRepository,
     private val notificationRepository: NotificationRepository,
     private val friendRepository: FriendRepository,
     private val friendshipCache: FriendshipCache,
     messageSocketManager: MessageSocketManager,
+    private val config: MeeshyConfig,
 ) : ViewModel() {
 
     val currentUser: StateFlow<MeeshyUser?> = sessionRepository.currentUser
+
+    /** The chrome avatar's loadable address — the stored key resolved against the API base. */
+    fun avatarModel(user: MeeshyUser?): String? = chromeAvatarModel(user?.avatar, config.apiBaseUrl)
 
     val unreadNotifications: StateFlow<Int> = notificationRepository.unreadCountStream
 
@@ -71,21 +75,9 @@ class ChromeViewModel @Inject constructor(
         warmedUp = true
         notificationRepository.notificationsStream(onSyncError = {}).launchIn(viewModelScope)
         viewModelScope.launch {
-            val received = friendRepository.receivedRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
-            val sent = friendRepository.sentRequests(offset = 0, limit = FRIENDSHIP_HYDRATION_LIMIT)
-            if (received is NetworkResult.Success && sent is NetworkResult.Success) {
-                friendshipCache.hydrate(sent = sent.data, received = received.data)
-            }
+            friendshipCache.hydrateCoalesced(fetch = {
+                friendRepository.friendshipGraph(sessionRepository.currentUserId.orEmpty()).getOrNull()
+            })
         }
-    }
-
-    private companion object {
-        // Doit rester alignee sur ContactsListViewModel.FETCH_LIMIT (feature:contacts,
-        // module distinct, constante privee — dupliquee ici plutot que reference
-        // faute d'un point d'hydratation partage en sdk-core) : les deux hydratent
-        // le MEME singleton FriendshipCache.hydrate(), qui REMPLACE tout le graphe —
-        // une limite plus basse ici tronquerait le graphe d'amitie pour toute l'app
-        // tant que l'ecran Contacts n'a pas ete ouvert une fois.
-        const val FRIENDSHIP_HYDRATION_LIMIT = 100
     }
 }

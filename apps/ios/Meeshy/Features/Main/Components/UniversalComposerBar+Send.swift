@@ -92,7 +92,7 @@ extension UniversalComposerBar {
                     .transition(tourbillonTransition)
             }
         }
-        .frame(width: showsQuickEmoji ? Self.quickEmojiSlotWidth : Self.sendSlotWidth, height: 44)
+        .frame(width: showsQuickEmoji ? quickEmojiBandWidth : Self.sendSlotWidth, height: 44)
         .animation(.spring(response: ComposerSlotMotion.response, dampingFraction: ComposerSlotMotion.damping), value: showsQuickEmoji)
         .animation(.spring(response: ComposerSlotMotion.response, dampingFraction: ComposerSlotMotion.damping), value: hasContent)
         .animation(.spring(response: 0.25, dampingFraction: ComposerSlotMotion.damping), value: sendBounce)
@@ -187,6 +187,20 @@ extension UniversalComposerBar {
         RecentEmojiHistory.row(history: RecentEmojiStore.load(), defaults: Self.quickSendDefaultEmojis)
     }
 
+    /// Le défilement en cours, borné ; la bande s'élargit de ce qu'il a gagné
+    /// vers la gauche, et le GARDE au relâcher : elle ne revient au repos
+    /// qu'au texte touché ou à l'émoji choisi (#12440).
+    private var quickEmojiLiveScroll: CGFloat {
+        QuickEmojiGrid.clampedScroll(quickEmojiScroll + quickEmojiDrag, itemCount: QuickEmojiGrid.row(quickSendEmojis).count)
+    }
+
+    var quickEmojiBandWidth: CGFloat {
+        QuickEmojiExpansion.bandWidth(sharedWidth: quickEmojiFieldWidth + Self.quickEmojiSlotWidth, restingWidth: Self.quickEmojiSlotWidth,
+                                      leftwardTravel: QuickEmojiExpansion.leftwardTravel(
+                                          held: quickEmojiHeld,
+                                          gestureTravel: quickEmojiDrag == 0 ? 0 : quickEmojiScroll - quickEmojiLiveScroll))
+    }
+
     @ViewBuilder
     private var quickEmojiButtons: some View {
         // Trois et demi visibles, le reste au défilement (#10842). Défilement
@@ -202,7 +216,7 @@ extension UniversalComposerBar {
                     sendQuickEmoji(emoji)
                 } label: {
                     Text(emoji)
-                        .font(.system(size: QuickEmojiGrid.emojiSize))
+                        .font(MeeshyFont.emoji(QuickEmojiGrid.emojiSize))
                         .frame(width: QuickEmojiGrid.cell, height: QuickEmojiGrid.cell)
                         .contentShape(Rectangle())
                 }
@@ -229,17 +243,21 @@ extension UniversalComposerBar {
         }
         .padding(.horizontal, QuickEmojiGrid.inset)
         .fixedSize()
-        .offset(x: QuickEmojiGrid.clampedScroll(quickEmojiScroll + quickEmojiDrag, itemCount: emojis.count))
-        .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.rowHeight, alignment: .leading)
+        .offset(x: QuickEmojiExpansion.contentOffset(scroll: quickEmojiLiveScroll, bandWidth: quickEmojiBandWidth,
+                                                     restingWidth: Self.quickEmojiSlotWidth))
+        .frame(width: quickEmojiBandWidth, height: QuickEmojiGrid.rowHeight, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         .contentShape(Rectangle())
         .highPriorityGesture(
-            DragGesture(minimumDistance: 8)
+            DragGesture(minimumDistance: 8, coordinateSpace: .global)
                 .onChanged { quickEmojiDrag = $0.translation.width }
                 .onEnded { value in
                     let landing = QuickEmojiGrid.clampedScroll(quickEmojiScroll + value.predictedEndTranslation.width,
                                                                itemCount: emojis.count)
+                    let held = QuickEmojiExpansion.heldWidth(after: .released(bandWidth: quickEmojiBandWidth),
+                                                             restingWidth: Self.quickEmojiSlotWidth)
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        quickEmojiHeld = held
                         quickEmojiScroll = landing
                         quickEmojiDrag = 0
                     }
@@ -249,7 +267,7 @@ extension UniversalComposerBar {
         // La rangée revient à l'emplacement même du bouton d'envoi : le second
         // appui d'un double appui sur « Envoyer » tombe sur elle (#7985).
         // …et elle revient au DÉBUT : le dernier émoji employé est le premier.
-        .onAppear { quickEmojiArrivedAt = Date(); quickEmojiScroll = 0 }
+        .onAppear { quickEmojiArrivedAt = Date(); quickEmojiScroll = 0; quickEmojiHeld = 0 }
     }
 
     /// Envoi direct d'un emoji : pose `text` puis réutilise `handleSend()` —
@@ -278,11 +296,20 @@ extension UniversalComposerBar {
     /// au prochain rendu, donc ce second `onChange` ne se déclenche jamais.
     private func sendQuickEmoji(_ emoji: String) {
         EmojiUsageTracker.recordUsage(emoji: emoji)
+        collapseQuickEmojiBand(after: .emojiChosen)
         quickEmojiScroll = 0
         text = emoji
         textBinding?.wrappedValue = emoji
         handleSend()
         text = ""
+    }
+
+    /// La bande élargie revient au repos, et le champ à sa position (#12440).
+    func collapseQuickEmojiBand(after event: QuickEmojiExpansion.Event) {
+        guard quickEmojiHeld != 0 else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            quickEmojiHeld = QuickEmojiExpansion.heldWidth(after: event, restingWidth: Self.quickEmojiSlotWidth)
+        }
     }
 
     // See UniversalComposerBar+Recording.swift for textInputField
@@ -367,7 +394,6 @@ extension UniversalComposerBar {
         onAnyInteraction?()
         RecentEmojiStore.record(RecentEmojiHistory.emojis(in: text))
 
-        // Custom send (edit mode, recording, or parent-managed send)
         if let onCustomSend {
             onCustomSend()
             // **Le champ ressuscitait son texte juste après l'envoi** (#5961).
@@ -401,17 +427,14 @@ extension UniversalComposerBar {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !allAttachments.isEmpty else { return }
 
-        // Rich callback (full parity with web MessageComposer)
         if let onSendMessage = onSendMessage {
             onSendMessage(trimmed, allAttachments, currentLanguage)
         }
 
-        // Simple callback (backward compatible)
         if let onSend = onSend, !trimmed.isEmpty {
             onSend(trimmed)
         }
 
-        // Clear state + remove draft for this story
         text = ""
         attachments.removeAll()
         isFocused = false

@@ -1,6 +1,5 @@
 package me.meeshy.app.stories
 
-import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
@@ -18,12 +17,15 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
-import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
-import me.meeshy.sdk.model.StrokeSmoothing
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.TusUploadContext
+import me.meeshy.sdk.model.scene.StoryBackgroundFraming
+import me.meeshy.sdk.model.scene.StoryCanvasTransform
+import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
@@ -33,219 +35,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.StoryComposerDraftStore
 import me.meeshy.sdk.story.StoryRepository
 import java.time.Instant
-import java.util.UUID
 import javax.inject.Inject
-
-/** Mints a fresh, collision-free slide id. The pure [StorySlideDeck] reducer stays
- * deterministic — id generation lives here, at the impure ViewModel edge. */
-private fun newSlideId(): String = UUID.randomUUID().toString()
-
-/** Mints a fresh, collision-free text-element id (same impure-edge rationale). */
-private fun newTextElementId(): String = UUID.randomUUID().toString()
-
-/** Mints a fresh, collision-free sticker id (same impure-edge rationale). */
-private fun newStickerId(): String = UUID.randomUUID().toString()
-
-/** Mints a fresh, collision-free drawn-stroke id (same impure-edge rationale). */
-private fun newStrokeId(): String = UUID.randomUUID().toString()
-
-/** Normalised canvas offset given to a duplicated element so the copy is visibly
- * clear of its source rather than hidden directly behind it. */
-private const val DUPLICATE_ELEMENT_OFFSET: Float = 0.04f
-
-/**
- * A media attachment durably queued offline: its bytes live in `MediaBlobStore`
- * and an `UPLOAD_MEDIA` outbox row is enqueued, both keyed by [cmid]. The publish
- * carries [cmid] as a placeholder media id and `dependsOn` it, so the drainer
- * grafts the real id once the upload delivers. [item] is retained only to render
- * the local preview while it waits.
- */
-@Immutable
-data class PendingMediaUpload(
-    val cmid: String,
-    val item: MediaUploadItem,
-)
-
-/**
- * Transient on-canvas feedback shown **only while an element is being dragged**: which
- * alignment guide line(s) the element has snapped onto ([verticalGuide]/[horizontalGuide],
- * normalised positions; `null` when that axis is free) and whether the element is still
- * inside the safe zone ([withinSafeZone] = `false` ⇒ the canvas flashes an out-of-bounds
- * warning). It is cleared the instant the drag ends, so it never lingers as state. The
- * snap math itself lives in the pure [StorySnapResolver]; this just carries its verdict
- * to the Composable.
- */
-@Immutable
-data class SnapFeedback(
-    val verticalGuide: Float?,
-    val horizontalGuide: Float?,
-    val withinSafeZone: Boolean,
-)
-
-/**
- * Immutable state of the story composer. [canPublish] is derived from the draft
- * and gated while a publish or media upload is in flight. [attachments] hold the
- * already-uploaded media for the on-screen preview; [pendingUploads] are the media
- * queued durably offline (their placeholder ids already in the draft) — several may
- * accumulate so a user can stage a whole offline batch. The draft carries every
- * media id (real + placeholder) for the wire request.
- */
-@Immutable
-data class StoryComposerUiState(
-    val draft: StoryComposerDraft = StoryComposerDraft(),
-    val deck: StorySlideDeck = StorySlideDeck.single(newSlideId()),
-    val attachments: List<UploadedMedia> = emptyList(),
-    val pendingUploads: List<PendingMediaUpload> = emptyList(),
-    val selectedTextElementId: String? = null,
-    val elementMenuId: String? = null,
-    val selectedStickerId: String? = null,
-    val snapFeedback: SnapFeedback? = null,
-    val band: ComposerBandState = ComposerBandState.Hidden,
-    val isDrawingActive: Boolean = false,
-    val drawingBoard: StoryDrawingBoard = StoryDrawingBoard(),
-    val drawColorHex: String = StoryDrawingPalette.DEFAULT_COLOR,
-    val drawWidthDesign: Double = StoryDrawingPalette.DEFAULT_WIDTH,
-    val isUploadingMedia: Boolean = false,
-    val isPublishing: Boolean = false,
-    val errorMessage: String? = null,
-    val canvasWidthPx: Float = 0f,
-    val canvasHeightPx: Float = 0f,
-) {
-    /**
-     * Publishable when some slide carries text, media **or** a publishable text
-     * element, every slide is within the character cap, the per-slide media and
-     * text-element caps hold, and nothing is in flight. The whole **deck** gates
-     * publishing — not just the slide currently being edited — so an over-long
-     * off-screen slide, or media/elements on an off-screen slide, all count.
-     */
-    val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing) &&
-            deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
-            deck.isWithinMediaLimit() &&
-            deck.isWithinTextElementLimit() &&
-            deck.isWithinStickerLimit() &&
-            !isPublishing &&
-            !isUploadingMedia
-
-    /**
-     * The uploaded media of the **selected** slide, in slide order — the preview the
-     * composer renders for the slide currently being edited. [attachments] is the
-     * global pool (one entry per upload across all slides); this projects it onto the
-     * selected slide via that slide's [StorySlide.mediaIds].
-     */
-    val selectedSlideAttachments: List<UploadedMedia>
-        get() = deck.selectedSlide.mediaIds.mapNotNull { id -> attachments.firstOrNull { it.id == id } }
-
-    /** The offline-pending media of the **selected** slide, in slide order. */
-    val selectedSlidePending: List<PendingMediaUpload>
-        get() = deck.selectedSlide.mediaIds.mapNotNull { id -> pendingUploads.firstOrNull { it.cmid == id } }
-
-    /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
-    val selectedSlideTransform: StoryCanvasTransform
-        get() = deck.selectedSlide.transform
-
-    /** The on-canvas text elements of the **selected** slide, in z-order, for rendering. */
-    val selectedSlideTextElements: List<StoryTextElement>
-        get() = deck.selectedSlide.elements
-
-    /** The on-canvas stickers of the **selected** slide, in order, for rendering. */
-    val selectedSlideStickers: List<StoryStickerElement>
-        get() = deck.selectedSlide.stickers
-
-    /** The freehand strokes drawn on the **selected** slide, in draw order, for rendering. */
-    val selectedSlideStrokes: List<StoryDrawingStroke>
-        get() = deck.selectedSlide.strokes
-
-    /**
-     * The sticker currently selected for manipulation — the [selectedStickerId]
-     * resolved against the **selected** slide. Null when nothing is selected or the id
-     * no longer lives on the selected slide (e.g. after a slide switch), so the screen
-     * never shows a stale remove handle.
-     */
-    val selectedSticker: StoryStickerElement?
-        get() = selectedStickerId?.let { id -> deck.selectedSlide.stickers.firstOrNull { it.id == id } }
-
-    /** The photo filter applied to the **selected** slide, or null when none is set. */
-    val selectedSlideFilter: StoryFilter?
-        get() = deck.selectedSlide.filter
-
-    /** The **selected** slide's filter strength (0..1) — what the Effets slider shows. */
-    val selectedSlideFilterIntensity: Float
-        get() = deck.selectedSlide.filterIntensity
-
-    /**
-     * The effective colour matrix the canvas renders for the **selected** slide's
-     * media — the neutral identity when no filter is set, otherwise the filter blended
-     * toward identity by its strength. Computed in one pure place
-     * ([StoryFilterMatrix.effectiveMatrix]) so the Composable stays glue.
-     */
-    val selectedSlideFilterMatrix: StoryColorMatrix
-        get() = StoryFilterMatrix.effectiveMatrix(selectedSlideFilter, selectedSlideFilterIntensity)
-
-    /**
-     * The text element currently being edited — the [selectedTextElementId] resolved
-     * against the **selected** slide. Null when nothing is being edited (caption mode)
-     * or the id no longer lives on the selected slide (e.g. after a slide switch), so
-     * the screen never edits a stale element.
-     */
-    val selectedTextElement: StoryTextElement?
-        get() = selectedTextElementId?.let { id -> deck.selectedSlide.elements.firstOrNull { it.id == id } }
-
-    /** True while the text field edits an on-canvas element rather than the slide caption. */
-    val isEditingTextElement: Boolean get() = selectedTextElement != null
-
-    /**
-     * The unified long-press context menu for the element [elementMenuId] on the selected
-     * slide, or `null` when no menu is open (or the id no longer resolves, e.g. after the
-     * element was removed) — the pure [StoryElementMenu.resolve] decides which of edit /
-     * duplicate / reorder / delete may fire, so the screen renders a greyed row it can
-     * never mis-dispatch and stays glue.
-     */
-    val elementContextMenu: StoryElementContextMenu?
-        get() = elementMenuId?.let { StoryElementMenu.resolve(deck, it) }
-
-    /**
-     * The effective on-screen duration (seconds) of the **selected** slide — the
-     * author's pin when set, otherwise the content-derived value — projected from the
-     * pure [StorySlideDeck.selectedSlideDurationSeconds] so the duration control shows a
-     * live value and the screen stays glue.
-     */
-    val selectedSlideDurationSeconds: Double get() = deck.selectedSlideDurationSeconds
-
-    /**
-     * The **selected** slide's author-chosen backdrop (`null` when none), projected from
-     * the pure [StorySlideDeck.selectedSlideBackground] so the background picker can show
-     * the active swatch and the screen stays glue.
-     */
-    val selectedSlideBackground: me.meeshy.sdk.model.StoryBackgroundValue?
-        get() = deck.selectedSlideBackground
-
-    /**
-     * Whether the **selected** slide's designated background media is a VIDEO — the only
-     * background kind whose looping is authorable (an image always loops on the reader).
-     * The screen shows the loop toggle only when this is true, so the control is never a
-     * no-op. Resolved against the uploaded [attachments] by the designated background id.
-     */
-    val selectedSlideBackgroundIsVideo: Boolean
-        get() = deck.selectedSlideBackgroundMediaId
-            ?.let { id -> attachments.firstOrNull { it.id == id } }
-            ?.mimeType?.startsWith("video", ignoreCase = true) == true
-
-    /**
-     * Whether the **selected** slide's background loops — what the loop toggle reflects,
-     * projected from the pure [StorySlideDeck.selectedSlideBackgroundLoop]. Meaningful only
-     * while [selectedSlideBackgroundIsVideo] is true.
-     */
-    val selectedSlideBackgroundLoop: Boolean
-        get() = deck.selectedSlideBackgroundLoop
-
-    /**
-     * What the single text field shows and edits: the selected element's text while
-     * one is selected, otherwise the selected slide's caption. One field, two roles —
-     * the screen stays glue.
-     */
-    val editorText: String get() = selectedTextElement?.text ?: draft.text
-}
 
 /**
  * Drives the text story composer — parity with iOS `StoryComposerViewModel` +
@@ -272,7 +62,11 @@ class StoryComposerViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryComposerUiState())
+    private var history = ComposerHistory(_state.value.snapshot())
     val state: StateFlow<StoryComposerUiState> = _state.asStateFlow()
+
+    /** The author colour the reader paints a background-less slide with (#12314). */
+    val authorAccentHex: String get() = StorySceneFill.authorAccentHex(sessionRepository.currentUser.value)
 
     /** One-shot signal that a story was queued — the screen dismisses on it. */
     private val _published = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -316,6 +110,7 @@ class StoryComposerViewModel @Inject constructor(
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
                 ).mirrorDraftToSelection()
             }
+            resetHistory()
         }
     }
 
@@ -355,86 +150,26 @@ class StoryComposerViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Routes the text field: while a text element is selected the keystrokes rewrite
-     * **that element**; otherwise they rewrite the **selected slide's caption** (the
-     * original behaviour). One field serves both roles so the canvas stays a single
-     * coherent surface.
-     */
-    fun onTextChange(text: String) {
-        val editingId = _state.value.selectedTextElement?.id
-        if (editingId != null) {
-            _state.update {
-                it.copy(deck = it.deck.updateTextElement(editingId) { element -> element.copy(text = text) }, errorMessage = null)
-            }
-            return
-        }
-        _state.update {
-            val deck = it.deck.updateSelectedText(text)
-            it.copy(draft = it.draft.withText(text), deck = deck, errorMessage = null)
-        }
-    }
+    /** Routes the text field to the selected element, else the slide caption. */
+    fun onTextChange(text: String) = reduce("type") { StoryComposerTextReducer.typed(it, text) }
 
-    /**
-     * Adds an empty on-canvas text element to the selected slide (clamped to the
-     * canvas centre by the deck) and selects it so the field begins editing it
-     * immediately — the natural "tap +Text, then type" flow. Inert-with-a-warning
-     * once the selected slide is at the ≤5-element cap.
-     */
+    /** Adds an empty on-canvas text element and selects it (warns at the ≤5-element cap). */
     fun onAddTextElement() {
-        val before = _state.value.deck
-        if (!before.selectedCanAddTextElement) {
-            _state.update { it.copy(errorMessage = TEXT_ELEMENT_LIMIT) }
-            return
-        }
         val id = newTextElementId()
-        _state.update {
-            it.copy(
-                deck = it.deck.addTextElementToSelected(StoryTextElement(id = id)),
-                selectedTextElementId = id,
-                selectedStickerId = null,
-                errorMessage = null,
-            )
-        }
+        reduce { StoryComposerTextReducer.added(it, id) }
     }
 
-    /** Begins editing the on-canvas element [id] (inert when it is not on the selected slide). */
-    fun onSelectTextElement(id: String) {
-        _state.update {
-            if (it.deck.selectedSlide.elements.none { element -> element.id == id }) it
-            else it.copy(selectedTextElementId = id, selectedStickerId = null)
-        }
-    }
+    fun onSelectTextElement(id: String) = reduce { StoryComposerTextReducer.selected(it, id) }
 
-    /** Stops editing the active element — the field returns to the slide caption. */
-    fun onDeselectTextElement() {
-        _state.update { if (it.selectedTextElementId == null) it else it.copy(selectedTextElementId = null) }
-    }
+    fun onDeselectTextElement() = reduce { StoryComposerTextReducer.deselected(it) }
 
-    /**
-     * Opens the unified long-press context menu on the on-canvas element [id], selecting it
-     * (so the menu targets the element the toolbar edits) and clearing any sticker selection.
-     * Inert when [id] is not on the selected slide, so a stale long-press never opens an empty
-     * menu. The available actions are resolved lazily by [StoryComposerUiState.elementContextMenu].
-     */
-    fun onOpenElementMenu(id: String) {
-        _state.update {
-            if (it.deck.selectedSlide.elements.none { element -> element.id == id }) it
-            else it.copy(elementMenuId = id, selectedTextElementId = id, selectedStickerId = null)
-        }
-    }
+    fun onOpenElementMenu(id: String) = reduce { StoryComposerTextReducer.menuOpened(it, id) }
 
-    /** Dismisses the element context menu without touching the deck or the selection. */
-    fun onDismissElementMenu() {
-        _state.update { if (it.elementMenuId == null) it else it.copy(elementMenuId = null) }
-    }
+    fun onDismissElementMenu() = reduce { StoryComposerTextReducer.menuDismissed(it) }
 
     /**
      * Dispatches a chosen context-menu [action] to the existing per-element intent and then
-     * dismisses the menu. A disabled action (its row greyed by [StoryElementMenu.resolve]) or
-     * a menu that has since gone stale is a safe no-op on the deck — the menu still closes.
-     * EDIT just keeps the element selected for the text field; the others reuse the same
-     * duplicate / reorder / remove reducers the floating toolbar already drives.
+     * dismisses the menu. A disabled action or a stale menu is a safe no-op on the deck.
      */
     fun onElementMenuAction(action: StoryElementAction) {
         val menu = _state.value.elementContextMenu
@@ -454,423 +189,127 @@ class StoryComposerViewModel @Inject constructor(
         onDismissElementMenu()
     }
 
-    /**
-     * Drags the on-canvas element [id] by the normalised canvas deltas [dx]/[dy], with
-     * **magnetic snapping**: the resulting centre is run through the pure
-     * [StorySnapResolver], which locks each axis onto the nearest alignment guide within
-     * its threshold and reports the active guide lines + safe-zone verdict as transient
-     * [SnapFeedback] (cleared by [onTextElementDragEnd]). The element is then moved by the
-     * snap-adjusted delta through the existing [StorySlideDeck.moveTextElement] path, so
-     * the canvas clamp still lives in one place. Selection and editing are untouched, and
-     * an unknown id (or one not on the selected, draggable slide) is inert. The Composable
-     * converts drag pixels to fractions and renders the returned guides/warning.
-     */
-    fun onTextElementMoved(id: String, dx: Float, dy: Float) {
-        _state.update { state ->
-            val element = state.deck.selectedSlide.elements.firstOrNull { it.id == id }
-                ?: return@update state
-            val snap = StorySnapResolver.resolve(element.x + dx, element.y + dy)
-            state.copy(
-                deck = state.deck.moveTextElement(id, snap.x - element.x, snap.y - element.y),
-                snapFeedback = SnapFeedback(snap.verticalGuide, snap.horizontalGuide, snap.withinSafeZone),
-            )
-        }
-    }
+    /** Drags element [id] by normalised deltas with magnetic snapping. */
+    fun onTextElementMoved(id: String, dx: Float, dy: Float) = reduce("move:$id") { StoryComposerTextReducer.moved(it, id, dx, dy) }
 
-    /**
-     * Ends an on-canvas drag: drops the transient [SnapFeedback] so the guide lines and
-     * any out-of-bounds warning disappear the moment the finger lifts. Inert when no
-     * feedback is showing, so a stray drag-end never churns state.
-     */
-    fun onTextElementDragEnd() {
-        _state.update { if (it.snapFeedback == null) it else it.copy(snapFeedback = null) }
-    }
+    fun onTextElementDragEnd() = reduce { StoryComposerTextReducer.dragEnded(it) }
 
-    /**
-     * Removes the on-canvas element [id] from whichever slide holds it, clearing the
-     * editing selection when it was the one being edited so the field falls back to
-     * the slide caption.
-     */
-    fun onRemoveTextElement(id: String) {
-        _state.update {
-            val selected = if (it.selectedTextElementId == id) null else it.selectedTextElementId
-            it.copy(deck = it.deck.removeTextElement(id), selectedTextElementId = selected)
-        }
-    }
+    fun onRemoveTextElement(id: String) = reduce { StoryComposerTextReducer.removed(it, id) }
 
-    /**
-     * Restyles the on-canvas element [id] (inert when the id is unknown). Selection
-     * and editing are untouched — you style the element you are editing. The wire
-     * mapping ([StoryTextElement.toTextObject]) carries the style on publish.
-     */
-    fun onTextElementStyle(id: String, style: StoryTextStyle) {
-        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(style = style) }) }
-    }
+    fun onTextElementStyle(id: String, style: StoryTextStyle) = reduce { StoryComposerTextReducer.styled(it, id, style) }
 
-    /** Recolours the on-canvas element [id] ([color] is a `RRGGBB` hex; inert on unknown id). */
-    fun onTextElementColor(id: String, color: String) {
-        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(color = color) }) }
-    }
+    fun onTextElementColor(id: String, color: String) = reduce { StoryComposerTextReducer.colored(it, id, color) }
 
-    /** Realigns the on-canvas element [id]'s lines (inert on unknown id). */
-    fun onTextElementAlign(id: String, align: StoryTextAlign) {
-        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(align = align) }) }
-    }
+    fun onTextElementAlign(id: String, align: StoryTextAlign) = reduce { StoryComposerTextReducer.aligned(it, id, align) }
 
-    /**
-     * Sets the text backing (none / solid / glass) of the on-canvas element [id] (inert on
-     * unknown id). Selection and editing are untouched — you restyle the element you are
-     * editing. The wire mapping ([StoryTextElement.toTextObject]) carries it on publish.
-     */
-    fun onTextElementBackground(id: String, background: StoryTextBackground) {
-        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(background = background) }) }
-    }
+    fun onTextElementBackground(id: String, background: StoryTextBackground) =
+        reduce { StoryComposerTextReducer.backed(it, id, background) }
 
-    /**
-     * Advances the base font size of the on-canvas element [id] by one tap — to the next
-     * larger step, wrapping past the largest back to the smallest (decided by the pure
-     * [StoryTextSizeCycle.next]). Inert on an unknown id; selection and editing are
-     * untouched — you resize the element you are editing. The wire mapping
-     * ([StoryTextElement.toTextObject]) carries `fontSize` on publish.
-     */
-    fun onTextElementCycleSize(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(size = StoryTextSizeCycle.next(element.size))
-                },
-            )
-        }
-    }
+    fun onTextElementCycleSize(id: String) = reduce { StoryComposerTextReducer.sizeCycled(it, id) }
 
-    /**
-     * Advances the stroke outline of the on-canvas element [id] by one tap — thicken to the
-     * next step, wrap past the thickest back to no-stroke, posting the default white the first
-     * time a stroke appears (all decided by the pure [StoryTextOutlineCycle.advance]). Inert on
-     * an unknown id; selection and editing are untouched — you outline the element you are
-     * editing. The wire mapping ([StoryTextElement.toTextObject]) carries `borderColor`/
-     * `borderWidth` on publish.
-     */
-    fun onTextElementCycleOutline(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(outline = StoryTextOutlineCycle.advance(element.outline))
-                },
-            )
-        }
-    }
+    fun onTextElementCycleOutline(id: String) = reduce { StoryComposerTextReducer.outlineCycled(it, id) }
 
-    /**
-     * Advances the fade-in of the on-canvas element [id] by one tap — to the next longer
-     * step, wrapping past the longest back to no-fade (decided by the pure
-     * [StoryTextFadeCycle.advance]). The fade-out end is left untouched, mirroring iOS's two
-     * independent timing controls. Inert on an unknown id; selection and editing are
-     * untouched. The wire mapping ([StoryTextElement.toTextObject]) carries `fadeIn` on publish.
-     */
-    fun onTextElementCycleFadeIn(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(fade = element.fade.cycledIn())
-                },
-            )
-        }
-    }
+    fun onTextElementCycleFadeIn(id: String) = reduce { StoryComposerTextReducer.fadeInCycled(it, id) }
 
-    /**
-     * Advances the fade-out of the on-canvas element [id] by one tap — to the next longer
-     * step, wrapping past the longest back to no-fade (decided by the pure
-     * [StoryTextFadeCycle.advance]). The fade-in end is left untouched. Inert on an unknown id;
-     * selection and editing are untouched. The wire mapping ([StoryTextElement.toTextObject])
-     * carries `fadeOut` on publish.
-     */
-    fun onTextElementCycleFadeOut(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(fade = element.fade.cycledOut())
-                },
-            )
-        }
-    }
+    fun onTextElementCycleFadeOut(id: String) = reduce { StoryComposerTextReducer.fadeOutCycled(it, id) }
 
-    /**
-     * Advances the visibility START of the on-canvas element [id] by one tap — to the next
-     * longer step, wrapping past the longest back to no offset (decided by the pure
-     * [StoryElementTimingCycle.advance]). The duration end is left untouched, mirroring iOS's
-     * two independent timing controls. Inert on an unknown id; selection and editing are
-     * untouched. The wire mapping ([StoryTextElement.toTextObject]) carries `startTime` on
-     * publish, and the reader gate ([StoryElementVisibility]) honours the window on playback.
-     */
-    fun onTextElementCycleStart(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(timing = element.timing.cycledStart())
-                },
-            )
-        }
-    }
+    fun onTextElementCycleStart(id: String) = reduce { StoryComposerTextReducer.startCycled(it, id) }
 
-    /**
-     * Advances the visibility DURATION of the on-canvas element [id] by one tap — to the next
-     * longer step, wrapping past the longest back to open-ended (decided by the pure
-     * [StoryElementTimingCycle.advance]). The start end is left untouched. Inert on an unknown
-     * id; selection and editing are untouched. The wire mapping ([StoryTextElement.toTextObject])
-     * carries `duration` on publish, and the reader gate ([StoryElementVisibility]) honours the
-     * window on playback.
-     */
-    fun onTextElementCycleDuration(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(timing = element.timing.cycledDuration())
-                },
-            )
-        }
-    }
+    fun onTextElementCycleDuration(id: String) = reduce { StoryComposerTextReducer.durationCycled(it, id) }
 
-    /**
-     * Pinch-scales / rotates the on-canvas element [id] by the incremental gesture
-     * deltas ([scaleBy] is the multiplicative pinch factor, [rotateByDeg] the additive
-     * rotation; clamped/wrapped by the pure [StoryTextElement.transformed]). Selection
-     * and editing are untouched — you transform the element you are manipulating — and
-     * an unknown id is inert. The wire mapping carries `scale`/`rotation` on publish.
-     */
-    fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) {
-        _state.update { it.copy(deck = it.deck.transformTextElement(id, scaleBy, rotateByDeg)) }
-    }
+    fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
+        reduce("pinch:$id") { StoryComposerTextReducer.transformed(it, id, scaleBy, rotateByDeg) }
 
-    /**
-     * Duplicates the on-canvas element [id] (which must live on the selected slide):
-     * mints a fresh id, inserts a clone of every styled field just after the source —
-     * nudged by [DUPLICATE_ELEMENT_OFFSET] so the copy is visibly offset — and selects
-     * the copy so the user can immediately move/style it. Inert when [id] is not on the
-     * selected slide; inert-with-a-warning once the slide is at the ≤5-element cap. The
-     * clone/cap rules live in the pure [StorySlideDeck.duplicateTextElement].
-     */
-    /**
-     * Restacks the on-canvas element [id] within its slide's paint order per [op]
-     * (back / one-step-back / one-step-forward / front). Selection and editing are
-     * untouched — you restack the element you are editing — and an inert move (unknown
-     * id, already at the extreme, single element) leaves the state instance unchanged
-     * so it never churns recomposition. The order rules live in the pure
-     * [StorySlideDeck.reorderTextElement].
-     */
-    fun onReorderTextElement(id: String, op: StoryZOrder) {
-        _state.update { state ->
-            val deck = state.deck.reorderTextElement(id, op)
-            if (deck === state.deck) state else state.copy(deck = deck)
-        }
-    }
+    fun onReorderTextElement(id: String, op: StoryZOrder) = reduce { StoryComposerTextReducer.reordered(it, id, op) }
 
     fun onDuplicateTextElement(id: String) {
-        val before = _state.value.deck
-        if (before.selectedSlide.elements.none { it.id == id }) return
-        if (!before.selectedCanAddTextElement) {
-            _state.update { it.copy(errorMessage = TEXT_ELEMENT_LIMIT) }
-            return
-        }
         val newId = newTextElementId()
-        _state.update {
-            it.copy(
-                deck = it.deck.duplicateTextElement(id, newId, DUPLICATE_ELEMENT_OFFSET, DUPLICATE_ELEMENT_OFFSET),
-                selectedTextElementId = newId,
-                errorMessage = null,
-            )
-        }
+        reduce { StoryComposerTextReducer.duplicated(it, id, newId) }
     }
 
-    /**
-     * Adds an on-canvas emoji sticker [emoji] to the selected slide (clamped to the
-     * canvas centre by the deck) and selects it so the user can immediately drag /
-     * pinch / remove it. A blank emoji is ignored (nothing to place). Inert-with-a-
-     * warning once the selected slide is at the [StorySlideDeck.MAX_STICKERS_PER_SLIDE]
-     * cap. Selecting the new sticker clears any text-element editing so the canvas keeps
-     * a single selected object.
-     */
+    /** Adds an emoji sticker to the selected slide and selects it (blank ignored, warns at the cap). */
     fun onAddSticker(emoji: String) {
-        if (emoji.isBlank()) return
-        val before = _state.value.deck
-        if (!before.selectedCanAddSticker) {
-            _state.update { it.copy(errorMessage = STICKER_LIMIT) }
-            return
-        }
         val id = newStickerId()
-        _state.update {
-            it.copy(
-                deck = it.deck.addStickerToSelected(StoryStickerElement(id = id, emoji = emoji)),
-                selectedStickerId = id,
-                selectedTextElementId = null,
-                errorMessage = null,
-            )
-        }
+        reduce { StoryComposerStickerReducer.added(it, emoji, id) }
     }
 
-    /** Selects the sticker [id] for manipulation (inert when it is not on the selected
-     * slide); clears any text-element editing so only one object is selected. */
-    fun onSelectSticker(id: String) {
-        _state.update {
-            if (it.deck.selectedSlide.stickers.none { sticker -> sticker.id == id }) it
-            else it.copy(selectedStickerId = id, selectedTextElementId = null)
-        }
-    }
+    fun onSelectSticker(id: String) = reduce { StoryComposerStickerReducer.selected(it, id) }
 
-    /** Deselects the active sticker — the remove handle disappears. Inert when none is selected. */
-    fun onDeselectSticker() {
-        _state.update { if (it.selectedStickerId == null) it else it.copy(selectedStickerId = null) }
-    }
+    fun onDeselectSticker() = reduce { StoryComposerStickerReducer.deselected(it) }
 
-    /**
-     * Removes the sticker [id] from whichever slide holds it, clearing the selection
-     * when it was the selected one so the canvas stops showing its remove handle.
-     */
-    fun onRemoveSticker(id: String) {
-        _state.update {
-            val selected = if (it.selectedStickerId == id) null else it.selectedStickerId
-            it.copy(deck = it.deck.removeSticker(id), selectedStickerId = selected)
-        }
-    }
+    fun onRemoveSticker(id: String) = reduce { StoryComposerStickerReducer.removed(it, id) }
 
-    /**
-     * Drags the sticker [id] by the normalised canvas deltas [dx]/[dy] (clamped by the
-     * pure [StorySlideDeck.moveSticker]). Inert when the id is unknown. The Composable
-     * converts drag pixels to fractions.
-     */
-    fun onStickerMoved(id: String, dx: Float, dy: Float) {
-        _state.update { it.copy(deck = it.deck.moveSticker(id, dx, dy)) }
-    }
+    fun onStickerMoved(id: String, dx: Float, dy: Float) = reduce("move:$id") { StoryComposerStickerReducer.moved(it, id, dx, dy) }
 
-    /**
-     * Pinch-scales / rotates the sticker [id] by the incremental gesture deltas
-     * (clamped/wrapped by the pure [StoryStickerElement.transformed]). Inert when the id
-     * is unknown. Selection is untouched — you transform the sticker you are manipulating.
-     */
-    fun onStickerTransform(id: String, scaleBy: Float, rotateByDeg: Float) {
-        _state.update { it.copy(deck = it.deck.transformSticker(id, scaleBy, rotateByDeg)) }
-    }
+    fun onStickerTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
+        reduce("pinch:$id") { StoryComposerStickerReducer.transformed(it, id, scaleBy, rotateByDeg) }
 
-    /**
-     * Enters the drawing tool: closes the tools band and clears any text/sticker
-     * selection so the canvas' full surface is free for the capture layer, which
-     * intercepts every touch while active. The Contenu drawer's "Draw" tile binds here.
-     */
-    fun onEnterDrawingMode() {
-        _state.update {
-            it.copy(
-                isDrawingActive = true,
-                band = ComposerBandState.Hidden,
-                selectedTextElementId = null,
-                selectedStickerId = null,
-                elementMenuId = null,
-            )
-        }
-    }
+    /** Enters the drawing tool (closes the band, clears selections). */
+    fun onEnterDrawingMode() = reduce { StoryComposerDrawingReducer.entered(it) }
 
-    /** Leaves the drawing tool — the canvas resumes routing touches to pan/zoom and elements. */
-    fun onExitDrawingMode() {
-        _state.update { if (!it.isDrawingActive) it else it.copy(isDrawingActive = false) }
-    }
+    fun onExitDrawingMode() = reduce { StoryComposerDrawingReducer.exited(it) }
 
-    /** Sets the pen colour the next stroke is drawn with (the colour swatch picker). */
-    fun onDrawColorSelected(colorHex: String) {
-        _state.update { it.copy(drawColorHex = colorHex) }
-    }
+    fun onDrawColorSelected(colorHex: String) = reduce { StoryComposerDrawingReducer.colorSelected(it, colorHex) }
 
-    /** Sets the pen thickness (design-pixels) the next stroke is drawn with. */
-    fun onDrawWidthSelected(widthDesign: Double) {
-        _state.update { it.copy(drawWidthDesign = widthDesign) }
-    }
+    fun onDrawWidthSelected(widthDesign: Double) = reduce { StoryComposerDrawingReducer.widthSelected(it, widthDesign) }
 
-    /**
-     * Commits a freshly captured freehand stroke — [points] already converted to the
-     * canonical design space by [StoryDrawingCanvasSpace]. A stroke of fewer than two
-     * points (a tap, not a drag) carries nothing to render and is dropped rather than
-     * committed as a zero-length mark. Colour and width are the pen's current picker
-     * selection; the composer only ever authors [me.meeshy.sdk.model.StrokeTool.PEN]
-     * strokes with `CURVE` smoothing (a real pressure driver rides on every point, so
-     * `captureVersion = 1` — the variable-width render).
-     */
+    /** Commits a captured freehand stroke (design-space [points]); a tap is dropped. */
     fun onStrokeCaptured(points: List<StoryDrawingStrokePoint>) {
-        if (points.size < 2) return
-        val current = _state.value
-        val stroke = StoryDrawingStroke(
-            id = newStrokeId(),
-            points = points,
-            colorHex = current.drawColorHex,
-            width = current.drawWidthDesign,
-            smoothing = StrokeSmoothing.CURVE,
-            createdAt = Instant.now().epochSecond.toDouble(),
-            captureVersion = 1,
-        )
-        applyDrawingBoard { it.commit(stroke) }
+        val id = newStrokeId()
+        val now = Instant.now().epochSecond.toDouble()
+        reduce { StoryComposerDrawingReducer.captured(it, points, id, now) }
     }
 
-    /** Undoes the most recently drawn stroke on the selected slide (inert with nothing to undo). */
-    fun onDrawUndo() = applyDrawingBoard { it.undo() }
-
-    /**
-     * Applies a [StoryDrawingBoard] mutation and mirrors its resulting strokes onto the
-     * **selected** slide, keeping the board the single source of the committed strokes
-     * (undo/redo/selection) while the deck only ever reflects its output.
-     */
-    private inline fun applyDrawingBoard(transform: (StoryDrawingBoard) -> StoryDrawingBoard) {
-        _state.update {
-            val board = transform(it.drawingBoard)
-            it.copy(drawingBoard = board, deck = it.deck.setSelectedStrokes(board.strokes)).mirrorDraftToSelection()
-        }
-    }
+    fun onDrawUndo() = reduce { StoryComposerDrawingReducer.undone(it) }
 
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
     }
 
     /**
-     * Opens the composer as a **repost** of the story identified by [sourceId]: the link
-     * rides onto every published slide's wire request so the gateway records the repost
-     * chain and the reader half (already shipped) renders the attribution badge. Inert on
-     * a blank id — a repost of "nothing" must never be created — and it only sets the link,
-     * leaving the author's own draft content untouched so they can add their take. Called
-     * once from the composer screen when it is entered with a repost source argument.
+     * Opens the composer as a **repost** of [sourceId]: the link rides onto every published
+     * slide's wire request. Inert on a blank id; the author's own draft is untouched.
      */
     fun onRepostSource(sourceId: String) {
         if (sourceId.isBlank()) return
         _state.update { it.copy(draft = it.draft.withRepostOf(sourceId)) }
     }
 
-    /**
-     * Toggles the bottom-band drawer for [category] (the Contenu / Effets FABs): opens
-     * it, switches category, or closes it per the pure [ComposerBandState.tapFab]. All
-     * band navigation state lives in the unit-tested [ComposerBandState].
-     */
-    fun onBandFabTap(category: BandCategory) {
-        _state.update { it.copy(band = it.band.tapFab(category)) }
+    /** Tap on a tool of the row: opens, switches to or closes its panel per [ComposerBandState.tapTool]. */
+    fun onBandToolTap(tool: StoryToolMode) {
+        _state.update { it.copy(band = it.band.tapTool(tool)) }
     }
 
-    /** Dismisses the band drawer (swipe-down gesture) — back to FAB-only. */
+    /** Swipe up on a tool: forces its panel open. */
+    fun onBandToolSwipeUp(tool: StoryToolMode) {
+        _state.update { it.copy(band = it.band.swipeUpOnTool(tool)) }
+    }
+
+    /** Swipe down on the row: closes an open panel, otherwise hides the chrome (bare canvas). */
+    fun onBandSwipeDown() {
+        _state.update { it.copy(band = if (it.band.isPanelOpen) it.band.closeAnyPanel() else it.band.hideChrome()) }
+    }
+
+    /** Gives the chrome back after a voluntary hiding (ghost handle tap). */
+    fun onBandShowChrome() {
+        _state.update { it.copy(band = it.band.showChrome()) }
+    }
+
+    /** Closes the open panel (handle pulled under its minimum) and gives the row back. */
     fun onBandDismiss() {
-        _state.update { it.copy(band = it.band.swipeDown()) }
+        _state.update { it.copy(band = it.band.closeAnyPanel()) }
     }
 
-    /** Swaps the open band to the other category (horizontal swipe); inert while hidden. */
-    fun onBandSwapCategory() {
-        _state.update { it.copy(band = it.band.swipeHorizontal()) }
-    }
-
-    /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap); the
-     * editor follows the new selection, so it clears to the empty slide's text. */
+    /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap). */
     fun onAddSlide() = applyDeck { it.addSlide(newSlideId()) }
 
     /** Inserts a clone of the selected slide right after it and selects the clone. */
     fun onDuplicateSelectedSlide() = applyDeck { it.duplicate(it.selectedId, newSlideId()) }
 
     /**
-     * Removes the slide [id] (inert on the last remaining slide / unknown id) and
-     * reclaims its media: each of the removed slide's media ids is dropped from the
-     * global preview pools, and any offline-pending upload among them is **cancelled**
-     * ([MediaUploadQueue.cancel]) so a slide thrown away never leaves an orphaned
-     * `UPLOAD_MEDIA` row streaming bytes to a story it no longer belongs to.
+     * Removes the slide [id] (inert on the last remaining slide / unknown id) and reclaims
+     * its media: dropped from the preview pools, and each offline-pending upload among them
+     * is cancelled so a discarded slide never leaves an orphaned `UPLOAD_MEDIA` row.
      */
     fun onRemoveSlide(id: String) {
         val before = _state.value.deck
@@ -888,27 +327,21 @@ class StoryComposerViewModel @Inject constructor(
                 pendingUploads = it.pendingUploads.filterNot { pending -> pending.cmid in droppedMedia },
             ).mirrorDraftToSelection()
         }
+        record()
         pendingToCancel.forEach { cancelDurableUpload(it) }
     }
 
-    /** Reorders the slide [id] to [toIndex] (selection preserved by id). */
     fun onMoveSlide(id: String, toIndex: Int) = applyDeck { it.move(id, toIndex) }
 
-    /** Switches the active slide to [id] (inert on unknown id). */
     fun onSelectSlide(id: String) = applyDeck { it.select(id) }
 
     /**
-     * Applies one incremental pinch-zoom + drag-pan gesture from the 9:16 canvas to
-     * the **selected** slide's persisted [StoryCanvasTransform], clamped to the canvas
-     * bounds via the pure [StoryCanvasTransform.apply]. The Composable supplies the
-     * gesture deltas and the measured canvas size; all transform math is unit-tested
-     * in one place, so the canvas stays glue.
+     * Applies one pinch-zoom + drag-pan gesture to the selected slide's persisted
+     * [StoryCanvasTransform]. The canvas size that produced the offset is captured here: it
+     * is exactly the size needed to normalise the offset back at publish.
      */
     fun onCanvasTransform(panX: Float, panY: Float, zoom: Float, canvasWidth: Float, canvasHeight: Float) {
-        // The canvas is a single fixed 9:16 box shared by every slide, and a gesture is the
-        // only way to make a transform non-identity — so the size that produced the offset is
-        // captured here and is exactly the size needed to normalise it back at publish.
-        _state.update {
+        reduce("canvas") {
             it.copy(
                 deck = it.deck.updateSelectedTransform(
                     it.deck.selectedSlide.transform.apply(panX, panY, zoom, canvasWidth, canvasHeight),
@@ -919,91 +352,68 @@ class StoryComposerViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Sets (or clears, with null) the **selected** slide's photo filter — the Effets
-     * drawer's filter picker. Per-slide: each slide keeps its own look. The selection
-     * and any in-progress element edit are preserved (a filter touches no element).
-     */
-    fun onSelectFilter(filter: StoryFilter?) = applyDeck { it.setSelectedFilter(filter) }
+    /** Sets (or clears) the selected slide's photo filter. */
+    fun onSelectFilter(filter: StoryFilter?) = reduce { StoryComposerBackgroundReducer.filterSelected(it, filter) }
 
-    /**
-     * Sets the **selected** slide's filter strength (clamped in the deck via the pure
-     * [StoryFilterMatrix.clampIntensity]) — the Effets drawer's intensity slider.
-     */
-    fun onFilterIntensityChange(intensity: Float) = applyDeck { it.setSelectedFilterIntensity(intensity) }
+    fun onFilterIntensityChange(intensity: Float) =
+        reduce("intensity") { StoryComposerBackgroundReducer.filterIntensityChanged(it, intensity) }
 
-    /**
-     * Pins the **selected** slide's on-screen duration to [seconds] — the timeline
-     * "pin duration" control. The value is bounded to the iOS `[2, 600]`s range by the
-     * pure [StorySlideDeck.setSelectedDuration]/[me.meeshy.sdk.model.StoryDurationPin],
-     * and rides to the reader as `effects.timelineDuration`, which the reader honours
-     * over content ([me.meeshy.sdk.model.StorySlideDuration]).
-     */
-    fun onSlideDurationChange(seconds: Double) = applyDeck { it.setSelectedDuration(seconds) }
+    /** Pins the selected slide's on-screen duration (bounded by the pure deck law). */
+    fun onSlideDurationChange(seconds: Double) = reduce("duration") { StoryComposerBackgroundReducer.durationChanged(it, seconds) }
 
-    /**
-     * Sets (or clears, with null) the **selected** slide's backdrop — the Effets drawer's
-     * background picker (a preset solid/gradient from
-     * [me.meeshy.sdk.model.StoryBackgroundPalette], or a random pastel). Per-slide: each
-     * slide keeps its own colour. The value rides to the reader as `effects.background`,
-     * which the reader paints over its accent→black fallback
-     * ([me.meeshy.sdk.model.StoryBackgroundValue]).
-     */
+    /** Sets (or clears) the selected slide's backdrop colour. */
     fun onSlideBackgroundChange(background: me.meeshy.sdk.model.StoryBackgroundValue?) =
-        applyDeck { it.setSelectedBackground(background) }
+        reduce { StoryComposerBackgroundReducer.backgroundChanged(it, background) }
 
-    /**
-     * Designates (or clears, on a second tap) which of the **selected** slide's attached
-     * media is its single looping background — the authoring counterpart of the reader's
-     * `isBackground` [me.meeshy.sdk.model.StoryMediaObject]. At most one media per slide is
-     * the background ([StorySlideDeck.toggleSelectedBackgroundMedia] enforces it); inert for
-     * an id not attached to the selected slide. On publish, [publishPlans] resolves the id to
-     * the uploaded media's URL/kind/duration so the reader picks exactly this layer.
-     */
+    /** Designates (or clears) the selected slide's single looping background media. */
     fun onToggleSlideBackgroundMedia(mediaId: String) =
-        applyDeck { it.toggleSelectedBackgroundMedia(mediaId) }
+        reduce { StoryComposerBackgroundReducer.backgroundMediaToggled(it, mediaId) }
 
-    /**
-     * Sets whether the **selected** slide's designated (video) background loops — the
-     * authoring counterpart of the reader's `loop` on the `isBackground`
-     * [me.meeshy.sdk.model.StoryMediaObject]. Inert when the slide has no designated
-     * background ([StorySlideDeck.setSelectedBackgroundLoop] enforces it). On publish,
-     * [publishPlans] carries this onto the emitted background media object.
-     */
+    /** Sets whether the selected slide's designated video background loops. */
     fun onSetSlideBackgroundLoop(loop: Boolean) =
-        applyDeck { it.setSelectedBackgroundLoop(loop) }
+        reduce { StoryComposerBackgroundReducer.backgroundLoopSet(it, loop) }
 
     /**
-     * Applies a structural deck transform and re-syncs the editor buffer to the
-     * (possibly new) selected slide's text **and** media, keeping `draft` a faithful
-     * mirror of the selected slide — the single invariant the screen relies on.
+     * Annule la dernière modification du deck (texte, sticker, fond, filtre, durée, médias, ordre
+     * d'empilement, dessin) — iOS `undo()` de l'historique global. Inerte pile vide.
      */
-    private inline fun applyDeck(transform: (StorySlideDeck) -> StorySlideDeck) {
-        _state.update {
-            val deck = transform(it.deck)
-            val mirrored = it.copy(deck = deck).mirrorDraftToSelection()
-            if (deck.selectedId == it.deck.selectedId) mirrored
-            else mirrored.copy(drawingBoard = StoryDrawingBoard(strokes = deck.selectedSlide.strokes))
+    fun onUndo() {
+        val (next, snapshot) = history.undone() ?: return
+        history = next
+        _state.update { it.restoredTo(snapshot).withHistoryFlags() }
+    }
+
+    fun onRedo() {
+        val (next, snapshot) = history.redone() ?: return
+        history = next
+        _state.update { it.restoredTo(snapshot).withHistoryFlags() }
+    }
+
+    private fun StoryComposerUiState.withHistoryFlags(): StoryComposerUiState =
+        copy(canUndo = history.canUndo, canRedo = history.canRedo)
+
+    /** Empile le deck courant dans l'historique ; [gesture] = changement continu (un seul cran). */
+    private fun record(gesture: String? = null) {
+        history = history.recorded(_state.value.snapshot(), gesture)
+        if (_state.value.canUndo != history.canUndo || _state.value.canRedo != history.canRedo) {
+            _state.update { it.withHistoryFlags() }
         }
     }
 
-    /**
-     * Re-points [StoryComposerUiState.draft] at the selected slide's text + media and
-     * drops a now-dangling element-edit selection (an element id only ever lives on
-     * one slide, so switching/removing a slide ends element editing and the field
-     * falls back to the new slide's caption).
-     */
-    private fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState {
-        val elementId = selectedTextElementId
-        val stillSelected = elementId != null && deck.selectedSlide.elements.any { it.id == elementId }
-        val stickerId = selectedStickerId
-        val stickerStillSelected = stickerId != null && deck.selectedSlide.stickers.any { it.id == stickerId }
-        return copy(
-            draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds),
-            selectedTextElementId = if (stillSelected) elementId else null,
-            selectedStickerId = if (stickerStillSelected) stickerId else null,
-            drawingBoard = drawingBoard.resyncedTo(deck.selectedSlide.strokes),
-        )
+    /** Repart d'un historique vierge sur l'état courant (brouillon restauré, publication). */
+    private fun resetHistory() {
+        history = ComposerHistory(_state.value.snapshot())
+        _state.update { it.withHistoryFlags() }
+    }
+
+    private fun reduce(gesture: String? = null, next: (StoryComposerUiState) -> StoryComposerUiState) {
+        _state.update(next)
+        record(gesture)
+    }
+
+    /** Applies a structural deck transform, re-syncing the editor buffer to the selected slide. */
+    private fun applyDeck(transform: (StorySlideDeck) -> StorySlideDeck) {
+        reduce { it.withDeckTransform(transform) }
     }
 
     /**
@@ -1053,6 +463,7 @@ class StoryComposerViewModel @Inject constructor(
             it.copy(deck = deck, attachments = it.attachments + uploaded, isUploadingMedia = false)
                 .mirrorDraftToSelection()
         }
+        record()
     }
 
     /**
@@ -1083,6 +494,7 @@ class StoryComposerViewModel @Inject constructor(
                     errorMessage = null,
                 ).mirrorDraftToSelection()
             }
+            record()
         }
         _state.update { it.copy(isUploadingMedia = false) }
     }
@@ -1106,6 +518,7 @@ class StoryComposerViewModel @Inject constructor(
             }
             next.mirrorDraftToSelection()
         }
+        record()
         if (wasPending) cancelDurableUpload(id)
     }
 
@@ -1133,6 +546,7 @@ class StoryComposerViewModel @Inject constructor(
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 draftStore.clear()
                 _state.update { StoryComposerUiState() }
+                resetHistory()
                 _published.tryEmit(Unit)
             } catch (e: CancellationException) {
                 throw e

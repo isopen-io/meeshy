@@ -19,7 +19,7 @@ struct PostDetailCommentThread: View {
     @EnvironmentObject private var storyViewModel: StoryViewModel
 
     var body: some View {
-        ThreadedCommentSection(
+        LivePresence { ThreadedCommentSection(
             comment: comment,
             replies: viewModel.repliesFor(comment.id),
             isExpanded: viewModel.expandedThreads.contains(comment.id),
@@ -49,7 +49,7 @@ struct PostDetailCommentThread: View {
             },
             onEditComment: { target in onEditComment(target) },
             onRequestTranslation: { target in
-                let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
+                let lang = ReaderPrism.resolve(for: AuthManager.shared.currentUser).first?.lowercased() ?? "fr"
                 Task {
                     try? await PostService.shared.requestCommentTranslation(
                         postId: postId, commentId: target.id, targetLanguage: lang)
@@ -57,15 +57,15 @@ struct PostDetailCommentThread: View {
             },
             moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
             storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
-            presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
+            presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),
             replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
             replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-            replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
+            replyPresenceResolver: { PresenceManager.shared.knownPresenceState(for: $0) },
             hasMoreReplies: viewModel.expandedThreads.contains(comment.id)
                 && (viewModel.repliesHasMore[comment.id] ?? false),
             onLoadMoreReplies: { await viewModel.loadMoreReplies(comment.id, postId: postId) },
             highlightedCommentId: highlightedCommentId
-        )
+        ) }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
         .background(

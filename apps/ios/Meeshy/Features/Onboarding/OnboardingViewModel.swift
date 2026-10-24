@@ -133,7 +133,7 @@ final class OnboardingViewModel: ObservableObject {
         self.applyUser = applyUser ?? { AuthManager.shared.currentUser = $0 }
         self.settled = settled
         self.auth = auth
-        self.pause = pause ?? { try? await Task.sleep(for: $0) }
+        self.pause = pause ?? { _ = await cancellableSleep(for: $0) }
         self.contacts = contacts
         self.directory = directory
         self.birthDates = birthDates

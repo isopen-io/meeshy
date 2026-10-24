@@ -38,7 +38,6 @@ const LINK_VISIT_LABELS: Readonly<Record<LinkVisitField, AdminPlainCatalogKey>> 
 
 const ABUSE_LABELS: Readonly<Record<AbuseField, AdminPlainCatalogKey>> = {
   heavyPoints: 'admin.scale.abuse.heavyPoints',
-  clawbackHours: 'admin.scale.abuse.clawbackHours',
   unverifiedMaxPoints: 'admin.scale.abuse.unverifiedMaxPoints',
 };
 

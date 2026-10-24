@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.StoryViewer
 import me.meeshy.sdk.model.toStoryViewer
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.PagedResult
+import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.net.api.CreateCommentRequest
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
@@ -36,6 +38,7 @@ import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,6 +52,7 @@ class StoryRepository @Inject constructor(
     syncMetaDao: SyncMetaDao,
     private val outboxRepository: OutboxRepository,
     private val translationApi: TranslationApi,
+    private val archiveCache: MyStoriesArchiveCache = InMemoryMyStoriesArchiveCache(),
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -73,6 +77,15 @@ class StoryRepository @Inject constructor(
     /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
     suspend fun refresh() {
         cacheSource.revalidate()
+    }
+
+    /**
+     * A story this device just published joins the tray cache at once, so its ring hands off
+     * from the optimistic one without waiting for the next revalidation (iOS inserts the
+     * published story on success). The next revalidation stays authoritative.
+     */
+    suspend fun adoptPublished(story: ApiPost) {
+        cacheSource.upsertLocal(story)
     }
 
     /**
@@ -106,11 +119,79 @@ class StoryRepository @Inject constructor(
         return true
     }
 
+    /**
+     * Les stories déjà en main dans le cache de la barre, sans réseau : le lecteur s'ouvre
+     * sur ce que l'anneau touché montrait, hors ligne compris (iOS
+     * `StoryViewerContainer.ensureGroupAvailable`, cache d'abord).
+     */
+    suspend fun cachedStories(): List<ApiPost> = cacheSource.readLocal()
+
     suspend fun list(cursor: String? = null, limit: Int = 50): NetworkResult<List<ApiPost>> =
         apiCall { storyApi.list(cursor, limit) }
 
-    suspend fun markViewed(storyId: String): NetworkResult<Unit> =
-        apiCall { storyApi.markViewed(storyId) }
+    /** One cursor page of the caller's own stories (`GET posts/stories/mine`), pagination kept. */
+    suspend fun listMine(cursor: String? = null, limit: Int = 50): NetworkResult<PagedResult<List<ApiPost>>> =
+        pagedApiCall { storyApi.listMine(cursor, limit) }
+
+    /** The last drained « Mes stories » archive, served instantly while a drain revalidates. */
+    suspend fun cachedMyStories(): List<ApiPost>? = archiveCache.read()
+
+    /**
+     * Drains the caller's whole story archive page by page and caches it ([MyStoriesArchiveCache.KEY]).
+     * Stops on exhaustion (`hasMore` false or no `nextCursor`) or on stagnation — an empty page
+     * or a page bringing no new id — and after [maxPages] as a hard stop. A failure on the first
+     * page is a [NetworkResult.Failure]; a failure on a later page keeps what was already
+     * drained. A drain that returned nothing never overwrites a non-empty cache.
+     */
+    suspend fun drainMyStories(limit: Int = 50, maxPages: Int = MAX_ARCHIVE_PAGES): NetworkResult<List<ApiPost>> {
+        val collected = LinkedHashMap<String, ApiPost>()
+        var cursor: String? = null
+        repeat(maxPages) { page ->
+            val result = listMine(cursor, limit)
+            val paged = when (result) {
+                is NetworkResult.Success -> result.data
+                is NetworkResult.Failure ->
+                    return if (page == 0) result else finishDrain(collected)
+            }
+            val before = collected.size
+            paged.data.forEach { collected.putIfAbsent(it.id, it) }
+            val stagnant = paged.data.isEmpty() || collected.size == before
+            val next = paged.pagination?.nextCursor
+            if (stagnant || paged.pagination?.hasMore != true || next.isNullOrEmpty()) return finishDrain(collected)
+            cursor = next
+        }
+        return finishDrain(collected)
+    }
+
+    private suspend fun finishDrain(collected: Map<String, ApiPost>): NetworkResult<List<ApiPost>> {
+        val posts = collected.values.toList()
+        if (posts.isNotEmpty()) archiveCache.write(posts)
+        return NetworkResult.Success(posts)
+    }
+
+    /** Persists the screen's current « Mes stories » list so a delete or republish survives a restart. */
+    suspend fun persistMyStories(posts: List<ApiPost>) = archiveCache.write(posts)
+
+    /** `POST posts/{id}/republish` — the same story, fresh dates, zeroed engagement. */
+    suspend fun republish(storyId: String): NetworkResult<ApiPost> =
+        apiCall { storyApi.republish(storyId) }
+
+    /**
+     * La vue est appliquée au cache de la barre AVANT l'appel réseau : l'anneau et ses
+     * points se grisent dès le retour à la liste, et l'ordre (non vus d'abord) suit — même
+     * hors ligne, comme iOS qui marque la story vue localement. La vue est monotone : la
+     * revalidation et `story:updated` ne la défont pas ([StoryUpdateMerge]).
+     */
+    suspend fun markViewed(storyId: String): NetworkResult<Unit> {
+        markViewedLocally(storyId)
+        return apiCall { storyApi.markViewed(storyId) }
+    }
+
+    private suspend fun markViewedLocally(storyId: String) {
+        val cached = cacheSource.findLocal(storyId) ?: return
+        if (cached.isViewedByMe == true) return
+        cacheSource.upsertLocal(cached.copy(isViewedByMe = true))
+    }
 
     suspend fun delete(storyId: String): NetworkResult<Unit> =
         apiCall { storyApi.delete(storyId) }
@@ -155,10 +236,27 @@ class StoryRepository @Inject constructor(
                 kind = OutboxKind.PUBLISH_STORY,
                 lane = OutboxLanes.STORY,
                 targetId = "pending_${UUID.randomUUID()}",
-                payload = MeeshyApi.json.encodeToString(request),
+                payload = MeeshyApi.json.encodeToString(sealedForPublication(request)),
                 dependsOn = dependsOn.toSet(),
             ),
         )
+
+    /**
+     * A published canvas may only designate media the post owns (#5280): a canvas
+     * naming a row the post does not list paints BLANK for every viewer, with no
+     * error anywhere. The orphans are journaled (ids only — never content), then
+     * [PublishMediaWriteBack.seal] attaches everything the canvas designates —
+     * pre-uploaded media, sounds, stickers — so the server does not sweep it a day
+     * later as an abandoned upload. A caller that prefers to refuse the send asks
+     * [PublishMediaWriteBack.coherenceOf] first.
+     */
+    private fun sealedForPublication(request: CreateStoryRequest): CreateStoryRequest {
+        val coherence = PublishMediaWriteBack.coherenceOf(request)
+        if (coherence is PublishCoherence.Orphans) {
+            Timber.w("publish: canvas designates %d media the post did not list: %s", coherence.ids.size, coherence.ids)
+        }
+        return PublishMediaWriteBack.seal(request)
+    }
 
     /**
      * The story-publish queue as a **single consistent snapshot** (ARCHITECTURE.md
@@ -305,6 +403,8 @@ class StoryRepository @Inject constructor(
     }
 
     private companion object {
+        const val MAX_ARCHIVE_PAGES = 10
+
         /** Outbox states that still represent an un-rolled-back publish. */
         val LIVE_PUBLISH_STATES = setOf(OutboxState.PENDING, OutboxState.INFLIGHT)
     }

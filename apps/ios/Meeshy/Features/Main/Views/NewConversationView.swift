@@ -203,16 +203,17 @@ struct NewConversationView: View {
 
     private func selectedUserChip(_ user: SearchedUser) -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: user.displayName ?? user.username,
                 context: .custom(24),
                 accentColor: DynamicColorGenerator.colorForName(user.username),
                 secondaryColor: accentColor,
+                avatarURL: user.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
                 ring: user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
-            )
+            ) }
 
             Text(user.displayName ?? user.username)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
@@ -321,7 +322,7 @@ struct NewConversationView: View {
             emptyState
         } else {
             ForEach(viewModel.searchResults) { user in
-                userRow(user)
+                liveUserRow(user)
             }
         }
     }
@@ -355,7 +356,7 @@ struct NewConversationView: View {
         } else {
             contactsSectionHeader
             ForEach(viewModel.contacts) { user in
-                userRow(user)
+                liveUserRow(user)
             }
         }
     }
@@ -427,6 +428,10 @@ struct NewConversationView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private func liveUserRow(_ user: SearchedUser) -> some View {
+        LivePresence { userRow(user) }
+    }
+
     private func userRow(_ user: SearchedUser) -> some View {
         let isSelected = selectedUsers.contains { $0.id == user.id }
         let isBlocked = blockService.isBlocked(userId: user.id)
@@ -449,6 +454,7 @@ struct NewConversationView: View {
                     context: .userListItem,
                     accentColor: userColor,
                     secondaryColor: accentColor,
+                    avatarURL: user.avatar,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                     presenceState: presence,
                     ring: user.avatarRing,

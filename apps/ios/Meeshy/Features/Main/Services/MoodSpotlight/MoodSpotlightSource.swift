@@ -44,7 +44,7 @@ struct MoodSpotlightSource: MoodSpotlightSourcing {
 
     func fetchAuthor(userId: String) async throws -> MeeshyUser {
         let user = try await users.getProfileById(userId)
-        try? await CacheCoordinator.shared.profiles.save([user], for: user.id)
+        await bestEffort("moodSpotlightSource.profiles.save", category: .cache) { try await CacheCoordinator.shared.profiles.save([user], for: user.id) }
         return user
     }
 

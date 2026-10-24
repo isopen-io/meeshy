@@ -58,6 +58,10 @@ final class AttachmentDownloadCenter {
     /// L'origine de chaque téléchargement en cours : seule une clé `manual`
     /// vibre à sa fin ou à son échec.
     private var origins: [String: MediaDownloadOrigin] = [:]
+    /// Le profil le plus fort demandé pour chaque clé en vol (#11283) : un
+    /// préchargement lointain rejoint par une lecture ou un tap ne garde pas
+    /// ses restrictions.
+    private var requestedProfiles: [String: MediaTransferProfile] = [:]
 
     init(haptics: @escaping @MainActor (Haptic) -> Void = { AttachmentDownloadCenter.playHaptic($0) }) {
         self.haptics = haptics
@@ -86,6 +90,9 @@ final class AttachmentDownloadCenter {
     private var active: [String: DownloadProgress] = [:]
     private var tasks: [String: Task<Void, Never>] = [:]
     private let subject = PassthroughSubject<(key: String, event: Event), Never>()
+    /// Les passes qui attendent la fin d'une clé (`awaitEnd(of:)`), reprises
+    /// par `publish` à la fin — jamais par une relecture à cadence fixe.
+    private var endWaiters: [String: [UUID: CheckedContinuation<Event?, Never>]] = [:]
 
     /// La clé d'un média — celle sous laquelle le cache typé le range.
     nonisolated static func key(for urlString: String) -> String {
@@ -105,6 +112,49 @@ final class AttachmentDownloadCenter {
             .eraseToAnyPublisher()
     }
 
+    /// Le premier événement de `key` qui satisfait `predicate`, attendu sans
+    /// bloquer — `nil` si la tâche qui attend est annulée (#11550).
+    ///
+    /// Le tri se fait AVANT le passage en `async` : `.values` ne redemande un
+    /// élément qu'une fois le précédent consommé, et le sujet sans tampon
+    /// jette ce qu'il émet entre-temps — la fin qui suit de près une
+    /// progression se perdait, et la case restait floue.
+    func firstEvent(for key: String, where predicate: @escaping (Event) -> Bool) async -> Event? {
+        for await event in events(for: key).first(where: predicate).values {
+            return event
+        }
+        return nil
+    }
+
+    /// **La fin du téléchargement de `key`, signalée** (#9882) — finie,
+    /// échouée ou annulée —, `nil` si rien n'est en cours ou si la tâche qui
+    /// attend est annulée. L'attente s'inscrit sur le fil principal dans le
+    /// même pas que la lecture de l'état : aucune fin ne peut passer entre les
+    /// deux, et rien ne relit l'état à cadence fixe.
+    @discardableResult
+    func awaitEnd(of key: String) async -> Event? {
+        guard active[key] != nil, !Task.isCancelled else { return nil }
+        let id = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Event?, Never>) in
+                endWaiters[key, default: [:]][id] = continuation
+            }
+        } onCancel: {
+            Task { @MainActor in self.resumeEndWaiter(key: key, id: id, with: nil) }
+        }
+    }
+
+    /// Le nombre de passes qui attendent la fin de `key`.
+    func endWaiterCount(for key: String) -> Int {
+        endWaiters[key]?.count ?? 0
+    }
+
+    private func resumeEndWaiter(key: String, id: UUID, with event: Event?) {
+        guard let continuation = endWaiters[key]?.removeValue(forKey: id) else { return }
+        if endWaiters[key]?.isEmpty == true { endWaiters[key] = nil }
+        continuation.resume(returning: event)
+    }
+
     /// Point d'émission UNIQUE : met à jour l'état tenu puis diffuse.
     func publish(_ event: Event, for key: String) {
         switch event {
@@ -113,6 +163,8 @@ final class AttachmentDownloadCenter {
         case .finished, .failed, .cancelled:
             active[key] = nil
             tasks[key] = nil
+            requestedProfiles[key] = nil
+            endWaiters.removeValue(forKey: key)?.values.forEach { $0.resume(returning: event) }
         }
         subject.send((key: key, event: event))
     }
@@ -131,22 +183,53 @@ final class AttachmentDownloadCenter {
     /// montrera au geste suivant (le réel qui suit l'actif). Même registre,
     /// même clé, même dédoublonnage que `start` : la surface montée plus tard
     /// REJOINT ce téléchargement, ou le trouve fini. Aucune vibration, ni au
-    /// départ ni à la fin : l'utilisateur n'a rien demandé.
-    func prefetch(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) {
-        start(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, origin: .automatic)
+    /// départ ni à la fin : l'utilisateur n'a rien demandé. `profile` choisit la
+    /// session réseau (#11283) : un préchargement lointain la veut
+    /// discrétionnaire, et hors réseau facturé si le réglage vidéo le demande.
+    func prefetch(
+        urlString: String,
+        expectedSize: Int64,
+        cacheStore: CacheStoreKind,
+        profile: MediaTransferProfile = .standard
+    ) {
+        guard launch(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, profile: profile) else {
+            return
+        }
+        origins[Self.key(for: urlString)] = .automatic
     }
 
     /// `false` quand il n'y a rien à lancer — URL vide, ou clé déjà en cours.
-    private func launch(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) -> Bool {
+    private func launch(
+        urlString: String,
+        expectedSize: Int64,
+        cacheStore: CacheStoreKind,
+        profile: MediaTransferProfile = .standard
+    ) -> Bool {
         guard !urlString.isEmpty else { return false }
         let key = Self.key(for: urlString)
-        guard tasks[key] == nil else { return false }
+        guard tasks[key] == nil else {
+            requestedProfiles[key] = requestedProfiles[key].map { $0.merged(with: profile) } ?? profile
+            return false
+        }
         publish(.progress(DownloadProgress(downloadedBytes: 0, totalBytes: expectedSize)), for: key)
+        requestedProfiles[key] = profile
         tasks[key] = Task.detached { [weak self] in
             guard let self else { return }
-            await self.run(key: key, urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore)
+            await self.run(key: key, urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, profile: profile)
         }
         return true
+    }
+
+    /// Le profil le plus fort demandé pour `key` en vol, ou `nil`.
+    func requestedProfile(for key: String) -> MediaTransferProfile? {
+        requestedProfiles[key]
+    }
+
+    /// Le profil avec lequel reprendre `key` quand le transfert ouvert avec
+    /// `profile` a échoué sur le réseau — `nil` s'il couvrait déjà la demande.
+    private func escalatedProfile(for key: String, beyond profile: MediaTransferProfile) -> MediaTransferProfile? {
+        guard let requested = requestedProfiles[key], !profile.covers(requested) else { return nil }
+        return requested
     }
 
     /// Annule le téléchargement de `key` — pour TOUTES les surfaces qui le montrent.
@@ -207,7 +290,8 @@ final class AttachmentDownloadCenter {
         key resolvedKey: String,
         urlString: String,
         expectedSize: Int64,
-        cacheStore: CacheStoreKind
+        cacheStore: CacheStoreKind,
+        profile: MediaTransferProfile
     ) async {
         do {
             guard MeeshyConfig.resolveMediaURL(urlString) != nil else { throw URLError(.badURL) }
@@ -229,13 +313,7 @@ final class AttachmentDownloadCenter {
                 return
             }
 
-            // La progression arrive cadencée par le téléchargeur (au plus
-            // ~10 rapports par seconde), jamais un saut MainActor par paquet.
-            let data = try await store.data(for: resolvedKey, progress: { [weak self] written, expected in
-                Task { @MainActor in
-                    self?.report(key: resolvedKey, downloaded: written, total: expected > 0 ? expected : nil)
-                }
-            })
+            let data = try await download(from: store, resolvedKey: resolvedKey, profile: profile)
 
             if case .image = cacheStore, let image = UIImage(data: data) {
                 DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)
@@ -248,6 +326,32 @@ final class AttachmentDownloadCenter {
             // sortir en échec, sinon la surface resterait sur « téléchargement ».
             guard !Task.isCancelled else { return }
             await fail(key: resolvedKey)
+        }
+    }
+
+    /// Le funnel du store, avec le profil demandé. Si le transfert échoue sur
+    /// le réseau alors qu'une demande plus forte l'a rejoint entre-temps
+    /// (palier proche, tap), il reprend UNE fois avec le profil relevé.
+    private nonisolated func download(
+        from store: DiskCacheStore,
+        resolvedKey: String,
+        profile: MediaTransferProfile
+    ) async throws -> Data {
+        do {
+            return try await store.data(for: resolvedKey, profile: profile, progress: progressReporter(for: resolvedKey))
+        } catch let error as URLError {
+            guard let stronger = await escalatedProfile(for: resolvedKey, beyond: profile) else { throw error }
+            return try await store.data(for: resolvedKey, profile: stronger, progress: progressReporter(for: resolvedKey))
+        }
+    }
+
+    /// La progression arrive cadencée par le téléchargeur (au plus ~10
+    /// rapports par seconde), jamais un saut MainActor par paquet.
+    private nonisolated func progressReporter(for resolvedKey: String) -> MediaFileDownloader.ProgressHandler {
+        { [weak self] written, expected in
+            Task { @MainActor in
+                self?.report(key: resolvedKey, downloaded: written, total: expected > 0 ? expected : nil)
+            }
         }
     }
 }
@@ -326,6 +430,60 @@ extension AttachmentDownloadCenter {
     nonisolated private static func imageCandidates(_ attachment: MessageAttachment, displayedURL: String?) -> [String] {
         let variants = (attachment.imageVariants ?? []).map { $0.url }
         return ([attachment.fileUrl, displayedURL ?? ""] + variants).filter { !$0.isEmpty }
+    }
+}
+
+// MARK: - Bubble Image Source Law (ce qui est sur l'appareil d'abord)
+
+/// **La source qu'une case d'image AFFICHE** : une forme déjà sur l'appareil
+/// passe avant la variante qu'il faudrait encore télécharger.
+///
+/// La case choisissait la plus petite variante qui couvre sa largeur
+/// (`ImageVariantSelector`, bande passante 5.2), alors que le bouton
+/// « télécharger » de la bulle rapatrie l'ORIGINAL. Tant que la politique
+/// d'auto-téléchargement refusait, la variante restait absente et la photo
+/// restait sur son aperçu flou — nette en plein écran, floue dans le fil.
+/// L'ordre : la variante élue pour le réseau si elle est déjà là, sinon la
+/// plus légère variante DÉJÀ LÀ qui couvre encore la case, sinon l'original
+/// s'il est là, sinon la variante élue.
+enum BubbleImageSourceLaw {
+    nonisolated static func displayedURL(
+        variants: [MeeshyImageVariant],
+        originalURL: String,
+        originalWidth: Int?,
+        targetWidthPx: Int,
+        isOnDevice: (String) -> Bool
+    ) -> String? {
+        guard !originalURL.isEmpty else { return nil }
+        let networkPick = ImageVariantSelector.bestImageURL(
+            variants: variants,
+            originalURL: originalURL,
+            originalWidth: originalWidth,
+            targetWidthPx: targetWidthPx
+        )
+        if isOnDevice(networkPick) { return networkPick }
+        let coveringOnDevice = variants
+            .filter { !$0.url.isEmpty && $0.width >= targetWidthPx && $0.url != networkPick }
+            .sorted { ($0.width, $0.url) < ($1.width, $1.url) }
+            .map(\.url)
+            .first(where: isOnDevice)
+        if let coveringOnDevice { return coveringOnDevice }
+        if originalURL != networkPick, isOnDevice(originalURL) { return originalURL }
+        return networkPick
+    }
+
+    /// Le critère de production : celui-là même qui lève la politique dans
+    /// `ProgressiveCachedImage` — une forme élue « sur l'appareil » se charge
+    /// donc sans attendre un geste. Une forme `file://` est une lecture locale.
+    nonisolated static func isOnDevice(_ urlString: String) -> Bool {
+        urlString.hasPrefix("file://")
+            || LocalImagePresence.isOnDevice(resolvedURL: AttachmentDownloadCenter.key(for: urlString))
+    }
+
+    /// Seule la FIN d'un téléchargement pose l'original sur l'appareil.
+    nonisolated static func marksOriginalLanding(_ event: AttachmentDownloadCenter.Event) -> Bool {
+        if case .finished = event { return true }
+        return false
     }
 }
 

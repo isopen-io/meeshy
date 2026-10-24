@@ -156,12 +156,12 @@ RUN bun -e "\
   fs.writeFileSync('dist/build-info.json', JSON.stringify(info)); \
 "
 
-# La preuve que les cinq documents ET la révision sont là — ici, pas en
+# La preuve que les huit documents ET la révision sont là — ici, pas en
 # production. Sans elle, une régression du greffon donnerait une image qui
 # démarre, sert l'application, et rend une page blanche sur /about au
 # deuxième passage ; sans la seconde, le gate de dérive rougirait sur CHAQUE
 # image plutôt que sur une seule périmée.
-RUN set -eu; for p in about contact partners privacy terms; do \
+RUN set -eu; for p in about child-safety contact faq help partners privacy terms; do \
       test -s "/app/dist/$p.html" || { echo "MANQUE dist/$p.html"; exit 1; }; \
       test -s "/app/dist/$p/index.html" || { echo "MANQUE dist/$p/index.html"; exit 1; }; \
     done; \
@@ -170,7 +170,7 @@ RUN set -eu; for p in about contact partners privacy terms; do \
       || { echo "MANQUE dist/build-info.json"; exit 1; }; \
     test -s /app/dist/config.js || { echo "MANQUE dist/config.js"; exit 1; }; \
     if grep -q '"url":"config.js"\|url:"config.js"' /app/dist/sw.js; then echo "sw.js precache config.js"; exit 1; fi; \
-    echo "les cinq pages sont presentes et precachees, build-info.json ecrit"
+    echo "les huit pages sont presentes et precachees, build-info.json ecrit"
 
 # ===== SERVICE =====
 FROM docker.io/nginx:1.31-alpine AS runner

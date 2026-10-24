@@ -109,7 +109,7 @@ struct ConversationLinkCardBody: View, Equatable {
                                  showsStatusOverlays: false) {
                     Text(verbatim: initials)
                         .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .heavy, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
                 .scaledToFill()
             )

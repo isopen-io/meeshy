@@ -118,6 +118,16 @@ class LaunchRouterTest {
     }
 
     @Test
+    fun `a socket incoming offer carries its conversation into the call screen`() {
+        val route = LaunchRouter.routeIncomingSocketOffer(
+            offer = WaitingCall(callId = "call-c", callerId = "u1", callerName = "Bob", isVideo = false, conversationId = "conv-7"),
+            currentRoute = Routes.CONVERSATIONS,
+        )!!
+
+        assertThat(configOf(route).conversationId).isEqualTo("conv-7")
+    }
+
+    @Test
     fun `a socket incoming offer while already on the call screen yields no route`() {
         val route = LaunchRouter.routeIncomingSocketOffer(
             offer = WaitingCall(callId = "call-2", callerId = "u2", callerName = "Carol", isVideo = false),
@@ -164,5 +174,113 @@ class LaunchRouterTest {
         )!!
 
         assertThat(Uri.parse(route).getQueryParameter(CallRoute.ANSWER_ARG)).isEqualTo("false")
+    }
+
+    // ---- Un lien a jeton d'e-mail n'entre que par la forme exacte de l'e-mail, sur l'origine https (#10873, #10875)
+
+    private fun routeOf(uri: String): String? = LaunchRouter.routeForDeepLink(uri)
+
+    @Test
+    fun `the secret written in the fragment routes to validation`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link?via=email#token=abc123"))
+            .isEqualTo("auth/magic-link?token=abc123")
+    }
+
+    @Test
+    fun `the fragment prevails over the query`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link?token=old#token=new"))
+            .isEqualTo("auth/magic-link?token=new")
+    }
+
+    @Test
+    fun `a blank fragment secret falls back to the query`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link?token=old#token="))
+            .isEqualTo("auth/magic-link?token=old")
+    }
+
+    @Test
+    fun `the email-link alias written in the mails routes to validation`() {
+        assertThat(routeOf("https://meeshy.me/auth/email-link/magic-link#token=abc123"))
+            .isEqualTo("auth/magic-link?token=abc123")
+    }
+
+    @Test
+    fun `the historical path token routes to validation`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link/tok-3_A"))
+            .isEqualTo("auth/magic-link?token=tok-3_A")
+    }
+
+    @Test
+    fun `the default https port and an upper-case origin are the same origin`() {
+        assertThat(routeOf("https://meeshy.me:443/auth/magic-link#token=abc"))
+            .isEqualTo("auth/magic-link?token=abc")
+        assertThat(routeOf("HTTPS://MEESHY.ME/auth/magic-link#token=abc"))
+            .isEqualTo("auth/magic-link?token=abc")
+    }
+
+    @Test
+    fun `a token link received through the custom scheme is never routed`() {
+        listOf(
+            "meeshy://auth/magic-link?token=abc",
+            "meeshy://auth/magic-link#token=abc",
+            "meeshy://auth/magic-link/abc",
+            "meeshy://auth/email-link/magic-link#token=abc",
+            "meeshy://auth/verify-email#token=t&email=a%40b.co",
+            "meeshy://auth/reset-password#token=r",
+            "meeshy://reset-password#token=r",
+            "MEESHY://auth/magic-link?token=abc",
+            "Meeshy://Auth/Magic-Link?token=abc",
+        ).forEach { assertThat(routeOf(it)).isNull() }
+    }
+
+    @Test
+    fun `every variant of the exact form is refused`() {
+        listOf(
+            "https://meeshy.me/auth/magic-link/validate?token=abc",
+            "https://meeshy.me/auth/magic-link/abc/extra",
+            "https://meeshy.me/auth/magic-link/ab%20c",
+            "https://meeshy.me/auth/magic-link/?token=abc",
+            "https://meeshy.me//auth/magic-link?token=abc",
+            "https://meeshy.me/x/../auth/magic-link?token=abc",
+            "https://meeshy.me/AUTH/Magic-Link?token=abc",
+            "https://meeshy.me/auth%2Fmagic-link?token=abc",
+            "https://meeshy.me/%61uth/magic-link?token=abc",
+            "https://meeshy.me/auth/magic-link%20?token=abc",
+            "https://meeshy.me/auth/magic%E2%80%8B-link?token=abc",
+            "https://meeshy.me/auth/magic-link;x=1?token=abc",
+            "https://meeshy.me/auth/magic-linker?token=abc",
+            "https://user:pass@meeshy.me/auth/magic-link?token=abc",
+            "https://evil.example%5C@meeshy.me/auth/magic-link?token=abc",
+            "https://meeshy.me:8443/auth/magic-link?token=abc",
+            "http://meeshy.me/auth/magic-link?token=abc",
+        ).forEach { assertThat(routeOf(it)).isNull() }
+    }
+
+    @Test
+    fun `an origin that only looks like Meeshy is refused`() {
+        listOf(
+            "https://evil.example/auth/magic-link?token=abc",
+            "https://meeshy.me.evil.example/auth/magic-link?token=abc",
+            "https://meeshy.me@evil.example/auth/magic-link?token=abc",
+            "https://meeshy.me\\@evil.example/auth/magic-link?token=abc",
+            "https://notmeeshy.me/auth/magic-link?token=abc",
+            "https://www.evil.example/?u=https://meeshy.me/auth/magic-link?token=abc",
+        ).forEach { assertThat(routeOf(it)).isNull() }
+    }
+
+    @Test
+    fun `verification and reset links have no destination here and never route`() {
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t&email=a%40b.co")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/email-link/verify-email#token=t&email=a%40b.co")).isNull()
+        assertThat(routeOf("https://meeshy.me/reset-password#token=r")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/email-link/reset-password#token=r")).isNull()
+    }
+
+    @Test
+    fun `a magic link without any secret never routes`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/magic-link?via=email")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/magic-link#token=")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/magic-link#other=abc")).isNull()
     }
 }

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "story.tool.media",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.tool.audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.tool.text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.tool.drawing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.tool.texture",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.tool.timeline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.fab.open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.fab.badge",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.fab.badge.none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.fab.hint.open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.fab.hint.close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.grabber",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.grabber.hint.resize",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.grabber.hint.dismiss",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

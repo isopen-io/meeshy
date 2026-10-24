@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import UIKit
+import MeeshyUI
 
 /// Full-screen long-press preview for a STAGED (not-yet-sent) image or video
 /// attachment. The composer already holds the media locally
@@ -21,6 +22,7 @@ struct AttachmentQuickLookPreview: View {
     @State private var fullImage: UIImage?
     @State private var player: AVQueuePlayer?
     @State private var looper: AVPlayerLooper?
+    @State private var audioTracks = AudioTrackActivator()
 
     var body: some View {
         ZStack {
@@ -49,10 +51,12 @@ struct AttachmentQuickLookPreview: View {
                 guard let fileURL else { return }
                 let queue = AVQueuePlayer()
                 queue.isMuted = true
+                audioTracks.bind(to: queue, effectiveMuted: { true })
                 queue.allowsExternalPlayback = false
                 queue.preventsDisplaySleepDuringVideoPlayback = false
                 let item = AVPlayerItem(url: fileURL)
                 looper = AVPlayerLooper(player: queue, templateItem: item)
+                MediaPolicyMonitor.shared.adopt(queue, role: .watched)
                 player = queue
                 queue.play()
             }
@@ -63,6 +67,7 @@ struct AttachmentQuickLookPreview: View {
         .onDisappear {
             player?.pause()
             looper = nil
+            audioTracks.release()
             player = nil
         }
     }

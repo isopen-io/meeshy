@@ -9,7 +9,7 @@ struct InviteChoicesPanel: View {
     let isSignedIn: Bool
     let requireAccount: Bool
     let resumesGuestSession: Bool
-    let accountInitials: String?
+    let accountFace: InviteAccountFace?
     let isDark: Bool
     let onChoice: (InviteLandingChoice) -> Void
 
@@ -63,20 +63,22 @@ struct InviteChoicesPanel: View {
             onChoice(choice)
         } label: {
             HStack(spacing: MeeshySpacing.smPlus) {
-                if choice == .joinWithAccount, let initials = accountInitials, !initials.isEmpty {
-                    Text(verbatim: initials)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
-                        .foregroundColor(MeeshyColors.indigo600)
-                        .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-                        .background(Circle().fill(Color.white))
-                        .accessibilityHidden(true)
+                if choice == .joinWithAccount, let face = accountFace {
+                    CachedAvatarImage(
+                        urlString: face.avatarURL,
+                        name: face.name,
+                        size: MeeshyControlSize.small,
+                        accentColor: DynamicColorGenerator.colorForName(face.name)
+                    )
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
+                    .accessibilityHidden(true)
                 }
                 Text(title(choice))
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .heavy))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .frame(maxWidth: .infinity, minHeight: 56)
             .padding(.horizontal, MeeshySpacing.lg)
             .background(

@@ -19,12 +19,25 @@ import me.meeshy.sdk.model.isMeaningful
  * timestamps keep their incoming relative order, and every non-draft row keeps its
  * incoming order below the floated group.
  *
+ * Pinned rows come FIRST, in their incoming (activity) order, and a draft never floats a row
+ * above them nor reorders them (iOS `conversationsAreInOrder`: « Épinglées d'abord ; parmi les
+ * non-épinglées, les conversations avec un brouillon actif flottent en tête »). The section
+ * split keeps this order, so a pinned row left in a category or in the catch-all heads it.
+ *
  * A pure product rule (`:feature`), not an SDK atom: it encodes the "when to float"
  * decision. Kept off the Composable/ViewModel so every branch is JVM-testable.
  */
 public object DraftAwareOrdering {
 
     public fun apply(
+        conversations: List<ApiConversation>,
+        draftsById: Map<String, ConversationDraft>,
+    ): List<ApiConversation> {
+        val (pinned, unpinned) = conversations.partition { it.resolvedPreferences?.isPinned == true }
+        return pinned + floatDrafts(unpinned, draftsById)
+    }
+
+    private fun floatDrafts(
         conversations: List<ApiConversation>,
         draftsById: Map<String, ConversationDraft>,
     ): List<ApiConversation> {

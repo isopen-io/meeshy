@@ -8,8 +8,6 @@ public actor ThumbnailPrefetcher {
     public static let shared = ThumbnailPrefetcher()
 
     private let cache: DecodedImageCache
-    private var inFlight: Set<String> = []
-    private let maxConcurrent = 4
 
     public init(cache: DecodedImageCache = .shared) {
         self.cache = cache
@@ -22,36 +20,6 @@ public actor ThumbnailPrefetcher {
         let path = thumbnailPath(forKey: key)
         guard FileManager.default.fileExists(atPath: path.path) else { return nil }
         return await decodeFromDisk(url: path, cacheKey: key)
-    }
-
-    /// Prefetch thumbnails for a batch of keys
-    public func prefetchBatch(_ keys: [String]) async {
-        let keysToFetch = keys.filter { cache.get($0) == nil && !inFlight.contains($0) }
-            .prefix(maxConcurrent)
-
-        for key in keysToFetch { inFlight.insert(key) }
-
-        // Compute paths before entering the task group to avoid actor isolation issues
-        let keyPathPairs = keysToFetch.map { ($0, thumbnailPath(forKey: $0)) }
-
-        await withTaskGroup(of: Void.self) { group in
-            for (key, path) in keyPathPairs {
-                group.addTask { [cache] in
-                    guard FileManager.default.fileExists(atPath: path.path) else { return }
-                    guard let data = try? Data(contentsOf: path, options: .mappedIfSafe) else { return }
-                    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return }
-                    let options: [CFString: Any] = [
-                        kCGImageSourceThumbnailMaxPixelSize: 300,
-                        kCGImageSourceCreateThumbnailFromImageAlways: true,
-                        kCGImageSourceShouldCacheImmediately: true
-                    ]
-                    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return }
-                    cache.set(cgImage, forKey: key)
-                }
-            }
-        }
-
-        for key in keysToFetch { inFlight.remove(key) }
     }
 
     /// Save raw thumbnail data to disk
@@ -72,19 +40,12 @@ public actor ThumbnailPrefetcher {
         }
     }
 
-    /// Decode from disk via mmap + CGImageSource — NEVER on MainActor
+    /// Décode depuis le disque par le sous-échantillonneur unique (#11923),
+    /// orientation EXIF comprise, sans recopier le fichier en mémoire — jamais
+    /// sur le MainActor.
     private func decodeFromDisk(url: URL, cacheKey: String) async -> CGImage? {
         await Task.detached(priority: .utility) { [cache] in
-            guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
-            guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-
-            let options: [CFString: Any] = [
-                kCGImageSourceThumbnailMaxPixelSize: 300,
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceShouldCacheImmediately: true
-            ]
-
-            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+            guard let cgImage = ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: 300, decodeImmediately: true)
             else { return nil }
 
             cache.set(cgImage, forKey: cacheKey)

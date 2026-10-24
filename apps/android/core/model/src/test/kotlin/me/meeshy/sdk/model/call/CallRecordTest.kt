@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.call
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.junit.Test
 
@@ -25,8 +26,8 @@ class CallRecordTest {
         conversationTitle: String? = "Team",
         conversationAvatar: String? = null,
         durationSec: Int = 0,
-        bytesSent: Int? = null,
-        bytesReceived: Int? = null,
+        bytesSent: Long? = null,
+        bytesReceived: Long? = null,
         peer: CallHistoryPeer? = null,
     ): CallRecord = CallRecord(
         callId = "c1",
@@ -158,8 +159,8 @@ class CallRecordTest {
 
     @Test
     fun `durationLabel formats sub-minute and minute durations as M SS`() {
-        assertThat(record(durationSec = 5).durationLabel).isEqualTo("0:05")
-        assertThat(record(durationSec = 65).durationLabel).isEqualTo("1:05")
+        assertThat(record(durationSec = 5).durationLabel).isEqualTo("00:05")
+        assertThat(record(durationSec = 65).durationLabel).isEqualTo("01:05")
         assertThat(record(durationSec = 600).durationLabel).isEqualTo("10:00")
     }
 
@@ -235,7 +236,7 @@ class CallRecordTest {
         assertThat(decoded.callId).isEqualTo("call_1")
         assertThat(decoded.directionKind).isEqualTo(CallDirection.OUTGOING)
         assertThat(decoded.mediaType).isEqualTo(CallMediaType.AUDIO_VIDEO)
-        assertThat(decoded.durationLabel).isEqualTo("5:00")
+        assertThat(decoded.durationLabel).isEqualTo("05:00")
         assertThat(decoded.dataLabel).isEqualTo("1.5 MB")
         assertThat(decoded.displayName).isEqualTo("Alice W.")
         assertThat(decoded.avatarUrl).isEqualTo("alice.png")
@@ -268,5 +269,66 @@ class CallRecordTest {
         assertThat(decoded.avatarUrl).isEqualTo("guild.png")
         assertThat(decoded.durationLabel).isEqualTo("")
         assertThat(decoded.dataLabel).isNull()
+    }
+
+    @Test
+    fun `participants absent from the wire decode to an empty list`() {
+        val rec = json.decodeFromString<CallRecord>(MINIMAL_JSON)
+        assertThat(rec.participants).isEmpty()
+    }
+
+    @Test
+    fun `participants present on the wire are decoded tolerantly`() {
+        val rec = json.decodeFromString<CallRecord>(
+            MINIMAL_JSON.dropLast(1) +
+                ""","participants":[{"participantId":"p1","userId":"u1","username":"ana","displayName":"Ana","avatar":"a.png"},{"displayName":"Bob"}]}""",
+        )
+        assertThat(rec.participants.map { it.displayName }).containsExactly("Ana", "Bob").inOrder()
+        assertThat(rec.participants[0].userId).isEqualTo("u1")
+        assertThat(rec.participants[0].avatar).isEqualTo("a.png")
+    }
+
+    @Test
+    fun `group label gives the first two names then the count of others`() {
+        fun group(vararg names: String) = CallRecord(
+            callId = "g", conversationId = "c", conversationType = "group", mode = "sfu",
+            status = "ended", direction = "incoming", isVideo = false,
+            startedAt = "2026-06-20T10:00:00Z", durationSec = 0,
+            participants = names.mapIndexed { i, n -> CallHistoryParticipant(participantId = "p$i", displayName = n) },
+        )
+        assertThat(group().participantsLabel).isNull()
+        assertThat(group("A").participantsLabel).isEqualTo("A")
+        assertThat(group("A", "B").participantsLabel).isEqualTo("A, B")
+        assertThat(group("A", "B", "C", "D").participantsLabel).isEqualTo("A, B +2")
+    }
+
+    @Test
+    fun `a long call past 2 GB in one direction still decodes and labels its data`() {
+        val raw = """{"callId":"c9","conversationId":"conv1","conversationType":"direct","mode":"p2p",
+            "status":"ended","direction":"outgoing","isVideo":true,"startedAt":"2026-07-01T10:00:00.000Z",
+            "durationSec":7200,"bytesSent":3000000000,"bytesReceived":2500000000}"""
+
+        val decoded = json.decodeFromString<CallRecord>(raw)
+
+        assertThat(decoded.bytesSent).isEqualTo(3_000_000_000L)
+        assertThat(decoded.dataLabel).isEqualTo("5.1 GB")
+    }
+
+    @Test
+    fun `two counters whose sum overflows an int still give a positive data label`() {
+        assertThat(record(bytesSent = 2_000_000_000L, bytesReceived = 2_000_000_000L).dataLabel).isEqualTo("3.7 GB")
+    }
+
+    @Test
+    fun `a nameless record falls back to the name the screen passes in its language`() {
+        val nameless = record(conversationTitle = null, peer = null)
+
+        assertThat(nameless.displayName(fallback = "Unknown")).isEqualTo("Unknown")
+        assertThat(record(conversationTitle = "Team").displayName(fallback = "Unknown")).isEqualTo("Team")
+    }
+
+    private companion object {
+        const val MINIMAL_JSON =
+            """{"callId":"c1","conversationId":"conv1","conversationType":"group","mode":"sfu","status":"ended","direction":"incoming","isVideo":false,"startedAt":"2026-06-20T10:00:00Z","durationSec":0}"""
     }
 }

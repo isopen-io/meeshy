@@ -436,7 +436,7 @@ struct StoryViewerView: View {
             // primitives (règle « Zero Unnecessary Re-render » : pas
             // d'@ObservedObject sur ces singletons dans la face du cube).
             neighborPresence: neighborCubeGroup.flatMap {
-                PresenceManager.shared.presenceMap[$0.id] ?? $0.authorPresence
+                PresenceManager.shared.servedPresence(for: $0.id, fallback: $0.authorPresence)
             },
             neighborIsFriend: neighborCubeGroup.map { FriendshipCache.shared.isFriend($0.id) } ?? false,
             isPresented: $isPresented,
@@ -662,6 +662,7 @@ struct StoryViewerView: View {
     /// scrub, or full-screen picker). Drives the heart-button bounce in the
     /// sidebar.
     @State private var heartBouncePulse: Int = 0
+    @State var delays = DelayedActions() // internal : extensions cross-fichiers
     @State var sharedContentWrapper: SharedContentWrapper? // internal : cause de boucle (#9821)
     /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
     @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
@@ -747,7 +748,7 @@ struct StoryViewerView: View {
             storyCommentExpandedThreads: storyCommentExpandedThreads,
             storyCommentLoadingReplies: storyCommentLoadingReplies,
             isLoadingComments: isLoadingComments,
-            commentsUserLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
+            commentsReaderLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isContentReady: $isContentReady,
             showEmojiStrip: $showEmojiStrip,
             showFullEmojiPicker: $showFullEmojiPicker,
@@ -797,12 +798,12 @@ struct StoryViewerView: View {
             sendComment: { text, effectFlags, parentId, pendingMedia, location in
                 sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia, location: location)
             },
-            makeStoryCommentRow: { comment, userLang in
-                makeStoryCommentRow(comment, userLang: userLang)
+            makeStoryCommentRow: { comment, readerLanguages in
+                makeStoryCommentRow(comment, readerLanguages: readerLanguages)
             },
             toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
             makeStoryExternalShareURL: { makeStoryExternalShareURL($0) },
-            deleteCurrentStory: { deleteCurrentStory(reason: $0) },
+            storyWithdrawal: StoryWithdrawalActions(delete: { deleteCurrentStory(reason: $0) }, makePrivate: { StoryPrivatization.makePrivate(currentStory, of: currentGroup, reason: $0, viewModel: viewModel, dismiss: dismissViewer) }),
             dismissViewer: { dismissViewer() },
             reportStory: { storyId, reportType, reason in
                 try await ReportService.shared.reportStory(storyId: storyId, reportType: reportType, reason: reason)
@@ -857,8 +858,8 @@ struct StoryViewerView: View {
         resolvedViewerLanguageChain.first
     }
 
-    /// Chaine complete : systemLanguage → regionalLanguage → customDestinationLanguage → "fr"
-    /// (cf. `MeeshyUser.preferredContentLanguages`). Utilisee par le reader pour resoudre
+    /// Chaine complete : systemLanguage → regionalLanguage → customDestinationLanguage → locale appareil,
+    /// sans repli « fr » (`ReaderPrism.resolve(for:)`, #11832). Utilisee par le reader pour resoudre
     /// les traductions selon le Prisme Linguistique.
     ///
     /// Quand l'utilisateur explore une autre langue via le picker (`sessionLanguageOverride`),
@@ -872,7 +873,7 @@ struct StoryViewerView: View {
     /// documented in apps/ios/CLAUDE.md.
     var resolvedViewerLanguageChain: [String] {
         Self.viewerLanguageChain(
-            base: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            base: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             override: sessionLanguageOverride
         )
     }

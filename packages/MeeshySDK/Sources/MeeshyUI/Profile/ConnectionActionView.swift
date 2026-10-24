@@ -104,7 +104,7 @@ public struct ConnectionActionView: View {
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
             }
             Text(text)
-                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
         }
         .foregroundColor(color)
         .padding(.horizontal, MeeshySpacing.smPlus)
@@ -122,7 +122,7 @@ public struct ConnectionActionView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     .background(Circle().fill(MeeshyColors.error.opacity(MeeshyOpacity.light)))
             }
@@ -134,7 +134,7 @@ public struct ConnectionActionView: View {
             } label: {
                 Image(systemName: "checkmark")
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     .background(Circle().fill(MeeshyColors.success))
             }
@@ -153,9 +153,9 @@ public struct ConnectionActionView: View {
                 Image(systemName: "clock")
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(pendingLabel)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
-            .foregroundColor(MeeshyColors.warning)
+            .foregroundStyle(MeeshyColors.warning)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(MeeshyColors.warning.opacity(MeeshyOpacity.light)))
@@ -174,9 +174,9 @@ public struct ConnectionActionView: View {
                 Image(systemName: "person.badge.plus")
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(addLabel)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(accentColor))

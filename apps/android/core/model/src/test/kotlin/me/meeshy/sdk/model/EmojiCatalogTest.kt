@@ -4,36 +4,104 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * Guards the emoji picker catalog against accidental omission — the port of
- * iOS `EmojiCategory.all` must keep its six categories and non-empty content.
+ * Guards the emoji picker catalog — the port of iOS `EmojiGridCategory` must keep
+ * its ten tabs in order, with content in each, and no repeated emoji inside a tab
+ * (the grid keys its cells by emoji, so a repeat would crash the lazy grid).
  */
 class EmojiCatalogTest {
 
     @Test
-    fun `category order matches iOS`() {
+    fun `ten categories in the iOS tab order`() {
         assertThat(EmojiCatalog.categories.map { it.id })
-            .containsExactly("reactions", "faces", "gestures", "hearts", "animals", "objects")
+            .containsExactly(
+                EmojiCategoryId.RECENT,
+                EmojiCategoryId.SMILEYS,
+                EmojiCategoryId.PEOPLE,
+                EmojiCategoryId.ANIMALS,
+                EmojiCategoryId.FOOD,
+                EmojiCategoryId.ACTIVITIES,
+                EmojiCategoryId.TRAVEL,
+                EmojiCategoryId.OBJECTS,
+                EmojiCategoryId.SYMBOLS,
+                EmojiCategoryId.FLAGS,
+            )
             .inOrder()
     }
 
     @Test
-    fun `every category has an icon and at least eight emojis`() {
-        EmojiCatalog.categories.forEach { category ->
-            assertThat(category.icon).isNotEmpty()
-            assertThat(category.emojis.size).isAtLeast(8)
+    fun `the recent tab carries no fixed content and the nine others carry plenty`() {
+        val byId = EmojiCatalog.categories.associateBy { it.id }
+        assertThat(byId.getValue(EmojiCategoryId.RECENT).emojis).isEmpty()
+        EmojiCatalog.searchableCategories.forEach { category ->
+            assertThat(category.emojis.size).isAtLeast(60)
         }
     }
 
     @Test
-    fun `category ids are unique`() {
-        val ids = EmojiCatalog.categories.map { it.id }
-        assertThat(ids.toSet()).hasSize(ids.size)
+    fun `no emoji is repeated inside a category`() {
+        EmojiCatalog.categories.forEach { category ->
+            assertThat(category.emojis.toSet()).hasSize(category.emojis.size)
+        }
+    }
+
+    @Test
+    fun `category keys are unique and round-trip`() {
+        val keys = EmojiCategoryId.entries.map { it.key }
+        assertThat(keys.toSet()).hasSize(keys.size)
+        EmojiCategoryId.entries.forEach { id ->
+            assertThat(EmojiCategoryId.fromKey(id.key)).isEqualTo(id)
+        }
+        assertThat(EmojiCategoryId.fromKey("nope")).isNull()
+        assertThat(EmojiCategoryId.fromKey(null)).isNull()
+    }
+
+    @Test
+    fun `searchable categories are the catalog without the recent tab`() {
+        assertThat(EmojiCatalog.searchableCategories.map { it.id })
+            .containsExactlyElementsIn(EmojiCategoryId.entries - EmojiCategoryId.RECENT)
+            .inOrder()
     }
 
     @Test
     fun `default quick reactions are the iOS strip`() {
         assertThat(EmojiCatalog.defaultQuickReactions)
-            .containsExactly("❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "👍")
+            .containsExactly(
+                "👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉",
+                "💯", "😍", "👀", "🤣", "💪", "✨", "🥺",
+            )
             .inOrder()
+        assertThat(EmojiCatalog.defaultQuickReactions).hasSize(15)
+    }
+
+    @Test
+    fun `the double tap emoji is the heart`() {
+        assertThat(EmojiCatalog.DOUBLE_TAP_EMOJI).isEqualTo("❤️")
+        assertThat(EmojiCatalog.defaultQuickReactions).contains(EmojiCatalog.DOUBLE_TAP_EMOJI)
+    }
+
+    @Test
+    fun `the reaction picker has six tabs in iOS order`() {
+        assertThat(ReactionPickerCategories.all.map { it.id.key })
+            .containsExactly("reactions", "faces", "gestures", "hearts", "animals", "objects")
+            .inOrder()
+        assertThat(ReactionPickerCategories.all.all { it.emojis.isNotEmpty() }).isTrue()
+    }
+
+    @Test
+    fun `the reaction bar defaults to scale one and a half with a 1_35 hover`() {
+        assertThat(ReactionBarLaw.DEFAULT_SCALE).isEqualTo(1.5f)
+        assertThat(ReactionBarLaw.HOVER_SCALE).isEqualTo(1.35f)
+    }
+
+    @Test
+    fun `every default quick reaction can be found in the grid`() {
+        val gridEmojis = EmojiCatalog.searchableCategories.flatMap { it.emojis }.toSet()
+        assertThat(gridEmojis).containsAtLeastElementsIn(EmojiCatalog.defaultQuickReactions)
+    }
+
+    @Test
+    fun `emojis of a category are served by id`() {
+        assertThat(EmojiCatalog.emojis(EmojiCategoryId.FLAGS)).contains("🇫🇷")
+        assertThat(EmojiCatalog.emojis(EmojiCategoryId.RECENT)).isEmpty()
     }
 }

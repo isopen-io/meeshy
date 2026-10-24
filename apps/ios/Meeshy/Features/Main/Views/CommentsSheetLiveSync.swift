@@ -33,7 +33,7 @@ struct CommentsSheetLiveSync: ViewModifier {
                     .receive(on: DispatchQueue.main)
                     .filter { [postId = post.id] in $0.postId == postId }
             ) { data in
-                let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                 let updated = FeedComment(api: data.comment, preferredLanguages: langs)
                 let topLevelWasLoaded = liveComments != nil
                 applyEdit(updated)
@@ -125,7 +125,7 @@ struct CommentsSheetLiveSync: ViewModifier {
         // Parité effets + Prisme avec le mapping REST (`mapFetchedComments`) :
         // sans effectFlags, un commentaire stylé (lueur/pulse) arrivant en
         // temps réel rendait SANS ses effets dans cette feuille.
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         let feedComment = FeedComment(api: data.comment, preferredLanguages: langs)
         // The echoed event for OUR own just-sent comment: replace the optimistic
         // placeholder in place instead of duplicating it. Primary key: the
@@ -151,7 +151,7 @@ struct CommentsSheetLiveSync: ViewModifier {
                 // complet quand le fil n'a pas (encore) été chargé ici.
                 let replies = existing
                 Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(replies), for: "replies-\(parentId)")
+                    await bestEffort("commentsSheetLiveSync.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(replies), for: "replies-\(parentId)") }
                 }
             } else if !existing.contains(where: { $0.id == feedComment.id }) {
                 existing.insert(feedComment, at: 0)
@@ -172,7 +172,7 @@ struct CommentsSheetLiveSync: ViewModifier {
                 let snapshot = current
                 let postId = post.id
                 Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(snapshot), for: "post-\(postId)")
+                    await bestEffort("commentsSheetLiveSync.comments.savePreservingFreshness.2", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(snapshot), for: "post-\(postId)") }
                 }
             } else if !current.contains(where: { $0.id == feedComment.id }) {
                 current.insert(feedComment, at: 0)
@@ -183,7 +183,7 @@ struct CommentsSheetLiveSync: ViewModifier {
     }
 
     private func handleCommentTranslation(_ data: SocketCommentTranslationUpdatedData) {
-        let langs = (AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             .filter { !$0.isEmpty }.map { $0.lowercased() }
         guard let incomingRank = langs.firstIndex(where: { $0 == data.language.lowercased() }) else { return }
         func shouldApply(_ comment: FeedComment) -> Bool {
@@ -232,7 +232,7 @@ struct CommentsSheetLiveSync: ViewModifier {
         guard !writes.isEmpty else { return }
         Task {
             for write in writes {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(write.comments, for: write.key)
+                await bestEffort("commentsSheetLiveSync.comments.savePreservingFreshness.3", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(write.comments, for: write.key) }
             }
         }
     }

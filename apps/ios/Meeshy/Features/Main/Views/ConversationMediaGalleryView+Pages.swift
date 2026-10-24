@@ -509,8 +509,7 @@ struct GalleryVideoPage: View, Equatable {
     /// La vidéo est-elle prête à jouer sans téléchargement ? Gouverne
     /// l'autoplay de la page active (le « et play » du double-tap).
     private var isReadyForAutoplay: Bool {
-        if case .ready = availability { return true }
-        return false
+        availability.playsNow(fileUrl: attachment.fileUrl)
     }
 
     /// Le verdict de montage du MOTEUR (#9575), au rôle plein écran : la page
@@ -674,8 +673,7 @@ struct GalleryVideoPage: View, Equatable {
         // sur une vidéo qui joue.
         .task(id: isPlayerActive) {
             guard isPlayerActive, !surfaceReady else { return }
-            try? await Task.sleep(for: .milliseconds(2500))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(2500)), !Task.isCancelled else { return }
             surfaceReady = true
         }
         .adaptiveOnChange(of: isPlayerAttached) { _, attached in
@@ -819,7 +817,8 @@ struct GalleryVideoPage: View, Equatable {
     private var playOrDownloadButton: some View {
         Button {
             switch availability {
-            case .ready:
+            case .ready, .downloading where isReadyForAutoplay:
+                // #12027 : un téléchargement lisible se joue dès sa tête.
                 // Défense en profondeur : la galerie n'exprime jamais de mute
                 // forcé — si une autre surface (le feed) a laissé `isForceMuted`
                 // activé (elle le relâche normalement d'elle-même en perdant
@@ -843,7 +842,7 @@ struct GalleryVideoPage: View, Equatable {
                 .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.intense))
         }
         .disabled({
-            if case .downloading = availability { return true }
+            if case .downloading = availability { return !isReadyForAutoplay }
             return false
         }())
         .accessibilityLabel(playOrDownloadAccessibilityLabel)
@@ -853,7 +852,7 @@ struct GalleryVideoPage: View, Equatable {
     /// / progression). Les glyphes internes sont décoratifs.
     private var playOrDownloadAccessibilityLabel: String {
         switch availability {
-        case .ready:
+        case .ready, .downloading where isReadyForAutoplay:
             return String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main)
         case .needsDownload:
             return String(localized: "media.downloadVideo", defaultValue: "Télécharger la vidéo", bundle: .main)
@@ -868,20 +867,20 @@ struct GalleryVideoPage: View, Equatable {
         // fixe (56/64pt) — les scaler déborderait le cercle. État porté par
         // `playOrDownloadAccessibilityLabel` sur le bouton parent.
         switch availability {
-        case .ready:
+        case .ready, .downloading where isReadyForAutoplay:
             Image(systemName: "play.fill")
                 .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
-                .foregroundColor(MeeshyColors.mediaChromeForeground)
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
                 .offset(x: 2)
         case .needsDownload:
             VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: MeeshyIconSize.xl, weight: .bold))
-                    .foregroundColor(MeeshyColors.mediaChromeForeground)
+                    .foregroundStyle(MeeshyColors.mediaChromeForeground)
                 if attachment.fileSize > 0 {
                     Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                        .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                 }
             }
         case .downloading(let progress):

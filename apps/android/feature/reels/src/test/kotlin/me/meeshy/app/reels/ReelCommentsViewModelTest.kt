@@ -4,6 +4,8 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import me.meeshy.sdk.lang.LanguageIdentification
+import me.meeshy.sdk.lang.LanguageIdentifying
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
@@ -61,9 +63,22 @@ class ReelCommentsViewModelTest {
             createdAt = createdAt,
         )
 
-    private fun viewModel(): ReelCommentsViewModel {
+    private fun viewModel(
+        identifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    ): ReelCommentsViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(me)
-        return ReelCommentsViewModel(repo, session, socialSocket)
+        return ReelCommentsViewModel(repo, session, socialSocket, identifier)
+    }
+
+    @Test
+    fun post_leavesInTheAuthorsLanguageWithoutAClearSignal() = runTest {
+        coEvery { repo.getComments("r1") } returns NetworkResult.Success(emptyList())
+        val vm = viewModel(LanguageIdentifying { LanguageIdentification("pt", 0.4) })
+        vm.load("r1")
+
+        vm.post("Commentaire test")
+
+        coVerify(exactly = 1) { repo.addComment("r1", "Commentaire test", null, null, null, "fr") }
     }
 
     // MARK: - Loading
@@ -290,7 +305,7 @@ class ReelCommentsViewModelTest {
     fun post_optimisticPending_thenSentOnAck() = runTest {
         coEvery { repo.getComments("r1") } returns NetworkResult.Success(emptyList())
         val gate = CompletableDeferred<NetworkResult<ApiPostComment>>()
-        coEvery { repo.addComment("r1", "hi", any(), any()) } coAnswers { gate.await() }
+        coEvery { repo.addComment("r1", "hi", any(), any(), any(), any()) } coAnswers { gate.await() }
         val vm = viewModel()
         vm.load("r1")
 
@@ -311,7 +326,7 @@ class ReelCommentsViewModelTest {
     @Test
     fun post_failure_marksRowFailed() = runTest {
         coEvery { repo.getComments("r1") } returns NetworkResult.Success(emptyList())
-        coEvery { repo.addComment("r1", "oops", any(), any()) } returns NetworkResult.Failure(ApiError("no net"))
+        coEvery { repo.addComment("r1", "oops", any(), any(), any(), any()) } returns NetworkResult.Failure(ApiError("no net"))
         val vm = viewModel()
         vm.load("r1")
 
@@ -329,20 +344,20 @@ class ReelCommentsViewModelTest {
         vm.post("   ")
 
         assertThat(vm.state.value.comments).isEmpty()
-        coVerify(exactly = 0) { repo.addComment(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { repo.addComment(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun retry_resendsFailedComment_toSent() = runTest {
         coEvery { repo.getComments("r1") } returns NetworkResult.Success(emptyList())
-        coEvery { repo.addComment("r1", "again", any(), any()) } returns NetworkResult.Failure(ApiError("flaky"))
+        coEvery { repo.addComment("r1", "again", any(), any(), any(), any()) } returns NetworkResult.Failure(ApiError("flaky"))
         val vm = viewModel()
         vm.load("r1")
         vm.post("again")
         val failed = vm.state.value.comments.single()
         assertThat(failed.status).isEqualTo(ReelCommentStatus.Failed)
 
-        coEvery { repo.addComment("r1", "again", any(), any()) } returns
+        coEvery { repo.addComment("r1", "again", any(), any(), any(), any()) } returns
             NetworkResult.Success(wire("server9", content = "again", createdAt = "2026-06-20T12:30:00Z"))
         vm.retry(failed.clientId!!)
 
@@ -359,7 +374,7 @@ class ReelCommentsViewModelTest {
 
         vm.retry("ghost")
 
-        coVerify(exactly = 0) { repo.addComment(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { repo.addComment(any(), any(), any(), any(), any(), any()) }
     }
 
     // MARK: - Realtime

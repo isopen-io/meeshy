@@ -9,9 +9,10 @@ import { AdminFormError } from '@/components/admin/form';
 import { AdminErrorState, AdminInlineNotice, AdminSkeleton } from '@/components/admin/states';
 import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { Sheet } from '@/components/sheet';
-import { cooldownOf, operationRunning } from '@/lib/admin/host-metrics';
 import { formatBytes } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
+import { AWAITED_RUN_MAX_MS, awaitedRunOf, awaitedServed, operationCardOf, opsStatusRefreshMs } from '@/lib/admin/ops-run-view';
+import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { ADMIN_OPS_STATUS_KEY, SERVER_OPERATIONS_SHOWN, loadOpsStatus, triggerServerOperation, type AdminOpsStatus } from '@/lib/api/admin-ops';
@@ -23,18 +24,22 @@ import { useOnline } from '@/lib/net/online';
 import { BackupsSection } from './admin-monitoring-backups';
 
 /**
- * **LA SAUVEGARDE ET LA PURGE DES IMAGES** (#10396) — deux cartes : le dernier passage
- * (statut, fin, octets récupérés), le délai avant la prochaine, et le bouton réservé au
- * rang souverain. La confirmation exige de TAPER le nom de l'opération (`backup`,
+ * **LA SAUVEGARDE ET LE NETTOYAGE** (#10396, #11441) — deux cartes : le dernier passage
+ * (statut, fin, octets récupérés), le délai avant la prochaine, et le bouton, offert au
+ * RANG D'ADMINISTRATION (ADMIN et BIGBOSS, demande porteur 2026-10-21 ; la passerelle
+ * garde la même règle, et journalise chaque tentative). Le motif est proposé à l'ADMIN
+ * (`useAdminMotive`), facultatif. La confirmation exige de TAPER le nom de l'opération (`backup`,
  * `image-prune`) — la passerelle compare le même mot. Les refus se disent en mots :
- * trop tôt (409), déjà en cours (409), relais absent (503). Le statut se relit toutes les
- * 5 s tant qu'une opération est en file ou en cours, 30 s sinon.
+ * trop tôt (409), déjà en cours (409), relais absent ou journal indisponible (503). Le statut se relit toutes les
+ * 5 s tant qu'une opération est en file ou en cours, 30 s sinon — la règle est le modèle de vue
+ * pur `lib/admin/ops-run-view.ts` (#10467), témoigné hors du DOM.
  */
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
 function refusalOf(failure: ApiFailure, language: AdminLanguage): string {
   if (failure.code === 'OPERATION_COOLDOWN') return translateAdmin(language, 'admin.ops.refused.cooldown');
   if (failure.code === 'OPERATION_IN_PROGRESS') return translateAdmin(language, 'admin.ops.refused.inProgress');
+  if (failure.code === 'AUDIT_UNAVAILABLE') return translateAdmin(language, 'admin.ops.refused.audit');
   if (failure.code === 'OPS_RELAY_UNAVAILABLE' || failure.status === 503) return translateAdmin(language, 'admin.ops.refused.relay');
   if (failure.status === 403) return translateAdmin(language, 'admin.kit.refused.permission');
   if (failure.status === 0) return translateAdmin(language, 'admin.kit.refused.network');
@@ -56,8 +61,9 @@ function ConfirmOperation({
   readonly onConfirm: (reason: string) => void;
   readonly onCancel: () => void;
 }) {
+  const proposed = useAdminMotive(language).fallback;
   const [typed, setTyped] = useState('');
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(proposed ?? '');
   const typedId = useId();
   const reasonId = useId();
   const field = { minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK } as const;
@@ -89,14 +95,23 @@ function ConfirmOperation({
         </label>
         <label htmlFor={reasonId} className="grid gap-2 text-body" style={{ color: INK }}>
           {translateAdmin(language, 'admin.ops.action.reason')}
-          <input id={reasonId} data-admin-ops-reason value={reason} maxLength={500} onInput={(event) => setReason(event.currentTarget.value)} className={`rounded-chip px-3 text-body ${FOCUS}`} style={field} />
+          <input
+            id={reasonId}
+            data-admin-ops-reason
+            value={reason}
+            maxLength={500}
+            {...(proposed === undefined ? {} : { placeholder: proposed })}
+            onInput={(event) => setReason(event.currentTarget.value)}
+            className={`rounded-chip px-3 text-body ${FOCUS}`}
+            style={field}
+          />
         </label>
         <AdminFormError text={error} data={{ 'data-admin-ops-error': '' }} />
-        <div className="flex flex-wrap justify-end gap-2">
-          <AdminButton onClick={onCancel} disabled={busy}>
+        <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:justify-end">
+          <AdminButton size="lg" onClick={onCancel} disabled={busy}>
             {translateAdmin(language, 'admin.ops.action.cancel')}
           </AdminButton>
-          <AdminButton type="submit" tone="danger" busy={busy} disabled={typed.trim() !== operation} data={{ 'data-admin-ops-go': operation }}>
+          <AdminButton size="lg" type="submit" tone="danger" busy={busy} disabled={typed.trim() !== operation} data={{ 'data-admin-ops-go': operation }}>
             {translateAdmin(language, `admin.ops.action.${operation}`)}
           </AdminButton>
         </div>
@@ -125,11 +140,10 @@ function OperationCard({
   /** La demande acceptée que le relais n'a pas encore publiée (#10467) : elle se dit « en file ». */
   readonly awaited?: ServerOperationRun | null;
 }) {
-  const run = awaited ?? status.runs[operation];
-  const wait = cooldownOf(status.availableAt[operation], now);
+  const card = operationCardOf({ operation, status, awaited, now, online });
+  const { run } = card;
   const available = adminMomentOf(status.availableAt[operation], now, language);
-  const finished = adminMomentOf(run?.finishedAt ?? run?.requestedAt ?? null, now, language);
-  const running = operationRunning(run);
+  const finished = adminMomentOf(card.lastAt, now, language);
   return (
     <article data-admin-ops-operation={operation} data-admin-ops-run={run?.status ?? 'none'} className="grid content-start gap-3 rounded-card p-4 md:p-5" style={{ backgroundColor: SURFACE, border: `1px solid ${EDGE}` }}>
       <h3 className="text-body font-semibold" style={{ color: INK }}>
@@ -146,14 +160,14 @@ function OperationCard({
               .filter((part) => part !== null)
               .join(' · ')}
       </p>
-      {wait > 0 && available !== null ? (
+      {card.waitMs > 0 && available !== null ? (
         <p className="text-caption" style={{ color: INK2 }} data-admin-ops-cooldown>
           {translateAdmin(language, 'admin.ops.action.availableIn', { when: available.relative })}
         </p>
       ) : null}
       {canTrigger ? (
         <div>
-          <AdminButton tone="danger" disabled={!online || !status.relayInstalled || running || wait > 0} onClick={onAsk} data={{ 'data-admin-ops-trigger': operation }}>
+          <AdminButton tone="danger" disabled={!card.canPress} onClick={onAsk} data={{ 'data-admin-ops-trigger': operation }}>
             {translateAdmin(language, `admin.ops.action.${operation}`)}
           </AdminButton>
         </div>
@@ -179,8 +193,7 @@ export function AdminOperationsActions({ language, deps, now }: { readonly langu
   const status = useQuery({
     queryKey: ADMIN_OPS_STATUS_KEY,
     queryFn: async ({ signal }) => unwrap(await loadOpsStatus({ ...deps, signal })),
-    refetchInterval: (query) =>
-      awaitedRef.current !== null || SERVER_OPERATIONS_SHOWN.some((op) => operationRunning(query.state.data?.runs[op] ?? null)) ? 5000 : 30_000,
+    refetchInterval: (query) => opsStatusRefreshMs({ awaited: awaitedRef.current, runs: query.state.data?.runs }),
     refetchOnWindowFocus: false,
     retry: false,
   });
@@ -206,21 +219,20 @@ export function AdminOperationsActions({ language, deps, now }: { readonly langu
       return;
     }
     setPending(null);
-    const queuedAt = result.data.queuedAt ?? now().toISOString();
-    setAwaited({ requestId: result.data.requestId, operation, status: 'queued', requestedBy: '', requestedAt: queuedAt, startedAt: null, finishedAt: null, reclaimedBytes: null, code: null });
+    setAwaited(awaitedRunOf({ operation, requestId: result.data.requestId, queuedAt: result.data.queuedAt, now: now() }));
     setAnnouncement(translateAdmin(language, 'admin.ops.action.queued'));
     void queryClient.invalidateQueries({ queryKey: ADMIN_OPS_STATUS_KEY });
   };
 
   const data = status.data;
-  const servedAwaited = awaited !== null && data?.runs[awaited.operation]?.requestId === awaited.requestId;
+  const servedAwaited = awaitedServed(awaited, data?.runs);
   useEffect(() => {
     if (awaited === null) return undefined;
     if (servedAwaited) {
       setAwaited(null);
       return undefined;
     }
-    const timer = setTimeout(() => setAwaited(null), 120_000);
+    const timer = setTimeout(() => setAwaited(null), AWAITED_RUN_MAX_MS);
     return () => clearTimeout(timer);
   }, [awaited, servedAwaited]);
   return (
@@ -228,7 +240,6 @@ export function AdminOperationsActions({ language, deps, now }: { readonly langu
       <h2 id="admin-ops-actions-title" className="text-body font-semibold" style={{ color: INK }}>
         {translateAdmin(language, 'admin.ops.actions.title')}
       </h2>
-      {reach.isSovereign ? null : <AdminInlineNotice tone="info" text={translateAdmin(language, 'admin.ops.action.sovereignOnly')} />}
       {data === undefined ? (
         status.isPending ? (
           <AdminSkeleton rows={2} />
@@ -250,9 +261,9 @@ export function AdminOperationsActions({ language, deps, now }: { readonly langu
                 operation={operation}
                 status={data}
                 now={clock}
-                canTrigger={reach.isSovereign}
+                canTrigger={reach.hasAdminRank}
                 online={online}
-                awaited={awaited !== null && awaited.operation === operation && !servedAwaited ? awaited : null}
+                awaited={awaited}
                 onAsk={() => {
                   setError('');
                   setPending(operation);

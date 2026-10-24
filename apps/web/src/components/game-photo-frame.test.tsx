@@ -70,7 +70,7 @@ describe('un emblème par sorte de moment', () => {
     ['rang', rankMoment({ rank: 'oracle', division: 1 }), 'data-game-rank="oracle"'],
     ['palier', tierMoment({ tier: 'aurore', level: 50 }), 'data-game-tier="aurore"'],
     ['niveau 100', levelHundredMoment(0), 'data-game-tier="galaxie"'],
-    ['Meesh', meeshMoment({ number: 10, edition: 'silver' }), 'data-game-coin'],
+    ['Meesh', meeshMoment({ number: 10 }), 'data-game-coin'],
     ['trésor', treasuryMoment('coffre'), 'data-game-coin'],
     ['Flamme', flameMoment(30), 'data-game-flame="brasier"'],
   ];
@@ -81,9 +81,16 @@ describe('un emblème par sorte de moment', () => {
   }
 
   test('une Meesh frappée montre son numéro, « Nº » dans toutes les langues (épopée § 6)', () => {
-    const html = render(meeshMoment({ number: 10, edition: 'silver' }));
+    const html = render(meeshMoment({ number: 10 }));
     expect(html).toContain('data-game-number="10"');
     expect(text(html)).not.toContain('N° 10');
+  });
+});
+
+describe('la pièce de la photo-souvenir se dessine comme on la voit (#11483)', () => {
+  test('le n° 247, frappé après le n° 100, est une pièce d’or ; le n° 10, d’argent', () => {
+    expect(render(meeshMoment({ number: 247 }))).toMatch(/data-game-face="reverse" data-game-edition="gold"/);
+    expect(render(meeshMoment({ number: 10 }))).toMatch(/data-game-face="reverse" data-game-edition="silver"/);
   });
 });
 
@@ -300,6 +307,15 @@ describe('la plaque d’auteur', () => {
   test('sans auteur, ou pour un moment sans plaque : le cadre d’avant', () => {
     expect(render(achievementMoment('achievement.first_content'))).not.toContain('data-photo-art="author"');
     expect(withAuthor(startMoment())).not.toContain('data-photo-art="author"');
+  });
+
+  test('sous un cadre décoré (#10159), la plaque reste un dessin source du cadre : la composition et le repli carte simple la relisent', () => {
+    const glory = { crest: { x: 448, y: 114, w: 184, h: 290 }, qr: null };
+    const html = renderToStaticMarkup(<GamePhotoFrame moment={rankMoment({ rank: 'voix', division: 2 })} dateLabel="5 octobre 2026" format="story" author={{ handle: 'atabeth' }} glory={glory} />);
+    expect(html).toContain('data-photo-frame-decorated');
+    expect(html).toMatch(/data-photo-art="author"[^>]*>\s*<svg/);
+    expect(html).toContain('@atabeth');
+    expect(renderToStaticMarkup(<GamePhotoFrame moment={startMoment()} dateLabel="5 octobre 2026" format="story" author={{ handle: 'atabeth' }} glory={glory} />)).not.toContain('data-photo-art="author"');
   });
 
   test('le trophée d’un succès prend le métal de SA rareté', () => {

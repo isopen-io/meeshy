@@ -77,6 +77,29 @@ class FriendListRepository @Inject constructor(
         }
     }
 
+    /**
+     * Puts [friend] at the head of the persisted roster (a friend just accepted shows
+     * first, before any network return), keeping the rest of the order verbatim. A
+     * friend already present moves to the head instead of duplicating. A cold cache
+     * stays cold: nothing was ever synced, so the next load fetches the real roster.
+     */
+    suspend fun insertAtHead(friend: FriendRequestUser) {
+        val current = cachedSnapshot() ?: return
+        persist(listOf(friend) + current.filterNot { it.id == friend.id })
+    }
+
+    /** Drops [userId] from the persisted roster (rollback of an optimistic accept). */
+    suspend fun remove(userId: String) {
+        val current = cachedSnapshot() ?: return
+        if (current.none { it.id == userId }) return
+        persist(current.filterNot { it.id == userId })
+    }
+
+    /** Expires the roster's freshness (the rows stay for the cold-start paint). */
+    suspend fun invalidate() {
+        syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, 0L))
+    }
+
     internal companion object {
         const val RESOURCE_KEY: String = "friends_list"
     }

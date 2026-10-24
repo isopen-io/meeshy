@@ -68,10 +68,12 @@ public final class StoryTimelineEngine {
     /// postérieurs : seule la DERNIÈRE ré-ancre l'audio sur la vidéo.
     private var seekGeneration: UInt64 = 0
 
-    /// Taille de tampon d'E/S de la session AVANT que l'aperçu ne pose la
-    /// sienne, rendue au `shutdown()` (#9702).
-    private var borrowedIOBufferDuration: TimeInterval?
-    private static let previewIOBufferDuration: TimeInterval = 0.005
+    /// Taille de tampon d'E/S de la session AVANT que la lecture ne pose la
+    /// sienne : empruntée au play ou au scrub, rendue à la pause et à la fin (#9884).
+    private var ioBufferLease = IOBufferLease()
+
+    /// Un item pas encore prêt : vidéo et son attendent ensemble (#9884).
+    private var readinessObservation: NSKeyValueObservation?
 
     private var usesInternalClock: Bool {
         composition?.tracks.isEmpty ?? true
@@ -142,40 +144,51 @@ public final class StoryTimelineEngine {
         // (sinon micro coupé) — l'aperçu éditeur cède sa session à l'appel.
         // État d'appel = source unique MediaSessionCoordinator.isCallActive.
         guard !MediaSessionCoordinator.shared.isCallActive else { return }
+        // Preview is read-only — `.playback` (not `.playAndRecord`) so we don't
+        // deactivate other apps' background audio; `.mixWithOthers` lets the user
+        // keep listening to Apple Music while editing a story; `.moviePlayback`
+        // is the canonical mode for video editor previews. The coordinator owns
+        // the session: call safety, recording holds and the playback lease (#9884).
+        MediaSessionCoordinator.shared.activatePlaybackSync(mode: .moviePlayback, options: [.mixWithOthers])
+    }
+
+    /// 5 ms : le scrub et le play du composer répondent sans latence audible.
+    /// Emprunté pendant la lecture seulement : le reste de l'app (lecteur de
+    /// stories, vocaux) n'a pas à payer ce coût CPU et énergie.
+    private func borrowIOBufferDuration() {
+        guard !MediaSessionCoordinator.shared.isCallActive else { return }
+        let session = AVAudioSession.sharedInstance()
+        guard ioBufferLease.borrow(current: session.preferredIOBufferDuration) else { return }
         do {
-            let session = AVAudioSession.sharedInstance()
-            // Preview is read-only — use .playback (not .playAndRecord) so we
-            // don't deactivate other apps' background audio. .mixWithOthers
-            // lets the user keep listening to Apple Music while editing a story.
-            // .moviePlayback is the canonical mode for video editor previews.
-            try session.setCategory(
-                .playback,
-                mode: .moviePlayback,
-                options: [.mixWithOthers]
-            )
-            // 5 ms : le scrub et le play du composer répondent sans latence
-            // audible. Emprunté, jamais laissé : le reste de l'app (lecteur
-            // de stories, vocaux) n'a pas à payer ce coût CPU/énergie.
-            if borrowedIOBufferDuration == nil {
-                borrowedIOBufferDuration = session.preferredIOBufferDuration
-            }
-            try session.setPreferredIOBufferDuration(Self.previewIOBufferDuration)
-            try session.setActive(true, options: [.notifyOthersOnDeactivation])
+            try session.setPreferredIOBufferDuration(IOBufferLease.previewDuration)
         } catch {
-            logger.error("StoryTimelineEngine audio session setup failed: \(error.localizedDescription)")
+            logger.error("StoryTimelineEngine IO buffer borrow failed: \(error.localizedDescription)")
         }
     }
 
     /// Un appel en cours a posé SA configuration : on ne la réécrit pas.
     private func restoreIOBufferDuration() {
-        guard let borrowed = borrowedIOBufferDuration else { return }
-        borrowedIOBufferDuration = nil
+        guard let borrowed = ioBufferLease.giveBack() else { return }
         guard !MediaSessionCoordinator.shared.isCallActive else { return }
         do {
             try AVAudioSession.sharedInstance().setPreferredIOBufferDuration(borrowed)
         } catch {
             logger.error("StoryTimelineEngine IO buffer restore failed: \(error.localizedDescription)")
         }
+    }
+
+    /// L'élément de la composition locale suit la politique média vivante
+    /// (#11984), comme tout lecteur de lecture : la chaleur et l'économie
+    /// d'énergie règlent aussi la timeline, y compris en cours de lecture.
+    /// `monitor` : un moniteur injecté (témoins) ; sinon le moniteur partagé.
+    static func makeCompositionItem(asset: AVAsset, monitor: MediaPolicyMonitor? = nil) -> AVPlayerItem {
+        let item = AVPlayerItem(asset: asset)
+        guard let monitor else {
+            MediaPolicyMonitor.shared.adopt(item, role: .watched)
+            return item
+        }
+        monitor.adopt(item, role: .watched)
+        return item
     }
 
     private func configureCore(
@@ -193,7 +206,7 @@ public final class StoryTimelineEngine {
                 project: project,
                 composition: composition
             )
-            let item = AVPlayerItem(asset: composition)
+            let item = Self.makeCompositionItem(asset: composition)
             item.videoComposition = videoComposition
             let player = AVPlayer(playerItem: item)
             // Composition LOCALE : attendre « pour minimiser les stalls »
@@ -287,6 +300,7 @@ public final class StoryTimelineEngine {
         // comportement AVPlayer où play() après end rejoue le dernier frame
         // sans repartir ; ici le transport interne repart proprement).
         if usesInternalClock, currentTime >= project.slideDuration { currentTime = 0 }
+        borrowIOBufferDuration()
         startSynchronized()
         isPlaying = true
         NotificationCenter.default.post(
@@ -298,9 +312,11 @@ public final class StoryTimelineEngine {
 
     public func pause() {
         seekGeneration &+= 1
+        readinessObservation = nil
         stopDriveClock()
         player?.pause()
         audioMixer.pause()
+        restoreIOBufferDuration()
         isPlaying = false
         NotificationCenter.default.post(name: .timelineDidStopPlaying, object: self)
     }
@@ -316,6 +332,10 @@ public final class StoryTimelineEngine {
             playhead = currentTime
             startDriveClock(from: playhead, anchorHostTime: anchor)
         } else if let player {
+            guard TimelinePlaybackSync.videoStart(itemStatus: player.currentItem?.status) != .awaitingReadiness else {
+                awaitReadiness(of: player, generation: seekGeneration)
+                return
+            }
             let itemSeconds = player.currentTime().seconds
             playhead = itemSeconds.isFinite ? Float(itemSeconds) : currentTime
             startVideo(player, anchorHostTime: anchor)
@@ -333,10 +353,10 @@ public final class StoryTimelineEngine {
     }
 
     /// `setRate(_:time:atHostTime:)` cale la première image sur l'ancre que
-    /// l'audio partage. Un item pas encore prêt ne le supporte pas : il part
-    /// au plus tôt (le player n'attend plus de tampon, cf. configure).
+    /// l'audio partage. Un item en échec ne le supporte pas : il joue sans
+    /// ancre, pour que le son parte quand même.
     private func startVideo(_ player: AVPlayer, anchorHostTime: UInt64) {
-        guard player.currentItem?.status == .readyToPlay else {
+        guard TimelinePlaybackSync.videoStart(itemStatus: player.currentItem?.status) == .anchored else {
             player.play()
             return
         }
@@ -345,10 +365,33 @@ public final class StoryTimelineEngine {
                        atHostTime: CMClockMakeHostTimeFromSystemUnits(anchorHostTime))
     }
 
+    /// L'item n'est pas prêt : rien ne part. Dès qu'il l'est (ou qu'il échoue),
+    /// vidéo et son repartent ensemble — sauf si une pause, un seek ou un autre
+    /// play sont passés entre-temps.
+    private func awaitReadiness(of player: AVPlayer, generation: UInt64) {
+        // `@Sendable` : KVO rappelle sur le fil qui a changé le statut, jamais
+        // garanti principal — le retour au MainActor passe par la tâche.
+        readinessObservation = player.currentItem?.observe(\.status, options: [.initial, .new]) { @Sendable [weak self] item, _ in
+            guard item.status != .unknown, let self else { return }
+            Task { @MainActor in
+                self.readinessDidSettle(generation: generation)
+            }
+        }
+    }
+
+    private func readinessDidSettle(generation: UInt64) {
+        guard generation == seekGeneration else { return }
+        readinessObservation = nil
+        guard isPlaying else { return }
+        startSynchronized()
+    }
+
     private func startDriveClock(from playhead: Float, anchorHostTime: UInt64) {
         stopDriveClock()
         driveOrigin = (playhead, TimelinePlaybackSync.hostSeconds(anchorHostTime))
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        // Plage `.clock` (30…60 Hz) : la tête n'a pas besoin des 120 Hz d'un
+        // écran ProMotion (#9874).
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
@@ -396,6 +439,7 @@ public final class StoryTimelineEngine {
         if next >= project.slideDuration {
             stopDriveClock()
             audioMixer.pause()
+            restoreIOBufferDuration()
             isPlaying = false
             NotificationCenter.default.post(name: .timelineDidStopPlaying, object: self)
             onPlaybackEnd?()
@@ -427,6 +471,7 @@ public final class StoryTimelineEngine {
             // de suite le faisait partir AVANT que la vidéo n'ait rejoint sa
             // cible (le seek AVPlayer est asynchrone) — l'audio sautait devant.
             if isPlaying { audioMixer.pause() }
+            borrowIOBufferDuration()
             audioMixer.seek(to: clamped)
             if let player, !usesInternalClock {
                 let cmtime = CMTime(seconds: Double(clamped), preferredTimescale: 600)
@@ -499,6 +544,7 @@ public final class StoryTimelineEngine {
                 // Parité avec la fin de l'horloge interne : l'audio s'arrête
                 // avec l'image, il ne continue pas seul après la fin.
                 self.audioMixer.pause()
+                self.restoreIOBufferDuration()
                 self.isPlaying = false
                 self.onPlaybackEnd?()
             }
@@ -507,6 +553,7 @@ public final class StoryTimelineEngine {
 
     private func tearDown() {
         seekGeneration &+= 1
+        readinessObservation = nil
         stopDriveClock()
         if let token = timeObserver {
             player?.removeTimeObserver(token)

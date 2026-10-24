@@ -39,14 +39,14 @@ extension FeedPostCard {
                         if post.comments.count > 3 {
                             HStack(spacing: -6) {
                                 ForEach(Array(post.comments.dropFirst(3).prefix(3).enumerated()), id: \.element.id) { index, comment in
-                                    MeeshyAvatar(
+                                    LivePresence { MeeshyAvatar(
                                         name: comment.author,
                                         context: .postReaction,
                                         accentColor: comment.authorColor,
                                         avatarURL: comment.authorAvatarURL,
                                         presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),
                                         ring: comment.authorRing
-                                    )
+                                    ) }
                                         .overlay(
                                             Circle()
                                                 .stroke(theme.backgroundPrimary, lineWidth: MeeshyBorder.emphasis)
@@ -92,7 +92,7 @@ extension FeedPostCard {
             HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
                 // Avatar
                 let commentMood = moodLookup?(comment.authorId)
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: comment.author,
                     context: .postComment,
                     accentColor: comment.authorColor,
@@ -107,7 +107,7 @@ extension FeedPostCard {
                             selectedProfileUser = .from(feedComment: comment)
                         }
                     ]
-                )
+                ) }
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     // Author name + language flags
@@ -119,8 +119,8 @@ extension FeedPostCard {
                         if let origLang = comment.originalLanguage, comment.translatedContent != nil {
                             MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
 
-                            let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-                            let targetLang = userLangs.first?.lowercased() ?? "fr"
+                            let userLangs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+                            let targetLang = comment.servedLanguage(preferredLanguages: userLangs)?.lowercased() ?? userLangs.first?.lowercased() ?? "fr"
                             // Ces trois glyphes ne disent qu'UNE chose : « ce
                             // commentaire a été traduit, de là vers ici ». Lus un
                             // par un, VoiceOver annonçait deux PAYS — « drapeau du

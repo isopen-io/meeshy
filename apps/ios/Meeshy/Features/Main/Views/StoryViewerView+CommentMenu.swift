@@ -111,7 +111,7 @@ struct StoryCommentThreadWriter {
         count = max(0, count + countDelta)
         do {
             try await request()
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(postId)")
+            await bestEffort("storyViewerViewCommentMenu.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(postId)") }
             return true
         } catch {
             comments = snapshot.comments
@@ -129,10 +129,10 @@ struct StoryCommentThreadWriter {
 /// place pour l'auteur. Un fichier par responsabilité.
 extension StoryViewerView {
 
-    func makeStoryCommentRow(_ comment: FeedComment, userLang: String) -> StoryCommentRowView {
+    func makeStoryCommentRow(_ comment: FeedComment, readerLanguages: [String]) -> StoryCommentRowView {
         StoryCommentRowView(
             comment: comment,
-            userLang: userLang,
+            readerLanguages: readerLanguages,
             isLiked: storyCommentLikedIds.contains(comment.id),
             likeCount: max(0, comment.likes + (storyCommentLikeDelta[comment.id] ?? 0)),
             isInFlight: heartInFlightIds.contains(comment.id),

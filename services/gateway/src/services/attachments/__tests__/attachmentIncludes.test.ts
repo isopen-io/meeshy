@@ -21,7 +21,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
     // Fields fetched from DB for server-side aggregation only — intentionally
     // absent from messageAttachmentSchema because they are transformed before
     // serialization. BUG2 A': raw reactions → reactionSummary + currentUserReactions.
-    const INTERNAL_AGGREGATION_FIELDS = new Set(['reactions']);
+    const INTERNAL_AGGREGATION_FIELDS = new Set(['reactions', 'message']);
 
     it('attachmentMediaSelect ⊆ messageAttachmentSchema.properties', () => {
       const missing = Object.keys(attachmentMediaSelect)
@@ -152,7 +152,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       });
     });
 
-    it('selects exactly 29 documented fields — guards against silent omission', () => {
+    it('selects exactly 33 documented fields — guards against silent omission', () => {
       const expectedKeys = [
         'id',
         'messageId',
@@ -164,6 +164,9 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'thumbnailUrl',
         'thumbHash',
         'imageVariants',
+        'avifVariants',
+        'renditions',
+        'processingState',
         'width',
         'height',
         'duration',
@@ -171,6 +174,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'sampleRate',
         'codec',
         'channels',
+        'loudnessLufs',
         'fps',
         'videoCodec',
         'pageCount',
@@ -185,7 +189,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'reactions',
       ];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(29);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(33);
     });
   });
 
@@ -323,7 +327,9 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         absentesDuDetail: [...clesSocket].filter((k) => !clesCompletes.has(k)).sort(),
       }).toEqual({
         absentesDuFil: [...ENVELOPPE_SERVEUR].sort(),
-        absentesDuDetail: [],
+        // #12333 — la description (et la protection du porteur qui la garde)
+        // est servie par le FIL ; le détail ne la sert pas encore.
+        absentesDuDetail: ['alt', 'altLanguage', 'altTranslations', 'message'],
       });
     });
   });

@@ -102,6 +102,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootFloatingChrome.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
         "Main/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/GlobalSearchView.swift": "entité — groupe, communauté, conversation, message sans compte",
@@ -279,6 +280,134 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertTrue(sut.presenceMap.isEmpty)
     }
 
+    /// #11412 — la frappe date l'activité sans prétendre que le serveur voit le
+    /// pair connecté : poser `isOnline:true` donnait 5 min de vert puis plus
+    /// rien, sans passer par l'orange ni le gris.
+    func test_noteActivity_unknownUser_refreshesLastActiveAtWithoutClaimingOnline() throws {
+        sut.noteActivity(userId: "typer-1")
+
+        let entry = try XCTUnwrap(sut.presenceMap["typer-1"])
+        XCTAssertFalse(entry.isOnline)
+        let lastActiveAt = try XCTUnwrap(entry.lastActiveAt)
+        XCTAssertLessThan(Date().timeIntervalSince(lastActiveAt), 5)
+    }
+
+    func test_noteActivity_thenSilence_decaysGreenOrangeGrey() throws {
+        sut.noteActivity(userId: "typer-1")
+        let entry = try XCTUnwrap(sut.presenceMap["typer-1"])
+        let now = Date()
+
+        XCTAssertEqual(entry.state(now: now.addingTimeInterval(30)), .online)
+        XCTAssertEqual(entry.state(now: now.addingTimeInterval(120)), .away)
+        XCTAssertEqual(entry.state(now: now.addingTimeInterval(240)), .idle)
+        XCTAssertEqual(entry.state(now: now.addingTimeInterval(400)), .offline)
+    }
+
+    func test_noteActivity_userTheServerSaysOnline_keepsIsOnline() throws {
+        sut.presenceMap["typer-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        sut.noteActivity(userId: "typer-1")
+
+        let entry = try XCTUnwrap(sut.presenceMap["typer-1"])
+        XCTAssertTrue(entry.isOnline)
+        XCTAssertNotNil(entry.lastActiveAt)
+    }
+
+    func test_noteActivity_currentUser_neverWritesTheMap() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        sut.noteActivity(userId: "me-id")
+
+        XCTAssertNil(sut.presenceMap["me-id"])
+    }
+
+    // MARK: - Sa propre pastille ne se peint jamais (décision porteur 2026-10-21, #11412)
+
+    func test_knownPresenceState_currentUserInTheMap_isOfflineSoNoDot() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+        sut.presenceMap["me-id"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+
+        XCTAssertEqual(sut.knownPresenceState(for: "me-id"), .offline)
+        XCTAssertEqual(sut.presenceState(for: "me-id"), .offline)
+    }
+
+    func test_resolvedState_currentUserServedOnlineByREST_isOffline() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        XCTAssertEqual(sut.resolvedState(userId: "me-id", isOnline: true, lastActiveAt: Date()), .offline)
+        XCTAssertEqual(sut.presenceState(for: "me-id", served: AppUserPresence(isOnline: true, lastActiveAt: Date())), .offline)
+    }
+
+    func test_resolvedState_otherUserServedOnline_keepsTheDot() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        XCTAssertEqual(sut.resolvedState(userId: "friend-9", isOnline: true, lastActiveAt: Date()), .online)
+    }
+
+    func test_settingsAvatar_neverHardcodesItsOwnPresence() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/SettingsView.swift"))
+        XCTAssertFalse(source.contains("presenceState: .online"), "les Réglages ne peignent pas la pastille du compte connecté")
+    }
+
+    // MARK: - noteSocketDisconnected() — la coupure éteint sans figer le vert (#11412)
+
+    func test_noteSocketDisconnected_onlineWithoutLastActiveAt_isNoLongerGreen() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        sut.noteSocketDisconnected()
+
+        XCTAssertEqual(sut.presenceMap["friend-1"]?.isOnline, false)
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .offline)
+    }
+
+    func test_noteSocketDisconnected_keepsLastActiveAt_soTheEntryDecays() throws {
+        let lastActiveAt = Date().addingTimeInterval(-120)
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: lastActiveAt)
+
+        sut.noteSocketDisconnected()
+
+        let entry = try XCTUnwrap(sut.presenceMap["friend-1"])
+        XCTAssertFalse(entry.isOnline)
+        XCTAssertEqual(entry.lastActiveAt, lastActiveAt)
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .away)
+    }
+
+    func test_noteSocketDisconnected_keepsEveryKnownEntry() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+        sut.presenceMap["friend-2"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-200))
+
+        sut.noteSocketDisconnected()
+
+        XCTAssertEqual(Set(sut.presenceMap.keys), ["friend-1", "friend-2"])
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .online)
+        XCTAssertEqual(sut.presenceState(for: "friend-2"), .idle)
+    }
+
+    func test_ingestSnapshot_afterDisconnect_replacesTheDimmedEntry() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        sut.noteSocketDisconnected()
+
+        sut.ingestSnapshot([UserStatusEvent(userId: "friend-1", username: "friend", isOnline: true, lastActiveAt: nil)])
+
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .online)
+    }
+
+    func test_disconnect_isWiredToNoteSocketDisconnected() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/PresenceManager.swift"))
+        let wiring = try XCTUnwrap(source.range(of: "self?.noteSocketDisconnected()"), "la coupure du socket doit atteindre noteSocketDisconnected")
+        let before = String(source[source.startIndex..<wiring.lowerBound].suffix(400))
+        XCTAssertTrue(before.contains("MessageSocketManager.shared.$isConnected"))
+        XCTAssertTrue(before.contains(".filter { !$0 }"))
+    }
+
     // MARK: - resolvedState(userId:isOnline:lastActiveAt:)
 
     func test_resolvedState_knownUser_liveMapWins() {
@@ -320,59 +449,103 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(state, PresenceState.offline)
     }
 
-    // MARK: - isNearStateFlip(_:now:) — fenetres calees sur la regle 1/3/5
+    // MARK: - recalculateStates(now:) — la signature des états publiés (#11412)
+    //
+    // Le minuteur re-résout TOUTES les entrées et compare au dernier battement
+    // publié : un seuil franchi à n'importe quel moment se repeint, et rien ne
+    // se repeint quand rien n'a changé. L'ancien test par fenêtres fixes
+    // (60–90 s, 180–210 s, 300–330 s) sautait un seuil dès qu'un tick manquait.
 
-    func test_isNearStateFlip_justPastOnlineBoundary_returnsTrue() {
-        let now = Date()
-        // 61s -> le flip online->away vient de se produire (fenetre 60-90s).
-        XCTAssertTrue(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-61)), now: now))
-        XCTAssertTrue(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-75)), now: now))
-        XCTAssertTrue(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-90)), now: now))
+    private func settle() async throws {
+        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
     }
 
-    func test_isNearStateFlip_justPastAwayBoundary_returnsTrue() {
-        let now = Date()
-        // 181s -> flip away->idle (fenetre 180-210s).
-        XCTAssertTrue(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-181)), now: now))
-        XCTAssertTrue(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-210)), now: now))
-    }
-
-    func test_isNearStateFlip_justPastIdleBoundary_returnsTrue() {
-        let now = Date()
-        // 301s -> flip idle->offline (fenetre 300-330s).
-        XCTAssertTrue(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-301)), now: now))
-        XCTAssertTrue(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-330)), now: now))
-    }
-
-    func test_isNearStateFlip_betweenWindows_returnsFalse() {
-        let now = Date()
-        for elapsed in [50.0, 100, 150, 250, 350, 1830] {
-            XCTAssertFalse(
-                PresenceManager.isNearStateFlip(
-                    AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-elapsed)), now: now),
-                "elapsed \(elapsed)s ne doit traverser aucune fenetre de flip 1/3/5"
-            )
+    /// Attend le battement que la dernière écriture a programmé : c'est lui qui
+    /// pose `publishedStates`. Une attente fixe ne le garantit pas sur un
+    /// simulateur chargé — ces tests rougissaient en CI et dans la suite
+    /// complète, jamais lancés seuls.
+    private func awaitBeat(after version: Int) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while sut.refreshSignal.presenceVersion == version, Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
         }
     }
 
-    func test_isNearStateFlip_noLastActiveAt_returnsFalse() {
-        XCTAssertFalse(PresenceManager.isNearStateFlip(AppUserPresence(isOnline: true, lastActiveAt: nil)))
-        XCTAssertFalse(PresenceManager.isNearStateFlip(AppUserPresence(isOnline: false, lastActiveAt: nil)))
+    func test_recalculateStates_nothingChangedSinceTheLastBeat_doesNotRepaint() async throws {
+        let initial = sut.refreshSignal.presenceVersion
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-10))
+        try await awaitBeat(after: initial)
+        let before = sut.refreshSignal.presenceVersion
+
+        XCTAssertFalse(sut.recalculateStates(now: Date()))
+        try await settle()
+
+        XCTAssertEqual(sut.refreshSignal.presenceVersion, before)
+    }
+
+    func test_recalculateStates_thresholdCrossed_repaintsOnce() async throws {
+        let initial = sut.refreshSignal.presenceVersion
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-50))
+        try await awaitBeat(after: initial)
+        let before = sut.refreshSignal.presenceVersion
+
+        XCTAssertTrue(sut.recalculateStates(now: Date().addingTimeInterval(20)))
+        try await awaitBeat(after: before)
+        try await settle()
+
+        XCTAssertEqual(sut.refreshSignal.presenceVersion, before + 1)
+    }
+
+    /// Un tick manqué ne saute plus un seuil : à 250 s, aucune des anciennes
+    /// fenêtres ne contenait l'instant, l'état avait pourtant changé deux fois.
+    func test_recalculateStates_tickMissedAcrossTwoThresholds_stillRepaints() async throws {
+        let initial = sut.refreshSignal.presenceVersion
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-50))
+        try await awaitBeat(after: initial)
+
+        XCTAssertTrue(sut.recalculateStates(now: Date().addingTimeInterval(200)))
+        try await settle()
+    }
+
+    func test_resolvedStates_resolvesEveryEntryAtTheGivenInstant() {
+        let now = Date()
+        let map = [
+            "a": AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-30)),
+            "b": AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-120)),
+            "c": AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-240)),
+            "d": AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-600)),
+        ]
+
+        XCTAssertEqual(
+            PresenceManager.resolvedStates(of: map, at: now),
+            ["a": .online, "b": .away, "c": .idle, "d": .offline]
+        )
     }
 
     // MARK: - Cadence de recalcul
 
-    func test_recalcInterval_coversEveryFlipWindow() {
-        // Timer 30s = largeur des fenetres de flip : chaque transition 1/3/5
-        // est captee par le tick suivant (retard max 30s, contre 60s avant).
-        XCTAssertEqual(PresenceManager.recalcInterval, 30)
+    func test_recalcInterval_repaintsAThresholdWithinFifteenSeconds() {
+        XCTAssertEqual(PresenceManager.recalcInterval, 15)
+    }
+
+    func test_recalcTimer_runsInCommonModes_soScrollingDoesNotPauseTheDecay() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/PresenceManager.swift"))
+        XCTAssertTrue(source.contains("RunLoop.main.add(timer, forMode: .common)"))
+        XCTAssertFalse(source.contains("Timer.scheduledTimer("), "un minuteur programmé en mode .default s'arrête pendant le défilement")
+    }
+
+    // MARK: - refreshPublisher — le battement remis aux vues du SDK (#11412)
+
+    func test_refreshPublisher_emitsOnABeat_notOnSubscription() async throws {
+        var received: [Int] = []
+        let cancellable = sut.refreshPublisher.sink { received.append($0) }
+        defer { cancellable.cancel() }
+        XCTAssertEqual(received, [], "s'abonner n'est pas un battement")
+
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        try await settle()
+
+        XCTAssertEqual(received, [sut.refreshSignal.presenceVersion])
     }
 
     // MARK: - refreshSignal.presenceVersion (debounced re-render signal, audit 2026-07-20)

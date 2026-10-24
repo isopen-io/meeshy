@@ -278,7 +278,7 @@ final class ReelsViewModel: ObservableObject {
             hasLoadedOnce = true
         }
         do {
-            let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let preferred = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             // Thread d'affinité dédié (exclut le seed + les réels du viewer, porte
             // `isBookmarkedByMe`). `FeedPost.reels` reste un garde-fou : la réponse
             // est déjà `type: REEL`, on filtre par sécurité.
@@ -536,20 +536,25 @@ final class ReelsViewModel: ObservableObject {
     /// `removeDeletedReel` (même logique d'avancement du pager que l'événement
     /// temps réel `post:deleted`) pour ne pas dupliquer la règle d'avancement.
     func deletePost(_ postId: String, reason: String? = nil) async {
+        await withdrawPost(postId, .delete(reason: reason))
+    }
+
+    /// Suppression, retrait ou passage en privé (#11535) : même retrait optimiste, même retour arrière.
+    func withdrawPost(_ postId: String, _ withdrawal: PublicationWithdrawal) async {
         guard let removedIndex = reels.firstIndex(where: { $0.id == postId }) else { return }
         let removedReel = reels[removedIndex]
         let snapshotCurrentId = currentId
         removeDeletedReel(postId)
         let advancedTo = currentId
         do {
-            try await service.delete(postId: postId, reason: reason)
-            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
+            try await withdrawal.perform(postId: postId, with: service)
+            FeedbackToastManager.shared.showSuccess(withdrawal.successText(deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
         } catch {
             // Remet CE réel à sa place — la page chargée pendant l'appel reste — et ne ramène le pager
             // dessus que si l'utilisateur n'a pas bougé depuis (`OptimisticRollback`).
             reels = OptimisticRollback.restoring(removedReel, at: removedIndex, into: reels)
             if currentId == advancedTo { currentId = snapshotCurrentId }
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
+            FeedbackToastManager.shared.showError(withdrawal.failureText(deleteError: String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main)))
         }
     }
 
@@ -614,7 +619,7 @@ final class ReelsViewModel: ObservableObject {
                 location: location
             ))
             if let newIdx = reels.firstIndex(where: { $0.id == postId }) {
-                reels[newIdx] = updated.toFeedPost(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+                reels[newIdx] = updated.toFeedPost(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
             }
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Publication modifiée", bundle: .main))
         } catch {

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "androidName": "open_conversation_error",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

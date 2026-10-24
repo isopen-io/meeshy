@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -146,6 +147,7 @@ private fun StorySendTargetList(
                     size = 40.dp,
                     containerColor = hexColor(target.accentHex).takeIf { it != Color.Unspecified }
                         ?: hexColor(accentHex),
+                    imageUrl = target.avatar,
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -156,7 +158,7 @@ private fun StorySendTargetList(
                     )
                     if (target.memberCount > 0) {
                         Text(
-                            text = stringResource(R.string.story_send_members, target.memberCount),
+                            text = pluralStringResource(R.plurals.story_send_members, target.memberCount, target.memberCount),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,

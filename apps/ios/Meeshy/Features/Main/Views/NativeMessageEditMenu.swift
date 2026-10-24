@@ -62,6 +62,17 @@ struct MessageEditMenuAction: Identifiable {
         self.children = children
         self.perform = perform
     }
+
+    /// Une entrée nommée par LA table des verbes (#11234) : son libellé et son
+    /// symbole sont ceux de l'appui long et de « Plus… », jamais les siens.
+    init(id: String,
+         verb: MessageActionVerb,
+         isDestructive: Bool = false,
+         children: [MessageEditMenuAction] = [],
+         perform: @escaping () -> Void) {
+        self.init(id: id, title: verb.label, systemImage: verb.symbol,
+                  isDestructive: isDestructive, children: children, perform: perform)
+    }
 }
 
 extension MessageEditMenuAction {
@@ -81,10 +92,10 @@ extension MessageEditMenuAction {
     /// Meeshy. Le menu système sert les MÊMES — sans quoi deux entrées du même
     /// nom, dans deux menus du même message, feraient deux choses.
     ///
-    /// **`peutEditer` est REMIS, jamais recalculé** : la règle
-    /// (`msg.isMe || isCurrentUserAdminOrMod`) est écrite trois fois dans
-    /// `ConversationView` ; une quatrième écriture ici garantirait la
-    /// divergence. Un message qu'on ne peut pas éditer n'affiche pas l'entrée
+    /// **`peutEditer` est REMIS, jamais recalculé** : la règle vit dans la
+    /// fabrique unique `MessageMenuContext.make` (#11214), que l'overlay, la
+    /// feuille « Plus… » et ce double toucher lisent tous ; une écriture ici
+    /// garantirait la divergence. Un message qu'on ne peut pas éditer n'affiche pas l'entrée
     /// — plutôt qu'un grisé : la loi 4 se tient par la RÈGLE, pas par un
     /// contrôle inerte.
     ///
@@ -110,31 +121,20 @@ extension MessageEditMenuAction {
         // — Les trois premières, dans l'ordre de la directive —
 
         if peutEditer, let editer {
-            actions.append(.init(id: "edit",
-                                 title: String(localized: "message.action.edit",
-                                               defaultValue: "Éditer", bundle: .main),
-                                 systemImage: "pencil") { editer(messageId) })
+            actions.append(.init(id: "edit", verb: .edit) { editer(messageId) })
         }
         if let selectionner {
-            actions.append(.init(id: "select",
-                                 title: String(localized: "message.action.select",
-                                               defaultValue: "Sélectionner", bundle: .main),
-                                 systemImage: "checkmark.circle") { selectionner(messageId) })
+            actions.append(.init(id: "select", verb: .select) { selectionner(messageId) })
         }
         // **« Imager » prend la troisième place** (directive porteur
         // 2026-09-29, #8692) : « à la place de Composer lorsqu'on double-tape,
         // il faut mettre Imager ». Un message qui ne s'image pas la rend à
         // « Composer ».
         let composerEntry = composer.map { composer in
-            MessageEditMenuAction(id: "compose",
-                                  title: String(localized: "message.action.compose",
-                                                defaultValue: "Composer", bundle: .main),
-                                  systemImage: "wand.and.stars") { composer(messageId) }
+            MessageEditMenuAction(id: "compose", verb: .compose) { composer(messageId) }
         }
         let imagerEntry = imager.map { imager in
-            MessageEditMenuAction(id: "imagine",
-                                  title: MessageCardExportMenu.imageLabel,
-                                  systemImage: MessageCardExportMenu.imageSymbol) { imager(messageId) }
+            MessageEditMenuAction(id: "imagine", verb: .imager) { imager(messageId) }
         }
         if let third = imagerEntry ?? composerEntry {
             actions.append(third)
@@ -143,31 +143,19 @@ extension MessageEditMenuAction {
         // — Puis ce que la barre montre si la place le permet —
 
         if let repondre {
-            actions.append(.init(id: "reply",
-                                 title: String(localized: "message.action.reply",
-                                               defaultValue: "Répondre", bundle: .main),
-                                 systemImage: "arrowshape.turn.up.left") { repondre(messageId) })
+            actions.append(.init(id: "reply", verb: .reply) { repondre(messageId) })
         }
         if let transferer {
-            actions.append(.init(id: "forward",
-                                 title: String(localized: "message.action.forward",
-                                               defaultValue: "Transférer", bundle: .main),
-                                 systemImage: "arrowshape.turn.up.right") { transferer(messageId) })
+            actions.append(.init(id: "forward", verb: .forward) { transferer(messageId) })
         }
         // **Le (>) déplie « Composer » ET « Imager »** — les deux gestes qui
         // emmènent le message ailleurs, rangés ensemble. Il n'existe que si
         // les deux existent : seul, l'un est déjà à la troisième place.
         if let composerEntry, let imagerEntry {
-            actions.append(.init(id: "create",
-                                 title: MessageCardExportMenu.createLabel,
-                                 systemImage: MessageCardExportMenu.createSymbol,
-                                 children: [composerEntry, imagerEntry]) {})
+            actions.append(.init(id: "create", verb: .create, children: [composerEntry, imagerEntry]) {})
         }
         if let plus {
-            actions.append(.init(id: "more",
-                                 title: String(localized: "message.action.more",
-                                               defaultValue: "Plus…", bundle: .main),
-                                 systemImage: "ellipsis") { plus(messageId) })
+            actions.append(.init(id: "more", verb: .more) { plus(messageId) })
         }
 
         return actions

@@ -19,7 +19,9 @@
  * Quatre formes de clé atteignent une pièce jointe, et chacune remonte à ses
  * lignes par un index :
  *  - l'original et la miniature : `filePath` / `thumbnailPath`, égalité ;
- *  - la variante WebP `<base>_<largeur>w.webp` : `filePath` égal à `<base>`
+ *  - la variante `<base>_<largeur>w.webp` ou `.avif` (#11262), et le rendu
+ *    vidéo `<base>_h264.mp4` (#11261), et l'original HEIC/AVIF
+ *    `<base>_original.<ext>` (#11263) : `filePath` égal à `<base>`
  *    (original sans extension) ou qui commence par `<base>.` (préfixe ancré,
  *    servi par le même index) ;
  *  - la piste traduite `translated/<attachmentId>_<langue>.<ext>` : la ligne
@@ -48,6 +50,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
 import { attachmentIsReaderBound } from './signedAttachmentUrls';
+import { prefixRange } from '../../utils/prefix-range';
 
 /**
  * `readerBound` (#9600) : TOUS les porteurs vivants de ce fichier sont des
@@ -100,7 +103,7 @@ export function immutableWhenWriteOnce(storageKey: string, cacheControl: string)
 }
 
 const TRANSLATED_TRACK = /^translated\/([0-9a-f]{24})_[^/]+$/;
-const RESPONSIVE_VARIANT = /^(.+)_\d+w\.webp$/;
+const RESPONSIVE_VARIANT = /^(.+)_(?:\d+w\.(?:webp|avif)|h264\.mp4|original\.(?:heic|heif|avif))$/;
 
 type OwnerRow = {
   readonly messageId: string | null;
@@ -165,7 +168,7 @@ async function ownerRowsOf(storageKey: string, prisma: FileRouteVerdictPrisma): 
   const variant = RESPONSIVE_VARIANT.exec(storageKey);
   if (!variant) return [];
   return prisma.messageAttachment.findMany({
-    where: { OR: [{ filePath: variant[1] }, { filePath: { startsWith: `${variant[1]}.` } }] },
+    where: { OR: [{ filePath: variant[1] }, { filePath: prefixRange(`${variant[1]}.`) }] },
     select: OWNER_SELECT,
   });
 }

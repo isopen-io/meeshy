@@ -5,6 +5,7 @@ import SwiftUI
 /// Loi d'affichage commune à l'app : **une vue en mouvement ne montre pas ses
 /// boutons d'action** (directive produit 2026-08-14). Les boutons s'effacent
 /// pendant le défilement et reviennent quand il s'arrête.
+@MainActor
 final class ScrollMotionVisibilityTests: XCTestCase {
 
     // MARK: - La loi

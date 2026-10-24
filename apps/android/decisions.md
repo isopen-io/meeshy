@@ -494,3 +494,82 @@ process; manual baseline profiles (silently rot); unstaged production releases.
 
 **Consequences.** Reproducible, gated releases; performance regressions caught
 in CI; safe staged rollout of a large, security-sensitive app.
+
+---
+
+## ADR-024 — `applicationId = me.meeshy.android`, distinct de la coque Capacitor
+**Date:** 2026-10-22 · **Status:** accepted (décision porteur, #11570)
+
+**Context.** Le dégel du 2026-10-22 remet l'app native en développement, et la coque Capacitor de `apps/web`
+sert déjà Android sous `me.meeshy.app` (`apps/web/android/app/build.gradle`). Les deux déclaraient le même
+`applicationId` : un appareil ne peut pas les installer côte à côte, et une fiche Play n'en porte qu'une.
+
+**Decision.** L'app native publie sous `me.meeshy.android` (`me.meeshy.android.debug` en debug). Le
+`namespace` Kotlin reste `me.meeshy.app` : c'est l'espace des classes générées (`R`, `BuildConfig`), sans
+rapport avec l'identité de publication. Le renommer réécrirait des centaines d'imports pour rien.
+
+**Rejected.** Garder `me.meeshy.app` et retirer la coque du Play Store : la coque est le chemin Android en
+service. Renommer le `namespace` : c'est un coût sans effet sur l'utilisateur.
+
+**Consequences.** Deux fiches Play, deux apps installables côte à côte. `assetlinks.json` doit recevoir les
+entrées `me.meeshy.android` (empreinte de la clé Play App Signing) et `me.meeshy.android.debug`. Le projet
+Firebase doit déclarer une app Android `me.meeshy.android` pour que FCM délivre ses pushes. Les deux
+démarches attendent la console du porteur (`docs/magic-link-app-links.md`).
+
+
+---
+
+## ADR-025 — Jetons : l'échelle d'iOS à l'identique, des ressorts convertis, Nunito pour les deux « designs »
+**Date:** 2026-10-22 · **Status:** accepted (lot F0b de la parité, #11570 / #11600)
+
+**Context.** `DesignTokens.swift` est la source des jetons d'interface. Android n'en portait qu'une partie
+(espacements sur une grille de 4 dp, cinq rayons, deux ressorts à raideur de Material, un délai d'échelonnement de
+45 ms), si bien qu'un écran porté d'iOS retombait sur des littéraux. Côté typographie, iOS écrit le texte courant
+dans la police système (SF Pro) et réserve le design arrondi (SF Pro Rounded) aux grands titres ; SF n'existe pas
+sur Android.
+
+**Decision.**
+1. **L'échelle est celle d'iOS, sans filtre.** Espacements (dont `xxs` 2, `xsPlus` 6, `smPlus` 10, `mdPlus` 14),
+   rayons (dont `xxs` 4, `xs` 8, `smPlus` 12, `lgPlus` 18, `xlPlus` 22), tailles de police 9..34, icônes, contrôles,
+   bordures, opacités, ombres et largeurs de lecture (`formMaxWidth` 600, `contentMaxWidth` 700). La contrainte de
+   grille de 4 dp est retirée : iOS intercale des demi-pas et les écrans portés les utilisent.
+   `MeeshyScalesParityTest` lit `DesignTokens.swift` et exige un jumeau Kotlin de même valeur pour chaque jeton :
+   ajouter un jeton côté iOS sans le porter fait rougir le test.
+2. **Les ressorts se convertissent, ils ne s'approchent pas.** Un ressort SwiftUI `(response, dampingFraction)` est
+   de masse unitaire : `dampingRatio = dampingFraction`, `stiffness = (2π / response)²`. `springFast` (0,25 / 0,7),
+   `springDefault` (0,4 / 0,75) et `springBouncy` (0,5 / 0,6) sont posés ainsi ; `standardSpring()` et `bouncySpring()`
+   restent comme alias de `springDefault()` et `springBouncy()`, pour ne pas toucher les appelants des autres lots.
+   Le délai d'échelonnement passe de 45 à 40 ms (`staggerDelay` 0,04 s).
+3. **Le texte suit la police du système ; l'emoji seul, non.** Les tailles sont en `sp` : `meeshyText(size, weight,
+   rounded)` est l'équivalent de `MeeshyFont.relative` (Dynamic Type). `emojiTextStyle(size)` est celui de
+   `MeeshyFont.emoji` : la taille `sp` est dérivée de la taille en dp et de la densité (`Dp.toSp()`), de sorte que
+   l'emoji s'affiche à la taille EXACTE demandée (90 / 60 / 45) à tout réglage de police.
+4. **Écart assumé : Nunito pour les deux designs.** Android n'a pas SF Pro ; la famille de marque est Nunito
+   (arrondie), appliquée à tout le texte, y compris là où iOS reste sur la police système. `meeshyText(rounded = …)`
+   garde le drapeau d'iOS et deux noms privés de famille (`DefaultDesignFontFamily`, `RoundedDesignFontFamily`),
+   aujourd'hui identiques : si le produit veut un corps de texte neutre à côté des titres arrondis, UNE ligne change,
+   aucun site d'appel. Poids ajoutés à la famille : 300 (Light) et 900 (Black), pour que tout poids iOS retombe sur
+   un poids réel de la police variable.
+5. **Cible tactile : 44 pt d'iOS, plancher de 48 dp d'Android.** `MeeshyControlSize.tapTarget` reste 44 (parité) ;
+   `minTouchTarget` (48 dp, Material et TalkBack) est le plancher qu'un composant interactif ne franchit jamais.
+
+**Rejected.** Garder la grille de 4 dp et arrondir les demi-pas d'iOS (un 14 devient 12 ou 16 : chaque écran porté
+dérive d'un pixel sans que rien ne le dise). Une raideur de Material (`StiffnessMediumLow`) « proche » de celle d'iOS
+(le rebond ne se ressemble pas). Un emoji en `sp` mis à l'échelle (à 2× de police, l'emoji de 90 remplit la bulle).
+Charger une police de corps neutre pour imiter SF Pro (une seconde famille à embarquer, pour une différence que
+l'utilisateur ne compare pas).
+
+**Consequences.** Le premier lot qui consomme un jeton n'invente plus de littéral. Les ressorts de `EmojiPicker`,
+`LanguageQuickStrip` et `StoryActionRail` s'assouplissent (raideur 200 → 158). `EmojiDetector.fontSizeSp` (90 / 60 /
+45) et `MessageBubble` écrivent encore l'emoji en `sp` mis à l'échelle : le branchement de `emojiTextStyle` relève du
+lot qui découpe la bulle (fichier chaud).
+
+## ADR-026 — Épinglage SPKI de la passerelle (production et staging)
+
+**Décision.** Le client OkHttp PARTAGÉ (REST, Socket.IO polling et WebSocket) porte un intercepteur réseau `CertificatePinInterceptor`, contribué par `CertificatePinnerContributor` (`@IntoSet HttpClientContributor`). Pour `gate.meeshy.me` et `gate.staging.meeshy.me`, un certificat de la chaîne doit porter une empreinte SHA-256 de SPKI (RSA 2048/4096, EC P-256/P-384) du pin-set (`GatewayPins` : clé courante + clé de secours), sinon `SSLPeerUnverifiedException` avant tout envoi de requête (donc de jeton). Miroir d'iOS (`CertificatePinning.swift`), dont le verdict (`CertificatePinDecision`) est repris dans `:core:model`. Le journal ne contient que l'hôte et le nombre d'empreintes, jamais la chaîne.
+
+**Mode non configuré.** localhost, 10.0.2.2 et tout environnement personnalisé ne sont pas épinglés ; un pin-set vide laisse aussi l'hôte non configuré (validation système seule) — état de livraison tant que les empreintes de production ne sont pas renseignées (elles ne se mesurent pas depuis le conteneur de développement). `network_security_config.xml` refuse le clair en release ; la variante debug n'ouvre que localhost et 10.0.2.2.
+
+**Expiration.** `GatewayPins.EXPIRES_AT_EPOCH_MILLIS` : passé ce jour, le pin-set est ignoré, la validation système reste, un avertissement est journalisé une fois par processus. Pas de brique silencieuse : l'application ne cesse pas de fonctionner parce qu'une rotation a été oubliée, mais l'oubli est visible.
+
+**Procédure de rotation.** (1) Générer la future clé hors ligne ; calculer `openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64`. (2) Publier une version qui l'ajoute à `BACKUP` (ancienne `CURRENT` conservée) et repousser la date d'expiration. (3) Attendre l'adoption de cette version (version minimale). (4) Faire émettre le certificat sur la nouvelle clé. (5) Version suivante : la nouvelle clé en `CURRENT`, nouvelle clé de secours en `BACKUP`. Jamais de bascule sèche (rétrocompatibilité de la production).

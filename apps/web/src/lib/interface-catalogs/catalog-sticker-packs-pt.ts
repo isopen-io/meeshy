@@ -73,6 +73,7 @@ const ptStickerPacks = {
   'packs.domain.avatar-ring': "Contornos de avatar",
   'packs.domain.banner': "Banners",
   'packs.domain.banner-frame': "Molduras de banner",
+  'packs.domain.lens': "Lentes",
   'packs.domain.capture-frame': "Molduras de captura",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Adquirido",

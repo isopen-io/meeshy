@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -80,7 +81,7 @@ fun StoryCommentsSheet(
                 text = if (state.comments.isEmpty()) {
                     stringResource(R.string.stories_comments_title)
                 } else {
-                    stringResource(R.string.stories_comments_count, state.comments.size)
+                    pluralStringResource(R.plurals.stories_comments_count, state.comments.size, state.comments.size)
                 },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
@@ -126,6 +127,7 @@ private fun CommentRow(comment: StoryComment, onRetry: (String) -> Unit) {
             name = comment.authorName,
             size = 36.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(comment.authorName)),
+            imageUrl = comment.avatarUrl,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(

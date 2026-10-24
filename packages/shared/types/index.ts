@@ -59,6 +59,7 @@ export * from './share-link-stats.js';
 export * from './content-surfaces.js';
 export * from './content-reach.js';
 export * from './social-events-v2.js';
+export * from './playback-qoe.js';
 
 // Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
 export * from './message-sticker.js';
@@ -87,7 +88,13 @@ export * from './glory-atmospheres.js';
 export * from './content-pack.js';
 export * from './content-pack-index.js';
 export * from './glory-frame-pack.js';
+export * from './pack-ownership.js';
+export * from './pack-availability.js';
+export * from './pack-unlock.js';
+export * from './pack-registry-override.js';
 export * from './pack-presence.js';
+export * from './lens-format.js';
+export * from './lens-pack.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';

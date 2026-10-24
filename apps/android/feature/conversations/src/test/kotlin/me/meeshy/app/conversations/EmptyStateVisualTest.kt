@@ -9,35 +9,14 @@ import org.junit.Test
  * label). The single source of truth for *what a non-list arm looks like* —
  * asserted through the pure [EmptyStateVisual.of], never the Composable card.
  * Copy is enum-keyed (resolved to R.string in the screen) so the decision stays
- * pure and JVM-testable, free of Android resource ids; only the dynamic server
- * error text ever travels as a literal.
+ * pure and JVM-testable, free of Android resource ids. A server or transport
+ * error text never reaches the card (parity iOS `conversations.error.subtitle`).
  */
 class EmptyStateVisualTest {
 
     @Test
-    fun `error arm becomes a retryable error card carrying the server message`() {
-        val visual = EmptyStateVisual.of(ConversationListContent.Error("network down"))
-
-        assertThat(visual).isEqualTo(
-            EmptyStateVisual(
-                glyph = EmptyStateGlyph.Error,
-                title = EmptyStateCopy.ErrorTitle,
-                subtitle = EmptyStateSubtitle.Literal("network down"),
-                cta = EmptyStateCopy.Retry,
-            ),
-        )
-    }
-
-    @Test
-    fun `error message is trimmed before it becomes the subtitle literal`() {
-        val visual = EmptyStateVisual.of(ConversationListContent.Error("  offline  "))
-
-        assertThat(visual?.subtitle).isEqualTo(EmptyStateSubtitle.Literal("offline"))
-    }
-
-    @Test
-    fun `a blank error message falls back to the generic error subtitle, still retryable`() {
-        val visual = EmptyStateVisual.of(ConversationListContent.Error("   "))
+    fun `error arm becomes a retryable error card with the translated subtitle, never the raw server message`() {
+        val visual = EmptyStateVisual.of(ConversationListContent.Error("Unable to resolve host gate.meeshy.me"))
 
         assertThat(visual).isEqualTo(
             EmptyStateVisual(
@@ -50,8 +29,8 @@ class EmptyStateVisualTest {
     }
 
     @Test
-    fun `an empty error message falls back to the generic error subtitle`() {
-        val visual = EmptyStateVisual.of(ConversationListContent.Error(""))
+    fun `a blank error message gets the same translated subtitle`() {
+        val visual = EmptyStateVisual.of(ConversationListContent.Error("   "))
 
         assertThat(visual?.subtitle).isEqualTo(EmptyStateSubtitle.Resource(EmptyStateCopy.ErrorSubtitle))
     }
@@ -71,7 +50,7 @@ class EmptyStateVisualTest {
     }
 
     @Test
-    fun `cold-empty arm becomes a no-conversations card with no retry`() {
+    fun `cold-empty arm becomes a no-conversations card with a New conversation CTA`() {
         val visual = EmptyStateVisual.of(ConversationListContent.ColdEmpty)
 
         assertThat(visual).isEqualTo(
@@ -79,9 +58,32 @@ class EmptyStateVisualTest {
                 glyph = EmptyStateGlyph.NoConversations,
                 title = EmptyStateCopy.ColdTitle,
                 subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.ColdSubtitle),
-                cta = null,
+                cta = EmptyStateCopy.NewConversation,
             ),
         )
+    }
+
+    @Test
+    fun `search-no-results arm is a compact no-results card with no CTA`() {
+        val visual = EmptyStateVisual.of(ConversationListContent.SearchNoResults)
+
+        assertThat(visual).isEqualTo(
+            EmptyStateVisual(
+                glyph = EmptyStateGlyph.SearchNoResults,
+                title = EmptyStateCopy.SearchNoResultsTitle,
+                subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.SearchNoResultsSubtitle),
+                cta = null,
+                compact = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `search and filter empties carry different copy`() {
+        val search = EmptyStateVisual.of(ConversationListContent.SearchNoResults)
+        val filter = EmptyStateVisual.of(ConversationListContent.FilteredEmpty)
+
+        assertThat(search?.title).isNotEqualTo(filter?.title)
     }
 
     @Test

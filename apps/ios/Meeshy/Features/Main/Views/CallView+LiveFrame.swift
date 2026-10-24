@@ -94,8 +94,7 @@ extension CallView {
             CallLiveFrameNotice(text: CallLiveFrameCopy.answered(answer.reply, by: answer.from))
                 .transition(.opacity)
                 .task(id: answer) {
-                    try? await Task.sleep(nanoseconds: 4_000_000_000)
-                    guard !Task.isCancelled else { return }
+                    guard await cancellableSleep(for: .seconds(4)), !Task.isCancelled else { return }
                     withAnimation(.easeInOut(duration: 0.25)) { liveFrame.dismissAnswer() }
                 }
         } else if layer.activeMode == nil, case .suspended(_, let reason) = liveFrameDisplay {

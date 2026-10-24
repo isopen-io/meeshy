@@ -13,10 +13,12 @@ import me.meeshy.sdk.model.RegisterResponse
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
+import app.cash.turbine.test
+import me.meeshy.sdk.model.auth.SessionOrigin
 import org.junit.Test
 
 private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
-    override suspend fun login(body: LoginRequest) = ApiResponse<AuthSession>(success = false)
+    override suspend fun login(body: LoginRequest) = ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
     override suspend fun register(body: RegisterRequest) = ApiResponse<RegisterResponse>(success = false)
     override suspend fun refresh(body: RefreshTokenRequest) = ApiResponse<AuthSession>(success = false)
     override suspend fun me() = meResponse
@@ -31,7 +33,7 @@ private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
     override suspend fun revokeOtherSessions() =
         me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
     override suspend fun validateMagicLink(body: me.meeshy.sdk.net.api.MagicLinkValidateRequest) =
-        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.AuthSession>(success = false)
+        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
     override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?) =
         ApiResponse<me.meeshy.sdk.model.AvailabilityResult>(success = false)
     override suspend fun getTwoFactorStatus() =
@@ -44,6 +46,37 @@ private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
         me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
     override suspend fun regenerateTwoFactorBackupCodes(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
         me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
+    override suspend fun completeLoginWith2FA(body: me.meeshy.sdk.model.auth.TwoFactorLoginRequest) =
+        ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
+    override suspend fun verifyEmail(body: me.meeshy.sdk.model.auth.EmailVerificationRequest) =
+        ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
+    override suspend fun resendVerification(body: me.meeshy.sdk.model.auth.ResendVerificationRequest) =
+        ApiResponse<Unit>(success = true)
+    override suspend fun verificationStatus(body: me.meeshy.sdk.model.auth.VerificationStatusRequest) =
+        ApiResponse<me.meeshy.sdk.model.auth.VerificationStatusData>(success = false)
+    override suspend fun verifyResetToken(body: me.meeshy.sdk.model.auth.ResetTokenVerificationRequest) =
+        ApiResponse<me.meeshy.sdk.model.auth.ResetTokenVerification>(success = false)
+    override suspend fun resetPassword(body: me.meeshy.sdk.model.auth.ResetPasswordRequest) =
+        ApiResponse<Unit>(success = true)
+    override suspend fun phoneRecoveryLookup(body: me.meeshy.sdk.model.auth.PhoneRecoveryLookupRequest) =
+        ApiResponse<me.meeshy.sdk.model.auth.PhoneRecoveryLookupData>(success = false)
+    override suspend fun phoneRecoveryVerifyIdentity(body: me.meeshy.sdk.model.auth.PhoneRecoveryIdentityRequest) =
+        ApiResponse<me.meeshy.sdk.model.auth.PhoneRecoveryIdentityData>(success = false)
+    override suspend fun phoneRecoveryVerifyCode(body: me.meeshy.sdk.model.auth.PhoneRecoveryCodeRequest) =
+        ApiResponse<me.meeshy.sdk.model.auth.PhoneRecoveryCodeData>(success = false)
+    override suspend fun phoneRecoveryResend(body: me.meeshy.sdk.model.auth.PhoneRecoveryResendRequest) =
+        ApiResponse<Unit>(success = true)
+    override suspend fun sendPhoneCode(body: me.meeshy.sdk.model.auth.SendPhoneCodeRequest) =
+        ApiResponse<Unit>(success = true)
+    override suspend fun verifyPhone(body: me.meeshy.sdk.model.auth.VerifyPhoneRequest) =
+        ApiResponse<me.meeshy.sdk.model.auth.VerifyPhoneData>(success = false)
+    override suspend fun logout(authorization: String?, sessionToken: String?) =
+        ApiResponse<Unit>(success = true)
+    override suspend fun verifyTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+        ApiResponse<me.meeshy.sdk.model.auth.TwoFactorVerifyResult>(success = false)
+    override suspend fun cancelTwoFactorSetup() = ApiResponse<Unit>(success = true)
+    override suspend fun meSecurity(fields: String, expand: String) =
+        ApiResponse<me.meeshy.sdk.model.auth.MeSecurityEnvelope>(success = false)
 }
 
 class SessionRepositoryTest {
@@ -170,5 +203,91 @@ class SessionRepositoryTest {
         repo.refresh()
 
         assertThat(tokenStore.userId).isEqualTo("cached")
+    }
+
+    @Test
+    fun `hasResolvedStoredSession passe une seule fois de faux a vrai apres la restauration`() = runTest {
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+
+        repo.hasResolvedStoredSession.test {
+            assertThat(awaitItem()).isFalse()
+            repo.refresh()
+            assertThat(awaitItem()).isTrue()
+            repo.refresh()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `hors ligne avec un jeton detenu la session est resolue sans effacer l identite`() = runTest {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore(jwt = "jwt"))
+        repo.adopt(user("u1"))
+        repo.refresh()
+
+        assertThat(repo.hasResolvedStoredSession.value).isTrue()
+        assertThat(repo.currentUserId).isEqualTo("u1")
+    }
+
+    @Test
+    fun `sans jeton la restauration se termine aussi`() = runTest {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore())
+        repo.refresh()
+        assertThat(repo.hasResolvedStoredSession.value).isTrue()
+    }
+
+    @Test
+    fun `une session restauree porte l origine RESTORED et une connexion LOGIN`() = runTest {
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
+        val restored = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+        restored.refresh()
+        assertThat(restored.sessionOrigin.value).isEqualTo(SessionOrigin.RESTORED)
+
+        val fresh = SessionRepository(api, InMemoryTokenStore())
+        fresh.adopt(user("u2"), SessionOrigin.REGISTRATION)
+        assertThat(fresh.sessionOrigin.value).isEqualTo(SessionOrigin.REGISTRATION)
+        fresh.clear()
+        assertThat(fresh.sessionOrigin.value).isNull()
+    }
+
+    @Test
+    fun `la relecture du profil est limitee a une par minute`() = runTest {
+        var calls = 0
+        val delegate = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
+        val api = object : AuthApi by delegate {
+            override suspend fun me(): ApiResponse<MeEnvelope> {
+                calls++
+                return delegate.me()
+            }
+        }
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+        var now = 1_000_000L
+        repo.nowMillis = { now }
+
+        repo.revalidateIfStale()
+        now += 59_000
+        repo.revalidateIfStale()
+        assertThat(calls).isEqualTo(1)
+        now += 2_000
+        repo.revalidateIfStale()
+        assertThat(calls).isEqualTo(2)
+    }
+
+    @Test
+    fun `une reponse tardive d une session remplacee est ecartee`() = runTest {
+        lateinit var repo: SessionRepository
+        val delegate = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("old"))))
+        val api = object : AuthApi by delegate {
+            override suspend fun me(): ApiResponse<MeEnvelope> {
+                repo.clear()
+                repo.adopt(user("new"))
+                return delegate.me()
+            }
+        }
+        repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+
+        repo.refresh()
+
+        assertThat(repo.currentUserId).isEqualTo("new")
     }
 }

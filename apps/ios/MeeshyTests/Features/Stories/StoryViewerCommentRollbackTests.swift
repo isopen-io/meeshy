@@ -10,6 +10,7 @@ import MeeshySDK
 /// of the fix — extracted so it's unit-testable without a live SwiftUI view
 /// (`sendComment`'s network calls aren't injectable, cf.
 /// `StoryViewerReactionFlowTests`'s header comment on the same limitation).
+@MainActor
 final class StoryViewerCommentRollbackTests: XCTestCase {
 
     private func makeComment(id: String, parentId: String? = nil, replies: Int = 0) -> FeedComment {

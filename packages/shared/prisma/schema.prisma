@@ -1265,6 +1265,18 @@ model MessageAttachment {
   title   String?
   /// Accessibility alt text (for images/media)
   alt     String?
+  /// Langue SOURCE de `alt` (ISO 639-1, détectée à la saisie, #11329) — même
+  /// rôle que `PostMedia.altLanguage`. `null` tant que `alt` est vide. Sans
+  /// saisie, la description par défaut est la transcription, RÉSOLUE par
+  /// `resolveMediaDescription` (`packages/shared/utils/media-description.ts`),
+  /// jamais recopiée ici.
+  altLanguage String?
+  /// Traductions de `alt` (#12333), MÊME forme que `PostMedia.altTranslations`
+  /// (`{ [lang]: { text, translationModel, confidenceScore, createdAt } }`).
+  /// Seul écrivain : `MessageAttachmentAltTranslationService`, garde fail-closed
+  /// (vue unique, floutée, chiffrée ⇒ jamais traduite). DISTINCTE de
+  /// `translations` (pistes audio) et de `captionTranslations`.
+  altTranslations Json?
   /// Caption/legend displayed with the attachment
   caption String?
 
@@ -1337,6 +1349,9 @@ model MessageAttachment {
   thumbnailUrl  String?
   thumbHash     String?   // ThumbHash base64 (~33 chars) — placeholder image instantane
   imageVariants Json?     // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
+  avifVariants  Json?     // Variantes AVIF responsive (#11262), MÊME forme, format 'avif' — à CÔTÉ des WebP, jamais dedans (anciens clients)
+  renditions    Json?     // Rendus vidéo ADDITIONNELS (#11261) : [{ codec: 'h264', url, width, height, size }] — l'original reste servi à iOS
+  processingState String? // #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias ; absent = prêt (ligne héritée ou traitée pendant la requête)
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)
@@ -1344,6 +1359,7 @@ model MessageAttachment {
   sampleRate Int? // Fréquence d'échantillonnage en Hz (ex: 44100, 48000)
   codec      String? // Codec audio (ex: "opus", "aac", "vorbis", "mp3")
   channels   Int? // Nombre de canaux audio (1: mono, 2: stereo)
+  loudnessLufs Float? // Sonie intégrée EBU R128 du fichier STOCKÉ (LUFS), mesurée à l'ingestion (#11259) — null si non mesurée
 
   // Métadonnées spécifiques vidéo
   fps        Float? // Frames per second pour vidéos
@@ -1495,6 +1511,7 @@ model MessageAttachment {
   // index, ce comptage balaie la collection entière à chaque suppression.
   @@index([filePath])
   @@index([thumbnailPath])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 // =====================================================
@@ -4157,6 +4174,15 @@ model PostMedia {
   /// chemin résumable et le multipart partagent (#11260). OPTIONNEL : une ligne héritée n'en
   /// porte pas, et une image déjà petite non plus. Images non chiffrées uniquement.
   imageVariants Json?
+  /// #11262 — les mêmes largeurs en AVIF, à CÔTÉ des WebP (jamais dans `imageVariants`,
+  /// que les anciens clients lisent sans filtrer le format). OPTIONNEL.
+  avifVariants Json?
+  /// #11261 — rendus vidéo ADDITIONNELS (H.264 de compatibilité d'une vidéo HEVC) :
+  /// [{ codec, url, width, height, size }]. OPTIONNEL ; l'original n'est jamais remplacé.
+  renditions Json?
+  /// #11264 — 'pending' | 'ready' | 'failed' : un rendu différé au worker de médias.
+  /// OPTIONNEL : absent = prêt (ligne héritée, ou traitée pendant la requête).
+  processingState String?
 
   // Metadata audio/vidéo
   duration     Int?     // ms
@@ -4268,6 +4294,7 @@ model PostMedia {
   /// Sert le rattrapage et la garde de revendication (filtre sur uploadeur
   /// parmi les médias en attente).
   @@index([uploaderId, postId])
+  @@index([processingState, createdAt]) // #11264 — le balayage des pièces `pending` sans tâche (worker de médias)
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)
@@ -5687,10 +5714,10 @@ model GameProfile {
 }
 
 /// LE REGISTRE DES MOMENTS PHOTO (#10162, § 5.16.2) : une ligne par (compte, étape du jeu), qui dit
-/// quand l'étape a été détectée, PRÉSENTÉE (sur n'importe quel appareil) et notifiée. `_id` est DÉRIVÉ
-/// de (userId, stepId) (`photoMomentId`, empreinte de 24 hex) : deux écritures de la même étape se
-/// heurtent à l'index `_id`, qui existe toujours ; l'unique (userId, stepId) et l'index de lecture sont
-/// posés par `migrations/2026-10-11-game-photo-moment-indexes.mongodb.js`. Purgé avec le compte.
+/// quand l'étape a été détectée, PRÉSENTÉE (sur n'importe quel appareil), notifiée et IMMORTALISÉE.
+/// `_id` est DÉRIVÉ de (userId, stepId) (`photoMomentId`, empreinte de 24 hex) : deux écritures de la
+/// même étape se heurtent à l'index `_id`, qui existe toujours ; l'unique (userId, stepId) et l'index de
+/// lecture sont posés par `migrations/2026-10-11-game-photo-moment-indexes.mongodb.js`. Purgé avec le compte.
 model GamePhotoMoment {
   id          String    @id @map("_id") @db.ObjectId
   userId      String    @db.ObjectId
@@ -5698,6 +5725,10 @@ model GamePhotoMoment {
   detectedAt  DateTime?
   presentedAt DateTime?
   notifiedAt  DateTime?
+  /// Le signal « immortalisée » (D22 b, #10182) : la photo reste sur l'appareil, seul l'identifiant
+  /// d'étape voyage (`POST /me/game/photo-moments/kept`) pour que les autres appareils la sortent de
+  /// « À rattraper ». Première immortalisation ; supprimer la photo ne l'efface pas.
+  keptAt      DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -5901,6 +5932,8 @@ model GameSeasonDefinition {
   stepPoints Int      @default(100)
   /// Textes en sept langues `{fr,en,es,de,it,pt-BR,ar → {title,tagline,description}}`, ou absent.
   copy       Json?
+  /// Le pack que la saison récompense (#11274), par sa clé `packChoiceKey` ; absent = aucun.
+  rewardPackKey String?
   revision   Int      @unique
   updatedBy  String?  @db.ObjectId
   createdAt  DateTime @default(now())
@@ -6113,18 +6146,105 @@ model CommunityAppearancePack {
   @@index([contractSrc])
 }
 
-/// LA POSSESSION d'un pack payant (#10632). Écrite dans la MÊME transaction que la
-/// ligne `spend` du registre `MeeshLedger` (MeeshSpend.apply) : ni achat sans
-/// possession, ni possession sans achat. Les packs gratuits n'ont pas de ligne.
+/// Une lens proposée par un partenaire (#11271, MeeshyLens v1) : le document
+/// re-sérialisé par `parseLens`, ses fichiers ré-encodés, et la fenêtre et les
+/// communautés FIXÉES par la modération. Gratuite (prix 0) ; l'identité
+/// partenaire, le crédit et le comptage d'usage attendent #11251 (S26).
+model LensPack {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  slug           String    @unique
+  name           String
+  author         String
+  submitterId    String    @db.ObjectId
+  /// pending · approved · rejected · withdrawn (retirée par la modération après publication)
+  status         String    @default("pending")
+  reviewNote     String?
+  reviewerId     String?   @db.ObjectId
+  reviewedAt     DateTime?
+  installCount   Int       @default(0)
+  /// light · standard · rich — le coût MESURÉ par la passerelle, jamais celui déclaré.
+  cost           String
+  /// capture · live
+  surfaces       String[]
+  /// La fenêtre fixée par la modération (proposée par le document, retenue ou corrigée à la revue).
+  startsAt       DateTime
+  endsAt         DateTime
+  /// Les communautés visées, fixées à la revue ; vide = tout le monde.
+  communities    String[]  @db.ObjectId
+  /// Le document re-sérialisé, tel que servi (adressé par `documentSha256`).
+  documentJson   String
+  documentSha256 String
+  /// `<sha16>.json` — l'adresse sous laquelle le magasin des packs sert le document.
+  documentSrc    String
+  documentBytes  Int
+  /// Les adresses `<sha16>.<ext>` des fichiers du document (`LensPackAsset.src`).
+  assetSrcs      String[]
+  createdAt      DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([submitterId, status])
+  @@index([documentSrc])
+}
+
+/// Un fichier d'une lens (#11271) : ré-encodé à la proposition, adressé par son
+/// empreinte, servi par `/pack-assets` seulement quand sa lens est publiée.
+model LensPackAsset {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  packId    String   @db.ObjectId
+  /// `<sha16>.webp|png` — les 16 premiers hexadécimaux du SHA-256 des octets.
+  src       String
+  sha256    String
+  mimeType  String
+  bytes     Bytes
+  sizeBytes Int
+  createdAt DateTime @default(now())
+
+  @@unique([packId, src])
+  @@index([src])
+}
+
+/// La SURCHARGE d'un pack du registre versionné (#11275), écrite par
+/// l'administration sans déploiement : masqué, ordre, prix, fenêtre, ciblage
+/// (`PackRegistryOverride`, JSON validé). Ne crée jamais un pack : les packs du
+/// dépôt restent lus au démarrage, la surcharge s'y applique. Chaque écriture
+/// est journalisée (`AdminAuditLog`) AVANT d'agir.
+model PackRegistryEntry {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  domain     String
+  slug       String
+  /// `PackRegistryOverride` — seules les clés présentes surchargent ; `null` retire.
+  override   Json
+  /// Compare-and-set : une écriture porte la révision qu'elle a lue.
+  revision   Int      @default(1)
+  updatedBy  String   @db.ObjectId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([domain, slug])
+}
+
+/// LA POSSESSION d'un pack payant (#10632). Quatre voies (#11272, `PACK_OWNERSHIP_SOURCES`) :
+/// l'ACHAT en Meeshes, écrit dans la MÊME transaction que la ligne `spend` du registre
+/// `MeeshLedger` (MeeshSpend.apply) — ni achat sans possession, ni possession sans achat —,
+/// le JEU (un rang, un trophée, une saison), un OCTROI de l'équipe, un ÉVÉNEMENT. Jamais
+/// acheté en argent réel (#11252). Les packs gratuits n'ont pas de ligne.
+/// `source`, `reference`, `priceMeeshes` et `requestId` sont OPTIONNELS (MongoDB : les lignes
+/// d'avant n'ont pas `source`, et lues sans elle sont des ACHATS ; seul un achat porte un
+/// prix payé non nul et un `requestId`). Une seule ligne par `(userId, packKey)` : c'est l'IDEMPOTENCE.
 model UserPackOwnership {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   userId       String   @db.ObjectId
   /// `packChoiceKey(domaine, slug)` — même clé que `UserStickerPack.packSlug`.
   packKey      String
-  /// Le prix PAYÉ, figé à l'achat (le prix servi peut changer ensuite).
-  priceMeeshes Int
-  /// Le `requestId` de la dépense — relie la possession à sa ligne de registre.
-  requestId    String
+  /// La voie : `purchase` | `game` | `grant` | `event` ; absent = `purchase` (lignes antérieures).
+  source       String?
+  /// Pourquoi cette ligne existe, court : `rank:voix`, `trophy:<clé>`, `season:2`, ou la raison d'un octroi / d'un événement.
+  reference    String?
+  /// Le prix PAYÉ, figé à l'achat (le prix servi peut changer ensuite) ; 0 hors achat (`PackGrants` l'écrit,
+  /// pour qu'un serveur d'avant #11272 — qui le déclarait requis — relise la ligne après un retour arrière).
+  priceMeeshes Int?
+  /// Le `requestId` de la dépense — relie la possession à sa ligne de registre ; absent hors achat.
+  requestId    String?
   acquiredAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -73,7 +73,7 @@ struct FeedPostRow: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     var body: some View {
         // On iPad/Mac (regular width) the feed lives in a narrow column where a
@@ -97,8 +97,8 @@ struct FeedPostRow: View {
         }
     }
 
-    private var removalOffer: ((String) -> Void)? {
-        ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.deletePost($0, reason: $1) }
+    private var removalOffer: PublicationModerationOffer? {
+        ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) }
     }
 
     /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de

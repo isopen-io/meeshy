@@ -115,7 +115,7 @@ class PublicProfileEndpointTest {
     @Test
     fun `an Android profile read goes to the canonical directory address`() = runTest {
         val capture = Capture()
-        apiServing(servedProfile(), capture).getPerson("68b0000000000000000000aa")
+        apiServing(servedProfile(), capture).getPublicProfile("68b0000000000000000000aa")
 
         assertThat(capture.request!!.url.encodedPath)
             .isEqualTo("/api/v1/directory/people/68b0000000000000000000aa")
@@ -129,7 +129,7 @@ class PublicProfileEndpointTest {
     @Test
     fun `a shared-link username reaches the same address, unresolved`() = runTest {
         val capture = Capture()
-        apiServing(servedProfile(), capture).getPerson("bob")
+        apiServing(servedProfile(), capture).getPublicProfile("bob")
 
         assertThat(capture.request!!.url.encodedPath).isEqualTo("/api/v1/directory/people/bob")
     }
@@ -146,9 +146,17 @@ class PublicProfileEndpointTest {
     @Test
     fun `the read asks for presence, so migrating does not silently drop the dot`() = runTest {
         val capture = Capture()
-        apiServing(servedProfile(), capture).getPerson("bob")
+        apiServing(servedProfile(), capture).getPublicProfile("bob")
 
-        assertThat(capture.request!!.url.queryParameter("expand")).isEqualTo("presence")
+        assertThat(capture.request!!.url.queryParameter("expand")!!.split(",")).contains("presence")
+    }
+
+    @Test
+    fun `the default read folds the stats into the same round trip`() = runTest {
+        val capture = Capture()
+        apiServing(servedProfile(), capture).getPublicProfile("bob")
+
+        assertThat(capture.request!!.url.queryParameter("expand")).isEqualTo("stats,presence")
     }
 
     // --- 2. Le decodage -----------------------------------------------------
@@ -161,7 +169,7 @@ class PublicProfileEndpointTest {
     @Test
     fun `the four voice fields the model ignores do not sink the document`() = runTest {
         val capture = Capture()
-        val user = apiServing(servedProfile(), capture).getPerson("bob").data
+        val user = apiServing(servedProfile(), capture).getPublicProfile("bob").data?.user
 
         assertThat(user).isNotNull()
         assertThat(user!!.id).isEqualTo("68b0000000000000000000aa")
@@ -181,7 +189,7 @@ class PublicProfileEndpointTest {
             "stats": { "postsCount": 3, "storiesCount": 1, "languagesUsed": 2 },
             "relation": "friend",
             "isSelf": false"""
-        val user = apiServing(servedProfile(extra = expansions), capture).getPerson("bob").data
+        val user = apiServing(servedProfile(extra = expansions), capture).getPublicProfile("bob").data?.user
 
         assertThat(user).isNotNull()
         assertThat(user!!.username).isEqualTo("bob")
@@ -197,7 +205,7 @@ class PublicProfileEndpointTest {
     @Test
     fun `the eighteen fields the public profile no longer serves decode to null`() = runTest {
         val capture = Capture()
-        val user = apiServing(servedProfile(), capture).getPerson("bob").data!!
+        val user = apiServing(servedProfile(), capture).getPublicProfile("bob").data!!.user
 
         assertThat(user.email).isNull()
         assertThat(user.phoneNumber).isNull()
@@ -217,7 +225,7 @@ class PublicProfileEndpointTest {
     @Test
     fun `served presence reaches the model`() = runTest {
         val capture = Capture()
-        val user = apiServing(servedProfile(), capture).getPerson("bob").data!!
+        val user = apiServing(servedProfile(), capture).getPublicProfile("bob").data!!.user
 
         assertThat(user.isOnline).isTrue()
         assertThat(user.lastActiveAt).isEqualTo("2026-08-29T10:00:00.000Z")
@@ -232,7 +240,7 @@ class PublicProfileEndpointTest {
     fun `withheld presence decodes as absent, never as a failure`() = runTest {
         val capture = Capture()
         val body = servedProfile(isOnline = "null", lastActiveAt = "null")
-        val user = apiServing(body, capture).getPerson("bob").data!!
+        val user = apiServing(body, capture).getPublicProfile("bob").data!!.user
 
         assertThat(user.isOnline).isNull()
         assertThat(user.lastActiveAt).isNull()

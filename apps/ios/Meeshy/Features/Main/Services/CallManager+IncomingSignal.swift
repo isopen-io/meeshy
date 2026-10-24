@@ -172,7 +172,7 @@ extension CallManager {
             }
             var waitedNs: UInt64 = 0
             while !socket.isConnected && waitedNs < 30_000_000_000 && !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 200_000_000)
+                _ = await cancellableSleep(for: .milliseconds(200))
                 waitedNs += 200_000_000
             }
             guard let self, !Task.isCancelled else { return }

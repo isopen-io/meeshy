@@ -21,6 +21,9 @@ class ConversationPreviewMessagesTest {
         you = "Vous",
         senderFormat = "%1\$s : %2\$s",
         draftPrefix = "Brouillon : ",
+        expired = "Message expiré",
+        hidden = "Message masqué",
+        viewOnce = "Vue unique",
     )
 
     private fun local(
@@ -160,7 +163,46 @@ class ConversationPreviewMessagesTest {
         )
 
         // No system/regional/custom language configured and no device locale supplied →
-        // the Prisme fallback ("fr") still matches this fixture's french translation.
-        assertThat(lines).containsExactly("Bonjour")
+        // the strict descent has no rank to walk: the original is shown. The "fr"
+        // fallback of preferredContentLanguages serves COMPOSITION defaults only.
+        assertThat(lines).containsExactly("Hello")
+    }
+
+    private fun protected(isViewOnce: Boolean? = null, isBlurred: Boolean? = null, expiresAt: String? = null) =
+        LocalMessage(
+            message = ApiMessage(
+                id = "secret",
+                conversationId = "c1",
+                senderId = "other",
+                content = "le code est 4321",
+                sender = ApiMessageSender(displayName = "Alice"),
+                isViewOnce = isViewOnce,
+                isBlurred = isBlurred,
+                expiresAt = expiresAt,
+            ),
+        )
+
+    private fun linesOf(message: LocalMessage) = previewLines(
+        listOf(message),
+        currentUserId = "me",
+        showSender = false,
+        prefs = null,
+        labels = labels,
+        nowMillis = 1_800_000_000_000,
+    )
+
+    @Test
+    fun `a view-once message never shows its text in the preview card`() {
+        assertThat(linesOf(protected(isViewOnce = true))).containsExactly("Vue unique")
+    }
+
+    @Test
+    fun `a blurred message never shows its text in the preview card`() {
+        assertThat(linesOf(protected(isBlurred = true))).containsExactly("Message masqué")
+    }
+
+    @Test
+    fun `an expired message never shows its text in the preview card`() {
+        assertThat(linesOf(protected(expiresAt = "2020-01-01T00:00:00Z"))).containsExactly("Message expiré")
     }
 }

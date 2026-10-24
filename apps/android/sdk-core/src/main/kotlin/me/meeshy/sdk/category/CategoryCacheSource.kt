@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.model.CategoryOption
+import me.meeshy.sdk.model.expansionById
 import me.meeshy.sdk.model.toOptions
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PreferencesApi
@@ -22,6 +23,7 @@ internal class CategoryCacheSource(
     private val store: CategorySnapshotStore,
     private val preferencesApi: PreferencesApi,
     private val clock: CacheClock,
+    private val expansion: CategoryExpansionStore? = null,
 ) : SwrCacheSource<List<CategoryOption>> {
 
     override fun observe(): Flow<List<CategoryOption>?> = store.observe()
@@ -30,13 +32,19 @@ internal class CategoryCacheSource(
 
     override suspend fun revalidate() {
         when (val result = apiCall { preferencesApi.getCategories(limit = PAGE_SIZE) }) {
-            is NetworkResult.Success -> store.save(result.data.toOptions(), clock.nowMillis())
+            is NetworkResult.Success -> {
+                store.save(result.data.toOptions(), clock.nowMillis())
+                expansion?.replaceAll(result.data.expansionById())
+            }
             is NetworkResult.Failure -> throw CategorySyncException(result.error.message)
         }
     }
 
     private companion object {
-        // The device caches the whole catalogue, so one wide page covers any realistic user.
-        const val PAGE_SIZE = 200
+        // The device caches the whole catalogue, so one wide page covers any realistic user —
+        // and the widest the gateway accepts: `GET /me/preferences/categories` declares
+        // `limit` with `maximum: 100` and answers 400 above it, which left every category
+        // section of the list empty.
+        const val PAGE_SIZE = 100
     }
 }

@@ -21,6 +21,12 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 import { LIVE_MESSAGE_MARK } from '../services/messaging/liveMessage';
 import { refuserCommeIntrouvable } from './conversations/utils/access-control';
+import { actorHasMinimumRole } from '../utils/conversation-authority';
+import { MemberRole } from '@meeshy/shared/types/role-types';
+import {
+  ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
+  mayActivateConversationEncryption,
+} from '../utils/encryption-activation-policy';
 const logger = enhancedLogger.child({ module: 'ConversationEncryptionRoutes' });
 
 // EncryptionMode type - defined locally to avoid build order issues
@@ -129,7 +135,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
   /**
    * POST /api/v1/conversations/:conversationId/encryption
-   * Enable encryption for a conversation (immutable - cannot be disabled)
+   * Enable encryption for a conversation (immutable - cannot be disabled).
+   * Restricted to platform ANALYST and above (#12517, #12588, utils/encryption-activation-policy.ts).
    */
   fastify.post<{
     Params: EncryptionStatusParams;
@@ -169,7 +176,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
               where: { isActive: true },
               select: {
                 userId: true,
-                role: true
+                role: true,
+                user: { select: { role: true } }
               }
             }
           }
@@ -184,16 +192,29 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           return sendBadRequest(reply, 'Encryption already enabled for this conversation (cannot be changed)');
         }
 
-        // Check permission to enable encryption
-        // - Direct (1:1) conversations: any participant can enable
-        // - Group conversations: only moderator, admin, or owner can enable
+        // Qui active le chiffrement (#11218) :
+        // - un tête-à-tête : chacun des deux participants ;
+        // - ailleurs : au moins modérateur DANS la conversation — créateur
+        //   compris — ou ADMIN/BIGBOSS de plateforme membre, qui y agit avec
+        //   les droits du créateur. La liste écrite à la main ignorait
+        //   `creator` et le rôle de plateforme. `actorHasMinimumRole` est la
+        //   loi d'autorité unique ; un rang illisible y vaut moins qu'un membre.
         const member = conversation.participants.find(m => m.userId === authContext.userId);
         if (!member) {
           return sendForbidden(reply, 'Not a member of this conversation');
         }
 
+        if (!mayActivateConversationEncryption({ platformRole: member.user?.role })) {
+          return sendForbidden(reply, 'Encryption can only be enabled by a platform staff role (ANALYST or above) for now', {
+            code: ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
+          });
+        }
+
         const isDirectConversation = conversation.type === 'direct';
-        const hasModeratorRole = ['MODERATOR', 'ADMIN', 'OWNER', 'moderator', 'admin', 'owner'].includes(member.role);
+        const hasModeratorRole = actorHasMinimumRole(
+          { conversationRole: member.role, platformRole: member.user?.role },
+          MemberRole.MODERATOR
+        );
 
         if (!isDirectConversation && !hasModeratorRole) {
           return sendForbidden(reply, 'Only moderators and above can enable encryption in group conversations');

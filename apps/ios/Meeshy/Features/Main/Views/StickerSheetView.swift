@@ -152,13 +152,9 @@ struct StickerSheetView: View {
 
 private struct StickerSheetDetents: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 16.0, *) {
-            content
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        } else {
-            content
-        }
+        content
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
     }
 }
 
@@ -199,8 +195,7 @@ struct StickerSheetOnTap: ViewModifier {
             return
         }
         pendingOpen = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(ReceivedSticker.doubleTapWindow * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(ReceivedSticker.doubleTapWindow)), !Task.isCancelled else { return }
             pendingOpen = nil
             HapticFeedback.light()
             isPresented = true

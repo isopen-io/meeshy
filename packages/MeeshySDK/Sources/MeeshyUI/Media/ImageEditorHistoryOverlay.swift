@@ -10,7 +10,7 @@ struct ImageEditorHistoryOverlay: View {
     let onJump: (UUID) -> Void
     let onClose: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     private var isDark: Bool { theme.mode.isDark }
     private var accent: Color { Color(hex: accentColor) }
@@ -26,7 +26,7 @@ struct ImageEditorHistoryOverlay: View {
             VStack(spacing: 0) {
                 HStack {
                     Text(String(localized: "media.editor.history", defaultValue: "Historique", bundle: .module))
-                        .font(.system(size: MeeshyFont.bodySize, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     Button {
@@ -37,10 +37,11 @@ struct ImageEditorHistoryOverlay: View {
                             .foregroundColor(theme.textSecondary)
                             .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                             .background(Circle().fill(theme.inputBackground))
+                            .meeshyTapTarget()
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(MeeshySpacing.lg)
+                .padding(EdgeInsets(top: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.small), leading: MeeshySpacing.lg, bottom: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.small), trailing: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.small)))
 
                 ScrollView {
                     VStack(spacing: MeeshySpacing.xsPlus) {
@@ -78,7 +79,7 @@ struct ImageEditorHistoryOverlay: View {
                         .foregroundColor(isCurrent ? .white : theme.textSecondary)
                 }
                 Text(step.label)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: isCurrent ? .semibold : .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isCurrent ? .semibold : .regular))
                     .foregroundColor(isCurrent ? theme.textPrimary : theme.textSecondary)
                 Spacer()
                 if isCurrent {

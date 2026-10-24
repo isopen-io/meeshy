@@ -82,6 +82,14 @@ async function participe(
   return false;
 }
 
+function estAuteurDuMessage(
+  message: { senderId?: string | null; sender?: { userId?: string | null } | null },
+  qui: Signalant
+): boolean {
+  if (qui.userId) return message.sender?.userId === qui.userId;
+  return qui.participantId !== undefined && message.senderId === qui.participantId;
+}
+
 /**
  * Un post ou une story est atteignable si sa visibilité le permet — la même
  * loi que la lecture, pas une seconde écrite ici.
@@ -161,9 +169,14 @@ export async function verifierCible(options: {
     case 'message': {
       const message = await prisma.message.findUnique({
         where: { id: entityId },
-        select: { conversationId: true },
+        select: { conversationId: true, senderId: true, sender: { select: { userId: true } } },
       });
       if (!message) return INTROUVABLE;
+      // #11220 — signaler son propre message n'a pas de sens, comme pour un
+      // compte ou un commentaire. L'auteur se lit sur la LIGNE de participation
+      // expéditrice : par son `userId` pour un inscrit, par son `id` pour un
+      // invité, qui n'a pas de compte.
+      if (estAuteurDuMessage(message, signalant)) return INACCESSIBLE;
       return (await participe(prisma, message.conversationId, signalant)) ? ATTEIGNABLE : INACCESSIBLE;
     }
 

@@ -28,3 +28,29 @@ class MeeshyGradientsTest {
             .isEqualTo(MeeshyGradients.mainBackground(dark = true))
     }
 }
+
+class MeeshySurfaceGradientTest {
+    private val tint = androidx.compose.ui.graphics.Color(0xFF6366F1)
+
+    @Test
+    fun `surface and border tinted tokens branch on dark`() {
+        assertThat(MeeshyGradients.surfaceGradient(tint, dark = true))
+            .isNotEqualTo(MeeshyGradients.surfaceGradient(tint, dark = false))
+        assertThat(MeeshyGradients.tintedBorder(tint, dark = true))
+            .isNotEqualTo(MeeshyGradients.tintedBorder(tint, dark = false))
+    }
+}
+
+class MeeshyGlassRimGradientTest {
+    @Test
+    fun `le liseré liquid glass branche sur sombre et clair`() {
+        assertThat(MeeshyGradients.liquidGlassRim(dark = true, isTinted = false))
+            .isNotEqualTo(MeeshyGradients.liquidGlassRim(dark = false, isTinted = false))
+    }
+
+    @Test
+    fun `le reflet liquid glass branche sur sombre et clair`() {
+        assertThat(MeeshyGradients.liquidGlassSheen(dark = true))
+            .isNotEqualTo(MeeshyGradients.liquidGlassSheen(dark = false))
+    }
+}

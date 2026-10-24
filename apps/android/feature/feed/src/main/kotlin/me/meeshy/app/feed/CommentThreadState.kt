@@ -58,8 +58,11 @@ data class CommentThreadState(
     /** Replace the optimistic [tempId] with the server [confirmed] row; inert if not pending. */
     fun confirmed(tempId: String, confirmed: ApiPostComment): CommentThreadState {
         if (tempId !in pendingIds) return this
+        // The realtime echo (`comment:added`) can land before the REST answer: the server row is
+        // then already shown, so the optimistic one goes instead of becoming its twin.
+        val echoed = comments.any { it.id == confirmed.id }
         return copy(
-            comments = comments.map { if (it.id == tempId) confirmed else it },
+            comments = if (echoed) comments.filterNot { it.id == tempId } else comments.map { if (it.id == tempId) confirmed else it },
             pendingIds = pendingIds - tempId,
         )
     }
@@ -130,4 +133,22 @@ data class CommentThreadState(
             },
         )
     }
+}
+
+/**
+ * La géométrie d'un fil de commentaires — iso `ReplyCell` / `LoadMoreRepliesCell` iOS :
+ * une réponse est indentée de 16 dp + 40 dp par niveau de profondeur, la ligne « Voir N réponses
+ * de plus » se pose un niveau plus bas. Pure : l'écran n'est qu'une projection.
+ */
+object CommentThreadLayout {
+    const val BASE_INDENT_DP: Int = 16
+    const val INDENT_PER_DEPTH_DP: Int = 40
+
+    /** Indentation d'une réponse de [depth] (1 = réponse directe) ; une profondeur < 1 vaut 1. */
+    fun replyIndentDp(depth: Int): Int = BASE_INDENT_DP + depth.coerceAtLeast(1) * INDENT_PER_DEPTH_DP
+
+    /** Indentation de la ligne « Voir N réponses de plus » : 56 + 40 dp sur iOS. */
+    fun loadMoreIndentDp(): Int = replyIndentDp(depth = 2)
+
+    fun remainingReplies(total: Int, shown: Int): Int = (total - shown).coerceAtLeast(0)
 }

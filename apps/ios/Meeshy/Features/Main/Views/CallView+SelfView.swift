@@ -182,42 +182,32 @@ extension CallView {
     }
 
     private var videoSuspendedTileBody: some View {
-        // Local user's initial (the suspended camera is OURS).
-        let localName = AuthManager.shared.currentUser?.displayName
-            ?? AuthManager.shared.currentUser?.username
-            ?? "?"
-        let initial = String(localName.prefix(1)).uppercased()
+        // The suspended camera is OURS : our own face, photo else initials.
+        let localUser = AuthManager.shared.currentUser
+        let localName = localUser?.displayName ?? localUser?.username ?? "?"
         return ZStack {
             Color.black.opacity(MeeshyOpacity.strong)
             // Avatar behind…
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 56, height: 56)
-                Text(initial)
-                    // Doctrine 86i : initiale d'avatar dans un cercle fixe 56×56 → figée.
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-            }
+            CachedAvatarImage(
+                urlString: localUser?.avatar,
+                thumbHash: localUser?.avatarThumbHash,
+                name: localName,
+                size: 56,
+                accentColor: MeeshyColors.brandPrimaryHex
+            )
             .opacity(MeeshyOpacity.strong)
             // …"video paused" affordance on top.
             VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "video.slash.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
                     .accessibilityHidden(true)
                 Text(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                 Text(String(localized: "call.video.suspended.short", defaultValue: "Reprise auto", bundle: .main))
                     .font(.caption2)
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
         }
     }

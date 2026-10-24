@@ -11,10 +11,13 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.media.InMemoryCaptureSavePolicyStore
 import me.meeshy.sdk.media.MediaDownloadPreferencesStore
 import me.meeshy.sdk.model.AutoDownloadPolicy
 import me.meeshy.sdk.model.MediaDownloadPreferences
 import me.meeshy.sdk.model.MediaKind
+import me.meeshy.sdk.model.composer.capture.CaptureRenderedSaveMode
+import me.meeshy.sdk.model.composer.capture.CaptureSavePolicy
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -57,7 +60,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun state_mirrorsThePersistedPreferences() = runTest {
         val store = RecordingStore(MediaDownloadPreferences(video = AutoDownloadPolicy.ALWAYS))
-        val vm = MediaDownloadViewModel(store)
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
         advanceUntilIdle()
         assertThat(vm.state.value.preferences.video).isEqualTo(AutoDownloadPolicy.ALWAYS)
     }
@@ -65,7 +68,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_persistsTheChangeForThatKind_leavingOthersUntouched() = runTest {
         val store = RecordingStore()
-        val vm = MediaDownloadViewModel(store)
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.VIDEO, AutoDownloadPolicy.ALWAYS)
@@ -82,7 +85,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_routesEachKindToItsOwnField() = runTest {
         val store = RecordingStore()
-        val vm = MediaDownloadViewModel(store)
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.IMAGE, AutoDownloadPolicy.NEVER)
@@ -99,7 +102,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_reselectingTheCurrentPolicy_isANoOpWrite() = runTest {
         val store = RecordingStore(MediaDownloadPreferences(image = AutoDownloadPolicy.NEVER))
-        val vm = MediaDownloadViewModel(store)
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.IMAGE, AutoDownloadPolicy.NEVER)
@@ -111,12 +114,49 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_aRealChange_writesExactlyOnce() = runTest {
         val store = RecordingStore()
-        val vm = MediaDownloadViewModel(store)
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.VIDEO, AutoDownloadPolicy.ALWAYS)
         advanceUntilIdle()
 
         assertThat(store.writeCount).isEqualTo(1)
+    }
+
+    @Test
+    fun capturePolicy_defaultsToNoOriginalAndOnDemandRender() = runTest {
+        val vm = MediaDownloadViewModel(RecordingStore(), InMemoryCaptureSavePolicyStore())
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.capturePolicy.savesOriginal).isFalse()
+        assertThat(vm.state.value.capturePolicy.renderedMode).isEqualTo(CaptureRenderedSaveMode.MANUAL)
+    }
+
+    @Test
+    fun setSavesOriginal_persistsWithoutTouchingTheRenderedMode() = runTest {
+        val capture = InMemoryCaptureSavePolicyStore(CaptureSavePolicy(renderedMode = CaptureRenderedSaveMode.AUTOMATIC))
+        val vm = MediaDownloadViewModel(RecordingStore(), capture)
+        advanceUntilIdle()
+
+        vm.setSavesOriginal(true)
+        advanceUntilIdle()
+
+        assertThat(capture.policy.value).isEqualTo(CaptureSavePolicy(true, CaptureRenderedSaveMode.AUTOMATIC))
+        assertThat(vm.state.value.capturePolicy.savesOriginal).isTrue()
+    }
+
+    @Test
+    fun setRenderedAutomatic_switchesTheModeBothWays() = runTest {
+        val capture = InMemoryCaptureSavePolicyStore()
+        val vm = MediaDownloadViewModel(RecordingStore(), capture)
+        advanceUntilIdle()
+
+        vm.setRenderedAutomatic(true)
+        advanceUntilIdle()
+        assertThat(capture.policy.value.renderedMode).isEqualTo(CaptureRenderedSaveMode.AUTOMATIC)
+
+        vm.setRenderedAutomatic(false)
+        advanceUntilIdle()
+        assertThat(capture.policy.value.renderedMode).isEqualTo(CaptureRenderedSaveMode.MANUAL)
     }
 }

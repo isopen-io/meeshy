@@ -264,6 +264,15 @@ function champCorrespond(valeur: unknown, contrainte: unknown): boolean {
 
   const bornes = ['gte', 'gt', 'lt', 'lte'] as const;
   if (bornes.some((b) => b in c)) {
+    // `prefixRange()` (utils/prefix-range.ts, #11492) borne un préfixe calculé
+    // par un intervalle de CHAÎNES — mimeType, filePath — pas seulement de dates.
+    if (typeof valeur === 'string') {
+      if (typeof c.gte === 'string' && valeur < c.gte) return false;
+      if (typeof c.gt === 'string' && valeur <= c.gt) return false;
+      if (typeof c.lt === 'string' && valeur >= c.lt) return false;
+      if (typeof c.lte === 'string' && valeur > c.lte) return false;
+      return true;
+    }
     const d = asDate(valeur);
     if (!d) return false;
     const gte = asDate(c.gte); if (gte && d.getTime() < gte.getTime()) return false;

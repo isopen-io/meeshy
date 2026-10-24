@@ -36,8 +36,7 @@ struct CallsTab: View {
         .task { await viewModel.loadCalls() }
         .task(id: viewModel.searchQuery) {
             if viewModel.isSearching {
-                try? await Task.sleep(for: Self.searchDebounceDuration)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: Self.searchDebounceDuration), !Task.isCancelled else { return }
             }
             await viewModel.applySearch()
         }
@@ -240,13 +239,13 @@ private struct CallJournalRow: View, Equatable {
             HStack(spacing: MeeshySpacing.mdPlus) {
                 Button(action: onTap) {
                     HStack(spacing: MeeshySpacing.mdPlus) {
-                        MeeshyAvatar(
+                        LivePresence { MeeshyAvatar(
                             name: name,
                             context: .userListItem,
                             accentColor: color,
                             avatarURL: record.avatarURL,
-                            presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
-                        )
+                            presenceState: record.peer.flatMap { PresenceManager.shared.knownPresenceState(for: $0.userId) }
+                        ) }
 
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(name)

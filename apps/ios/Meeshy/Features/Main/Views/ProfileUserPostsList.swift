@@ -346,7 +346,7 @@ struct ProfileUserPostsList: View {
             onTapAuthor: { _ in },
             onEdit: isOwnPost ? { post in editingPost = post } : nil,
             onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
-            onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.deletePost($0, reason: $1) },
+            onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) },
             onReport: !isOwnPost ? { id in Task { await viewModel.report(id) } } : nil,
             onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil
         )
@@ -379,7 +379,7 @@ struct ProfileUserPostsList: View {
             onTapPost: { tapped in openPost(tapped) },
             onTapRepost: { _ in openPost(post) },
             onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
-            onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.deletePost($0, reason: $1) },
+            onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) },
             onReport: !isOwnPost ? { id in
                 Task { await viewModel.report(id) }
             } : nil,

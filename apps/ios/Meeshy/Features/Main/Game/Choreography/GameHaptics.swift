@@ -1,5 +1,6 @@
 import CoreHaptics
 import UIKit
+import MeeshySDK
 
 /// UN TOUCHER du motif : à quel instant, avec quelle force.
 nonisolated struct GameHapticTap: Equatable, Sendable {
@@ -27,6 +28,12 @@ nonisolated enum GameHapticPattern {
         GameHapticTap(time: 0, intensity: 1.0, sharpness: 1.0),
         GameHapticTap(time: 0.09, intensity: 0.45, sharpness: 0.55),
     ]
+
+    /// Un coup de la cérémonie de la frappe (#11177), joué à son impact : une tape franche, et au DERNIER coup le choc
+    /// net de la frappe avec son léger rebond.
+    static func ceremonyBlow(final: Bool) -> [GameHapticTap] {
+        final ? strikeInPlace : [GameHapticTap(time: 0, intensity: 0.6, sharpness: 0.75)]
+    }
 
     /// Une tape par trait de la Signature qui se grave.
     static let rank: [GameHapticTap] = [
@@ -119,7 +126,7 @@ final class GameHaptics: GameHapticsProviding {
             let generator = UIImpactFeedbackGenerator(style: tap.intensity > 0.75 ? .heavy : (tap.intensity > 0.5 ? .medium : .light))
             generator.prepare()
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(tap.time * 1_000_000_000))
+                _ = await cancellableSleep(for: .seconds(tap.time))
                 generator.impactOccurred(intensity: CGFloat(tap.intensity))
             }
         }

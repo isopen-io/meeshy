@@ -12,19 +12,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -43,22 +45,36 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.EmojiCatalog
-import me.meeshy.sdk.model.EmojiCategory
+import me.meeshy.sdk.model.EmojiCategoryId
+import me.meeshy.sdk.model.EmojiPickerPresenter
+import me.meeshy.sdk.model.ReactionBarLaw
+import me.meeshy.sdk.reaction.SharedPrefsRecentEmojiStore
 import me.meeshy.ui.R
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
+/** Skin of the quick-reaction strip — iOS `EmojiReactionPickerChrome`. */
+public enum class ReactionStripChrome {
+    /** The floating pill (glass seam), the default. */
+    Capsule,
+
+    /** No pill, no background: the strip rests bare on what is already there (full-screen stories). */
+    None,
+}
+
 /**
  * Horizontal quick-reaction strip — port of `EmojiReactionPicker`'s quick bar
  * (EmojiReactionPicker.swift). The caller passes a usage-ordered [emojis] list
  * (see `EmojiUsageRanker`); a trailing "+" opens the full picker.
  *
- * The strip sits inside a pill so it keeps the anchored "floating bar" look of
- * the iOS quick-reaction overlay. Emojis the user already reacted with are
- * highlighted in the brand accent.
+ * Every size is multiplied by [scale] (default [ReactionBarLaw.DEFAULT_SCALE] = 1.5, the size of
+ * Meeshy's bars on every surface where one can react). The row scrolls horizontally when the
+ * fifteen emojis do not fit. A tile under the scrub finger ([highlightedIndex]) springs to
+ * [ReactionBarLaw.HOVER_SCALE] with a light haptic tick.
  */
 @Composable
 fun EmojiQuickStrip(
@@ -70,29 +86,31 @@ fun EmojiQuickStrip(
     onExpand: (() -> Unit)? = null,
     highlightedIndex: Int? = null,
     onTileBounds: ((Int, Rect) -> Unit)? = null,
+    scale: Float = ReactionBarLaw.DEFAULT_SCALE,
+    chrome: ReactionStripChrome = ReactionStripChrome.Capsule,
 ) {
+    val haptics = rememberMeeshyHaptics()
+    LaunchedEffect(highlightedIndex) {
+        if (highlightedIndex != null) haptics.light()
+    }
     // Scrub mode (bounds requested): keep the pill as a BACKGROUND shape only,
     // without clipping — a hovered tile scaled ×1.35 must overflow the pill.
     // Non-scrub callers (chat) keep the original clipped pill.
     val scrubMode = onTileBounds != null
+    val pill = RoundedCornerShape(MeeshyRadius.pill)
     Row(
         modifier = modifier
             .let { base ->
-                if (scrubMode) {
-                    base.background(
-                        MeeshyTheme.tokens.backgroundSecondary,
-                        RoundedCornerShape(MeeshyRadius.pill),
-                    )
-                } else {
-                    base
-                        .clip(RoundedCornerShape(MeeshyRadius.pill))
-                        .background(MeeshyTheme.tokens.backgroundSecondary)
+                when {
+                    chrome == ReactionStripChrome.None -> base
+                    scrubMode -> base.background(MeeshyTheme.tokens.backgroundSecondary, pill)
+                    else -> base.clip(pill).background(MeeshyTheme.tokens.backgroundSecondary)
                 }
             }
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+            .padding(horizontal = MeeshySpacing.sm * scale, vertical = MeeshySpacing.xs * scale),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs * scale),
     ) {
         emojis.forEachIndexed { index, emoji ->
             EmojiTile(
@@ -100,7 +118,8 @@ fun EmojiQuickStrip(
                 isMine = emoji in ownReactions,
                 isHighlighted = highlightedIndex == index,
                 accentColor = accentColor,
-                onClick = { onReact(emoji) },
+                scale = scale,
+                onClick = { haptics.light(); onReact(emoji) },
                 onBounds = onTileBounds?.let { report -> { rect -> report(index, rect) } },
             )
         }
@@ -108,13 +127,13 @@ fun EmojiQuickStrip(
             val expandLabel = stringResource(R.string.emoji_picker_expand)
             val plusIndex = emojis.size
             val plusScale by animateFloatAsState(
-                targetValue = if (highlightedIndex == plusIndex) 1.35f else 1f,
+                targetValue = if (highlightedIndex == plusIndex) ReactionBarLaw.HOVER_SCALE else 1f,
                 animationSpec = MeeshyMotion.bouncySpring(),
                 label = "emojiPlusScale",
             )
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(TileSize * scale)
                     .let { base ->
                         val report = onTileBounds
                         if (report != null) {
@@ -126,7 +145,7 @@ fun EmojiQuickStrip(
                     .graphicsLayer { scaleX = plusScale; scaleY = plusScale }
                     .clip(CircleShape)
                     .background(MeeshyTheme.tokens.backgroundTertiary)
-                    .clickable(onClick = onExpand)
+                    .clickable { haptics.light(); onExpand() }
                     .semantics { contentDescription = expandLabel },
                 contentAlignment = Alignment.Center,
             ) {
@@ -134,12 +153,14 @@ fun EmojiQuickStrip(
                     imageVector = Icons.Filled.Add,
                     contentDescription = null,
                     tint = MeeshyTheme.tokens.textSecondary,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(18.dp * scale),
                 )
             }
         }
     }
 }
+
+private val TileSize = 36.dp
 
 @Composable
 private fun EmojiTile(
@@ -147,22 +168,23 @@ private fun EmojiTile(
     isMine: Boolean,
     isHighlighted: Boolean,
     accentColor: Color,
+    scale: Float,
     onClick: () -> Unit,
     onBounds: ((Rect) -> Unit)?,
 ) {
     val reactLabel = stringResource(R.string.emoji_react_with, emoji)
-    val scale by animateFloatAsState(
-        targetValue = if (isHighlighted) 1.35f else 1f,
+    val hoverScale by animateFloatAsState(
+        targetValue = if (isHighlighted) ReactionBarLaw.HOVER_SCALE else 1f,
         animationSpec = MeeshyMotion.bouncySpring(),
         label = "emojiTileScale",
     )
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(TileSize * scale)
             .let { base ->
                 if (onBounds != null) base.onGloballyPositioned { onBounds(it.boundsInRoot()) } else base
             }
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .graphicsLayer { scaleX = hoverScale; scaleY = hoverScale }
             .clip(CircleShape)
             .background(if (isMine) accentColor.copy(alpha = 0.22f) else Color.Transparent)
             .let { base ->
@@ -172,111 +194,103 @@ private fun EmojiTile(
             .semantics { contentDescription = reactLabel },
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = emoji, fontSize = 22.sp)
+        Text(text = emoji, fontSize = (22f * scale).sp)
     }
 }
 
 /**
- * Full categorised emoji picker — port of `EmojiFullPickerSheet`'s tabs + grid
- * (EmojiReactionPicker.swift). Designed to be hosted inside a `ModalBottomSheet`
- * by the caller, which keeps presentation (sheet vs. dialog) app-side.
+ * The picker's content with no host — search field, ten category tabs and a virtualized grid —
+ * so a bottom sheet, a dialog or the composer dock can embed it as it is (iOS `EmojiPickerView`).
+ * One body serves inserting into the field, sending a quick emoji and choosing a reaction.
+ *
+ * It is stateless about persistence: [recentEmojis] (most recent first) comes from the host,
+ * and every tap reaches [onSelect]. The catalog is built off the main thread on first use
+ * ([rememberEmojiCatalog]); until then the grid is a skeleton.
  */
 @Composable
-fun EmojiFullPicker(
+public fun EmojiPickerContent(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     accentColor: Color = MeeshyPalette.Indigo500,
-    categories: List<EmojiCategory> = EmojiCatalog.categories,
+    quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
+    recentEmojis: List<String> = emptyList(),
 ) {
-    var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
-    val selected = categories.getOrElse(selectedIndex) { categories.first() }
+    val snapshot = rememberEmojiCatalog()
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedKey by rememberSaveable { mutableStateOf(EmojiCategoryId.RECENT.key) }
+    val selected = EmojiCategoryId.fromKey(selectedKey) ?: EmojiCategoryId.RECENT
+    val page = remember(snapshot, query, selected, quickReactions, recentEmojis) {
+        snapshot?.let {
+            EmojiPickerPresenter.page(
+                query = query,
+                selected = selected,
+                snapshot = it,
+                quickReactions = quickReactions,
+                recents = recentEmojis,
+            )
+        }
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        EmojiPickerSearchField(
+            query = query,
+            onQueryChange = { query = it },
+            accentColor = accentColor,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        )
+        if (EmojiPickerPresenter.showsTabs(query)) {
+            EmojiCategoryTabs(
+                selected = selected,
+                accentColor = accentColor,
+                onSelect = { selectedKey = it.key },
+            )
+        }
+        HorizontalDivider(color = MeeshyTheme.tokens.inputBorder)
+        EmojiPickerBody(
+            page = page,
+            scrollKey = selected to query,
+            onSelect = onSelect,
+        )
+    }
+}
+
+/**
+ * The picker as a titled sheet body — the entry the chat composer, the reaction choice and the
+ * story viewer already call. Wraps [EmojiPickerContent], feeds it the persisted « used recently »
+ * history and records every pick into it. Designed to be hosted inside a `ModalBottomSheet` by
+ * the caller, which keeps presentation (sheet vs. dialog) app-side.
+ */
+@Composable
+public fun EmojiFullPicker(
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    accentColor: Color = MeeshyPalette.Indigo500,
+    quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
+    title: String = stringResource(R.string.emoji_picker_title),
+) {
+    val context = LocalContext.current
+    val recentStore = remember(context) { SharedPrefsRecentEmojiStore.shared(context) }
+    val recents by recentStore.history.collectAsState()
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = stringResource(R.string.emoji_picker_title),
-            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = MeeshyTheme.tokens.textPrimary,
             modifier = Modifier.padding(
                 start = MeeshySpacing.lg,
                 top = MeeshySpacing.sm,
-                bottom = MeeshySpacing.sm,
             ),
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = MeeshySpacing.md),
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        ) {
-            categories.forEachIndexed { index, category ->
-                CategoryTab(
-                    category = category,
-                    isSelected = index == selectedIndex,
-                    accentColor = accentColor,
-                    onClick = { selectedIndex = index },
-                )
-            }
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(8),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(MeeshySpacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        ) {
-            items(selected.emojis, key = { it }) { emoji ->
-                val reactLabel = stringResource(R.string.emoji_react_with, emoji)
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .clickable { onSelect(emoji) }
-                        .semantics { contentDescription = reactLabel },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(text = emoji, fontSize = 26.sp)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CategoryTab(
-    category: EmojiCategory,
-    isSelected: Boolean,
-    accentColor: Color,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(MeeshyRadius.sm))
-            .background(if (isSelected) accentColor.copy(alpha = 0.12f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = category.icon, fontSize = 20.sp)
-        Text(
-            text = categoryLabel(category.id),
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (isSelected) accentColor else MeeshyTheme.tokens.textSecondary,
+        EmojiPickerContent(
+            onSelect = { emoji ->
+                recentStore.record(emoji)
+                onSelect(emoji)
+            },
+            accentColor = accentColor,
+            quickReactions = quickReactions,
+            recentEmojis = recents,
         )
     }
 }
-
-@Composable
-private fun categoryLabel(id: String): String = stringResource(
-    when (id) {
-        "reactions" -> R.string.emoji_category_reactions
-        "faces" -> R.string.emoji_category_faces
-        "gestures" -> R.string.emoji_category_gestures
-        "hearts" -> R.string.emoji_category_hearts
-        "animals" -> R.string.emoji_category_animals
-        else -> R.string.emoji_category_objects
-    },
-)

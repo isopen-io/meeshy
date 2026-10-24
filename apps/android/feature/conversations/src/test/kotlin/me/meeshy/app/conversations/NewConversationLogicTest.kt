@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.directConversationRequest
 import me.meeshy.sdk.net.api.UserSearchResult
 import org.junit.Test
 
@@ -54,5 +55,37 @@ class NewConversationLogicTest {
         assertThat(rows[1].displayName).isEqualTo("bob")
         assertThat(rows[1].isSelected).isFalse()
         assertThat(rows[1].isOnline).isFalse()
+    }
+
+    // #11615 — le résolveur unique : une seule forme de demande pour un direct.
+
+    @Test
+    fun a_single_peer_is_created_through_the_one_direct_request() {
+        // Le titre saisi est ignoré : un direct n'a pas de titre propre.
+        assertThat(NewConversationLogic.request(listOf("u1"), rawTitle = "Ignoré"))
+            .isEqualTo(directConversationRequest("u1"))
+    }
+
+    @Test
+    fun the_direct_request_has_no_title_and_only_the_peer() {
+        val request = NewConversationLogic.request(listOf("u1"), rawTitle = "")
+
+        assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_DIRECT)
+        assertThat(request.title).isNull()
+        assertThat(request.participantIds).containsExactly("u1")
+    }
+
+    @Test
+    fun several_peers_are_created_as_a_titled_group() {
+        val request = NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  Team  ")
+
+        assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_GROUP)
+        assertThat(request.title).isEqualTo("Team")
+        assertThat(request.participantIds).containsExactly("u1", "u2").inOrder()
+    }
+
+    @Test
+    fun a_group_without_a_typed_title_has_none() {
+        assertThat(NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  ").title).isNull()
     }
 }

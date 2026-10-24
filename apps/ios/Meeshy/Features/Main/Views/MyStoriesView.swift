@@ -40,7 +40,7 @@ struct MyStoriesView: View {
 
     // Réinjectés par le tray sur la sheet (même raison que ses covers : la
     // sheet interne SharePickerView crasherait sur un env object manquant).
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @Environment(\.meeshyConversationList) private var conversationListViewModel
 
     /// Surfaces the failed-publish history (`failedItems`) in the drafts tab
@@ -755,7 +755,7 @@ struct MyStoriesView: View {
     /// aller-retour réseau pour l'ouvrir.
     private func openComments(for story: StoryItem) {
         guard !isResolvingComments else { return }
-        let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let preferred = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         let cached = StoryService.shared.cachedPost(id: story.id)
         if MyStoriesCommentsResolver.shouldUseCache(cachedPost: cached), let cached {
             commentTarget = MyStoriesCommentTarget(post: cached.toFeedPost(preferredLanguages: preferred))

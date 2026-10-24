@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreImage
 import Foundation
+import MeeshyUI
 import Metal
 
 /// **Ce qui identifie une scène cuite** (#9347) : le look, la toile, et ce que
@@ -127,11 +128,33 @@ nonisolated enum ComposerLookPainter {
     /// L'effet de l'appel (#10311) se pose sur la source tonifiée, avant le
     /// cadrage : le visage se lit là où il est. `still` : une photo, dont le
     /// visage se cherche sur elle ; `faces` : le suivi d'un aperçu ou d'un export.
+    /// Les étages sont ceux du peintre de lens unique (#11298) : étalonnage,
+    /// effet du visage, puis cadrage et cadre.
+    ///
+    /// `overlay` : ce qui se pose AU-DESSUS du cadre, à l'étage `.overlays` — le texte de la
+    /// retouche (#12591). Mis à l'échelle de la toile ; `nil` ⇒ le graphe d'avant, inchangé.
     static func paint(_ source: CIImage, look: ComposerPhotoLook, framing: ComposerFraming,
                       scene: CallLiveFrameScene?, canvas: CGSize, declared: CGColorSpace? = nil,
-                      faces: ComposerFaceEffects = .live, still: Bool = false) -> CIImage {
-        let tonifiee = ComposerLiveLookRule.graded(source, filter: look.filter, declared: declared)
-        let graded = faces.apply(look.effect, to: tonifiee, probing: source, still: still)
+                      faces: ComposerFaceEffects = .live, still: Bool = false, overlay: CIImage? = nil) -> CIImage {
+        let couches = [
+            LensPass(.lut) { image, _ in ComposerLiveLookRule.graded(image, filter: look.filter, declared: declared) },
+            LensPass(.face) { tonifiee, _ in faces.apply(look.effect, to: tonifiee, probing: source, still: still) },
+            LensPass(.frame) { image, _ in framed(image, framing: framing, scene: scene, canvas: canvas) },
+        ] + overlayPasses(overlay, canvas: canvas)
+        return LensPainter.paint(source, passes: couches, input: LensFrameInput())
+    }
+
+    private static func overlayPasses(_ overlay: CIImage?, canvas: CGSize) -> [LensPass] {
+        guard let overlay, overlay.extent.width > 0, overlay.extent.height > 0 else { return [] }
+        let etendue = overlay.extent
+        let pose = CGAffineTransform(translationX: -etendue.minX, y: -etendue.minY)
+            .concatenating(CGAffineTransform(scaleX: canvas.width / etendue.width, y: canvas.height / etendue.height))
+        return [LensPass.overlay(overlay.transformed(by: pose), stage: .overlays)]
+    }
+
+    /// Le cadrage, puis la case du cadre quand la scène en a une.
+    private static func framed(_ graded: CIImage, framing: ComposerFraming,
+                               scene: CallLiveFrameScene?, canvas: CGSize) -> CIImage {
         guard let scene, let slot = scene.slots.first, slot.photo.height > 0 else {
             return filled(graded, framing: framing, into: CGRect(origin: .zero, size: canvas))
         }
@@ -156,11 +179,11 @@ nonisolated enum ComposerLookPainter {
     /// **La photo qui part** : le même graphe, rendu dans l'espace de la photo (#9327),
     /// à la résolution native de la source quand `canvas` est `nil`.
     static func photo(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming,
-                      scene: CallLiveFrameScene?, canvas: CGSize? = nil) -> CGImage? {
+                      scene: CallLiveFrameScene?, canvas: CGSize? = nil, overlay: CGImage? = nil) -> CGImage? {
         let toile = canvas ?? Self.canvas(for: CGSize(width: image.width, height: image.height))
         let espace = ComposerPhotoLookRule.colorSpace(of: image)
         let peinte = paint(CIImage(cgImage: image), look: look, framing: framing, scene: scene,
-                           canvas: toile, declared: espace, still: true)
+                           canvas: toile, declared: espace, still: true, overlay: overlay.map { CIImage(cgImage: $0) })
         return ComposerLookGPU.context.createCGImage(peinte, from: CGRect(origin: .zero, size: toile),
                                                      format: .RGBA8, colorSpace: espace)
     }
@@ -185,13 +208,13 @@ nonisolated enum ComposerLookPainter {
     @concurrent
     static func renderPhoto(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming,
                             aspect: CGFloat = designAspect, person: CallFramePerson, date: Date,
-                            scenes: any ComposerLookSceneProviding) async -> CGImage? {
+                            scenes: any ComposerLookSceneProviding, overlay: CGImage? = nil) async -> CGImage? {
         let toile = canvas(for: CGSize(width: image.width, height: image.height), aspect: aspect)
         let cle = ComposerLookSceneKey(look: look, canvas: toile, date: date, person: person)
         let scene = scenes.cached(cle) ?? Self.scene(for: cle)
         if look.frame != ComposerPhotoFrame.none, scene == nil { return nil }
         guard !Task.isCancelled else { return nil }
-        return photo(image, look: look, framing: framing, scene: scene, canvas: toile)
+        return photo(image, look: look, framing: framing, scene: scene, canvas: toile, overlay: overlay)
     }
 
     /// **L'aperçu d'une prise** : le même graphe, à la toile de l'écran
@@ -208,5 +231,21 @@ nonisolated enum ComposerLookPainter {
         if look.frame != ComposerPhotoFrame.none, scene == nil { return nil }
         guard !Task.isCancelled else { return nil }
         return photo(image, look: look, framing: framing, scene: scene, canvas: designCanvas)
+    }
+
+    /// Les proportions de la case où le média se pose : la découpe du cadre, la toile du viseur
+    /// sinon. La scène de l'aperçu sert si elle est cuite ; sinon une toile de sonde, aux mêmes
+    /// proportions et de la taille d'une miniature (une milliseconde), se cuit ici — un cache froid
+    /// ne doit jamais faire cadrer plein viseur un média qui part dans une case 4:5.
+    static func framingAspect(look: ComposerPhotoLook, neutral: CGFloat, date: Date, person: CallFramePerson,
+                              scenes: any ComposerLookSceneProviding) -> CGFloat {
+        guard look.frame != ComposerPhotoFrame.none else { return neutral }
+        let sonde = canvas(for: thumbnailCanvas, aspect: neutral)
+        let cles = [previewCanvas(aspect: neutral), sonde].map {
+            ComposerLookSceneKey(look: look, canvas: $0, date: date, person: person)
+        }
+        let scene = cles.lazy.compactMap { scenes.cached($0) }.first ?? Self.scene(for: cles[1])
+        guard let photo = scene?.slots.first?.photo, photo.height > 0 else { return neutral }
+        return photo.width / photo.height
     }
 }

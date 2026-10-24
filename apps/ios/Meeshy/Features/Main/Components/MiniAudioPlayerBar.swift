@@ -198,8 +198,7 @@ struct MiniAudioPlayerBar: View {
             }
             graceContext = lastObservedContext
             graceTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: Constants.graceDurationNanos)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .nanoseconds(Constants.graceDurationNanos)), !Task.isCancelled else { return }
                 graceContext = nil
                 present(displayedContext)
             }
@@ -219,17 +218,17 @@ struct MiniAudioPlayerBar: View {
             // button rather than as disconnected monogram / name / percent
             // fragments, and the whole-card tap action stays reachable non-visually.
             HStack(spacing: MeeshySpacing.smPlus) {
-                // Avatar conv. Le fond de la barre étant lui-même indigo
-                // plein, le placeholder ne peut plus être un dégradé indigo —
-                // il s'y fondrait. Voile blanc translucide : il se détache du
-                // fond quelle que soit la nuance choisie pour la barre.
-                Circle()
-                    .fill(Color.white.opacity(0.22))
-                    .frame(width: 36, height: 36)
-                    .overlay(
-                        Text(String(context.senderName.prefix(1)).uppercased())
-                            .font(.footnote.weight(.bold))
-                            .foregroundColor(.white))
+                // Visage de l'expéditeur : sa photo, sinon ses initiales —
+                // jamais les deux. L'accent est celui de la personne (et non
+                // un indigo qui se fondrait dans le fond de la barre) ; le
+                // liseré blanc translucide détache le cercle du fond.
+                CachedAvatarImage(
+                    urlString: context.senderAvatarURL,
+                    name: context.senderName,
+                    size: 36,
+                    accentColor: DynamicColorGenerator.colorForName(context.senderName)
+                )
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(context.senderName)

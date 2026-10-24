@@ -1,11 +1,24 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
+/**
+ * Corps de `POST /auth/login`.
+ *
+ * [rememberDevice] part TOUJOURS, même à `false` : `MeeshyApi.json` n'écrit pas
+ * les valeurs par défaut (`encodeDefaults = false`), donc une valeur égale à son
+ * défaut serait omise — et c'est la passerelle qui déciderait, silencieusement,
+ * de la durée de confiance de l'appareil (365 jours ou 24 h). `@EncodeDefault`
+ * rend ce choix explicite à chaque connexion.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class LoginRequest(
     val username: String,
     val password: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val rememberDevice: Boolean = false,
 )
 
 /**
@@ -27,7 +40,8 @@ data class LoginRequest(
 @Serializable
 data class RegisterRequest(
     val email: String,
-    val password: String,
+    /** `null` ⇒ clé ABSENTE : le compte naît sans mot de passe (lien magique). Jamais `""`, que la borne de longueur refuserait. */
+    val password: String? = null,
     /** Le nom affiché, seule identité saisie à l'inscription. */
     val displayName: String? = null,
     val username: String? = null,
@@ -42,7 +56,41 @@ data class RegisterRequest(
     val phoneNumber: String? = null,
     /** The selected dial-code country's ISO 3166-1 alpha-2, or `null` alongside [phoneNumber]. */
     val phoneCountryCode: String? = null,
-)
+    /**
+     * Le code du lien d'invitation (#8058, #8075) : la passerelle rattache le compte
+     * créé à son parrain, et un code invalide ne bloque jamais l'inscription. `null`
+     * ⇒ absent de la charge.
+     */
+    val affiliateToken: String? = null,
+    /** La clé de visite de `/affiliate/track-visit`. Ne voyage qu'avec [affiliateToken] : seule, elle n'a rien à rattacher. */
+    val affiliateSessionKey: String? = null,
+    /**
+     * « Ce n'est pas moi » (#8214) : l'adresse est détenue par un autre compte, celui-ci
+     * la REVENDIQUE. Seul `true` a un sens — `null`, jamais `false`, sinon la clé part
+     * pour rien et une passerelle antérieure pourrait la refuser.
+     */
+    val claimEmail: Boolean? = null,
+) {
+
+    /**
+     * La même charge, portant le code d'invitation [code] s'il a la forme d'un code (sans
+     * espace, 128 caractères au plus — la forme que le web et iOS retiennent). Un code mal
+     * formé ou absent retire les DEUX clés : la clé de visite [sessionKey] ne voyage qu'avec
+     * un code, seule elle n'a rien à rattacher. Miroir de `RegisterRequest.referred(byCode:)`
+     * (`packages/MeeshySDK/.../Auth/AuthModels.swift`).
+     */
+    fun referred(code: String?, sessionKey: String? = null): RegisterRequest {
+        val token = me.meeshy.sdk.model.auth.ReferralCode.normalized(code)
+        val key = sessionKey?.trim()?.takeIf { it.isNotEmpty() }
+        return copy(affiliateToken = token, affiliateSessionKey = if (token == null) null else key)
+    }
+
+    /** La même charge, qui REVENDIQUE l'adresse (« ce n'est pas moi », #8214). */
+    fun claimingEmail(): RegisterRequest = copy(claimEmail = true)
+}
+
+/** La longueur maximale d'un code d'invitation, comme `ReferralCode.maxLength` côté iOS. */
+private const val MAX_REFERRAL_CODE_LENGTH: Int = 128
 
 /**
  * Charge du `200` de `POST /auth/register` — DEUX branches sous un seul statut.
@@ -94,7 +142,10 @@ data class MeEnvelope(
 
 @Serializable
 data class RefreshTokenRequest(
-    val sessionToken: String,
+    /** Le JWT présenté (même échu) : `refreshTokenRequestSchema` l'exige, comme iOS l'envoie. */
+    val token: String,
+    /** Le jeton de session de l'appareil, qui permet de renouveler un JWT échu. */
+    val sessionToken: String? = null,
 )
 
 /**

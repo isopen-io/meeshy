@@ -7,6 +7,7 @@ import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Siz
 import type { MontageCall, MontageCircle } from '@/lib/calls/call-montage-circle';
 import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
 import { browserFaceDetector } from '@/lib/calls/face-tracker';
+import { startFrameClock } from '@/lib/calls/frame-clock';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
@@ -204,10 +205,10 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     const small = (): void => thumbs.current.forEach((canvas, id) => paintRef.current(canvas, id, 'thumb'));
     big();
     small();
-    const bigTimer = setInterval(big, 1000 / (studio.recording ? MONTAGE_RECORD_FPS : MONTAGE_PREVIEW_FPS));
+    const bigClock = startFrameClock({ fps: studio.recording ? MONTAGE_RECORD_FPS : MONTAGE_PREVIEW_FPS, tick: big, driver: () => scene.current()?.querySelector<HTMLVideoElement>('video') ?? null });
     const smallTimer = setInterval(small, 1000 / MONTAGE_THUMB_FPS);
     return () => {
-      clearInterval(bigTimer);
+      bigClock.stop();
       clearInterval(smallTimer);
     };
   }, [studio.recording]);

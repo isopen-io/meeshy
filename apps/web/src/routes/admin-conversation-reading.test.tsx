@@ -10,6 +10,7 @@ import { createActMounter } from '@/test-support/act-mount';
 import { adminIdentityFixture } from '@/test-support/admin-assertions';
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { receptionOf } from '@/lib/view/ephemeral-reception';
+import { createFakeIntersectionObservers } from '@/test-support/fake-intersection-observer';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { AdminConversationReading } from './admin-conversation-reading';
@@ -278,6 +279,49 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
   });
 });
 
+describe('le motif est borné à la SAISIE, jumelle du schéma de la route des pièces (#11510)', () => {
+  test('le champ porte maxLength 500, et un motif plus long ne désarme pas « Lire » sans le rouvrir : il ne l’arme pas', async () => {
+    const { transport, calls } = transportSouverain();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading
+          conversationId={CONVERSATION}
+          language="fr"
+          prisme="membre"
+          readerLanguages={['de', 'es']}
+          viewer={VIEWER}
+          deps={{ source: 'gateway', transport }}
+        />
+      </QueryClientProvider>,
+    );
+    await mounter.settle();
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-reason]');
+    expect(champ?.getAttribute('maxlength')).toBe('500');
+    mounter.type(host, '[data-admin-reason]', 'x'.repeat(600));
+    await mounter.settle();
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(true);
+    expect(calls().length).toBe(0);
+  });
+});
+
+describe('un ADMIN ne se justifie pas : le motif proposé est déjà écrit (#11410)', () => {
+  test('le champ s’ouvre rempli, « Lire » part d’un seul geste avec le motif proposé', async () => {
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, adminIdentityFixture({ role: 'ADMIN' }));
+    const { transport, calls } = transportSouverain();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading conversationId={CONVERSATION} language="fr" prisme="membre" readerLanguages={['fr']} viewer={VIEWER} deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-reason]');
+    expect(champ?.value).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(false);
+    await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+    await mounter.settle();
+    expect(calls()[0]?.path).toContain(new URLSearchParams({ reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' }).toString());
+  });
+});
+
 describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
   test('sert le RANG 2 du membre — ni son rang 1 absent, ni la langue de l’administrateur', async () => {
     const { host } = await lire(['de', 'es']);
@@ -436,7 +480,7 @@ describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
    * rougir ce témoin, et c'est voulu — il faudra alors dire lequel, et prouver
    * qu'il fait quelque chose.
    */
-  const GESTES_OFFERTS = ['Précédents', 'Suivants', 'Ouvrir plan.png', 'Lire l’audio', 'Vitesse de lecture', 'Ouvrir en plein écran'];
+  const GESTES_OFFERTS = ['Fil', 'Médias', 'Ouvrir plan.png', 'Lire l’audio', 'Vitesse de lecture', 'Ouvrir en plein écran'];
 
   test('la fenêtre n’offre QUE les gestes dont l’effet existe', async () => {
     const { host } = await lire(['de', 'es']);
@@ -600,5 +644,211 @@ describe('un message éphémère, en lecture souveraine', () => {
     expect(host.textContent ?? '').toContain('Je disparais dans trente secondes');
     expect(host.querySelector('[data-admin-ephemeral="m-ephemere"]')?.textContent).toMatch(/éphémère · 30\s?s/i);
     expect(receptionOf('m-ephemere')).toBe(null);
+  });
+});
+
+/**
+ * **LE FIL SE REMONTE D'UN GESTE** (#11457, demande porteur 2026-10-21 : « on scroll du
+ * plus récent en bas au plus ancien en haut »). La lecture s'ouvre sur la page la plus
+ * RÉCENTE ; une prise posée en TÊTE du fil demande la page plus ancienne quand elle entre
+ * dans la vue, et la page arrive AU-DESSUS. Plus de « Précédent / Suivant ».
+ *
+ * L'observateur est un faux qui sait ce qu'il observe : `emitAll(1)` met la prise dans la
+ * vue, exactement ce que fait un défilement vers le haut.
+ */
+describe('le fil souverain se remonte en continu (#11457)', () => {
+  const observers = createFakeIntersectionObservers();
+  let natif: typeof IntersectionObserver | undefined;
+  beforeEach(() => {
+    observers.reset();
+    natif = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = observers.FakeIntersectionObserver as unknown as typeof IntersectionObserver;
+  });
+  afterEach(() => {
+    if (natif !== undefined) globalThis.IntersectionObserver = natif;
+  });
+
+  const [ANCIEN] = CHARGE.data.slice(-1);
+  const RECENT = {
+    ...ANCIEN,
+    id: 'm-recent',
+    content: 'Dernier mot',
+    translations: [],
+    attachmentCount: 0,
+    attachments: [],
+    createdAt: '2026-06-02T12:00:00.000Z',
+  };
+  const PAGE_RECENTE = { data: [RECENT], pagination: { total: 3, offset: 0, limit: 30, hasMore: true } };
+  /* Le message CHIFFRÉ porte ici une pièce : sans elle, « la pellicule n'expose pas un
+     message retenu » verdirait aussi bien sans la garde. */
+  const [CHIFFRE, TRADUIT] = CHARGE.data;
+  if (CHIFFRE === undefined || TRADUIT === undefined) throw new Error('corpus : le message chiffré et le message traduit sont attendus');
+  const RETENU_AVEC_PIECE = {
+    ...CHIFFRE,
+    attachmentCount: 1,
+    attachments: [{ ...TRADUIT?.attachments[0], id: 'a-secret', messageId: 'm-chiffre', fileUrl: 'data:image/png;base64,SECRET' }],
+  };
+  const PAGE_ANCIENNE = { data: [RETENU_AVEC_PIECE, TRADUIT], pagination: { total: 3, offset: 30, limit: 30, hasMore: false } };
+
+  /* LA PELLICULE (#11510) lit sa PROPRE route : les pièces servies au curseur, chaque
+     pièce avec son PORTEUR résumé. La pièce du message CHIFFRÉ y est servie RETENUE —
+     et DÉLIBÉRÉMENT bavarde (`fileUrl` présent) : un témoin fail-closed se mesure sur
+     une charge plus généreuse que ce que le serveur sert. */
+  const porteurDe = (message: Record<string, unknown>, isProtected: boolean) => ({
+    id: message.id,
+    createdAt: message.createdAt,
+    senderId: message.senderId,
+    sender: message.sender,
+    isProtected,
+  });
+  const PIECES_SERVIES = [
+    { ...(RETENU_AVEC_PIECE.attachments[0] as Record<string, unknown>), isProtected: true, message: porteurDe(RETENU_AVEC_PIECE, true) },
+    ...TRADUIT.attachments.map((piece: Record<string, unknown>) => ({ ...piece, message: porteurDe(TRADUIT, false) })),
+  ];
+  const PELLICULE_PAGE_1 = { data: PIECES_SERVIES, pagination: { limit: 60, hasMore: true, nextCursor: 'jeton-suivant', form: 'keyset' } };
+  const PELLICULE_PAGE_2 = { data: [], pagination: { limit: 60, hasMore: false, nextCursor: null, form: 'keyset' } };
+
+  function transportEnDeuxPages() {
+    const calls: HttpRequest[] = [];
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (req: HttpRequest): Promise<ApiResult<unknown>> => {
+      calls.push(req);
+      if (req.path.startsWith(`/api/v1/admin/conversations/${CONVERSATION}/attachments`)) {
+        return { ok: true, data: req.path.includes('cursor=jeton-suivant') ? PELLICULE_PAGE_2 : PELLICULE_PAGE_1 };
+      }
+      if (!req.path.startsWith(`/api/v1/admin/conversations/${CONVERSATION}/messages`)) return { ok: false, status: 404, error: 'non prévu' };
+      return { ok: true, data: req.path.includes('offset=30') ? PAGE_ANCIENNE : PAGE_RECENTE };
+    }) as HttpTransport['request'];
+    return { transport, calls: () => calls };
+  }
+
+  async function ouvrir() {
+    const { transport, calls } = transportEnDeuxPages();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading conversationId={CONVERSATION} language="fr" prisme="lecteur" readerLanguages={['fr']} viewer={VIEWER} deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+    mounter.type(host, '[data-admin-reason]', MOTIF);
+    await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+    await mounter.settle();
+    return { host, calls };
+  }
+
+  const remonter = async () => {
+    observers.emitAll(1);
+    await mounter.settle();
+  };
+
+  const ouvrirLesMedias = async (host: HTMLElement) => {
+    await mounter.click(host.querySelector('[data-admin-reading-tab="media"]') as HTMLElement | null);
+    await mounter.settle();
+    await mounter.settle();
+  };
+
+  test('s’ouvre sur la page la plus RÉCENTE, sans bouton de pagination', async () => {
+    const { host, calls } = await ouvrir();
+    expect(host.textContent ?? '').toContain('Dernier mot');
+    expect(host.textContent ?? '').not.toContain('Bonjour');
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(1);
+    expect(host.querySelector('[data-admin-messages-prev]')).toBeNull();
+    expect(host.querySelector('[data-admin-messages-next]')).toBeNull();
+    expect(host.querySelector('[data-thread-older]')?.getAttribute('data-thread-older')).toBe('idle');
+  });
+
+  test('remonter demande la page plus ANCIENNE, sous le même motif, et la pose AU-DESSUS', async () => {
+    const { host, calls } = await ouvrir();
+    await remonter();
+    const lectures = calls().filter((c) => c.path.includes('/messages'));
+    expect(lectures).toHaveLength(2);
+    expect(lectures[1]?.path).toContain('offset=30');
+    expect(lectures[1]?.path).toContain('reason=');
+    const texte = host.textContent ?? '';
+    expect(texte).toContain('Bonjour');
+    expect(texte.indexOf('Bonjour')).toBeLessThan(texte.indexOf('Dernier mot'));
+  });
+
+  test('remonté jusqu’au bout, le fil DIT qu’il commence là, et ne demande plus rien', async () => {
+    const { host, calls } = await ouvrir();
+    expect(host.querySelector('[data-admin-reading-start]')?.textContent ?? '').toBe('');
+    await remonter();
+    expect(host.querySelector('[data-thread-older]')?.getAttribute('data-thread-older')).toBe('exhausted');
+    expect(host.querySelector('[data-admin-reading-start]')?.textContent).toContain('Début de la conversation');
+    await remonter();
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(2);
+  });
+
+  /**
+   * **LA PELLICULE NE PARCOURT PLUS LE FIL** (#11510). Elle lit sa propre route, sous
+   * le même motif, sans qu'aucune page de messages de plus ne soit demandée : les
+   * pièces d'un message pas encore chargé (ici `m-traduit`, dans la page ANCIENNE) y
+   * sont dès l'ouverture.
+   */
+  test('l’onglet « Médias » lit SA route, sous le même motif, et montre les pièces d’un message pas encore chargé', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    expect(host.querySelector('[data-admin-reading-tab="media"]')?.getAttribute('aria-selected')).toBe('true');
+    const lectures = calls().filter((c) => c.path.includes('/attachments'));
+    expect(lectures).toHaveLength(1);
+    expect(lectures[0]?.path).toContain('reason=');
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(1);
+    expect(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]')).not.toBeNull();
+    expect(host.querySelector('[data-media-hub-row="m-traduit:a-vocal"]')).not.toBeNull();
+  });
+
+  test('… et jamais la pièce d’un message RETENU — ni sa tuile, ni son URL, même servie bavarde', async () => {
+    const { host } = await ouvrir();
+    await ouvrirLesMedias(host);
+    expect(host.querySelectorAll('[data-media-hub-tile^="m-chiffre"], [data-media-hub-row^="m-chiffre"]')).toHaveLength(0);
+    expect(host.querySelector('[data-admin-reading-media]')?.innerHTML ?? '').not.toContain('SECRET');
+  });
+
+  test('sa prise du bas demande la page SUIVANTE par son curseur — jamais une page de messages', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    expect(host.querySelector('[data-admin-reading-media-more]')?.getAttribute('data-admin-reading-media-more')).toBe('idle');
+    await remonter();
+    const lectures = calls().filter((c) => c.path.includes('/attachments'));
+    expect(lectures).toHaveLength(2);
+    expect(lectures[1]?.path).toContain('cursor=jeton-suivant');
+    expect(host.querySelector('[data-admin-reading-media-more]')).toBeNull();
+  });
+
+  test('une puce de genre interroge la route avec `kind=` — filtrer est une requête, pas un tri', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    await mounter.click(host.querySelector('[data-admin-reading-media-kind="audio"]') as HTMLElement | null);
+    await mounter.settle();
+    const lectures = calls().filter((c) => c.path.includes('/attachments'));
+    expect(lectures[lectures.length - 1]?.path).toContain('kind=audio');
+    expect(host.querySelector('[data-admin-reading-media-kind="audio"]')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  /**
+   * **« VOIR DANS LE FIL » REMONTE JUSQU'AU MESSAGE.** La pièce vient d'une route qui ne
+   * suit pas les pages du fil : `m-traduit` n'est pas chargé quand on touche sa
+   * vignette. Le fil demande la page plus ancienne, puis saute — un contrôle qui ne
+   * mènerait nulle part serait inerte (loi 4).
+   */
+  test('toucher une vignette ramène au FIL, le remonte jusqu’au message qui la porte, et y saute', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    expect(host.querySelector('[data-row="m-traduit"]')).toBeNull();
+    await mounter.click(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]') as HTMLElement | null);
+    await mounter.settle();
+    await mounter.settle();
+    expect(host.querySelector('[data-admin-reading-tab="thread"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[data-admin-reading-media-panel]')?.hasAttribute('hidden')).toBe(true);
+    expect(calls().filter((c) => c.path.includes('offset=30'))).toHaveLength(1);
+    expect(host.querySelector('[data-row="m-traduit"]')).not.toBeNull();
+  });
+
+  test('revenir sur l’onglet Médias ne relit pas la pellicule : elle est restée montée', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    await mounter.click(host.querySelector('[data-admin-reading-tab="thread"]') as HTMLElement | null);
+    await ouvrirLesMedias(host);
+    expect(calls().filter((c) => c.path.includes('/attachments'))).toHaveLength(1);
+    expect(host.querySelector('[data-admin-reading-media-panel]')?.hasAttribute('hidden')).toBe(false);
   });
 });

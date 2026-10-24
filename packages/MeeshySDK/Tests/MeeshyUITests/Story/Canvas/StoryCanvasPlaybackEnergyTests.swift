@@ -238,12 +238,44 @@ final class StoryCanvasPlaybackEnergyTests: XCTestCase {
     }
 
     func test_lowRange_staysBelowSixtyHertz_highRangeKeepsProMotion() {
-        let low = StoryPlaybackCadence.frameRateRange(for: .low)
-        let high = StoryPlaybackCadence.frameRateRange(for: .high)
+        let low = StoryPlaybackCadence.frameRateRange(for: .low, mediaTier: .high)
+        let high = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .high)
         XCTAssertLessThanOrEqual(low.maximum, 30)
         XCTAssertGreaterThanOrEqual(low.minimum, 10)
         XCTAssertEqual(high.maximum, 120)
         XCTAssertEqual(high.minimum, 60)
+    }
+
+    // MARK: - Le tier média de l'appareil (#11281)
+
+    func test_highCadence_followsTheDeviceMediaTier() {
+        let low = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .low)
+        let mid = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .mid)
+        let high = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .high)
+        let pro = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .pro)
+        XCTAssertEqual([low.minimum, low.maximum, low.preferred], [30, 60, 30])
+        XCTAssertEqual([mid.minimum, mid.maximum, mid.preferred], [30, 60, 60])
+        XCTAssertEqual([high.minimum, high.maximum, high.preferred], [60, 120, 60])
+        XCTAssertEqual([pro.minimum, pro.maximum, pro.preferred], [60, 120, 60])
+    }
+
+    func test_lowCadence_isTheSameOnEveryTier() {
+        let reference = StoryPlaybackCadence.frameRateRange(for: .low, mediaTier: .high)
+        for tier in DeviceMediaTier.allCases {
+            let range = StoryPlaybackCadence.frameRateRange(for: .low, mediaTier: tier)
+            XCTAssertEqual([range.minimum, range.maximum, range.preferred],
+                           [reference.minimum, reference.maximum, reference.preferred], "\(tier)")
+        }
+    }
+
+    func test_highCadence_neverExceedsWhatAStrongerTierGets() {
+        let ranges = DeviceMediaTier.allCases.map {
+            StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: $0)
+        }
+        for (weaker, stronger) in zip(ranges, ranges.dropFirst()) {
+            XCTAssertLessThanOrEqual(weaker.maximum, stronger.maximum)
+            XCTAssertLessThanOrEqual(weaker.preferred ?? 0, stronger.preferred ?? 0)
+        }
     }
 
     // MARK: - Lien d'édition d'un canvas préchargé

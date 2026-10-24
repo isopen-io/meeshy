@@ -133,6 +133,8 @@ function pieceFixture(overrides: AnyRecord = {}): AnyRecord {
     thumbnailUrl: '/api/v1/attachments/file/uploads%2Freunion.jpg',
     thumbHash: 'YTQGFYQYd4h_iIeHh4d3iAeQhw',
     imageVariants: [{ url: '/api/v1/attachments/file/uploads%2Freunion-512.webp', size: 512, format: 'webp' }],
+    avifVariants: [{ url: '/api/v1/attachments/file/uploads%2Freunion-512.avif', size: 400, format: 'avif' }],
+    renditions: [{ codec: 'h264', url: '/api/v1/attachments/file/uploads%2Freunion_h264.mp4', width: 640, height: 360, size: 9 }],
     metadata: { audioEffectsTimeline: [{ at: 0, effect: 'none' }] },
     transcription: { text: 'la reunion est deplacee a jeudi', segments: [] },
     translations: {
@@ -296,6 +298,26 @@ describe('GET /admin/conversations/:id/messages — le rang', () => {
   it('refuse un motif de moins de dix caractères AU SCHÉMA, avant le handler', async () => {
     const { res, espion } = await lire('ADMIN', [messageFixture()], 'court');
     expect(res.statusCode).toBe(400);
+    expect(espion.findManyArgs).toBeNull();
+  });
+
+  it('accepte encore un motif de plus de 500 caractères — le web déjà déployé ne borne pas la saisie, et cette route est en production (#9223)', async () => {
+    const { res } = await lire('ADMIN', [messageFixture()], 'x'.repeat(600));
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('un identifiant de conversation qui n’est pas un ObjectId est refusé en 400 AVANT Prisma — jamais un 500', async () => {
+    const espion: Espion = { findManyArgs: null };
+    const prisma = createMockPrisma([messageFixture()], espion);
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/pas-un-objectid/messages?reason=${encodeURIComponent(MOTIF)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(400);
+    expect((prisma.conversation.findUnique as jest.Mock).mock.calls).toHaveLength(0);
     expect(espion.findManyArgs).toBeNull();
   });
 });
@@ -545,6 +567,8 @@ describe('GET /admin/conversations/:id/messages — un message PROTÉGÉ', () =>
     expect(piece.thumbnailUrl).toBeNull();
     expect(piece.thumbHash).toBeNull();
     expect(piece.imageVariants).toEqual([]);
+    expect(piece.avifVariants).toEqual([]);
+    expect(piece.renditions).toEqual([]);
     expect(piece.transcription).toBeUndefined();
     expect(piece.translations).toBeUndefined();
     expect(piece.metadata).toBeUndefined();
@@ -672,6 +696,8 @@ describe('GET /admin/conversations/:id/messages — une PIÈCE protégée seule'
     expect(piece.thumbnailUrl).toBeNull();
     expect(piece.thumbHash).toBeNull();
     expect(piece.imageVariants).toEqual([]);
+    expect(piece.avifVariants).toEqual([]);
+    expect(piece.renditions).toEqual([]);
     expect(piece.transcription).toBeUndefined();
     expect(piece.translations).toBeUndefined();
 

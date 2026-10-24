@@ -183,7 +183,7 @@ final class WidgetDataManager: NotificationWidgetSink {
         suiteName: String,
         stagingDirectories: [URL]? = nil,
         preferredContentLanguages: @escaping @MainActor () -> [String] = {
-            AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         },
         presenceState: @escaping @MainActor (String) -> PresenceState? = {
             PresenceManager.shared.knownPresenceState(for: $0)
@@ -273,8 +273,23 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// Les lecteurs valident la valeur contre une allowlist et retombent sur la
     /// production si elle en sort — un environnement inattendu ne peut donc pas
     /// détourner un partage vers un hôte arbitraire.
-    func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin) {
-        writingToSharedContainer { sharedDefaults?.set(origin, forKey: apiBaseURLKey) }
+    ///
+    /// Au démarrage à froid, publiée par `finishLaunch` une fois l'écran de
+    /// lancement levé, la liste rendue (#11558) : l'assertion d'arrière-plan
+    /// (`beginBackgroundTask`) est un XPC synchrone sur le fil principal, et
+    /// seules les extensions lisent la valeur, déjà écrite au lancement
+    /// précédent. L'ouverture du groupe d'app et l'écriture partent sur la file
+    /// `AppGroupIO` ; l'assertion court jusqu'à l'écriture faite.
+    func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin, io: AppGroupIO = .shared) {
+        let suiteName = suiteName
+        let key = apiBaseURLKey
+        let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.widget.publish")
+        io.enqueue {
+            UserDefaults(suiteName: suiteName)?.set(origin, forKey: key)
+            Task { @MainActor in
+                if taskId != .invalid { UIApplication.shared.endBackgroundTask(taskId) }
+            }
+        }
     }
 
     // MARK: - NotificationWidgetSink

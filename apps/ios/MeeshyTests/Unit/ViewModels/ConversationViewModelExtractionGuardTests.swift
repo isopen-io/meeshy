@@ -64,7 +64,7 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
             "func hydrateMetadataFromGRDB(",
         ]),
         ("ConversationViewModel+Send.swift", [
-            "func withSendTimeout<", "func sendMessage(content:",
+            "func withSendTimeout<", "func send(_ outgoing: OutgoingMessage)",
             "func finalizeSuccessfulSend(", "func retryMessage(",
             "func insertOptimisticMediaMessage(",
         ]),
@@ -94,6 +94,15 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
             "func playAudio(attachmentId:", "func audioQueueTail(after attachmentId:",
             "func queuedAudio(for attachment:",
         ]),
+        ("Conversation/TranscriptionRetryScheduler.swift", [
+            "struct TranscriptionRetryScheduler", "static func idsMissingTranscription(",
+        ]),
+        ("Conversation/PrismTranslationLaw.swift", [
+            "enum PrismTranslationLaw", "static func prismTranslation(", "static func dominantSplit(",
+        ]),
+        ("Conversation/ConversationAudioQueueFeed.swift", [
+            "final class ConversationAudioQueueFeed", "func followMessages(", "func followFinishedEvents(",
+        ]),
         ("Conversation/ConversationCommandHandler.swift", [
             "func deleteForEveryone(", "func removeForModeration(", "func togglePin(", "func compensate(",
         ]),
@@ -111,6 +120,17 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
         ("Conversation/MediaConsumptionSeeder.swift", ["static func seed("]),
         ("Conversation/QuotedAudioResolver.swift", ["static func inWindow(", "static func outOfWindow("]),
         ("Conversation/StarredSnapshotFactory.swift", ["static func snapshot("]),
+        ("Conversation/OptimisticMessageStager.swift", ["func stageOffline(", "func stageOnline(", "func stageMedia("]),
+        ("Conversation/SendFailureRecovery.swift", ["func recover(", "func classifyRefusal("]),
+        ("Conversation/ConversationMessageProjector.swift", ["static func visualAttachments(", "static func audioItems(", "static func mentionCandidates("]),
+        ("Conversation/EphemeralExpiryTriage.swift", ["static func triage("]),
+        ("Conversation/ConversationReadReceiptSender.swift", ["func send(conversationId:"]),
+        ("Conversation/VoiceConsentGate.swift", ["func fetchMissing(", "func grant("]),
+        ("Conversation/FailedMessageReplay.swift", ["static func outgoing("]),
+        ("Conversation/DeliveryCounterReconciliation.swift", ["static func updates("]),
+        ("Conversation/ConversationWindowFetcher.swift", ["func around(", "func fetchAfter("]),
+        ("Conversation/ConversationCacheReader.swift", ["func currentConversation(", "func cachedThread("]),
+        ("Conversation/ConversationCollaborators.swift", ["struct ConversationCollaborators"]),
     ]
 
     // MARK: - Lecture

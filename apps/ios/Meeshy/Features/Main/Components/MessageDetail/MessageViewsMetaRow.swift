@@ -24,7 +24,7 @@ struct MessageViewsMetaRow: View {
 
             Text(label)
                 .font(.caption.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(width: 85, alignment: .leading)
 
             Text(value)

@@ -60,7 +60,7 @@ struct FeedPostCard: View {
     var onSeeMore: (() -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
     /// #11151 — « Retirer » la publication d'un autre (modération) : l'hôte présente le motif.
-    var onRemove: ((String) -> Void)? = nil
+    var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
     var onEdit: ((FeedPost) -> Void)? = nil
@@ -188,7 +188,7 @@ struct FeedPostCard: View {
     /// flag tap (`activeDisplayLangCode`) always overrides the auto-resolution.
     private var currentDisplayLangCode: String {
         activeDisplayLangCode
-            ?? post.resolvedLanguageCode(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            ?? post.resolvedLanguageCode(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
             ?? "fr"
     }
 
@@ -221,7 +221,7 @@ struct FeedPostCard: View {
         Self.availableFlags(
             originalLanguage: post.originalLanguage,
             translationKeys: post.translations.map { Array($0.keys) } ?? [],
-            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             activeLanguage: currentDisplayLangCode
         )
     }
@@ -564,7 +564,7 @@ struct FeedPostCard: View {
                         document: cardSceneDocument,
                         accentColor: accentColor,
                         preferredContentLanguages:
-                            AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                            ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                         // **L'index VOYAGE** : la tuile touchée ouvre SA scène.
                         onTapScene: { index in
                             if cardSceneOpensFullscreen { openSceneFullscreen(at: index) }
@@ -631,7 +631,7 @@ struct FeedPostCard: View {
                     StoryRepostSurface(
                         coordinator: reelAutoplay,
                         post: post,
-                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages
+                        preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                     )
                 } else if isReelRepost {
                     // Repost-of-REEL: a reel's content lives in media/caption, never
@@ -809,7 +809,7 @@ struct FeedPostCard: View {
             startMediaId: fullscreenMediaId,
             startSceneIndex: fullscreenSceneIndex,
             accentColor: accentColor,
-            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             zoomSourceID: SceneZoomTransition.destinationID(postId: post.id, hasScene: cardSceneDocument != nil,
                                                             startMediaId: fullscreenMediaId)
         )
@@ -842,14 +842,14 @@ struct FeedPostCard: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 // Original author
                 HStack(spacing: MeeshySpacing.sm) {
-                    MeeshyAvatar(
+                    LivePresence { MeeshyAvatar(
                         name: repost.author,
                         context: .postComment,
                         accentColor: repost.authorColor,
                         avatarURL: repost.authorAvatarURL,
                         presenceState: PresenceManager.shared.knownPresenceState(for: repost.authorId),
                         ring: repost.authorRing
-                    )
+                    ) }
 
                     Text(repost.author)
                         .font(.footnote.weight(.semibold))

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="twofactor_backup_codes_remaining">
+        <item quantity="zero">لا رموز احتياطية متبقية</item>
+        <item quantity="one">رمز احتياطي واحد متبقٍ</item>
+        <item quantity="two">رمزان احتياطيان متبقيان</item>
+        <item quantity="few">%1$d رموز احتياطية متبقية</item>
+        <item quantity="many">%1$d رمزًا احتياطيًا متبقيًا</item>
+        <item quantity="other">%1$d رمز احتياطي متبقٍ</item>
+    </plurals>
+    <plurals name="data_export_ready_messages">
+        <item quantity="zero">لا رسائل مضمّنة</item>
+        <item quantity="one">رسالة واحدة مضمّنة</item>
+        <item quantity="two">رسالتان مضمّنتان</item>
+        <item quantity="few">%1$d رسائل مضمّنة</item>
+        <item quantity="many">%1$d رسالة مضمّنة</item>
+        <item quantity="other">%1$d رسالة مضمّنة</item>
+    </plurals>
+    <plurals name="data_export_ready_contacts">
+        <item quantity="zero">لا جهات اتصال مضمّنة</item>
+        <item quantity="one">جهة اتصال واحدة مضمّنة</item>
+        <item quantity="two">جهتا اتصال مضمّنتان</item>
+        <item quantity="few">%1$d جهات اتصال مضمّنة</item>
+        <item quantity="many">%1$d جهة اتصال مضمّنة</item>
+        <item quantity="other">%1$d جهة اتصال مضمّنة</item>
+    </plurals>
+</resources>

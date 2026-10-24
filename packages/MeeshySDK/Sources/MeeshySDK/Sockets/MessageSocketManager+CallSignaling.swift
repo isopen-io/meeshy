@@ -154,6 +154,12 @@ extension MessageSocketManager {
 
     public func emitRequestIceServers(callId: String) {
         socket?.emit("call:request-ice-servers", ["callId": callId])
+        CallAccessoryRequestLog.shared.record(.turnCredentials, callId: callId)
+    }
+
+    func emitCallCheckActive() {
+        socket?.emit("call:check-active")
+        CallAccessoryRequestLog.shared.record(.stateQuery, callId: nil)
     }
 
     /// Informs the gateway the app entered background while a call is active.
@@ -225,10 +231,12 @@ extension MessageSocketManager {
 
     public func emitCallToggleAudio(callId: String, enabled: Bool) {
         socket?.emit("call:toggle-audio", ["callId": callId, "enabled": enabled])
+        CallAccessoryRequestLog.shared.record(.mediaToggle, callId: callId)
     }
 
     public func emitCallToggleVideo(callId: String, enabled: Bool) {
         socket?.emit("call:toggle-video", ["callId": callId, "enabled": enabled])
+        CallAccessoryRequestLog.shared.record(.mediaToggle, callId: callId)
     }
 
     public func emitCallEnd(callId: String) {
@@ -244,30 +252,20 @@ extension MessageSocketManager {
         socket?.emit("call:end", ["callId": callId, "reason": "rejected"])
     }
 
-    /// Variante avec ACK du refus (parité `emitCallEndWithAck`, 2026-08-11) :
-    /// émet `call:end {reason:"rejected"}` et attend confirmation du gateway
-    /// (max 3s). Sans elle, un socket vu « connecté » au moment du refus
-    /// pouvait perdre l'emit en vol — un blip qui s'auto-répare avant que
-    /// `connectionState` n'observe la coupure — laissant l'appelant sonner
-    /// jusqu'au timeout serveur pendant que le gateway résout `missed` au
-    /// lieu de `rejected` (le mislabel que l'arc reject 2026-07-12 fermait
-    /// déjà sur tous les autres chemins de refus).
-    public func emitCallRejectWithAck(callId: String) async -> Bool {
-        guard let socket else { return false }
-        let ack = await socket.emitWithAck(
-            .callEnd, ["callId": callId, "reason": "rejected"] as [String: Any],
-            as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 3
-        )
-        return Self.ackSucceeded(ack)
+    /// `call:end` part sur-le-champ, avant le démontage local (D2, #11468).
+    public func emitCallEndWithAck(callId: String, acknowledged: @escaping @Sendable (Bool) -> Void) {
+        guard let socket else { return acknowledged(false) }
+        CallEndEmission.emit(on: socket, callId: callId, reason: nil, acknowledged: acknowledged)
     }
 
-    /// Variante avec ACK : émet `call:end` et attend confirmation du gateway
-    /// (max 3s). Le gateway accepte et broadcast `call:ended` à tous les
-    /// participants. Sans ACK le client ne sait pas si le peer a été notifié
-    /// — symptôme : l'appelé reste bloqué en `.connecting` ou `.connected`
-    /// alors que l'appelant a raccroché. Utiliser cette variante quand le
-    /// client a un cycle de vie immédiat (raccrocher = vouloir confirmation
-    /// avant de fermer le socket / quitter l'écran).
+    /// Le refus porte `reason: "rejected"`, sans quoi la passerelle le résout `missed`.
+    public func emitCallRejectWithAck(callId: String, acknowledged: @escaping @Sendable (Bool) -> Void) {
+        guard let socket else { return acknowledged(false) }
+        CallEndEmission.emit(on: socket, callId: callId, reason: "rejected", acknowledged: acknowledged)
+    }
+
+    /// `call:end` et l'accusé de la passerelle attendu (3 s au plus) : sans lui,
+    /// le client ne sait pas si `call:ended` a été diffusé au pair.
     public func emitCallEndWithAck(callId: String) async -> Bool {
         guard let socket else { return false }
         let ack = await socket.emitWithAck(

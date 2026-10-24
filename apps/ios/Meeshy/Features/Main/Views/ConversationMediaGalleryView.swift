@@ -8,22 +8,23 @@ import MeeshyUI
 /// Fullscreen gallery that allows swiping through ALL visual media in the conversation.
 /// Opened when tapping any image/video in a message bubble.
 ///
-/// ## Budget de rendu (2026-08-25)
+/// ## Budget de rendu
 ///
-/// La galerie freezait au défilement pour trois raisons cumulées, toutes du
-/// même genre : **de l'état à la racine que seule UNE page consomme**.
+/// La galerie tient son budget de rendu contre trois causes de freeze au
+/// défilement, toutes du même genre : **de l'état à la racine que seule UNE
+/// page consomme**.
 ///
-/// 1. `scale` / `offset` vivaient sur la racine. Un pincement ou un glissement
-///    les réécrit à la fréquence d'affichage — chaque écriture invalidait le
+/// 1. `scale` / `offset` sur la racine : un pincement ou un glissement
+///    les réécrit à la fréquence d'affichage — chaque écriture invaliderait le
 ///    `body` racine, donc le pager, donc TOUTES les pages réalisées.
-/// 2. `currentIndex` était un `@State` mis à jour par un `firstIndex(where:)`
-///    linéaire à chaque changement de page ; il est désormais DÉRIVÉ d'une
+/// 2. `currentIndex` en `@State` mis à jour par un `firstIndex(where:)`
+///    linéaire à chaque changement de page ; il est DÉRIVÉ d'une
 ///    carte `id → index` construite une fois (O(1), aucune écriture d'état).
 /// 3. Le `LazyHStack` réalise les pages paresseusement mais ne les libère
-///    JAMAIS : après vingt swipes, vingt images plein format restaient
-///    décodées en mémoire, chaque page vidéo gardait ses trois abonnements
-///    Combine et sa résolution de disponibilité — et déclenchait même son
-///    auto-téléchargement. Le coût grandissait donc avec la distance parcourue,
+///    JAMAIS : après vingt swipes, vingt images plein format resteraient
+///    décodées en mémoire, chaque page vidéo garderait ses trois abonnements
+///    Combine et sa résolution de disponibilité — et déclencherait même son
+///    auto-téléchargement. Le coût grandirait donc avec la distance parcourue,
 ///    ce qui est exactement le symptôme rapporté (« plus je défile, plus ça
 ///    rame »).
 ///
@@ -43,7 +44,7 @@ struct ConversationMediaGalleryView: View {
     let accentColor: String
     /// Maps attachment.id → caption text (message content or attachment caption)
     var captionMap: [String: String] = [:]
-    /// **Ce que la légende POURRAIT dire, langue par langue** (#4934).
+    /// **Ce que la légende POURRAIT dire, langue par langue.**
     ///
     /// `captionMap` reste le chemin simple — une légende, sans alternative — et
     /// tous ses appelants continuent de fonctionner tels quels. `captionServings`
@@ -54,10 +55,10 @@ struct ConversationMediaGalleryView: View {
     /// Vide, ou avec des `alternatives` vides, ⇒ aucun contrôle n'est peint
     /// (loi 4 : un contrôle sans effet est ABSENT, jamais grisé).
     var captionServings: [String: SocialMediaCaptionServing] = [:]
-    /// attachment.id → la carte des liens suivis du PORTEUR de la légende (#9075).
+    /// attachment.id → la carte des liens suivis du PORTEUR de la légende.
     var captionLinks: [String: [String: String]] = [:]
 
-    /// **Le repli de la légende est un état d'ÉCRAN, pas de média** (#4768) —
+    /// **Le repli de la légende est un état d'ÉCRAN, pas de média** —
     /// mais il se REMET à chaque page. Feuilleter vers un autre média présente
     /// une autre légende : la garder dépliée ferait s'ouvrir en grand un texte
     /// que l'utilisateur n'a pas demandé à lire, et masquerait le média qu'il
@@ -75,12 +76,12 @@ struct ConversationMediaGalleryView: View {
     /// parallèles auraient permis à l'un de viser une page que l'autre a quittée.
     ///
     /// `internal` — la traînée d'émojis et sa feuille vivent dans
-    /// `+Actions.swift` depuis le #6161, et `private` est une portée de FICHIER.
+    /// `+Actions.swift`, et `private` est une portée de FICHIER.
     /// Même prix que celui payé par `currentPageID` plus bas.
     @State var showFullEmojiPicker = false
-    /// **La rangée d'émojis est OUVERTE** (révision porteur 2026-09-11 : « les
-    /// réactions […] doivent s'activer comme pour répondre ou composer, il faut
-    /// mettre un bouton réagir (emoji +) qui affiche la traille des emojis »).
+    /// **La rangée d'émojis est OUVERTE** quand l'utilisateur la demande : les
+    /// réactions s'activent comme répondre ou composer, par un bouton réagir
+    /// (emoji +) qui affiche la traîne des emojis.
     ///
     /// Au repos le visualiseur est NU — rien ne se pose sur l'image. Cet état
     /// répond à une question qui n'est PAS celle de la loi : la loi dit si la
@@ -94,11 +95,11 @@ struct ConversationMediaGalleryView: View {
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
-    /// #7362 — `false` pour les galeries POST / COMMENTAIRE : leurs pièces ne
+    /// `false` pour les galeries POST / COMMENTAIRE : leurs pièces ne
     /// sont pas des `MessageAttachment` (cf. `+Consumption.swift`).
     var reportsAttachmentConsumption: Bool = true
 
-    /// **Créer une story, un réel ou un post avec CE média** (#4014).
+    /// **Créer une story, un réel ou un post avec CE média.**
     ///
     /// Une CLOSURE, et pas un chemin que la galerie prendrait elle-même : elle
     /// ne connaît que des pièces jointes — jamais le `Message` ni le
@@ -110,15 +111,14 @@ struct ConversationMediaGalleryView: View {
     /// action inerte — il n'en affiche pas du tout.
     var onComposeWithMedia: ((MessageAttachment) -> Void)?
 
-    /// **Répondre au média** (#4013) — c'est-à-dire au MESSAGE (conversation) ou
+    /// **Répondre au média** — c'est-à-dire au MESSAGE (conversation) ou
     /// au COMMENTAIRE (post, story, réel) qui le porte.
     ///
     /// Même forme que ci-dessus, et pour la même raison : la galerie ne connaît
     /// pas le porteur. `nil` ⇒ aucun bouton.
     var onReplyToMedia: ((MessageAttachment) -> Void)?
 
-    /// **Répondre à la pièce SANS quitter son plein écran** (#6165, directive
-    /// porteur 2026-09-12).
+    /// **Répondre à la pièce SANS quitter son plein écran.**
     ///
     /// `(pièce, texte, langue)` — la galerie ne connaît que des pièces jointes ;
     /// résoudre le porteur, composer l'ancre et envoyer sont l'affaire de
@@ -139,7 +139,7 @@ struct ConversationMediaGalleryView: View {
     /// ce qu'elle cite vaut moins que pas de bannière du tout.
     var replyCitation: ((MessageAttachment) -> ReplyReference?)?
 
-    /// **Réagir à la PIÈCE, depuis le plein écran** (#6084).
+    /// **Réagir à la PIÈCE, depuis le plein écran.**
     ///
     /// La pièce voyage AVEC l'émoji : la galerie sait quelle page est ouverte,
     /// l'hôte non. Un rappel qui ne porterait que l'émoji laisserait l'hôte
@@ -155,12 +155,15 @@ struct ConversationMediaGalleryView: View {
     /// affichent pas.
     var onReactToMedia: ((MessageAttachment, String) -> Void)?
 
-    /// **La publication dont la galerie montre les SCÈNES** (#6709) — `nil` hors
+    /// **Transférer la pièce** (#12420) — rail et ⋯. `nil` ⇒ aucune entrée (loi 4).
+    var onForwardMedia: ((MessageAttachment) -> Void)?
+
+    /// **La publication dont la galerie montre les SCÈNES** — `nil` hors
     /// d'un post. Une pièce dont l'identité est dans `scenes` est une page scène
     /// (`+ScenePage.swift`) ; toutes les autres restent des pièces jointes.
     var sceneContext: GallerySceneContext?
 
-    /// **« Répondre » existe-t-il sur CETTE pièce ?** (#6710) `nil` ⇒ sur toutes.
+    /// **« Répondre » existe-t-il sur CETTE pièce ?** `nil` ⇒ sur toutes.
     /// Un média joint à un commentaire ne se cite pas depuis un post : le geste
     /// n'y existe pas (loi 4), au lieu d'un bouton qui ne ferait rien.
     var replyableMedia: ((MessageAttachment) -> Bool)?
@@ -170,50 +173,53 @@ struct ConversationMediaGalleryView: View {
     /// un média de commentaire : sans cible, pas de bouton (loi 4).
     var composableMedia: ((MessageAttachment) -> Bool)?
 
-    /// **« Réagir » existe-t-il sur CETTE pièce ?** (#8095) `nil` ⇒ sur toutes.
+    /// **« Réagir » existe-t-il sur CETTE pièce ?** `nil` ⇒ sur toutes.
     /// Une pièce dont le porteur est inconnu ne peut pas refléter sa réaction :
-    /// le bouton n'y existe pas (loi 4). Hors fenêtre, l'index la repeint (#9910).
+    /// le bouton n'y existe pas (loi 4). Hors fenêtre, l'index la repeint.
     var reactableMedia: ((MessageAttachment) -> Bool)?
 
-    /// **Où la colonne d'actions est posée sur le plateau** (#6709) — mesurée, parce
+    /// **« Transférer » existe-t-il sur CETTE pièce ?** `nil` ⇒ sur toutes.
+    var forwardableMedia: ((MessageAttachment) -> Bool)?
+
+    /// **Où la colonne d'actions est posée sur le plateau** — mesurée, parce
     /// que la hauteur du bloc auteur et légende qui la porte change avec la page.
     /// Elle décide du fond que la colonne a sous elle
     /// (`MediaGalleryStage.columnBackdrop`). `internal` : `+Geometry.swift` la lit.
     @State var actionColumnFrame: CGRect = .zero
 
-    /// **La région du plateau où elle se mesure** (#6709, #6760) — celle qui porte le
+    /// **La région du plateau où elle se mesure** — celle qui porte le
     /// cadre et le chrome. Le cadre et son média y sont posés au milieu : sa taille
     /// dit où ils sont peints. `internal` : `+Geometry.swift` l'écrit.
     @State var cadreRegionSize: CGSize = .zero
 
-    /// #10352 — le viewport RÉEL de la galerie, mesuré sur son fond : le solveur
-    /// le lit (`stageViewport`), la fenêtre n'étant qu'un repli avant la mesure.
+    /// #10352 — le viewport RÉEL de la galerie, mesuré sur son fond (`stageViewport`), la fenêtre en repli.
     @State var measuredViewport: CGSize = .zero
 
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`). `internal` : `+Consumption.swift` la lit.
     let indexByID: [String: Int]
-    /// #11163 — la forme du lot, lue une fois ici et non par chaque page.
+    /// La forme du lot, lue une fois ici et non par chaque page.
     let lotShape: GalleryLotShape
 
     @Environment(\.dismiss) private var dismiss
     /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
     @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
-    /// Les marges de la fenêtre qui porte la galerie, la fenêtre clé en repli.
-    var galleryInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
+    /// Publiées par la racine, sinon MESURÉES hors de `body` (`GallerySafeArea`, #12422).
+    var galleryInsets: EdgeInsets { GallerySafeArea.resolve(published: sceneSafeAreaInsets, measured: measuredSafeArea) }
+    @State var measuredSafeArea: EdgeInsets?
     /// `internal` — le couloir bas du plateau le PILOTE depuis
     /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
-    /// celui payé par les pages au #4014, et pour la même raison.
+    /// celui payé par les pages, et pour la même raison.
     @State var currentPageID: String?
     /// Les pages de la source au dernier suivi : de quoi trouver la VOISINE
     /// d'une pièce retirée (`GalleryPagePinning.pageAfterRemoval`).
     @State var lastPageIDs: [String]
-    /// **L'état d'immersion, un seul** (#6142, spec § 3.2). Il a remplacé
-    /// `showControls` : un booléen ne pouvait pas porter la RAISON de l'entrée,
-    /// et sans elle l'appui long et le glissement rendaient le même écran. Il ne
+    /// **L'état d'immersion, un seul** (spec § 3.2). Un booléen ne peut pas
+    /// porter la RAISON de l'entrée, et sans elle l'appui long et le glissement
+    /// rendraient le même écran. Il ne
     /// s'écrit qu'en un endroit — `onEnterStage`, `+Presentation.swift`. Il ne
-    /// commande plus que le plateau (#10930) : on ENTRE en plein écran, sans
+    /// commande que le plateau : on ENTRE en plein écran, sans
     /// chrome, et le toucher le pose par-dessus le média sans en changer les
     /// cotes (`MediaStageVeil.geometryPresentation`).
     @State var stagePresentation: StagePresentation
@@ -243,7 +249,7 @@ struct ConversationMediaGalleryView: View {
     @State var playPauseFade = FullscreenPlayPauseFade()
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
-    /// **La pièce à laquelle la barre RÉPOND** (#6165) — `nil` au repos, ce qui
+    /// **La pièce à laquelle la barre RÉPOND** — `nil` au repos, ce qui
     /// est l'état nominal : le visualiseur est NU tant qu'on n'a pas demandé à
     /// parler.
     ///
@@ -253,18 +259,18 @@ struct ConversationMediaGalleryView: View {
     /// les doigts, et la bannière mentirait sur ce que l'envoi gravera.
     @State private var replyTarget: MessageAttachment?
 
-    /// #6751 — la transition clavier ANNONCÉE, seule source de sa hauteur.
+    /// La transition clavier ANNONCÉE, seule source de sa hauteur.
     @State private var replyKeyboard: KeyboardTransition?
 
-    /// **La commande de lecture de la scène ouverte** (#6709) — l'équivalent,
+    /// **La commande de lecture de la scène ouverte** — l'équivalent,
     /// pour une scène, de l'état de lecture du player partagé. Levée à chaque
     /// page : un plein écran est une demande de voir, y compris ce qui bouge.
     /// `internal` — `+Presentation.swift` et `+Transport.swift` l'écrivent.
     @State var scenePlaying = true
-    /// #8598 — l'horloge du curseur de scène, en `@State` pour ne pas observer ses 60 Hz ici.
+    /// L'horloge du curseur de scène, en `@State` pour ne pas observer ses 60 Hz ici.
     @State var sceneClock = GallerySceneClock()
 
-    /// #7362 — la page image en cours de visionnage. `internal` : `+Consumption.swift` l'écrit.
+    /// La page image en cours de visionnage. `internal` : `+Consumption.swift` l'écrit.
     @State var imageViewSession = GalleryImageViewSession()
 
     init(
@@ -281,9 +287,11 @@ struct ConversationMediaGalleryView: View {
         onSendReplyToMedia: ((MessageAttachment, String, String) -> Void)? = nil,
         replyCitation: ((MessageAttachment) -> ReplyReference?)? = nil,
         onReactToMedia: ((MessageAttachment, String) -> Void)? = nil,
+        onForwardMedia: ((MessageAttachment) -> Void)? = nil,
         replyableMedia: ((MessageAttachment) -> Bool)? = nil,
         composableMedia: ((MessageAttachment) -> Bool)? = nil,
         reactableMedia: ((MessageAttachment) -> Bool)? = nil,
+        forwardableMedia: ((MessageAttachment) -> Bool)? = nil,
         sceneContext: GallerySceneContext? = nil,
         entryPresentation: StagePresentation? = nil
     ) {
@@ -306,6 +314,8 @@ struct ConversationMediaGalleryView: View {
         self.replyableMedia = replyableMedia
         self.composableMedia = composableMedia
         self.reactableMedia = reactableMedia
+        self.onForwardMedia = onForwardMedia
+        self.forwardableMedia = forwardableMedia
         self.sceneContext = sceneContext
         let positions = Dictionary(uniqueKeysWithValues: pages.enumerated().map { ($0.element.id, $0.offset) })
         self.indexByID = positions
@@ -336,17 +346,16 @@ struct ConversationMediaGalleryView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { measuredViewport = $0 }
+                .modifier(GalleryMeasurement(viewport: $measuredViewport, safeArea: $measuredSafeArea))
 
-            // **LE SOL d'une page scène** (#6904, directive porteur du
-            // 2026-09-17 : « On préserve le même fond que pour la story ! »).
+            // **LE SOL d'une page scène** : on préserve le même fond que pour la story.
             // Le noir ci-dessus reste le sol des pages image et vidéo ; une page
             // SCÈNE reçoit par-dessus la MÊME matière que le lecteur de stories
             // peint autour de sa carte. Le montage vit dans `+ScenePage.swift`,
             // avec le reste de ce qui ne concerne que les scènes.
             sceneFloorLayer
 
-            // **Le clavier ne pousse pas le cadre hors de l'écran** (#6165) :
+            // **Le clavier ne pousse pas le cadre hors de l'écran** :
             // la scène et tout le plateau IGNORENT la zone sûre du clavier,
             // seule la couche de saisie la respecte. Sans cette asymétrie,
             // SwiftUI remonte la pile entière et le média sort par le haut au
@@ -355,21 +364,20 @@ struct ConversationMediaGalleryView: View {
                 .ignoresSafeArea(.keyboard, edges: .bottom)
 
             // **LE VOILE de lisibilité, sur TOUT l'écran** — doctrine et
-            // entrées dans `+Scrims.swift` (#6904 tour 5).
+            // entrées dans `+Scrims.swift`.
             stageScrimsLayer
 
             overlayLayer
                 .ignoresSafeArea(.keyboard, edges: .bottom)
 
-            // **Ce que l'appui long a promis** (#6142) : la pastille est la
+            // **Ce que l'appui long a promis** : la pastille est la
             // seule chose qui distingue ses deux portes à l'écran. Elle vit
             // au-dessus du plateau, qui n'existe pas là où elle s'affiche.
             pausedBadgeLayer
                 .ignoresSafeArea(.keyboard, edges: .bottom)
 
-            // **La traînée d'émojis est la couche la PLUS HAUTE du visualiseur**
-            // (précision porteur 2026-09-11 : « les réactions doivent apparaître
-            // par-dessus tous les autres contrôleurs »).
+            // **La traînée d'émojis est la couche la PLUS HAUTE du visualiseur** : les
+            // réactions apparaissent par-dessus tous les autres contrôleurs.
             //
             // DERNIER enfant du `ZStack` racine, et non un `.zIndex()` posé plus
             // bas : `zIndex` n'ordonne qu'entre FRÈRES d'un même conteneur. La
@@ -380,21 +388,21 @@ struct ConversationMediaGalleryView: View {
             reactionLayer
                 .ignoresSafeArea(.keyboard, edges: .bottom)
 
-            // **La barre de réponse est la couche du DIALOGUE** (#6165) — au
+            // **La barre de réponse est la couche du DIALOGUE** — au
             // même rang que la traînée d'émojis, et pour la même raison : elle
             // doit passer par-dessus tous les contrôleurs du plateau.
             GalleryReplyComposerLayer(accentColor: accentColor,
                                       replyCitation: replyCitation,
                                       onSendReplyToMedia: onSendReplyToMedia,
                                       replyTarget: $replyTarget)
-                // #6751 — l'inset est EXPLICITE : l'ajustement automatique de
+                // L'inset est EXPLICITE : l'ajustement automatique de
                 // SwiftUI ne s'applique pas à une couche alignée en bas d'un
                 // `ZStack` que ses quatre autres enfants étendent à l'écran
                 // entier. Détail et mesure : `MediaReplyKeyboardInset`.
                 .padding(.bottom, MediaReplyKeyboardInset.bottomInset(for: replyKeyboard))
                 .animation(.easeOut(duration: replyKeyboard?.duration ?? 0.25), value: replyKeyboard?.height)
         }
-        // #6751 — **l'inset clavier est neutralisé à la RACINE, pas par couche.**
+        // **L'inset clavier est neutralisé à la RACINE, pas par couche.**
         // Mesuré au simulateur : posé sur les enfants, il ne protège rien —
         // c'est la racine du `fullScreenCover` que la fenêtre pousse, et les
         // couches montent avec elle (le média sortait par le haut, « Fermer »
@@ -402,7 +410,7 @@ struct ConversationMediaGalleryView: View {
         // suit le clavier est la couche de saisie, par son padding explicite.
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .observingKeyboardTransition($replyKeyboard)
-        .statusBar(hidden: true)
+        .statusBarHidden(true)
         .onAppear {
             // Filet de sécurité : `scrollPosition(id:)` honore la valeur initiale
             // posée en `init`, mais une présentation qui recycle un état
@@ -422,8 +430,8 @@ struct ConversationMediaGalleryView: View {
         }
         .task(id: playPauseFade) { await fadePlayPauseAfterDelay() }
         .sheet(isPresented: $showFullEmojiPicker) { fullEmojiPickerSheet }
-        // #10729 — présentée en `fullScreenCover`, la galerie recouvre l'hôte
-        // des toasts de la racine : « Enregistrer » se taisait à l'écran.
+        // Présentée en `fullScreenCover`, la galerie recouvre l'hôte
+        // des toasts de la racine : « Enregistrer » se tairait à l'écran.
         .feedbackToastOverlay()
     }
 
@@ -432,19 +440,18 @@ struct ConversationMediaGalleryView: View {
     /// TOUT l'arbre — pager compris — à chaque bascule des contrôles.
     ///
     /// **`allowsHitTesting` n'est pas une ceinture de plus : c'est la garde**
-    /// (#6142). La couche s'en va en FONDU, donc elle reste dans l'arbre — et
+    /// La couche s'en va en FONDU, donc elle reste dans l'arbre — et
     /// atteignable — pendant toute la transition : sans cette ligne, un tap posé
     /// pendant ces deux dixièmes fermerait la galerie par un bouton que
     /// l'utilisateur voit déjà disparaître.
-    /// **Le chrome du plateau, et ce qui l'efface** (#6142 pour l'immersion,
-    /// #6789 pour le voile).
+    /// **Le chrome du plateau, et ce qui l'efface** (immersion et voile).
     ///
     /// Deux façons de n'avoir aucun contrôle à l'écran, et elles ne se
     /// confondent pas : le plein cadre a RENDU la place du plateau, une
     /// ouverture la VOILE — sa place reste réservée, pour que le média ne bouge
     /// pas sous le doigt qui vise un émoji, ni sous le clavier qui monte.
     /// `MediaStageVeil` tient les deux d'un seul verdict, et il en connaît
-    /// DEUX : la traînée d'émojis (#6789) et la barre de réponse (#6817).
+    /// DEUX : la traînée d'émojis et la barre de réponse.
     private var overlayLayer: some View {
         let overlays = stageOverlays
         let chrome = MediaStageVeil.showsChrome(presentation: stagePresentation,
@@ -452,7 +459,7 @@ struct ConversationMediaGalleryView: View {
         return ZStack {
             if chrome {
                 // Le plateau ENTIER — les deux couloirs et ce qui se pose sur le
-                // cadre, transport vidéo compris (#6141) : il commande le média,
+                // cadre, transport vidéo compris : il commande le média,
                 // donc il vit sur le cadre, plus dans une couche flottante à lui.
                 controlsOverlay
                     .transition(.opacity)
@@ -464,7 +471,6 @@ struct ConversationMediaGalleryView: View {
     }
 
     /// **Ce que le visualiseur a monté au-dessus de la scène — site UNIQUE**
-    /// (#6817).
     ///
     /// Deux surfaces montent pour qu'on PARLE de la pièce : la traînée d'émojis
     /// et la barre de réponse. Elles exigent la même chose — le silence autour —
@@ -478,11 +484,11 @@ struct ConversationMediaGalleryView: View {
 
     // MARK: - Pager
 
-    /// **Le pager occupe la ZONE LIBRE, jamais l'écran entier** (#6141). Ses
+    /// **Le pager occupe la ZONE LIBRE, jamais l'écran entier.** Ses
     /// deux retraits sont ceux que le solveur a réservés — lui et le plateau
     /// lisent la MÊME table (`stageCorridors`, `+Geometry.swift`).
     private var galleryPager: some View {
-        // #11162 — par SÉLECTION : la page se suit par son identité quand le
+        // Par SÉLECTION : la page se suit par son identité quand le
         // catalogue insère des pièces avant elle, et ouvrir la 900e ne
         // construit pas les 899 qui la précèdent.
         AdaptiveHorizontalPager(
@@ -507,7 +513,7 @@ struct ConversationMediaGalleryView: View {
     private func handlePageChange(from oldID: String?, to newID: String?) {
         guard let newID, let newIndex = indexByID[newID] else { return }
 
-        // **Le repli se REMET à chaque média** (#4768). Feuilleter présente une
+        // **Le repli se REMET à chaque média.** Feuilleter présente une
         // AUTRE légende ; la garder dépliée ouvrirait en grand un texte que
         // personne n'a demandé à lire, par-dessus le média qu'on vient
         // d'atteindre. C'est l'inverse du volet de description du composer, qui
@@ -522,7 +528,7 @@ struct ConversationMediaGalleryView: View {
         // au-dessus, et pour la même raison.
         if oldID != newID, reactionBarOpen { reactionBarOpen = false }
 
-        // **Une scène atteinte au glissement se LIT** (#6709) : la commande se
+        // **Une scène atteinte au glissement se LIT** : la commande se
         // relève à chaque page, comme une vidéo active part d'elle-même
         // (`GalleryVideoPage`). La pause posée sur la scène précédente ne suit pas
         // le lecteur sur la suivante.
@@ -594,7 +600,7 @@ struct ConversationMediaGalleryView: View {
             .equatable()
 
         default:
-            // **Une scène de post est une pièce SYNTHÉTIQUE** (#6709) : son MIME
+            // **Une scène de post est une pièce SYNTHÉTIQUE** : son MIME
             // n'est ni image ni vidéo, donc elle arrive ici. Sa nature se lit sur
             // `sceneContext`, jamais sur le MIME ; toute autre pièce reste noire.
             if let scene = sceneContext?.scenes[attachment.id] {
@@ -626,13 +632,12 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
-    /// **La légende du plein écran rejoint la couche PARTAGÉE** (#4768).
+    /// **La légende du plein écran rejoint la couche PARTAGÉE.**
     ///
-    /// Elle était la TROISIÈME façon de replier la même chose : `Text` brut,
-    /// `lineLimit(4)`, aucune bascule — exactement la forme INERTE que la story
-    /// portait avant #4474 et le lecteur de réel avant #4484. Une légende de
-    /// cinq lignes s'y arrêtait au milieu d'une phrase, sans que rien n'indique
-    /// qu'il en restait, ni ne permette de la lire.
+    /// Une troisième façon de replier la même chose — `Text` brut,
+    /// `lineLimit(4)`, aucune bascule — serait la forme INERTE : une légende de
+    /// cinq lignes s'y arrêterait au milieu d'une phrase, sans que rien n'indique
+    /// qu'il en reste, ni ne permette de la lire.
     ///
     /// > Deux surfaces converties sur trois, c'est une règle qui a l'air
     /// > partagée. La troisième ne rougit pas : elle affiche un texte, tronqué
@@ -641,7 +646,7 @@ struct ConversationMediaGalleryView: View {
     /// Ce qui passe au composant est la RÈGLE — 15 mots de tête au-delà de 30,
     /// l'invite, l'ancrage bas-gauche déplié. Le retrait reste 16 pt, celui de
     /// `bottomMetadataOverlay` juste au-dessus : la légende s'aligne sur sa
-    /// colonne, comme en réel (directive porteur 2026-09-01).
+    /// colonne, comme en réel.
     private func captionOverlay(_ text: String, links: [String: String]) -> some View {
         MediaCaptionOverlay(caption: text,
                             isExpanded: captionExpanded,
@@ -670,17 +675,14 @@ struct ConversationMediaGalleryView: View {
             HStack {
                 FullscreenCloseButton(tone: .onMedia) { dismissGallery() }
 
-                // La capsule « n / N » a quitté ce couloir (#6144, directive
-                // porteur « enlever les N/M au centre ! ») : le rail du couloir
+                // La capsule « n / N » n'a pas sa place dans ce couloir : le rail du couloir
                 // bas MONTRE déjà la position — vignette active bordée de
                 // blanc — et il la dit mieux qu'un texte. Le libellé VoiceOver
-                // de position, lui, ne disparaît pas : il vit maintenant sur
-                // chaque vignette du rail (`FilmstripThumbnail`).
+                // de position vit sur chaque vignette du rail (`FilmstripThumbnail`).
                 Spacer()
 
-                // La flèche d'enregistrement direct a cédé la place au menu ⋯
-                // (#6145, directive porteur) : l'enregistrement y est devenu une
-                // ENTRÉE, à côté du partage hors de l'application. Le menu et
+                // L'enregistrement est une ENTRÉE du menu ⋯, à côté du partage hors de
+                // l'application. Le menu et
                 // ses deux transports vivent dans `+Menu.swift`.
                 overflowMenu
             }
@@ -706,51 +708,34 @@ struct ConversationMediaGalleryView: View {
     }
 
     /// Bas du CADRE : auteur du média, sa date, sa ligne format / dimensions /
-    /// poids, puis la légende. **Plus ses actions** (#6161) : réagir · répondre ·
-    /// composer sont montées au-dessus de ce bloc, en colonne verticale à droite
-    /// (`cadreActionColumn`). Ce qui reste ici est exactement ce que le porteur a
-    /// demandé de garder sous le voile.
+    /// poids, puis la légende. **Pas d'actions** : elles vivent dans le rail, à
+    /// droite de ce bloc (`cadreActionColumn`, #12420).
     ///
-    /// **La pellicule n'est plus là** (#6141) : elle a rejoint le couloir bas du
+    /// **La pellicule n'est pas là** : elle vit dans le couloir bas du
     /// plateau (`railCorridor`, `+Geometry.swift`), où plus aucune légende
-    /// dépliée ne peut la comprimer. Le voile, lui, a monté d'un cran
+    /// dépliée ne peut la comprimer. Le voile, lui, est monté d'un cran
     /// (`cadreOverlay`) : un dégradé par étage ferait deux lisières.
     @ViewBuilder
     var bottomOverlay: some View {
         if currentIndex < allAttachments.count {
             let att = allAttachments[currentIndex]
             VStack(alignment: .leading, spacing: 0) {
-                // **Déplier la légende EFFACE l'auteur** (directive porteur
-                // 2026-09-02) : « quand on affiche / déplie pour tout voir, les
-                // détails d'auteur se cachent pour afficher le contenu ».
+                // **L'auteur n'est pas effacé par le dépliage : il est POUSSÉ vers le haut.**
+                // Le « voir plus » de la légende affiche le texte déplié avec effet ombre, en
+                // repoussant le détail de l'auteur vers le haut.
                 //
-                // Le bas de l'écran est une ressource FINIE. Une légende
-                // dépliée et une carte d'auteur s'y disputent la place ; la
-                // seule des deux que l'utilisateur vient de demander est la
-                // légende. L'auteur revient au repli — rien n'est perdu, tout
-                // est rendu à son tour.
+                // Le bas de l'écran est une ressource FINIE : une légende dépliée et une carte
+                // d'auteur s'y disputent la place. C'est la pile ancrée en bas qui fait le
+                // travail — la légende grandit, ses voisins montent — et la lisibilité est
+                // portée par l'ombre de `MediaCaptionOverlay`, jamais par la place qu'on
+                // prendrait à quelqu'un d'autre. Ni fondu ni gate : rien ne se cache.
                 //
-                // C'est la règle du POST. La story fait l'inverse et c'est
-                // voulu : là, rien ne se cache, la scène se FLOUTE
-                // (`StoryViewerView+Canvas`). Deux surfaces, deux réponses à la
-                // même question — « où trouver la place ? » — parce qu'elles
-                // n'ont pas le même voisinage.
-                // **L'auteur ne s'efface plus : il est POUSSÉ vers le haut**
-                // (directive porteur 2026-09-05).
-                //
-                // > « le "voir plus" de la légende doit juste afficher le texte
-                // > déplié avec effet ombre, en repoussant le détail de
-                // > l'auteur vers le haut »
-                //
-                // Le fondu et son gate viennent de la directive du 2026-09-02,
-                // qui demandait l'inverse. Ils sont retirés, pas commentés :
-                // c'est la pile ancrée en bas qui fait le travail — la légende
-                // grandit, ses voisins montent — et la lisibilité est portée
-                // par l'ombre de `MediaCaptionOverlay`, jamais par la place
-                // qu'on prendrait à quelqu'un d'autre.
+                // La story répond autrement à la même question — « où trouver la place ? » —
+                // parce qu'elle n'a pas le même voisinage : la scène se FLOUTE
+                // (`StoryViewerView+Canvas`).
                 bottomMetadataOverlay(att)
-                // **La légende d'une SCÈNE se traduit par sa propre source**
-                // (#6709, #6504) : texte du post ou légende du média, chacun par
+                // **La légende d'une SCÈNE se traduit par sa propre source** : texte du
+                // post ou légende du média, chacun par
                 // sa route, avec LA feuille de traduction des messages. Montée
                 // avec l'identité de la pièce : la langue choisie ne suit pas le
                 // lecteur sur la page suivante, qui porte un autre contenu.
@@ -781,62 +766,55 @@ struct ConversationMediaGalleryView: View {
 
     // MARK: - Video Transport Controls (for the currently playing video)
     //
-    // **Le transport a quitté ce fichier au #6162.** Il s'était posé sur le
-    // cadre au #6141 — le bon endroit tant que la progression, la durée et le
-    // play/pause étaient UNE vue. Ils ne le sont plus : la progression est
-    // descendue au couloir du plateau (`transportCorridor`) et le play/pause
-    // est resté au centre du média (`cadreCenterPlayPause`), les deux dans
-    // `+Transport.swift`. Ce commentaire reste pour que la prochaine recherche
-    // de « videoTransportLayer » atterrisse quelque part.
+    // **Le transport vit dans `+Transport.swift`** : la progression est au
+    // couloir du plateau (`transportCorridor`) et le play/pause au centre du
+    // média (`cadreCenterPlayPause`). Ce commentaire reste pour que la
+    // recherche de « videoTransportLayer » atterrisse quelque part.
 
-    /// **Les actions quittent le bas du cadre pour une COLONNE VERTICALE à
-    /// droite** (#6161, directive porteur 2026-09-12 : « il faut placer les
-    /// contrôleurs du bas sur le côté en vertical sur la zone sombre du
-    /// plateau »).
-    ///
-    /// Elles étaient en ligne, à droite de l'auteur, sous le voile (#4014) ;
-    /// elles prennent le gabarit de la barre latérale du lecteur de story
-    /// (`StoryViewerView+Sidebar.swift`).
+    /// **Les actions sont en COLONNE VERTICALE à droite**, sur la zone sombre du
+    /// plateau : elles prennent le gabarit de la barre latérale du lecteur de
+    /// story (`StoryViewerView+Sidebar.swift`).
     ///
     /// ## Elle se POSE sur le cadre — elle ne lui prend pas de largeur
     ///
-    /// La lecture opposée avait été retenue une heure plus tôt : un vrai couloir
-    /// latéral, réservé AVANT le cadre comme les couloirs haut et bas. Elle
-    /// coûtait **356 × 633 → 322 × 572** sur une scène 9:16, soit un cinquième
-    /// de la surface. Second arbitrage porteur du même jour — *« on va essayer
-    /// de garder l'aspect des story mais ce ne sont pas des story »* — et c'est
-    /// celui-ci qui vit : `MediaStageFraming` ne gagne AUCUN champ ici.
+    /// Un vrai couloir latéral, réservé AVANT le cadre comme les couloirs haut
+    /// et bas, coûterait **356 × 633 → 322 × 572** sur une scène 9:16, soit un
+    /// cinquième de la surface. Arbitrage porteur : *« on va essayer de garder
+    /// l'aspect des story mais ce ne sont pas des story »* — `MediaStageFraming`
+    /// ne gagne AUCUN champ ici.
     ///
-    /// **#4561 / #4633 ne l'interdisent pas**, et il faut le dire ici parce
-    /// qu'un lot futur les citera pour « corriger » ce choix : ces deux issues
-    /// gouvernent le COMPOSER, où un contrôle posé sur la scène entre en
-    /// concurrence avec le geste d'ÉDITION. En lecture il n'y a aucune édition à
-    /// protéger, et le lecteur de story a toujours posé sa colonne sur son
-    /// canvas.
+    /// **La règle du composer (aucun contrôle sur le canvas) ne l'interdit pas**,
+    /// et il faut le dire ici parce qu'un lot futur la citerait pour « corriger »
+    /// ce choix : elle gouverne le COMPOSER, où un contrôle posé sur la scène entre
+    /// en concurrence avec le geste d'ÉDITION. En lecture il n'y a aucune édition à
+    /// protéger, et le lecteur de story pose sa colonne sur son canvas.
     ///
-    /// Le retrait bas n'existe pas : `bottomMetadataOverlay` porte déjà ses
-    /// 12 pt de `padding(.top)`, qui valent la gouttière. Une colonne vide ne
-    /// prend donc RIEN — ni largeur, ni hauteur (loi 4).
+    /// Une colonne vide ne prend RIEN — ni largeur, ni hauteur (loi 4).
     var cadreActionColumn: some View {
         FullscreenActionRail {
             if currentIndex < allAttachments.count {
                 mediaActions(allAttachments[currentIndex])
+                // #12420 — Enregistrer et Transférer : dans le rail ET dans le ⋯.
+                GalleryRailExitActions(contentId: allAttachments[currentIndex].id,
+                                       offersSave: currentSaveSubject != nil,
+                                       offersForward: currentOffersForward,
+                                       onSave: requestSaveCurrent,
+                                       onForward: forwardCurrent)
             }
-            // #9577 — le son et (...) ont quitté la ligne de la barre : ils
-            // se rangent ici, sous « Composer » (`+Transport.swift`).
+            // #9577 — le son et (...) se rangent sous les actions (`+Transport.swift`).
             cadreTransportRail
         }
-        // #6709 — la colonne MESURE sa place sur le plateau : c'est elle, et non le
+        // La colonne MESURE sa place sur le plateau : c'est elle, et non le
         // média de la page, qui dit ce qui est peint sous ses boutons.
         .onGeometryChange(for: CGRect.self) { proxy in
             proxy.frame(in: .named(MediaGalleryStage.cadreSpace))
         } action: { cadre in
             actionColumnFrame = cadre
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
+        .fixedSize()
         .padding(.trailing, MediaGalleryStage.gutter)
-        // #6693 — la colonne est POSÉE sur le plateau (#6161, #6760) : sa teinte suit
-        // la luminance de ce qu'elle a SOUS elle (#6709) — le média, la bande du
+        // La colonne est POSÉE sur le plateau : sa teinte suit
+        // la luminance de ce qu'elle a SOUS elle — le média, la bande du
         // hors-champ, ou le sol noir sous un cadre plus court —, jamais le blanc
         // d'office (1,83:1 sur une vidéo violette).
         .mediaChromeTinted()
@@ -853,10 +831,9 @@ struct ConversationMediaGalleryView: View {
     /// n'existe pas (loi 4).
     @ViewBuilder
     private func mediaActions(_ att: MessageAttachment) -> some View {
-        // **« Réagir » est une ACTION, pas un ornement** (#6084, révision porteur
-        // 2026-09-11 : « les réactions sur les attachements en plein écran
-        // doivent s'activer comme pour répondre ou composer, il faut mettre un
-        // bouton réagir (emoji +) qui affiche la traille des emojis »).
+        // **« Réagir » est une ACTION, pas un ornement** : les réactions sur les
+        // attachements en plein écran s'activent comme répondre ou composer, par
+        // un bouton réagir (emoji +) qui affiche la traîne des emojis.
         //
         // Il rejoint donc CETTE rangée — même rang, même gabarit 40 pt, même
         // verre que Répondre et Composer — au lieu de poser sa rangée d'émojis
@@ -884,20 +861,20 @@ struct ConversationMediaGalleryView: View {
                 }
             }
         }
-        // **Un média PROTÉGÉ ne se cite pas** (#4013) : la bannière de citation
+        // **Un média PROTÉGÉ ne se cite pas** : la bannière de citation
         // porte la vignette du média, ce qui ferait sortir de la conversation
         // ce qu'une vue unique, un flou ou un chiffrement y retiennent. Le
         // prédicat est celui que le menu d'appui long lit déjà —
         // `ComposableAttachment.isProtected` — plutôt qu'une seconde écriture
         // des trois mêmes drapeaux.
         //
-        // **La ROUTE décide, pas deux `if` côte à côte** (#6165) : sans elle,
+        // **La ROUTE décide, pas deux `if` côte à côte** : sans elle,
         // un hôte qui câble les deux rappels monterait la barre PENDANT que la
         // galerie se referme sous elle.
         let route = FullscreenReplyRoute.route(
             isProtected: ComposableAttachment.isProtected(att),
             hasInPlaceComposer: onSendReplyToMedia != nil && replyCitation != nil,
-            // `replyableMedia` (#6710) : un hôte de post ne relaie que ce qu'il
+            // `replyableMedia` : un hôte de post ne relaie que ce qu'il
             // sait citer — jamais un média joint à un commentaire.
             hasThreadHandOff: onReplyToMedia != nil && (replyableMedia?(att) ?? true)
         )
@@ -919,7 +896,7 @@ struct ConversationMediaGalleryView: View {
                 case .composeInPlace:
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                         // **Les deux ouvertures ne partagent pas le bas de
-                        // l'écran** (#6817). Elles vivent dans deux `@State`
+                        // l'écran**. Elles vivent dans deux `@State`
                         // indépendants : rien dans le type ne les empêche
                         // d'être montées ensemble, et la traînée d'émojis
                         // flotterait alors au-dessus du champ de saisie. Le

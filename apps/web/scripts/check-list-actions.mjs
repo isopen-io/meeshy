@@ -15,13 +15,16 @@
  * CE QU'IL MESURE, dans un navigateur réel, sur le `dist` construit :
  *
  *  1. CHAQUE rangée expose son bouton d'actions, et aucun n'est retiré à
- *     l'arbre d'accessibilité ni à la tabulation. La magnification est élue par
+ *     l'arbre d'accessibilité ni au clavier. La magnification est élue par
  *     la POSITION DE DÉFILEMENT : la réserver au rang magnifié rendait les
  *     actions des autres rangées inexistantes pour qui n'a pas de souris.
+ *     Depuis #11227, le bouton n'est plus un arrêt de TABULATION — la rangée
+ *     n'en offre qu'un, son lien vers le fil — mais la flèche vers la fin de
+ *     ligne y mène depuis ce lien (§ 3 et § 16).
  *  2. La cible TACTILE RÉELLE de ce bouton — débord `::after` compris — fait au
  *     moins 44×44, mesurée par `elementFromPoint`, jamais par sa boîte visuelle.
- *  3. Il s'atteint AU CLAVIER : `Tab` depuis le lien d'une rangée quelconque
- *     s'y pose, `Entrée` ouvre le menu, le focus entre dedans, les flèches y
+ *  3. Il s'atteint AU CLAVIER : la flèche vers la fin de ligne, depuis le lien
+ *     d'une rangée quelconque, s'y pose, `Entrée` ouvre le menu, le focus entre dedans, les flèches y
  *     naviguent, `Échap` referme et rend le focus au bouton.
  *  4. CHAQUE action change QUELQUE CHOSE À L'ÉCRAN — c'est le cœur :
  *     épingler pose l'épingle ET remonte la rangée, mettre en sourdine fond
@@ -69,6 +72,9 @@
  *     jusqu'à son maximum RÉEL (gestes `wheel`, jamais un `scrollTop`
  *     programmé — seul un geste réel arme le même défilement qu'un doigt),
  *     la dernière rangée et son bouton doivent retomber sur EUX-MÊMES.
+ * 16. LA LISTE N'EST QU'UN ARRÊT DE TABULATION (#11227) — chaque rangée n'en
+ *     offre qu'un (son lien vers le fil) ; une fois dans la liste, `Tab` en
+ *     sort ; bas et haut changent de rangée, Fin va à la dernière.
  * 14. L'HEURE ET LES POINTS D'UNE RANGÉE NE PARAISSENT QU'AU DÉFILEMENT
  *     (#9570) — au repos effacés mais lus, montrés à la molette, au focus et
  *     au survol, place réservée, sans fondu sous « animations réduites »
@@ -81,6 +87,7 @@ import { contrastOf } from './lib/contrast.mjs';
 import { checkLensRowMetaRest } from './lib/check-lens-row-meta.mjs';
 import { checkRowMenuMore } from './lib/check-row-menu-more.mjs';
 import { reportFailures } from './lib/ci-annotation.mjs';
+import { awaitCondition } from './lib/await-fact.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -173,7 +180,7 @@ const buttons = await page.$$eval(BUTTON, (els) =>
   els.map((el) => ({
     row: el.closest('[data-row]')?.dataset.row,
     ariaHidden: el.getAttribute('aria-hidden'),
-    tabIndex: el.tabIndex,
+    disabled: el.hasAttribute('disabled'),
   })),
 );
 const rows = await rowIds(page);
@@ -183,8 +190,8 @@ check(
   `aucun bouton d'actions n'est retiré au lecteur d'écran : ${JSON.stringify(buttons.filter((b) => b.ariaHidden !== null))}`,
 );
 check(
-  buttons.every((b) => b.tabIndex >= 0),
-  `aucun bouton d'actions n'est retiré de la tabulation : ${JSON.stringify(buttons.filter((b) => b.tabIndex < 0))}`,
+  buttons.every((b) => !b.disabled),
+  `aucun bouton d'actions n'est désactivé — chacun reste focalisable : ${JSON.stringify(buttons.filter((b) => b.disabled))}`,
 );
 
 // ------------------------------------------------------- 2. cible tactile réelle
@@ -266,24 +273,25 @@ check(shellScroll.top === 0, `le cadre de l'écran n'a pas défilé sous les scr
  *  qui est magnifiée, et un témoin écrit sur elle serait vert même si les
  *  autres rangées restaient inatteignables (le défaut exact qu'on mesure). */
 const lastRow = rows[rows.length - 1];
-/* LE DERNIER lien de la rangée, plus le premier (#7241) : depuis que l'AVATAR
-   porte sa propre destination (la fiche du pair), une rangée compte DEUX liens
-   — l'avatar puis le fil. Partir du premier mesurerait « Tab passe de l'avatar
-   au fil », une évidence, et laisserait le bouton d'actions hors du relevé.
-   L'invariant visé n'a pas bougé : depuis le DERNIER contrôle de la rangée,
-   Tab atteint SON bouton d'actions. */
-await page.evaluate((row) => {
-  const liens = document.querySelectorAll(`[data-row="${row}"] a`);
-  liens[liens.length - 1]?.focus();
-}, lastRow);
-await page.keyboard.press('Tab');
-const focused = await page.evaluate(() => ({
-  label: document.activeElement?.getAttribute('aria-label'),
-  row: document.activeElement?.closest('[data-row]')?.dataset.row,
-}));
+/* DEPUIS LE LIEN VERS LE FIL (#11227) — le seul arrêt de tabulation de la
+   rangée. La flèche vers la fin de ligne passe d'un contrôle à l'autre de la
+   rangée : un appel en cours y pose « Rejoindre » avant le bouton d'actions,
+   d'où jusqu'à trois flèches — jamais une rangée voisine. */
+await page.evaluate((row) => document.querySelector(`[data-row="${row}"] [data-row-primary]`)?.focus(), lastRow);
+const focused = { label: null, row: null };
+for (let step = 0; step < 3 && focused.label !== 'Actions de conversation'; step += 1) {
+  await page.keyboard.press('ArrowRight');
+  Object.assign(
+    focused,
+    await page.evaluate(() => ({
+      label: document.activeElement?.getAttribute('aria-label'),
+      row: document.activeElement?.closest('[data-row]')?.dataset.row,
+    })),
+  );
+}
 check(
   focused.label === 'Actions de conversation' && focused.row === lastRow,
-  `au clavier, Tab depuis la DERNIÈRE rangée atteint SON bouton d'actions (${JSON.stringify(focused)})`,
+  `au clavier, la flèche depuis le lien de la DERNIÈRE rangée atteint SON bouton d'actions (${JSON.stringify(focused)})`,
 );
 
 await page.keyboard.press('Enter');
@@ -685,8 +693,8 @@ const menuFit = await shortPage.evaluate(() => {
   };
 });
 check(
-  menuFit.count === 11 && menuFit.allInView,
-  `à 390×640, les ONZE lignes du menu de la dernière rangée (deux appels, trois actions, Détails, Renommer, Favori, Déplacer vers… — #10593 —, « Archiver », « Supprimer » — #7285) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
+  menuFit.count === 13 && menuFit.allInView,
+  `à 390×640, les TREIZE lignes du menu de la dernière rangée (deux appels, trois actions, Rechercher et Mode de lecture — #11226 —, Détails, Renommer, Favori, Déplacer vers… — #10593 —, « Archiver », « Supprimer » — #7285) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
 );
 
 await shortContext.close();
@@ -1045,7 +1053,7 @@ for (const scheme of ['light', 'dark']) {
   const labels = opened ? await enPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
   check(
     JSON.stringify(labels) ===
-      JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Details', 'Favorite', 'Move to…', 'Archive', 'Leave', 'Delete']),
+      JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Search', 'Read', 'Reading mode', 'Details', 'Favorite', 'Move to…', 'Archive', 'Leave', 'Delete']),
     `en anglais, le menu d'une ligne — ouvert par le clic droit, sous l'aperçu (#11211) — est entièrement anglais, et un simple membre y quitte sans renommer (${JSON.stringify(labels)})`,
   );
   await enContext.close();
@@ -1056,6 +1064,39 @@ await checkLensRowMetaRest({ browser, base: BASE, row: SUBJECT, check });
 
 // ------------- 15. les entrées d'iOS du menu d'une ligne ont un effet (#10593)
 await checkRowMenuMore({ browser, base: BASE, check });
+
+// ------------- 16. la liste n'est qu'un arrêt de tabulation (#11227)
+{
+  const kbdContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR' });
+  const kbd = await kbdContext.newPage();
+  await kbd.goto(`${BASE}/chats`, { waitUntil: 'load' });
+  await kbd.waitForSelector('[data-row-primary]');
+  await awaitCondition(kbd, () => [...document.querySelectorAll('[data-row]')].every((row) => row.querySelector('[data-row-primary]') !== null));
+  const perRow = await kbd.$$eval('[data-row]', (rows) =>
+    rows.map((row) => ({
+      row: row.dataset.row,
+      stops: [...row.querySelectorAll('a[href], button')].filter((el) => el.tabIndex >= 0 && el.closest('[aria-hidden="true"]') === null).map((el) => (el.hasAttribute('data-row-primary') ? 'lien' : (el.getAttribute('aria-label') ?? el.tagName))),
+    })),
+  );
+  check(
+    perRow.every(({ stops }) => stops.length === 1 && stops[0] === 'lien'),
+    `chaque rangée n'offre à la tabulation que son lien vers le fil (${JSON.stringify(perRow.filter(({ stops }) => stops.length !== 1 || stops[0] !== 'lien'))})`,
+  );
+  const ids = perRow.map(({ row }) => row);
+  await kbd.evaluate((row) => document.querySelector(`[data-row="${row}"] [data-row-primary]`)?.focus(), ids[0]);
+  await kbd.keyboard.press('ArrowDown');
+  const second = await kbd.evaluate(() => document.activeElement?.closest('[data-row]')?.dataset.row ?? null);
+  check(second === ids[1], `bas mène du lien de la première rangée à celui de la deuxième (« ${second} », attendu « ${ids[1]} »)`);
+  await kbd.keyboard.press('End');
+  const last = await kbd.evaluate(() => document.activeElement?.closest('[data-row]')?.dataset.row ?? null);
+  check(last === ids.at(-1), `Fin mène à la dernière rangée (« ${last} », attendu « ${ids.at(-1)} »)`);
+  const stopsNow = await kbd.$$eval('[data-row-primary]', (links) => links.filter((link) => link.tabIndex >= 0).length);
+  check(stopsNow === 1, `une fois dans la liste, elle n'est plus qu'UN arrêt de tabulation (${stopsNow})`);
+  await kbd.keyboard.press('Tab');
+  const out = await kbd.evaluate(() => document.activeElement?.closest('[data-row]')?.dataset.row ?? null);
+  check(out === null, `Tab depuis une rangée QUITTE la liste — elle ne traverse pas les autres rangées (« ${out} »)`);
+  await kbdContext.close();
+}
 
 await browser.close();
 served.close();

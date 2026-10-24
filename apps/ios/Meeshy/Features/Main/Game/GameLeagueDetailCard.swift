@@ -53,11 +53,11 @@ struct GameLeagueDetailCard: View {
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(GameText.leagueName(current.league))
                             .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                         Text(GameText.leagueRankLine(rank: GameCopy.formatCount(current.rank), size: GameCopy.formatCount(current.groupSize))
                             + " · " + GameText.leagueDetailWeek(points: GameCopy.points(current.weekPoints)))
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                         TimelineView(.periodic(from: .now, by: 60)) { context in
                             GameNote(text: GameText.leagueCloses(remaining: GameWave2Format.remaining(closes: league.closes, now: context.date)))
@@ -66,7 +66,7 @@ struct GameLeagueDetailCard: View {
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .accessibilityHidden(true)
                 }
             }

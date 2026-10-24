@@ -606,10 +606,6 @@ public func formatMediaDuration(_ seconds: TimeInterval) -> String {
     DurationFormat.clock(seconds)
 }
 
-public func formatMediaDurationMs(_ ms: Int) -> String {
-    formatMediaDuration(Double(ms) / 1000.0)
-}
-
 /// Single source of truth for human-readable file sizes across the app —
 /// download badges (image/video), audio play-button labels and upload
 /// progress all render through this one helper so a "870 KB" reads

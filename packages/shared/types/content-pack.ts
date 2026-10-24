@@ -18,9 +18,11 @@
  * @see schema.prisma — `StickerPack`, `UserStickerPack` (aucun changement de schéma en v1, D-P1)
  */
 import type { GloryAtmosphere } from './glory-atmospheres.js';
+import type { PackEligibilityRule } from './pack-ownership.js';
 
 /** `banner` : le FOND de bannière (un dessin qui s'affiche sans photo) ; `banner-frame` : le CADRE posé sur la photo, centre transparent (#10932). */
-export const PACK_DOMAINS = ['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner', 'banner-frame'] as const;
+/** `lens` : une lens MeeshyLens v1 proposée par un partenaire (#11271) ; un ancien client la lit comme un domaine inconnu et l'ignore. */
+export const PACK_DOMAINS = ['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner', 'banner-frame', 'lens'] as const;
 export type PackDomain = (typeof PACK_DOMAINS)[number];
 
 /** `builtin` : dessiné ou embarqué par le client ; `official` : publié par Meeshy ; `community` : proposé par un tiers (stickers seuls). */
@@ -78,17 +80,30 @@ export function parsePackChoiceKey(key: string): { readonly domain: PackDomain; 
 
 // ── La possession (#10632) ──────────────────────────────────────────────
 
-/** Ce que la loi de possession lit d'un pack : son adresse et son prix (`null`/absent = gratuit). */
-export type PackOwnable = { readonly domain: PackDomain; readonly slug: string; readonly price?: number | null };
+/**
+ * Ce que la loi de possession lit d'un pack : son adresse, son prix et sa
+ * récompense du jeu (#11273). Ni prix ni récompense (`null`/absent) = gratuit.
+ */
+export type PackOwnable = {
+  readonly domain: PackDomain;
+  readonly slug: string;
+  readonly price?: number | null;
+  readonly reward?: PackEligibilityRule | null;
+};
+
+/** Un pack GRATUIT n'a ni prix ni récompense : tout compte inscrit le possède, sans ligne. */
+export const isFreePack = (pack: Pick<PackOwnable, 'price' | 'reward'>): boolean =>
+  (pack.price === undefined || pack.price === null) && (pack.reward === undefined || pack.reward === null);
 
 /**
  * LA règle de possession : un pack gratuit est possédé par tout compte
- * inscrit ; un pack payant l'est si et seulement si une ligne
- * `UserPackOwnership` existe pour `packChoiceKey(domaine, slug)`. Installer
- * n'est pas posséder : le RENDU d'un choix exige la possession.
+ * inscrit ; un pack payant ou RÉCOMPENSÉ l'est si et seulement si une ligne
+ * `UserPackOwnership` existe pour `packChoiceKey(domaine, slug)` — achat,
+ * jeu, octroi ou événement (#11272). Installer n'est pas posséder : le RENDU
+ * d'un choix exige la possession.
  */
 export const isPackOwned = (pack: PackOwnable, ownedKeys: ReadonlySet<string>): boolean =>
-  pack.price === undefined || pack.price === null || ownedKeys.has(packChoiceKey(pack.domain, pack.slug));
+  isFreePack(pack) || ownedKeys.has(packChoiceKey(pack.domain, pack.slug));
 
 // ── Installé, réservé, retirable ────────────────────────────────────────
 

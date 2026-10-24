@@ -91,4 +91,13 @@ nonisolated struct EngagementRevealQueue: Equatable {
         guard !suspendue, enCours == nil, !enAttente.isEmpty else { return }
         enCours = enAttente.removeFirst()
     }
+
+    /// La file après `suspends(_:)`, ou `nil` si rien ne change (#11556) : l'hôte
+    /// n'écrit son `@State` que sur un vrai changement, car une écriture identique
+    /// l'invalide quand même et rebouclait sur le rendu au démarrage.
+    func enSuspendant(_ suspendue: Bool) -> EngagementRevealQueue? {
+        var suivante = self
+        suivante.suspends(suspendue)
+        return suivante == self ? nil : suivante
+    }
 }

@@ -15,6 +15,7 @@ struct PrivacyPolicyView: View {
 
     @MainActor
     init() {
+        // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
         let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         let deviceLocale = Locale.current.language.languageCode?.identifier
         _selectedLanguage = State(initialValue: Self.resolveInitialLanguage(preferred: preferred, deviceLocale: deviceLocale))
@@ -115,7 +116,7 @@ struct PrivacyPolicyView: View {
     private var lastUpdated: some View {
         Text(selectedLanguage == "fr" ? String(localized: "legal.privacy.lastUpdated.fr", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main) : String(localized: "legal.privacy.lastUpdated.en", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main))
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, MeeshySpacing.xs)
     }
@@ -131,12 +132,12 @@ struct PrivacyPolicyView: View {
 
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
             }
 
             Text(content)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
         }

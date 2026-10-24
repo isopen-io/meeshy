@@ -81,7 +81,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
 
         UNUserNotificationCenter.current().delegate = self
-        Self.registerNotificationCategories()
+        Self.scheduleNotificationCategoriesRegistration()
         BackgroundTaskManager.shared.registerTasks()
 
         // VoIP push registration MUST happen unconditionally, on every
@@ -368,6 +368,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     /// Les titres se résolvent dans la langue que l'app publie à ses
     /// extensions (#8951) : sous une notification déployée, un bouton de
     /// l'extension et une action de l'app parlent la même langue.
+    /// La langue publiée se lit dans le groupe d'app sur SA file (#11558) —
+    /// derrière la publication de `MeeshyApp.init`, donc après elle — et les
+    /// catégories s'enregistrent ensuite sur le main actor.
+    static func scheduleNotificationCategoriesRegistration(
+        io: AppGroupIO = .shared,
+        store: any InterfaceLanguageProviding & Sendable = AppGroupInterfaceLanguageStore(),
+        register: @escaping @MainActor @Sendable (Bundle) -> Void = { registerNotificationCategories(bundle: $0) }
+    ) {
+        io.enqueue {
+            let bundle = InterfaceLanguageResolver.bundle(store: store)
+            Task { @MainActor in register(bundle) }
+        }
+    }
+
     static func registerNotificationCategories(bundle: Bundle = InterfaceLanguageResolver.bundle()) {
         let replyAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.reply.rawValue,
@@ -794,7 +808,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 /// outbox), et une copie de `tmp` n'est plus que du poids.
 nonisolated enum TemporaryMediaSweeper {
     static let prefixes = ["composer_camera_", "composer_file_", "composer_photo_", "composer_sound_",
-                           "recent_", "retouche-", "video_look_", "meeshy-imagine-"]
+                           "recent_", "retouche-", "video_look_", "meeshy-imagine-", PickedMediaStaging.filePrefix]
     static let maximumAge: TimeInterval = 7 * 24 * 3600
 
     /// Les noms à retirer parmi `entries` (nom, date de modification) à l'instant `now`.

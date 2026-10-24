@@ -206,4 +206,143 @@ final class AttachmentOnDevicePresenceTests: XCTestCase {
 
         XCTAssertEqual(availability, .needsDownload)
     }
+
+    // MARK: - La source de la case : ce qui est sur l'appareil d'abord
+
+    private func bubbleVariants() -> [MeeshyImageVariant] {
+        [480, 960, 1920].map { MeeshyImageVariant(width: $0, height: $0 * 3 / 4, url: "2025/10/x/p_\($0).webp", size: $0 * 100) }
+    }
+
+    /// Une photo téléchargée par le bouton de la bulle (l'ORIGINAL) restait
+    /// floue : la case affichait la variante 960, absente du disque, que la
+    /// politique d'auto-téléchargement continuait de retenir.
+    func test_bubbleImageSource_originalOnDevice_variantAbsent_showsTheOriginal() {
+        let original = "2025/10/x/p.jpg"
+
+        let shown = BubbleImageSourceLaw.displayedURL(
+            variants: bubbleVariants(), originalURL: original, originalWidth: 4032, targetWidthPx: 900,
+            isOnDevice: { $0 == original }
+        )
+
+        XCTAssertEqual(shown, original, "l'original sur le disque l'emporte sur une variante qu'il faudrait encore télécharger")
+    }
+
+    func test_bubbleImageSource_nothingOnDevice_showsTheLightestCoveringVariant() {
+        let shown = BubbleImageSourceLaw.displayedURL(
+            variants: bubbleVariants(), originalURL: "2025/10/x/p.jpg", originalWidth: 4032, targetWidthPx: 900,
+            isOnDevice: { _ in false }
+        )
+
+        XCTAssertEqual(shown, "2025/10/x/p_960.webp")
+    }
+
+    func test_bubbleImageSource_largerCoveringVariantOnDevice_beatsTheNetworkPick() {
+        let shown = BubbleImageSourceLaw.displayedURL(
+            variants: bubbleVariants(), originalURL: "2025/10/x/p.jpg", originalWidth: 4032, targetWidthPx: 900,
+            isOnDevice: { $0 == "2025/10/x/p_1920.webp" || $0 == "2025/10/x/p.jpg" }
+        )
+
+        XCTAssertEqual(shown, "2025/10/x/p_1920.webp", "la plus légère des formes déjà sur l'appareil qui couvre la case")
+    }
+
+    func test_bubbleImageSource_tooNarrowVariantOnDevice_isNeverShown() {
+        let shown = BubbleImageSourceLaw.displayedURL(
+            variants: bubbleVariants(), originalURL: "2025/10/x/p.jpg", originalWidth: 4032, targetWidthPx: 900,
+            isOnDevice: { $0 == "2025/10/x/p_480.webp" }
+        )
+
+        XCTAssertEqual(shown, "2025/10/x/p_960.webp", "une variante trop étroite pour la case ne la sert jamais")
+    }
+
+    func test_bubbleImageSource_emptyOriginal_isNil() {
+        XCTAssertNil(BubbleImageSourceLaw.displayedURL(
+            variants: [], originalURL: "", originalWidth: nil, targetWidthPx: 900, isOnDevice: { _ in true }
+        ))
+    }
+
+    /// La case apprend la fin du téléchargement du bouton par le centre, et
+    /// la source qu'elle affiche bascule alors vers l'original.
+    func test_bubbleImageSource_finishedDownloadOfTheOriginal_switchesTheCellToTheOriginal() {
+        let original = "2025/10/x/landing-\(UUID().uuidString).jpg"
+        let center = AttachmentDownloadCenter()
+        var landed = false
+        let watch = center.events(for: AttachmentDownloadCenter.key(for: original))
+            .sink { landed = landed || BubbleImageSourceLaw.marksOriginalLanding($0) }
+        defer { watch.cancel() }
+        let shown = {
+            BubbleImageSourceLaw.displayedURL(
+                variants: self.bubbleVariants(), originalURL: original, originalWidth: 4032, targetWidthPx: 900,
+                isOnDevice: { landed && $0 == original }
+            )
+        }
+        XCTAssertEqual(shown(), "2025/10/x/p_960.webp")
+
+        center.publish(.progress(.init(downloadedBytes: 10, totalBytes: 100)), for: AttachmentDownloadCenter.key(for: original))
+        XCTAssertEqual(shown(), "2025/10/x/p_960.webp", "une progression ne fait rien basculer")
+
+        center.publish(.finished(totalBytes: 100), for: AttachmentDownloadCenter.key(for: original))
+        XCTAssertEqual(shown(), original)
+    }
+
+    /// #11550 — la case attend la fin du téléchargement de l'original pour se
+    /// recharger. La dernière progression et la fin arrivent presque ensemble
+    /// sur l'acteur principal : la fin ne doit pas se perdre pendant que
+    /// l'attente traite la progression.
+    func test_firstLanding_finishedRightAfterAProgress_isNotLost() async {
+        let key = AttachmentDownloadCenter.key(for: "2025/10/x/landing-\(UUID().uuidString).jpg")
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let waiting = Task { @MainActor in
+            await center.firstEvent(for: key, where: BubbleImageSourceLaw.marksOriginalLanding)
+        }
+        await Task.yield()
+        await Task.yield()
+
+        center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+        center.publish(.progress(.init(downloadedBytes: 100, totalBytes: 100)), for: key)
+        center.publish(.finished(totalBytes: 100), for: key)
+
+        let deadline = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            waiting.cancel()
+        }
+        let landed = await waiting.value
+        deadline.cancel()
+        XCTAssertEqual(landed, .finished(totalBytes: 100), "la fin du téléchargement s'est perdue : la case resterait floue")
+    }
+
+    /// Même attente quand chaque événement arrive par son propre saut sur
+    /// l'acteur principal, comme les rapports du téléchargeur et sa fin.
+    func test_firstLanding_progressAndFinishOnSeparateHops_isNotLost() async {
+        let key = AttachmentDownloadCenter.key(for: "2025/10/x/landing-\(UUID().uuidString).jpg")
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let waiting = Task { @MainActor in
+            await center.firstEvent(for: key, where: BubbleImageSourceLaw.marksOriginalLanding)
+        }
+        await Task.yield()
+        await Task.yield()
+
+        Task { @MainActor in center.publish(.progress(.init(downloadedBytes: 100, totalBytes: 100)), for: key) }
+        Task { @MainActor in center.publish(.finished(totalBytes: 100), for: key) }
+
+        let deadline = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            waiting.cancel()
+        }
+        let landed = await waiting.value
+        deadline.cancel()
+        XCTAssertEqual(landed, .finished(totalBytes: 100), "la fin du téléchargement s'est perdue : la case resterait floue")
+    }
+
+    func test_marksOriginalLanding_onlyOnFinished() {
+        XCTAssertTrue(BubbleImageSourceLaw.marksOriginalLanding(.finished(totalBytes: 1)))
+        XCTAssertFalse(BubbleImageSourceLaw.marksOriginalLanding(.failed))
+        XCTAssertFalse(BubbleImageSourceLaw.marksOriginalLanding(.cancelled))
+    }
+
+    /// Une forme `file://` est déjà sur l'appareil (la politique ne retient
+    /// jamais une lecture locale).
+    func test_bubbleImageSource_productionPredicate_localFileIsOnDevice() {
+        XCTAssertTrue(BubbleImageSourceLaw.isOnDevice("file:///tmp/whatever.jpg"))
+        XCTAssertFalse(BubbleImageSourceLaw.isOnDevice("2025/10/x/never-\(UUID().uuidString).jpg"))
+    }
 }

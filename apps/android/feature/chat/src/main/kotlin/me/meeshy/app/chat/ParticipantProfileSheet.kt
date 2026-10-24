@@ -69,13 +69,14 @@ import java.util.Date
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ParticipantProfileSheet(
+internal fun ParticipantProfileSheet(
     conversationId: String,
     participantId: String,
     displayName: String,
     accentColor: Color,
     onDismiss: () -> Unit,
     viewModel: ParticipantProfileViewModel = hiltViewModel(),
+    avatarUrl: String? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var datePickerOpen by remember { mutableStateOf(false) }
@@ -98,7 +99,12 @@ fun ParticipantProfileSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
-                MeeshyAvatar(name = displayName, size = 56.dp, containerColor = accentColor)
+                MeeshyAvatar(
+                    name = state.profile?.displayName ?: displayName,
+                    size = 56.dp,
+                    containerColor = accentColor,
+                    imageUrl = state.profile?.avatar ?: avatarUrl,
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = state.profile?.displayName ?: displayName,

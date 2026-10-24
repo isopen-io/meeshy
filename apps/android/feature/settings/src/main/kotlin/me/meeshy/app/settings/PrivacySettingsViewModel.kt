@@ -4,15 +4,22 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.location.LocationSharingPreferencesStore
+import me.meeshy.sdk.model.LocationPrecision
+import me.meeshy.sdk.model.LocationSharingPreferences
+import me.meeshy.sdk.model.SharedMapStyle
 import me.meeshy.sdk.model.PrivacyCatalog
+import me.meeshy.sdk.model.PrivacyInfoTopic
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.PrivacyToggle
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.privacy.AnalyticsCollectionGate
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.privacy.PrivacyPreferencesSyncRepository
 import javax.inject.Inject
@@ -20,6 +27,9 @@ import javax.inject.Inject
 /** Immutable UI state for the privacy & visibility settings screen (feature-parity §L). */
 data class PrivacyUiState(
     val preferences: PrivacyPreferences = PrivacyPreferences(),
+    val locationSharing: LocationSharingPreferences = LocationSharingPreferences(),
+    /** Explanation currently shown in the modal "(i)" overlay; one at a time. */
+    val presentedInfo: PrivacyInfoTopic? = null,
 )
 
 /**
@@ -40,18 +50,43 @@ class PrivacySettingsViewModel @Inject constructor(
     private val store: PrivacyPreferencesStore,
     private val syncRepository: PrivacyPreferencesSyncRepository,
     private val workManager: WorkManager,
+    private val locationStore: LocationSharingPreferencesStore,
+    private val analyticsGate: AnalyticsCollectionGate,
 ) : ViewModel() {
 
+    private val presentedInfo = MutableStateFlow<PrivacyInfoTopic?>(null)
+
     val state: StateFlow<PrivacyUiState> =
-        store.preferences
-            .map { PrivacyUiState(preferences = it) }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.Eagerly,
-                initialValue = PrivacyUiState(store.preferences.value),
-            )
+        combine(store.preferences, locationStore.preferences, presentedInfo) { privacy, location, info ->
+            PrivacyUiState(preferences = privacy, locationSharing = location, presentedInfo = info)
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = PrivacyUiState(
+                preferences = store.preferences.value,
+                locationSharing = locationStore.preferences.value,
+            ),
+        )
+
+    /** Persists the chosen location-sharing grain; it rounds coordinates before any send. */
+    fun setLocationPrecision(precision: LocationPrecision) {
+        viewModelScope.launch { locationStore.setPrecision(precision) }
+    }
+
+    fun setLocationMapStyle(style: SharedMapStyle) {
+        viewModelScope.launch { locationStore.setMapStyle(style) }
+    }
+
+    fun showInfo(topic: PrivacyInfoTopic) {
+        presentedInfo.value = topic
+    }
+
+    fun dismissInfo() {
+        presentedInfo.value = null
+    }
 
     fun setToggle(toggle: PrivacyToggle, enabled: Boolean) {
+        if (!PrivacyCatalog.isWritable(toggle)) return
         // Read the base *inside* the launch so back-to-back edits on different toggles
         // serialize through viewModelScope and never clobber each other's write.
         viewModelScope.launch {
@@ -59,6 +94,7 @@ class PrivacySettingsViewModel @Inject constructor(
             if (PrivacyCatalog.isEnabled(current, toggle) == enabled) return@launch
             val updated = PrivacyCatalog.set(current, toggle, enabled)
             store.setPreferences(updated)
+            if (toggle == PrivacyToggle.ALLOW_ANALYTICS) analyticsGate.onAnalyticsConsentChanged(enabled)
             val cmid = syncRepository.enqueueSync(updated)
             if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
         }

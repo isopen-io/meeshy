@@ -73,6 +73,7 @@ const enStickerPacks = {
   'packs.domain.avatar-ring': "Avatar rings",
   'packs.domain.banner': "Banners",
   'packs.domain.banner-frame': "Banner frames",
+  'packs.domain.lens': "Lenses",
   'packs.domain.capture-frame': "Capture frames",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Owned",

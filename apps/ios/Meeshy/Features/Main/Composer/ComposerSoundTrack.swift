@@ -8,6 +8,8 @@ extension ComposerCaptureCopy {
     static func editToolName(_ tool: ComposerEditTool) -> String {
         switch tool {
         case .crop: return reframe
+        case .text:
+            return String(localized: "composer.capture.tool.text", defaultValue: "Texte", bundle: .main)
         case .trim:
             return String(localized: "composer.capture.tool.trim", defaultValue: "Couper", bundle: .main)
         case .sound:
@@ -18,9 +20,14 @@ extension ComposerCaptureCopy {
     static func editToolSymbol(_ tool: ComposerEditTool) -> String {
         switch tool {
         case .crop: return "crop"
+        case .text: return "textformat"
         case .trim: return "scissors"
         case .sound: return "waveform"
         }
+    }
+
+    static var addText: String {
+        String(localized: "composer.capture.text.add", defaultValue: "Ajouter un texte", bundle: .main)
     }
 
     /// Ce qu'un outil fait paraître est affiché, ou masqué.
@@ -208,7 +215,7 @@ struct ComposerSoundTrack: View {
             guard !releve.isEmpty else { return }
             let pas = width / CGFloat(releve.count)
             for (index, valeur) in releve.enumerated() {
-                let hauteur = max(2, CGFloat(valeur) * Self.height * echelle)
+                let hauteur = max(2, CGFloat(WaveformScale.displayHeight(rms: valeur)) * Self.height * echelle)
                 chemin.addRect(CGRect(x: CGFloat(index) * pas, y: (Self.height - hauteur) / 2,
                                       width: max(1, pas - 1), height: hauteur))
             }

@@ -636,15 +636,15 @@ const inJob = (world, job, needle, replacement) => {
 
 const MUTATIONS = [
   [
-    "l'étape « Build packages/shared » retirée du job institutionnel-v3 (le défaut de 01c49fcfee)",
+    "l'étape « Build packages/shared » retirée du job web-navigateur (le défaut de 01c49fcfee)",
     (world) =>
       inJob(
         world,
-        'institutionnel-v3',
+        'web-navigateur',
         /      - name: Build packages\/shared[^\n]*\n        run: \|\n          cd packages\/shared\n[^\n]*\n/,
         '',
       ),
-    'job « institutionnel-v3 » · scénario bun · étape « Build apps/web',
+    'job « web-navigateur » · scénario bun · étape « Build apps/web',
   ],
   [
     'une dépendance workspace:* PRODUCTRICE ajoutée sans son étape (le scénario que #4761 ferme)',
@@ -697,7 +697,7 @@ const MUTATIONS = [
     (world) =>
       inJob(
         world,
-        'institutionnel-v3',
+        'web-navigateur',
         /      - name: Build apps\/web[^\n]*\n        run: \|\n          cd apps\/web\n/,
         '      - name: Build apps/web (branche)\n        run: |\n          if true; then cd apps/web; fi\n',
       ),

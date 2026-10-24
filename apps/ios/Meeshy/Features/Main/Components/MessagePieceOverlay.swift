@@ -24,7 +24,13 @@ struct MessagePieceOverlay: View {
     let accentHex: String
     @Binding var focusedPieceId: String?
     @Binding var isPresented: Bool
+    /// La suppression SERVEUR (`MessageMenuContext.canDeleteOnServer`).
     var canDelete: Bool = false
+    /// Le verdict `forward` de la loi (`MessageMenuContext.canForward`).
+    var canForward: Bool = true
+    /// Les verdicts `canReply` et `canReact` de la loi (`MessageMenuContext`).
+    var canReply: Bool = true
+    var canReact: Bool = true
     /// Réagir à la pièce affichée. `nil` ⇒ pas de bande (loi 4).
     var onReact: ((MessageAttachment, String) -> Void)? = nil
     /// Les actions du menu, rendues à l'hôte avec la pièce affichée.
@@ -48,6 +54,9 @@ struct MessagePieceOverlay: View {
          focusedPieceId: Binding<String?>,
          isPresented: Binding<Bool>,
          canDelete: Bool = false,
+         canForward: Bool = true,
+         canReply: Bool = true,
+         canReact: Bool = true,
          onReact: ((MessageAttachment, String) -> Void)? = nil,
          onAction: ((PrimaryAction, MessageAttachment) -> Void)? = nil) {
         self.message = message
@@ -55,6 +64,9 @@ struct MessagePieceOverlay: View {
         self._focusedPieceId = focusedPieceId
         self._isPresented = isPresented
         self.canDelete = canDelete
+        self.canForward = canForward
+        self.canReply = canReply
+        self.canReact = canReact
         self.onReact = onReact
         self.onAction = onAction
         let start = focusedPieceId.wrappedValue ?? MessagePieceTarget.pieces(of: message).first?.id ?? ""
@@ -72,19 +84,26 @@ struct MessagePieceOverlay: View {
         MessagePieceTarget.isProtected(piece, in: message)
     }
 
+    private func menuContext(for piece: MessageAttachment) -> MessagePieceMenu.Context {
+        MessagePieceMenu.Context(
+            isProtected: isProtected(piece),
+            exits: message.exitOffer,
+            canDelete: canDelete,
+            canForward: canForward,
+            canReply: canReply,
+            canReact: canReact
+        )
+    }
+
     private var actions: [PrimaryAction] {
         guard let current else { return [.wholeMessage] }
-        return MessagePieceMenu.actions(MessagePieceMenu.Context(
-            isProtected: isProtected(current),
-            exits: message.exitOffer,
-            canDelete: canDelete
-        ))
+        return MessagePieceMenu.actions(menuContext(for: current))
     }
 
     private var offersReaction: Bool {
         guard let current, onReact != nil else { return false }
         return AttachmentReactionOffer.offersReaction(surface: .fullscreen, attachment: current, hasHandler: true)
-            && !isProtected(current)
+            && MessagePieceMenu.offersReaction(menuContext(for: current))
     }
 
     var body: some View {

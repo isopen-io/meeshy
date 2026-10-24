@@ -270,14 +270,14 @@ extension StoryCanvasUIView {
         playheadTickClock = PlayheadTickClock()
         // Proxy weak partagé : le link ne retient pas le canvas — un canvas
         // jamais fenêtré (setMode avant attach puis jeté) reste libérable.
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let cadence = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: cadence) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.displayLinkTick(link)
         }
-        link.preferredFrameRateRange = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier())
         link.add(to: .main, forMode: .common)
         displayLink = link
         // Autorise (ou ré-autorise après pause) la lecture du player vidéo de
@@ -361,7 +361,7 @@ extension StoryCanvasUIView {
     /// qui approche, un audio qui se planifie ou un hôte qui s'abonne changent
     /// le palier sans repasser par `startPlayback`. N'écrit que sur changement.
     func applyPlaybackCadence(to link: CADisplayLink) {
-        let range = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier())
+        let range = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
         let current = link.preferredFrameRateRange
         guard current.minimum != range.minimum
                 || current.maximum != range.maximum
@@ -683,14 +683,13 @@ extension StoryCanvasUIView {
         guard EditClockArming.shouldArm(isEditing: mode == .edit,
                                         isInteractive: isUserInteractionEnabled),
               editDisplayLink == nil else { return }
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .gesture) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.editTick(link)
         }
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)
         editDisplayLink = link
         // Fresh grace window every time the link is (re)armed — opening the

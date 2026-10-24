@@ -24,7 +24,11 @@ class PrivacyPreferencesTest {
         assertThat(prefs.hideProfileFromSearch).isFalse()
         assertThat(prefs.allowContactRequests).isTrue()
         assertThat(prefs.allowGroupInvites).isTrue()
-        assertThat(prefs.allowCallsFromNonContacts).isFalse()
+        // #8073 — « Appels hors contacts » est OPT-OUT côté serveur (défaut `true`) : tout le monde
+        // peut faire sonner, seul celui qui coupe le réglage ne sonne que pour ses amis acceptés.
+        assertThat(prefs.acceptCallsFromNonContacts).isTrue()
+        // #8285 — « Prévenir mes contacts quand je reviens sur Meeshy » est OPT-OUT aussi.
+        assertThat(prefs.notifyContactsOnReturn).isTrue()
         assertThat(prefs.saveMediaToGallery).isFalse()
         // #4578 — `allowAnalytics` est GARDÉE par `dataProcessingConsentAt` et
         // n'a aucun lecteur d'usage : sa valeur stockée est la seule qui existe.
@@ -110,11 +114,12 @@ class PrivacyPreferencesTest {
     }
 
     @Test
-    fun sections_visibilityCategory_carriesItsFiveToggles_inDeclaredOrder() {
+    fun sections_visibilityCategory_carriesItsSixToggles_inIosOrder() {
         val visibility = PrivacyCatalog.sections(PrivacyPreferences())
             .first { it.category == PrivacyCategory.VISIBILITY }
         assertThat(visibility.items.map { it.toggle }).containsExactly(
             PrivacyToggle.SHOW_ONLINE_STATUS,
+            PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN,
             PrivacyToggle.SHOW_LAST_SEEN,
             PrivacyToggle.SHOW_READ_RECEIPTS,
             PrivacyToggle.SHOW_TYPING_INDICATOR,
@@ -143,11 +148,55 @@ class PrivacyPreferencesTest {
     fun codec_roundTripsANonDefaultBlock() {
         val prefs = PrivacyPreferences(
             showOnlineStatus = false,
-            allowCallsFromNonContacts = true,
+            acceptCallsFromNonContacts = false,
+            notifyContactsOnReturn = false,
             blockScreenshots = true,
             allowAnalytics = false,
         )
         assertThat(privacyPreferencesFromStorage(prefs.storageValue)).isEqualTo(prefs)
+    }
+
+    @Test
+    fun codec_persistsTheCanonicalCallsKey_andNeverTheDeadAlias() {
+        val json = PrivacyPreferences().storageValue
+        assertThat(json).contains("acceptCallsFromNonContacts")
+        assertThat(json).contains("notifyContactsOnReturn")
+        assertThat(json).doesNotContain("allowCallsFromNonContacts")
+    }
+
+    @Test
+    fun codec_aTokenCarryingOnlyTheLegacyAlias_readsWithoutErrorAndClosesNothing() {
+        // Un bloc stocké avant #8073 porte `allowCallsFromNonContacts:false` (l'ancien défaut,
+        // jamais un choix : le serveur ne l'a jamais lu). Il se lit sans erreur, ne ferme RIEN.
+        val decoded = privacyPreferencesFromStorage(
+            """{"showOnlineStatus":false,"allowCallsFromNonContacts":false}""",
+        )
+
+        assertThat(decoded.showOnlineStatus).isFalse()
+        assertThat(decoded.acceptCallsFromNonContacts).isTrue()
+    }
+
+    @Test
+    fun codec_aTokenWithBothKeys_obeysTheCanonicalOne() {
+        val decoded = privacyPreferencesFromStorage(
+            """{"acceptCallsFromNonContacts":false,"allowCallsFromNonContacts":true}""",
+        )
+
+        assertThat(decoded.acceptCallsFromNonContacts).isFalse()
+    }
+
+    @Test
+    fun catalog_theCallsToggleReadsAndWritesTheCanonicalField() {
+        val closed = PrivacyCatalog.set(
+            PrivacyPreferences(),
+            PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS,
+            false,
+        )
+
+        assertThat(closed.acceptCallsFromNonContacts).isFalse()
+        assertThat(PrivacyCatalog.isEnabled(closed, PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS)).isFalse()
+        assertThat(PrivacyCatalog.isEnabled(PrivacyPreferences(), PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS))
+            .isTrue()
     }
 
     @Test
@@ -186,5 +235,54 @@ class PrivacyPreferencesTest {
     fun codec_unknownKeys_areIgnored() {
         val decoded = privacyPreferencesFromStorage("""{"blockScreenshots":true,"legacyField":123}""")
         assertThat(decoded.blockScreenshots).isTrue()
+    }
+
+    // ---- Lot privacy-settings-iso ----
+
+    @Test
+    fun catalog_hasThirteenToggles_theNotifyOnReturnOneReadsAndWritesItsField() {
+        assertThat(PrivacyToggle.entries).hasSize(13)
+        val closed = PrivacyCatalog.set(PrivacyPreferences(), PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN, false)
+        assertThat(closed.notifyContactsOnReturn).isFalse()
+        assertThat(PrivacyCatalog.isEnabled(closed, PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN)).isFalse()
+    }
+
+    @Test
+    fun codec_aBlockStoredBeforeNotifyOnReturn_decodesWithTheValueTrue() {
+        val legacy = """{"showOnlineStatus":false,"blockScreenshots":true}"""
+
+        val decoded = privacyPreferencesFromStorage(legacy)
+
+        assertThat(decoded.notifyContactsOnReturn).isTrue()
+        assertThat(decoded.showOnlineStatus).isFalse()
+        assertThat(decoded.blockScreenshots).isTrue()
+    }
+
+    @Test
+    fun comingSoon_isExactlyTheFiveTogglesWithoutEffect_andRefusesWrites() {
+        assertThat(PrivacyCatalog.comingSoon).containsExactly(
+            PrivacyToggle.BLOCK_SCREENSHOTS,
+            PrivacyToggle.SAVE_MEDIA_TO_GALLERY,
+            PrivacyToggle.SHARE_USAGE_DATA,
+            PrivacyToggle.ALLOW_CONTACT_REQUESTS,
+            PrivacyToggle.ALLOW_GROUP_INVITES,
+        )
+        PrivacyToggle.entries.forEach { toggle ->
+            assertThat(PrivacyCatalog.isWritable(toggle)).isEqualTo(!PrivacyCatalog.isComingSoon(toggle))
+        }
+    }
+
+    @Test
+    fun infoTopics_coverTheSixIosRows_onlyOnTheirToggle() {
+        val withInfo = PrivacyToggle.entries.filter { PrivacyCatalog.infoTopic(it) != null }
+        assertThat(withInfo).containsExactly(
+            PrivacyToggle.SHOW_ONLINE_STATUS,
+            PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN,
+            PrivacyToggle.SHOW_READ_RECEIPTS,
+            PrivacyToggle.HIDE_PROFILE_FROM_SEARCH,
+            PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS,
+            PrivacyToggle.ALLOW_ANALYTICS,
+        )
+        assertThat(PrivacyCatalog.infoTopic(PrivacyToggle.ALLOW_ANALYTICS)).isEqualTo(PrivacyInfoTopic.ANALYTICS)
     }
 }

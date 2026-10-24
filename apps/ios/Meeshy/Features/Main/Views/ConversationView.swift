@@ -260,11 +260,9 @@ struct ConversationView: View {
         viewModel.topActiveMembersList(accentColor: accentColor)
     }
 
-    var isCurrentUserAdminOrMod: Bool {
-        let convRole = conversation?.currentUserRole?.uppercased() ?? ""
-        let platformRole = AuthManager.shared.currentUser?.role?.uppercased() ?? ""
-        let modRoles: Set<String> = ["ADMIN", "MODERATOR", "BIGBOSS"]
-        return modRoles.contains(convRole) || modRoles.contains(platformRole)
+    /// #11214 — le lecteur et la conversation tels que la loi des actions les lit ; un seul site.
+    var menuAuthority: ConversationMenuAuthority {
+        ConversationMenuAuthority.make(conversation: liveConversation, currentUser: AuthManager.shared.currentUser, guest: anonymousSession)
     }
 
     /// « Retirer » le message d'un AUTRE (#11151) — créateur compris, jamais en direct.
@@ -376,7 +374,7 @@ struct ConversationView: View {
             .modifier(ConversationBodyCovers(
                 viewModel: viewModel, composerState: $composerState, scrollState: $scrollState,
                 overlayState: $overlayState, conversation: conversation, accentColor: accentColor,
-                isDark: isDark, isGuest: anonymousSession != nil, isAdminOrMod: isCurrentUserAdminOrMod,
+                isDark: isDark, authority: menuAuthority,
                 mediaSaveCoordinator: mediaSaveCoordinator, onReply: { triggerReply(for: $0) },
                 actions: messageActions))
             .modifier(ConversationBodySheets(
@@ -394,7 +392,7 @@ struct ConversationView: View {
             .modifier(ConversationBodyOverlayMenu(
                 overlayState: $overlayState, focalFullscreenPlace: $focalFullscreenPlace,
                 focalShareFileItem: $focalShareFileItem, viewModel: viewModel, frameTracker: frameTracker,
-                accentColor: accentColor, isDirect: isDirect, isAdminOrMod: isCurrentUserAdminOrMod,
+                accentColor: accentColor, isDirect: isDirect, authority: menuAuthority,
                 mediaSaveCoordinator: mediaSaveCoordinator, actions: messageActions,
                 threadLanguage: { overlayThreadLanguage(for: $0) },
                 pieceOverlay: { pieceOverlayContent(for: $0) },
@@ -465,7 +463,7 @@ struct ConversationView: View {
     private func conversationDidAppear() {
         if let context = replyContext { applyReplyContext(context, openingConversation: true) }
         if let lang = ConversationViewRules.defaultComposeLanguage(
-            preferredContentLanguage: AuthManager.shared.currentUser?.preferredContentLanguages.first,
+            preferredContentLanguage: AuthManager.shared.currentUser?.preferredContentLanguages.first, // Défaut de COMPOSITION (#11875).
             keyboardPrimaryLanguage: UITextInputMode.activeInputModes.first?.primaryLanguage,
             supportedCodes: Set(LanguageOption.defaults.map(\.code))
         ) { composerState.selectedLanguage = lang }
@@ -563,7 +561,7 @@ struct ConversationView: View {
             scrollState: $scrollState,
             overlayState: $overlayState,
             showScript: { readingModeController.select(.script) },
-            reply: { triggerReply(for: $0) },
+            reply: { triggerReply(for: $0) }, presentMenu: { presentLongPressMenu(for: $0, cellFrame: nil) },
             openViewOnce: { openViewOnce(messageId: $0) },
             openMedia: openMediaFullscreen
         )
@@ -623,7 +621,7 @@ struct ConversationView: View {
             ),
             isHeaderExpanded: composerState.showOptions,
             readingMode: readingModeController.mode,
-            isAdminOrMod: isCurrentUserAdminOrMod,
+            authority: menuAuthority,
             messageActions: messageActions,
             actions: ConversationMessageListActions(
                 toggleSelection: { toggleMessageSelection($0) },
@@ -643,10 +641,9 @@ struct ConversationView: View {
             beginSelection: { beginSelectionMode(seedingWith: $0) },
             deleteMedia: { deleteMedia(targeted: nil, of: $0) },
             requestDelete: { requestDeleteMessage($0) },
-            edit: { beginEdit($0) },
+            beginEdit: { beginEdit($0) },
             export: { beginMessageExport($0, quick: $1) },
-            compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) },
-            canRemove: { canRemoveMessage($0) }
+            compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) }
         )
     }
 

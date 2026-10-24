@@ -126,7 +126,7 @@ struct ReelsPlayerView: View {
             // reel and scroll to the targeted comment. Brief delay so the reel is
             // on screen first (the reveal disc settles), then present.
             guard let cid = commentTargetId, !cid.isEmpty else { return }
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            _ = await cancellableSleep(for: .milliseconds(450))
             let reel = seedPosts.first(where: { $0.id == startId }) ?? seedPosts.first ?? viewModel.reels.first
             if let reel {
                 pendingCommentTargetId = cid
@@ -913,7 +913,7 @@ struct ReelPageView: View {
         guard selectedLanguage == nil, let audioMedia else { return }
         selectedLanguage = ReelAudioLanguageResolver.preferredAudioLanguage(
             original: metaOriginalLanguage,
-            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             availableLanguages: audioMedia.translatedAudios.map(\.targetLanguage)
         )
     }

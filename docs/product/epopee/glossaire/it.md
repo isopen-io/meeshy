@@ -63,7 +63,7 @@ Il tono: si dà del **tu**, si scrive per un ragazzo di 13 anni, un’idea per f
 | Forziere | la quarta custodia dell’Eredità | il forziere del giorno (→ l’Offerta) |
 | Tesoro | la quinta custodia dell’Eredità | il concetto intero (→ l’Eredità) |
 | Scrigno | la terza custodia dell’Eredità | un contenitore qualsiasi (→ custodia) |
-| Stella | il cielo: lo stato Stella, il cielo degli antenati, i frammenti di stella, le stelle delle medaglie | la Rinascita (→ Ere), il viaggio (→ passi) |
+| Stella | il cielo: lo stato Stella, il cielo degli antenati, i frammenti di stella, le stelle delle medaglie | la Rinascita (→ Ere), il viaggio (→ passi), il nome delle soglie di una medaglia (→ Gradini) |
 | Tappa | l’accoglienza soltanto («Tappa 2 di 7», «Le sette tappe») | la soglia dei dieci livelli (→ prova), il viaggio (→ sosta) |
 | Passo | il viaggio soltanto | le prove dei dieci livelli (→ prova), l’accoglienza (→ tappa) |
 | Gradino | le soglie delle Sfide e delle medaglie | le cinque divisioni del rango (→ scalino) |

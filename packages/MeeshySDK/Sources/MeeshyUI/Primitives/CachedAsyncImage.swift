@@ -118,9 +118,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
             // (NSCache puis disque) pour que les cellules reutilisees au scroll
             // ne flashent pas leur thumbHash quand la nouvelle URL est deja sur
             // disque.
-            let cached = targetSize.flatMap {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0)))
-            } ?? WarmImageProbe.warmedImage(for: resolved)
+            let cached = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: targetSize.map { DecodeBudget.maxPixelWidth(for: .fitting($0)) })
             image = cached
             // Refresh the ThumbHash blur for the new url — cells are reused, so
             // stale @State from the previous message must not bleed through.
@@ -194,8 +192,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         if MediaFetchGate.shouldSkipNetworkFetch(
             autoLoad: autoLoad,
             isLocalFileURL: Self.isLocalFileURL(resolved),
-            hasLocalCacheHit: CacheCoordinator.imageLocalFileURL(for: resolved) != nil
-                || DiskCacheStore.cachedImage(for: resolved) != nil,
+            hasLocalCacheHit: LocalImagePresence.isOnDevice(resolvedURL: resolved),
             policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
         ) {
             isDeferred = true
@@ -245,6 +242,27 @@ enum MediaDownloadPolicy {
 /// still resolve `policyAllowsAutoLoad` via `MediaDownloadPolicy`, an already
 /// SDK-legitimate composition of `MediaDownloadPolicyEngine` +
 /// `NetworkConditionMonitor` + `MediaDownloadPreferencesStore`).
+/// **Une image est sur l'appareil quand la lire ne coûte aucun octet réseau** :
+/// fichier dans le cache image, ou plein format décodé en mémoire. C'est le
+/// critère exact qui lève la politique de téléchargement des vues d'image —
+/// un hôte qui choisit une URL « déjà là » la lit ici pour être sûr que la
+/// vue la chargera sans attendre un geste.
+public enum LocalImagePresence {
+    nonisolated public static func isOnDevice(resolvedURL: String) -> Bool {
+        CacheCoordinator.imageLocalFileURL(for: resolvedURL) != nil
+            || DiskCacheStore.cachedImage(for: resolvedURL) != nil
+    }
+}
+
+/// L'identité d'un chargement de `ProgressiveCachedImage` : son URL ET le
+/// jeton de relance de l'hôte. Un chargement retenu par la politique ne
+/// repartait que si l'URL changeait ; un média arrivé par un autre chemin
+/// sous la MÊME URL laissait la vue sur son aperçu flou.
+nonisolated struct ProgressiveImageLoadID: Hashable {
+    let url: String?
+    let reloadToken: AnyHashable?
+}
+
 enum MediaFetchGate {
     nonisolated static func shouldSkipNetworkFetch(
         autoLoad: Bool,
@@ -268,26 +286,24 @@ public struct CachedAvatarImage: View {
     public let name: String
     public let size: CGFloat
     public let accentColor: String
+    public let secondaryColor: String?
 
     @State private var image: UIImage?
     @State private var thumbHashImage: UIImage?
 
-    public init(urlString: String?, thumbHash: String? = nil, name: String, size: CGFloat, accentColor: String) {
+    public init(urlString: String?, thumbHash: String? = nil, name: String, size: CGFloat, accentColor: String, secondaryColor: String? = nil) {
         self.urlString = urlString; self.thumbHash = thumbHash; self.name = name; self.size = size; self.accentColor = accentColor
+        self.secondaryColor = secondaryColor
 
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            cachedFull = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
-                ?? WarmImageProbe.warmedImage(for: resolved)
+            cachedFull = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
         } else {
             cachedFull = nil
         }
         _image = State(initialValue: cachedFull)
-
-        if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
-            _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
-        }
+        _thumbHashImage = State(initialValue: cachedFull == nil ? Self.waitingBlur(urlString: urlString, thumbHash: thumbHash) : nil)
     }
 
     public var body: some View {
@@ -301,22 +317,36 @@ public struct CachedAvatarImage: View {
         .frame(width: size, height: size).clipShape(Circle())
         .task(id: urlString) { await loadAvatar(for: urlString) }
         .adaptiveOnChange(of: urlString) { _, newUrl in
-            guard let newUrl, !newUrl.isEmpty else { image = nil; return }
+            guard let newUrl, !newUrl.isEmpty else {
+                image = nil
+                thumbHashImage = nil
+                return
+            }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            image = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
-                ?? WarmImageProbe.warmedImage(for: resolved)
+            image = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
+            thumbHashImage = image == nil ? Self.waitingBlur(urlString: newUrl, thumbHash: thumbHash) : nil
         }
     }
 
+    /// Le flou d'attente n'annonce qu'une photo À VENIR : sans URL, la personne
+    /// n'a pas de photo et le cercle montre ses initiales (#12568).
+    static func waitingBlur(urlString: String?, thumbHash: String?) -> UIImage? {
+        guard let urlString, !urlString.isEmpty, let thumbHash, !thumbHash.isEmpty else { return nil }
+        return UIImage.fromThumbHash(thumbHash)
+    }
+
+    /// Les initiales d'attente ET d'échec sont celles d'un avatar sans photo :
+    /// une seule dérivation, `MeeshyAvatar.initials(for:)`.
+    nonisolated public static func fallbackInitials(for name: String) -> String {
+        MeeshyAvatar.initials(for: name)
+    }
+
     private var initialsFallback: some View {
-        let initials = name.components(separatedBy: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-        let color = Color(hex: accentColor)
-        return ZStack {
-            LinearGradient(colors: [color, color.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Text(initials.isEmpty ? "?" : initials)
-                .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-        }
+        AvatarInitialsFace(
+            initials: Self.fallbackInitials(for: name),
+            accent: accentColor, secondary: secondaryColor,
+            size: size, fontSize: size * 0.38
+        )
     }
 
     private func loadAvatar(for currentUrlString: String?) async {
@@ -349,7 +379,7 @@ public struct CachedBannerImage: View {
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            cachedFull = WarmImageProbe.warmedImage(for: resolved)
+            cachedFull = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fullBleed(height: height)))
         } else {
             cachedFull = nil
         }
@@ -379,7 +409,7 @@ public struct CachedBannerImage: View {
                 return
             }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            if let cached = WarmImageProbe.warmedImage(for: resolved) {
+            if let cached = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fullBleed(height: height))) {
                 image = cached
             } else {
                 image = nil
@@ -433,6 +463,10 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     /// le média n'est pas sur l'appareil ne saurait jamais qu'il l'est
     /// devenu (#10370).
     public let onFullImageLoaded: (@MainActor () -> Void)?
+    /// Jeton opaque de l'hôte : quand il change, les chargements repartent
+    /// même si les URL n'ont pas changé — un média que la politique retenait
+    /// et qu'un autre chemin vient de poser sur l'appareil.
+    public let reloadToken: AnyHashable?
     public let placeholder: () -> Placeholder
 
     @State private var thumbHashImage: UIImage?
@@ -460,8 +494,10 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         targetSize: CGSize? = nil,
         onFullImageFailure: (@MainActor () -> Void)? = nil,
         onFullImageLoaded: (@MainActor () -> Void)? = nil,
+        reloadToken: AnyHashable? = nil,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
+        self.reloadToken = reloadToken
         self.thumbHash = thumbHash
         self.thumbnailUrl = thumbnailUrl
         self.fullUrl = fullUrl
@@ -528,11 +564,11 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         }
         .animation(.easeInOut(duration: 0.25), value: fullImage != nil)
         .animation(.easeInOut(duration: 0.15), value: thumbnailImage != nil)
-        .task(id: thumbnailUrl) {
+        .task(id: ProgressiveImageLoadID(url: thumbnailUrl, reloadToken: reloadToken)) {
             guard fullImage == nil else { return }
             await loadThumbnail()
         }
-        .task(id: fullUrl) {
+        .task(id: ProgressiveImageLoadID(url: fullUrl, reloadToken: reloadToken)) {
             await loadFullImage()
         }
         .task(id: fullUrl) {
@@ -549,9 +585,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         .adaptiveOnChange(of: fullUrl) { _, newUrl in
             guard let newUrl, !newUrl.isEmpty else { fullImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            let cached = targetSize.flatMap {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0)))
-            } ?? WarmImageProbe.warmedImage(for: resolved)
+            let cached = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: targetSize.map { DecodeBudget.maxPixelWidth(for: .fitting($0)) })
             if let cached {
                 fullImage = cached
             } else {
@@ -597,8 +631,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         if MediaFetchGate.shouldSkipNetworkFetch(
             autoLoad: autoLoad,
             isLocalFileURL: ProgressiveCachedImage.isLocalFileURL(resolved),
-            hasLocalCacheHit: CacheCoordinator.imageLocalFileURL(for: resolved) != nil
-                || DiskCacheStore.cachedImage(for: resolved) != nil,
+            hasLocalCacheHit: LocalImagePresence.isOnDevice(resolvedURL: resolved),
             policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
         ) {
             thumbnailDeferredByPolicy = true
@@ -638,8 +671,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         if MediaFetchGate.shouldSkipNetworkFetch(
             autoLoad: autoLoad,
             isLocalFileURL: ProgressiveCachedImage.isLocalFileURL(resolved),
-            hasLocalCacheHit: CacheCoordinator.imageLocalFileURL(for: resolved) != nil
-                || DiskCacheStore.cachedImage(for: resolved) != nil,
+            hasLocalCacheHit: LocalImagePresence.isOnDevice(resolvedURL: resolved),
             policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
         ) {
             fetchDeferredByPolicy = true

@@ -12,7 +12,7 @@ public enum ContactCardFile {
 
     private static let aliases: Set<String> = ["text/vcard", "text/x-vcard", "text/directory"]
     private static let extensions: Set<String> = ["vcf", "vcard"]
-    private static let temporaryPrefix = try! NSRegularExpression(
+    private static let temporaryPrefix = LiteralRegex.compile(
         pattern: "^contact_[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}_"
     )
 

@@ -128,6 +128,15 @@ describe('le détail', () => {
     expect(html).toContain('src="https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607%2Fharbor_41.png"');
   });
 
+  test('la photo de la communauté PRÉCÈDE ses initiales, qui portent seules le fond d’accent (#12571)', () => {
+    const html = renderToStaticMarkup(<CommunityHero language="fr" community={community({ avatar: '2026/09/6aa607/harbor_41.png' })} />);
+    expect(html.indexOf('harbor_41.png')).toBeGreaterThan(-1);
+    expect(html.indexOf('harbor_41.png')).toBeLessThan(html.indexOf('data-avatar-initials'));
+    const sansPhoto = renderToStaticMarkup(<CommunityHero language="fr" community={community({ avatar: null })} />);
+    expect(sansPhoto).toContain('data-avatar-initials');
+    expect(sansPhoto).not.toContain('harbor_41.png');
+  });
+
   test('les compteurs sont des nombres ENTIERS, dans la langue', () => {
     const html = plain(renderToStaticMarkup(<CommunityStats language="fr" community={community()} />));
     expect(html).toContain('1 284');

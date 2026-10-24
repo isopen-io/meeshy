@@ -1,5 +1,6 @@
 import XCTest
 import CoreGraphics
+import MeeshySDK
 @testable import MeeshyUI
 
 /// La bande de forme d'onde est partagée par les pistes audio et vidéo. On
@@ -58,5 +59,13 @@ final class WaveformStripTests: XCTestCase {
     func test_tinyLaneNeverProducesNegativeHeights() {
         let heights = WaveformStrip.barHeights(samples: [0.5, 1.0], availableHeight: 4)
         XCTAssertTrue(heights.allSatisfy { $0 >= 0 }, "hauteurs = \(heights)")
+    }
+
+    /// Le champ PUBLIÉ (normalisé au pic) se lit en linéaire : 0,1 fait 10 pt,
+    /// pas les 67 pt de l'échelle décibel (#9886).
+    func test_publishedReading_isLinear() {
+        let h = WaveformStrip.barHeights(samples: [0.1], availableHeight: availableHeight,
+                                         reading: .published)[0]
+        XCTAssertEqual(h, 10, accuracy: 0.01)
     }
 }

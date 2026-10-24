@@ -3,13 +3,19 @@ package me.meeshy.sdk.net
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ApiResponseMeta
+import me.meeshy.sdk.model.DeletionAcknowledgement
 import me.meeshy.sdk.model.Pagination
+import okhttp3.ResponseBody
 import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
 
 /** [apiCall]'s payload plus the envelope's `pagination` block, which [apiCall] discards. */
-data class PagedResult<T>(val data: T, val pagination: Pagination?)
+data class PagedResult<T>(val data: T, val pagination: Pagination?, val meta: ApiResponseMeta? = null) {
+    /** Ancre de la suite (curseur) de cette page, `null` quand il n'y en a plus. */
+    val nextCursor: String? get() = pagination?.nextCursor
+}
 
 /**
  * Projette une enveloppe de refus en [ApiError] — le SITE UNIQUE qui décide ce
@@ -67,11 +73,11 @@ suspend fun <T> apiCall(block: suspend () -> ApiResponse<T>): NetworkResult<T> =
         NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     } catch (e: SerializationException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+            parseApiError(e),
         )
     }
 
@@ -85,7 +91,7 @@ suspend fun <T> pagedApiCall(block: suspend () -> ApiResponse<T>): NetworkResult
         val response = block()
         val data = response.data
         if (response.success && data != null) {
-            NetworkResult.Success(PagedResult(data, response.pagination))
+            NetworkResult.Success(PagedResult(data, response.pagination, response.meta))
         } else {
             NetworkResult.Failure(
                 response.toApiError(fallbackMessage = "Unknown error", fallbackCode = null, httpStatus = null),
@@ -95,11 +101,11 @@ suspend fun <T> pagedApiCall(block: suspend () -> ApiResponse<T>): NetworkResult
         NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     } catch (e: SerializationException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+            parseApiError(e),
         )
     }
 
@@ -144,7 +150,7 @@ suspend fun <T> headerCall(headerName: String, block: suspend () -> Response<T>)
         )
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     }
 
@@ -170,7 +176,7 @@ suspend fun chunkCall(block: suspend () -> Response<Unit>): NetworkResult<Unit> 
         )
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     }
 
@@ -186,11 +192,11 @@ suspend fun <T> rawApiCall(block: suspend () -> T): NetworkResult<T> =
         NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     } catch (e: SerializationException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+            parseApiError(e),
         )
     }
 
@@ -203,7 +209,7 @@ suspend fun <T> rawApiCall(block: suspend () -> T): NetworkResult<T> =
  */
 sealed interface ConditionalResult<out T> {
     /** A decoded 2xx body, plus the response's own `ETag` header (if any) to remember for next time. */
-    data class Fresh<T>(val data: T, val pagination: Pagination?, val etag: String?) : ConditionalResult<T>
+    data class Fresh<T>(val data: T, val pagination: Pagination?, val etag: String?, val meta: ApiResponseMeta? = null) : ConditionalResult<T>
 
     /** 304 — the caller's held validator still matches; there is no body to read. */
     data object NotModified : ConditionalResult<Nothing>
@@ -249,7 +255,7 @@ suspend fun <T> conditionalApiCall(block: suspend () -> Response<ApiResponse<T>>
                 val envelope = response.body()
                 val data = envelope?.data
                 if (envelope?.success == true && data != null) {
-                    ConditionalResult.Fresh(data, envelope.pagination, response.headers()["ETag"])
+                    ConditionalResult.Fresh(data, envelope.pagination, response.headers()["ETag"], envelope.meta)
                 } else {
                     ConditionalResult.Failure(
                         envelope?.toApiError(
@@ -265,7 +271,28 @@ suspend fun <T> conditionalApiCall(block: suspend () -> Response<ApiResponse<T>>
     } catch (e: HttpException) {
         ConditionalResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
-        ConditionalResult.Failure(ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"))
+        ConditionalResult.Failure(ioApiError(e))
     } catch (e: SerializationException) {
-        ConditionalResult.Failure(ApiError(message = e.message ?: "Malformed response", code = "PARSE"))
+        ConditionalResult.Failure(parseApiError(e))
+    }
+
+/**
+ * Suppression tolérante : TOUT 2xx confirme, quelle que soit la charge (`{message}`,
+ * `{messageId, deleted, meta}`, `{deleted:true}`, corps vide). Un 4xx/5xx reste un
+ * [NetworkResult.Failure] portant le `code`/`error` de la passerelle. La méthode
+ * Retrofit rend la [Response] brute pour atteindre le statut sans décoder la charge.
+ */
+suspend fun deletionCall(block: suspend () -> Response<ResponseBody>): NetworkResult<DeletionAcknowledgement> =
+    try {
+        val response = block()
+        if (response.isSuccessful) {
+            val body = runCatching { response.body()?.string() }.getOrNull()
+            NetworkResult.Success(DeletionAcknowledgement.parse(body))
+        } else {
+            NetworkResult.Failure(apiErrorFromResponse(response))
+        }
+    } catch (e: HttpException) {
+        NetworkResult.Failure(apiErrorFromHttpException(e))
+    } catch (e: IOException) {
+        NetworkResult.Failure(ioApiError(e))
     }

@@ -7,7 +7,7 @@ import MeeshyUI
 import os
 
 @MainActor
-class ConversationViewModel: ObservableObject {
+class ConversationViewModel: ObservableObject, AttachmentSendHosting, TranscriptionRetryReceiving {
 
     // MARK: - Published State
 
@@ -429,6 +429,7 @@ class ConversationViewModel: ObservableObject {
     let sendCoordinator: any ConversationSendCoordinatorProviding
     let translationSource: any ConversationTranslationSourcing
     let historyLoader: any ConversationHistoryLoading
+    let collaborators: ConversationCollaborators
     /// #8303 — les flammes-œil vues pendant la visite, et ce que la sortie en fait.
     var afterReadVisit = AfterReadVisit()
     let afterReadConsumer: AfterReadConsumptionProviding
@@ -528,9 +529,8 @@ class ConversationViewModel: ObservableObject {
         self.offlineQueue = offlineQueue
         self.sendCoordinator = sendCoordinator ?? ConversationSendCoordinator(conversationId: conversationId, messageService: messageService, messageSocket: messageSocket, offlineQueue: offlineQueue, persistence: dependencies.persistence)
         self.translationSource = translationSource ?? ConversationTranslationSource(persistence: dependencies.persistence)
-        self.historyLoader = historyLoader ?? ConversationHistoryLoader(
-            conversationId: conversationId, messageService: messageService, persistence: dependencies.persistence
-        )
+        self.historyLoader = historyLoader ?? ConversationHistoryLoader(conversationId: conversationId, messageService: messageService, persistence: dependencies.persistence)
+        self.collaborators = dependencies.collaborators ?? ConversationCollaborators(persistence: dependencies.persistence, syncEngine: syncEngine, messageService: messageService)
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         self.startupDependencies = dependencies
@@ -594,7 +594,7 @@ class ConversationViewModel: ObservableObject {
     /// une extension Swift ne peut pas déclarer de propriété stockée.
     var storeRefreshGeneration: Int = 0
 
-    deinit {
+    nonisolated deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
         newerPagesChain?.cancel()
@@ -689,9 +689,9 @@ class ConversationViewModel: ObservableObject {
     }
 
     /// Mémoire des messages déjà vus par la file des vocaux — pilotée par
-    /// `subscribeToMessagesForAudioQueue()` (`ConversationViewModel+AudioQueue.swift`).
+    /// `ConversationAudioQueueFeed` (`subscribeToMessagesForAudioQueue()` dans `+AudioQueue.swift`).
     /// Stockée ici : une extension ne déclare pas de propriété stockée.
-    var audioQueueTracker = AudioQueueAppendTracker()
+    let audioQueueFeed = ConversationAudioQueueFeed()
 
     // MARK: - Mark as Read / Received
 
@@ -743,37 +743,13 @@ class ConversationViewModel: ObservableObject {
         sendReadReceipt(messageIds: nil, caughtUpId: newest)
     }
 
-    /// Marque localement (badge, cache, widget) puis envoie au serveur —
-    /// partagé par `markAsRead` et `markCaughtUpFromSummaryOrRiver`, seule la
-    /// provenance de `caughtUpId` diffère entre les deux.
     private func sendReadReceipt(messageIds: [String]?, caughtUpId: String?) {
-        let convId = conversationId
-        if messageIds == nil || caughtUpId != nil {
-            // Les trois surfaces locales d'un seul geste — cache + frontière,
-            // lignes @Published + `ConversationStore`, badge d'icône + widget.
-            // Ce chemin n'en écrivait que deux : le badge d'icône restait au
-            // compte d'avant jusqu'à un `read-status:updated` serveur.
-            ConversationReadSignal.markReadLocally(convId, syncEngine: syncEngine)
-        }
-        // 3. Send to server in background (fire-and-forget, queue on failure)
-        //
-        // PAS de gate client sur showReadReceipts : le gateway gate déjà le
-        // broadcast aux pairs selon la préférence (divulgation), mais il a
-        // BESOIN de l'appel pour avancer le curseur de lecture — c'est lui qui
-        // alimente `conversation:unread-updated` (badge multi-appareils, icône,
-        // widget). Le même gate a été délibérément retiré du chemin
-        // ConversationListViewModel pour la même raison ; avec le gate, un
-        // utilisateur accusés-OFF gardait un badge fantôme sur ses autres
-        // appareils et sur l'icône de l'app.
         // Résolu ICI, pas au moment de l'envoi : la file d'attente peut partir
         // longtemps après, et une traduction arrivée entre-temps ne change pas
         // ce que le lecteur avait sous les yeux.
         let languages = messageIds.map { splitConsumedLanguages(for: $0) }
-        ReadReceiptOutbox.enqueue(
-            conversationId: convId,
-            messageIds: messageIds,
-            caughtUpId: caughtUpId,
-            languages: languages
+        collaborators.readReceipts.send(
+            conversationId: conversationId, messageIds: messageIds, caughtUpId: caughtUpId, languages: languages
         )
     }
 

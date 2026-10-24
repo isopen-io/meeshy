@@ -8,28 +8,28 @@ extension StoryBackgroundLayer {
 
     /// Attache un AVPlayer pour une URL vidéo. Factorisé pour les trois chemins :
     /// `file://` (composer / cache disque déjà téléchargé), cache disque chaud,
-    /// et URL distante HTTPS streamée en direct. `AVPlayerItem(url:)` gère les
-    /// trois — pour une URL distante, `AVPlayer` fait du progressive/range
-    /// loading (premier frame en ~centaines de ms) et le cache disque se peuple
-    /// en arrière-plan via le caller. NE PAS bloquer sur un download intégral
-    /// avant d'appeler ceci (régression 2026-05-20 → grosses stories injouables
-    /// sur réseau device).
+    /// et URL distante. Pour une URL distante, l'asset lit le transfert du
+    /// cache pendant sa course (#9881) : premier frame dès la tête, une seule
+    /// requête, et le MÊME asset sert à lire la taille naturelle. NE PAS
+    /// bloquer sur un download intégral avant d'appeler ceci (régression
+    /// 2026-05-20 → grosses stories injouables sur réseau device).
     @MainActor
     func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool, fitOverride: String? = nil) {
-        let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = 2.0
+        let asset = CacheCoordinator.videoPlaybackAsset(for: url, startsTransfer: true)
+        let item = AVPlayerItem(asset: asset)
+        MediaPolicyMonitor.shared.adopt(item, role: .watched)
         if looping {
             let queuePlayer = AVQueuePlayer()
             // Fond de canvas en boucle : décor, jamais un contenu regardé (#6221).
             queuePlayer.preventsDisplaySleepDuringVideoPlayback = false
             self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
+            MediaPolicyMonitor.shared.adopt(queuePlayer, role: .watched)
             self.avPlayer = queuePlayer
         } else {
             self.avPlayer = providedCarrierPlayer() ?? AVPlayer(playerItem: item)
         }
-        // Le paramètre `mute` reste pris en compte pour compat avec les call
-        // sites existants (renderer), mais on respecte aussi l'état dynamique
-        // `self.isMuted` mis à jour par le canvas. Le OR garantit que si l'un
+        // `mute` reste pris en compte pour les call sites existants (renderer),
+        // avec l'état dynamique `self.isMuted` mis à jour par le canvas : si l'un
         // OU l'autre demande mute, le player démarre silencieux ; le toggle
         // unmute du sidebar passera ensuite par `isMuted.didSet`.
         self.avPlayer?.isMuted = mute || self.isMuted
@@ -69,23 +69,12 @@ extension StoryBackgroundLayer {
         // re-attached (slide change / configure() with different kind) between
         // the Task launch and the asset load completion.
         let canvasSize = self.bounds.size
-        let asset = AVURLAsset(url: url)
         attachedVideoAsset = asset
         Task { @MainActor [weak self, weak pl] in
             guard self != nil else { return }
-            let tracks: [AVAssetTrack]
-            if #available(iOS 16.0, *) {
-                tracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
-            } else {
-                tracks = asset.tracks(withMediaType: .video)
-            }
+            let tracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
             guard let videoTrack = tracks.first else { return }
-            let naturalSize: CGSize
-            if #available(iOS 16.0, *) {
-                naturalSize = (try? await videoTrack.load(.naturalSize)) ?? .zero
-            } else {
-                naturalSize = videoTrack.naturalSize
-            }
+            let naturalSize = (try? await videoTrack.load(.naturalSize)) ?? .zero
             guard naturalSize.width > 0, naturalSize.height > 0 else { return }
             guard let pl else { return }
             let resolved = StoryBackgroundLayer.resolveVideoGravity(
@@ -175,9 +164,7 @@ extension StoryBackgroundLayer {
                   expected: max(0, slidePlayheadSeconds),
                   actual: player.currentTime().seconds,
                   threshold: Self.timelineSeekDriftThreshold) else { return }
-        player.seek(to: target,
-                    toleranceBefore: VideoDriftCorrection.seekTolerance,
-                    toleranceAfter: VideoDriftCorrection.seekTolerance)
+        VideoDriftCorrection.recenter(player, to: target, gate: driftSeekGate)
     }
 
     /// Scrub de preview timeline : pause puis cale le player de fond sur le

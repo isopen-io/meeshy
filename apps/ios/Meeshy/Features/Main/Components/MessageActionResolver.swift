@@ -4,6 +4,14 @@ import MeeshySDK
 /// Action affichée dans la liste verticale de l'overlay appui-long.
 enum PrimaryAction: String, Equatable {
     case edit, translate, copy, saveMedia, more
+    /// **Répondre** (#11214) — en tête, comme la loi partagée le range
+    /// (`messageActionsFor`) : c'est l'usage nominal d'un appui long.
+    case reply
+    /// **Réessayer** l'envoi raté — en tête à la place de Répondre.
+    case retry
+    /// **Les actions du TYPE** (#11214), que la loi propose après Répondre :
+    /// le lien (ouvrir, copier), le lieu (ouvrir dans Plans, copier l'adresse).
+    case openLink, copyLink, openInMaps, copyAddress
     /// **Composer** (lot 5, O13) — ouvre l'atelier sur le média reçu, déjà
     /// posé. Elle vit dans la liste VERTICALE et non dans « Plus… » parce que
     /// O13 fixe le budget à DEUX gestes : la feuille en coûterait trois.
@@ -50,6 +58,17 @@ enum PrimaryAction: String, Equatable {
     /// gabarit du catalogue ou Mee : à la place d'« Ajouter à mes stickers »,
     /// qui n'a de sens que pour ce qu'on n'a pas.
     case favoriteSticker, unfavoriteSticker
+    /// **Supprimer le MESSAGE, à un geste** — la loi range la suppression dans
+    /// son groupe `destructive` (`MessageActionPolicy.Groups`) ; elle n'était
+    /// atteignable que par « Plus… » (deux gestes). L'entrée est rouge et ne
+    /// supprime rien d'elle-même : l'hôte ouvre la confirmation qui offre
+    /// « pour tous », « retirer » ou « pour moi » selon les verdicts.
+    case deleteMessage
+}
+
+extension PrimaryAction {
+    /// Les entrées qui détruisent : teintées en rouge, jamais à l'accent.
+    var isDestructive: Bool { self == .deletePiece || self == .deleteMessage }
 }
 
 /// Item d'une section de la feuille « Plus… ».
@@ -168,8 +187,50 @@ struct MessageMenuContext: Equatable {
     /// même sans texte (#8692).
     var hasPaintableMedia: Bool = false
 
+    /// Les VERDICTS de la loi partagée (#11214) — `MessageActionPolicy`, posés
+    /// par `MessageMenuContext.make`, seul site de production. Leurs défauts
+    /// gardent ouvert ce que le menu offrait avant la loi ; la fabrique les
+    /// ferme selon le rôle, le type, le chiffrement et l'état du message.
+    var canReply: Bool = true
+    var canPin: Bool = true
+    var canStar: Bool = true
+    var canReport: Bool = true
+    var canTranslate: Bool = true
+    /// **Traduire SUR L'APPAREIL** (verdict `.device` de la loi) : en E2EE le
+    /// serveur ne lit pas le clair, la vue Langue ne sait demander qu'à lui.
+    /// La traduction se fait alors par `DeviceTranslationCoordinator`, et
+    /// « Traduire » reste offert au lieu de disparaître.
+    var translatesOnDevice: Bool = false
+    /// Le verdict `canReact` de la loi : message vivant, non système, lecteur
+    /// membre actif d'une conversation ouverte. Faux ⇒ ni barre d'emojis, ni
+    /// réaction de pièce.
+    var canReact: Bool = true
+    /// Les verdicts de suppression, distincts : un tiers modérateur RETIRE
+    /// avec motif, l'auteur supprime pour tous, chacun pour soi, et un envoi
+    /// jamais parti s'abandonne (`.discard`). `canDelete` en est l'union — la
+    /// porte de l'entrée « Supprimer ».
+    var canRemove: Bool = false
+    var canDeleteForEveryone: Bool = false
+    var canDeleteForMe: Bool = true
+    var canDiscard: Bool = false
+    /// Le verdict `forward` de la loi : ni E2EE, ni avis système, ni envoi raté.
+    var canForward: Bool = true
+    var isFailed: Bool = false
+    /// Supprimé ou éphémère échu : il ne reste que « Supprimer pour moi ».
+    var isGone: Bool = false
+    /// Un lieu n'a ni texte à copier ni média à supprimer : il s'ouvre dans Plans.
+    var isLocation: Bool = false
+    /// Chiffré de bout en bout : transcription et sentiment côté serveur n'existent pas.
+    var serverFeaturesAbsent: Bool = false
+    var kindActions: [PrimaryAction] = []
+
     /// « Imager » a-t-il quelque chose à peindre ? Un texte ou un média peignable.
     var canImagine: Bool { hasText || hasPaintableMedia }
+
+    /// **Une suppression qui part vers la PASSERELLE** — « Supprimer le média »,
+    /// supprimer une pièce. « Supprimer pour moi » est local et n'en ouvre
+    /// aucune : la passerelle refuse un membre sur le message d'autrui.
+    var canDeleteOnServer: Bool { canDeleteForEveryone || canRemove }
 }
 
 /// **Ce qu'une graine de composer sait poser sur un canvas.**
@@ -303,20 +364,50 @@ nonisolated enum ComposableAttachment {
 /// Logique pure de composition du menu appui-long. Aucune dépendance UI —
 /// entièrement testable. Source unique de vérité pour « quelle action, où ».
 enum MessageActionResolver {
-    /// Liste verticale COMPACTE de l'overlay (façon iMessage) : uniquement les
-    /// actions clés + `.more` toujours en fin. `pin`/`star`/`delete` sont
-    /// routés vers « Plus… » (`moreSections`), jamais affichés ici.
+    /// Liste verticale COMPACTE de l'overlay (façon iMessage) : au plus
+    /// `MessageActionPolicy.maxPrimaryActions` actions clés, puis `.more`
+    /// toujours en fin. `pin`/`star`/`delete` sont routés vers « Plus… »
+    /// (`moreSections`), jamais affichés ici.
+    ///
+    /// **« Supprimer » est à un geste** (`.deleteMessage`, rouge, juste avant
+    /// « Plus… ») dès que la loi ouvre une suppression (`canDelete` = l'union
+    /// de son groupe `destructive`). Sa place suit le contenu : après les
+    /// actions du contenu d'un message vivant, mais SEUL devant « Plus… » quand
+    /// le contenu ne se montre pas (vue unique, supprimé, échu) — c'est alors
+    /// le seul geste qui reste.
     static func primaryActions(_ ctx: MessageMenuContext) -> [PrimaryAction] {
-        guard !ctx.isViewOnce else { return [.more] }
+        let removal: [PrimaryAction] = ctx.canDelete ? [.deleteMessage] : []
+        guard !ctx.isViewOnce, !ctx.isGone else { return removal + [.more] }
+        return capped(candidates(ctx)) + removal + [.more]
+    }
+
+    /// Au-delà de six, ce qui a un JUMEAU dans « Plus… » y passe d'abord —
+    /// l'export rapide et « Imager » (« Imager »), « Copier », « Traduire »
+    /// (la vue Langue), « Éditer ». Ce qui n'en a pas — Répondre, les actions du
+    /// type, Sélectionner, Enregistrer, Composer — reste à portée d'un geste.
+    private static let overflowOrder: [PrimaryAction] = [.exportQuick, .exportImage, .copy, .translate, .edit]
+
+    private static func capped(_ candidates: [PrimaryAction]) -> [PrimaryAction] {
+        let limit = MessageActionPolicy.maxPrimaryActions
+        let excess = candidates.count - limit
+        guard excess > 0 else { return candidates }
+        let dropped = Set(overflowOrder.filter { candidates.contains($0) }.prefix(excess))
+        return Array(candidates.filter { !dropped.contains($0) }.prefix(limit))
+    }
+
+    private static func candidates(_ ctx: MessageMenuContext) -> [PrimaryAction] {
         var out: [PrimaryAction] = []
+        if ctx.isFailed { out.append(.retry) }
         if ctx.hasCallSummary { out.append(.callDetail) }
+        if ctx.canReply { out.append(.reply) }
+        let showsContent = !ctx.isBlurred
+        if showsContent { out.append(contentsOf: ctx.kindActions) }
         if ctx.isMine && ctx.canEdit && ctx.hasText { out.append(.edit) }
         // « Sélectionner » — retour porteur 2026-08-27 : juste À CÔTÉ
         // d'Éditer, parmi les premiers éléments (jamais dans « Plus… »).
         out.append(.select)
-        let showsContent = !ctx.isBlurred
-        if ctx.hasText && showsContent { out.append(.translate) }
-        if ctx.hasText && showsContent && ctx.exits.offers(.copy) { out.append(.copy) }
+        if ctx.hasText && showsContent && (ctx.canTranslate || ctx.translatesOnDevice) { out.append(.translate) }
+        if ctx.hasText && showsContent && !ctx.isLocation && ctx.exits.offers(.copy) { out.append(.copy) }
         if ctx.canImagine && showsContent && ctx.exits.offers(.imagine) {
             out.append(.exportImage)
             if ctx.hasDefaultExportFormat { out.append(.exportQuick) }
@@ -329,13 +420,9 @@ enum MessageActionResolver {
         // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
         // gestes qui EMPORTENT le média hors de la conversation, et le second se
         // cherche à côté du premier. La CONDITION, elle, n'est pas ici : elle
-        // vit dans `ComposableAttachment.offers`, que les trois lecteurs de ce
-        // geste partagent. Le résolveur n'en tient qu'un fait.
+        // vit dans `ComposableAttachment.offers`, que les lecteurs de ce geste
+        // partagent. Le résolveur n'en tient qu'un fait.
         if ctx.canComposeMedia && showsContent && ctx.exits.offers(.publish) { out.append(.compose) }
-        // Le repli « jamais de menu réduit à Plus… seul » (média-seul non
-        // enregistrable, localisation…) est devenu SANS OBJET : `.select`,
-        // toujours ajouté ci-dessus, garantit déjà `out` non vide.
-        out.append(.more)
         return out
     }
 
@@ -344,28 +431,29 @@ enum MessageActionResolver {
     /// la suppression du message. `.language` n'y figure jamais.
     static func moreSections(_ ctx: MessageMenuContext) -> [MoreSection] {
         if ctx.isViewOnce { return viewOnceSections(ctx) }
+        if ctx.isGone { return ctx.canDelete ? [.actions([.delete])] : [] }
         var sections: [MoreSection] = []
 
         // « Faire » (exécutent + ferment) : répondre, transférer, discussion,
         // éditer (si éditable), copier (si texte), partager, épingler/favori,
         // supprimer.
         let showsContent = !ctx.isBlurred
-        var actions: [MoreItem] = [.reply]
-        if showsContent && ctx.exits.offers(.forward) { actions.append(.forward) }
+        var actions: [MoreItem] = ctx.canReply ? [.reply] : []
+        if showsContent && ctx.canForward && ctx.exits.offers(.forward) { actions.append(.forward) }
         actions.append(.thread)
         if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
         if ctx.hasText && showsContent && ctx.exits.offers(.copy) { actions.append(.copy) }
         if showsContent && ctx.exits.offers(.share) { actions.append(.share) }
         if ctx.canImagine && showsContent && ctx.exits.offers(.imagine) { actions.append(.imager) }
-        actions.append(ctx.isPinned ? .unpin : .pin)
-        actions.append(ctx.isStarred ? .unstar : .star)
+        if ctx.canPin { actions.append(ctx.isPinned ? .unpin : .pin) }
+        if ctx.canStar { actions.append(ctx.isStarred ? .unstar : .star) }
         // **La décoration, juste après le favori du MESSAGE** — c'est le
         // voisin qu'on cherche quand on vient d'y penser, et le libellé fait
         // la différence entre les deux objets.
         if let epinglee = ctx.stickerFavorite {
             actions.append(epinglee ? .unpinSticker : .pinSticker)
         }
-        if ctx.canDelete && ctx.hasMedia { actions.append(.media) }
+        if ctx.canDeleteOnServer && ctx.hasMedia && !ctx.isLocation { actions.append(.media) }
         if ctx.canDelete { actions.append(.delete) }
         sections.append(.actions(actions))
 
@@ -373,15 +461,23 @@ enum MessageActionResolver {
         // (langue), transcription (audio/vidéo), réactions (voir + ajouter),
         // vues, sentiment (texte), historique (édité).
         var info: [MoreItem] = []
-        if (ctx.hasText || ctx.hasTimebasedMedia) && showsContent { info.append(.language) }
-        if ctx.hasTimebasedMedia && showsContent { info.append(.transcription) }
+        // Chiffré de bout en bout : le serveur ne lit pas le clair, ses
+        // services n'existent pas (#11214) — la feuille le dit, le menu ne
+        // les offre pas. La vue Langue n'existe que si elle peut traduire.
+        let serverReads = !ctx.serverFeaturesAbsent
+        let translatesText = ctx.hasText && ctx.canTranslate
+        let translatesAudio = ctx.hasTimebasedMedia && serverReads
+        if (translatesText || translatesAudio) && showsContent { info.append(.language) }
+        if ctx.hasTimebasedMedia && showsContent && serverReads { info.append(.transcription) }
         info.append(.reactions)
         if ctx.showReadReceipts { info.append(.views) }
+        // Le sentiment se calcule SUR L'APPAREIL (`NLTagger`) : rien ne part,
+        // il reste offert en E2EE.
         if ctx.hasText && showsContent { info.append(.sentiment) }
         if ctx.isEdited && ctx.hasEditRevisions && showsContent { info.append(.history) }
         sections.append(.info(info))
 
-        sections.append(.moderation([.report]))
+        if ctx.canReport { sections.append(.moderation([.report])) }
         return sections
     }
 

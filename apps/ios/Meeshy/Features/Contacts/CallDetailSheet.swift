@@ -70,18 +70,18 @@ struct CallDetailSheet: View {
         let name = record.displayName(fallback: unknownCallerFallback)
         let peerUserId: String? = record.peer?.userId
         return VStack(spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: name,
                 context: .profileSheet,
                 accentColor: accentHex,
                 avatarURL: record.avatarURL,
                 moodEmoji: peerUserId.flatMap { moodEmojiResolver?($0) },
-                presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline),
+                presenceState: peerUserId.flatMap { PresenceManager.shared.knownPresenceState(for: $0) },
                 onMoodTap: peerUserId.flatMap { moodTapResolver?($0) }
-            )
+            ) }
             Text(name)
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: record.isVideo ? "video.fill" : "phone.fill")
                     .font(.caption)
@@ -124,7 +124,7 @@ struct CallDetailSheet: View {
                 Image(systemName: icon)
                 Text(title).font(.subheadline.weight(.semibold))
             }
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.md)
             .background(Capsule().fill(accentColor))
@@ -191,7 +191,7 @@ struct CallDetailSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(String(localized: "calls.detail.participants", defaultValue: "Participants", bundle: .main))
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.top, MeeshySpacing.md)
                 .accessibilityAddTraits(.isHeader)
@@ -206,7 +206,7 @@ struct CallDetailSheet: View {
                     .accessibilityHidden(true)
                     Text(participant.displayName)
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                     Spacer()
                 }
@@ -230,11 +230,11 @@ struct CallDetailSheet: View {
                 .accessibilityHidden(true)
             Text(label)
                 .font(.subheadline)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Spacer()
             Text(value)
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.md)

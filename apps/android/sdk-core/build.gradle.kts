@@ -37,6 +37,8 @@ dependencies {
     api(project(":core:model"))
     api(project(":core:network"))
     implementation(project(":core:common"))
+    implementation(project(":core:datastore"))
+    implementation(project(":core:crypto"))
     implementation(project(":core:database"))
 
     implementation(libs.androidx.core.ktx)
@@ -45,14 +47,18 @@ dependencies {
     api(libs.stream.webrtc)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+    implementation(libs.androidx.media3.common)
+    implementation(libs.androidx.media3.transformer)
+    implementation(libs.androidx.media3.effect)
     implementation(libs.datastore.preferences)
     implementation(libs.room.ktx)
-    implementation(libs.security.crypto)
     implementation(libs.hilt.android)
     implementation(libs.hilt.work)
     implementation(libs.work.runtime)
     implementation(libs.socketio)
     implementation(libs.timber)
+    implementation(libs.mlkit.translate)
+    implementation(libs.mlkit.language.id)
     ksp(libs.hilt.compiler)
     ksp(libs.hilt.work.compiler)
 
@@ -63,6 +69,8 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)
+    // Test-only: OutboxFlushWorkerTest builds the worker with TestListenableWorkerBuilder.
+    testImplementation(libs.work.testing)
     // Test-only: TusUploadRepositoryTest constructs raw retrofit2.Response fixtures
     // to stub TusApi.createUpload (the Location-header response createSession()
     // reads). :core:network keeps retrofit an `implementation` (not `api`) dependency

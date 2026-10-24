@@ -46,17 +46,20 @@ const DEPLOIEMENTS = [
     statique: 'static-files',
     volumeUploads: 'gateway_uploads',
     volumeLegacy: 'frontend_uploads',
+    worker: null,
   },
   {
     compose: 'docker-compose.staging.yml',
     statique: 'static-files-staging',
     volumeUploads: 'gateway_staging_uploads',
     volumeLegacy: 'frontend_staging_uploads',
+    worker: 'media-worker-staging',
   },
 ] as const;
 
 const CONFS_NGINX = [
   path.resolve(INFRA_DIR, 'nginx', 'static-files.conf'),
+  path.resolve(INFRA_DIR, 'nginx', 'static-files.staging.conf'),
   path.resolve(COMPOSE_DIR, 'config', 'nginx', 'static-files.conf'),
 ] as const;
 
@@ -85,7 +88,7 @@ function locationBlock(conf: string, selecteur: string): string | null {
 }
 
 describe('les uploads de la passerelle ne rejoignent JAMAIS un magasin public (#11256)', () => {
-  describe.each(DEPLOIEMENTS)('$compose', ({ compose, statique, volumeUploads, volumeLegacy }) => {
+  describe.each(DEPLOIEMENTS)('$compose', ({ compose, statique, volumeUploads, volumeLegacy, worker }) => {
     const source = fs.readFileSync(path.resolve(COMPOSE_DIR, compose), 'utf8');
     const bloc = serviceBlock(source, statique, compose);
 
@@ -109,12 +112,24 @@ describe('les uploads de la passerelle ne rejoignent JAMAIS un magasin public (#
       expect(source).toContain(`${volumeUploads}:/app/uploads`);
     });
 
-    it(`AUCUN autre service ne monte "${volumeUploads}" — seule la passerelle sert ces octets`, () => {
+    it(`AUCUN autre service ne monte "${volumeUploads}" — seule la passerelle SERT ces octets`, () => {
       const montages = source
         .split('\n')
         .map((l) => l.trim())
         .filter((l) => l.startsWith(`- ${volumeUploads}:`));
-      expect(montages).toEqual([`- ${volumeUploads}:/app/uploads`]);
+      expect(new Set(montages)).toEqual(new Set([`- ${volumeUploads}:/app/uploads`]));
+      expect(montages.length).toBe(1 + (worker ? 1 : 0));
+    });
+
+    // #11264 — le worker de médias (même image, autre CMD) écrit les rendus
+    // dans ce volume : il le MONTE, mais ne SERT rien — ni port publié, ni
+    // routeur Traefik. C'est cette différence que la règle protège.
+    it('le seul autre porteur du volume est le worker de médias, qui ne publie rien', () => {
+      if (!worker) return;
+      const bloc = serviceBlock(source, worker, compose);
+      expect(bloc).toContain(`- ${volumeUploads}:/app/uploads`);
+      expect(bloc).not.toMatch(/^\s{4}ports:/m);
+      expect(bloc).not.toContain('traefik.enable=true');
     });
   });
 

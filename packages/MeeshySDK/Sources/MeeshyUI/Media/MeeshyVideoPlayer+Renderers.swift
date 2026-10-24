@@ -2,25 +2,6 @@ import SwiftUI
 import AVFoundation
 import MeeshySDK
 
-// MARK: - Mini Renderer
-
-internal struct _MiniRenderer: View {
-    let player: MeeshyVideoPlayer
-
-    var body: some View {
-        MeeshyVideoThumbnail(
-            attachment: player.attachment,
-            accentColor: player.accentColor,
-            showPlayBadge: true,
-            showDurationBadge: player.controls.contains(.duration),
-            cornerRadius: player.frame.cornerRadius,
-            onTap: player.onExpand
-        )
-        .aspectRatio(player.attachment.videoAspectRatio ?? 1.0, contentMode: .fit)
-        .applyVideoFrame(player.frame)
-    }
-}
-
 // MARK: - Fullscreen Renderer
 //
 // Routes through `SharedAVPlayerManager` so PIP + global play coordination
@@ -112,8 +93,9 @@ internal struct _FullscreenRenderer: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            switch player.availability {
-            case .ready:
+            // #12027 : un téléchargement LISIBLE se joue dès sa tête, comme
+            // un fichier sur le disque — le lecteur prend la place de l'attente.
+            if player.availability.playsNow(fileUrl: player.attachment.fileUrl) {
                 // L'overlay est toujours rendu pour .ready, même si
                 // `manager.player` n'est pas encore chargé. Sans ça, le user
                 // voit un écran noir + ProgressView sans aucun contrôle
@@ -131,7 +113,7 @@ internal struct _FullscreenRenderer: View {
                 } else {
                     playerContent
                 }
-            case .needsDownload, .downloading:
+            } else {
                 downloadOverlay
             }
         }
@@ -330,7 +312,7 @@ internal struct _FullscreenRenderer: View {
             if let caption = player.caption, !caption.isEmpty {
                 Text(caption)
                     .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.vertical, MeeshySpacing.smPlus)
@@ -365,7 +347,7 @@ internal struct _FullscreenRenderer: View {
                 }
                 Text(author.displayName)
                     .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
@@ -387,10 +369,15 @@ internal struct _FullscreenRenderer: View {
     /// Shared by the initial mount and the retry button so they can never
     /// diverge into two different failure behaviours.
     private func attemptLoad() {
-        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
-        // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la pièce
-        // jointe qu'elle qualifie : ce moteur est partagé (#7212).
-        manager.setServedConsumption(player.attachment.currentUserConsumption, for: player.attachment.id)
+        if player.reportsConsumption {
+            manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la pièce
+            // jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            manager.setServedConsumption(player.attachment.currentUserConsumption, for: player.attachment.id)
+        } else {
+            // Sans identifiant, le moteur ne rapporte ni ne reprend rien (#9890).
+            manager.load(urlString: player.attachment.fileUrl)
+        }
         if manager.player == nil {
             loadFailed = true
         } else {
@@ -466,7 +453,7 @@ internal struct _FullscreenRenderer: View {
 
                 Text(downloadOverlayMessage)
                     .font(.system(size: MeeshyFont.labelSize, weight: .medium))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundStyle(Color.white.opacity(0.85))
                     .shadow(color: .black.opacity(0.6), radius: 4)
                     .multilineTextAlignment(.center)
 
@@ -476,7 +463,7 @@ internal struct _FullscreenRenderer: View {
                 } label: {
                     Text(String(localized: "media.video.close", defaultValue: "Fermer", bundle: .module))
                         .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundStyle(Color.white.opacity(0.7))
                         .padding(.horizontal, 18)
                         .padding(.vertical, MeeshySpacing.sm)
                         .background(Capsule().fill(Color.white.opacity(0.12)))
@@ -497,7 +484,7 @@ internal struct _FullscreenRenderer: View {
         if loadFailed {
             Image(systemName: "arrow.clockwise")
                 .font(.system(size: 30, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
         } else {
             switch player.availability {
             case .ready:
@@ -505,7 +492,7 @@ internal struct _FullscreenRenderer: View {
             case .needsDownload:
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: 30, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             case .downloading(let progress):
                 if progress > 0 {
                     Circle()
@@ -528,7 +515,7 @@ internal struct _FullscreenRenderer: View {
         switch player.availability {
         case .ready:         return ""
         case .needsDownload: return String(localized: "media.video.downloadToPlay", defaultValue: "Téléchargez pour lire la vidéo", bundle: .module)
-        case .downloading:   return String(localized: "media.video.downloadingHint", defaultValue: "La lecture démarrera après le téléchargement", bundle: .module)
+        case .downloading:   return String(localized: "media.video.downloadingHint", defaultValue: "Préparation de la lecture…", bundle: .module)
         }
     }
 
@@ -647,7 +634,7 @@ internal struct _FullscreenRenderer: View {
     }
 
     private func reportWatch(complete: Bool) {
-        guard let start = watchStartTime else { return }
+        guard player.reportsConsumption, let start = watchStartTime else { return }
         // Règle et raison : `VideoDismissWatchReport`. En deux mots — un player
         // détaché a déjà rapporté ET persisté sa position ; le relire ici
         // effacerait ce qu'il vient d'écrire (#3908).

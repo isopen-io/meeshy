@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_message_videos">%1$d video</string>
+    <string name="a11y_message_reply_to_you">te stesso</string>
+    <string name="a11y_message_contact_card">Contatto condiviso: %1$s</string>
+    <string name="a11y_message_contact_card_account">Su Meeshy: %1$s</string>
+    <string name="a11y_delivery_slow">invio lento</string>
+    <string name="a11y_message_view_once_sealed">Messaggio visualizzabile una volta, tocca per vedere</string>
+    <string name="a11y_message_view_once">Visualizza una volta</string>
+    <string name="a11y_message_blurred">Sfocato</string>
+</resources>

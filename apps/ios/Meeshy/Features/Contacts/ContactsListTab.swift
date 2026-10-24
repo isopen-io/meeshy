@@ -12,7 +12,7 @@ struct ContactsListTab: View {
     @ObservedObject var affiliatesViewModel: AffiliatesViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @Environment(\.colorScheme) private var colorScheme
 
@@ -103,15 +103,15 @@ struct ContactsListTab: View {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
                     ForEach(friends, id: \.id) { friend in
-                        ContactRow(
+                        LivePresence { ContactRow(
                             user: friend,
                             moodEmoji: statusViewModel.statusForUser(userId: friend.id)?.moodEmoji,
                             presence: PresenceManager.shared.resolvedState(userId: friend.id, isOnline: friend.isOnline, lastActiveAt: friend.lastActiveAt),
                             isDark: colorScheme == .dark,
-                            onOpen: { router.deepLinkProfileUser = ProfileSheetUser(username: friend.username) },
+                            onOpen: { router.openProfileSheet(ProfileSheetUser(username: friend.username)) },
                             onMoodTap: statusViewModel.moodTapHandler(for: friend.id)
                         )
-                        .equatable()
+                        .equatable() }
                         .countsImpression(of: statusViewModel.statusForUser(userId: friend.id)?.id) {
                             statusViewModel.trackImpression($0)
                         }

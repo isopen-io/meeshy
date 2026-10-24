@@ -61,6 +61,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case communitiesByCommunityIdMembers(communityId: String)
     case conversations
     case conversationsByConversationId(conversationId: String)
+    case conversationsByConversationIdAttachments(conversationId: String)
     case conversationsByConversationIdMessages(conversationId: String)
     case conversationsByConversationIdParticipants(conversationId: String)
     case conversationsByConversationIdParticipantsByUserId(conversationId: String, userId: String)
@@ -90,6 +91,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case messagesTrends
     case monitoring
     case opsByOperation(operation: String)
+    case opsContainers
     case opsHostMetrics
     case opsStatus
     case posts
@@ -203,6 +205,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .communitiesByCommunityIdMembers(let communityId): return "/api/v1/admin/communities/\(communityId)/members"
         case .conversations: return "/api/v1/admin/conversations"
         case .conversationsByConversationId(let conversationId): return "/api/v1/admin/conversations/\(conversationId)"
+        case .conversationsByConversationIdAttachments(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/attachments"
         case .conversationsByConversationIdMessages(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/messages"
         case .conversationsByConversationIdParticipants(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/participants"
         case .conversationsByConversationIdParticipantsByUserId(let conversationId, let userId): return "/api/v1/admin/conversations/\(conversationId)/participants/\(userId)"
@@ -232,6 +235,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .messagesTrends: return "/api/v1/admin/messages/trends"
         case .monitoring: return "/api/v1/admin/monitoring"
         case .opsByOperation(let operation): return "/api/v1/admin/ops/\(operation)"
+        case .opsContainers: return "/api/v1/admin/ops/containers"
         case .opsHostMetrics: return "/api/v1/admin/ops/host-metrics"
         case .opsStatus: return "/api/v1/admin/ops/status"
         case .posts: return "/api/v1/admin/posts"

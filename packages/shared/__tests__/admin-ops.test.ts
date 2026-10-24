@@ -10,6 +10,7 @@ import {
   hostMetricsSnapshotSchema,
   opsRequestFileSchema,
   serverOperationRequestBodySchema,
+  serverOperationRunSchema,
   serverOperationStateFileSchema,
   serverOperationStatusSchema,
 } from '../types/admin-ops.js';
@@ -113,6 +114,15 @@ describe('contrat des opérations serveur (#10384–#10386)', () => {
     expect(opsRequestFileSchema.safeParse({ ...request, id: 'x' }).success).toBe(false);
     expect(opsRequestFileSchema.safeParse({ ...request, action: 'shell' }).success).toBe(false);
     expect(opsRequestFileSchema.safeParse({ ...request, extra: true }).success).toBe(false);
+  });
+
+  it('le demandeur est borné des deux côtés du relais, à l’identique du runner (1 à 128 caractères, #10459)', () => {
+    const request = { v: 1, id: REQUEST_ID, action: 'backup', environment: 'staging', requestedBy: 'x'.repeat(128), requestedAt: AT };
+    expect(opsRequestFileSchema.safeParse(request).success).toBe(true);
+    expect(opsRequestFileSchema.safeParse({ ...request, requestedBy: 'x'.repeat(129) }).success).toBe(false);
+    expect(opsRequestFileSchema.safeParse({ ...request, requestedBy: '' }).success).toBe(false);
+    expect(serverOperationRunSchema.safeParse(run({ requestedBy: 'x'.repeat(129) })).success).toBe(false);
+    expect(serverOperationRunSchema.safeParse(run({ requestedBy: 'x'.repeat(128) })).success).toBe(true);
   });
 
   it('l’état publié nomme un dernier passage par opération', () => {

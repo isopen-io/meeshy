@@ -26,10 +26,10 @@ final class ComposerEditToolsTests: XCTestCase {
     // MARK: - Ce que chaque prise offre, ACTIF D'OFFICE (porteur 2026-10-09)
 
     func test_offered_photoCrops_videoCropsTrimsAndSounds_audioTrimsAndSounds() {
-        XCTAssertEqual(ComposerEditTools.offered(.photo), [.crop])
-        XCTAssertEqual(ComposerEditTools.offered(.video(hasAudio: false)), [.crop, .trim])
-        XCTAssertEqual(ComposerEditTools.offered(.video(hasAudio: true)), [.crop, .trim, .sound])
-        XCTAssertEqual(ComposerEditTools.offered(.audio), [.trim, .sound], "un son ne se recadre pas")
+        XCTAssertEqual(ComposerEditTools.offered(.photo), [.crop, .text])
+        XCTAssertEqual(ComposerEditTools.offered(.video(hasAudio: false)), [.crop, .text, .trim])
+        XCTAssertEqual(ComposerEditTools.offered(.video(hasAudio: true)), [.crop, .text, .trim, .sound])
+        XCTAssertEqual(ComposerEditTools.offered(.audio), [.trim, .sound], "un son ne se recadre pas et ne porte pas de texte")
     }
 
     /// **Le rail est là dès l'entrée, AUCUN outil ouvert** (porteur 2026-10-20 :
@@ -204,11 +204,11 @@ final class ComposerEditToolsTests: XCTestCase {
         let session = ConversationPieceRetouchOpening.session(
             gallery: MockComposerGallery(),
             loopPlayerFactory: { _ in MockComposerLoopPlayer(duration: 6, hasAudio: true) })
-        var vie = ConversationPieceRetouchLife()
+        var vie = ComposerCaptureCoverLife()
         vie.detach()
         session.disarm()
         XCTAssertTrue(vie.attach(), "rattachée après une disparition, la retouche se réarme")
-        ConversationPieceRetouchOpening.reattach(session)
+        ComposerCaptureCoverLife.reattach(session)
         let ouverte = await ConversationPieceRetouchOpening.open(.video(choisie), in: session)
         XCTAssertTrue(ouverte)
         XCTAssertNotEqual(session.stage, .off, "le montage ne peint rien sur une session éteinte")
@@ -219,7 +219,7 @@ final class ComposerEditToolsTests: XCTestCase {
     /// Détachée, la retouche ne répond pas à l'hôte : ni « Abandonner » lu
     /// dans le désarmement, ni fermeture ; rattachée, elle répond une fois.
     func test_11347_aDetachedRetouch_neitherSettlesNorReadsItsDisarmAsAnAbandon() {
-        var vie = ConversationPieceRetouchLife()
+        var vie = ComposerCaptureCoverLife()
         vie.detach()
         XCTAssertFalse(vie.abandoned(wasEditing: true, isEditing: false),
                        "le désarmement d'une disparition n'est pas « Abandonner »")
@@ -229,6 +229,36 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(vie.settle(), "la première réponse part")
         XCTAssertFalse(vie.settle(), "une seule réponse à l'hôte")
         XCTAssertFalse(vie.abandoned(wasEditing: true, isEditing: false), "« Terminé » a déjà répondu")
+    }
+
+    /// **Le viseur servi seul subit le même cycle** (#11352) : ouvert clavier
+    /// levé, SwiftUI le détache puis le rattache sans le détruire. Sa session,
+    /// désarmée à la disparition, se réarme au mode que la porte a promis —
+    /// sans quoi le montage ne peignait ni l'aperçu ni une seule commande.
+    func test_11352_aViewfinderDetachedThenReattached_isArmedAgainInItsPromisedMode() {
+        let promis = ComposerViewfinderRules.sceneMode(for: .video)
+        let session = ComposerCaptureSession(stage: .armed, mode: promis)
+        var vie = ComposerCaptureCoverLife()
+        vie.detach()
+        session.disarm()
+        XCTAssertEqual(session.stage, .off, "la disparition éteint la session")
+        XCTAssertTrue(vie.attach(), "rattaché après une disparition, le viseur se réarme")
+        ComposerCaptureCoverLife.reattach(session, mode: promis)
+        XCTAssertEqual(session.stage, .armed, "le montage ne peint ni l'aperçu ni les commandes d'une session éteinte")
+        XCTAssertEqual(session.mode, .video, "la barre annonce encore le mode que la porte a promis")
+    }
+
+    /// Le viseur lit sa disparition comme la retouche (#11352) : une seule vie
+    /// partagée, jamais une mécanique jumelle — désarmé en disparaissant,
+    /// réarmé en revenant, et une prise qui ne part qu'une fois.
+    func test_11352_theViewfinderSharesTheCoverLifeOfTheRetouch() throws {
+        let viseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        XCTAssertTrue(viseur.contains("ComposerCaptureCoverLife()"), "le viseur tient la même vie que la retouche")
+        XCTAssertTrue(viseur.contains("life.detach()"), "une disparition détache le viseur sans le régler")
+        XCTAssertTrue(viseur.contains("life.attach()"), "un rattachement se reconnaît")
+        XCTAssertTrue(viseur.contains("ComposerCaptureCoverLife.reattach(capture"), "et réarme la session")
+        XCTAssertTrue(viseur.contains("life.settle()"), "une prise ne part qu'une fois, jamais d'un viseur détaché")
+        XCTAssertFalse(viseur.contains("delivered"), "aucun second drapeau « déjà rendu » à côté de la vie")
     }
 
     func test_11133_tappingAPendingPiece_opensTheCaptureRetouch_withoutTheCamera() throws {
@@ -448,7 +478,7 @@ final class ComposerEditToolsTests: XCTestCase {
         photo.revealEditChrome()
         XCTAssertTrue(photo.showsCropBrackets, "les outils reviennent comme on les a laissés")
         photo.toggleEditTool(.trim)
-        XCTAssertEqual(photo.editTools, [.crop], "une photo ne se coupe pas")
+        XCTAssertEqual(photo.editTools, [.crop, .text], "une photo ne se coupe pas")
     }
 
     // MARK: - (3) Les outils d'une vidéo, ensemble et chacun pour soi
@@ -670,7 +700,7 @@ final class ComposerEditToolsTests: XCTestCase {
 
     func test_aSilentClip_offersNoSoundTool() async {
         let (session, _) = await videoSession(hasAudio: false)
-        XCTAssertEqual(session.editTools, [.crop, .trim])
+        XCTAssertEqual(session.editTools, [.crop, .text, .trim])
         session.toggleEditTool(.trim)
         XCTAssertEqual(session.activeEditTools, [.trim], "« Couper » seul, sans spectre")
         session.toggleEditTool(.sound)
@@ -714,13 +744,13 @@ final class ComposerEditToolsTests: XCTestCase {
     func test_theFinalRender_carriesTheGain_throughTheSingleRecipe() throws {
         let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertTrue(edition.contains("let gain = takeSound.effectiveGain"))
-        XCTAssertTrue(edition.contains("declaredSpaceName: espace, audioGain: gain)"),
+        XCTAssertTrue(edition.contains("declaredSpaceName: espace, audioGain: gain, overlay: calque)"),
                       "« Terminé » et ⬇︎ exportent par la même recette, son compris")
         XCTAssertEqual(edition.components(separatedBy: "ComposerLookVideoExporter.export(").count - 1, 1,
                        "une seule recette de rendu vidéo")
         let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("|| audioGain != 1"), "un son réglé force le rendu")
-        XCTAssertTrue(export.contains("session.audioMix = audioMix"), "le gain part dans le fichier")
+        XCTAssertTrue(export.contains("audioMix: mixage"), "le gain part dans le fichier (#11849 : par la passe unique)")
         XCTAssertTrue(export.contains("setVolume("))
     }
 
@@ -872,5 +902,51 @@ final class ComposerEditToolsTests: XCTestCase {
         let son = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSoundTrack.swift")
         XCTAssertTrue(son.contains("accessibilityAdjustableAction"), "VoiceOver règle le volume")
         XCTAssertTrue(son.contains(".buttonStyle(ComposerBounceButtonStyle())"), "lecture et muet rebondissent")
+    }
+
+    // MARK: - Texte (#12591)
+
+    func test_theTextTool_excludesTheCropTool_andTheOtherWayAround() {
+        XCTAssertEqual(ComposerEditTools.toggled([.crop], tapping: .text, familyOpen: false), [.text],
+                       "montrer le texte range les équerres : tous deux prennent la scène")
+        XCTAssertEqual(ComposerEditTools.toggled([.text], tapping: .crop, familyOpen: false), [.crop])
+        XCTAssertEqual(ComposerEditTools.toggled([.text, .trim], tapping: .sound, familyOpen: false), [.text, .trim, .sound],
+                       "la coupe et le son composent avec le texte")
+        XCTAssertEqual(ComposerEditTools.toggled([.text], tapping: .text, familyOpen: false), [], "retoucher range")
+    }
+
+    func test_theTextTool_hasNoPanelUnderTheScene_andDoesNotFrameIt() {
+        XCTAssertEqual(ComposerEditTools.panel(for: .text), .none)
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.text]), [],
+                       "la barre de texte flotte au-dessus du clavier : aucun panneau")
+        XCTAssertFalse(ComposerEditTools.framesScene(active: [.text], chromeShown: true))
+        XCTAssertFalse(ComposerEditTools.showsBrackets(active: [.text]))
+    }
+
+    func test_theTextTool_hidesTheTopRow_likeAnyShownTool() {
+        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: [.text]))
+    }
+
+    func test_anOpenFamily_foldsTheTextTool() {
+        XCTAssertFalse(ComposerEditTools.isShown(.text, active: [.text], familyOpen: true))
+        XCTAssertTrue(ComposerEditTools.isShown(.text, active: [.text], familyOpen: false))
+    }
+
+    func test_theTextTool_isNamedAndIconed() {
+        XCTAssertEqual(ComposerCaptureCopy.editToolSymbol(.text), "textformat")
+        XCTAssertFalse(ComposerCaptureCopy.editToolName(.text).isEmpty)
+    }
+
+    func test_aPhotoSession_showingTheTextTool_opensATextForTyping_andHidingItEndsTheTyping() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        session.toggleEditTool(.text)
+        XCTAssertTrue(session.shownEditTools.contains(.text))
+        XCTAssertNotNil(session.retouchTexts.typingId, "outil montré, aucun texte : un texte neuf s'ouvre en saisie")
+        XCTAssertFalse(session.showsCropBrackets)
+        session.toggleEditTool(.text)
+        XCTAssertFalse(session.shownEditTools.contains(.text))
+        XCTAssertNil(session.retouchTexts.typingId)
+        XCTAssertTrue(session.retouchTexts.isEmpty, "une coquille vide disparaît")
     }
 }

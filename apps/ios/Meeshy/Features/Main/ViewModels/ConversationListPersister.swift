@@ -34,13 +34,12 @@ final class ConversationListPersister {
     func schedule(snapshot: [Conversation], cursor: String?, hasMore more: Bool, debounce: TimeInterval) {
         task?.cancel()
         task = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(debounce))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(debounce)), !Task.isCancelled else { return }
             // Un seul écrivain du groupe « dernier message », le moteur (#7548) :
             // voir `ConversationListLastMessage.persisting`.
             let store = await CacheCoordinator.shared.conversations
             if await store.load(for: "list").snapshot() == nil {
-                try? await store.savePreservingFreshness(snapshot, for: "list")
+                await bestEffort("conversationListPersister.store.savePreservingFreshness", category: .cache) { try await store.savePreservingFreshness(snapshot, for: "list") }
             } else {
                 await store.update(for: "list") { ConversationListLastMessage.persisting(snapshot, over: $0) }
             }
@@ -60,7 +59,7 @@ final class ConversationListPersister {
         task = Task {
             // try? : Wave 1 Local-First a rendu .save() throwing.
             // Best-effort persist — l'erreur est loggee en aval.
-            try? await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")
+            await bestEffort("conversationListPersister.conversations.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list") }
             await CacheCoordinator.shared.conversations.saveCursor(
                 nextCursor: persistedCursor,
                 hasMore: persistedHasMore,
