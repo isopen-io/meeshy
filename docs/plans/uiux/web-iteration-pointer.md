@@ -39,7 +39,7 @@ normal.
 | itération | date | branche de travail | PR | état |
 |---|---|---|---|---|
 | **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | [#11384](https://github.com/isopen-io/meeshy/pull/11384) → `dev` | ✅ mergé |
-| **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | à ouvrir → `dev` | ⏳ |
+| **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | [#12599](https://github.com/isopen-io/meeshy/pull/12599) → `dev` | ⏳ CI |
 
 **75w** — cohérence du thème clair/sombre : la vignette « Signature » du sélecteur
 d'apparence (`appearance-picker-sections.tsx`) DÉRIVE désormais des cotes canoniques
